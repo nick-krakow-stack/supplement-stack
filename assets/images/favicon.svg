@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!-- Background -->
+  <rect width="32" height="32" rx="6" fill="#2563eb"/>
+  
+  <!-- Capsule Icon -->
+  <g transform="translate(8, 8)">
+    <!-- Capsule Body -->
+    <rect x="2" y="4" width="12" height="8" rx="4" ry="4" fill="white"/>
+    
+    <!-- Capsule Split -->
+    <rect x="2" y="4" width="6" height="8" rx="4" ry="4" fill="#93c5fd"/>
+    
+    <!-- Pills/Dots -->
+    <circle cx="5" cy="6" r="0.8" fill="white" opacity="0.8"/>
+    <circle cx="11" cy="6" r="0.8" fill="#2563eb" opacity="0.8"/>
+    <circle cx="5" cy="10" r="0.8" fill="white" opacity="0.8"/>
+    <circle cx="11" cy="10" r="0.8" fill="#2563eb" opacity="0.8"/>
+  </g>
+</svg>

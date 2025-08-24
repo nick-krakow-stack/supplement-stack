@@ -1,0 +1,56 @@
+# Supplement Stack PHP - Robots.txt
+# All-Inkl Webserver
+
+User-agent: *
+
+# Erlaubte Bereiche
+Allow: /
+Allow: /assets/
+Allow: /legal/
+
+# Gesperrte Bereiche - Sicherheit und Datenschutz
+Disallow: /config/
+Disallow: /includes/
+Disallow: /database/
+Disallow: /api/
+Disallow: /install.php
+Disallow: /login.php
+Disallow: /register.php
+Disallow: /dashboard.php
+Disallow: /products.php
+Disallow: /stacks.php
+Disallow: /analysis.php
+Disallow: /profile.php
+Disallow: /settings.php
+Disallow: /logout.php
+
+# Blockiere Dateitypen
+Disallow: /*.sql$
+Disallow: /*.log$
+Disallow: /*.env$
+Disallow: /*.config$
+
+# Sitemap (falls vorhanden)
+# Sitemap: https://deine-domain.de/sitemap.xml
+
+# Crawl-Delay für respektvolles Crawling
+Crawl-delay: 1
+
+# Spezielle Bots
+User-agent: Googlebot
+Allow: /legal/
+Disallow: /api/
+
+User-agent: Bingbot
+Allow: /legal/
+Disallow: /api/
+
+# Böswillige Bots blockieren
+User-agent: SemrushBot
+Disallow: /
+
+User-agent: AhrefsBot
+Disallow: /
+
+User-agent: MJ12bot
+Disallow: /

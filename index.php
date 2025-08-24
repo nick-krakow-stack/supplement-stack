@@ -39,8 +39,8 @@ $pageTitle = 'Supplement Stack - Dein intelligenter Supplement Manager';
                 </div>
                 <nav class="hidden md:flex items-center space-x-6">
                     <a href="#features" class="text-gray-700 hover:text-blue-600 transition-colors">Features</a>
-                    <a href="/demo.php" class="text-gray-700 hover:text-blue-600 transition-colors">Demo</a>
-                    <a href="/help.php" class="text-gray-700 hover:text-blue-600 transition-colors">Hilfe</a>
+                    <a href="legal/privacy.php" class="text-gray-700 hover:text-blue-600 transition-colors">Datenschutz</a>
+                    <a href="legal/imprint.php" class="text-gray-700 hover:text-blue-600 transition-colors">Kontakt</a>
                     <a href="login.php" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">Anmelden</a>
                 </nav>
             </div>
@@ -170,23 +170,23 @@ $pageTitle = 'Supplement Stack - Dein intelligenter Supplement Manager';
                     <h4 class="font-semibold mb-4">Produkt</h4>
                     <ul class="space-y-2 text-gray-400">
                         <li><a href="#features" class="hover:text-white transition-colors">Features</a></li>
-                        <li><a href="/demo.php" class="hover:text-white transition-colors">Demo</a></li>
-                        <li><a href="/help.php" class="hover:text-white transition-colors">Hilfe</a></li>
+                        <li><a href="register.php" class="hover:text-white transition-colors">Registrieren</a></li>
+                        <li><a href="login.php" class="hover:text-white transition-colors">Anmelden</a></li>
                     </ul>
                 </div>
                 <div>
                     <h4 class="font-semibold mb-4">Support</h4>
                     <ul class="space-y-2 text-gray-400">
-                        <li><a href="/help.php" class="hover:text-white transition-colors">Hilfe</a></li>
-                        <li><a href="/contact.php" class="hover:text-white transition-colors">Kontakt</a></li>
+                        <li><a href="legal/imprint.php" class="hover:text-white transition-colors">Impressum</a></li>
+                        <li><a href="legal/imprint.php" class="hover:text-white transition-colors">Kontakt</a></li>
                     </ul>
                 </div>
                 <div>
                     <h4 class="font-semibold mb-4">Legal</h4>
                     <ul class="space-y-2 text-gray-400">
-                        <li><a href="/privacy.php" class="hover:text-white transition-colors">Datenschutz</a></li>
-                        <li><a href="/terms.php" class="hover:text-white transition-colors">AGB</a></li>
-                        <li><a href="/imprint.php" class="hover:text-white transition-colors">Impressum</a></li>
+                        <li><a href="legal/privacy.php" class="hover:text-white transition-colors">Datenschutz</a></li>
+                        <li><a href="legal/terms.php" class="hover:text-white transition-colors">AGB</a></li>
+                        <li><a href="legal/imprint.php" class="hover:text-white transition-colors">Impressum</a></li>
                     </ul>
                 </div>
             </div>
