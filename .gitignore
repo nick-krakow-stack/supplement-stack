@@ -1,0 +1,125 @@
+# Supplement Stack Manager PHP - .gitignore
+# Für All-Inkl Privat Plus Webserver
+
+# Konfigurationsdateien mit sensiblen Daten
+config/database.php.local
+config/config.php.local
+.env
+.env.local
+.env.production
+
+# Logs
+logs/
+*.log
+error.log
+access.log
+
+# Upload-Verzeichnisse
+uploads/
+temp/
+cache/
+
+# Session-Daten
+sessions/
+tmp/
+
+# Backup-Dateien
+*.backup
+*.bak
+*.sql.backup
+backup/
+
+# IDE und Editor-Dateien
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Composer (falls später verwendet)
+vendor/
+composer.lock
+
+# NPM/Node.js (falls später verwendet)
+node_modules/
+npm-debug.log
+yarn.lock
+package-lock.json
+
+# Build-Verzeichnisse
+build/
+dist/
+
+# Archive und komprimierte Dateien
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# Datenbank-Dumps
+*.sql
+*.db
+*.sqlite
+*.sqlite3
+
+# All-Inkl spezifische Dateien
+.htaccess.local
+php.ini.local
+
+# Temporäre Dateien
+*.tmp
+*.temp
+.cache/
+
+# Sicherheits-relevante Dateien
+private_keys/
+certificates/
+*.key
+*.crt
+*.pem
+
+# Test-Dateien
+tests/tmp/
+phpunit.xml.local
+.phpunit.result.cache
+
+# Coverage-Reports
+coverage/
+*.coverage
+
+# Migration-Dateien (lokale Versionen)
+migrations/local/
+
+# FTP-Konfigurationen
+.ftpconfig
+ftp-sync.json
+
+# All-Inkl MySQL-Dumps
+mysqldump_*.sql
+
+# Windows-spezifische Dateien
+desktop.ini
+$RECYCLE.BIN/
+
+# macOS-spezifische Dateien
+.AppleDouble
+.LSOverride
+Icon?
+._*
+
+# Linux-spezifische Dateien
+*~
+.nfs*
+
+# PHP-spezifische Dateien
+*.cache
+opcache/
+
+# Session-Management
+session_storage/
+
+# Lokale Entwicklungstools
+.php-cs-fixer.cache
+.phpstan.neon.local
