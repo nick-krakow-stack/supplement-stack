@@ -1,585 +1,783 @@
 // Supplement Stack - Frontend JavaScript
+// Handles user interactions, API calls, and dynamic content
 
-class SupplementStack {
+class SupplementApp {
   constructor() {
-    this.currentUser = null;
-    this.cart = [];
-    this.init();
+    this.token = localStorage.getItem('auth_token')
+    this.currentUser = null
+    this.init()
   }
 
-  async init() {
-    await this.checkAuth();
-    this.bindEvents();
-    this.updateUI();
+  init() {
+    this.setupAxiosDefaults()
+    this.setupEventListeners()
+    this.checkAuthStatus()
   }
 
-  // Authentication
-  async checkAuth() {
+  setupAxiosDefaults() {
+    // Set default headers for API requests
+    if (this.token) {
+      axios.defaults.headers.common['Authorization'] = `Bearer ${this.token}`
+    }
+    
+    // Add response interceptor for token expiration
+    axios.interceptors.response.use(
+      response => response,
+      error => {
+        if (error.response?.status === 401) {
+          this.logout()
+        }
+        return Promise.reject(error)
+      }
+    )
+  }
+
+  async checkAuthStatus() {
+    const currentPath = window.location.pathname
+    
+    // Allow access to landing page and auth page without token
+    if (currentPath === '/' || currentPath === '/auth') {
+      return
+    }
+    
+    if (!this.token) {
+      this.redirectToLogin()
+      return
+    }
+
     try {
-      const response = await axios.get('/api/auth/me');
-      if (response.data.success) {
-        this.currentUser = response.data.data.user;
+      // Verify token is still valid
+      const response = await axios.get('/api/health')
+      this.loadPageContent()
+    } catch (error) {
+      if (error.response?.status === 401) {
+        this.logout()
+      }
+    }
+  }
+
+  setupEventListeners() {
+    // Login form
+    const loginForm = document.getElementById('login-form')
+    if (loginForm) {
+      loginForm.addEventListener('submit', (e) => this.handleLogin(e))
+    }
+
+    // Register form
+    const registerForm = document.getElementById('register-form')
+    if (registerForm) {
+      registerForm.addEventListener('submit', (e) => this.handleRegister(e))
+    }
+
+    // Toggle between login and register
+    const showRegister = document.getElementById('show-register')
+    const showLogin = document.getElementById('show-login')
+    
+    if (showRegister) {
+      showRegister.addEventListener('click', (e) => {
+        e.preventDefault()
+        document.getElementById('login-form').classList.add('hidden')
+        document.getElementById('register-form').classList.remove('hidden')
+      })
+    }
+
+    if (showLogin) {
+      showLogin.addEventListener('click', (e) => {
+        e.preventDefault()
+        document.getElementById('register-form').classList.add('hidden')
+        document.getElementById('login-form').classList.remove('hidden')
+      })
+    }
+
+    // Logout button
+    const logoutBtn = document.getElementById('logout-btn')
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', () => this.logout())
+    }
+
+    // Demo link
+    const demoLink = document.getElementById('demo-link')
+    if (demoLink) {
+      demoLink.addEventListener('click', (e) => {
+        e.preventDefault()
+        this.openDemo()
+      })
+    }
+
+    // Page-specific event listeners
+    this.setupPageSpecificEvents()
+  }
+
+  setupPageSpecificEvents() {
+    const currentPath = window.location.pathname
+
+    switch (currentPath) {
+      case '/dashboard':
+        this.setupDashboardEvents()
+        break
+      case '/products':
+        this.setupProductsEvents()
+        break
+      case '/stacks':
+        this.setupStacksEvents()
+        break
+      case '/admin':
+        this.setupAdminEvents()
+        break
+    }
+  }
+
+  async handleLogin(e) {
+    e.preventDefault()
+    const formData = new FormData(e.target)
+    
+    this.showLoading('Anmeldung läuft...')
+    
+    try {
+      const response = await axios.post('/api/auth/login', {
+        email: formData.get('email'),
+        password: formData.get('password')
+      })
+
+      if (response.data.token) {
+        this.token = response.data.token
+        localStorage.setItem('auth_token', this.token)
+        axios.defaults.headers.common['Authorization'] = `Bearer ${this.token}`
+        
+        this.currentUser = response.data.user
+        this.showSuccess('Erfolgreich angemeldet!')
+        this.redirectToDashboard()
       }
     } catch (error) {
-      // User not authenticated
-      this.currentUser = null;
+      this.showError(error.response?.data?.error || 'Anmeldung fehlgeschlagen')
+    } finally {
+      this.hideLoading()
     }
   }
 
-  async login(email, password) {
+  async handleRegister(e) {
+    e.preventDefault()
+    const formData = new FormData(e.target)
+    
+    this.showLoading('Registrierung läuft...')
+    
     try {
-      const response = await axios.post('/api/auth/login', { email, password });
-      if (response.data.success) {
-        this.currentUser = response.data.data.user;
-        this.updateUI();
-        this.showNotification('Erfolgreich angemeldet!', 'success');
-        this.hideModal('loginModal');
-        return true;
+      const response = await axios.post('/api/auth/register', {
+        email: formData.get('email'),
+        password: formData.get('password'),
+        age: formData.get('age') ? parseInt(formData.get('age')) : null,
+        weight: formData.get('weight') ? parseFloat(formData.get('weight')) : null,
+        diet_type: formData.get('diet_type')
+      })
+
+      if (response.data.token) {
+        this.token = response.data.token
+        localStorage.setItem('auth_token', this.token)
+        axios.defaults.headers.common['Authorization'] = `Bearer ${this.token}`
+        
+        this.currentUser = response.data.user
+        this.showSuccess('Registrierung erfolgreich!')
+        this.redirectToDashboard()
       }
     } catch (error) {
-      this.showNotification(error.response?.data?.error || 'Anmeldung fehlgeschlagen', 'error');
-      return false;
+      this.showError(error.response?.data?.error || 'Registrierung fehlgeschlagen')
+    } finally {
+      this.hideLoading()
     }
   }
 
-  async register(userData) {
-    try {
-      const response = await axios.post('/api/auth/register', userData);
-      if (response.data.success) {
-        this.showNotification('Registrierung erfolgreich! Sie sind jetzt angemeldet.', 'success');
-        this.hideModal('registerModal');
-        await this.checkAuth();
-        this.updateUI();
-        return true;
-      }
-    } catch (error) {
-      this.showNotification(error.response?.data?.error || 'Registrierung fehlgeschlagen', 'error');
-      return false;
+  logout() {
+    this.token = null
+    this.currentUser = null
+    localStorage.removeItem('auth_token')
+    delete axios.defaults.headers.common['Authorization']
+    this.redirectToLogin()
+  }
+
+  redirectToLogin() {
+    const currentPath = window.location.pathname
+    if (currentPath !== '/' && currentPath !== '/auth') {
+      window.location.href = '/auth'
     }
   }
 
-  async logout() {
-    try {
-      await axios.post('/api/auth/logout');
-      this.currentUser = null;
-      this.updateUI();
-      this.showNotification('Erfolgreich abgemeldet!', 'success');
-    } catch (error) {
-      this.showNotification('Fehler beim Abmelden', 'error');
-    }
+  redirectToDashboard() {
+    window.location.href = '/dashboard'
   }
 
-  // UI Management
-  updateUI() {
-    if (this.currentUser) {
-      this.showAuthenticatedUI();
-      this.loadUserData();
+  openDemo() {
+    const demoUrl = window.location.origin + '/demo'
+    const demoWindow = window.open(demoUrl, 'demo', 'width=1200,height=800,scrollbars=yes,resizable=yes')
+    
+    if (demoWindow) {
+      demoWindow.focus()
     } else {
-      this.showUnauthenticatedUI();
+      this.showError('Pop-up blockiert. Bitte erlauben Sie Pop-ups für diese Seite.')
     }
   }
 
-  showAuthenticatedUI() {
-    const loginBtn = document.getElementById('loginBtn');
-    const registerBtn = document.getElementById('registerBtn');
-    
-    if (loginBtn) loginBtn.style.display = 'none';
-    if (registerBtn) registerBtn.style.display = 'none';
+  // Dashboard functionality
+  setupDashboardEvents() {
+    this.loadDashboardData()
+  }
 
-    // Add user menu
-    const nav = document.querySelector('nav .flex');
-    if (nav && !document.getElementById('userMenu')) {
-      const userMenu = this.createUserMenu();
-      nav.appendChild(userMenu);
+  async loadDashboardData() {
+    try {
+      this.showLoading('Lade Dashboard...')
+      
+      const [productsResponse, stacksResponse, wishlistResponse] = await Promise.all([
+        axios.get('/api/protected/products'),
+        axios.get('/api/protected/stacks'),
+        axios.get('/api/protected/wishlist')
+      ])
+
+      // Update counters
+      const productsCount = document.getElementById('products-count')
+      const stacksCount = document.getElementById('stacks-count')
+      const wishlistCount = document.getElementById('wishlist-count')
+      
+      if (productsCount) productsCount.textContent = productsResponse.data.length
+      if (stacksCount) stacksCount.textContent = stacksResponse.data.length
+      if (wishlistCount) wishlistCount.textContent = wishlistResponse.data.length
+
+      // Calculate monthly costs
+      const monthlyCost = this.calculateMonthlyCosts(stacksResponse.data)
+      const monthlyCostElement = document.getElementById('monthly-cost')
+      if (monthlyCostElement) monthlyCostElement.textContent = `€${monthlyCost.toFixed(2)}`
+
+      // Display recent stacks
+      this.displayRecentStacks(stacksResponse.data)
+
+    } catch (error) {
+      console.error('Error loading dashboard data:', error)
+      this.showError('Fehler beim Laden der Dashboard-Daten')
+    } finally {
+      this.hideLoading()
+    }
+  }
+
+  calculateMonthlyCosts(stacks) {
+    return stacks.reduce((total, stack) => total + (stack.monthly_cost || 0), 0)
+  }
+
+  displayRecentStacks(stacks) {
+    const container = document.getElementById('recent-stacks')
+    if (!container) return
+
+    if (stacks.length === 0) {
+      container.innerHTML = '<p class="text-gray-500 text-center py-4">Noch keine Stacks erstellt</p>'
+      return
     }
 
-    // Load dashboard
-    this.loadDashboard();
-  }
-
-  showUnauthenticatedUI() {
-    const loginBtn = document.getElementById('loginBtn');
-    const registerBtn = document.getElementById('registerBtn');
-    
-    if (loginBtn) loginBtn.style.display = 'block';
-    if (registerBtn) registerBtn.style.display = 'block';
-
-    // Remove user menu
-    const userMenu = document.getElementById('userMenu');
-    if (userMenu) userMenu.remove();
-
-    // Show landing page
-    this.showLandingPage();
-  }
-
-  createUserMenu() {
-    const userMenu = document.createElement('div');
-    userMenu.id = 'userMenu';
-    userMenu.className = 'flex items-center space-x-4';
-    userMenu.innerHTML = `
-      <span class="text-gray-700">Hallo, ${this.currentUser.name || this.currentUser.email}!</span>
-      <button id="dashboardBtn" class="text-gray-600 hover:text-primary">Dashboard</button>
-      <button id="logoutBtn" class="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">Abmelden</button>
-    `;
-    return userMenu;
-  }
-
-  // Dashboard
-  async loadDashboard() {
-    const app = document.getElementById('app');
-    app.innerHTML = `
-      <div class="max-w-7xl mx-auto px-4 py-8">
-        <div class="mb-8">
-          <h1 class="text-3xl font-bold text-gray-800 mb-2">Dashboard</h1>
-          <p class="text-gray-600">Verwalte deine Supplements und Stacks</p>
-        </div>
-
-        <!-- Quick Actions -->
-        <div class="grid md:grid-cols-3 gap-6 mb-8">
-          <div class="bg-white p-6 rounded-lg shadow-md">
-            <div class="flex items-center mb-4">
-              <i class="fas fa-plus-circle text-primary text-2xl mr-3"></i>
-              <h3 class="text-lg font-semibold">Produkt hinzufügen</h3>
-            </div>
-            <button id="addProductBtn" class="btn-primary text-white px-4 py-2 rounded w-full">
-              Neues Produkt
-            </button>
-          </div>
-          
-          <div class="bg-white p-6 rounded-lg shadow-md">
-            <div class="flex items-center mb-4">
-              <i class="fas fa-layer-group text-primary text-2xl mr-3"></i>
-              <h3 class="text-lg font-semibold">Stack erstellen</h3>
-            </div>
-            <button id="createStackBtn" class="btn-primary text-white px-4 py-2 rounded w-full">
-              Neuer Stack
-            </button>
-          </div>
-          
-          <div class="bg-white p-6 rounded-lg shadow-md">
-            <div class="flex items-center mb-4">
-              <i class="fas fa-heart text-primary text-2xl mr-3"></i>
-              <h3 class="text-lg font-semibold">Wunschliste</h3>
-            </div>
-            <button id="viewWishlistBtn" class="bg-secondary text-white px-4 py-2 rounded w-full">
-              Wunschliste anzeigen
-            </button>
-          </div>
-        </div>
-
-        <!-- Content Tabs -->
-        <div class="bg-white rounded-lg shadow-md">
-          <div class="border-b">
-            <nav class="flex space-x-8 px-6">
-              <button class="tab-btn active py-4 border-b-2 border-primary text-primary font-medium" data-tab="products">
-                Meine Produkte
-              </button>
-              <button class="tab-btn py-4 border-b-2 border-transparent text-gray-500 hover:text-gray-700" data-tab="stacks">
-                Meine Stacks
-              </button>
-              <button class="tab-btn py-4 border-b-2 border-transparent text-gray-500 hover:text-gray-700" data-tab="public">
-                Öffentlich
-              </button>
-            </nav>
-          </div>
-          
-          <div class="p-6">
-            <div id="productsTab" class="tab-content active">
-              <div id="productsList" class="loading">
-                <div class="flex justify-center">
-                  <div class="loading-spinner"></div>
-                </div>
-              </div>
-            </div>
-            
-            <div id="stacksTab" class="tab-content hidden">
-              <div id="stacksList" class="loading">
-                <div class="flex justify-center">
-                  <div class="loading-spinner"></div>
-                </div>
-              </div>
-            </div>
-            
-            <div id="publicTab" class="tab-content hidden">
-              <div id="publicContent">
-                <p class="text-gray-600">Öffentliche Produkte und Stacks anderer Nutzer</p>
-              </div>
-            </div>
-          </div>
+    container.innerHTML = stacks.slice(0, 3).map(stack => `
+      <div class="border-b border-gray-200 last:border-b-0 pb-4 last:pb-0 mb-4 last:mb-0">
+        <h3 class="font-medium text-gray-900">${this.escapeHtml(stack.name)}</h3>
+        <p class="text-sm text-gray-500 mt-1">${this.escapeHtml(stack.description || 'Keine Beschreibung')}</p>
+        <div class="flex justify-between items-center mt-2">
+          <span class="text-xs text-gray-400">${stack.product_count || 0} Produkte</span>
+          <a href="/stacks?id=${stack.id}" class="text-blue-600 hover:text-blue-500 text-sm">Bearbeiten</a>
         </div>
       </div>
-    `;
-
-    this.bindDashboardEvents();
-    this.loadProducts();
+    `).join('')
   }
 
-  bindDashboardEvents() {
-    // Tab switching
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        const tabName = e.target.dataset.tab;
-        this.switchTab(tabName);
-      });
-    });
-
-    // Action buttons
-    document.getElementById('addProductBtn')?.addEventListener('click', () => this.showAddProductModal());
-    document.getElementById('createStackBtn')?.addEventListener('click', () => this.showCreateStackModal());
-    document.getElementById('viewWishlistBtn')?.addEventListener('click', () => this.showWishlist());
-  }
-
-  switchTab(tabName) {
-    // Update active tab button
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-      btn.classList.remove('active', 'border-primary', 'text-primary');
-      btn.classList.add('border-transparent', 'text-gray-500');
-    });
-    
-    document.querySelector(`[data-tab="${tabName}"]`).classList.add('active', 'border-primary', 'text-primary');
-
-    // Show/hide content
-    document.querySelectorAll('.tab-content').forEach(content => {
-      content.classList.add('hidden');
-      content.classList.remove('active');
-    });
-    
-    const activeTab = document.getElementById(`${tabName}Tab`);
-    activeTab.classList.remove('hidden');
-    activeTab.classList.add('active');
-
-    // Load content if needed
-    if (tabName === 'stacks' && !activeTab.dataset.loaded) {
-      this.loadStacks();
-      activeTab.dataset.loaded = 'true';
-    } else if (tabName === 'public' && !activeTab.dataset.loaded) {
-      this.loadPublicContent();
-      activeTab.dataset.loaded = 'true';
+  // Products functionality
+  setupProductsEvents() {
+    const addProductBtn = document.getElementById('add-product-btn')
+    if (addProductBtn) {
+      addProductBtn.addEventListener('click', () => this.showAddProductModal())
     }
+
+    const searchInput = document.getElementById('search-products')
+    if (searchInput) {
+      searchInput.addEventListener('input', () => this.filterProducts())
+    }
+
+    this.loadProducts()
   }
 
-  // Products
   async loadProducts() {
     try {
-      const response = await axios.get('/api/products');
-      if (response.data.success) {
-        this.renderProducts(response.data.data);
-      }
+      this.showLoading('Lade Produkte...')
+      const response = await axios.get('/api/protected/products')
+      this.displayProducts(response.data)
     } catch (error) {
-      this.showNotification('Fehler beim Laden der Produkte', 'error');
+      console.error('Error loading products:', error)
+      this.showError('Fehler beim Laden der Produkte')
+    } finally {
+      this.hideLoading()
     }
   }
 
-  renderProducts(products) {
-    const container = document.getElementById('productsList');
-    
+  displayProducts(products) {
+    const container = document.getElementById('products-grid')
+    if (!container) return
+
     if (products.length === 0) {
       container.innerHTML = `
-        <div class="text-center py-8">
-          <i class="fas fa-box-open text-gray-400 text-4xl mb-4"></i>
-          <p class="text-gray-600">Noch keine Produkte vorhanden</p>
-          <button class="btn-primary text-white px-4 py-2 rounded mt-4" onclick="app.showAddProductModal()">
-            Erstes Produkt hinzufügen
+        <div class="col-span-full text-center py-12">
+          <i class="fas fa-pills text-4xl text-gray-300 mb-4"></i>
+          <h3 class="text-lg font-medium text-gray-500 mb-2">Noch keine Produkte hinzugefügt</h3>
+          <p class="text-gray-400 mb-6">Fügen Sie Ihr erstes Supplement hinzu, um zu beginnen</p>
+          <button onclick="app.showAddProductModal()" class="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors">
+            <i class="fas fa-plus mr-2"></i>Erstes Produkt hinzufügen
           </button>
         </div>
-      `;
-      return;
+      `
+      return
     }
 
-    container.innerHTML = `
-      <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-        ${products.map(product => this.renderProductCard(product)).join('')}
-      </div>
-    `;
-  }
-
-  renderProductCard(product) {
-    const nutrients = product.nutrients ? JSON.parse(product.nutrients) : [];
-    
-    return `
-      <div class="product-card bg-white border rounded-lg p-4 hover:shadow-md">
-        <div class="flex justify-between items-start mb-3">
-          <div>
-            <h3 class="font-semibold text-lg">${product.name}</h3>
-            ${product.brand ? `<p class="text-gray-600 text-sm">${product.brand}</p>` : ''}
-          </div>
+    container.innerHTML = products.map(product => `
+      <div class="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
+        <div class="flex justify-between items-start mb-4">
+          <h3 class="text-lg font-semibold text-gray-900">${this.escapeHtml(product.name)}</h3>
           <div class="flex space-x-2">
-            <button onclick="app.editProduct(${product.id})" class="text-blue-600 hover:text-blue-800">
+            <button class="text-blue-600 hover:text-blue-500" onclick="app.editProduct(${product.id})">
               <i class="fas fa-edit"></i>
             </button>
-            <button onclick="app.addToWishlist(${product.id})" class="text-red-600 hover:text-red-800">
-              <i class="fas fa-heart"></i>
+            <button class="text-red-600 hover:text-red-500" onclick="app.deleteProduct(${product.id})">
+              <i class="fas fa-trash"></i>
             </button>
           </div>
         </div>
-        
-        <div class="mb-3">
-          <div class="flex flex-wrap gap-1 mb-2">
-            ${nutrients.map(n => `<span class="nutrient-badge">${n.name}</span>`).join('')}
+        <p class="text-gray-600 mb-2">${this.escapeHtml(product.brand)} - ${this.escapeHtml(product.form)}</p>
+        <div class="space-y-2 mb-4">
+          ${(product.nutrients || []).map(nutrient => `
+            <div class="flex justify-between text-sm">
+              <span>${this.escapeHtml(nutrient.name)}</span>
+              <span>${nutrient.amount} ${nutrient.unit}</span>
+            </div>
+          `).join('')}
+        </div>
+        <div class="flex justify-between items-center">
+          <span class="text-lg font-semibold text-green-600">€${product.price_per_package}</span>
+          <div class="space-x-2">
+            <button onclick="app.addToWishlist(${product.id})" class="text-red-600 hover:text-red-500" title="Zur Wunschliste">
+              <i class="fas fa-heart"></i>
+            </button>
+            <a href="${product.shop_url}" target="_blank" class="text-blue-600 hover:text-blue-500 text-sm">
+              <i class="fas fa-external-link-alt mr-1"></i>Shop
+            </a>
           </div>
         </div>
-        
-        ${product.price_per_package ? `
-          <div class="text-sm text-gray-600 mb-3">
-            <p>€${product.price_per_package} (${product.servings_per_package} Portionen)</p>
-          </div>
-        ` : ''}
-        
-        <div class="flex space-x-2">
-          <button onclick="app.addToCart([${product.id}])" class="flex-1 bg-primary text-white px-3 py-2 rounded text-sm hover:bg-secondary">
-            <i class="fas fa-shopping-cart mr-1"></i> Kaufen
+      </div>
+    `).join('')
+  }
+
+  // Stacks functionality
+  setupStacksEvents() {
+    const addStackBtn = document.getElementById('add-stack-btn')
+    if (addStackBtn) {
+      addStackBtn.addEventListener('click', () => this.showAddStackModal())
+    }
+
+    this.loadStacks()
+  }
+
+  async loadStacks() {
+    try {
+      this.showLoading('Lade Stacks...')
+      const response = await axios.get('/api/protected/stacks')
+      this.displayStacks(response.data)
+    } catch (error) {
+      console.error('Error loading stacks:', error)
+      this.showError('Fehler beim Laden der Stacks')
+    } finally {
+      this.hideLoading()
+    }
+  }
+
+  displayStacks(stacks) {
+    const container = document.getElementById('stacks-grid')
+    if (!container) return
+
+    if (stacks.length === 0) {
+      container.innerHTML = `
+        <div class="col-span-full text-center py-12">
+          <i class="fas fa-layer-group text-4xl text-gray-300 mb-4"></i>
+          <h3 class="text-lg font-medium text-gray-500 mb-2">Noch keine Stacks erstellt</h3>
+          <p class="text-gray-400 mb-6">Erstellen Sie Ihren ersten Stack aus Ihren Produkten</p>
+          <button onclick="app.showAddStackModal()" class="bg-green-600 text-white px-6 py-2 rounded-md hover:bg-green-700 transition-colors">
+            <i class="fas fa-plus mr-2"></i>Ersten Stack erstellen
           </button>
-          <button onclick="app.viewProduct(${product.id})" class="flex-1 border border-primary text-primary px-3 py-2 rounded text-sm hover:bg-primary hover:text-white">
+        </div>
+      `
+      return
+    }
+
+    container.innerHTML = stacks.map(stack => `
+      <div class="bg-white rounded-lg shadow-md p-6">
+        <div class="flex justify-between items-start mb-4">
+          <h3 class="text-xl font-semibold text-gray-900">${this.escapeHtml(stack.name)}</h3>
+          <div class="flex space-x-2">
+            <button class="text-blue-600 hover:text-blue-500" onclick="app.editStack(${stack.id})">
+              <i class="fas fa-edit"></i>
+            </button>
+            <button class="text-red-600 hover:text-red-500" onclick="app.deleteStack(${stack.id})">
+              <i class="fas fa-trash"></i>
+            </button>
+          </div>
+        </div>
+        <p class="text-gray-600 mb-4">${this.escapeHtml(stack.description || 'Keine Beschreibung')}</p>
+        <div class="space-y-2 mb-4">
+          ${(stack.products || []).slice(0, 3).map(product => `
+            <div class="flex justify-between text-sm">
+              <span>${this.escapeHtml(product.product_name)}</span>
+              <span>${product.dosage_per_day}x täglich</span>
+            </div>
+          `).join('')}
+          ${stack.products && stack.products.length > 3 ? `<div class="text-sm text-gray-500">+${stack.products.length - 3} weitere</div>` : ''}
+        </div>
+        <div class="flex justify-between items-center">
+          <span class="text-lg font-semibold text-green-600">€${(stack.monthly_cost || 0).toFixed(2)}/Monat</span>
+          <button class="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700" onclick="app.viewStack(${stack.id})">
             Details
           </button>
         </div>
       </div>
-    `;
+    `).join('')
   }
 
-  // Event Bindings
-  bindEvents() {
-    // Login/Register buttons
-    document.getElementById('loginBtn')?.addEventListener('click', () => this.showLoginModal());
-    document.getElementById('registerBtn')?.addEventListener('click', () => this.showRegisterModal());
-    document.getElementById('getStartedBtn')?.addEventListener('click', () => {
-      if (this.currentUser) {
-        this.loadDashboard();
-      } else {
-        this.showRegisterModal();
-      }
-    });
-
-    // Dynamic event binding for logout (added after login)
-    document.addEventListener('click', (e) => {
-      if (e.target.id === 'logoutBtn') {
-        this.logout();
-      }
-    });
+  // Modal functions for adding products and stacks
+  showAddProductModal() {
+    this.showModal('Neues Produkt hinzufügen', this.getAddProductForm(), this.handleAddProduct.bind(this))
   }
 
-  // Modals
-  showLoginModal() {
-    this.showModal('loginModal', `
-      <div class="bg-white rounded-lg p-6 w-full max-w-md">
-        <h2 class="text-2xl font-bold mb-4">Anmelden</h2>
-        <form id="loginForm">
-          <div class="mb-4">
-            <label class="block text-sm font-medium mb-2">E-Mail</label>
-            <input type="email" id="loginEmail" class="form-input w-full px-3 py-2 border rounded" required>
-          </div>
-          <div class="mb-6">
-            <label class="block text-sm font-medium mb-2">Passwort</label>
-            <input type="password" id="loginPassword" class="form-input w-full px-3 py-2 border rounded" required>
-          </div>
-          <div class="flex justify-end space-x-3">
-            <button type="button" onclick="app.hideModal('loginModal')" class="px-4 py-2 border rounded hover:bg-gray-50">
-              Abbrechen
-            </button>
-            <button type="submit" class="btn-primary text-white px-4 py-2 rounded">
-              Anmelden
-            </button>
-          </div>
-        </form>
-      </div>
-    `);
-
-    document.getElementById('loginForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const email = document.getElementById('loginEmail').value;
-      const password = document.getElementById('loginPassword').value;
-      await this.login(email, password);
-    });
+  showAddStackModal() {
+    this.showModal('Neuen Stack erstellen', this.getAddStackForm(), this.handleAddStack.bind(this))
   }
 
-  showRegisterModal() {
-    this.showModal('registerModal', `
-      <div class="bg-white rounded-lg p-6 w-full max-w-md">
-        <h2 class="text-2xl font-bold mb-4">Registrieren</h2>
-        <form id="registerForm">
-          <div class="mb-4">
-            <label class="block text-sm font-medium mb-2">E-Mail *</label>
-            <input type="email" id="regEmail" class="form-input w-full px-3 py-2 border rounded" required>
+  getAddProductForm() {
+    return `
+      <form id="add-product-form" class="space-y-4">
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="form-label">Produktname *</label>
+            <input type="text" name="name" required class="form-input">
           </div>
-          <div class="mb-4">
-            <label class="block text-sm font-medium mb-2">Passwort *</label>
-            <input type="password" id="regPassword" class="form-input w-full px-3 py-2 border rounded" required>
+          <div>
+            <label class="form-label">Marke *</label>
+            <input type="text" name="brand" required class="form-input">
           </div>
-          <div class="mb-4">
-            <label class="block text-sm font-medium mb-2">Name (optional)</label>
-            <input type="text" id="regName" class="form-input w-full px-3 py-2 border rounded">
-          </div>
-          <div class="grid md:grid-cols-2 gap-4 mb-4">
-            <div>
-              <label class="block text-sm font-medium mb-2">Alter</label>
-              <input type="number" id="regAge" class="form-input w-full px-3 py-2 border rounded" min="1" max="120">
-            </div>
-            <div>
-              <label class="block text-sm font-medium mb-2">Gewicht (kg)</label>
-              <input type="number" id="regWeight" class="form-input w-full px-3 py-2 border rounded" min="1" max="300" step="0.1">
-            </div>
-          </div>
-          <div class="mb-4">
-            <label class="block text-sm font-medium mb-2">Geschlecht</label>
-            <select id="regGender" class="form-input w-full px-3 py-2 border rounded">
-              <option value="">Bitte wählen</option>
-              <option value="male">Männlich</option>
-              <option value="female">Weiblich</option>
-              <option value="other">Andere</option>
+        </div>
+        
+        <div class="grid grid-cols-3 gap-4">
+          <div>
+            <label class="form-label">Darreichungsform *</label>
+            <select name="form" required class="form-select">
+              <option value="">Auswählen</option>
+              <option value="Kapsel">Kapsel</option>
+              <option value="Tablette">Tablette</option>
+              <option value="Tropfen">Tropfen</option>
+              <option value="Pulver">Pulver</option>
+              <option value="Öl">Öl</option>
             </select>
           </div>
-          <div class="mb-6">
-            <label class="block text-sm font-medium mb-2">Ernährungsweise</label>
-            <select id="regDiet" class="form-input w-full px-3 py-2 border rounded">
-              <option value="">Bitte wählen</option>
-              <option value="omnivore">Alles</option>
-              <option value="vegetarian">Vegetarisch</option>
-              <option value="vegan">Vegan</option>
-            </select>
+          <div>
+            <label class="form-label">Preis pro Packung (€) *</label>
+            <input type="number" name="price" step="0.01" required class="form-input">
           </div>
-          <div class="flex justify-end space-x-3">
-            <button type="button" onclick="app.hideModal('registerModal')" class="px-4 py-2 border rounded hover:bg-gray-50">
-              Abbrechen
-            </button>
-            <button type="submit" class="btn-primary text-white px-4 py-2 rounded">
-              Registrieren
-            </button>
+          <div>
+            <label class="form-label">Portionen pro Packung *</label>
+            <input type="number" name="servings" required class="form-input">
           </div>
-        </form>
-      </div>
-    `);
-
-    document.getElementById('registerForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      
-      const userData = {
-        email: document.getElementById('regEmail').value,
-        password: document.getElementById('regPassword').value,
-        name: document.getElementById('regName').value || null,
-        age: document.getElementById('regAge').value ? parseInt(document.getElementById('regAge').value) : null,
-        weight: document.getElementById('regWeight').value ? parseFloat(document.getElementById('regWeight').value) : null,
-        gender: document.getElementById('regGender').value || null,
-        diet_type: document.getElementById('regDiet').value || null
-      };
-      
-      await this.register(userData);
-    });
+        </div>
+        
+        <div>
+          <label class="form-label">Shop-URL *</label>
+          <input type="url" name="shop_url" required class="form-input">
+        </div>
+        
+        <div>
+          <label class="form-label">Bild-URL (optional)</label>
+          <input type="url" name="image_url" class="form-input">
+        </div>
+        
+        <div id="nutrients-section">
+          <label class="form-label">Wirkstoffe</label>
+          <div id="nutrients-list"></div>
+          <button type="button" onclick="app.addNutrientField()" class="mt-2 text-blue-600 hover:text-blue-500">
+            <i class="fas fa-plus mr-1"></i>Wirkstoff hinzufügen
+          </button>
+        </div>
+      </form>
+    `
   }
 
-  showModal(id, content) {
-    // Remove existing modal
-    const existing = document.getElementById(id);
-    if (existing) existing.remove();
+  getAddStackForm() {
+    return `
+      <form id="add-stack-form" class="space-y-4">
+        <div>
+          <label class="form-label">Stack-Name *</label>
+          <input type="text" name="name" required class="form-input">
+        </div>
+        
+        <div>
+          <label class="form-label">Beschreibung</label>
+          <textarea name="description" rows="3" class="form-input"></textarea>
+        </div>
+        
+        <div id="stack-products-section">
+          <label class="form-label">Produkte auswählen</label>
+          <div id="stack-products-list"></div>
+          <button type="button" onclick="app.loadProductsForStack()" class="mt-2 text-blue-600 hover:text-blue-500">
+            <i class="fas fa-plus mr-1"></i>Produkt hinzufügen
+          </button>
+        </div>
+      </form>
+    `
+  }
 
-    const modal = document.createElement('div');
-    modal.id = id;
-    modal.className = 'fixed inset-0 modal-backdrop flex items-center justify-center z-50 fade-in';
-    modal.innerHTML = `<div class="modal-content">${content}</div>`;
-    
-    document.body.appendChild(modal);
-    
-    // Close on backdrop click
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) {
-        this.hideModal(id);
+  async handleAddProduct(formData) {
+    try {
+      this.showLoading('Produkt wird gespeichert...')
+      
+      const productData = {
+        name: formData.get('name'),
+        brand: formData.get('brand'),
+        form: formData.get('form'),
+        price_per_package: parseFloat(formData.get('price')),
+        servings_per_package: parseInt(formData.get('servings')),
+        shop_url: formData.get('shop_url'),
+        image_url: formData.get('image_url') || null,
+        nutrients: [] // Will be populated from form
       }
-    });
-  }
 
-  hideModal(id) {
-    const modal = document.getElementById(id);
-    if (modal) {
-      modal.remove();
+      const response = await axios.post('/api/protected/products', productData)
+      this.showSuccess('Produkt erfolgreich hinzugefügt!')
+      this.hideModal()
+      this.loadProducts()
+      
+    } catch (error) {
+      this.showError(error.response?.data?.error || 'Fehler beim Speichern des Produkts')
+    } finally {
+      this.hideLoading()
     }
   }
 
-  // Notifications
-  showNotification(message, type = 'info') {
-    const notification = document.createElement('div');
-    notification.className = `fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50 fade-in ${
-      type === 'success' ? 'bg-green-500 text-white' :
-      type === 'error' ? 'bg-red-500 text-white' :
-      'bg-blue-500 text-white'
-    }`;
-    notification.innerHTML = `
-      <div class="flex items-center">
-        <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'} mr-2"></i>
-        <span>${message}</span>
+  async handleAddStack(formData) {
+    try {
+      this.showLoading('Stack wird erstellt...')
+      
+      const stackData = {
+        name: formData.get('name'),
+        description: formData.get('description') || null,
+        products: [] // Will be populated from selected products
+      }
+
+      const response = await axios.post('/api/protected/stacks', stackData)
+      this.showSuccess('Stack erfolgreich erstellt!')
+      this.hideModal()
+      this.loadStacks()
+      
+    } catch (error) {
+      this.showError(error.response?.data?.error || 'Fehler beim Erstellen des Stacks')
+    } finally {
+      this.hideLoading()
+    }
+  }
+
+  // Admin functionality
+  setupAdminEvents() {
+    const adminTabs = document.querySelectorAll('.admin-tab')
+    adminTabs.forEach(tab => {
+      tab.addEventListener('click', (e) => {
+        adminTabs.forEach(t => t.classList.remove('active', 'border-blue-500', 'text-blue-600'))
+        adminTabs.forEach(t => t.classList.add('border-transparent', 'text-gray-500'))
+        
+        e.target.classList.add('active', 'border-blue-500', 'text-blue-600')
+        e.target.classList.remove('border-transparent', 'text-gray-500')
+        
+        this.loadAdminTab(e.target.dataset.tab)
+      })
+    })
+
+    this.loadAdminTab('nutrients')
+  }
+
+  async loadAdminTab(tabName) {
+    const content = document.getElementById('admin-content')
+    if (!content) return
+
+    content.innerHTML = '<div class="text-center py-4 text-gray-500">Lade Daten...</div>'
+
+    try {
+      switch (tabName) {
+        case 'nutrients':
+          await this.loadNutrientsAdmin()
+          break
+        case 'duplicates':
+          await this.loadDuplicatesAdmin()
+          break
+        case 'affiliates':
+          await this.loadAffiliatesAdmin()
+          break
+        case 'statistics':
+          await this.loadStatisticsAdmin()
+          break
+      }
+    } catch (error) {
+      console.error(`Error loading admin tab ${tabName}:`, error)
+      content.innerHTML = '<div class="text-center py-4 text-red-500">Fehler beim Laden der Daten</div>'
+    }
+  }
+
+  async loadNutrientsAdmin() {
+    const response = await axios.get('/api/protected/admin/nutrients')
+    const nutrients = response.data
+    
+    const content = document.getElementById('admin-content')
+    content.innerHTML = `
+      <div class="space-y-6">
+        <div class="flex justify-between items-center">
+          <h3 class="text-lg font-semibold">Nährstoffe verwalten</h3>
+          <button onclick="app.showAddNutrientModal()" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700">
+            <i class="fas fa-plus mr-2"></i>Nährstoff hinzufügen
+          </button>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow overflow-hidden">
+          <table class="min-w-full table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Einheit</th>
+                <th>DGE Empfehlung</th>
+                <th>Studien Empfehlung</th>
+                <th>Warnschwelle</th>
+                <th>Aktionen</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200">
+              ${nutrients.map(nutrient => `
+                <tr>
+                  <td class="font-medium">${this.escapeHtml(nutrient.name)}</td>
+                  <td>${this.escapeHtml(nutrient.standard_unit)}</td>
+                  <td>${nutrient.dge_recommended || '-'}</td>
+                  <td>${nutrient.study_recommended || '-'}</td>
+                  <td>${nutrient.warning_threshold || '-'}</td>
+                  <td>
+                    <button onclick="app.editNutrient(${nutrient.id})" class="text-blue-600 hover:text-blue-500 mr-2">
+                      <i class="fas fa-edit"></i>
+                    </button>
+                    <button onclick="app.deleteNutrient(${nutrient.id})" class="text-red-600 hover:text-red-500">
+                      <i class="fas fa-trash"></i>
+                    </button>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
       </div>
-    `;
-
-    document.body.appendChild(notification);
-
-    setTimeout(() => {
-      notification.remove();
-    }, 5000);
+    `
   }
 
-  showLandingPage() {
-    // Landing page is already in the HTML, just ensure it's visible
-    const app = document.getElementById('app');
-    app.innerHTML = '';
+  // Utility functions
+  showModal(title, content, submitHandler) {
+    const modalHtml = `
+      <div class="modal-overlay" id="modal-overlay">
+        <div class="modal-container">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-semibold">${title}</h3>
+            <button onclick="app.hideModal()" class="text-gray-400 hover:text-gray-600">
+              <i class="fas fa-times text-xl"></i>
+            </button>
+          </div>
+          <div class="modal-content mb-6">
+            ${content}
+          </div>
+          <div class="flex justify-end space-x-3">
+            <button onclick="app.hideModal()" class="btn-secondary">Abbrechen</button>
+            <button onclick="app.submitModal()" class="btn-primary">Speichern</button>
+          </div>
+        </div>
+      </div>
+    `
+    
+    document.body.insertAdjacentHTML('beforeend', modalHtml)
+    this.currentModalSubmitHandler = submitHandler
   }
 
-  // Placeholder methods for features to be implemented
-  async loadUserData() {
-    // Load user-specific data like products, stacks, wishlist
+  hideModal() {
+    const modal = document.getElementById('modal-overlay')
+    if (modal) {
+      modal.remove()
+    }
+    this.currentModalSubmitHandler = null
   }
 
-  async loadStacks() {
-    // Implement stack loading
-    document.getElementById('stacksList').innerHTML = '<p class="text-gray-600">Stacks werden geladen...</p>';
+  submitModal() {
+    if (this.currentModalSubmitHandler) {
+      const form = document.querySelector('#modal-overlay form')
+      if (form) {
+        const formData = new FormData(form)
+        this.currentModalSubmitHandler(formData)
+      }
+    }
   }
 
-  async loadPublicContent() {
-    // Implement public content loading
-    document.getElementById('publicContent').innerHTML = '<p class="text-gray-600">Öffentliche Inhalte werden geladen...</p>';
+  showLoading(message = 'Lädt...') {
+    // Simple loading implementation
+    console.log('Loading:', message)
   }
 
-  showAddProductModal() {
-    this.showNotification('Produkt hinzufügen - Wird implementiert', 'info');
+  hideLoading() {
+    console.log('Loading finished')
   }
 
-  showCreateStackModal() {
-    this.showNotification('Stack erstellen - Wird implementiert', 'info');
+  showError(message) {
+    alert(`Fehler: ${message}`)
   }
 
-  showWishlist() {
-    this.showNotification('Wunschliste - Wird implementiert', 'info');
+  showSuccess(message) {
+    alert(`Erfolg: ${message}`)
   }
 
-  editProduct(id) {
-    this.showNotification(`Produkt ${id} bearbeiten - Wird implementiert`, 'info');
+  escapeHtml(text) {
+    if (!text) return ''
+    const div = document.createElement('div')
+    div.textContent = text
+    return div.innerHTML
   }
 
-  viewProduct(id) {
-    this.showNotification(`Produkt ${id} anzeigen - Wird implementiert`, 'info');
+  loadPageContent() {
+    const path = window.location.pathname
+    
+    switch (path) {
+      case '/dashboard':
+        this.loadDashboardData()
+        break
+      case '/products':
+        this.loadProducts()
+        break
+      case '/stacks':
+        this.loadStacks()
+        break
+    }
   }
 
-  addToWishlist(id) {
-    this.showNotification(`Produkt ${id} zur Wunschliste hinzugefügt`, 'success');
-  }
-
-  addToCart(productIds) {
-    this.cart = [...this.cart, ...productIds];
-    this.showNotification('Zum Warenkorb hinzugefügt', 'success');
-  }
+  // Placeholder functions for missing functionality
+  editProduct(id) { this.showError('Produkt bearbeiten - wird implementiert') }
+  deleteProduct(id) { this.showError('Produkt löschen - wird implementiert') }
+  addToWishlist(id) { this.showSuccess('Zur Wunschliste hinzugefügt') }
+  editStack(id) { this.showError('Stack bearbeiten - wird implementiert') }
+  deleteStack(id) { this.showError('Stack löschen - wird implementiert') }
+  viewStack(id) { this.showError('Stack Details - wird implementiert') }
+  addNutrientField() { this.showError('Nährstoff-Feld hinzufügen - wird implementiert') }
+  loadProductsForStack() { this.showError('Produkte für Stack laden - wird implementiert') }
 }
-
-// Initialize app
-const app = new SupplementStack();
-
-// Make app available globally for onclick handlers
-window.app = app;
 
 // Landing page specific functionality
 document.addEventListener('DOMContentLoaded', () => {
-  // Handle demo button
+  // Initialize app
+  window.app = new SupplementApp()
+
+  // Handle demo button on landing page
   const demoBtn = document.getElementById('demo-btn')
   if (demoBtn) {
     demoBtn.addEventListener('click', () => {
-      // Simple demo functionality - scroll to features or show a modal
-      const featuresSection = document.querySelector('#features') || document.querySelector('.py-20.bg-white')
+      const featuresSection = document.querySelector('#features')
       if (featuresSection) {
         featuresSection.scrollIntoView({ behavior: 'smooth' })
       }
@@ -599,7 +797,7 @@ document.addEventListener('DOMContentLoaded', () => {
     })
   })
 
-  // Ensure all feature cards are visible (no animations for now to prevent hiding)
+  // Ensure all feature cards are visible
   const featureCards = document.querySelectorAll('#features .text-center.p-6')
   featureCards.forEach(card => {
     card.style.opacity = '1'

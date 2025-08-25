@@ -62,6 +62,19 @@ app.route('/api/protected/stacks', stackRoutes)
 app.route('/api/protected/wishlist', wishlistRoutes)
 app.route('/api/protected/admin', adminRoutes)
 
+// Protected auth routes
+app.get('/api/protected/auth/me', async (c) => {
+  const user = c.get('user')
+  return c.json({ 
+    success: true,
+    user: {
+      id: user.id,
+      email: user.email,
+      guideline_source: user.guideline_source
+    }
+  })
+})
+
 // Health check endpoint
 app.get('/api/health', (c) => {
   return c.json({ status: 'healthy', timestamp: new Date().toISOString() })
@@ -95,6 +108,11 @@ app.get('/', (c) => {
 // Login/Register page
 app.get('/auth', (c) => {
   return c.html(getAuthHTML())
+})
+
+// Demo page
+app.get('/demo', (c) => {
+  return c.html(getDemoHTML())
 })
 
 // HTML Template Functions
@@ -164,9 +182,9 @@ function getLandingNavigationHTML() {
                 
                 <div class="flex items-center space-x-4">
                     <a href="#features" class="text-gray-700 hover:text-blue-600 transition-colors">Features</a>
-                    <a href="/auth" class="text-gray-700 hover:text-blue-600 transition-colors">Anmelden</a>
+                    <button id="demo-link" class="text-gray-700 hover:text-blue-600 transition-colors">Demo</button>
                     <a href="/auth" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">
-                        Registrieren
+                        Anmelden
                     </a>
                 </div>
             </div>
@@ -629,6 +647,195 @@ function getAdminHTML() {
         </div>
     </div>
   `, 'admin')
+}
+
+function getDemoHTML() {
+  return getBaseHTML('Demo - Supplement Stack', `
+    <!-- Demo Header -->
+    <div class="bg-blue-600 text-white py-4">
+        <div class="max-w-6xl mx-auto px-4 flex justify-between items-center">
+            <h1 class="text-2xl font-bold">
+                <i class="fas fa-capsules mr-2"></i>Supplement Stack - Demo
+            </h1>
+            <a href="/auth" target="_parent" class="bg-white text-blue-600 px-6 py-2 rounded-md hover:bg-gray-100 transition-colors font-semibold">
+                Jetzt kostenlos anmelden
+            </a>
+        </div>
+    </div>
+
+    <!-- Demo Dashboard -->
+    <div class="space-y-8">
+        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <div class="flex items-center">
+                <i class="fas fa-info-circle text-yellow-600 mr-3"></i>
+                <div>
+                    <h3 class="font-semibold text-yellow-800">Demo-Modus</h3>
+                    <p class="text-yellow-700">Dies ist eine Demonstration der Supplement Stack Funktionen. Keine Daten werden gespeichert.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Demo Stats -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex items-center">
+                    <div class="p-3 rounded-full bg-blue-500 bg-opacity-10">
+                        <i class="fas fa-pills text-blue-500 text-xl"></i>
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-sm font-medium text-gray-500">Produkte</p>
+                        <p class="text-2xl font-semibold text-gray-900">5</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex items-center">
+                    <div class="p-3 rounded-full bg-green-500 bg-opacity-10">
+                        <i class="fas fa-layer-group text-green-500 text-xl"></i>
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-sm font-medium text-gray-500">Stacks</p>
+                        <p class="text-2xl font-semibold text-gray-900">2</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex items-center">
+                    <div class="p-3 rounded-full bg-yellow-500 bg-opacity-10">
+                        <i class="fas fa-euro-sign text-yellow-500 text-xl"></i>
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-sm font-medium text-gray-500">Monatliche Kosten</p>
+                        <p class="text-2xl font-semibold text-gray-900">€47.90</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex items-center">
+                    <div class="p-3 rounded-full bg-red-500 bg-opacity-10">
+                        <i class="fas fa-heart text-red-500 text-xl"></i>
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-sm font-medium text-gray-500">Wunschliste</p>
+                        <p class="text-2xl font-semibold text-gray-900">3</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Demo Products -->
+        <div class="bg-white rounded-lg shadow">
+            <div class="p-6 border-b border-gray-200">
+                <h2 class="text-lg font-semibold text-gray-900">Demo-Produkte</h2>
+            </div>
+            <div class="p-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div class="bg-gray-50 rounded-lg p-4 border-2 border-dashed border-gray-300">
+                        <h3 class="font-semibold text-gray-900 mb-2">Vitamin D3 4000 IU</h3>
+                        <p class="text-sm text-gray-600 mb-3">Sunday Natural - Kapsel</p>
+                        <div class="space-y-1 text-sm mb-4">
+                            <div class="flex justify-between">
+                                <span>Vitamin D3</span>
+                                <span>100 µg</span>
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="font-semibold text-green-600">€19.90</span>
+                            <span class="text-xs text-gray-500">Demo-Produkt</span>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-gray-50 rounded-lg p-4 border-2 border-dashed border-gray-300">
+                        <h3 class="font-semibold text-gray-900 mb-2">B12 Tropfen</h3>
+                        <p class="text-sm text-gray-600 mb-3">InnoNature - Tropfen</p>
+                        <div class="space-y-1 text-sm mb-4">
+                            <div class="flex justify-between">
+                                <span>Vitamin B12</span>
+                                <span>200 µg</span>
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="font-semibold text-green-600">€24.90</span>
+                            <span class="text-xs text-gray-500">Demo-Produkt</span>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-gray-50 rounded-lg p-4 border-2 border-dashed border-gray-300">
+                        <h3 class="font-semibold text-gray-900 mb-2">Magnesium Glycinat</h3>
+                        <p class="text-sm text-gray-600 mb-3">Biomenta - Kapsel</p>
+                        <div class="space-y-1 text-sm mb-4">
+                            <div class="flex justify-between">
+                                <span>Magnesium</span>
+                                <span>400 mg</span>
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="font-semibold text-green-600">€16.90</span>
+                            <span class="text-xs text-gray-500">Demo-Produkt</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-6 text-center">
+                    <a href="/auth" target="_parent" class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors inline-block">
+                        <i class="fas fa-plus mr-2"></i>Eigene Produkte verwalten - Kostenlos registrieren
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Demo Stack -->
+        <div class="bg-white rounded-lg shadow">
+            <div class="p-6 border-b border-gray-200">
+                <h2 class="text-lg font-semibold text-gray-900">Demo-Stack: Grundausstattung</h2>
+            </div>
+            <div class="p-6">
+                <div class="bg-gray-50 rounded-lg p-4 border-2 border-dashed border-gray-300">
+                    <div class="space-y-3">
+                        <div class="flex justify-between items-center">
+                            <span class="font-medium">Vitamin D3 4000 IU</span>
+                            <span class="text-sm text-gray-600">1x täglich</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="font-medium">B12 Tropfen</span>
+                            <span class="text-sm text-gray-600">0.5x täglich</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="font-medium">Magnesium Glycinat</span>
+                            <span class="text-sm text-gray-600">1x täglich</span>
+                        </div>
+                    </div>
+                    
+                    <div class="border-t border-gray-300 mt-4 pt-4">
+                        <div class="flex justify-between items-center">
+                            <span class="font-semibold">Geschätzte monatliche Kosten:</span>
+                            <span class="font-semibold text-green-600">€47.90</span>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4 bg-yellow-50 border border-yellow-200 rounded p-3">
+                        <div class="flex items-start">
+                            <i class="fas fa-exclamation-triangle text-yellow-600 mr-2 mt-0.5"></i>
+                            <div class="text-sm">
+                                <p class="text-yellow-800 font-medium">Interaktionswarnung</p>
+                                <p class="text-yellow-700">Magnesium kann die Vitamin D Aufnahme verbessern. Empfohlene Kombinationseinnahme.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-6 text-center">
+                    <a href="/auth" target="_parent" class="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors inline-block">
+                        <i class="fas fa-layer-group mr-2"></i>Eigene Stacks erstellen - Kostenlos registrieren
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+  `)
 }
 
 export default app
