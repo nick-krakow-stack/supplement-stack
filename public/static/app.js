@@ -599,25 +599,11 @@ document.addEventListener('DOMContentLoaded', () => {
     })
   })
 
-  // Add animations on scroll (simple implementation)
-  const observerOptions = {
-    threshold: 0.1,
-    rootMargin: '0px 0px -50px 0px'
-  }
-
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        entry.target.style.animation = 'fadeInUp 0.6s ease-out forwards'
-      }
-    })
-  }, observerOptions)
-
-  // Observe feature cards
-  const featureCards = document.querySelectorAll('.text-center.p-6')
+  // Ensure all feature cards are visible (no animations for now to prevent hiding)
+  const featureCards = document.querySelectorAll('#features .text-center.p-6')
   featureCards.forEach(card => {
-    card.style.opacity = '0'
-    card.style.transform = 'translateY(20px)'
-    observer.observe(card)
+    card.style.opacity = '1'
+    card.style.transform = 'translateY(0)'
+    card.style.visibility = 'visible'
   })
 })

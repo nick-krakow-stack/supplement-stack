@@ -261,7 +261,7 @@ function getLandingPageHTML() {
             
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                 <!-- Feature 1: Produkt-Management -->
-                <div class="text-center p-6">
+                <div class="text-center p-6 bg-white rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300">
                     <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
                         <i class="fas fa-pills text-2xl text-blue-600"></i>
                     </div>
@@ -274,7 +274,7 @@ function getLandingPageHTML() {
                 </div>
 
                 <!-- Feature 2: Stack-Verwaltung -->
-                <div class="text-center p-6">
+                <div class="text-center p-6 bg-white rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300">
                     <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                         <i class="fas fa-layer-group text-2xl text-green-600"></i>
                     </div>
@@ -286,7 +286,7 @@ function getLandingPageHTML() {
                 </div>
 
                 <!-- Feature 3: Interaktions-Warnungen -->
-                <div class="text-center p-6">
+                <div class="text-center p-6 bg-white rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300">
                     <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
                         <i class="fas fa-exclamation-triangle text-2xl text-red-600"></i>
                     </div>
@@ -298,7 +298,7 @@ function getLandingPageHTML() {
                 </div>
 
                 <!-- Feature 4: Preisberechnung -->
-                <div class="text-center p-6">
+                <div class="text-center p-6 bg-white rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300">
                     <div class="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
                         <i class="fas fa-calculator text-2xl text-purple-600"></i>
                     </div>
@@ -310,7 +310,7 @@ function getLandingPageHTML() {
                 </div>
 
                 <!-- Feature 5: Intelligente Analyse -->
-                <div class="text-center p-6">
+                <div class="text-center p-6 bg-white rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300">
                     <div class="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
                         <i class="fas fa-chart-line text-2xl text-yellow-600"></i>
                     </div>
@@ -322,7 +322,7 @@ function getLandingPageHTML() {
                 </div>
 
                 <!-- Feature 6: Wissensdatenbank -->
-                <div class="text-center p-6">
+                <div class="text-center p-6 bg-white rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300">
                     <div class="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
                         <i class="fas fa-book text-2xl text-indigo-600"></i>
                     </div>
