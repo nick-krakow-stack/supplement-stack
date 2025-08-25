@@ -8,19 +8,22 @@ Eine moderne, webbasierte Anwendung zur intelligenten Verwaltung von Nahrungserg
 
 ### 🎯 Hauptfunktionen
 
-- **Produktverwaltung**: Vollständige CRUD-Operationen für Nahrungsergänzungsmittel
+- **Professionelle Landing Page**: EAAT-konforme Präsentation mit Vertrauenssignalen
+- **Produktverwaltung**: Vollständige CRUD-Operationen für Nahrungsergänzungsmittel  
 - **Stack-Management**: Intelligente Kombinationen mit Dosierungsempfehlungen
 - **Affiliate-System**: Automatische Link-Verfolgung und Klick-Statistiken
 - **Admin-Interface**: Dubletten-Management, Nährstoff-Verwaltung, Statistiken
 - **Interaktionswarnungen**: Automatische Prüfung auf Nährstoff-Interaktionen
 - **Kostenberechnung**: Detaillierte Preis-pro-Tag und Verbrauchsanalyse
-- **Responsive Design**: Optimiert für Desktop und Mobile
+- **Responsive Design**: Optimiert für Desktop und Mobile mit modernen Animationen
 
 ## 🌐 Live URLs
 
-- **Development**: https://3000-i4cud35ai8ri8ynzljswx-6532622b.e2b.dev
+- **Landing Page**: https://3000-i4cud35ai8ri8ynzljswx-6532622b.e2b.dev
+- **Login/Registrierung**: https://3000-i4cud35ai8ri8ynzljswx-6532622b.e2b.dev/auth
+- **Dashboard**: https://3000-i4cud35ai8ri8ynzljswx-6532622b.e2b.dev/dashboard
 - **GitHub Repository**: https://github.com/nick-krakow-stack/supplement-stack
-- **Produktions-Domain**: supplementstack.de (noch nicht deployed)
+- **Produktions-Domain**: supplementstack.de (bereit für Deployment)
 
 ## 🏗️ Datenarchitektur
 
