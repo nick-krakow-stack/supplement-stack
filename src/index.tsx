@@ -222,7 +222,7 @@ function getNavigationHTML(activePage: string) {
                 </div>
                 
                 <div class="flex items-center space-x-4">
-                    <button id="logout-btn" class="text-gray-700 hover:text-gray-900">
+                    <button onclick="window.logout && window.logout()" class="text-gray-700 hover:text-gray-900">
                         <i class="fas fa-sign-out-alt mr-1"></i>Abmelden
                     </button>
                 </div>
@@ -649,8 +649,51 @@ function getAdminHTML() {
   `, 'admin')
 }
 
+function getDemoBaseHTML(title: string, content: string) {
+  return `
+    <!DOCTYPE html>
+    <html lang="de">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>${title}</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+        <style>
+          /* Custom styles for supplement management */
+          .supplement-card { @apply bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow; }
+          .nav-item.active { @apply bg-blue-600 text-white; }
+          .warning-high { @apply bg-red-100 border-red-500 text-red-700; }
+          .warning-medium { @apply bg-yellow-100 border-yellow-500 text-yellow-700; }
+          .safe { @apply bg-green-100 border-green-500 text-green-700; }
+        </style>
+    </head>
+    <body class="bg-gray-50 min-h-screen">
+        <!-- DSGVO Disclaimer -->
+        <div class="bg-blue-600 text-white text-center py-2 text-sm">
+            <i class="fas fa-info-circle mr-2"></i>
+            Diese Plattform bietet keine medizinische Beratung. Konsultieren Sie bei gesundheitlichen Fragen einen Arzt.
+        </div>
+        
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto px-4 py-8">
+            ${content}
+        </main>
+        
+        <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
+        <script>
+          // Demo-spezifisches JavaScript - keine Authentifizierung erforderlich
+          document.addEventListener('DOMContentLoaded', () => {
+            console.log('Demo-Modus: Keine Authentifizierung erforderlich')
+          })
+        </script>
+    </body>
+    </html>
+  `
+}
+
 function getDemoHTML() {
-  return getBaseHTML('Demo - Supplement Stack', `
+  return getDemoBaseHTML('Demo - Supplement Stack', `
     <!-- Demo Header -->
     <div class="bg-blue-600 text-white py-4">
         <div class="max-w-6xl mx-auto px-4 flex justify-between items-center">

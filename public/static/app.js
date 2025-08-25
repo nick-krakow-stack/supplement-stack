@@ -35,8 +35,8 @@ class SupplementApp {
   async checkAuthStatus() {
     const currentPath = window.location.pathname
     
-    // Allow access to landing page and auth page without token
-    if (currentPath === '/' || currentPath === '/auth') {
+    // Allow access to public pages without token
+    if (currentPath === '/' || currentPath === '/auth' || currentPath === '/demo') {
       return
     }
     
@@ -89,11 +89,14 @@ class SupplementApp {
       })
     }
 
-    // Logout button
+    // Logout button - both ID-based and onclick handlers
     const logoutBtn = document.getElementById('logout-btn')
     if (logoutBtn) {
       logoutBtn.addEventListener('click', () => this.logout())
     }
+    
+    // Make logout function globally available for onclick handlers
+    window.logout = () => this.logout()
 
     // Demo link
     const demoLink = document.getElementById('demo-link')
@@ -191,12 +194,31 @@ class SupplementApp {
     this.currentUser = null
     localStorage.removeItem('auth_token')
     delete axios.defaults.headers.common['Authorization']
-    this.redirectToLogin()
+    
+    // Smart redirect after logout
+    this.handleLogoutRedirect()
+  }
+
+  handleLogoutRedirect() {
+    const currentPath = window.location.pathname
+    
+    // If user was in admin/dashboard/protected areas, go to home
+    const protectedPaths = ['/dashboard', '/products', '/stacks', '/admin']
+    const isInProtectedArea = protectedPaths.some(path => currentPath.startsWith(path))
+    
+    if (isInProtectedArea) {
+      window.location.href = '/'
+    } else {
+      // If already on public page, just reload to update UI
+      window.location.reload()
+    }
   }
 
   redirectToLogin() {
     const currentPath = window.location.pathname
-    if (currentPath !== '/' && currentPath !== '/auth') {
+    const publicPaths = ['/', '/auth', '/demo']
+    
+    if (!publicPaths.includes(currentPath)) {
       window.location.href = '/auth'
     }
   }
