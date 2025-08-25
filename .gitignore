@@ -1,125 +1,47 @@
-# Supplement Stack Manager PHP - .gitignore
-# Für All-Inkl Privat Plus Webserver
+# Dependencies
+node_modules/
 
-# Konfigurationsdateien mit sensiblen Daten
-config/database.php.local
-config/config.php.local
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Compiled binary addons
+build
+dist/
+
+# dotenv environment variables file
 .env
-.env.local
-.env.production
+.dev.vars
 
-# Logs
+# PM2
+.pm2/
+pids/
 logs/
 *.log
-error.log
-access.log
 
-# Upload-Verzeichnisse
-uploads/
-temp/
-cache/
-
-# Session-Daten
-sessions/
-tmp/
-
-# Backup-Dateien
+# Backup files
 *.backup
 *.bak
-*.sql.backup
-backup/
+*.tar.gz
+*.zip
 
-# IDE und Editor-Dateien
+# Wrangler
+.wrangler/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# IDE files
 .vscode/
 .idea/
 *.swp
 *.swo
-*~
-.DS_Store
-Thumbs.db
 
-# Composer (falls später verwendet)
-vendor/
-composer.lock
+# TypeScript
+*.tsbuildinfo
 
-# NPM/Node.js (falls später verwendet)
-node_modules/
-npm-debug.log
-yarn.lock
-package-lock.json
-
-# Build-Verzeichnisse
-build/
-dist/
-
-# Archive und komprimierte Dateien
-*.zip
-*.tar.gz
-*.rar
-*.7z
-
-# Datenbank-Dumps
-*.sql
-*.db
-*.sqlite
-*.sqlite3
-
-# All-Inkl spezifische Dateien
-.htaccess.local
-php.ini.local
-
-# Temporäre Dateien
-*.tmp
-*.temp
-.cache/
-
-# Sicherheits-relevante Dateien
-private_keys/
-certificates/
-*.key
-*.crt
-*.pem
-
-# Test-Dateien
-tests/tmp/
-phpunit.xml.local
-.phpunit.result.cache
-
-# Coverage-Reports
-coverage/
-*.coverage
-
-# Migration-Dateien (lokale Versionen)
-migrations/local/
-
-# FTP-Konfigurationen
-.ftpconfig
-ftp-sync.json
-
-# All-Inkl MySQL-Dumps
-mysqldump_*.sql
-
-# Windows-spezifische Dateien
-desktop.ini
-$RECYCLE.BIN/
-
-# macOS-spezifische Dateien
-.AppleDouble
-.LSOverride
-Icon?
-._*
-
-# Linux-spezifische Dateien
-*~
-.nfs*
-
-# PHP-spezifische Dateien
-*.cache
-opcache/
-
-# Session-Management
-session_storage/
-
-# Lokale Entwicklungstools
-.php-cs-fixer.cache
-.phpstan.neon.local
+# Temporary files
+/tmp/

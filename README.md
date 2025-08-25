@@ -1,191 +1,168 @@
-# 🚀 Supplement Stack PHP - Intelligente Supplement-Verwaltung
+# Supplement Stack
 
-> **Vollständiges PHP-System für All-Inkl Privat Plus Server**  
-> Konvertiert von Hono/Cloudflare zu PHP/MySQL für traditionelle Webserver
+## 🎯 Projektübersicht
+**Supplement Stack** ist eine moderne Web-Anwendung für das intelligente Management von Nahrungsergänzungsmitteln. Die Plattform ermöglicht es Nutzern, ihre Supplements zu verwalten, Stacks zu erstellen, Überdosierungen zu vermeiden und die besten Angebote über Affiliate-Links zu finden.
 
-## 📦 Schnelle Installation (3 Schritte)
+### ✨ Hauptfunktionen
+- **Produktverwaltung**: Erfassung und Verwaltung von Supplements mit Nährstoffprofilen
+- **Stack-Erstellung**: Kombinationen von Supplements mit automatischer Dosierungsberechnung
+- **Überdosierungsschutz**: Automatische Warnungen bei kritischen Dosierungen
+- **Interaktionscheck**: Prüfung auf Nährstoff-Interaktionen
+- **Affiliate-System**: Monetarisierung über Partner-Links
+- **Admin-Backend**: Dubletten-Management, Datenpflege, Statistiken
 
-### 1. Download
-- **📥 ZIP herunterladen:** [`supplement-stack-php-v1.0.zip`](https://github.com/nick-krakow-stack/supplement-stack/blob/main/supplement-stack-php-v1.0.zip)
-- **🗂️ Entpacken** mit WinRAR/7-Zip
+## 🌐 URLs
 
-### 2. Upload
-- **📤 Per FTP** alle Dateien in dein Webroot-Verzeichnis hochladen
-- **📁 Struktur:** Alle Dateien direkt in `public_html/` oder `www/`
+### Entwicklungsumgebung
+- **Live-Demo**: https://3000-i4cud35ai8ri8ynzljswx-6532622b.e2b.dev
+- **Health Check**: https://3000-i4cud35ai8ri8ynzljswx-6532622b.e2b.dev/health
+- **GitHub Repository**: https://github.com/nick-krakow-stack/supplement-stack
 
-### 3. Installation
-```
-🌐 Browser öffnen: https://deine-domain.de/install_simple.php
-```
+### Produktionsumgebung (geplant)
+- **Domain**: supplementstack.de (Cloudflare Pages)
+- **Produktions-URLs**: Werden nach Deployment verfügbar sein
 
-## 🔧 Bei Problemen
+## 📊 Datenarchitektur
 
-### Internal Server Error / Not Found?
-```
-🔍 Debug-Script: https://deine-domain.de/debug.php
-```
-Zeigt PHP-Version, Extensions, Berechtigungen und mögliche Fehlerursachen.
+### 🗄️ Hauptdatenmodelle
+- **Users**: Benutzerverwaltung mit Profilen und Präferenzen
+- **Products**: Supplement-Produkte mit Nährstoffprofilen
+- **Stacks**: Supplement-Kombinationen mit Dosierungen
+- **Nutrients**: Nährstoff-Datenbank mit Empfehlungen
+- **Affiliate Links**: Link-Management für Monetarisierung
 
-### Alternative Installation:
-Falls `install_simple.php` nicht funktioniert:
-```
-🛠️ Original Installer: https://deine-domain.de/install.php
-```
+### 🏗️ Speicherdienste
+- **Cloudflare D1**: SQLite-basierte Datenbank für relationale Daten
+- **Lokale Entwicklung**: Automatische lokale SQLite mit `--local` Flag
+- **Produktionsdatenbank**: Globale D1-Verteilung für optimale Performance
 
-## ✅ System-Features
+### 🔄 Datenfluss
+1. **Benutzer-Input**: Produkt- und Stack-Erstellung über Frontend
+2. **Validierung**: Backend-Validierung und Nährstoff-Normalisierung  
+3. **Berechnung**: Automatische Dosierungs- und Kostenberechnungen
+4. **Warnungen**: Echtzeit-Überdosierungs- und Interaktionswarnungen
+5. **Affiliate-Tracking**: Transparente Link-Weiterleitung mit Statistiken
 
-### 🔐 Benutzer-Management
-- **Registrierung & Login** mit sicherer Passwort-Verschlüsselung
-- **Profil-Management** mit Gesundheitsdaten
-- **Session-basierte Authentifizierung**
+## 👥 Benutzerhandbuch
 
-### 💊 Supplement-Verwaltung
-- **Produktdatenbank** mit flexiblen Einheiten
-- **Stack-System** für Supplement-Kombinationen
-- **Kostenrechner** mit automatischen Berechnungen
-- **Import/Export** Funktionen
+### 🚀 Erste Schritte
+1. **Registrierung**: E-Mail + Passwort, optional Profildaten (Alter, Gewicht, Ernährung)
+2. **Dashboard**: Übersicht über Produkte, Stacks und Wunschliste
+3. **Produkt hinzufügen**: Name, Marke, Nährstoffe mit Dosierung erfassen
+4. **Stack erstellen**: Produkte kombinieren mit gewünschter Tagesdosis
 
-### 📊 Dashboard & Analyse
-- **Benutzer-Dashboard** mit Statistiken
-- **Analyse-Tools** (in Entwicklung)
-- **Responsive Design** mit TailwindCSS
+### 📋 Kernfunktionen
+- **Produktkatalog**: Persönlicher und öffentlicher Katalog von Supplements
+- **Stack-Management**: Erstellen, bearbeiten und analysieren von Supplement-Kombinationen
+- **Dosierungsempfehlungen**: Wahl zwischen DGE, Studien oder Influencer-Empfehlungen
+- **Warnsystem**: Automatische Alerts bei Überdosierungen oder Interaktionen
+- **Einkaufshilfe**: Preisvergleich und direkter Kauf über Affiliate-Links
 
-### ⚖️ Legal Compliance
-- **DSGVO-konform** mit Cookie-Consent
-- **Datenschutzerklärung, AGB, Impressum**
-- **Privacy-by-Design** Architektur
+### 🔧 Erweiterte Features
+- **Dubletten-Erkennung**: Automatische Prüfung auf bereits vorhandene Produkte
+- **Notizen-System**: Private Notizen zu jedem Produkt
+- **Wunschliste**: Favoriten für spätere Käufe
+- **Verbrauchsübersicht**: Berechnung der Nachkauftermine
+- **PDF-Export**: Einnahmepläne als PDF (geplant)
 
-## 🏗️ Technische Details
+## 🚀 Deployment
 
-### 📋 Systemanforderungen
-- **PHP 8.0+** (bei All-Inkl aktivieren)
-- **MySQL 5.7+** oder MariaDB
-- **Extensions:** PDO, PDO_MySQL, JSON, OpenSSL
-- **Apache** mit mod_rewrite Support
+### ✅ Aktueller Status
+- **Entwicklung**: ✅ Läuft lokal mit PM2 und Wrangler
+- **Frontend**: ✅ Responsive Design mit TailwindCSS
+- **Backend**: ✅ Hono API mit vollständigem Routing
+- **Datenbank**: ✅ Schema erstellt, lokale Entwicklung bereit
+- **Cloudflare Setup**: ⏳ Bereit für Deployment
 
-### 🗄️ Datenbank-Schema
-```sql
--- Vollständiges MySQL-Schema inkludiert
--- Automatische Migration durch Installer
--- 7 Tabellen: users, products, stacks, ingredients, etc.
-```
+### 🛠️ Tech Stack
+- **Framework**: Hono (TypeScript) auf Cloudflare Workers
+- **Frontend**: Vanilla JavaScript + TailwindCSS + FontAwesome
+- **Datenbank**: Cloudflare D1 (SQLite)
+- **Deployment**: Cloudflare Pages
+- **Entwicklung**: Vite + PM2 für lokale Entwicklung
+- **Versionskontrolle**: Git mit GitHub Integration
 
-### 🛡️ Sicherheits-Features
-- **CSRF-Schutz** mit Token-Validation
-- **Rate Limiting** für API-Endpunkte
-- **SQL-Injection Schutz** mit PDO Prepared Statements
-- **XSS-Schutz** mit HTML-Escaping
-- **Session-Sicherheit** mit HttpOnly Cookies
+### 📋 Deployment-Schritte
+1. **Cloudflare API Setup**: API-Key konfigurieren
+2. **D1 Datenbank**: Produktionsdatenbank erstellen
+3. **Migrationen**: Schema in Produktionsumgebung anwenden  
+4. **Pages Deployment**: Build und Deployment nach Cloudflare
+5. **DNS Setup**: Domain supplementstack.de konfigurieren
 
-## 📁 Projekt-Struktur
+## ✨ Aktuell implementierte Features
 
-```
-supplement-stack-php/
-├── 🏠 index.php              # Landing Page
-├── 🔐 login.php              # Benutzer-Anmeldung
-├── 📊 dashboard.php          # Hauptdashboard
-├── 💊 products.php           # Produktverwaltung
-├── 📚 stacks.php             # Stack-Management
-├── 📈 analysis.php           # Analyse-Tools
-├── 👤 profile.php            # Benutzerprofil
-├── ⚙️ settings.php           # Einstellungen
-├── 🛠️ install_simple.php     # Vereinfachter Installer
-├── 🔍 debug.php              # Fehlerdiagnose
-├── config/                   # Konfigurationsdateien
-├── api/                      # AJAX API-Endpunkte
-├── assets/                   # CSS, JavaScript, Images
-├── database/                 # SQL Schema-Dateien
-├── includes/                 # Wiederverwendbare PHP-Includes
-├── legal/                    # DSGVO-konforme Legal Pages
-└── 📋 README.md              # Diese Dokumentation
-```
+### 🔐 Authentifizierung
+- [x] Registrierung mit E-Mail/Passwort
+- [x] Login/Logout mit Sessions
+- [x] Benutzerprofil mit Präferenzen
+- [x] Admin-Rolle für Backend-Verwaltung
 
-## 🚀 API-Endpunkte
+### 📦 Produktmanagement
+- [x] CRUD-Operationen für Produkte
+- [x] Nährstoff-Zuordnung mit Mengen/Einheiten
+- [x] Dubletten-Erkennung
+- [x] Öffentliche vs. private Produkte
+- [x] Notizen-System
 
-### Authentication
-- `POST /api/csrf-token.php` - CSRF Token generieren
-- `POST /login.php` - Benutzer anmelden
-- `POST /register.php` - Neuen Benutzer registrieren
+### 🥞 Stack-Management
+- [x] Stack-Erstellung und -Verwaltung
+- [x] Produkt-Zuordnung mit Dosierungen
+- [x] Dosierungsquellen (DGE, Studien, Influencer)
+- [x] Kostenkalkulation (täglich/monatlich)
 
-### Products & Stacks
-- `GET/POST /api/products.php` - Produktverwaltung
-- `GET/POST /api/stacks.php` - Stack-Management
-- `POST /api/cost-calculator.php` - Kostenberechnungen
+### 💼 Affiliate-System
+- [x] Link-Management und Tracking
+- [x] Klick-Statistiken
+- [x] Redirect-Service
+- [x] Backend-Queue für unbearbeitete Links
 
-## 🔄 Migration von Cloudflare
+### 👨‍💼 Admin-Backend
+- [x] Benutzer- und Produktstatistiken
+- [x] Nährstoff-Verwaltung
+- [x] Dubletten-Management
+- [x] Affiliate-Link-Bearbeitung
 
-Diese PHP-Version ist eine vollständige Konvertierung des ursprünglichen Hono/Cloudflare Systems:
+## 🔄 Geplante Features
 
-### ✅ Konvertiert:
-- **Hono Framework** → **PHP 8.x**
-- **Cloudflare D1** → **MySQL/MariaDB**
-- **Cloudflare Workers** → **Apache/All-Inkl**
-- **Edge Functions** → **PHP Includes**
-- **Worker KV** → **MySQL Sessions**
+### 📊 Erweiterte Funktionen
+- [ ] Interaktions-Check zwischen Nährstoffen
+- [ ] Überdosierungs-Warnungen
+- [ ] Verbrauchsplanung mit Nachkauferinnerungen
+- [ ] PDF-Export von Einnahmeplänen
+- [ ] Social Login (Google OAuth)
 
-### 📈 Verbesserungen:
-- **Erweiterte Fehlerbehandlung**
-- **Debug-Tools für Entwicklung**  
-- **All-Inkl spezifische Optimierungen**
-- **Vereinfachte Installation**
+### 🎯 Monetarisierung
+- [ ] Erweiterte Affiliate-Partner Integration
+- [ ] Premium-Features für Power-User
+- [ ] E-Mail-Marketing für Nachkauferinnerungen
+- [ ] Partner-Shop Integrationen
 
-## 📞 Support & Dokumentation
+## 🏗️ Entwicklungsnotizen
 
-### 📖 Zusätzliche Dokumentation:
-- **[`INSTALLATION_SCHNELL.md`](INSTALLATION_SCHNELL.md)** - 3-Schritte Schnellstart
-- **[`FEHLERBEHEBUNG.md`](FEHLERBEHEBUNG.md)** - Häufige Probleme & Lösungen
+### 🚀 Nächste Schritte
+1. **Cloudflare API**: Setup für Deployment vorbereiten
+2. **D1 Produktionsdatenbank**: Erstellen und Migrationen anwenden
+3. **Domain-Konfiguration**: supplementstack.de für Cloudflare Pages
+4. **Monitoring**: Error-Tracking und Performance-Monitoring
+5. **Tests**: Unit- und Integrationstests hinzufügen
 
-### 🆘 Bei Problemen:
-1. **Debug-Script ausführen:** `debug.php`
-2. **GitHub Issues:** Bug-Reports und Feature-Requests
-3. **All-Inkl Support:** Für Server-spezifische Fragen
+### 🔧 Technische Verbesserungen
+- [ ] TypeScript-Typen vollständig implementieren
+- [ ] Error-Handling und Logging verbessern  
+- [ ] Rate-Limiting für API-Endpunkte
+- [ ] Caching-Strategien für bessere Performance
+- [ ] Progressive Web App (PWA) Features
 
-## ⚡ Next Steps nach Installation
-
-### 1. Sicherheit
-- [ ] **Install-Dateien löschen:** `install.php`, `install_simple.php`, `debug.php`
-- [ ] **Admin-Passwort** stark wählen
-- [ ] **SSL-Zertifikat** bei All-Inkl aktivieren
-
-### 2. Konfiguration
-- [ ] **Site-Name** anpassen in `config/database.php`
-- [ ] **Legal Pages** mit deinen Daten anpassen
-- [ ] **E-Mail-Settings** für Benachrichtigungen
-
-### 3. Erste Schritte
-- [ ] **Admin-Login** testen
-- [ ] **Erste Supplemente** hinzufügen
-- [ ] **Test-Stack** erstellen
-- [ ] **Backup-Strategie** einrichten
-
-## 🎯 Roadmap
-
-### 🔮 Geplante Features:
-- [ ] **Interaktions-Checker** - Supplement-Wechselwirkungen
-- [ ] **Erweiterte Analysen** - Nährstoff-Dashboards
-- [ ] **Shop-Integration** - Preisvergleiche
-- [ ] **Mobile App** - PWA-Support
-- [ ] **API-Integration** - Externe Datenquellen
-- [ ] **Multi-Language** - Internationalisierung
-
-### 🛠️ Technische Verbesserungen:
-- [ ] **Caching-System** für bessere Performance
-- [ ] **Background Jobs** mit Cron-Integration
-- [ ] **Advanced Security** mit 2FA
-- [ ] **Monitoring** mit Health-Checks
+### 📈 Skalierung
+- [ ] Multi-Region Deployment
+- [ ] CDN-Optimierung für statische Assets
+- [ ] Datenbank-Indexierung optimieren
+- [ ] Background-Jobs für zeitaufwändige Operationen
 
 ---
 
-## 📜 Lizenz & Credits
+**Letzte Aktualisierung**: 25. August 2024
+**Entwickler**: Nick (nick-krakow-stack)
+**Lizenz**: Proprietär
 
-**Erstellt:** 2025-08-24  
-**Version:** 1.0  
-**Kompatibilität:** All-Inkl Privat Plus  
-**PHP:** 8.0+  
-**Database:** MySQL 5.7+  
-
-**🎉 Bereit für Production Deployment!**
-
----
-
-> **💡 Tipp:** Nach erfolgreicher Installation unbedingt die Installer-Dateien löschen!
+⚠️ **Wichtiger Hinweis**: Diese Anwendung ersetzt keine medizinische Beratung. Bei gesundheitlichen Fragen konsultieren Sie immer einen Arzt.
