@@ -571,3 +571,53 @@ const app = new SupplementStack();
 
 // Make app available globally for onclick handlers
 window.app = app;
+
+// Landing page specific functionality
+document.addEventListener('DOMContentLoaded', () => {
+  // Handle demo button
+  const demoBtn = document.getElementById('demo-btn')
+  if (demoBtn) {
+    demoBtn.addEventListener('click', () => {
+      // Simple demo functionality - scroll to features or show a modal
+      const featuresSection = document.querySelector('#features') || document.querySelector('.py-20.bg-white')
+      if (featuresSection) {
+        featuresSection.scrollIntoView({ behavior: 'smooth' })
+      }
+    })
+  }
+
+  // Smooth scrolling for anchor links
+  const anchorLinks = document.querySelectorAll('a[href^="#"]')
+  anchorLinks.forEach(link => {
+    link.addEventListener('click', (e) => {
+      e.preventDefault()
+      const targetId = link.getAttribute('href').substring(1)
+      const targetElement = document.getElementById(targetId)
+      if (targetElement) {
+        targetElement.scrollIntoView({ behavior: 'smooth' })
+      }
+    })
+  })
+
+  // Add animations on scroll (simple implementation)
+  const observerOptions = {
+    threshold: 0.1,
+    rootMargin: '0px 0px -50px 0px'
+  }
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.style.animation = 'fadeInUp 0.6s ease-out forwards'
+      }
+    })
+  }, observerOptions)
+
+  // Observe feature cards
+  const featureCards = document.querySelectorAll('.text-center.p-6')
+  featureCards.forEach(card => {
+    card.style.opacity = '0'
+    card.style.transform = 'translateY(20px)'
+    observer.observe(card)
+  })
+})
