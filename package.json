@@ -1,0 +1,28 @@
+{
+  "name": "supplement-stack-cloudflare",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Intelligente Supplement-Verwaltung für Cloudflare Pages",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "wrangler pages dev dist",
+    "deploy": "npm run build && wrangler pages deploy dist",
+    "deploy:prod": "npm run build && wrangler pages deploy dist --project-name supplement-stack",
+    "cf-typegen": "wrangler types --env-interface CloudflareBindings",
+    "d1:migrate:local": "wrangler d1 migrations apply supplement-stack-db --local",
+    "d1:migrate:prod": "wrangler d1 migrations apply supplement-stack-db",
+    "d1:console:local": "wrangler d1 execute supplement-stack-db --local",
+    "d1:console:prod": "wrangler d1 execute supplement-stack-db"
+  },
+  "dependencies": {
+    "hono": "^4.6.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250705.0",
+    "@hono/vite-cloudflare-pages": "^0.4.2",
+    "vite": "^5.0.0",
+    "wrangler": "^3.78.0",
+    "typescript": "^5.0.0"
+  }
+}
