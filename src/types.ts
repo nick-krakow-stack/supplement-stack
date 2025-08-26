@@ -9,7 +9,7 @@ export interface User {
   id: number;
   email: string;
   name?: string;
-  alter?: number;
+  age?: number;
   geschlecht?: 'm' | 'w' | 'd';
   gewicht?: number;
   ernaehrungsweise?: string;
@@ -24,7 +24,7 @@ export interface CreateUserRequest {
   email: string;
   password: string;
   name?: string;
-  alter?: number;
+  age?: number;
   geschlecht?: 'm' | 'w' | 'd';
   gewicht?: number;
   ernaehrungsweise?: string;

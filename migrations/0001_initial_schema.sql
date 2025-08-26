@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT UNIQUE NOT NULL,
   password_hash TEXT NOT NULL,
   name TEXT,
-  alter INTEGER,
+  age INTEGER,
   geschlecht TEXT CHECK (geschlecht IN ('m', 'w', 'd')),
   gewicht REAL,
   ernaehrungsweise TEXT,

@@ -1,7 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "supplement-stack",
-  "main": "src/index.tsx",
   "compatibility_date": "2025-08-26",
   "compatibility_flags": ["nodejs_compat"],
   "pages_build_output_dir": "./dist",
@@ -11,7 +10,7 @@
     {
       "binding": "DB",
       "database_name": "supplement-stack-production",
-      "database_id": ""
+      "database_id": "3f817330-b78c-45b2-a0f3-f93cf3157e2f"
     }
   ]
 }

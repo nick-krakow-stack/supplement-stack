@@ -68,14 +68,14 @@ auth.post('/register', async (c) => {
     // User erstellen
     const result = await c.env.DB.prepare(`
       INSERT INTO users (
-        email, password_hash, name, alter, geschlecht, gewicht, 
+        email, password_hash, name, age, geschlecht, gewicht, 
         ernaehrungsweise, ziele, guideline_quelle
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       body.email,
       passwordHash,
       body.name || null,
-      body.alter || null,
+      body.age || null,
       body.geschlecht || null,
       body.gewicht || null,
       body.ernaehrungsweise || null,
@@ -195,7 +195,7 @@ auth.post('/validate', async (c) => {
     
     // User aus DB laden für aktuelle Daten
     const user = await c.env.DB.prepare(
-      'SELECT id, email, name, alter, geschlecht, gewicht, ernaehrungsweise, ziele, guideline_quelle, role, created_at, updated_at FROM users WHERE id = ?'
+      'SELECT id, email, name, age, geschlecht, gewicht, ernaehrungsweise, ziele, guideline_quelle, role, created_at, updated_at FROM users WHERE id = ?'
     ).bind(payload.userId).first() as User | null
 
     if (!user) {
@@ -238,13 +238,13 @@ auth.put('/profile', async (c) => {
     // Profil aktualisieren
     await c.env.DB.prepare(`
       UPDATE users 
-      SET name = ?, alter = ?, geschlecht = ?, gewicht = ?, 
+      SET name = ?, age = ?, geschlecht = ?, gewicht = ?, 
           ernaehrungsweise = ?, ziele = ?, guideline_quelle = ?, 
           updated_at = CURRENT_TIMESTAMP
       WHERE id = ?
     `).bind(
       body.name || null,
-      body.alter || null,
+      body.age || null,
       body.geschlecht || null,
       body.gewicht || null,
       body.ernaehrungsweise || null,
@@ -255,7 +255,7 @@ auth.put('/profile', async (c) => {
 
     // Aktualisierte User-Daten laden
     const user = await c.env.DB.prepare(
-      'SELECT id, email, name, alter, geschlecht, gewicht, ernaehrungsweise, ziele, guideline_quelle, role, created_at, updated_at FROM users WHERE id = ?'
+      'SELECT id, email, name, age, geschlecht, gewicht, ernaehrungsweise, ziele, guideline_quelle, role, created_at, updated_at FROM users WHERE id = ?'
     ).bind(payload.userId).first() as User
 
     return c.json<ApiResponse<{ user: User }>>({
