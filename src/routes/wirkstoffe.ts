@@ -16,22 +16,24 @@ wirkstoffe.get('/search', async (c) => {
       })
     }
 
-    // Suche in Wirkstoffen und Synonymen
+    // Suche in Wirkstoffen und Synonymen (mit DISTINCT zur Vermeidung von Duplikaten)
     const searchResults = await c.env.DB.prepare(`
       SELECT DISTINCT 
         w.id, w.name, w.einheit, w.beschreibung, w.hypo_symptome, 
         w.hyper_symptome, w.external_url, w.created_at, w.updated_at,
-        CASE 
+        MAX(CASE 
           WHEN w.name LIKE ? THEN 3  -- Exakte Übereinstimmung am Anfang
           WHEN s.synonym LIKE ? THEN 2  -- Synonym-Match
           WHEN w.name LIKE ? THEN 1  -- Teilstring-Match
           ELSE 0 
-        END as relevance_score
+        END) as relevance_score
       FROM wirkstoffe w
       LEFT JOIN wirkstoff_synonyme s ON w.id = s.wirkstoff_id
       WHERE 
         w.name LIKE ? OR 
         s.synonym LIKE ?
+      GROUP BY w.id, w.name, w.einheit, w.beschreibung, w.hypo_symptome, 
+               w.hyper_symptome, w.external_url, w.created_at, w.updated_at
       ORDER BY relevance_score DESC, w.name ASC
       LIMIT ?
     `).bind(

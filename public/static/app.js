@@ -295,28 +295,28 @@ class SupplementStack {
     return `
       <div class="mb-8">
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h3 class="text-lg font-medium text-gray-900 mb-4">
-            <i class="fas fa-search mr-2"></i>
-            Wirkstoff hinzufügen
-          </h3>
-          
-          <div class="relative">
-            <input
-              type="text"
-              id="wirkstoff-search"
-              placeholder="Nach Wirkstoff suchen (z.B. Magnesium, B12, Vitamin D3)..."
-              class="form-input pr-10"
-              autocomplete="off"
+          <div class="flex items-center justify-between mb-6">
+            <h3 class="text-lg font-medium text-gray-900">
+              <i class="fas fa-pills mr-2 text-supplement-600"></i>
+              Supplement verwalten
+            </h3>
+            <button 
+              onclick="app.openAddSupplementModal()"
+              class="inline-flex items-center px-4 py-2 bg-supplement-600 text-white text-sm font-medium rounded-lg hover:bg-supplement-700 focus:outline-none focus:ring-2 focus:ring-supplement-500 focus:ring-offset-2 transition-colors"
             >
-            <i class="fas fa-search absolute right-3 top-3 text-gray-400"></i>
-            
-            <!-- Autocomplete Dropdown -->
-            <div id="autocomplete-results" class="autocomplete-dropdown hidden"></div>
+              <i class="fas fa-plus mr-2"></i>
+              Hinzufügen
+            </button>
           </div>
 
-          <div class="mt-4 text-sm text-gray-600">
-            <i class="fas fa-info-circle mr-1"></i>
-            Tipp: Suche nach Wirkstoffen wie "Magnesium", "B12" oder "Omega-3"
+          <div class="p-4 bg-gray-50 rounded-lg">
+            <div class="flex">
+              <i class="fas fa-info-circle text-blue-500 mt-1 mr-3"></i>
+              <div class="text-sm text-gray-600">
+                <strong>Tipp:</strong> Klicken Sie auf "Hinzufügen" um neue Supplemente zu Ihrem Stack hinzuzufügen. 
+                Suche nach Wirkstoffen wie "Magnesium", "B12" oder "Omega-3" oder nach spezifischen Produkten.
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -490,211 +490,208 @@ class SupplementStack {
   renderModal() {
     if (!this.modal.isOpen) return ''
 
-    let modalContent = ''
-    
-    switch (this.modal.step) {
-      case 1:
-        modalContent = this.renderModal1_WirkstoffDetails()
-        break
-      case 2:
-        modalContent = this.renderModal2_ProduktListe()
-        break
-      case 3:
-        modalContent = this.renderModal3_Dosierung()
-        break
+    return `
+      <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onclick="app.closeSupplementModal()">
+        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
+          ${this.renderAddSupplementModal()}
+        </div>
+      </div>
+    `
+  }
+
+  renderAddSupplementModal() {
+    return `
+      <div class="p-6">
+        <div class="flex items-center justify-between mb-6">
+          <h2 class="text-xl font-semibold text-gray-900">Supplement hinzufügen</h2>
+          <button onclick="app.closeSupplementModal()" class="text-gray-400 hover:text-gray-600">
+            <i class="fas fa-times text-xl"></i>
+          </button>
+        </div>
+
+        <!-- Tab Navigation -->
+        <div class="flex mb-6">
+          <button 
+            onclick="app.switchModalMode('produkt')"
+            class="px-4 py-2 rounded-l-lg text-sm font-medium border ${this.modal.mode === 'produkt' ? 'bg-blue-500 text-white border-blue-500' : 'bg-gray-100 text-gray-700 border-gray-300'}"
+          >
+            Produkt suchen
+          </button>
+          <button 
+            onclick="app.switchModalMode('wirkstoff')"
+            class="px-4 py-2 rounded-r-lg text-sm font-medium border-t border-r border-b ${this.modal.mode === 'wirkstoff' ? 'bg-blue-500 text-white border-blue-500' : 'bg-gray-100 text-gray-700 border-gray-300'}"
+          >
+            Wirkstoff suchen
+          </button>
+        </div>
+
+        <!-- Search Input -->
+        <div class="mb-4">
+          <input
+            type="text"
+            id="modal-search"
+            placeholder="${this.modal.mode === 'wirkstoff' ? 'Wirkstoff eingeben...' : 'Suchbegriff eingeben...'}"
+            value="${this.modal.searchQuery}"
+            class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            oninput="app.handleModalSearchInput(this.value)"
+          >
+        </div>
+
+        ${this.renderModalSearchResults()}
+        ${this.renderModalForm()}
+
+        <!-- Action Buttons -->
+        <div class="flex justify-end space-x-3 mt-6 pt-4 border-t border-gray-200">
+          <button 
+            onclick="app.closeSupplementModal()"
+            class="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
+          >
+            Abbrechen
+          </button>
+          <button 
+            onclick="app.addSupplementToStack()"
+            class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+            ${!this.modal.selectedProdukt ? 'disabled' : ''}
+          >
+            Supplement hinzufügen
+          </button>
+        </div>
+      </div>
+    `
+  }
+
+  renderModalSearchResults() {
+    if (this.modal.mode === 'wirkstoff' && this.modal.selectedWirkstoff && this.modal.wirkstoffProducts) {
+      return `
+        <div class="mb-4 p-4 bg-blue-50 rounded-lg">
+          <h3 class="font-medium text-blue-900 mb-3">Produkte mit diesem Wirkstoff:</h3>
+          <div class="space-y-2">
+            ${this.modal.wirkstoffProducts.map(produkt => `
+              <div 
+                class="flex items-center justify-between p-3 bg-white rounded border cursor-pointer hover:bg-gray-50 ${this.modal.selectedProdukt?.id === produkt.id ? 'ring-2 ring-green-500' : ''}"
+                onclick="app.selectWirkstoffProdukt(${JSON.stringify(produkt).replace(/"/g, '&quot;')})"
+              >
+                <div>
+                  <div class="font-medium">${produkt.name}</div>
+                  <div class="text-sm text-gray-600">${produkt.preis_pro_monat}€ (${produkt.preis_pro_monat}€/Monat)</div>
+                  <div class="text-xs text-gray-500">${produkt.hauptwirkstoff_menge}${produkt.hauptwirkstoff_einheit} pro ${produkt.einheit_text}</div>
+                </div>
+                <span class="px-2 py-1 bg-green-100 text-green-700 text-xs rounded">Hauptwirkstoff</span>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `
     }
 
-    return `
-      <div class="modal-backdrop" onclick="app.closeModal(event)">
-        <div class="modal-content" onclick="event.stopPropagation()">
-          ${modalContent}
+    if (!this.modal.searchResults.length && this.modal.searchQuery.length >= 2) {
+      return `
+        <div class="text-gray-500 text-center py-4">
+          Keine Ergebnisse für "${this.modal.searchQuery}"
         </div>
-      </div>
-    `
-  }
+      `
+    }
 
-  renderModal1_WirkstoffDetails() {
-    const w = this.modal.wirkstoff
-    if (!w) return ''
-
-    return `
-      <div class="p-6">
-        <div class="flex items-center justify-between mb-6">
-          <h2 class="text-2xl font-bold text-gray-900">${w.name}</h2>
-          <button onclick="app.closeModal()" class="text-gray-400 hover:text-gray-600">
-            <i class="fas fa-times text-xl"></i>
-          </button>
-        </div>
-
-        <div class="space-y-6">
-          ${w.beschreibung ? `
-            <div>
-              <h3 class="font-medium text-gray-900 mb-2">Beschreibung</h3>
-              <p class="text-gray-700">${w.beschreibung}</p>
-            </div>
-          ` : ''}
-
-          ${w.hypo_symptome || w.hyper_symptome ? `
-            <div class="grid md:grid-cols-2 gap-6">
-              ${w.hypo_symptome ? `
+    if (this.modal.searchResults.length > 0) {
+      return `
+        <div class="mb-4 space-y-2">
+          ${this.modal.searchResults.map(item => {
+            const isWirkstoff = this.modal.mode === 'wirkstoff'
+            return `
+              <div 
+                class="flex items-center justify-between p-3 border rounded-lg cursor-pointer hover:bg-gray-50 ${(isWirkstoff && this.modal.selectedWirkstoff?.id === item.id) || (!isWirkstoff && this.modal.selectedProdukt?.id === item.id) ? 'ring-2 ring-blue-500' : ''}"
+                onclick="app.selectModalItem(${JSON.stringify(item).replace(/"/g, '&quot;')})"
+              >
                 <div>
-                  <h3 class="font-medium text-red-700 mb-2">
-                    <i class="fas fa-exclamation-triangle mr-1"></i>
-                    Mangelsymptome
-                  </h3>
-                  <p class="text-sm text-gray-700">${w.hypo_symptome}</p>
+                  <div class="font-medium">${item.name}</div>
+                  ${item.beschreibung ? `<div class="text-sm text-gray-600">${item.beschreibung}</div>` : ''}
+                  ${!isWirkstoff && item.preis ? `<div class="text-sm text-green-600">${item.preis}€</div>` : ''}
                 </div>
-              ` : ''}
-              ${w.hyper_symptome ? `
-                <div>
-                  <h3 class="font-medium text-orange-700 mb-2">
-                    <i class="fas fa-warning mr-1"></i>
-                    Überdosis-Symptome  
-                  </h3>
-                  <p class="text-sm text-gray-700">${w.hyper_symptome}</p>
-                </div>
-              ` : ''}
-            </div>
-          ` : ''}
-
-          ${w.formen && w.formen.length ? `
-            <div>
-              <h3 class="font-medium text-gray-900 mb-3">Verfügbare Formen</h3>
-              <div class="space-y-2">
-                ${w.formen.map(form => `
-                  <div class="flex items-center justify-between p-3 bg-gray-50 rounded-md">
-                    <div>
-                      <span class="font-medium">${form.name}</span>
-                      ${form.kommentar ? `
-                        <div class="text-sm text-gray-600">${form.kommentar}</div>
-                      ` : ''}
-                    </div>
-                    <div class="flex items-center">
-                      ${this.renderScoreStars(form.score)}
-                    </div>
-                  </div>
-                `).join('')}
+                ${isWirkstoff ? `<div class="text-sm text-blue-600">Vitamine - Empfehlung: ${item.empfehlung || '4000 IE'}</div>` : ''}
               </div>
-            </div>
-          ` : ''}
+            `
+          }).join('')}
         </div>
+      `
+    }
 
-        <div class="mt-8 flex items-center justify-between">
-          ${w.external_url ? `
-            <a href="${w.external_url}" target="_blank" 
-              class="text-supplement-600 hover:text-supplement-700 text-sm">
-              <i class="fas fa-external-link-alt mr-1"></i>
-              Mehr erfahren
-            </a>
-          ` : '<div></div>'}
-          
-          <button onclick="app.modalNext()" class="btn-primary">
-            Produkte anzeigen
-            <i class="fas fa-arrow-right ml-2"></i>
-          </button>
-        </div>
-      </div>
-    `
+    return ''
   }
 
-  renderModal2_ProduktListe() {
-    // Placeholder - würde die Produktliste für den gewählten Wirkstoff anzeigen
+  renderModalForm() {
     return `
-      <div class="p-6">
-        <div class="flex items-center justify-between mb-6">
-          <div>
-            <button onclick="app.modalBack()" class="text-gray-600 hover:text-gray-800 mr-4">
-              <i class="fas fa-arrow-left"></i>
-            </button>
-            <span class="text-2xl font-bold text-gray-900">
-              Produkte für ${this.modal.wirkstoff?.name || 'Wirkstoff'}
-            </span>
-          </div>
-          <button onclick="app.closeModal()" class="text-gray-400 hover:text-gray-600">
-            <i class="fas fa-times text-xl"></i>
-          </button>
+      <form class="space-y-4">
+        <!-- Kategorie -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Kategorie</label>
+          <select 
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            onchange="app.updateModalField('selectedCategory', this.value)"
+          >
+            <option value="Basisausstattung" ${this.modal.selectedCategory === 'Basisausstattung' ? 'selected' : ''}>Basisausstattung</option>
+            <option value="Energie & Leistung" ${this.modal.selectedCategory === 'Energie & Leistung' ? 'selected' : ''}>Energie & Leistung</option>
+            <option value="Entgiftung" ${this.modal.selectedCategory === 'Entgiftung' ? 'selected' : ''}>Entgiftung</option>
+            <option value="Immunsystem" ${this.modal.selectedCategory === 'Immunsystem' ? 'selected' : ''}>Immunsystem</option>
+          </select>
         </div>
 
-        <div id="modal-product-list" class="space-y-4">
-          <div class="text-center py-8">
-            <div class="spinner w-8 h-8 mx-auto mb-4"></div>
-            <p class="text-gray-600">Produkte werden geladen...</p>
+        <div class="grid grid-cols-2 gap-4">
+          <!-- Dosierung -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Gewünschte Dosierung</label>
+            <input
+              type="text"
+              placeholder="z.B. 1000"
+              value="${this.modal.dosierung}"
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              oninput="app.updateModalField('dosierung', this.value)"
+            >
+          </div>
+
+          <!-- Einheit -->
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">Einheit</label>
+            <select 
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              onchange="app.updateModalField('selectedUnit', this.value)"
+            >
+              <option value="mg" ${this.modal.selectedUnit === 'mg' ? 'selected' : ''}>mg</option>
+              <option value="μg" ${this.modal.selectedUnit === 'μg' ? 'selected' : ''}>μg</option>
+              <option value="g" ${this.modal.selectedUnit === 'g' ? 'selected' : ''}>g</option>
+              <option value="ml" ${this.modal.selectedUnit === 'ml' ? 'selected' : ''}>ml</option>
+              <option value="IE" ${this.modal.selectedUnit === 'IE' ? 'selected' : ''}>IE</option>
+              <option value="Tropfen" ${this.modal.selectedUnit === 'Tropfen' ? 'selected' : ''}>Tropfen</option>
+              <option value="Kapseln" ${this.modal.selectedUnit === 'Kapseln' ? 'selected' : ''}>Kapseln</option>
+              <option value="Tabletten" ${this.modal.selectedUnit === 'Tabletten' ? 'selected' : ''}>Tabletten</option>
+            </select>
           </div>
         </div>
-      </div>
+
+        <!-- Notizen -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">Notizen (optional)</label>
+          <textarea
+            placeholder="Persönliche Notizen zu diesem Supplement..."
+            rows="3"
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 resize-none"
+            oninput="app.updateModalField('notizen', this.value)"
+          >${this.modal.notizen}</textarea>
+        </div>
+      </form>
     `
   }
 
-  renderModal3_Dosierung() {
-    const p = this.modal.produkt
-    if (!p) return ''
-
-    return `
-      <div class="p-6">
-        <div class="flex items-center justify-between mb-6">
-          <div>
-            <button onclick="app.modalBack()" class="text-gray-600 hover:text-gray-800 mr-4">
-              <i class="fas fa-arrow-left"></i>
-            </button>
-            <span class="text-2xl font-bold text-gray-900">${p.name}</span>
-          </div>
-          <button onclick="app.closeModal()" class="text-gray-400 hover:text-gray-600">
-            <i class="fas fa-times text-xl"></i>
-          </button>
-        </div>
-
-        <form onsubmit="app.addToStack(event)" class="space-y-6">
-          <div class="grid md:grid-cols-2 gap-6">
-            <div>
-              <label class="form-label">Dosierung pro Tag</label>
-              <select name="dosierung" class="form-input">
-                <option value="0.5">0,5x täglich</option>
-                <option value="1" selected>1x täglich</option>
-                <option value="2">2x täglich</option>
-                <option value="3">3x täglich</option>
-              </select>
-            </div>
-            <div>
-              <label class="form-label">Einnahmezeit</label>
-              <select name="einnahmezeit" class="form-input">
-                <option value="">Keine Angabe</option>
-                <option value="Morgens nüchtern">Morgens nüchtern</option>
-                <option value="Zum Frühstück">Zum Frühstück</option>
-                <option value="Mittags">Mittags</option>
-                <option value="Abends">Abends</option>
-                <option value="Vor dem Schlafen">Vor dem Schlafen</option>
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <label class="form-label">Notiz (optional)</label>
-            <textarea name="notiz" class="form-input" rows="3" 
-              placeholder="z.B. mit viel Wasser einnehmen..."></textarea>
-          </div>
-
-          <div class="bg-supplement-50 p-4 rounded-md">
-            <h4 class="font-medium text-supplement-800 mb-2">Geschätzte Kosten</h4>
-            <div id="cost-calculation">
-              <div class="text-lg font-bold text-supplement-700">
-                ${p.preis_pro_monat?.toFixed(2) || '0.00'}€ pro Monat
-              </div>
-            </div>
-          </div>
-
-          <div class="flex space-x-3">
-            <button type="button" onclick="app.modalBack()" class="btn-secondary flex-1">
-              Zurück
-            </button>
-            <button type="submit" class="btn-primary flex-1">
-              <i class="fas fa-plus mr-2"></i>
-              Zu Stack hinzufügen
-            </button>
-          </div>
-        </form>
-      </div>
-    `
+  handleModalSearchInput(value) {
+    this.modal.searchQuery = value
+    if (value.length >= 2) {
+      this.performModalSearch(value)
+    } else {
+      this.modal.searchResults = []
+      this.renderApp()
+    }
   }
+
+
 
   renderInteractionWarnings() {
     if (!this.currentStack?.interaktionen?.length) return ''
@@ -1179,6 +1176,130 @@ class SupplementStack {
       await this.apiCall('/demo/cleanup', 'POST')
     } catch (error) {
       console.error('Cleanup error:', error)
+    }
+  }
+
+  // Modal Functions for "Supplement hinzufügen"
+  openAddSupplementModal() {
+    this.modal = {
+      isOpen: true,
+      mode: 'wirkstoff', // 'wirkstoff' or 'produkt'
+      searchQuery: '',
+      searchResults: [],
+      selectedCategory: 'Basisausstattung',
+      selectedUnit: 'mg',
+      dosierung: '',
+      notizen: '',
+      selectedWirkstoff: null,
+      selectedProdukt: null
+    }
+    this.renderApp()
+  }
+
+  closeSupplementModal() {
+    this.modal.isOpen = false
+    this.renderApp()
+  }
+
+  switchModalMode(mode) {
+    this.modal.mode = mode
+    this.modal.searchQuery = ''
+    this.modal.searchResults = []
+    this.renderApp()
+  }
+
+  async performModalSearch(query) {
+    if (!query || query.length < 2) {
+      this.modal.searchResults = []
+      this.renderApp()
+      return
+    }
+
+    try {
+      let response
+      if (this.modal.mode === 'wirkstoff') {
+        response = await this.apiCall(`/wirkstoffe/search?q=${encodeURIComponent(query)}&limit=5`)
+      } else {
+        response = await this.apiCall(`/produkte?q=${encodeURIComponent(query)}&limit=5`)
+      }
+
+      if (response.success) {
+        this.modal.searchResults = response.data
+        this.renderApp()
+      }
+    } catch (error) {
+      console.error('Modal search error:', error)
+    }
+  }
+
+  selectModalItem(item) {
+    if (this.modal.mode === 'wirkstoff') {
+      this.modal.selectedWirkstoff = item
+      // Load products for this wirkstoff
+      this.loadWirkstoffProducts(item.id)
+    } else {
+      this.modal.selectedProdukt = item
+    }
+    this.renderApp()
+  }
+
+  async loadWirkstoffProducts(wirkstoffId) {
+    try {
+      const response = await this.apiCall(`/produkte/by-wirkstoff/${wirkstoffId}`)
+      if (response.success) {
+        this.modal.wirkstoffProducts = response.data
+        this.renderApp()
+      }
+    } catch (error) {
+      console.error('Load wirkstoff products error:', error)
+    }
+  }
+
+  selectWirkstoffProdukt(produkt) {
+    this.modal.selectedProdukt = produkt
+    this.renderApp()
+  }
+
+  updateModalField(field, value) {
+    this.modal[field] = value
+  }
+
+  async addSupplementToStack() {
+    if (!this.currentStack) {
+      this.showToast('Kein Stack ausgewählt', 'error')
+      return
+    }
+
+    let produktId = null
+    
+    if (this.modal.selectedProdukt) {
+      produktId = this.modal.selectedProdukt.id
+    } else {
+      this.showToast('Bitte wählen Sie ein Produkt aus', 'error')
+      return
+    }
+
+    const dosierung = parseFloat(this.modal.dosierung) || 1
+    const data = {
+      produkt_id: produktId,
+      dosierung: dosierung,
+      einnahmezeit: this.modal.selectedCategory,
+      notiz: this.modal.notizen || null
+    }
+
+    try {
+      const response = await this.apiCall(`/stacks/${this.currentStack.id}/produkte`, 'POST', data)
+      
+      if (response.success) {
+        this.showToast('Supplement erfolgreich hinzugefügt!', 'success')
+        this.closeSupplementModal()
+        await this.loadStack(this.currentStack.id)
+      } else {
+        this.showToast(response.error || 'Fehler beim Hinzufügen', 'error')
+      }
+    } catch (error) {
+      console.error('Add supplement error:', error)
+      this.showToast('Fehler beim Hinzufügen', 'error')
     }
   }
 
