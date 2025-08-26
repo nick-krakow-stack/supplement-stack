@@ -1,1 +1,198 @@
-h1 { font-family: Arial, Helvetica, sans-serif; }
+/* Supplement Stack - Custom Styles */
+
+/* Card hover effects */
+.supplement-card {
+  @apply bg-white rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-all duration-300;
+  @apply hover:border-supplement-300;
+}
+
+.supplement-card:hover {
+  transform: translateY(-2px);
+}
+
+/* Badge styles */
+.badge-empfohlen {
+  @apply bg-supplement-100 text-supplement-800 text-xs font-semibold px-2.5 py-0.5 rounded;
+}
+
+.badge-alternative {
+  @apply bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-0.5 rounded;
+}
+
+.badge-warnung {
+  @apply bg-red-100 text-red-800 text-xs font-semibold px-2.5 py-0.5 rounded;
+}
+
+.badge-tageszeit {
+  @apply bg-orange-100 text-orange-800 text-xs font-semibold px-2.5 py-0.5 rounded;
+}
+
+/* Modal animations */
+.modal-backdrop {
+  @apply fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.modal-content {
+  @apply bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto;
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideIn {
+  from { 
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+  to { 
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Loading spinner */
+.spinner {
+  @apply inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin;
+}
+
+/* Autocomplete dropdown */
+.autocomplete-dropdown {
+  @apply absolute top-full left-0 right-0 bg-white border border-gray-300 rounded-md shadow-lg z-50 max-h-60 overflow-y-auto;
+}
+
+.autocomplete-item {
+  @apply px-4 py-2 hover:bg-supplement-50 cursor-pointer border-b border-gray-100 last:border-b-0;
+}
+
+.autocomplete-item:hover {
+  @apply bg-supplement-50;
+}
+
+/* Price highlighting */
+.price-highlight {
+  @apply text-supplement-600 font-bold text-lg;
+}
+
+.price-per-month {
+  @apply text-supplement-700 font-semibold;
+}
+
+/* Stack footer */
+.stack-footer {
+  @apply fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-40;
+  @apply px-4 py-4;
+}
+
+/* Button variants */
+.btn-primary {
+  @apply bg-supplement-600 hover:bg-supplement-700 text-white font-medium py-2 px-4 rounded-md transition-colors duration-200;
+}
+
+.btn-secondary {
+  @apply bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-md transition-colors duration-200;
+}
+
+.btn-success {
+  @apply bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-md transition-colors duration-200;
+}
+
+.btn-warning {
+  @apply bg-orange-500 hover:bg-orange-600 text-white font-medium py-2 px-4 rounded-md transition-colors duration-200;
+}
+
+.btn-danger {
+  @apply bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-md transition-colors duration-200;
+}
+
+/* Form styles */
+.form-input {
+  @apply w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-supplement-500 focus:border-transparent;
+}
+
+.form-label {
+  @apply block text-sm font-medium text-gray-700 mb-1;
+}
+
+/* Demo banner */
+.demo-banner {
+  @apply bg-gradient-to-r from-blue-500 to-purple-600 text-white;
+  @apply border-b border-blue-400;
+}
+
+/* Interaction warnings */
+.interaction-warning {
+  @apply bg-red-50 border-l-4 border-red-400 p-4 rounded-r-md;
+}
+
+.interaction-caution {
+  @apply bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-r-md;
+}
+
+.interaction-positive {
+  @apply bg-green-50 border-l-4 border-green-400 p-4 rounded-r-md;
+}
+
+/* Responsive grid for product cards */
+.product-grid {
+  @apply grid gap-6;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+}
+
+@media (max-width: 640px) {
+  .product-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Search highlight */
+.search-highlight {
+  @apply bg-yellow-200 font-semibold;
+}
+
+/* Tooltip styles */
+.tooltip {
+  @apply absolute z-50 px-2 py-1 text-sm text-white bg-gray-800 rounded shadow-lg;
+  @apply -mt-8 left-1/2 transform -translate-x-1/2;
+}
+
+.tooltip::after {
+  content: '';
+  @apply absolute top-full left-1/2 transform -translate-x-1/2;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 4px solid #1f2937;
+}
+
+/* Stack categories */
+.stack-category {
+  @apply mb-8 last:mb-0;
+}
+
+.stack-category-title {
+  @apply text-lg font-semibold text-gray-800 mb-4 pb-2 border-b border-gray-200;
+}
+
+/* Smooth transitions */
+.transition-smooth {
+  @apply transition-all duration-300 ease-in-out;
+}
+
+/* Hide scrollbar but keep functionality */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Glass effect for demo overlay */
+.glass-effect {
+  backdrop-filter: blur(10px);
+  background: rgba(255, 255, 255, 0.9);
+}
