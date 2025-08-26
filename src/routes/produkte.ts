@@ -79,9 +79,10 @@ produkte.get('/by-wirkstoff/:wirkstoffId', optionalAuth, async (c) => {
           ORDER BY pw.ist_hauptwirkstoff DESC, w.name
         `).bind(produkt.id).all()
 
-        // Preisberechnung
-        const tagesDosis = Math.ceil(produkt.hauptwirkstoff_menge / 30) || 1
-        const preisProTag = (produkt.preis / produkt.einheit_anzahl) * tagesDosis
+        // Preisberechnung (korrigiert)
+        const tagesDosis = 1 // Standard: 1x täglich
+        const preisProEinheit = produkt.preis / (produkt.einheit_anzahl || 1)
+        const preisProTag = preisProEinheit * tagesDosis
         const preisProMonat = preisProTag * 30
 
         return {
@@ -268,16 +269,16 @@ produkte.get('/', optionalAuth, async (c) => {
 
     const produkteResult = await c.env.DB.prepare(sqlQuery).bind(...params).all()
 
+    // Produkte mit korrigierter Preisberechnung
+    const produkteWithPricing = produkteResult.results.map((produkt: any) => ({
+      ...produkt,
+      preis_pro_tag: Math.round((produkt.preis / (produkt.einheit_anzahl || 1)) * 100) / 100,
+      preis_pro_monat: Math.round((produkt.preis / (produkt.einheit_anzahl || 1)) * 30 * 100) / 100
+    }))
+
     return c.json<ApiResponse>({
       success: true,
-      data: {
-        produkte: produkteResult.results,
-        pagination: {
-          page,
-          limit,
-          total: produkteResult.results.length // Vereinfacht
-        }
-      }
+      data: produkteWithPricing
     })
 
   } catch (error) {

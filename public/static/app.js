@@ -573,7 +573,7 @@ class SupplementStack {
               >
                 <div>
                   <div class="font-medium">${produkt.name}</div>
-                  <div class="text-sm text-gray-600">${produkt.preis_pro_monat}€ (${produkt.preis_pro_monat}€/Monat)</div>
+                  <div class="text-sm text-gray-600">${produkt.preis?.toFixed(2) || '0.00'}€ (${(produkt.preis_pro_monat || produkt.preis * 30 / (produkt.einheit_anzahl || 1))?.toFixed(2) || '0.00'}€/Monat)</div>
                   <div class="text-xs text-gray-500">${produkt.hauptwirkstoff_menge}${produkt.hauptwirkstoff_einheit} pro ${produkt.einheit_text}</div>
                 </div>
                 <span class="px-2 py-1 bg-green-100 text-green-700 text-xs rounded">Hauptwirkstoff</span>
@@ -605,7 +605,7 @@ class SupplementStack {
                 <div>
                   <div class="font-medium">${item.name}</div>
                   ${item.beschreibung ? `<div class="text-sm text-gray-600">${item.beschreibung}</div>` : ''}
-                  ${!isWirkstoff && item.preis ? `<div class="text-sm text-green-600">${item.preis}€</div>` : ''}
+                  ${!isWirkstoff && item.preis ? `<div class="text-sm text-green-600">${item.preis?.toFixed(2) || '0.00'}€ (${(item.preis_pro_monat || (item.preis * 30 / (item.einheit_anzahl || 1)))?.toFixed(2) || '0.00'}€/Monat)</div>` : ''}
                 </div>
                 ${isWirkstoff ? `<div class="text-sm text-blue-600">Vitamine - Empfehlung: ${item.empfehlung || '4000 IE'}</div>` : ''}
               </div>
