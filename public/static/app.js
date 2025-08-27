@@ -346,7 +346,7 @@ class SupplementStack {
               <i class="fas fa-${this.getCategoryIcon(kategorie)} mr-2"></i>
               ${kategorie} (${produkte.length})
             </h3>
-            <div class="product-grid">
+            <div class="products-grid-modern">
               ${produkte.map(item => this.renderProductCard(item)).join('')}
             </div>
           </div>
@@ -358,84 +358,110 @@ class SupplementStack {
   renderProductCard(stackItem) {
     const { stack_produkt: sp, produkt: p } = stackItem
     
+    // Generate placeholder image with first letter of product name
+    const firstLetter = p.name.charAt(0).toUpperCase()
+    const placeholderImage = this.generatePlaceholderImage(firstLetter, p.name)
+    
+    // Generate warnings based on product type
+    const warnings = this.getProductWarnings(p)
+    
     return `
-      <div class="supplement-card p-6">
-        <!-- Product Header -->
-        <div class="flex items-start justify-between mb-4">
-          <div class="flex-1">
-            <h4 class="font-semibold text-gray-900 text-lg">${p.name}</h4>
-            ${p.marke ? `<p class="text-sm text-gray-600">${p.marke}</p>` : ''}
-          </div>
-          <div class="ml-4">
+      <div class="product-card-modern">
+        <!-- Product Image -->
+        <div class="product-image-container">
+          ${p.bild_url ? `
+            <img src="${p.bild_url}" alt="${p.name}" class="product-image">
+          ` : `
+            <div class="product-image-placeholder">
+              <span class="placeholder-letter">${firstLetter}</span>
+            </div>
+          `}
+          <div class="product-checkbox">
             <input type="checkbox" 
               ${this.selectedProducts.has(p.id) ? 'checked' : ''}
               onchange="app.toggleProductSelection(${p.id})"
-              class="w-4 h-4 text-supplement-600 rounded">
+              class="checkbox-modern">
           </div>
         </div>
 
-        <!-- Product Image -->
-        ${p.bild_url ? `
-          <div class="mb-4">
-            <img src="${p.bild_url}" alt="${p.name}" 
-              class="w-full h-32 object-cover rounded-md bg-gray-100">
-          </div>
-        ` : ''}
-
-        <!-- Wirkstoffe -->
-        <div class="mb-4">
-          <div class="text-sm text-gray-600 mb-1">Wirkstoffe:</div>
-          <div class="space-y-1">
-            ${p.wirkstoffe_info ? p.wirkstoffe_info.split(' | ').map(wirkstoff => `
-              <div class="text-sm font-medium text-gray-800">${wirkstoff.trim()}</div>
-            `).join('') : ''}
-          </div>
+        <!-- Product Header -->
+        <div class="product-header">
+          <h4 class="product-title">${p.name}</h4>
+          ${p.marke ? `<p class="product-brand">${p.marke}</p>` : ''}
         </div>
 
-        <!-- Dosierung & Einnahme -->
-        <div class="mb-4 flex items-center justify-between">
-          <div>
-            <span class="text-sm text-gray-600">Dosierung:</span>
-            <span class="font-medium">${this.formatDosageDisplay(p, sp)}</span>
+        <!-- Product Content -->
+        <div class="product-content">
+          <!-- Package Content Info -->
+          <div class="product-info">
+            <div class="info-label">Packungsinhalt:</div>
+            <div class="info-value">${this.formatPackageContent(p)}</div>
           </div>
+
+          <!-- Dosage Display -->
+          <div class="product-info">
+            <div class="info-label">Dosierung:</div>
+            <div class="info-value dosage-display">${this.formatDosageDisplay(p, sp)}</div>
+          </div>
+
+          <!-- Einnahmezeit Badge -->
           ${sp.einnahmezeit ? `
-            <span class="badge-tageszeit">${sp.einnahmezeit}</span>
+            <div class="timing-badge timing-${this.getTimingClass(sp.einnahmezeit)}">
+              <i class="fas fa-${this.getCategoryIcon(sp.einnahmezeit)} mr-1"></i>
+              ${sp.einnahmezeit}
+            </div>
+          ` : ''}
+
+          <!-- Warnings -->
+          ${warnings.length ? `
+            <div class="warnings-container">
+              ${warnings.map(warning => `
+                <div class="warning-item">
+                  <i class="fas fa-exclamation-triangle warning-icon"></i>
+                  <span class="warning-text">${warning}</span>
+                </div>
+              `).join('')}
+            </div>
+          ` : ''}
+
+          <!-- Notiz -->
+          ${sp.notiz ? `
+            <div class="note-container">
+              <i class="fas fa-sticky-note note-icon"></i>
+              <span class="note-text">${sp.notiz}</span>
+            </div>
           ` : ''}
         </div>
 
-        <!-- Preis -->
-        <div class="mb-4">
-          <div class="price-per-month">${p.preis_pro_monat.toFixed(2)}€/Monat</div>
-          <div class="text-sm text-gray-600">
-            Einzelpreis: ${p.preis.toFixed(2)}€ (${p.einheit_anzahl} Stück)
+        <!-- Price Section -->
+        <div class="price-section">
+          <div class="price-main">${p.preis_pro_monat.toFixed(2).replace('.', ',')}€</div>
+          <div class="price-period">pro Monat</div>
+          <div class="price-details">
+            Einzelpreis: ${p.preis.toFixed(2).replace('.', ',')}€ (${this.formatPackageContent(p)})
           </div>
         </div>
-
-        <!-- Notiz -->
-        ${sp.notiz ? `
-          <div class="mb-4 p-3 bg-blue-50 rounded-md">
-            <i class="fas fa-sticky-note text-blue-600 mr-1"></i>
-            <span class="text-sm text-blue-800">${sp.notiz}</span>
-          </div>
-        ` : ''}
 
         <!-- Actions -->
-        <div class="flex space-x-2">
+        <div class="card-actions">
           <button onclick="app.editStackProduct(${sp.stack_id}, ${sp.produkt_id})" 
-            class="btn-secondary text-sm flex-1">
+            class="btn-edit">
             <i class="fas fa-edit mr-1"></i> Bearbeiten
           </button>
-          ${p.shop_link || p.affiliate_link ? `
-            <a href="${p.affiliate_link || p.shop_link}" target="_blank" 
-              class="btn-primary text-sm flex-1 text-center">
-              <i class="fas fa-shopping-cart mr-1"></i> Kaufen
-            </a>
-          ` : ''}
+          
           <button onclick="app.removeFromStack(${sp.stack_id}, ${sp.produkt_id})" 
-            class="btn-danger text-sm">
-            <i class="fas fa-trash"></i>
+            class="btn-remove">
+            <i class="fas fa-trash mr-1"></i> Entfernen
           </button>
         </div>
+
+        <!-- Shop Button -->
+        ${p.shop_link || p.affiliate_link ? `
+          <a href="${p.affiliate_link || p.shop_link}" target="_blank" 
+            class="btn-shop">
+            <i class="fas fa-shopping-cart mr-2"></i> Jetzt bestellen
+          </a>
+        ` : ''}
       </div>
     `
   }
@@ -1738,6 +1764,10 @@ ${this.modal.editMode ? 'Änderungen speichern' : 'Supplement hinzufügen'}
           this.modal.editMode = true
           this.modal.editStackId = stackId
           this.modal.editProduktId = produktId
+          
+          // Wichtig: Im Edit-Modus soll das Produkt vorausgewählt sein
+          this.modal.mode = 'produkt'
+          this.modal.searchResults = [stackProdukt.produkt]
           
           this.renderApp()
         }
