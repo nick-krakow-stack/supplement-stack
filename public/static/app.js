@@ -396,7 +396,7 @@ class SupplementStack {
         <div class="mb-4 flex items-center justify-between">
           <div>
             <span class="text-sm text-gray-600">Dosierung:</span>
-            <span class="font-medium">${sp.dosierung}x täglich</span>
+            <span class="font-medium">${this.formatDosageDisplay(p, sp)}</span>
           </div>
           ${sp.einnahmezeit ? `
             <span class="badge-tageszeit">${sp.einnahmezeit}</span>
@@ -503,7 +503,7 @@ class SupplementStack {
     return `
       <div class="p-6">
         <div class="flex items-center justify-between mb-6">
-          <h2 class="text-xl font-semibold text-gray-900">Supplement hinzufügen</h2>
+          <h2 class="text-xl font-semibold text-gray-900">${this.modal.editMode ? 'Supplement bearbeiten' : 'Supplement hinzufügen'}</h2>
           <button onclick="app.closeSupplementModal()" class="text-gray-400 hover:text-gray-600">
             <i class="fas fa-times text-xl"></i>
           </button>
@@ -537,7 +537,9 @@ class SupplementStack {
           >
         </div>
 
-        ${this.renderModalSearchResults()}
+        <div id="modal-search-results">
+          ${this.renderModalSearchResults()}
+        </div>
         ${this.renderModalForm()}
 
         <!-- Action Buttons -->
@@ -553,7 +555,7 @@ class SupplementStack {
             class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
             ${!this.modal.selectedProdukt ? 'disabled' : ''}
           >
-            Supplement hinzufügen
+${this.modal.editMode ? 'Änderungen speichern' : 'Supplement hinzufügen'}
           </button>
         </div>
       </div>
@@ -569,12 +571,13 @@ class SupplementStack {
             ${this.modal.wirkstoffProducts.map(produkt => `
               <div 
                 class="flex items-center justify-between p-3 bg-white rounded border cursor-pointer hover:bg-gray-50 ${this.modal.selectedProdukt?.id === produkt.id ? 'ring-2 ring-green-500' : ''}"
-                onclick="app.selectWirkstoffProdukt(${JSON.stringify(produkt).replace(/"/g, '&quot;')})"
+                onclick="app.selectWirkstoffProduktById(${produkt.id})"
               >
                 <div>
                   <div class="font-medium">${produkt.name}</div>
-                  <div class="text-sm text-gray-600">${produkt.preis?.toFixed(2) || '0.00'}€ (${(produkt.preis_pro_monat || produkt.preis * 30 / (produkt.einheit_anzahl || 1))?.toFixed(2) || '0.00'}€/Monat)</div>
-                  <div class="text-xs text-gray-500">${produkt.hauptwirkstoff_menge}${produkt.hauptwirkstoff_einheit} pro ${produkt.einheit_text}</div>
+                  <div class="text-sm text-gray-600">${produkt.preis?.toFixed(2).replace('.', ',') || '0,00'}€ (${(produkt.preis_pro_monat || 0)?.toFixed(2).replace('.', ',') || '0,00'}€/Monat)</div>
+                  <div class="text-xs text-gray-500">${produkt.hauptwirkstoff_menge}${produkt.hauptwirkstoff_einheit} pro ${this.getProductUnitName(produkt)}</div>
+                  <div class="text-xs text-blue-600 font-medium">📦 ${this.formatPackageContent(produkt)}</div>
                 </div>
                 <span class="px-2 py-1 bg-green-100 text-green-700 text-xs rounded">Hauptwirkstoff</span>
               </div>
@@ -605,7 +608,8 @@ class SupplementStack {
                 <div>
                   <div class="font-medium">${item.name}</div>
                   ${item.beschreibung ? `<div class="text-sm text-gray-600">${item.beschreibung}</div>` : ''}
-                  ${!isWirkstoff && item.preis ? `<div class="text-sm text-green-600">${item.preis?.toFixed(2) || '0.00'}€ (${(item.preis_pro_monat || (item.preis * 30 / (item.einheit_anzahl || 1)))?.toFixed(2) || '0.00'}€/Monat)</div>` : ''}
+                  ${!isWirkstoff && item.preis ? `<div class="text-sm text-green-600">${item.preis?.toFixed(2).replace('.', ',') || '0,00'}€ (${(item.preis_pro_monat || 0)?.toFixed(2).replace('.', ',') || '0,00'}€/Monat)</div>` : ''}
+                  ${!isWirkstoff && item.einheit_anzahl ? `<div class="text-xs text-blue-600 font-medium">📦 ${this.formatPackageContent(item)}</div>` : ''}
                 </div>
                 ${isWirkstoff ? `<div class="text-sm text-blue-600">Vitamine - Empfehlung: ${item.empfehlung || '4000 IE'}</div>` : ''}
               </div>
@@ -638,7 +642,10 @@ class SupplementStack {
         <div class="grid grid-cols-2 gap-4">
           <!-- Dosierung -->
           <div>
-            <label class="block text-sm font-medium text-gray-700 mb-2">Gewünschte Dosierung</label>
+            <label class="block text-sm font-medium text-gray-700 mb-2">
+              Gewünschte Dosierung
+              ${this.modal.editMode ? '<span class="text-xs text-blue-600 font-normal">(Wirkstoff-Menge)</span>' : ''}
+            </label>
             <input
               type="text"
               placeholder="z.B. 1000"
@@ -646,6 +653,7 @@ class SupplementStack {
               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               oninput="app.updateModalField('dosierung', this.value)"
             >
+            ${this.modal.editMode ? '<p class="text-xs text-gray-500 mt-1">💡 Wird automatisch in Kapseln/Tropfen umgerechnet</p>' : ''}
           </div>
 
           <!-- Einheit -->
@@ -655,14 +663,9 @@ class SupplementStack {
               class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               onchange="app.updateModalField('selectedUnit', this.value)"
             >
-              <option value="mg" ${this.modal.selectedUnit === 'mg' ? 'selected' : ''}>mg</option>
-              <option value="μg" ${this.modal.selectedUnit === 'μg' ? 'selected' : ''}>μg</option>
-              <option value="g" ${this.modal.selectedUnit === 'g' ? 'selected' : ''}>g</option>
-              <option value="ml" ${this.modal.selectedUnit === 'ml' ? 'selected' : ''}>ml</option>
-              <option value="IE" ${this.modal.selectedUnit === 'IE' ? 'selected' : ''}>IE</option>
-              <option value="Tropfen" ${this.modal.selectedUnit === 'Tropfen' ? 'selected' : ''}>Tropfen</option>
-              <option value="Kapseln" ${this.modal.selectedUnit === 'Kapseln' ? 'selected' : ''}>Kapseln</option>
-              <option value="Tabletten" ${this.modal.selectedUnit === 'Tabletten' ? 'selected' : ''}>Tabletten</option>
+              ${this.getAvailableUnits().map(unit => `
+                <option value="${unit}" ${this.modal.selectedUnit === unit ? 'selected' : ''}>${unit}</option>
+              `).join('')}
             </select>
           </div>
         </div>
@@ -683,11 +686,18 @@ class SupplementStack {
 
   handleModalSearchInput(value) {
     this.modal.searchQuery = value
+    
+    // Debounce search to prevent focus loss
+    clearTimeout(this.searchTimeout)
+    
     if (value.length >= 2) {
-      this.performModalSearch(value)
+      this.searchTimeout = setTimeout(() => {
+        this.performModalSearch(value)
+      }, 300) // 300ms delay
     } else {
       this.modal.searchResults = []
-      this.renderApp()
+      // Update only search results without full re-render
+      this.updateSearchResults()
     }
   }
 
@@ -719,6 +729,200 @@ class SupplementStack {
   }
 
   // Helper functions
+  formatDosageDisplay(produkt, stackProdukt) {
+    const portionen = stackProdukt.dosierung || 1
+    const produktName = produkt.name?.toLowerCase() || ''
+    
+    console.log('🔍 formatDosageDisplay DEBUG:')
+    console.log('  Portionen:', portionen)  
+    console.log('  Produktname:', produktName)
+    console.log('  Produktform:', produkt.form)
+    console.log('  D3 Check:', produktName.includes('vitamin d3') || produktName.includes('d3'))
+    console.log('  Tropfen Check:', produkt.form?.toLowerCase() === 'tropfen' || produktName.includes('tropfen'))
+    
+
+    // Extrahiere Wirkstoffmenge aus Produktname und berechne Gesamtdosis
+    let wirkstoffInfo = ''
+    
+    // Vitamin D3 Tropfen - Robustere Erkennung mit Fallback für falsch gespeicherte Daten
+    const istVitaminD3 = produktName.includes('vitamin d3') || produktName.includes('d3')
+    const istTropfen = (produkt.form && produkt.form.toLowerCase().includes('tropfen')) || 
+                       produktName.includes('tropfen') ||
+                       produktName.includes('ie') // D3 mit IE ist meist Tropfen
+    
+    console.log('🧪 D3 ERKENNUNG:', { istVitaminD3, istTropfen, form: produkt.form, name: produktName })
+    
+    if (istVitaminD3 && istTropfen) {
+      // Fallback: Wenn Portionen > 1000, dann wurden wahrscheinlich IE fälschlicherweise als Portionen gespeichert
+      if (portionen > 1000) {
+        console.log('🔧 FALLBACK: Große Portionenzahl erkannt:', portionen, '- behandle als IE')
+        const korrigierteTropfen = Math.ceil(portionen / 10000) || 1
+        const gesamtIE = portionen // Die "Portionen" sind eigentlich IE
+        wirkstoffInfo = `${gesamtIE.toLocaleString('de-DE')} IE täglich`
+        const result = `${korrigierteTropfen} ${korrigierteTropfen === 1 ? 'Tropfen' : 'Tropfen'} täglich (${wirkstoffInfo})`
+        console.log('🔧 FALLBACK Ergebnis:', result)
+        return result
+      } else {
+        // Normale Berechnung - Portionen sind korrekt als Tropfen gespeichert
+        console.log('✅ D3 NORMALE BERECHNUNG:', portionen, 'Tropfen gespeichert')
+        const ieProTropfen = 10000 // Standard: 10.000 IE pro Tropfen
+        const gesamtIE = portionen * ieProTropfen
+        wirkstoffInfo = `${gesamtIE.toLocaleString('de-DE')} IE täglich`
+        const result = `${portionen} ${portionen === 1 ? 'Tropfen' : 'Tropfen'} täglich (${wirkstoffInfo})`
+        console.log('✅ D3 ERGEBNIS:', result)
+        return result
+      }
+    }
+    
+    // Vitamin B12 Kapseln/Tabletten  
+    else if (produktName.includes('b12')) {
+
+      const mcgMatch = produktName.match(/(\d+)mcg/)
+      const mcgProKapsel = mcgMatch ? parseInt(mcgMatch[1]) : 1000
+      const gesamtMcg = portionen * mcgProKapsel
+      wirkstoffInfo = `${gesamtMcg} μg täglich`
+      const einheitName = produkt.form?.toLowerCase() === 'tablette' ? 'Tablette' : 'Kapsel'
+      return `${portionen} ${portionen === 1 ? einheitName : einheitName + 'n'} täglich (${wirkstoffInfo})`
+    }
+    
+    // Magnesium Kapseln
+    else if (produktName.includes('magnesium')) {
+
+      const mgProKapsel = produktName.includes('einzelkapsel') ? 180 : 200 // Standard mg pro Kapsel
+      const gesamtMg = portionen * mgProKapsel
+      wirkstoffInfo = `${gesamtMg} mg täglich`
+      return `${portionen} ${portionen === 1 ? 'Kapsel' : 'Kapseln'} täglich (${wirkstoffInfo})`
+    }
+    
+    // Allgemeiner Fall - versuche Einheit aus Produktname zu extrahieren
+    else {
+      console.log('❌ ALLGEMEINER FALL erreicht - keine spezielle Erkennung')
+      
+      // Spezielle Fallback-Checks für D3
+      if (produktName.includes('d3') || produktName.includes('vitamin d3')) {
+        console.log('🔧 D3 FALLBACK aktiviert')
+        // Behandle als Tropfen, auch wenn Erkennung fehlschlug
+        const ieProTropfen = 10000
+        const gesamtIE = portionen * ieProTropfen
+        const wirkstoffInfo = `${gesamtIE.toLocaleString('de-DE')} IE täglich`
+        return `${portionen} ${portionen === 1 ? 'Tropfen' : 'Tropfen'} täglich (${wirkstoffInfo})`
+      }
+      
+      const einheitName = produkt.form || 'Portion'
+      return `${portionen} ${portionen === 1 ? einheitName : einheitName + 'en'} täglich`
+    }
+  }
+
+  formatPackageContent(produkt) {
+    const anzahl = produkt.einheit_anzahl
+    const produktName = produkt.name?.toLowerCase() || ''
+    const form = produkt.form?.toLowerCase() || ''
+    
+    // Intelligente Formatierung basierend auf Produkttyp
+    if (form === 'tropfen' || produktName.includes('tropfen')) {
+      // Für Tropfen: Rechne ml in Tropfen um (1ml ≈ 20 Tropfen)
+      const tropfenAnzahl = Math.round(anzahl * 20)
+      return `${tropfenAnzahl} Tropfen pro Packung`
+    }
+    else if (form === 'flüssig' || form === 'liquid') {
+      return `${anzahl} ml pro Packung`
+    }
+    else if (form === 'kapsel' || form === 'kapseln') {
+      return `${anzahl} Kapseln pro Packung`
+    }
+    else if (form === 'tablette' || form === 'tabletten') {
+      return `${anzahl} Tabletten pro Packung`
+    }
+    else if (form === 'pulver') {
+      return `${anzahl}g Pulver pro Packung`
+    }
+    else {
+      // Fallback mit intelligenter Einheit-Erkennung
+      const einheit = form || 'Stück'
+      return `${anzahl} ${einheit} pro Packung`
+    }
+  }
+
+  getProductUnitName(produkt) {
+    const produktName = produkt.name?.toLowerCase() || ''
+    const form = produkt.form?.toLowerCase() || ''
+    
+    // Intelligente Einheit basierend auf Produkttyp
+    if (form === 'tropfen' || produktName.includes('tropfen')) {
+      return 'Tropfen'
+    }
+    else if (form === 'kapsel' || form === 'kapseln') {
+      return 'Kapsel'
+    }
+    else if (form === 'tablette' || form === 'tabletten') {
+      return 'Tablette'
+    }
+    else if (form === 'pulver') {
+      return 'Portion'
+    }
+    else if (form === 'flüssig' || form === 'liquid') {
+      return 'ml'
+    }
+    else {
+      // Fallback auf das was in der Datenbank steht, oder "Stück"
+      return produkt.einheit_text || 'Stück'
+    }
+  }
+
+  getAvailableUnits() {
+    // Intelligente Unit-Auswahl basierend auf gewähltem Produkt/Wirkstoff
+    if (this.modal.selectedProdukt) {
+      const produktName = this.modal.selectedProdukt.name?.toLowerCase() || ''
+      const form = this.modal.selectedProdukt.form?.toLowerCase() || ''
+      
+      // Vitamin D3 → nur IE
+      if (produktName.includes('vitamin d3') || produktName.includes('d3')) {
+        return ['IE']
+      }
+      // Vitamin B12 → nur μg  
+      else if (produktName.includes('b12')) {
+        return ['μg']
+      }
+      // Magnesium → nur mg
+      else if (produktName.includes('magnesium')) {
+        return ['mg']
+      }
+      // Omega-3 → nur mg
+      else if (produktName.includes('omega')) {
+        return ['mg']
+      }
+      // Zink → nur mg
+      else if (produktName.includes('zink')) {
+        return ['mg']
+      }
+      // Eisen → nur mg
+      else if (produktName.includes('eisen')) {
+        return ['mg']
+      }
+    }
+    
+    // Fallback oder bei Wirkstoff-Suche
+    if (this.modal.selectedWirkstoff) {
+      const wirkstoffName = this.modal.selectedWirkstoff.name?.toLowerCase() || ''
+      
+      if (wirkstoffName.includes('vitamin d3') || wirkstoffName.includes('d3')) {
+        return ['IE']
+      }
+      else if (wirkstoffName.includes('b12')) {
+        return ['μg']
+      }
+      else if (wirkstoffName.includes('magnesium')) {
+        return ['mg']
+      }
+      else if (wirkstoffName.includes('omega')) {
+        return ['mg']
+      }
+    }
+    
+    // Allgemeiner Fallback - alle Einheiten
+    return ['mg', 'μg', 'g', 'ml', 'IE', 'Tropfen', 'Kapseln', 'Tabletten']
+  }
+
   groupProductsByCategory(produkte) {
     const kategorien = {}
     
@@ -916,7 +1120,7 @@ class SupplementStack {
                 </div>
                 
                 <div class="text-right ml-4">
-                  <div class="price-highlight">${produkt.preis_pro_monat.toFixed(2)}€</div>
+                  <div class="price-highlight">${(produkt.preis_pro_monat || 0).toFixed(2).replace('.', ',')}€</div>
                   <div class="text-sm text-gray-600">pro Monat</div>
                 </div>
               </div>
@@ -1191,13 +1395,30 @@ class SupplementStack {
       dosierung: '',
       notizen: '',
       selectedWirkstoff: null,
-      selectedProdukt: null
+      selectedProdukt: null,
+      editMode: false,
+      editStackId: null,
+      editProduktId: null
     }
     this.renderApp()
   }
 
   closeSupplementModal() {
-    this.modal.isOpen = false
+    this.modal = {
+      isOpen: false,
+      mode: 'wirkstoff',
+      searchQuery: '',
+      searchResults: [],
+      selectedCategory: 'Basisausstattung',
+      selectedUnit: 'mg',
+      dosierung: '',
+      notizen: '',
+      selectedWirkstoff: null,
+      selectedProdukt: null,
+      editMode: false,
+      editStackId: null,
+      editProduktId: null
+    }
     this.renderApp()
   }
 
@@ -1211,7 +1432,7 @@ class SupplementStack {
   async performModalSearch(query) {
     if (!query || query.length < 2) {
       this.modal.searchResults = []
-      this.renderApp()
+      this.updateSearchResults()
       return
     }
 
@@ -1225,22 +1446,79 @@ class SupplementStack {
 
       if (response.success) {
         this.modal.searchResults = response.data
-        this.renderApp()
+        // Update only search results, not full modal
+        this.updateSearchResults()
       }
     } catch (error) {
       console.error('Modal search error:', error)
     }
   }
 
+  updateSearchResults() {
+    // Update nur die Suchergebnisse ohne vollständiges Re-rendering
+    const resultsContainer = document.getElementById('modal-search-results')
+    if (resultsContainer) {
+      resultsContainer.innerHTML = this.renderModalSearchResults()
+    }
+  }
+
   selectModalItem(item) {
     if (this.modal.mode === 'wirkstoff') {
       this.modal.selectedWirkstoff = item
+      
+      // Automatisch die richtige Einheit setzen
+      if (item.name.toLowerCase().includes('vitamin d3')) {
+        this.modal.selectedUnit = 'IE'
+      } else if (item.name.toLowerCase().includes('b12')) {
+        this.modal.selectedUnit = 'μg'
+      } else if (item.name.toLowerCase().includes('magnesium')) {
+        this.modal.selectedUnit = 'mg'
+      } else {
+        // Standard-Einheit basierend auf Wirkstoff-Einheit
+        this.modal.selectedUnit = item.einheit || 'mg'
+      }
+      
       // Load products for this wirkstoff
       this.loadWirkstoffProducts(item.id)
     } else {
       this.modal.selectedProdukt = item
+      
+      // Automatisch zur richtigen Einheit und Standarddosierung wechseln
+      const produktName = item.name?.toLowerCase() || ''
+      
+      if (produktName.includes('vitamin d3') || produktName.includes('d3')) {
+        this.modal.selectedUnit = 'IE'
+        this.modal.dosierung = '4000'
+      } 
+      else if (produktName.includes('b12')) {
+        this.modal.selectedUnit = 'μg' 
+        this.modal.dosierung = '1000'
+      }
+      else if (produktName.includes('magnesium')) {
+        this.modal.selectedUnit = 'mg'
+        this.modal.dosierung = '400'
+      }
+      else if (produktName.includes('omega')) {
+        this.modal.selectedUnit = 'mg'
+        this.modal.dosierung = '2000'
+      }
+      else {
+        this.modal.selectedUnit = 'mg'
+        this.modal.dosierung = '100'
+      }
     }
     this.renderApp()
+    
+    // Bei Produktauswahl automatisch zum Dosierung-Feld springen
+    if (this.modal.mode === 'produkt' && this.modal.selectedProdukt) {
+      setTimeout(() => {
+        const dosierungInput = document.querySelector('input[oninput*="dosierung"]')
+        if (dosierungInput) {
+          dosierungInput.focus()
+          dosierungInput.select()
+        }
+      }, 100)
+    }
   }
 
   async loadWirkstoffProducts(wirkstoffId) {
@@ -1256,8 +1534,44 @@ class SupplementStack {
   }
 
   selectWirkstoffProdukt(produkt) {
+    console.log('🔍 selectWirkstoffProdukt aufgerufen:', produkt)
     this.modal.selectedProdukt = produkt
+    console.log('✅ selectedProdukt gesetzt:', this.modal.selectedProdukt)
+    
+    // Automatisch zur richtigen Einheit und Standarddosierung wechseln
+    const produktName = produkt.name?.toLowerCase() || ''
+    
+    if (produktName.includes('vitamin d3') || produktName.includes('d3')) {
+      this.modal.selectedUnit = 'IE'
+      this.modal.dosierung = '4000' // Standarddosierung für D3
+    } 
+    else if (produktName.includes('b12')) {
+      this.modal.selectedUnit = 'μg' 
+      this.modal.dosierung = '1000' // Standarddosierung für B12
+    }
+    else if (produktName.includes('magnesium')) {
+      this.modal.selectedUnit = 'mg'
+      this.modal.dosierung = '400' // Standarddosierung für Magnesium
+    }
+    else if (produktName.includes('omega')) {
+      this.modal.selectedUnit = 'mg'
+      this.modal.dosierung = '2000' // Standarddosierung für Omega-3
+    }
+    else {
+      this.modal.selectedUnit = 'mg'
+      this.modal.dosierung = '100' // Allgemeine Standarddosierung
+    }
+    
     this.renderApp()
+    
+    // Automatisch zum Dosierung-Feld springen
+    setTimeout(() => {
+      const dosierungInput = document.querySelector('input[oninput*="dosierung"]')
+      if (dosierungInput) {
+        dosierungInput.focus()
+        dosierungInput.select() // Text auswählen für einfache Überschreibung
+      }
+    }, 100)
   }
 
   updateModalField(field, value) {
@@ -1279,27 +1593,195 @@ class SupplementStack {
       return
     }
 
-    const dosierung = parseFloat(this.modal.dosierung) || 1
+    // Berechne korrekte Dosierung basierend auf Wirkstoff und Einheit
+    let dosierung = parseFloat(this.modal.dosierung) || 1
+    const einheit = this.modal.selectedUnit || 'mg'
+    
+    // Intelligente Umrechnung basierend auf Wirkstoff und Einheit
+    if (this.modal.selectedProdukt) {
+      const produktName = this.modal.selectedProdukt.name.toLowerCase()
+      
+
+      // Vitamin D3 Tropfen: IE zu Tropfen - Robustere Erkennung
+      if ((produktName.includes('vitamin d3') || produktName.includes('d3')) && 
+          (this.modal.selectedProdukt.form?.toLowerCase() === 'tropfen' || produktName.includes('tropfen')) && 
+          einheit === 'IE') {
+        const originalDosierung = dosierung
+        // 10000 IE = 1 Tropfen (standardmäßig)
+        dosierung = Math.ceil(dosierung / 10000) || 1
+        console.log('🧪 D3 UMRECHNUNG:', originalDosierung, 'IE →', dosierung, 'Tropfen')
+
+      }
+      
+      // Vitamin B12 Tabletten/Kapseln: μg zu Stück
+      else if (produktName.includes('b12') && einheit === 'μg') {
+        const originalDosierung = dosierung
+        // Extrahiere mcg pro Kapsel aus Produktname (z.B. "1000mcg")
+        const mcgMatch = produktName.match(/(\d+)mcg/)
+        const mcgProKapsel = mcgMatch ? parseInt(mcgMatch[1]) : 1000 // Default: 1000mcg
+        dosierung = Math.ceil(dosierung / mcgProKapsel) || 1
+
+      }
+      
+      // Magnesium Kapseln: mg zu Kapseln
+      else if (produktName.includes('magnesium') && einheit === 'mg') {
+        const originalDosierung = dosierung
+        // Standard: 180mg pro Kapsel für Einzelkapseln
+        const mgProKapsel = produktName.includes('einzelkapsel') ? 180 : 200
+        dosierung = Math.ceil(dosierung / mgProKapsel) || 1
+
+      }
+
+    }
+    
     const data = {
       produkt_id: produktId,
       dosierung: dosierung,
       einnahmezeit: this.modal.selectedCategory,
       notiz: this.modal.notizen || null
     }
+    
+    console.log('📤 SPEICHERE DATEN:', data)
 
     try {
-      const response = await this.apiCall(`/stacks/${this.currentStack.id}/produkte`, 'POST', data)
+      let response
+      
+      // Edit-Modus oder Neu-Hinzufügen
+      if (this.modal.editMode && this.modal.editStackId && this.modal.editProduktId) {
+        // Update bestehenden Eintrag
+        response = await this.apiCall(`/stacks/${this.modal.editStackId}/produkte/${this.modal.editProduktId}`, 'PUT', data)
+        
+        if (response.success) {
+          this.showToast('Supplement erfolgreich bearbeitet!', 'success')
+        } else {
+          this.showToast(response.error || 'Fehler beim Bearbeiten', 'error')
+        }
+      } else {
+        // Neuen Eintrag hinzufügen
+        response = await this.apiCall(`/stacks/${this.currentStack.id}/produkte`, 'POST', data)
+        
+        if (response.success) {
+          this.showToast('Supplement erfolgreich hinzugefügt!', 'success')
+        } else {
+          this.showToast(response.error || 'Fehler beim Hinzufügen', 'error')
+        }
+      }
       
       if (response.success) {
-        this.showToast('Supplement erfolgreich hinzugefügt!', 'success')
         this.closeSupplementModal()
         await this.loadStack(this.currentStack.id)
-      } else {
-        this.showToast(response.error || 'Fehler beim Hinzufügen', 'error')
+        this.renderApp()
       }
     } catch (error) {
-      console.error('Add supplement error:', error)
-      this.showToast('Fehler beim Hinzufügen', 'error')
+      console.error('Add/Edit supplement error:', error)
+      this.showToast('Fehler beim Speichern', 'error')
+    }
+  }
+
+  selectWirkstoffProduktById(produktId) {
+    // Finde das Produkt in der wirkstoffProducts Liste
+    const produkt = this.modal.wirkstoffProducts?.find(p => p.id === produktId)
+    if (produkt) {
+      console.log('🔍 selectWirkstoffProduktById gefunden:', produkt)
+      this.selectWirkstoffProdukt(produkt)
+    } else {
+      console.error('❌ Produkt mit ID', produktId, 'nicht gefunden in:', this.modal.wirkstoffProducts)
+    }
+  }
+
+  async editStackProduct(stackId, produktId) {
+    try {
+      // Lade aktuelles Stack-Produkt für Bearbeitung
+      const response = await this.apiCall(`/stacks/${stackId}`)
+      if (response.success) {
+        const stackProdukt = response.data.produkte.find(item => 
+          item.produkt.id === produktId
+        )
+        
+        if (stackProdukt) {
+          // Berechne die ursprüngliche Wirkstoff-Dosierung aus den Portionen zurück
+          const portionen = stackProdukt.stack_produkt.dosierung
+          const produktName = stackProdukt.produkt.name.toLowerCase()
+          let originalWirkstoffDosierung = portionen
+          
+          // Rückrechnung basierend auf Produkttyp
+          if (produktName.includes('vitamin d3') && 
+              stackProdukt.produkt.form?.toLowerCase() === 'tropfen') {
+            // 1 Tropfen = 10.000 IE
+            originalWirkstoffDosierung = portionen * 10000
+            this.modal.selectedUnit = 'IE'
+          } 
+          else if (produktName.includes('b12')) {
+            // Extrahiere mcg pro Kapsel aus Produktname
+            const mcgMatch = produktName.match(/(\d+)mcg/)
+            const mcgProKapsel = mcgMatch ? parseInt(mcgMatch[1]) : 1000
+            originalWirkstoffDosierung = portionen * mcgProKapsel
+            this.modal.selectedUnit = 'μg'
+          }
+          else if (produktName.includes('magnesium')) {
+            // Standard: 180-200mg pro Kapsel
+            const mgProKapsel = produktName.includes('einzelkapsel') ? 180 : 200
+            originalWirkstoffDosierung = portionen * mgProKapsel
+            this.modal.selectedUnit = 'mg'
+          }
+          else {
+            // Fallback: Portionen anzeigen
+            this.modal.selectedUnit = 'Portionen'
+          }
+          
+          // Öffne Modal mit vorausgefüllten Daten
+          this.modal.isOpen = true
+          this.modal.selectedProdukt = stackProdukt.produkt
+          this.modal.dosierung = originalWirkstoffDosierung.toString()
+          this.modal.selectedCategory = stackProdukt.stack_produkt.einnahmezeit || 'Basisausstattung'
+          this.modal.notizen = stackProdukt.stack_produkt.notiz || ''
+          this.modal.editMode = true
+          this.modal.editStackId = stackId
+          this.modal.editProduktId = produktId
+          
+          this.renderApp()
+        }
+      }
+    } catch (error) {
+      console.error('Edit stack product error:', error)
+      this.showToast('Fehler beim Laden des Produkts', 'error')
+    }
+  }
+
+  async removeFromStack(stackId, produktId) {
+    if (!confirm('Möchten Sie dieses Supplement wirklich aus Ihrem Stack entfernen?')) {
+      return
+    }
+
+    try {
+      const response = await this.apiCall(`/stacks/${stackId}/produkte/${produktId}`, 'DELETE')
+      
+      if (response.success) {
+        this.showToast('Supplement erfolgreich entfernt!', 'success')
+        
+        // Entferne das Produkt sofort aus der lokalen Liste (optimistische Update)
+        if (this.currentStack && this.currentStack.produkte) {
+          this.currentStack.produkte = this.currentStack.produkte.filter(item => 
+            item.produkt.id !== produktId
+          )
+          
+          // Berechne Gesamtpreis neu
+          this.currentStack.gesamtpreis_monat = this.currentStack.produkte.reduce((sum, item) => 
+            sum + (item.produkt.preis_pro_monat || 0), 0
+          )
+        }
+        
+        // Rendere sofort die aktualisierte Ansicht
+        this.renderApp()
+        
+        // Optional: Lade Stack im Hintergrund neu um sicherzustellen, dass alles synchron ist
+        // await this.loadStack(stackId)
+      } else {
+        this.showToast(response.error || 'Fehler beim Entfernen', 'error')
+      }
+    } catch (error) {
+      console.error('Remove from stack error:', error)
+      this.showToast('Fehler beim Entfernen', 'error')
     }
   }
 

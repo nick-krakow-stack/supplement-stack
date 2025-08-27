@@ -24,14 +24,15 @@
     "git:log": "git log --oneline"
   },
   "dependencies": {
-    "hono": "^4.9.4",
     "bcryptjs": "^2.4.3",
-    "jsonwebtoken": "^9.0.2"
+    "hono": "^4.9.4",
+    "jsonwebtoken": "^9.0.2",
+    "pm2": "^6.0.8"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^4.0.0",
     "@hono/vite-build": "^1.2.0",
     "@hono/vite-dev-server": "^0.18.2",
-    "@cloudflare/workers-types": "^4.0.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/jsonwebtoken": "^9.0.7",
     "typescript": "^5.0.0",

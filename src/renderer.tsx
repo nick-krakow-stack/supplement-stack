@@ -52,6 +52,9 @@ export const renderer = jsxRenderer(({ children }) => {
         <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js"></script>
         <script src="https://cdn.jsdelivr.net/npm/dayjs@1.11.10/dayjs.min.js"></script>
         
+        {/* Dosage Calculator */}
+        <script src="/static/dosage-frontend.js"></script>
+        
         {/* Main App JavaScript */}
         <script src="/static/app.js"></script>
       </body>

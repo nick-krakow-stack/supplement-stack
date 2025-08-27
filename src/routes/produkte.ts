@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { verify } from 'hono/jwt'
 import type { CloudflareBindings, Produkt, ProduktDetails, CreateProduktRequest, ApiResponse, SearchParams } from '../types'
+import { calculateSimpleDosage } from '../utils/simple-dosage-calculator'
 
 const produkte = new Hono<{ Bindings: CloudflareBindings }>()
 
@@ -21,11 +22,12 @@ const optionalAuth = async (c: any, next: any) => {
   await next()
 }
 
-// Produkte für einen Wirkstoff laden (Modal 2)
+// Produkte für einen Wirkstoff laden (Modal 2) mit präziser Dosierungsberechnung
 produkte.get('/by-wirkstoff/:wirkstoffId', optionalAuth, async (c) => {
   try {
     const wirkstoffId = parseInt(c.req.param('wirkstoffId'))
     const showAlternatives = c.req.query('alternatives') === 'true'
+    const gewuenschteDosis = parseFloat(c.req.query('dosis') || '0') // Gewünschte Tagesdosis
 
     if (!wirkstoffId) {
       return c.json<ApiResponse>({
@@ -34,7 +36,7 @@ produkte.get('/by-wirkstoff/:wirkstoffId', optionalAuth, async (c) => {
       }, 400)
     }
 
-    // Empfohlene Produkte zuerst, dann Alternativen
+    // Einfache Query ohne nicht-existierende Tabellen
     let produktQuery = `
       SELECT DISTINCT p.*, we.typ as empfehlung_typ, we.reihenfolge,
         pw_main.menge as hauptwirkstoff_menge,
@@ -79,19 +81,19 @@ produkte.get('/by-wirkstoff/:wirkstoffId', optionalAuth, async (c) => {
           ORDER BY pw.ist_hauptwirkstoff DESC, w.name
         `).bind(produkt.id).all()
 
-        // Preisberechnung (korrigiert)
-        const tagesDosis = 1 // Standard: 1x täglich
-        const preisProEinheit = produkt.preis / (produkt.einheit_anzahl || 1)
-        const preisProTag = preisProEinheit * tagesDosis
-        const preisProMonat = preisProTag * 30
+        // Intelligente Dosierungsberechnung
+        const dosageResult = calculateSimpleDosage(produkt, gewuenschteDosis)
+        const preis_pro_tag = dosageResult.preis_pro_tag
+        const preis_pro_monat = dosageResult.preis_pro_monat
 
         return {
           ...produkt,
           wirkstoffe: wirkstoffeResult.results,
           hauptwirkstoffe: wirkstoffeResult.results.filter((w: any) => w.ist_hauptwirkstoff),
-          preis_pro_tag: Math.round(preisProTag * 100) / 100,
-          preis_pro_monat: Math.round(preisProMonat * 100) / 100,
-          empfehlung_typ: produkt.empfehlung_typ || 'neutral'
+          preis_pro_tag: Math.round(preis_pro_tag * 100) / 100,
+          preis_pro_monat: Math.round(preis_pro_monat * 100) / 100,
+          empfehlung_typ: produkt.empfehlung_typ || 'neutral',
+          dosage_info: dosageResult // Zusätzliche Dosierungsinfos für Frontend
         }
       })
     )
@@ -269,12 +271,26 @@ produkte.get('/', optionalAuth, async (c) => {
 
     const produkteResult = await c.env.DB.prepare(sqlQuery).bind(...params).all()
 
-    // Produkte mit korrigierter Preisberechnung
-    const produkteWithPricing = produkteResult.results.map((produkt: any) => ({
-      ...produkt,
-      preis_pro_tag: Math.round((produkt.preis / (produkt.einheit_anzahl || 1)) * 100) / 100,
-      preis_pro_monat: Math.round((produkt.preis / (produkt.einheit_anzahl || 1)) * 30 * 100) / 100
-    }))
+    // Produkte mit präziser Dosierungsberechnung
+    const produkteWithPricing = await Promise.all(
+      produkteResult.results.map(async (produkt: any) => {
+        let preis_pro_tag = 0
+        let preis_pro_monat = 0
+        let dosage_info = null
+        
+        // Intelligente Dosierungsberechnung
+        dosage_info = calculateSimpleDosage(produkt)
+        preis_pro_tag = dosage_info.preis_pro_tag
+        preis_pro_monat = dosage_info.preis_pro_monat
+        
+        return {
+          ...produkt,
+          preis_pro_tag: Math.round(preis_pro_tag * 100) / 100,
+          preis_pro_monat: Math.round(preis_pro_monat * 100) / 100,
+          dosage_info
+        }
+      })
+    )
 
     return c.json<ApiResponse>({
       success: true,
