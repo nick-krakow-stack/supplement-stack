@@ -1,7 +1,20 @@
 import { Hono } from 'hono'
 import { sign } from 'hono/jwt'
 import type { Bindings, LoginRequest, RegisterRequest, User } from '../types'
-import bcrypt from 'bcryptjs'
+
+// Cloudflare Workers compatible password hashing
+const hashPassword = async (password: string): Promise<string> => {
+  const encoder = new TextEncoder()
+  const data = encoder.encode(password)
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+  const hashArray = Array.from(new Uint8Array(hashBuffer))
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
+const verifyPassword = async (password: string, hash: string): Promise<boolean> => {
+  const hashedInput = await hashPassword(password)
+  return hashedInput === hash
+}
 
 export const authRoutes = new Hono<{ Bindings: Bindings }>()
 
@@ -29,7 +42,7 @@ authRoutes.post('/register', async (c) => {
     }
     
     // Hash password
-    const passwordHash = await bcrypt.hash(body.password, 10)
+    const passwordHash = await hashPassword(body.password)
     
     // Create user
     const result = await c.env.DB.prepare(`
@@ -95,7 +108,7 @@ authRoutes.post('/login', async (c) => {
     }
     
     // Verify password
-    const isValidPassword = await bcrypt.compare(body.password, user.password_hash)
+    const isValidPassword = await verifyPassword(body.password, user.password_hash)
     if (!isValidPassword) {
       return c.json({ error: 'Ungültige Anmeldedaten' }, 401)
     }

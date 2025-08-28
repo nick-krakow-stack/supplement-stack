@@ -13,39 +13,68 @@ class SupplementDemoApp {
 
   init() {
     console.log('[Demo Modal] Initialisierung startet...')
+    
+    // Add visible indicator that JavaScript is working
+    document.title = 'Demo - Supplement Stack (JS Modal Loaded!)'
+    
     this.setupEventListeners()
     
     // Stack-Selector initialisieren
     setTimeout(() => this.initStackSelector(), 100)
     
     // Demo-Stack mit ein paar Produkten vorbesetzen
-    this.addDemoStackProducts()
+    // this.addDemoStackProducts() // Deaktiviert, da wir vordefinierte Stacks verwenden
     
     // Stack-Rendering nach DOM-Load
     setTimeout(() => this.renderStack(), 500)
     
     this.updateStats()
+    
+    // Show success message that JS is working
+    this.showSuccess('Demo-Modal-App erfolgreich geladen! Modals schließen sich jetzt automatisch.')
+    
     console.log(`[Demo Modal] Initialisierung abgeschlossen - ${this.availableProducts.length} verfügbare Produkte, ${this.products.length} im Stack`)
   }
   
-  addDemoStackProducts() {
-    // Füge automatisch ein paar Produkte zum Demo-Stack hinzu
-    const demoStackProducts = [
-      { productId: 1, nutrientId: 1, dosageAmount: 4000, dosageUnit: 'IU' }, // Vitamin D3 4000 IU
-      { productId: 3, nutrientId: 2, dosageAmount: 200, dosageUnit: 'µg' },   // B12 Methylcobalamin  
-      { productId: 12, nutrientId: 2, dosageAmount: 100, dosageUnit: 'µg' },  // B-Komplex Premium
-      { productId: 13, nutrientId: 11, dosageAmount: 1000, dosageUnit: 'mg' } // L-Carnitin + Vitamin C
-    ]
+  showSuccess(message) {
+    this.showNotification(message, 'success')
+  }
+
+  showError(message) {
+    this.showNotification(message, 'error')
+  }
+
+  showNotification(message, type = 'info') {
+    const notification = document.createElement('div')
+    notification.className = `fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg max-w-sm ${
+      type === 'success' ? 'bg-green-100 border border-green-400 text-green-700' :
+      type === 'error' ? 'bg-red-100 border border-red-400 text-red-700' :
+      'bg-blue-100 border border-blue-400 text-blue-700'
+    }`
     
-    demoStackProducts.forEach(({ productId, nutrientId, dosageAmount, dosageUnit }) => {
-      const product = this.availableProducts.find(p => p.id === productId)
-      const nutrient = this.nutrients.find(n => n.id === nutrientId)
-      
-      if (product && nutrient) {
-        const dosage = { amount: dosageAmount, unit: dosageUnit, category: 'custom' }
-        this.finalizeAddProduct(product, nutrient, dosage)
+    notification.innerHTML = `
+      <div class="flex items-center">
+        <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'} mr-2"></i>
+        <span class="text-sm">${message}</span>
+        <button onclick="this.parentElement.parentElement.remove()" class="ml-2 text-gray-500 hover:text-gray-700">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    `
+    
+    document.body.appendChild(notification)
+    
+    setTimeout(() => {
+      if (notification.parentElement) {
+        notification.remove()
       }
-    })
+    }, 5000)
+  }
+
+  addDemoStackProducts() {
+    console.log('[Demo Modal] Skipping addDemoStackProducts - using predefined stacks instead')
+    // Diese Funktion wird nicht mehr benötigt, da wir vordefinierte Stacks verwenden
+    // Die Produkte werden über loadStack() aus den Stack-Definitionen geladen
   }
 
   setupEventListeners() {
@@ -559,8 +588,10 @@ class SupplementDemoApp {
       return
     }
     
-    // Bestimme welche Produkte angezeigt werden sollen basierend auf aktuellem Stack
-    const currentProducts = this.getCurrentProducts()
+    try {
+      // Bestimme welche Produkte angezeigt werden sollen basierend auf aktuellem Stack
+      const currentProducts = this.getCurrentProducts()
+      console.log('[Demo Modal] Rendering stack with', currentProducts.length, 'products')
     
     const html = currentProducts.map((product, index) => {
       // Verschiedene Einnahmezeiten für Demo
@@ -639,18 +670,42 @@ class SupplementDemoApp {
       `
     }).join('')
     
-    stackGrid.innerHTML = html
-    this.updateStackSummary()
-    console.log('[Demo Modal] Stack gerendert:', this.getCurrentProducts().length, 'Produkte')
+      stackGrid.innerHTML = html
+      this.updateStackSummary()
+      console.log('[Demo Modal] Stack gerendert:', currentProducts.length, 'Produkte')
+      
+    } catch (error) {
+      console.error('[Demo Modal] Error in renderStack:', error)
+      stackGrid.innerHTML = `
+        <div class="col-span-full text-center py-8">
+          <div class="text-gray-500">
+            <i class="fas fa-exclamation-triangle text-2xl mb-2"></i>
+            <p>Fehler beim Laden der Produkte</p>
+            <p class="text-sm">Bitte laden Sie die Seite neu</p>
+          </div>
+        </div>
+      `
+    }
   }
 
   // Hilfsmethode: Gibt die aktuellen Produkte basierend auf dem ausgewählten Stack zurück
   getCurrentProducts() {
+    console.log('[Demo Modal] getCurrentProducts called, currentStackId:', this.currentStackId)
+    
     if (this.currentStackId) {
-      const currentStack = this.stacks.find(s => s.id === this.currentStackId)
-      return currentStack && currentStack.products ? currentStack.products : []
+      const currentStack = this.stacks.find(s => s.id == this.currentStackId) // Use == for type-flexible comparison
+      console.log('[Demo Modal] Found current stack:', currentStack ? currentStack.name : 'NOT FOUND')
+      
+      if (currentStack && currentStack.products) {
+        console.log('[Demo Modal] Returning stack products:', currentStack.products.length)
+        return currentStack.products
+      } else {
+        console.log('[Demo Modal] No products in stack, returning empty array')
+        return []
+      }
     } else {
-      return this.products
+      console.log('[Demo Modal] No currentStackId, returning global products:', this.products.length)
+      return this.products || []
     }
   }
 
@@ -678,6 +733,12 @@ class SupplementDemoApp {
 
   // Hilfsfunktion für Singular/Plural
   getPluralForm(amount, form) {
+    // Sichere Behandlung von undefined/null Werten
+    if (!form || typeof form !== 'string') {
+      console.warn('[Demo Modal] Invalid form parameter in getPluralForm:', form)
+      return 'Einheiten' // Fallback
+    }
+    
     if (amount === 1) {
       return form // Singular: 1 Kapsel, 1 Tropfen, 1 Tablette
     }
@@ -881,20 +942,37 @@ class SupplementDemoApp {
       `).join('')}
     `
     
+    // Vorherige Event Listener entfernen um Duplikate zu vermeiden
+    const newSelector = selector.cloneNode(true)
+    selector.parentNode.replaceChild(newSelector, selector)
+    
     // Event Listener für Stack-Wechsel
-    selector.addEventListener('change', (e) => {
-      const stackId = parseInt(e.target.value)
-      this.loadStack(stackId)
+    newSelector.addEventListener('change', (e) => {
+      const stackId = e.target.value ? parseInt(e.target.value) : null
+      console.log('[Demo Modal] Stack switching to:', stackId, 'from selector value:', e.target.value)
+      
+      if (stackId) {
+        this.loadStack(stackId)
+      } else {
+        // Leeren Stack anzeigen wenn nichts ausgewählt
+        console.log('[Demo Modal] No stack selected, clearing products')
+        this.currentStackId = null
+        this.products = []
+        this.renderStack()
+        this.updateStats()
+      }
     })
     
     // Ersten Stack automatisch laden
     if (this.stacks.length > 0) {
-      selector.value = this.stacks[0].id
+      newSelector.value = this.stacks[0].id
       this.loadStack(this.stacks[0].id)
     }
   }
 
   loadStack(stackId) {
+    console.log(`[Demo Modal] Loading stack with ID: ${stackId}`)
+    
     if (!stackId) {
       this.currentStackId = null
       this.products = []
@@ -902,24 +980,47 @@ class SupplementDemoApp {
       return
     }
     
-    const stack = this.stacks.find(s => s.id === stackId)
-    if (!stack) return
+    const stack = this.stacks.find(s => s.id == stackId) // Use == for type-flexible comparison
+    if (!stack) {
+      console.error(`[Demo Modal] Stack with ID ${stackId} not found`)
+      return
+    }
+    
+    console.log(`[Demo Modal] Found stack:`, stack)
+    console.log(`[Demo Modal] Available products:`, this.availableProducts.length)
     
     this.currentStackId = stackId
     
-    // Produkte für diesen Stack laden (vereinfachte Demo-Version)
+    // Produkte für diesen Stack laden
     this.products = []
-    stack.products.forEach(productId => {
-      const product = this.availableProducts.find(p => p.id === productId)
-      if (product) {
-        this.products.push({ ...product })
-      }
-    })
+    if (stack.products && Array.isArray(stack.products)) {
+      console.log(`[Demo Modal] Processing ${stack.products.length} products in stack`)
+      
+      stack.products.forEach((product, index) => {
+        if (typeof product === 'number') {
+          // Falls es eine Produkt-ID ist (vordefinierte Struktur)
+          console.log(`[Demo Modal] Looking for product ID: ${product}`)
+          const foundProduct = this.availableProducts.find(p => p.id == product) // Use == for type-flexible comparison
+          if (foundProduct) {
+            console.log(`[Demo Modal] Found product:`, foundProduct.name)
+            this.products.push({ ...foundProduct })
+          } else {
+            console.warn(`[Demo Modal] Product with ID ${product} not found in availableProducts`)
+          }
+        } else if (typeof product === 'object' && product !== null) {
+          // Falls es bereits ein vollständiges Produktobjekt ist (benutzererstellte Struktur)
+          console.log(`[Demo Modal] Adding full product object:`, product.name)
+          this.products.push({ ...product })
+        } else {
+          console.warn(`[Demo Modal] Invalid product at index ${index}:`, product)
+        }
+      })
+    }
+    
+    console.log(`[Demo Modal] Stack "${stack.name}" loaded with ${this.products.length} products`)
     
     this.renderStack()
     this.updateStats()
-    
-    console.log(`[Demo Modal] Stack "${stack.name}" geladen mit ${this.products.length} Produkten`)
   }
 
   closeAllModals() {
@@ -1281,9 +1382,28 @@ class SupplementDemoApp {
 
     // 7. Finales Hinzufügen
     modal.querySelector('#add-product-final')?.addEventListener('click', () => {
+      console.log('[Demo Modal] Final add button clicked')
+      console.log('[Demo Modal] Selected values:', {
+        product: selectedProduct ? selectedProduct.name : 'NOT SELECTED',
+        nutrient: selectedNutrient ? selectedNutrient.name : 'NOT SELECTED', 
+        dosage: selectedDosage ? `${selectedDosage.amount}${selectedDosage.unit}` : 'NOT SELECTED'
+      })
+      
       if (selectedProduct && selectedNutrient && selectedDosage) {
-        this.addSelectedProductToStack(selectedProduct, selectedNutrient, selectedDosage)
-        modal.remove()
+        try {
+          this.addSelectedProductToStack(selectedProduct, selectedNutrient, selectedDosage)
+          this.showSuccess(`${selectedProduct.name} erfolgreich hinzugefügt!`)
+          // Modal IMMER schließen, auch bei Fehlern in der Verarbeitung
+          setTimeout(() => modal.remove(), 100)
+        } catch (error) {
+          console.error('Fehler beim Hinzufügen:', error)
+          this.showError(`Fehler beim Hinzufügen: ${error.message || 'Unbekannter Fehler'}`)
+          // Modal auch bei Fehler schließen
+          setTimeout(() => modal.remove(), 1000)
+        }
+      } else {
+        console.error('[Demo Modal] Missing selections for final add')
+        this.showError('Bitte wählen Sie ein Produkt, einen Nährstoff und eine Dosierung aus')
       }
     })
 
@@ -1564,25 +1684,41 @@ class SupplementDemoApp {
   }
 
   addSelectedProductToStack(product, nutrient, dosage) {
-    console.log('[Demo Modal] Produkt zu Stack hinzugefügt:', product.name, 'Dosierung:', dosage.amount + dosage.unit)
+    console.log('[Demo Modal] Adding product to stack:', product?.name, 'Dosage:', dosage?.amount + dosage?.unit)
     
-    // HAUPTPRÜFUNG: Prüfung auf gleichen Wirkstoff/Nährstoff (wichtiger als Produkt)
-    const currentProducts = this.getCurrentProducts()
-    const existingNutrientProduct = currentProducts.find(p => {
-      if (p.main_nutrients) {
-        return p.main_nutrients.some(n => n.nutrient_id === nutrient.id)
-      }
-      return p.nutrient_id === nutrient.id // Fallback für alte Struktur
-    })
-    
-    if (existingNutrientProduct) {
-      // Gleicher Nährstoff bereits im Stack - egal ob gleiches oder anderes Produkt
-      this.showDuplicateNutrientDialog(product, nutrient, dosage, existingNutrientProduct)
-      return
+    // Validierung der Parameter
+    if (!product || !nutrient || !dosage) {
+      console.error('[Demo Modal] Invalid parameters:', { product, nutrient, dosage })
+      throw new Error('Ungültige Parameter beim Hinzufügen des Produkts')
     }
     
-    // Wenn kein Nährstoff-Konflikt: Direkt hinzufügen
-    this.finalizeAddProduct(product, nutrient, dosage)
+    try {
+      // HAUPTPRÜFUNG: Prüfung auf gleichen Wirkstoff/Nährstoff (wichtiger als Produkt)
+      const currentProducts = this.getCurrentProducts()
+      console.log('[Demo Modal] Current products in stack:', currentProducts?.length || 0)
+      
+      const existingNutrientProduct = currentProducts.find(p => {
+        if (p.main_nutrients) {
+          return p.main_nutrients.some(n => n.nutrient_id === nutrient.id)
+        }
+        return p.nutrient_id === nutrient.id // Fallback für alte Struktur
+      })
+      
+      if (existingNutrientProduct) {
+        // Gleicher Nährstoff bereits im Stack - egal ob gleiches oder anderes Produkt
+        console.log('[Demo Modal] Duplicate nutrient found, showing dialog')
+        this.showDuplicateNutrientDialog(product, nutrient, dosage, existingNutrientProduct)
+        return
+      }
+      
+      // Wenn kein Nährstoff-Konflikt: Direkt hinzufügen
+      console.log('[Demo Modal] No conflicts, finalizing add product')
+      this.finalizeAddProduct(product, nutrient, dosage)
+      
+    } catch (error) {
+      console.error('[Demo Modal] Error in addSelectedProductToStack:', error)
+      throw error // Re-throw für übergeordnete Fehlerbehandlung
+    }
   }
 
   showDuplicateProductDialog(product, nutrient, dosage, existingProduct) {
@@ -1725,40 +1861,74 @@ class SupplementDemoApp {
   }
 
   finalizeAddProduct(product, nutrient, dosage) {
-    const nutrientInfo = product.main_nutrients.find(n => n.nutrient_id == nutrient.id)
-    const amountPerUnit = nutrientInfo ? nutrientInfo.amount_per_unit : 0
-    const requiredUnitsPerDay = Math.ceil(dosage.amount / amountPerUnit)
-    const daysSupply = Math.floor(product.quantity / requiredUnitsPerDay)
-    const monthlySupplyNeeded = 30 / daysSupply
-    const customMonthlyPrice = product.purchase_price * monthlySupplyNeeded
+    console.log('[Demo Modal] Finalizing add product:', { product: product?.name, nutrient: nutrient?.name, dosage })
     
-    this.showMessage(`✅ "${product.name}" wurde zu Ihrem Stack hinzugefügt!\n💊 ${requiredUnitsPerDay} ${this.getPluralForm(requiredUnitsPerDay, product.form)}/Tag\n💰 €${customMonthlyPrice.toFixed(2)}/Monat`, 'success')
+    // Validierung
+    if (!product || !nutrient || !dosage) {
+      throw new Error('Fehlende Parameter für finalizeAddProduct')
+    }
+    
+    // Nährstoff-Info finden (mit besserer Fehlerbehandlung)
+    let nutrientInfo = null
+    let amountPerUnit = 0
+    
+    if (product.main_nutrients && Array.isArray(product.main_nutrients)) {
+      nutrientInfo = product.main_nutrients.find(n => n.nutrient_id == nutrient.id)
+      amountPerUnit = nutrientInfo ? nutrientInfo.amount_per_unit : 0
+    } else if (product.nutrient_id == nutrient.id) {
+      // Fallback für alte Struktur
+      amountPerUnit = product.nutrient_amount_per_unit || 0
+    }
+    
+    if (amountPerUnit <= 0) {
+      console.warn('[Demo Modal] No nutrient info found, using default values')
+      amountPerUnit = dosage.amount // Fallback: 1:1 Verhältnis
+    }
+    
+    const requiredUnitsPerDay = Math.ceil(dosage.amount / amountPerUnit)
+    const daysSupply = Math.floor((product.quantity || 30) / requiredUnitsPerDay)
+    const monthlySupplyNeeded = daysSupply > 0 ? 30 / daysSupply : 1
+    const customMonthlyPrice = (product.purchase_price || 0) * monthlySupplyNeeded
+    
+    const productName = product.name || 'Unbekanntes Produkt'
+    const productForm = product.form || 'Einheit'
+    const pluralForm = this.getPluralForm(requiredUnitsPerDay, productForm)
+    
+    this.showMessage(`✅ "${productName}" wurde zu Ihrem Stack hinzugefügt!\n💊 ${requiredUnitsPerDay} ${pluralForm}/Tag\n💰 €${customMonthlyPrice.toFixed(2)}/Monat`, 'success')
     
     // Produkt mit angepassten Werten zur Liste hinzufügen
     const customProduct = {
       ...product,
+      // Sicherheitsprüfungen für Eigenschaften
+      name: product.name || 'Unbekanntes Produkt',
+      form: product.form || 'Einheit',
       // Angepasste Werte basierend auf individueller Dosierung
       dosage_per_day: requiredUnitsPerDay,
       days_supply: daysSupply,
       monthly_cost: customMonthlyPrice,
       custom_dosage: dosage.amount,
       custom_stack_id: this.currentStackId || 'basic', // Verwende aktuellen Stack
-      custom_notes: dosage.notes
+      custom_notes: dosage.notes || ''
     }
     
     // Zum aktuellen Stack hinzufügen
     if (this.currentStackId) {
       // Finde den aktuellen Stack und füge das Produkt hinzu
-      const currentStack = this.stacks.find(s => s.id === this.currentStackId)
+      const currentStack = this.stacks.find(s => s.id == this.currentStackId)
       if (currentStack) {
+        console.log('[Demo Modal] Adding product to stack:', currentStack.name)
         // Initialisiere products Array falls noch nicht vorhanden
         if (!currentStack.products) {
           currentStack.products = []
         }
         currentStack.products.push(customProduct)
+        console.log('[Demo Modal] Stack now has', currentStack.products.length, 'products')
+      } else {
+        console.error('[Demo Modal] Current stack not found:', this.currentStackId)
       }
     } else {
       // Fallback: Zur globalen Produktliste hinzufügen (Basisausstattung)
+      console.log('[Demo Modal] Adding to global products list')
       this.products.push(customProduct)
     }
     
@@ -1807,11 +1977,21 @@ class SupplementDemoApp {
     const stackName = formData.get('stack_name')
     const description = formData.get('description') || ''
     
+    // Validierung
+    if (!stackName || stackName.trim().length === 0) {
+      throw new Error('Stack-Name ist erforderlich')
+    }
+    
+    // Prüfen ob Stack-Name bereits existiert
+    if (this.stacks.find(s => s.name && s.name.toLowerCase() === stackName.trim().toLowerCase())) {
+      throw new Error('Ein Stack mit diesem Namen existiert bereits')
+    }
+    
     // Demo: Stack zur Liste hinzufügen
     const newStack = {
       id: this.stacks.length + 1,
-      name: stackName,
-      description: description,
+      name: stackName.trim(),
+      description: description.trim(),
       products: [],
       total_monthly_cost: 0,
       created_at: new Date().toISOString()
@@ -1819,18 +1999,25 @@ class SupplementDemoApp {
     
     this.stacks.push(newStack)
     
-    // Stack-Selector aktualisieren
-    this.initStackSelector()
-    
-    // Neuen Stack automatisch auswählen
-    const selector = document.getElementById('stack-selector')
-    if (selector) {
-      selector.value = newStack.id
-      this.loadStack(newStack.id)
+    // Stack-Selector aktualisieren (mit Error Handling)
+    try {
+      this.initStackSelector()
+      
+      // Neuen Stack automatisch auswählen
+      const selector = document.getElementById('stack-selector')
+      if (selector) {
+        selector.value = newStack.id
+        this.loadStack(newStack.id)
+      }
+      
+      this.updateStats()
+    } catch (error) {
+      console.warn('Warnung beim Aktualisieren der UI:', error)
+      // Fehler beim UI-Update sollen Stack-Erstellung nicht verhindern
     }
     
-    this.updateStats()
-    this.showMessage(`✅ Stack "${stackName}" erstellt! Sie können jetzt Nährstoffe hinzufügen.`, 'success')
+    console.log('Stack erfolgreich erstellt:', newStack)
+    return newStack
   }
 
   showNutrientBasedStackModal() {
@@ -1910,8 +2097,17 @@ class SupplementDemoApp {
     if (form) {
       form.addEventListener('submit', (e) => {
         e.preventDefault()
-        this.createStack(new FormData(form))
-        modal.remove()
+        try {
+          const newStack = this.createStack(new FormData(form))
+          this.showSuccess(`Stack "${newStack.name}" erfolgreich erstellt!`)
+          // Modal IMMER schließen nach erfolgreichem Erstellen
+          setTimeout(() => modal.remove(), 100)
+        } catch (error) {
+          console.error('Fehler beim Erstellen des Stacks:', error)
+          // Spezifischere Fehlermeldung anzeigen
+          this.showError(error.message || 'Fehler beim Erstellen des Stacks')
+          // Modal bei Validierungsfehlern NICHT schließen, damit User korrigieren kann
+        }
       })
     }
 
