@@ -559,7 +559,10 @@ class SupplementDemoApp {
       return
     }
     
-    const html = this.products.map((product, index) => {
+    // Bestimme welche Produkte angezeigt werden sollen basierend auf aktuellem Stack
+    const currentProducts = this.getCurrentProducts()
+    
+    const html = currentProducts.map((product, index) => {
       // Verschiedene Einnahmezeiten für Demo
       const intakeTimes = ['Nach dem Aufstehen', 'Zum Frühstück', 'Zum Mittagessen', 'Am Abend']
       const intakeTime = intakeTimes[index % intakeTimes.length]
@@ -638,12 +641,23 @@ class SupplementDemoApp {
     
     stackGrid.innerHTML = html
     this.updateStackSummary()
-    console.log('[Demo Modal] Stack gerendert:', this.products.length, 'Produkte')
+    console.log('[Demo Modal] Stack gerendert:', this.getCurrentProducts().length, 'Produkte')
+  }
+
+  // Hilfsmethode: Gibt die aktuellen Produkte basierend auf dem ausgewählten Stack zurück
+  getCurrentProducts() {
+    if (this.currentStackId) {
+      const currentStack = this.stacks.find(s => s.id === this.currentStackId)
+      return currentStack && currentStack.products ? currentStack.products : []
+    } else {
+      return this.products
+    }
   }
 
   updateStackSummary() {
-    const totalPurchase = this.products.reduce((sum, p) => sum + p.purchase_price, 0)
-    const totalMonthly = this.products.reduce((sum, p) => sum + p.monthly_cost, 0)
+    const currentProducts = this.getCurrentProducts()
+    const totalPurchase = currentProducts.reduce((sum, p) => sum + p.purchase_price, 0)
+    const totalMonthly = currentProducts.reduce((sum, p) => sum + p.monthly_cost, 0)
     
     const purchaseCostEl = document.getElementById('total-purchase-cost')
     const monthlyCostEl = document.getElementById('total-monthly-cost')
@@ -1312,6 +1326,12 @@ class SupplementDemoApp {
     customDosage.value = nutrient.dge_recommendation
     customDosage.placeholder = nutrient.dge_recommendation
     
+    // Aktuellen Stack im Dropdown vorauswählen
+    const stackSelect = modal.querySelector('#supplement-stack')
+    if (stackSelect && this.currentStackId) {
+      stackSelect.value = this.currentStackId
+    }
+    
     // DGE-Button Handler
     modal.querySelector('#use-dge-dosage').addEventListener('click', () => {
       customDosage.value = nutrient.dge_recommendation
@@ -1547,7 +1567,8 @@ class SupplementDemoApp {
     console.log('[Demo Modal] Produkt zu Stack hinzugefügt:', product.name, 'Dosierung:', dosage.amount + dosage.unit)
     
     // HAUPTPRÜFUNG: Prüfung auf gleichen Wirkstoff/Nährstoff (wichtiger als Produkt)
-    const existingNutrientProduct = this.products.find(p => {
+    const currentProducts = this.getCurrentProducts()
+    const existingNutrientProduct = currentProducts.find(p => {
       if (p.main_nutrients) {
         return p.main_nutrients.some(n => n.nutrient_id === nutrient.id)
       }
@@ -1721,11 +1742,31 @@ class SupplementDemoApp {
       days_supply: daysSupply,
       monthly_cost: customMonthlyPrice,
       custom_dosage: dosage.amount,
-      custom_stack_id: dosage.stackId,
+      custom_stack_id: this.currentStackId || 'basic', // Verwende aktuellen Stack
       custom_notes: dosage.notes
     }
-    this.products.push(customProduct)
+    
+    // Zum aktuellen Stack hinzufügen
+    if (this.currentStackId) {
+      // Finde den aktuellen Stack und füge das Produkt hinzu
+      const currentStack = this.stacks.find(s => s.id === this.currentStackId)
+      if (currentStack) {
+        // Initialisiere products Array falls noch nicht vorhanden
+        if (!currentStack.products) {
+          currentStack.products = []
+        }
+        currentStack.products.push(customProduct)
+      }
+    } else {
+      // Fallback: Zur globalen Produktliste hinzufügen (Basisausstattung)
+      this.products.push(customProduct)
+    }
+    
+    // Stack-Anzeige aktualisieren
     this.renderStack()
+    
+    // Modal schließen
+    this.closeAllModals()
   }
 
   updateDosageCalculation(form) {
