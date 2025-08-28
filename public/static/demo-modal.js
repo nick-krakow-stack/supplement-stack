@@ -1145,8 +1145,8 @@ class SupplementDemoApp {
     dgeRecommendation.textContent = `${nutrient.dge_recommendation}${nutrient.unit}`
     dosageUnit.textContent = `(${nutrient.unit})`
     
-    // Studien-Empfehlung anzeigen falls vorhanden
-    if (nutrient.study_recommendation) {
+    // Studien-Empfehlung nur anzeigen wenn vorhanden
+    if (nutrient.study_recommendation && nutrient.study_url) {
       studyRecommendationCard.classList.remove('hidden')
       studyRecommendation.textContent = `${nutrient.study_recommendation}${nutrient.unit}`
     } else {
@@ -1163,8 +1163,8 @@ class SupplementDemoApp {
       this.updateDosageSafety(modal, nutrient, nutrient.dge_recommendation)
     })
     
-    // Studien-Button Handler (falls vorhanden)
-    if (nutrient.study_recommendation) {
+    // Studien-Button Handler (nur wenn Studien vorhanden)
+    if (nutrient.study_recommendation && nutrient.study_url) {
       modal.querySelector('#use-study-dosage').addEventListener('click', () => {
         customDosage.value = nutrient.study_recommendation
         this.updateDosageSafety(modal, nutrient, nutrient.study_recommendation)
