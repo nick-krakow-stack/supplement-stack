@@ -79,7 +79,7 @@ class SupplementDemoApp {
         monthly_cost: 11.94,
         description: 'Hochdosiertes Vitamin D3 (Cholecalciferol) aus Lanolin',
         benefits: ['Unterstützt das Immunsystem', 'Wichtig für Knochen und Zähne', 'Trägt zur normalen Muskelfunktion bei'],
-        warnings: ['Nicht über 4000 IU täglich', 'Bei Nierensteinen Arzt konsultieren'],
+        warnings: [],
         dosage_recommendation: '1 Kapsel täglich zu einer Mahlzeit',
         category: 'Vitamine',
         // Haupt- und Nebenwirkstoffe
@@ -199,7 +199,7 @@ class SupplementDemoApp {
         monthly_cost: 16.90,
         description: 'Hochwertiges Magnesium in Chelat-Form für optimale Bioverfügbarkeit',
         benefits: ['Reduziert Müdigkeit', 'Unterstützt normale Muskelfunktion', 'Trägt zum Elektrolytgleichgewicht bei'],
-        warnings: ['Bei Nierenerkrankungen Arzt konsultieren', 'Kann abführend wirken'],
+        warnings: [],
         dosage_recommendation: '2 Kapseln täglich zu den Mahlzeiten',
         category: 'Mineralien',
         main_nutrients: [{ nutrient_id: 3, amount_per_unit: 200 }], // 200mg pro Kapsel
@@ -222,7 +222,7 @@ class SupplementDemoApp {
         monthly_cost: 22.50,
         description: 'Magnesium als Citrat für gute Absorption',
         benefits: ['Gut verträglich', 'Hohe Bioverfügbarkeit', 'Unterstützt Muskelfunktion'],
-        warnings: ['Bei Nierenerkrankungen Arzt konsultieren'],
+        warnings: [],
         dosage_recommendation: '3 Kapseln täglich verteilt zu den Mahlzeiten',
         category: 'Mineralien',
         main_nutrients: [{ nutrient_id: 3, amount_per_unit: 133 }], // 133mg pro Kapsel
@@ -436,23 +436,33 @@ class SupplementDemoApp {
     const html = this.products.map(product => `
       <div class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow overflow-hidden">
         <div class="p-4">
-          <!-- Subtiles kleines Produktbild in der Ecke -->
-          <div class="flex items-start justify-between mb-2">
-            <div class="flex-1 pr-3">
-              <h3 class="font-semibold text-gray-900 text-sm sm:text-base mb-1">${product.name}</h3>
-              <p class="text-xs sm:text-sm text-gray-600">${product.brand} • ${product.form}</p>
-            </div>
-            
-            <!-- Kleines subtiles Produktbild -->
+          <!-- Layout wie in Vorlage: Produktbild links oben mit Content -->
+          <div class="flex items-start mb-3">
+            <!-- Produktbild links oben - wie in Vorlage -->
             ${product.product_image ? `
-              <div class="w-12 h-12 sm:w-16 sm:h-16 flex-shrink-0 rounded-lg overflow-hidden bg-gray-100 border border-gray-200">
-                <img src="${product.product_image}" alt="${product.name}" class="w-full h-full object-cover opacity-80">
+              <div class="w-16 h-16 sm:w-20 sm:h-20 flex-shrink-0 rounded-lg overflow-hidden bg-gray-100 border border-gray-200 mr-3">
+                <img src="${product.product_image}" alt="${product.name}" class="w-full h-full object-cover">
               </div>
             ` : `
-              <div class="w-12 h-12 sm:w-16 sm:h-16 flex-shrink-0 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center">
-                <i class="fas fa-pills text-gray-400 text-sm"></i>
+              <div class="w-16 h-16 sm:w-20 sm:h-20 flex-shrink-0 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center mr-3">
+                <i class="fas fa-pills text-gray-400 text-lg"></i>
               </div>
             `}
+            
+            <!-- Produktinfo rechts vom Bild -->
+            <div class="flex-1 min-w-0">
+              <h3 class="font-semibold text-gray-900 text-sm sm:text-base mb-1 leading-tight">${product.name}</h3>
+              <p class="text-xs sm:text-sm text-gray-600 mb-2">${product.brand} • ${product.form}</p>
+              
+              <!-- Dosierung Info -->
+              <div class="text-xs text-gray-700">
+                <div class="font-medium">Dosierung:</div>
+                <div>${(() => {
+                  const mainNutrient = this.getMainNutrientInfo(product)
+                  return `${mainNutrient.amount}${mainNutrient.unit} ${mainNutrient.name}`
+                })()}</div>
+              </div>
+            </div>
           </div>
 
           
@@ -613,7 +623,7 @@ class SupplementDemoApp {
           </div>
           
           <div class="flex items-center space-x-2">
-            <button onclick="window.demoApp.clearStack()" class="text-sm text-gray-500 hover:text-red-600 px-3 py-2 rounded">
+            <button onclick="window.demoApp.clearStack()" class="text-sm text-gray-500 hover:text-orange-600 px-3 py-2 rounded">
               <i class="fas fa-trash mr-1"></i>Stack leeren
             </button>
             <button onclick="window.demoApp.proceedToCheckout()" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors text-sm font-medium">
@@ -1053,12 +1063,12 @@ class SupplementDemoApp {
     dosageSafety.classList.remove('hidden')
     
     if (amount > nutrient.dge_upper_limit) {
-      // Gefährlich hoch
-      dosageSafety.className = 'p-3 rounded-lg border border-red-200 bg-red-50 mb-4'
-      safetyTitle.textContent = 'Hinweis: Über DGE-Empfehlung'
-      safetyTitle.className = 'font-medium mb-1 text-red-800'
+      // Über DGE-Obergrenze - aber nur gelb statt rot
+      dosageSafety.className = 'p-3 rounded-lg border border-yellow-200 bg-yellow-50 mb-4'
+      safetyTitle.textContent = 'Hinweis: Über DGE-Obergrenze'
+      safetyTitle.className = 'font-medium mb-1 text-yellow-800'
       safetyMessage.innerHTML = `Die Dosierung liegt über der <a href="https://dge.de" target="_blank" class="text-blue-600 underline">DGE-Obergrenze</a> von ${nutrient.dge_upper_limit}${nutrient.unit}. <a href="https://dge.de" target="_blank" class="text-blue-600 underline">Mehr Infos bei der DGE</a>`
-      safetyMessage.className = 'text-red-700'
+      safetyMessage.className = 'text-yellow-700'
     } else if (amount > nutrient.dge_recommendation * 2) {
       // Hoch aber noch sicher
       dosageSafety.className = 'p-3 rounded-lg border border-yellow-200 bg-yellow-50 mb-4'
@@ -1948,17 +1958,17 @@ class SupplementDemoApp {
           </div>
           <div class="flex justify-between items-center py-2">
             <span class="text-gray-600">DGE-Obergrenze:</span>
-            <span class="font-medium ${dailyAmount > nutrient.dge_upper_limit ? 'text-red-600' : 'text-gray-900'}">${nutrient.dge_upper_limit}${nutrient.unit}</span>
+            <span class="font-medium ${dailyAmount > nutrient.dge_upper_limit ? 'text-yellow-600' : 'text-gray-900'}">${nutrient.dge_upper_limit}${nutrient.unit}</span>
           </div>
         </div>
         
         ${dailyAmount > nutrient.dge_upper_limit ? `
-          <div class="bg-red-50 border border-red-200 rounded-lg p-3">
-            <div class="flex items-center text-red-800">
-              <i class="fas fa-exclamation-triangle mr-2"></i>
-              <span class="font-medium">Hinweis: Liegt über DGE-Empfehlung</span>
+          <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+            <div class="flex items-center text-yellow-800">
+              <i class="fas fa-info-circle mr-2"></i>
+              <span class="font-medium">Hinweis: Über DGE-Obergrenze</span>
             </div>
-            <p class="text-red-700 text-sm mt-1">Die tägliche Aufnahme liegt über der <a href="https://dge.de" target="_blank" class="text-blue-600 underline">DGE-Obergrenze</a>.</p>
+            <p class="text-yellow-700 text-sm mt-1">Die tägliche Aufnahme liegt über der <a href="https://dge.de" target="_blank" class="text-blue-600 underline">DGE-Obergrenze</a>.</p>
           </div>
         ` : ''}
       </div>
@@ -2066,7 +2076,7 @@ class SupplementDemoApp {
       <div class="modal-container" style="background: white; border-radius: 8px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); width: 100%; max-width: 28rem;">
         <div class="p-4 sm:p-6">
           <div class="flex items-center mb-4">
-            <i class="fas fa-trash text-2xl text-red-600 mr-3"></i>
+            <i class="fas fa-trash text-2xl text-orange-600 mr-3"></i>
             <h2 class="text-lg font-bold text-gray-900">Produkt löschen</h2>
           </div>
           
@@ -2085,7 +2095,7 @@ class SupplementDemoApp {
             <button onclick="this.closest('.modal-overlay').remove()" class="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition-colors">
               Abbrechen
             </button>
-            <button onclick="window.demoApp.confirmDelete(${productId}); this.closest('.modal-overlay').remove()" class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors">
+            <button onclick="window.demoApp.confirmDelete(${productId}); this.closest('.modal-overlay').remove()" class="bg-orange-600 text-white px-4 py-2 rounded-md hover:bg-orange-700 transition-colors">
               <i class="fas fa-trash mr-2"></i>Löschen
             </button>
           </div>
@@ -2146,7 +2156,7 @@ class SupplementDemoApp {
     const toast = document.createElement('div')
     toast.className = `fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg transition-all duration-300 ${
       type === 'success' ? 'bg-green-100 text-green-800 border border-green-200' :
-      type === 'error' ? 'bg-red-100 text-red-800 border border-red-200' :
+      type === 'error' ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' :
       'bg-blue-100 text-blue-800 border border-blue-200'
     }`
     toast.textContent = message
