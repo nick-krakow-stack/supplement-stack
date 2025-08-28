@@ -13,6 +13,10 @@ class SupplementDemoApp {
 
   init() {
     console.log('[Demo Modal] Initialisierung startet...')
+    
+    // Add visible indicator that JavaScript is working
+    document.title = 'Demo - Supplement Stack (JS Modal Loaded!)'
+    
     this.setupEventListeners()
     
     // Stack-Selector initialisieren
@@ -25,9 +29,48 @@ class SupplementDemoApp {
     setTimeout(() => this.renderStack(), 500)
     
     this.updateStats()
+    
+    // Show success message that JS is working
+    this.showSuccess('Demo-Modal-App erfolgreich geladen! Modals schließen sich jetzt automatisch.')
+    
     console.log(`[Demo Modal] Initialisierung abgeschlossen - ${this.availableProducts.length} verfügbare Produkte, ${this.products.length} im Stack`)
   }
   
+  showSuccess(message) {
+    this.showNotification(message, 'success')
+  }
+
+  showError(message) {
+    this.showNotification(message, 'error')
+  }
+
+  showNotification(message, type = 'info') {
+    const notification = document.createElement('div')
+    notification.className = `fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg max-w-sm ${
+      type === 'success' ? 'bg-green-100 border border-green-400 text-green-700' :
+      type === 'error' ? 'bg-red-100 border border-red-400 text-red-700' :
+      'bg-blue-100 border border-blue-400 text-blue-700'
+    }`
+    
+    notification.innerHTML = `
+      <div class="flex items-center">
+        <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'} mr-2"></i>
+        <span class="text-sm">${message}</span>
+        <button onclick="this.parentElement.parentElement.remove()" class="ml-2 text-gray-500 hover:text-gray-700">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+    `
+    
+    document.body.appendChild(notification)
+    
+    setTimeout(() => {
+      if (notification.parentElement) {
+        notification.remove()
+      }
+    }, 5000)
+  }
+
   addDemoStackProducts() {
     // Füge automatisch ein paar Produkte zum Demo-Stack hinzu
     const demoStackProducts = [
@@ -1282,8 +1325,14 @@ class SupplementDemoApp {
     // 7. Finales Hinzufügen
     modal.querySelector('#add-product-final')?.addEventListener('click', () => {
       if (selectedProduct && selectedNutrient && selectedDosage) {
-        this.addSelectedProductToStack(selectedProduct, selectedNutrient, selectedDosage)
-        modal.remove()
+        try {
+          this.addSelectedProductToStack(selectedProduct, selectedNutrient, selectedDosage)
+          this.showSuccess(`${selectedProduct.name} erfolgreich hinzugefügt!`)
+          modal.remove()
+        } catch (error) {
+          console.error('Fehler beim Hinzufügen:', error)
+          this.showError('Fehler beim Hinzufügen des Produkts')
+        }
       }
     })
 
@@ -1910,8 +1959,14 @@ class SupplementDemoApp {
     if (form) {
       form.addEventListener('submit', (e) => {
         e.preventDefault()
-        this.createStack(new FormData(form))
-        modal.remove()
+        try {
+          this.createStack(new FormData(form))
+          this.showSuccess('Stack erfolgreich erstellt!')
+          modal.remove()
+        } catch (error) {
+          console.error('Fehler beim Erstellen des Stacks:', error) 
+          this.showError('Fehler beim Erstellen des Stacks')
+        }
       })
     }
 

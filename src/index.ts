@@ -141,7 +141,7 @@ app.get('/demo', (c) => {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Demo - Supplement Stack</title>
+        <title>Demo - Supplement Stack (UPDATED VERSION)</title>
         <meta name="description" content="Demo der Supplement Stack Anwendung mit nährstoffbasiertem System">
         <script src="https://cdn.tailwindcss.com"></script>
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
@@ -240,8 +240,7 @@ app.get('/demo', (c) => {
                 <div class="relative">
                     <select id="stack-selector" class="bg-white border border-gray-300 rounded-lg px-4 py-2 pr-8 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                         <option value="">Stack auswählen</option>
-                        <option value="1">Grundausstattung</option>
-                        <option value="2">Immunsystem Boost</option>
+                        <!-- Optionen werden dynamisch von JavaScript hinzugefügt -->
                     </select>
                 </div>
             </div>
