@@ -11,9 +11,11 @@ class SupplementDemoApp {
 
   init() {
     console.log('[Demo App] Initialisierung startet...')
+    this.currentStack = null // Track currently selected stack
     this.setupEventListeners()
     this.renderProducts()
     this.renderStacks()
+    this.updateStackSelector()
     this.updateStats()
     console.log(`[Demo App] Initialisierung abgeschlossen - ${this.products.length} Produkte geladen`)
   }
@@ -57,6 +59,19 @@ class SupplementDemoApp {
         this.showNutrientBasedStackModal()
       }
     })
+    
+    // Stack Selector Event Listener
+    const stackSelector = document.getElementById('stack-selector')
+    if (stackSelector) {
+      stackSelector.addEventListener('change', (e) => {
+        const stackId = parseInt(e.target.value)
+        if (stackId) {
+          this.switchToStack(stackId)
+        } else {
+          this.showAllProducts()
+        }
+      })
+    }
   }
 
   loadDemoProducts() {
@@ -263,7 +278,8 @@ class SupplementDemoApp {
     }
   }
 
-  renderProductCard(product) {
+  renderProductCard(product, customDosage = null) {
+    const displayDosage = customDosage || product.dosage_per_day
     return `
       <div class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow overflow-hidden">
         <div class="p-3 sm:p-4">
@@ -284,7 +300,7 @@ class SupplementDemoApp {
           <div class="space-y-1 text-xs text-gray-600 mb-3">
             <div class="flex justify-between">
               <span class="truncate pr-2">${product.category}</span>
-              <span class="font-medium">${product.dosage_per_day}x täglich</span>
+              <span class="font-medium">${displayDosage}x täglich</span>
             </div>
           </div>
           
@@ -1418,6 +1434,92 @@ class SupplementDemoApp {
     // Show stack details modal (simplified implementation)
     this.showSuccess(`Stack-Details für "${stack.name}" - ${stack.products.length} Produkte, €${this.calculateStackCost(stack).toFixed(2)}/Monat`)
   }
+  
+  switchToStack(stackId) {
+    console.log('[Demo App] Wechsle zu Stack:', stackId)
+    const stack = this.stacks.find(s => s.id === stackId)
+    if (!stack) {
+      this.showError('Stack nicht gefunden!')
+      return
+    }
+    
+    // Update current stack reference
+    this.currentStack = stack
+    
+    // Show products in this stack
+    this.showStackProducts(stack)
+    
+    // Update stack selector dropdown with current stack
+    this.updateStackSelector()
+    
+    this.showSuccess(`Stack "${stack.name}" ausgewählt - ${stack.products.length} Produkte`)
+  }
+  
+  showStackProducts(stack) {
+    const grid = document.getElementById('demo-products-grid')
+    if (!grid) return
+    
+    // Get products that are in this stack
+    const stackProductIds = stack.products.map(p => p.product_id)
+    const stackProducts = this.products.filter(p => stackProductIds.includes(p.id))
+    
+    if (stackProducts.length === 0) {
+      grid.innerHTML = `
+        <div class="col-span-full text-center py-8 text-gray-500">
+          <i class="fas fa-layer-group text-3xl mb-3"></i>
+          <p class="text-lg font-medium mb-2">Keine Produkte in diesem Stack</p>
+          <p class="text-sm">Fügen Sie Produkte zu "${stack.name}" hinzu!</p>
+        </div>
+      `
+      return
+    }
+    
+    // Show products with stack-specific dosages
+    const html = stackProducts.map(product => {
+      const stackProduct = stack.products.find(sp => sp.product_id === product.id)
+      return this.renderProductCard(product, stackProduct ? stackProduct.dosage : product.dosage_per_day)
+    }).join('')
+    
+    grid.innerHTML = html
+    console.log(`[Demo App] ${stackProducts.length} Stack-Produkte angezeigt für "${stack.name}"`)
+  }
+  
+  showAllProducts() {
+    console.log('[Demo App] Zeige alle Produkte')
+    this.currentStack = null
+    this.renderProducts()
+    this.showSuccess('Alle Produkte angezeigt')
+  }
+  
+  updateStackSelector() {
+    const selector = document.getElementById('stack-selector')
+    if (!selector) return
+    
+    // Clear existing options except the first one
+    const firstOption = selector.querySelector('option[value=""]')
+    selector.innerHTML = ''
+    if (firstOption) {
+      selector.appendChild(firstOption)
+    } else {
+      const defaultOption = document.createElement('option')
+      defaultOption.value = ''
+      defaultOption.textContent = 'Stack auswählen'
+      selector.appendChild(defaultOption)
+    }
+    
+    // Add all stacks
+    this.stacks.forEach(stack => {
+      const option = document.createElement('option')
+      option.value = stack.id.toString()
+      option.textContent = `${stack.name} (${stack.products.length} Produkte)`
+      if (this.currentStack && this.currentStack.id === stack.id) {
+        option.selected = true
+      }
+      selector.appendChild(option)
+    })
+    
+    console.log('[Demo App] Stack-Selector aktualisiert mit', this.stacks.length, 'Stacks')
+  }
 
   updateStats() {
     const productsCountEl = document.getElementById('demo-products-count')
@@ -1889,6 +1991,7 @@ class SupplementDemoApp {
     
     // Update UI
     this.renderStacks()
+    this.updateStackSelector()
     this.updateStats()
     
     console.log('[Demo App] Nährstoff zu Stack hinzugefügt:', {
