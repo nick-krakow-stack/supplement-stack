@@ -654,11 +654,11 @@ class SupplementDemoApp {
           <div class="grid grid-cols-2 gap-4 mb-4">
             <div>
               <span class="text-xs text-gray-500">Einmalkosten</span>
-              <div class="font-semibold text-gray-900">€${product.purchase_price.toFixed(2)}</div>
+              <div class="font-semibold text-gray-900">€${(product.purchase_price || 0).toFixed(2)}</div>
             </div>
             <div>
               <span class="text-xs text-gray-500">Pro Monat</span>
-              <div class="font-semibold text-green-600">€${product.monthly_cost.toFixed(2)}</div>
+              <div class="font-semibold text-green-600">€${(product.monthly_cost || 0).toFixed(2)}</div>
             </div>
           </div>
           
@@ -696,13 +696,10 @@ class SupplementDemoApp {
       const currentStack = this.stacks.find(s => s.id == this.currentStackId) // Use == for type-flexible comparison
       console.log('[Demo Modal] Found current stack:', currentStack ? currentStack.name : 'NOT FOUND')
       
-      if (currentStack && currentStack.products) {
-        console.log('[Demo Modal] Returning stack products:', currentStack.products.length)
-        return currentStack.products
-      } else {
-        console.log('[Demo Modal] No products in stack, returning empty array')
-        return []
-      }
+      // WICHTIG: Verwende this.products (die geladenen Vollständigen Objekte)
+      // nicht currentStack.products (die nur IDs sind)
+      console.log('[Demo Modal] Returning loaded products from this.products:', this.products.length)
+      return this.products || []
     } else {
       console.log('[Demo Modal] No currentStackId, returning global products:', this.products.length)
       return this.products || []
@@ -1018,6 +1015,7 @@ class SupplementDemoApp {
     }
     
     console.log(`[Demo Modal] Stack "${stack.name}" loaded with ${this.products.length} products`)
+    console.log('[Demo Modal] Loaded products:', this.products.map(p => ({ id: p.id, name: p.name, form: p.form })))
     
     this.renderStack()
     this.updateStats()
