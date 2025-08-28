@@ -3,5 +3,16 @@
   "name": "supplementstack",
   "compatibility_date": "2024-01-01",
   "compatibility_flags": ["nodejs_compat"],
-  "pages_build_output_dir": "./dist"
+  "pages_build_output_dir": "./dist",
+  
+  // D1 Database configuration
+  // IMPORTANT: Create production database first: npx wrangler d1 create supplementstack-production
+  // Local development automatically uses local SQLite with --local flag
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "supplementstack-production",
+      "database_id": "placeholder-will-be-replaced-after-creation"  // Replace with actual ID from wrangler d1 create
+    }
+  ]
 }

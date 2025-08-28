@@ -10,6 +10,8 @@ productRoutes.get('/', async (c) => {
     
     const products = await c.env.DB.prepare(`
       SELECT p.*, 
+             c.name as category_name,
+             c.description as category_description,
              GROUP_CONCAT(
                json_object(
                  'nutrient_id', pn.nutrient_id,
@@ -17,12 +19,14 @@ productRoutes.get('/', async (c) => {
                  'amount', pn.amount,
                  'unit', pn.unit,
                  'amount_standardized', pn.amount_standardized,
-                 'dge_recommended', n.dge_recommended
+                 'dge_recommended', n.dge_recommended,
+                 'category_id', n.category_id
                )
              ) as nutrients_json
       FROM products p
       LEFT JOIN product_nutrients pn ON p.id = pn.product_id
       LEFT JOIN nutrients n ON pn.nutrient_id = n.id
+      LEFT JOIN categories c ON p.category_id = c.id
       WHERE p.user_id = ? AND p.is_duplicate = FALSE
       GROUP BY p.id
       ORDER BY p.created_at DESC
@@ -49,6 +53,8 @@ productRoutes.get('/:id', async (c) => {
 
     const product = await c.env.DB.prepare(`
       SELECT p.*, 
+             c.name as category_name,
+             c.description as category_description,
              GROUP_CONCAT(
                json_object(
                  'nutrient_id', pn.nutrient_id,
@@ -56,12 +62,14 @@ productRoutes.get('/:id', async (c) => {
                  'amount', pn.amount,
                  'unit', pn.unit,
                  'amount_standardized', pn.amount_standardized,
-                 'dge_recommended', n.dge_recommended
+                 'dge_recommended', n.dge_recommended,
+                 'category_id', n.category_id
                )
              ) as nutrients_json
       FROM products p
       LEFT JOIN product_nutrients pn ON p.id = pn.product_id
       LEFT JOIN nutrients n ON pn.nutrient_id = n.id
+      LEFT JOIN categories c ON p.category_id = c.id
       WHERE p.id = ? AND p.user_id = ?
       GROUP BY p.id
     `).bind(productId, user.id).first()
@@ -125,11 +133,23 @@ productRoutes.post('/', async (c) => {
       affiliateUrl = body.shop_url // Keep original until processed
     }
 
+    // Determine category_id from main nutrient if not provided
+    let categoryId = body.category_id || null
+    if (!categoryId && body.nutrients && body.nutrients.length > 0) {
+      const mainNutrient = await c.env.DB.prepare(`
+        SELECT category_id FROM nutrients WHERE id = ?
+      `).bind(body.nutrients[0].nutrient_id).first()
+      
+      if (mainNutrient) {
+        categoryId = mainNutrient.category_id
+      }
+    }
+
     // Create product
     const productResult = await c.env.DB.prepare(`
       INSERT INTO products (user_id, name, brand, form, price_per_package, servings_per_package, 
                           shop_url, affiliate_url, image_url, description, benefits, warnings, 
-                          dosage_recommendation, category)
+                          dosage_recommendation, category_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       user.id,
@@ -145,7 +165,7 @@ productRoutes.post('/', async (c) => {
       body.benefits || null,
       body.warnings || null,
       body.dosage_recommendation || null,
-      body.category || null
+      categoryId
     ).run()
 
     if (!productResult.success) {
@@ -200,13 +220,25 @@ productRoutes.put('/:id', async (c) => {
       return c.json({ error: 'Produkt nicht gefunden' }, 404)
     }
 
+    // Determine category_id from main nutrient if not provided
+    let categoryId = body.category_id || null
+    if (!categoryId && body.nutrients && body.nutrients.length > 0) {
+      const mainNutrient = await c.env.DB.prepare(`
+        SELECT category_id FROM nutrients WHERE id = ?
+      `).bind(body.nutrients[0].nutrient_id).first()
+      
+      if (mainNutrient) {
+        categoryId = mainNutrient.category_id
+      }
+    }
+
     // Update product
     await c.env.DB.prepare(`
       UPDATE products 
       SET name = ?, brand = ?, form = ?, price_per_package = ?, 
           servings_per_package = ?, shop_url = ?, image_url = ?, 
           description = ?, benefits = ?, warnings = ?, dosage_recommendation = ?, 
-          category = ?, updated_at = CURRENT_TIMESTAMP
+          category_id = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ? AND user_id = ?
     `).bind(
       body.name,
@@ -220,7 +252,7 @@ productRoutes.put('/:id', async (c) => {
       body.benefits || null,
       body.warnings || null,
       body.dosage_recommendation || null,
-      body.category || null,
+      categoryId,
       productId,
       user.id
     ).run()
@@ -296,15 +328,76 @@ productRoutes.delete('/:id', async (c) => {
 productRoutes.get('/nutrients/available', async (c) => {
   try {
     const nutrients = await c.env.DB.prepare(`
-      SELECT id, name, standard_unit, external_article_url, link_label
-      FROM nutrients
-      ORDER BY name ASC
+      SELECT n.id, n.name, n.standard_unit, n.external_article_url, n.link_label, 
+             n.category_id, c.name as category_name
+      FROM nutrients n
+      LEFT JOIN categories c ON n.category_id = c.id
+      ORDER BY c.sort_order ASC, n.name ASC
     `).all()
 
     return c.json(nutrients.results || [])
   } catch (error) {
     console.error('Error fetching nutrients:', error)
     return c.json({ error: 'Fehler beim Laden der Nährstoffe' }, 500)
+  }
+})
+
+// Get all categories
+productRoutes.get('/categories', async (c) => {
+  try {
+    const categories = await c.env.DB.prepare(`
+      SELECT id, name, description, sort_order
+      FROM categories
+      ORDER BY sort_order ASC
+    `).all()
+
+    return c.json(categories.results || [])
+  } catch (error) {
+    console.error('Error fetching categories:', error)
+    return c.json({ error: 'Fehler beim Laden der Kategorien' }, 500)
+  }
+})
+
+// Get products by category
+productRoutes.get('/category/:categoryId', async (c) => {
+  try {
+    const user = c.get('user')
+    const categoryId = c.req.param('categoryId')
+    
+    const products = await c.env.DB.prepare(`
+      SELECT p.*, 
+             c.name as category_name,
+             c.description as category_description,
+             GROUP_CONCAT(
+               json_object(
+                 'nutrient_id', pn.nutrient_id,
+                 'name', n.name,
+                 'amount', pn.amount,
+                 'unit', pn.unit,
+                 'amount_standardized', pn.amount_standardized,
+                 'dge_recommended', n.dge_recommended,
+                 'category_id', n.category_id
+               )
+             ) as nutrients_json
+      FROM products p
+      LEFT JOIN product_nutrients pn ON p.id = pn.product_id
+      LEFT JOIN nutrients n ON pn.nutrient_id = n.id
+      LEFT JOIN categories c ON p.category_id = c.id
+      WHERE p.user_id = ? AND p.category_id = ? AND p.is_duplicate = FALSE
+      GROUP BY p.id
+      ORDER BY p.created_at DESC
+    `).bind(user.id, categoryId).all()
+
+    const productsWithNutrients = products.results?.map(product => ({
+      ...product,
+      nutrients: product.nutrients_json ? 
+        product.nutrients_json.split(',').map(n => JSON.parse(n)) : []
+    })) || []
+
+    return c.json(productsWithNutrients)
+  } catch (error) {
+    console.error('Error fetching products by category:', error)
+    return c.json({ error: 'Fehler beim Laden der Produkte nach Kategorie' }, 500)
   }
 })
 

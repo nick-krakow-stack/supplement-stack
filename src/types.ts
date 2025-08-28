@@ -28,7 +28,23 @@ export interface Nutrient {
   influencer_recommended?: number;
   max_safe_dose?: number;
   warning_threshold?: number;
+  category_id?: number;
   created_at: string;
+}
+
+// Category type for supplement classification
+export interface Category {
+  id: number;
+  name: string;
+  description?: string;
+  sort_order: number;
+  created_at: string;
+}
+
+// Extended Nutrient with category information
+export interface NutrientWithCategory extends Nutrient {
+  category_name?: string;
+  category_description?: string;
 }
 
 export interface Product {
@@ -47,11 +63,17 @@ export interface Product {
   benefits?: string; // Wozu ist es gut? (JSON Array)
   warnings?: string; // Warnhinweise
   dosage_recommendation?: string; // Dosierungsempfehlung
-  category?: string; // Vitamin, Mineral, Aminosäure, etc.
+  category_id?: number; // Reference to categories table
   is_duplicate: boolean;
   duplicate_of?: number;
   created_at: string;
   updated_at: string;
+}
+
+// Extended Product with category information
+export interface ProductWithCategory extends Product {
+  category_name?: string;
+  category_description?: string;
 }
 
 export interface ProductNutrient {
@@ -180,7 +202,7 @@ export interface CreateProductRequest {
   benefits?: string; // JSON string
   warnings?: string;
   dosage_recommendation?: string;
-  category?: string;
+  category_id?: number; // Reference to categories table
   nutrients: {
     nutrient_id: number;
     amount: number;
