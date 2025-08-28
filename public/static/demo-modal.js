@@ -3,7 +3,8 @@
 
 class SupplementDemoApp {
   constructor() {
-    this.products = this.loadDemoProducts()
+    this.availableProducts = this.loadDemoProducts()  // Verfügbare Produkte
+    this.products = []  // Produkte im Stack (initial leer)
     this.stacks = this.loadDemoStacks()
     this.nutrients = this.loadNutrients()
     this.init()
@@ -13,8 +14,32 @@ class SupplementDemoApp {
     console.log('[Demo Modal] Initialisierung startet...')
     this.setupEventListeners()
     this.renderProducts()
+    
+    // Demo-Stack mit ein paar Produkten vorbesetzen
+    this.addDemoStackProducts()
+    
     this.updateStats()
-    console.log(`[Demo Modal] Initialisierung abgeschlossen - ${this.products.length} Produkte geladen`)
+    console.log(`[Demo Modal] Initialisierung abgeschlossen - ${this.availableProducts.length} verfügbare Produkte, ${this.products.length} im Stack`)
+  }
+  
+  addDemoStackProducts() {
+    // Füge automatisch ein paar Produkte zum Demo-Stack hinzu
+    const demoStackProducts = [
+      { productId: 1, nutrientId: 1, dosageAmount: 4000, dosageUnit: 'IU' }, // Vitamin D3 4000 IU
+      { productId: 3, nutrientId: 2, dosageAmount: 200, dosageUnit: 'µg' },   // B12 Methylcobalamin  
+      { productId: 12, nutrientId: 2, dosageAmount: 100, dosageUnit: 'µg' },  // B-Komplex Premium
+      { productId: 13, nutrientId: 11, dosageAmount: 1000, dosageUnit: 'mg' } // L-Carnitin + Vitamin C
+    ]
+    
+    demoStackProducts.forEach(({ productId, nutrientId, dosageAmount, dosageUnit }) => {
+      const product = this.availableProducts.find(p => p.id === productId)
+      const nutrient = this.nutrients.find(n => n.id === nutrientId)
+      
+      if (product && nutrient) {
+        const dosage = { amount: dosageAmount, unit: dosageUnit, category: 'custom' }
+        this.finalizeAddProduct(product, nutrient, dosage)
+      }
+    })
   }
 
   setupEventListeners() {
@@ -433,7 +458,7 @@ class SupplementDemoApp {
       return
     }
     
-    const html = this.products.map(product => `
+    const html = this.availableProducts.map(product => `
       <div class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow overflow-hidden">
         <div class="p-4">
           <!-- Layout wie in Vorlage: Produktbild links oben mit Content -->
@@ -561,7 +586,7 @@ class SupplementDemoApp {
 
   updateStats() {
     // Update various stats displays
-    const totalProducts = this.products.length
+    const totalProducts = this.availableProducts.length
     const totalStacks = this.stacks.length
     
     // Update stack count if element exists
