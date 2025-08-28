@@ -362,7 +362,9 @@ class SupplementDemoApp {
         description: 'Wichtig für Knochengesundheit und Immunsystem',
         study_recommendation: 2000,
         study_url: 'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6266123/',
-        study_title: 'Vitamin D3 Supplementation in Adults - Systematic Review'
+        study_title: 'Vitamin D3 Supplementation in Adults - Systematic Review',
+        dge_info_url: 'https://www.dge.de/wissenschaft/referenzwerte/vitamin-d/',
+        synonyms: ['D3', 'Cholecalciferol', 'Vitamin D', 'Sonnenvitamin']
       },
       { 
         id: 2, 
@@ -371,19 +373,23 @@ class SupplementDemoApp {
         category: 'Vitamine', 
         dge_recommendation: 4, 
         dge_upper_limit: 1000, 
-        description: 'Essential für Nervensystem und Blutbildung' 
+        description: 'Essential für Nervensystem und Blutbildung',
+        dge_info_url: 'https://www.dge.de/wissenschaft/referenzwerte/vitamin-b12/',
+        synonyms: ['B12', 'Cobalamin', 'Methylcobalamin', 'Cyanocobalamin']
       },
       { 
         id: 3, 
         name: 'Magnesium', 
         unit: 'mg', 
         category: 'Mineralien', 
-        dge_recommendation: 375, 
+        dge_recommendation: 300, 
         dge_upper_limit: 350, 
         description: 'Wichtig für Muskeln und Energiestoffwechsel',
         study_recommendation: 400,
         study_url: 'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5637834/',
-        study_title: 'Magnesium Supplementation and Health Outcomes'
+        study_title: 'Magnesium Supplementation and Health Outcomes',
+        dge_info_url: 'https://www.dge.de/wissenschaft/referenzwerte/magnesium/',
+        synonyms: ['Mg', 'Magnium']
       },
       { 
         id: 4, 
@@ -392,7 +398,9 @@ class SupplementDemoApp {
         category: 'Fettsäuren', 
         dge_recommendation: 250, 
         dge_upper_limit: 5000, 
-        description: 'Omega-3-Fettsäure für Herz und Gehirn' 
+        description: 'Omega-3-Fettsäure für Herz und Gehirn',
+        dge_info_url: 'https://www.dge.de/wissenschaft/referenzwerte/fett/',
+        synonyms: ['Omega-3', 'Omega 3', 'Eicosapentaensäure', 'Fischöl', 'Algenöl']
       },
       { 
         id: 5, 
@@ -401,7 +409,9 @@ class SupplementDemoApp {
         category: 'Mineralien', 
         dge_recommendation: 10, 
         dge_upper_limit: 25, 
-        description: 'Essential für Immunsystem und Wundheilung' 
+        description: 'Essential für Immunsystem und Wundheilung',
+        dge_info_url: 'https://www.dge.de/wissenschaft/referenzwerte/zink/',
+        synonyms: ['Zn', 'Zinc', 'Bisglycinat', 'Citrat']
       },
       { 
         id: 6, 
@@ -413,7 +423,9 @@ class SupplementDemoApp {
         description: 'Antioxidans und Kollagenbildung',
         study_recommendation: 1000,
         study_url: 'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7579810/',
-        study_title: 'Vitamin C and Immune Function'
+        study_title: 'Vitamin C and Immune Function',
+        dge_info_url: 'https://www.dge.de/wissenschaft/referenzwerte/vitamin-c/',
+        synonyms: ['C', 'Ascorbinsäure', 'Ester-C']
       },
       { 
         id: 7, 
@@ -1034,10 +1046,24 @@ class SupplementDemoApp {
           return
         }
         
-        const filtered = this.nutrients.filter(n => 
-          n.name.toLowerCase().includes(query) || 
-          n.category.toLowerCase().includes(query)
-        )
+        const filtered = this.nutrients.filter(n => {
+          const name = n.name.toLowerCase()
+          const category = n.category.toLowerCase()
+          const description = n.description.toLowerCase()
+          const synonyms = (n.synonyms || []).join(' ').toLowerCase()
+          
+          // Suche in Name, Kategorie, Beschreibung und Synonymen
+          return name.includes(query) || 
+                 category.includes(query) ||
+                 description.includes(query) ||
+                 synonyms.includes(query) ||
+                 // Auch in verfügbaren Produktnamen suchen
+                 this.availableProducts.some(p => 
+                   p.name.toLowerCase().includes(query) && 
+                   ((p.main_nutrients && p.main_nutrients.some(mn => mn.nutrient_id === n.id)) ||
+                    (p.nutrient_id === n.id))
+                 )
+        })
         
         if (filtered.length > 0) {
           searchResults.classList.remove('hidden')
@@ -2099,6 +2125,39 @@ class SupplementDemoApp {
           <div class="flex justify-between items-center py-2">
             <span class="text-gray-600">DGE-Obergrenze:</span>
             <span class="font-medium ${dailyAmount > nutrient.dge_upper_limit ? 'text-yellow-600' : 'text-gray-900'}">${nutrient.dge_upper_limit}${nutrient.unit}</span>
+          </div>
+        </div>
+        
+        <!-- DGE Links und Synonyme -->
+        <div class="bg-gray-50 rounded-lg p-4">
+          <h4 class="font-medium text-gray-900 mb-2">Weitere Informationen</h4>
+          
+          ${nutrient.synonyms && nutrient.synonyms.length > 0 ? `
+            <div class="mb-3">
+              <span class="text-sm text-gray-600">Andere Namen:</span>
+              <div class="text-sm text-gray-800">${nutrient.synonyms.join(', ')}</div>
+            </div>
+          ` : ''}
+          
+          <div class="flex flex-col space-y-2 text-sm">
+            ${nutrient.dge_info_url ? `
+              <a href="${nutrient.dge_info_url}" target="_blank" class="text-blue-600 hover:text-blue-800 underline flex items-center">
+                <i class="fas fa-external-link-alt mr-1"></i>
+                DGE-Referenzwerte für ${nutrient.name}
+              </a>
+            ` : ''}
+            
+            ${nutrient.study_url ? `
+              <a href="${nutrient.study_url}" target="_blank" class="text-purple-600 hover:text-purple-800 underline flex items-center">
+                <i class="fas fa-flask mr-1"></i>
+                ${nutrient.study_title || 'Wissenschaftliche Studie'}
+              </a>
+            ` : ''}
+            
+            <a href="https://www.dge.de/wissenschaft/referenzwerte/" target="_blank" class="text-gray-600 hover:text-gray-800 underline flex items-center">
+              <i class="fas fa-info-circle mr-1"></i>
+              Alle DGE-Referenzwerte
+            </a>
           </div>
         </div>
         
