@@ -13,7 +13,6 @@ class SupplementDemoApp {
   init() {
     console.log('[Demo Modal] Initialisierung startet...')
     this.setupEventListeners()
-    this.renderProducts()
     
     // Demo-Stack mit ein paar Produkten vorbesetzen
     this.addDemoStackProducts()
@@ -275,7 +274,7 @@ class SupplementDemoApp {
         warnings: ['Kühl lagern', 'Nach Anbruch 3 Monate haltbar'],
         dosage_recommendation: '1 Teelöffel täglich zu einer Mahlzeit',
         category: 'Fettsäuren',
-        main_nutrients: [{ nutrient_id: 4, amount_per_unit: 1000 }], // EPA 1000mg
+        main_nutrients: [{ nutrient_id: 4, amount_per_unit: 1000 }], // Omega-3 1000mg (Gesamt)
         secondary_nutrients: [],
         recommended: true,
         recommendation_rank: 1,
@@ -352,11 +351,13 @@ class SupplementDemoApp {
 
   loadNutrients() {
     return [
+      // HAUPTWIRKSTOFFE - Das, was Nutzer suchen
       { 
         id: 1, 
         name: 'Vitamin D3', 
         unit: 'IE', 
         category: 'Vitamine', 
+        is_main_nutrient: true,
         dge_recommendation: 800, 
         dge_upper_limit: 4000, 
         description: 'Wichtig für Knochengesundheit und Immunsystem',
@@ -371,6 +372,7 @@ class SupplementDemoApp {
         name: 'Vitamin B12', 
         unit: 'µg', 
         category: 'Vitamine', 
+        is_main_nutrient: true,
         dge_recommendation: 4, 
         dge_upper_limit: 1000, 
         description: 'Essential für Nervensystem und Blutbildung',
@@ -382,6 +384,7 @@ class SupplementDemoApp {
         name: 'Magnesium', 
         unit: 'mg', 
         category: 'Mineralien', 
+        is_main_nutrient: true,
         dge_recommendation: 300, 
         dge_upper_limit: 350, 
         description: 'Wichtig für Muskeln und Energiestoffwechsel',
@@ -393,20 +396,23 @@ class SupplementDemoApp {
       },
       { 
         id: 4, 
-        name: 'EPA', 
+        name: 'Omega-3', 
         unit: 'mg', 
         category: 'Fettsäuren', 
+        is_main_nutrient: true,
         dge_recommendation: 250, 
         dge_upper_limit: 5000, 
-        description: 'Omega-3-Fettsäure für Herz und Gehirn',
+        description: 'Essentielle Fettsäuren für Herz, Gehirn und Entzündungshemmung',
         dge_info_url: 'https://www.dge.de/wissenschaft/referenzwerte/fett/',
-        synonyms: ['Omega-3', 'Omega 3', 'Eicosapentaensäure', 'Fischöl', 'Algenöl']
+        synonyms: ['Omega 3', 'Fischöl', 'Algenöl', 'Marine Omega'],
+        sub_nutrients: [41, 42, 43] // EPA, DHA, DPA
       },
       { 
         id: 5, 
         name: 'Zink', 
         unit: 'mg', 
         category: 'Mineralien', 
+        is_main_nutrient: true,
         dge_recommendation: 10, 
         dge_upper_limit: 25, 
         description: 'Essential für Immunsystem und Wundheilung',
@@ -418,6 +424,7 @@ class SupplementDemoApp {
         name: 'Vitamin C', 
         unit: 'mg', 
         category: 'Vitamine', 
+        is_main_nutrient: true,
         dge_recommendation: 110, 
         dge_upper_limit: 1000, 
         description: 'Antioxidans und Kollagenbildung',
@@ -428,134 +435,104 @@ class SupplementDemoApp {
         synonyms: ['C', 'Ascorbinsäure', 'Ester-C']
       },
       { 
+        id: 11, 
+        name: 'L-Carnitin', 
+        unit: 'mg', 
+        category: 'Aminosäuren', 
+        is_main_nutrient: true,
+        dge_recommendation: 300, 
+        dge_upper_limit: 3000, 
+        description: 'Unterstützt Fettstoffwechsel und Energieproduktion',
+        synonyms: ['Carnitin', 'Acetyl-L-Carnitin']
+      },
+      
+      // SUB-WIRKSTOFFE - Können gesucht werden, verweisen auf Hauptwirkstoff
+      { 
+        id: 41, 
+        name: 'EPA', 
+        unit: 'mg', 
+        category: 'Fettsäuren', 
+        is_main_nutrient: false,
+        parent_nutrient_id: 4, // Verweist auf Omega-3
+        dge_recommendation: 250, 
+        dge_upper_limit: 5000, 
+        description: 'Eicosapentaensäure - eine der wichtigsten Omega-3-Fettsäuren',
+        synonyms: ['Eicosapentaensäure']
+      },
+      { 
+        id: 42, 
+        name: 'DHA', 
+        unit: 'mg', 
+        category: 'Fettsäuren', 
+        is_main_nutrient: false,
+        parent_nutrient_id: 4, // Verweist auf Omega-3
+        dge_recommendation: 100, 
+        dge_upper_limit: 5000, 
+        description: 'Docosahexaensäure - wichtig für Gehirn und Augen',
+        synonyms: ['Docosahexaensäure']
+      },
+      { 
+        id: 43, 
+        name: 'DPA', 
+        unit: 'mg', 
+        category: 'Fettsäuren', 
+        is_main_nutrient: false,
+        parent_nutrient_id: 4, // Verweist auf Omega-3
+        dge_recommendation: 10, 
+        dge_upper_limit: 1000, 
+        description: 'Docosapentaensäure - weitere wichtige Omega-3-Fettsäure',
+        synonyms: ['Docosapentaensäure']
+      },
+      
+      // Weitere bekannte Nährstoffe für Vollständigkeit
+      { 
         id: 7, 
         name: 'Vitamin B6', 
         unit: 'mg', 
         category: 'Vitamine', 
+        is_main_nutrient: true,
         dge_recommendation: 1.4, 
         dge_upper_limit: 25, 
-        description: 'Aminosäurestoffwechsel und Nervenfunktion' 
+        description: 'Aminosäurestoffwechsel und Nervenfunktion',
+        synonyms: ['B6', 'Pyridoxin']
       },
       { 
         id: 8, 
         name: 'Folsäure', 
         unit: 'µg', 
         category: 'Vitamine', 
+        is_main_nutrient: true,
         dge_recommendation: 400, 
         dge_upper_limit: 1000, 
-        description: 'DNA-Synthese und Zellteilung' 
+        description: 'DNA-Synthese und Zellteilung',
+        synonyms: ['Folat', 'Vitamin B9']
       },
       { 
         id: 9, 
         name: 'Eisen', 
         unit: 'mg', 
         category: 'Mineralien', 
+        is_main_nutrient: true,
         dge_recommendation: 15, 
         dge_upper_limit: 45, 
-        description: 'Sauerstofftransport und Energiestoffwechsel' 
+        description: 'Sauerstofftransport und Energiestoffwechsel',
+        synonyms: ['Fe', 'Iron']
       },
       { 
         id: 10, 
         name: 'Calcium', 
         unit: 'mg', 
         category: 'Mineralien', 
+        is_main_nutrient: true,
         dge_recommendation: 1000, 
         dge_upper_limit: 2500, 
-        description: 'Knochen- und Zahngesundheit' 
-      },
-      { 
-        id: 11, 
-        name: 'L-Carnitin', 
-        unit: 'mg', 
-        category: 'Aminosäuren', 
-        dge_recommendation: 300, 
-        dge_upper_limit: 3000, 
-        description: 'Unterstützt Fettstoffwechsel und Energieproduktion' 
+        description: 'Knochen- und Zahngesundheit',
+        synonyms: ['Ca', 'Kalzium']
       }
     ]
   }
 
-  renderProducts() {
-    const grid = document.getElementById('demo-products-grid')
-    if (!grid) {
-      console.error('[Demo Modal] Grid nicht gefunden!')
-      return
-    }
-    
-    const html = this.availableProducts.map(product => `
-      <div class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow overflow-hidden">
-        <div class="p-4">
-          <!-- Layout wie in Vorlage: Produktbild links oben mit Content -->
-          <div class="flex items-start mb-3">
-            <!-- Produktbild links oben - wie in Vorlage -->
-            ${product.product_image ? `
-              <div class="w-16 h-16 sm:w-20 sm:h-20 flex-shrink-0 rounded-lg overflow-hidden bg-gray-100 border border-gray-200 mr-3">
-                <img src="${product.product_image}" alt="${product.name}" class="w-full h-full object-cover">
-              </div>
-            ` : `
-              <div class="w-16 h-16 sm:w-20 sm:h-20 flex-shrink-0 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center mr-3">
-                <i class="fas fa-pills text-gray-400 text-lg"></i>
-              </div>
-            `}
-            
-            <!-- Produktinfo rechts vom Bild -->
-            <div class="flex-1 min-w-0">
-              <h3 class="font-semibold text-gray-900 text-sm sm:text-base mb-1 leading-tight">${product.name}</h3>
-              <p class="text-xs sm:text-sm text-gray-600 mb-2">${product.brand} • ${product.form}</p>
-              
-              <!-- Dosierung Info -->
-              <div class="text-xs text-gray-700">
-                <div class="font-medium">Dosierung:</div>
-                <div>${(() => {
-                  const mainNutrient = this.getMainNutrientInfo(product)
-                  return `${mainNutrient.amount}${mainNutrient.unit} ${mainNutrient.name}`
-                })()}</div>
-              </div>
-            </div>
-          </div>
 
-          
-          <div class="bg-blue-50 rounded-lg p-3 mb-3">
-            ${(() => {
-              const mainNutrient = this.getMainNutrientInfo(product)
-              return `
-                <div class="text-sm font-medium text-blue-800 mb-1">🧬 ${mainNutrient.name}</div>
-                <div class="text-xs text-blue-600">${mainNutrient.amount}${mainNutrient.unit} pro ${product.form}</div>
-              `
-            })()}
-          </div>
-          
-          <div class="bg-gray-50 rounded-lg p-3 mb-3">
-            <div class="grid grid-cols-2 gap-2 text-xs sm:text-sm">
-              <div>
-                <span class="text-gray-500">Kaufpreis:</span>
-                <div class="font-semibold text-gray-900">€${product.purchase_price.toFixed(2)}</div>
-              </div>
-              <div>
-                <span class="text-gray-500">Pro Monat:</span>
-                <div class="font-semibold text-green-600">€${product.monthly_cost.toFixed(2)}</div>
-              </div>
-            </div>
-          </div>
-          
-          <div class="flex justify-between items-center">
-            <button data-action="details" data-product-id="${product.id}" class="bg-blue-600 text-white px-3 py-2 rounded text-sm hover:bg-blue-700 transition-colors">
-              <i class="fas fa-eye mr-1"></i>Details
-            </button>
-            <div class="text-xs text-gray-500">
-              <i class="fas fa-flask mr-1"></i>Nährstoffbasiert
-            </div>
-          </div>
-        </div>
-      </div>
-    `).join('')
-    
-    grid.innerHTML = html
-    console.log('[Demo Modal] Produkte gerendert:', this.availableProducts.length)
-    
-    // Render auch den Stack
-    this.renderStack()
-  }
 
   renderStack() {
     const stackGrid = document.getElementById('demo-stack-grid')
@@ -1046,7 +1023,8 @@ class SupplementDemoApp {
           return
         }
         
-        const filtered = this.nutrients.filter(n => {
+        // Erst alle passenden Nährstoffe finden (Haupt- und Sub-Wirkstoffe)
+        const allMatches = this.nutrients.filter(n => {
           const name = n.name.toLowerCase()
           const category = n.category.toLowerCase()
           const description = n.description.toLowerCase()
@@ -1065,6 +1043,31 @@ class SupplementDemoApp {
                  )
         })
         
+        // Haupt- und Sub-Wirkstoffe intelligent verarbeiten
+        const filtered = []
+        const addedMainNutrients = new Set()
+        
+        allMatches.forEach(nutrient => {
+          if (nutrient.is_main_nutrient) {
+            // Hauptwirkstoff direkt hinzufügen
+            filtered.push(nutrient)
+            addedMainNutrients.add(nutrient.id)
+          } else if (nutrient.parent_nutrient_id) {
+            // Sub-Wirkstoff: Hauptwirkstoff finden und hinzufügen
+            const parentNutrient = this.nutrients.find(n => n.id === nutrient.parent_nutrient_id)
+            if (parentNutrient && !addedMainNutrients.has(parentNutrient.id)) {
+              // Erweitere den Hauptwirkstoff mit Sub-Wirkstoff Info
+              const enhancedParent = {
+                ...parentNutrient,
+                search_match_info: `Gefunden über: ${nutrient.name}`,
+                sub_match: nutrient
+              }
+              filtered.push(enhancedParent)
+              addedMainNutrients.add(parentNutrient.id)
+            }
+          }
+        })
+        
         if (filtered.length > 0) {
           searchResults.classList.remove('hidden')
           searchResults.innerHTML = filtered.slice(0, 8).map(nutrient => `
@@ -1073,9 +1076,21 @@ class SupplementDemoApp {
                 <div>
                   <div class="font-medium text-gray-900">${nutrient.name}</div>
                   <div class="text-sm text-gray-600">${nutrient.category} • DGE: ${nutrient.dge_recommendation}${nutrient.unit}</div>
+                  ${nutrient.search_match_info ? `
+                    <div class="text-xs text-purple-600 mt-1">
+                      <i class="fas fa-search mr-1"></i>${nutrient.search_match_info}
+                    </div>
+                  ` : ''}
                 </div>
-                <div class="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded">
-                  ${nutrient.unit}
+                <div class="text-right">
+                  <div class="text-xs text-blue-600 bg-blue-100 px-2 py-1 rounded mb-1">
+                    ${nutrient.unit}
+                  </div>
+                  ${nutrient.is_main_nutrient ? `
+                    <div class="text-xs text-green-600 font-medium">
+                      <i class="fas fa-star mr-1"></i>Hauptwirkstoff
+                    </div>
+                  ` : ''}
                 </div>
               </div>
             </div>
@@ -2347,7 +2362,7 @@ class SupplementDemoApp {
     newProduct.monthly_cost = (newProduct.purchase_price / newProduct.days_supply * 30)
     
     this.products.push(newProduct)
-    this.renderProducts()
+    this.renderStack()
     this.updateStats()
   }
 

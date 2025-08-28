@@ -971,48 +971,26 @@ function getDemoHTML() {
             </div>
         </div>
 
-        <!-- Demo Products -->
-        <div class="bg-white rounded-lg shadow">
-            <div class="p-6 border-b border-gray-200">
-                <h2 class="text-lg font-semibold text-gray-900">Demo-Produkte</h2>
-            </div>
-            <div class="p-6">
-                <!-- Sichtbare Action-Buttons -->
-                <div class="mb-6 flex flex-col sm:flex-row gap-3">
-                    <button id="demo-create-stack-main" class="flex-1 bg-purple-600 text-white px-4 py-3 rounded-lg hover:bg-purple-700 transition-colors">
-                        <i class="fas fa-flask mr-2"></i>Nährstoff-Stack erstellen
-                    </button>
-                    <button id="demo-add-product-main" class="flex-1 bg-green-600 text-white px-4 py-3 rounded-lg hover:bg-green-700 transition-colors">
-                        <i class="fas fa-plus mr-2"></i>Produkt hinzufügen
-                    </button>
-                </div>
 
-                <div id="demo-products-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6 mb-6">
-                    <!-- Diese werden dynamisch von JavaScript generiert -->
-                </div>
-                
-                <!-- Fallback falls JavaScript nicht lädt -->
-                <div id="demo-fallback" class="text-center text-gray-500 py-8" style="display: none;">
-                    <i class="fas fa-exclamation-triangle text-2xl mb-2"></i>
-                    <p>Die Demo-Produkte konnten nicht geladen werden.</p>
-                    <p class="text-sm mt-2">Bitte laden Sie die Seite neu oder nutzen Sie die Vollversion.</p>
-                </div>
-                
-                <div class="mt-6 text-center">
-                    <a href="/auth" target="_parent" class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors inline-block">
-                        <i class="fas fa-arrow-right mr-2"></i>Zur Vollversion - Kostenlos registrieren
-                    </a>
-                </div>
-            </div>
-        </div>
 
         <!-- Stack-Bereich wie im Screenshot -->
         <div class="bg-white rounded-lg shadow mt-8">
             <div class="p-6 border-b border-gray-200">
-                <h2 class="text-lg font-semibold text-gray-900 flex items-center">
-                    <i class="fas fa-leaf text-green-600 mr-2"></i>
-                    Allgemeine Versorgung
-                </h2>
+                <div class="flex justify-between items-center">
+                    <h2 class="text-lg font-semibold text-gray-900 flex items-center">
+                        <i class="fas fa-leaf text-green-600 mr-2"></i>
+                        Allgemeine Versorgung
+                    </h2>
+                    <!-- Action-Buttons im Header -->
+                    <div class="flex gap-2">
+                        <button id="demo-add-product-main" class="bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm">
+                            <i class="fas fa-plus mr-1"></i>Produkt hinzufügen
+                        </button>
+                        <button id="demo-create-stack-main" class="bg-purple-600 text-white px-3 py-2 rounded-lg hover:bg-purple-700 transition-colors text-sm">
+                            <i class="fas fa-flask mr-1"></i>Stack erstellen
+                        </button>
+                    </div>
+                </div>
             </div>
             <div class="p-6">
                 <div id="demo-stack-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
