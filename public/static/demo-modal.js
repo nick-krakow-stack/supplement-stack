@@ -7,12 +7,16 @@ class SupplementDemoApp {
     this.products = []  // Produkte im Stack (initial leer)
     this.stacks = this.loadDemoStacks()
     this.nutrients = this.loadNutrients()
+    this.currentStackId = null  // Aktuell ausgewählter Stack
     this.init()
   }
 
   init() {
     console.log('[Demo Modal] Initialisierung startet...')
     this.setupEventListeners()
+    
+    // Stack-Selector initialisieren
+    setTimeout(() => this.initStackSelector(), 100)
     
     // Demo-Stack mit ein paar Produkten vorbesetzen
     this.addDemoStackProducts()
@@ -334,17 +338,31 @@ class SupplementDemoApp {
     return [
       {
         id: 1,
-        name: 'Basis Gesundheit',
+        name: 'Basisausstattung',
         products: [1, 3, 5],
         total_monthly_cost: 31.64,
         description: 'Grundversorgung mit wichtigsten Vitaminen und Mineralien'
       },
       {
         id: 2,
-        name: 'Immunsystem Plus',
+        name: 'Gesundheit',
         products: [1, 2, 5, 6],
         total_monthly_cost: 35.42,
         description: 'Optimale Unterstützung des Immunsystems'
+      },
+      {
+        id: 3,
+        name: 'Sport & Leistung',
+        products: [11, 4],
+        total_monthly_cost: 28.90,
+        description: 'Supplements für sportliche Performance'
+      },
+      {
+        id: 4,
+        name: 'Spezielle Bedürfnisse',
+        products: [],
+        total_monthly_cost: 0,
+        description: 'Individuell angepasste Supplements'
       }
     ]
   }
@@ -733,6 +751,9 @@ class SupplementDemoApp {
       document.body.appendChild(footer)
     }
     
+    // Prüfe ob alle Produkte ausgewählt sind
+    const allSelected = this.areAllProductsSelected()
+    
     footer.innerHTML = `
       <div class="max-w-7xl mx-auto px-4 py-3">
         <div class="flex items-center justify-between">
@@ -752,12 +773,15 @@ class SupplementDemoApp {
           </div>
           
           <div class="flex items-center space-x-2">
-            <button onclick="window.demoApp.clearStack()" class="text-sm text-gray-500 hover:text-orange-600 px-3 py-2 rounded">
-              <i class="fas fa-trash mr-1"></i>Stack leeren
-            </button>
-            <button onclick="window.demoApp.proceedToCheckout()" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors text-sm font-medium">
-              <i class="fas fa-shopping-cart mr-2"></i>Alle auswählen
-            </button>
+            ${allSelected ? `
+              <button onclick="window.demoApp.deselectAllProducts()" class="bg-orange-600 text-white px-4 py-2 rounded-md hover:bg-orange-700 transition-colors text-sm font-medium">
+                <i class="fas fa-times mr-2"></i>Alles abwählen
+              </button>
+            ` : `
+              <button onclick="window.demoApp.selectAllProducts()" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors text-sm font-medium">
+                <i class="fas fa-check mr-2"></i>Alles auswählen
+              </button>
+            `}
             <button onclick="window.demoApp.hidePriceFooter()" class="text-gray-400 hover:text-gray-600 p-2">
               <i class="fas fa-times"></i>
             </button>
@@ -793,12 +817,95 @@ class SupplementDemoApp {
     }
   }
 
+  areAllProductsSelected() {
+    if (this.products.length === 0) return false
+    
+    const checkboxes = document.querySelectorAll('.product-checkbox')
+    if (checkboxes.length === 0) return false
+    
+    return Array.from(checkboxes).every(checkbox => checkbox.checked)
+  }
+
+  selectAllProducts() {
+    const checkboxes = document.querySelectorAll('.product-checkbox')
+    checkboxes.forEach(checkbox => {
+      checkbox.checked = true
+    })
+    this.updatePriceFooter() // Aktualisiere Footer
+    this.showMessage('✅ Alle Produkte ausgewählt', 'success')
+  }
+
+  deselectAllProducts() {
+    const checkboxes = document.querySelectorAll('.product-checkbox')
+    checkboxes.forEach(checkbox => {
+      checkbox.checked = false
+    })
+    this.updatePriceFooter() // Aktualisiere Footer
+    this.showMessage('❌ Alle Produkte abgewählt', 'info')
+  }
+
   proceedToCheckout() {
     const totalMonthlyPrice = this.products.reduce((sum, product) => {
       return sum + (product.monthly_cost || 0)
     }, 0)
     
     this.showMessage(`🛒 Demo-Checkout\n\n${this.products.length} Produkte\n💰 €${totalMonthlyPrice.toFixed(2)}/Monat\n\nIn der Vollversion werden Sie zu Amazon weitergeleitet.`, 'info')
+  }
+
+  initStackSelector() {
+    const selector = document.getElementById('stack-selector')
+    if (!selector) {
+      console.log('[Demo Modal] Stack-Selector nicht gefunden')
+      return
+    }
+    
+    // Stacks in Dropdown laden
+    selector.innerHTML = `
+      <option value="">Stack auswählen...</option>
+      ${this.stacks.map(stack => `
+        <option value="${stack.id}">${stack.name}</option>
+      `).join('')}
+    `
+    
+    // Event Listener für Stack-Wechsel
+    selector.addEventListener('change', (e) => {
+      const stackId = parseInt(e.target.value)
+      this.loadStack(stackId)
+    })
+    
+    // Ersten Stack automatisch laden
+    if (this.stacks.length > 0) {
+      selector.value = this.stacks[0].id
+      this.loadStack(this.stacks[0].id)
+    }
+  }
+
+  loadStack(stackId) {
+    if (!stackId) {
+      this.currentStackId = null
+      this.products = []
+      this.renderStack()
+      return
+    }
+    
+    const stack = this.stacks.find(s => s.id === stackId)
+    if (!stack) return
+    
+    this.currentStackId = stackId
+    
+    // Produkte für diesen Stack laden (vereinfachte Demo-Version)
+    this.products = []
+    stack.products.forEach(productId => {
+      const product = this.availableProducts.find(p => p.id === productId)
+      if (product) {
+        this.products.push({ ...product })
+      }
+    })
+    
+    this.renderStack()
+    this.updateStats()
+    
+    console.log(`[Demo Modal] Stack "${stack.name}" geladen mit ${this.products.length} Produkten`)
   }
 
   closeAllModals() {
@@ -905,15 +1012,13 @@ class SupplementDemoApp {
                 </div>
               </div>
               
-              <!-- Kategorie -->
+              <!-- Stack-Auswahl -->
               <div class="mb-4">
-                <label class="block text-sm font-medium text-gray-700 mb-2">Kategorie</label>
-                <select id="supplement-category" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white shadow-sm">
-                  <option value="Basisausstattung">Basisausstattung</option>
-                  <option value="Gesundheit">Gesundheit</option>
-                  <option value="Sport & Leistung">Sport & Leistung</option>
-                  <option value="Spezielle Bedürfnisse">Spezielle Bedürfnisse</option>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Stack auswählen</label>
+                <select id="supplement-stack" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white shadow-sm">
+                  ${this.stacks.map(stack => `<option value="${stack.id}">${stack.name}</option>`).join('')}
                 </select>
+                <p class="text-xs text-gray-500 mt-1">Produkt wird diesem Stack hinzugefügt</p>
               </div>
               
               <!-- Notizen -->
@@ -1130,14 +1235,14 @@ class SupplementDemoApp {
     // 4. Weiter zu Produkten (von Dosierung)
     modal.querySelector('#continue-to-products')?.addEventListener('click', () => {
       const customDosage = parseFloat(modal.querySelector('#custom-dosage').value)
-      const category = modal.querySelector('#supplement-category').value
+      const stackId = parseInt(modal.querySelector('#supplement-stack').value)
       const notes = modal.querySelector('#personal-notes').value
       
       if (customDosage > 0) {
         selectedDosage = {
           amount: customDosage,
           unit: selectedNutrient.unit,
-          category: category,
+          stackId: stackId,
           notes: notes
         }
         this.showProductSelection(modal, selectedNutrient, selectedDosage)
@@ -1616,7 +1721,7 @@ class SupplementDemoApp {
       days_supply: daysSupply,
       monthly_cost: customMonthlyPrice,
       custom_dosage: dosage.amount,
-      custom_category: dosage.category,
+      custom_stack_id: dosage.stackId,
       custom_notes: dosage.notes
     }
     this.products.push(customProduct)
@@ -1672,8 +1777,19 @@ class SupplementDemoApp {
     }
     
     this.stacks.push(newStack)
+    
+    // Stack-Selector aktualisieren
+    this.initStackSelector()
+    
+    // Neuen Stack automatisch auswählen
+    const selector = document.getElementById('stack-selector')
+    if (selector) {
+      selector.value = newStack.id
+      this.loadStack(newStack.id)
+    }
+    
     this.updateStats()
-    this.showMessage(`✅ Stack "${stackName}" erstellt! Fügen Sie jetzt Nährstoffe hinzu.`, 'success')
+    this.showMessage(`✅ Stack "${stackName}" erstellt! Sie können jetzt Nährstoffe hinzufügen.`, 'success')
   }
 
   showNutrientBasedStackModal() {

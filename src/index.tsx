@@ -977,10 +977,16 @@ function getDemoHTML() {
         <div class="bg-white rounded-lg shadow mt-8">
             <div class="p-6 border-b border-gray-200">
                 <div class="flex justify-between items-center">
-                    <h2 class="text-lg font-semibold text-gray-900 flex items-center">
-                        <i class="fas fa-leaf text-green-600 mr-2"></i>
-                        Allgemeine Versorgung
-                    </h2>
+                    <div class="flex items-center space-x-4">
+                        <h2 class="text-lg font-semibold text-gray-900 flex items-center">
+                            <i class="fas fa-leaf text-green-600 mr-2"></i>
+                            Stack-Verwaltung
+                        </h2>
+                        <!-- Stack-Auswahl -->
+                        <select id="stack-selector" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <option value="">Stack auswählen...</option>
+                        </select>
+                    </div>
                     <!-- Action-Buttons im Header -->
                     <div class="flex gap-2">
                         <button id="demo-add-product-main" class="bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm">
@@ -997,27 +1003,7 @@ function getDemoHTML() {
                     <!-- Stack-Produkte werden hier dynamisch eingefügt -->
                 </div>
                 
-                <!-- Stack-Summary wie im Screenshot -->
-                <div id="stack-summary" class="border-t border-gray-200 pt-4">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <span class="text-sm text-gray-600">Gewählte Supplements</span>
-                            <div class="flex items-center space-x-6 mt-2">
-                                <div>
-                                    <span class="text-sm text-gray-600">Einmalkosten</span>
-                                    <div id="total-purchase-cost" class="text-lg font-bold text-gray-900">€0,00</div>
-                                </div>
-                                <div>
-                                    <span class="text-sm text-gray-600">Pro Monat</span>
-                                    <div id="total-monthly-cost" class="text-lg font-bold text-green-600">€0,00</div>
-                                </div>
-                            </div>
-                        </div>
-                        <button id="select-all-supplements" class="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition-colors">
-                            Alle auswählen
-                        </button>
-                    </div>
-                </div>
+
             </div>
         </div>
     </div>
