@@ -1333,6 +1333,9 @@ class SupplementDemoApp {
         selectedNutrient = this.nutrients.find(n => n.id == nutrientId)
         
         if (selectedNutrient) {
+          // Setze auch Modal-Variable
+          modal._selectedNutrient = selectedNutrient
+          console.log('[Demo Modal] Nutrient selected:', selectedNutrient.name)
           this.showDosageSelection(modal, selectedNutrient)
         }
       }
@@ -1358,6 +1361,9 @@ class SupplementDemoApp {
           stackId: stackId,
           notes: notes
         }
+        // Setze auch Modal-Variable
+        modal._selectedDosage = selectedDosage
+        console.log('[Demo Modal] Dosage selected:', selectedDosage.amount + selectedDosage.unit)
         this.showProductSelection(modal, selectedNutrient, selectedDosage)
       } else {
         this.showMessage('Bitte geben Sie eine gültige Dosierung ein', 'error')
@@ -1381,16 +1387,32 @@ class SupplementDemoApp {
     // 7. Finales Hinzufügen
     modal.querySelector('#add-product-final')?.addEventListener('click', () => {
       console.log('[Demo Modal] Final add button clicked')
+      
+      // Verwende die im Modal gespeicherten Werte
+      const finalProduct = modal._selectedProduct || selectedProduct
+      const finalNutrient = modal._selectedNutrient || selectedNutrient
+      const finalDosage = modal._selectedDosage || selectedDosage
+      
       console.log('[Demo Modal] Selected values:', {
-        product: selectedProduct ? selectedProduct.name : 'NOT SELECTED',
-        nutrient: selectedNutrient ? selectedNutrient.name : 'NOT SELECTED', 
-        dosage: selectedDosage ? `${selectedDosage.amount}${selectedDosage.unit}` : 'NOT SELECTED'
+        product: finalProduct ? finalProduct.name : 'NOT SELECTED',
+        nutrient: finalNutrient ? finalNutrient.name : 'NOT SELECTED', 
+        dosage: finalDosage ? `${finalDosage.amount}${finalDosage.unit}` : 'NOT SELECTED',
+        fromModal: {
+          product: modal._selectedProduct?.name || 'NOT SET',
+          nutrient: modal._selectedNutrient?.name || 'NOT SET',
+          dosage: modal._selectedDosage ? `${modal._selectedDosage.amount}${modal._selectedDosage.unit}` : 'NOT SET'
+        },
+        fromScope: {
+          product: selectedProduct?.name || 'NOT SET',
+          nutrient: selectedNutrient?.name || 'NOT SET',
+          dosage: selectedDosage ? `${selectedDosage.amount}${selectedDosage.unit}` : 'NOT SET'
+        }
       })
       
-      if (selectedProduct && selectedNutrient && selectedDosage) {
+      if (finalProduct && finalNutrient && finalDosage) {
         try {
-          this.addSelectedProductToStack(selectedProduct, selectedNutrient, selectedDosage)
-          this.showSuccess(`${selectedProduct.name} erfolgreich hinzugefügt!`)
+          this.addSelectedProductToStack(finalProduct, finalNutrient, finalDosage)
+          this.showSuccess(`${finalProduct.name} erfolgreich hinzugefügt!`)
           // Modal IMMER schließen, auch bei Fehlern in der Verarbeitung
           setTimeout(() => modal.remove(), 100)
         } catch (error) {
@@ -1401,6 +1423,7 @@ class SupplementDemoApp {
         }
       } else {
         console.error('[Demo Modal] Missing selections for final add')
+        console.error('[Demo Modal] Debug info:', { finalProduct, finalNutrient, finalDosage })
         this.showError('Bitte wählen Sie ein Produkt, einen Nährstoff und eine Dosierung aus')
       }
     })
@@ -1638,6 +1661,18 @@ class SupplementDemoApp {
     const stepProductSelection = modal.querySelector('#step-product-selection')
     const stepAddToStack = modal.querySelector('#step-add-to-stack')
     const productSummary = modal.querySelector('#selected-product-summary')
+    
+    // WICHTIG: Setze die globalen Modal-Variablen
+    // Finde und setze die Variablen im Modal-Scope
+    modal._selectedProduct = product
+    modal._selectedNutrient = nutrient  
+    modal._selectedDosage = dosage
+    
+    console.log('[Demo Modal] showAddToStack - Setting variables:', {
+      product: product?.name,
+      nutrient: nutrient?.name,
+      dosage: dosage?.amount + dosage?.unit
+    })
     
     // Schritt wechseln
     stepProductSelection.classList.add('hidden')
