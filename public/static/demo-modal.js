@@ -924,15 +924,20 @@ class SupplementDemoApp {
       `).join('')}
     `
     
+    // Vorherige Event Listener entfernen um Duplikate zu vermeiden
+    const newSelector = selector.cloneNode(true)
+    selector.parentNode.replaceChild(newSelector, selector)
+    
     // Event Listener für Stack-Wechsel
-    selector.addEventListener('change', (e) => {
+    newSelector.addEventListener('change', (e) => {
       const stackId = parseInt(e.target.value)
+      console.log('[Demo Modal] Stack wechseln zu:', stackId)
       this.loadStack(stackId)
     })
     
     // Ersten Stack automatisch laden
     if (this.stacks.length > 0) {
-      selector.value = this.stacks[0].id
+      newSelector.value = this.stacks[0].id
       this.loadStack(this.stacks[0].id)
     }
   }
@@ -952,12 +957,20 @@ class SupplementDemoApp {
     
     // Produkte für diesen Stack laden (vereinfachte Demo-Version)
     this.products = []
-    stack.products.forEach(productId => {
-      const product = this.availableProducts.find(p => p.id === productId)
-      if (product) {
-        this.products.push({ ...product })
-      }
-    })
+    if (stack.products && Array.isArray(stack.products)) {
+      stack.products.forEach(product => {
+        if (typeof product === 'number') {
+          // Falls es eine Produkt-ID ist (alte Struktur)
+          const foundProduct = this.availableProducts.find(p => p.id === product)
+          if (foundProduct) {
+            this.products.push({ ...foundProduct })
+          }
+        } else if (typeof product === 'object') {
+          // Falls es bereits ein vollständiges Produktobjekt ist (neue Struktur)
+          this.products.push({ ...product })
+        }
+      })
+    }
     
     this.renderStack()
     this.updateStats()
@@ -1328,11 +1341,16 @@ class SupplementDemoApp {
         try {
           this.addSelectedProductToStack(selectedProduct, selectedNutrient, selectedDosage)
           this.showSuccess(`${selectedProduct.name} erfolgreich hinzugefügt!`)
-          modal.remove()
+          // Modal IMMER schließen, auch bei Fehlern in der Verarbeitung
+          setTimeout(() => modal.remove(), 100)
         } catch (error) {
           console.error('Fehler beim Hinzufügen:', error)
           this.showError('Fehler beim Hinzufügen des Produkts')
+          // Modal auch bei Fehler schließen
+          setTimeout(() => modal.remove(), 1000)
         }
+      } else {
+        this.showError('Bitte wählen Sie ein Produkt, einen Nährstoff und eine Dosierung aus')
       }
     })
 
@@ -1856,11 +1874,21 @@ class SupplementDemoApp {
     const stackName = formData.get('stack_name')
     const description = formData.get('description') || ''
     
+    // Validierung
+    if (!stackName || stackName.trim().length === 0) {
+      throw new Error('Stack-Name ist erforderlich')
+    }
+    
+    // Prüfen ob Stack-Name bereits existiert
+    if (this.stacks.find(s => s.name.toLowerCase() === stackName.trim().toLowerCase())) {
+      throw new Error('Ein Stack mit diesem Namen existiert bereits')
+    }
+    
     // Demo: Stack zur Liste hinzufügen
     const newStack = {
       id: this.stacks.length + 1,
-      name: stackName,
-      description: description,
+      name: stackName.trim(),
+      description: description.trim(),
       products: [],
       total_monthly_cost: 0,
       created_at: new Date().toISOString()
@@ -1868,18 +1896,25 @@ class SupplementDemoApp {
     
     this.stacks.push(newStack)
     
-    // Stack-Selector aktualisieren
-    this.initStackSelector()
-    
-    // Neuen Stack automatisch auswählen
-    const selector = document.getElementById('stack-selector')
-    if (selector) {
-      selector.value = newStack.id
-      this.loadStack(newStack.id)
+    // Stack-Selector aktualisieren (mit Error Handling)
+    try {
+      this.initStackSelector()
+      
+      // Neuen Stack automatisch auswählen
+      const selector = document.getElementById('stack-selector')
+      if (selector) {
+        selector.value = newStack.id
+        this.loadStack(newStack.id)
+      }
+      
+      this.updateStats()
+    } catch (error) {
+      console.warn('Warnung beim Aktualisieren der UI:', error)
+      // Fehler beim UI-Update sollen Stack-Erstellung nicht verhindern
     }
     
-    this.updateStats()
-    this.showMessage(`✅ Stack "${stackName}" erstellt! Sie können jetzt Nährstoffe hinzufügen.`, 'success')
+    console.log('Stack erfolgreich erstellt:', newStack)
+    return newStack
   }
 
   showNutrientBasedStackModal() {
@@ -1960,12 +1995,15 @@ class SupplementDemoApp {
       form.addEventListener('submit', (e) => {
         e.preventDefault()
         try {
-          this.createStack(new FormData(form))
-          this.showSuccess('Stack erfolgreich erstellt!')
-          modal.remove()
+          const newStack = this.createStack(new FormData(form))
+          this.showSuccess(`Stack "${newStack.name}" erfolgreich erstellt!`)
+          // Modal IMMER schließen nach erfolgreichem Erstellen
+          setTimeout(() => modal.remove(), 100)
         } catch (error) {
-          console.error('Fehler beim Erstellen des Stacks:', error) 
-          this.showError('Fehler beim Erstellen des Stacks')
+          console.error('Fehler beim Erstellen des Stacks:', error)
+          // Spezifischere Fehlermeldung anzeigen
+          this.showError(error.message || 'Fehler beim Erstellen des Stacks')
+          // Modal bei Validierungsfehlern NICHT schließen, damit User korrigieren kann
         }
       })
     }
