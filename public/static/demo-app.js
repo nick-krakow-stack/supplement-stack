@@ -13,6 +13,7 @@ class SupplementDemoApp {
     console.log('[Demo App] Initialisierung startet...')
     this.setupEventListeners()
     this.renderProducts()
+    this.renderStacks()
     this.updateStats()
     console.log(`[Demo App] Initialisierung abgeschlossen - ${this.products.length} Produkte geladen`)
   }
@@ -823,8 +824,10 @@ class SupplementDemoApp {
       form.addEventListener('submit', (e) => {
         e.preventDefault()
         try {
-          this.addProduct(new FormData(form))
-          modal.remove()
+          const success = this.addProduct(new FormData(form))
+          if (success) {
+            modal.remove() // Only close modal if product was added successfully
+          }
         } catch (error) {
           console.error('Fehler beim Hinzufügen:', error)
           this.showError('Fehler beim Hinzufügen des Produkts')
@@ -1063,8 +1066,10 @@ class SupplementDemoApp {
       form.addEventListener('submit', (e) => {
         e.preventDefault()
         try {
-          this.updateProduct(productId, new FormData(form))
-          modal.remove()
+          const success = this.updateProduct(productId, new FormData(form))
+          if (success) {
+            modal.remove() // Only close modal if product was updated successfully
+          }
         } catch (error) {
           console.error('Fehler beim Bearbeiten:', error)
           this.showError('Fehler beim Bearbeiten des Produkts')
@@ -1135,18 +1140,18 @@ class SupplementDemoApp {
     
     if (!name || !brand || !form || !purchasePrice || !quantity || !dosagePerDay || !nutrientId || !nutrientAmountPerUnit) {
       this.showError('Bitte füllen Sie alle Pflichtfelder aus.')
-      return
+      return false
     }
     
     if (purchasePrice <= 0 || quantity <= 0 || dosagePerDay <= 0 || nutrientAmountPerUnit <= 0) {
       this.showError('Preis, Menge, Dosierung und Wirkstoffgehalt müssen größer als 0 sein.')
-      return
+      return false
     }
     
     const nutrient = this.nutrients.find(n => n.id === nutrientId)
     if (!nutrient) {
       this.showError('Ungültiger Wirkstoff ausgewählt.')
-      return
+      return false
     }
     
     const pricePerPiece = purchasePrice / quantity
@@ -1177,8 +1182,10 @@ class SupplementDemoApp {
 
     this.products.push(newProduct)
     this.renderProducts()
+    this.renderStacks() // Update Stack display
     this.updateStats()
     this.showSuccess(`Produkt "${name}" erfolgreich hinzugefügt!`)
+    return true // Indicate success
   }
 
   updateEditDosageCalculation(form) {
@@ -1218,7 +1225,7 @@ class SupplementDemoApp {
     const productIndex = this.products.findIndex(p => p.id === productId)
     if (productIndex === -1) {
       this.showError('Produkt nicht gefunden!')
-      return
+      return false
     }
 
     // Validierung
@@ -1233,18 +1240,18 @@ class SupplementDemoApp {
     
     if (!name || !brand || !form || !purchasePrice || !quantity || !dosagePerDay || !nutrientId || !nutrientAmountPerUnit) {
       this.showError('Bitte füllen Sie alle Pflichtfelder aus.')
-      return
+      return false
     }
     
     if (purchasePrice <= 0 || quantity <= 0 || dosagePerDay <= 0 || nutrientAmountPerUnit <= 0) {
       this.showError('Preis, Menge, Dosierung und Wirkstoffgehalt müssen größer als 0 sein.')
-      return
+      return false
     }
     
     const nutrient = this.nutrients.find(n => n.id === nutrientId)
     if (!nutrient) {
       this.showError('Ungültiger Wirkstoff ausgewählt.')
-      return
+      return false
     }
     
     const pricePerPiece = purchasePrice / quantity
@@ -1270,17 +1277,146 @@ class SupplementDemoApp {
     }
 
     this.renderProducts()
+    this.renderStacks() // Update Stack display
     this.updateStats()
     this.showSuccess(`Produkt "${name}" erfolgreich aktualisiert!`)
+    return true // Indicate success
   }
 
   deleteProduct(productId) {
     if (confirm('Möchten Sie dieses Produkt wirklich löschen?')) {
+      // Remove product from products list
       this.products = this.products.filter(p => p.id !== productId)
+      
+      // Remove product from all stacks
+      this.stacks.forEach(stack => {
+        stack.products = stack.products.filter(p => p.product_id !== productId)
+        stack.total_cost = this.calculateStackCost(stack)
+      })
+      
       this.renderProducts()
+      this.renderStacks()
       this.updateStats()
       this.showSuccess('Produkt erfolgreich gelöscht!')
     }
+  }
+
+  renderStacks() {
+    const stacksGrid = document.getElementById('demo-stacks-grid')
+    if (!stacksGrid) {
+      console.log('[Demo App] Stacks-Grid nicht gefunden - vermutlich nicht auf der Demo-Seite')
+      return
+    }
+
+    try {
+      if (this.stacks.length === 0) {
+        stacksGrid.innerHTML = `
+          <div class="col-span-full text-center py-8 text-gray-500">
+            <i class="fas fa-layer-group text-3xl mb-3"></i>
+            <p class="text-lg font-medium mb-2">Noch keine Stacks erstellt</p>
+            <p class="text-sm">Erstellen Sie Ihren ersten nährstoffbasierten Stack!</p>
+          </div>
+        `
+        return
+      }
+
+      const html = this.stacks.map(stack => this.renderStackCard(stack)).join('')
+      stacksGrid.innerHTML = html
+      
+      console.log(`[Demo App] ${this.stacks.length} Stacks gerendert`)
+    } catch (error) {
+      console.error('[Demo App] Fehler beim Rendern der Stacks:', error)
+      stacksGrid.innerHTML = `
+        <div class="col-span-full text-center py-8 text-red-500">
+          <i class="fas fa-exclamation-triangle text-2xl mb-2"></i>
+          <p>Fehler beim Laden der Stacks</p>
+        </div>
+      `
+    }
+  }
+
+  renderStackCard(stack) {
+    const stackProducts = stack.products.map(stackProduct => {
+      const product = this.products.find(p => p.id === stackProduct.product_id)
+      if (!product) return null
+      
+      const nutrient = this.nutrients.find(n => n.id === product.nutrient_id)
+      const dailyIntake = product.nutrient_amount_per_unit * stackProduct.dosage
+      
+      return {
+        product,
+        nutrient,
+        dosage: stackProduct.dosage,
+        dailyIntake
+      }
+    }).filter(Boolean)
+
+    const totalMonthlyCost = this.calculateStackCost(stack)
+
+    return `
+      <div class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow overflow-hidden">
+        <div class="p-4 sm:p-6">
+          <div class="flex items-start justify-between mb-4">
+            <div>
+              <h3 class="font-semibold text-gray-900 text-lg">${stack.name}</h3>
+              <p class="text-sm text-gray-600 mt-1">${stack.description || 'Persönlicher Nährstoff-Stack'}</p>
+            </div>
+            <div class="text-right">
+              <div class="text-lg font-bold text-green-600">€${totalMonthlyCost.toFixed(2)}</div>
+              <div class="text-xs text-gray-500">pro Monat</div>
+            </div>
+          </div>
+          
+          <div class="space-y-3 mb-4">
+            <h4 class="text-sm font-medium text-gray-700 flex items-center">
+              <i class="fas fa-pills mr-2 text-blue-500"></i>
+              Enthaltene Produkte (${stackProducts.length})
+            </h4>
+            
+            ${stackProducts.length === 0 ? `
+              <div class="text-center py-4 text-gray-500">
+                <i class="fas fa-plus-circle text-2xl mb-2"></i>
+                <p class="text-sm">Noch keine Produkte im Stack</p>
+              </div>
+            ` : stackProducts.map(item => `
+              <div class="bg-gray-50 rounded-lg p-3 flex items-center justify-between">
+                <div class="flex-1">
+                  <div class="font-medium text-gray-900 text-sm">${item.product.name}</div>
+                  <div class="text-xs text-gray-600">
+                    ${item.dosage}x täglich • ${item.dailyIntake} ${item.nutrient?.unit || ''} ${item.nutrient?.name || ''}
+                  </div>
+                </div>
+                <div class="text-right">
+                  <div class="text-sm font-medium text-gray-900">€${((item.product.monthly_cost / item.product.dosage_per_day) * item.dosage).toFixed(2)}</div>
+                  <div class="text-xs text-gray-500">pro Monat</div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+          
+          <div class="flex items-center justify-between pt-3 border-t border-gray-200">
+            <div class="text-sm text-gray-600">
+              <i class="fas fa-calendar-alt mr-1"></i>
+              ${stackProducts.length} Produkte
+            </div>
+            <button class="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 transition-colors" onclick="window.demoApp && window.demoApp.showStackDetails(${stack.id})">
+              <i class="fas fa-eye mr-1"></i>Details
+            </button>
+          </div>
+        </div>
+      </div>
+    `
+  }
+
+  showStackDetails(stackId) {
+    const stack = this.stacks.find(s => s.id === stackId)
+    if (!stack) {
+      this.showError('Stack nicht gefunden!')
+      return
+    }
+    
+    // Show stack details modal (simplified implementation)
+    this.showSuccess(`Stack-Details für "${stack.name}" - ${stack.products.length} Produkte, €${this.calculateStackCost(stack).toFixed(2)}/Monat`)
   }
 
   updateStats() {
@@ -1293,10 +1429,15 @@ class SupplementDemoApp {
     if (stacksCountEl) stacksCountEl.textContent = this.stacks.length
     if (wishlistCountEl) wishlistCountEl.textContent = '3'
     
-    // Berechne die monatlichen Gesamtkosten des ersten Stacks
-    if (monthlyCostEl && this.stacks.length > 0) {
-      const totalCost = this.calculateStackCost(this.stacks[0])
-      monthlyCostEl.textContent = `€${totalCost.toFixed(2)}`
+    // Berechne die monatlichen Gesamtkosten aller Stacks oder des ersten Stacks
+    if (monthlyCostEl) {
+      if (this.stacks.length > 0) {
+        const myStack = this.stacks.find(s => s.name === 'Mein Stack') || this.stacks[0]
+        const totalCost = this.calculateStackCost(myStack)
+        monthlyCostEl.textContent = `€${totalCost.toFixed(2)}`
+      } else {
+        monthlyCostEl.textContent = '€0.00'
+      }
     }
   }
 
@@ -1697,25 +1838,68 @@ class SupplementDemoApp {
     // Add to Stack Button Handler
     const addBtn = modal.querySelector('#add-to-stack-btn')
     addBtn.onclick = () => {
-      this.addNutrientToStack(productId, unitsNeeded, desiredAmount)
-      modal.remove()
+      const success = this.addNutrientToStack(productId, unitsNeeded, desiredAmount)
+      if (success) {
+        modal.remove() // Only close modal if successfully added to stack
+      }
     }
   }
 
   addNutrientToStack(productId, unitsNeeded, desiredAmount) {
-    // Hier würde normalerweise ein Stack erstellt oder erweitert werden
-    // Für die Demo zeigen wir eine Erfolgsmeldung
     const product = this.products.find(p => p.id === productId)
     const nutrient = this.nutrients.find(n => n.id === product.nutrient_id)
     
-    this.showSuccess(`${product.name} wurde zu Ihrem Stack hinzugefügt! Dosierung: ${unitsNeeded}x täglich für ${desiredAmount} ${nutrient.unit} ${nutrient.name}.`)
+    if (!product || !nutrient) {
+      this.showError('Produkt oder Nährstoff nicht gefunden!')
+      return false
+    }
+
+    // Find or create "Mein Stack" (default stack)
+    let myStack = this.stacks.find(s => s.name === 'Mein Stack')
+    
+    if (!myStack) {
+      // Create new default stack
+      myStack = {
+        id: Math.max(0, ...this.stacks.map(s => s.id)) + 1,
+        name: 'Mein Stack',
+        products: [],
+        description: 'Mein persönlicher Nährstoff-Stack'
+      }
+      this.stacks.push(myStack)
+    }
+    
+    // Check if product is already in stack
+    const existingProductIndex = myStack.products.findIndex(p => p.product_id === productId)
+    
+    if (existingProductIndex >= 0) {
+      // Update existing product dosage
+      myStack.products[existingProductIndex].dosage = unitsNeeded
+      this.showSuccess(`${product.name} Dosierung in Ihrem Stack aktualisiert: ${unitsNeeded}x täglich für ${desiredAmount} ${nutrient.unit} ${nutrient.name}.`)
+    } else {
+      // Add new product to stack
+      myStack.products.push({
+        product_id: productId,
+        dosage: unitsNeeded
+      })
+      this.showSuccess(`${product.name} wurde zu Ihrem Stack hinzugefügt! Dosierung: ${unitsNeeded}x täglich für ${desiredAmount} ${nutrient.unit} ${nutrient.name}.`)
+    }
+    
+    // Recalculate stack cost
+    myStack.total_cost = this.calculateStackCost(myStack)
+    
+    // Update UI
+    this.renderStacks()
+    this.updateStats()
     
     console.log('[Demo App] Nährstoff zu Stack hinzugefügt:', {
       productId,
       unitsNeeded,
       desiredAmount,
-      nutrient: nutrient.name
+      nutrient: nutrient.name,
+      stackId: myStack.id
     })
+    
+    return true
   }
 }
 
