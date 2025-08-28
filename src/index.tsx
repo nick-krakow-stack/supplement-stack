@@ -859,24 +859,7 @@ function getDemoBaseHTML(title: string, content: string) {
         </main>
         
         <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
-        <script src="/static/demo-app.js"></script>
-        <script>
-          // Demo App Debugging - KEIN FALLBACK, nur Debugging
-          document.addEventListener('DOMContentLoaded', () => {
-            console.log('[Demo] DOM geladen')
-            console.log('[Demo] Grid Element:', document.getElementById('demo-products-grid'))
-            console.log('[Demo] JavaScript geladen:', !!window.SupplementDemoApp)
-            
-            // Nach 2 Sekunden prüfen ob App initialisiert wurde
-            setTimeout(() => {
-              console.log('[Demo] App initialisiert:', !!window.demoApp)
-              if (window.demoApp) {
-                console.log('[Demo] Produkte:', window.demoApp.products.length)
-                console.log('[Demo] Grid innerHTML Länge:', document.getElementById('demo-products-grid').innerHTML.length)
-              }
-            }, 2000)
-          })
-        </script>
+        <script src="/static/demo-modal.js"></script>
     </body>
     </html>
   `
