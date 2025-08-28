@@ -16,7 +16,8 @@ productRoutes.get('/', async (c) => {
                  'name', n.name,
                  'amount', pn.amount,
                  'unit', pn.unit,
-                 'amount_standardized', pn.amount_standardized
+                 'amount_standardized', pn.amount_standardized,
+                 'dge_recommended', n.dge_recommended
                )
              ) as nutrients_json
       FROM products p
@@ -54,7 +55,8 @@ productRoutes.get('/:id', async (c) => {
                  'name', n.name,
                  'amount', pn.amount,
                  'unit', pn.unit,
-                 'amount_standardized', pn.amount_standardized
+                 'amount_standardized', pn.amount_standardized,
+                 'dge_recommended', n.dge_recommended
                )
              ) as nutrients_json
       FROM products p
@@ -65,7 +67,10 @@ productRoutes.get('/:id', async (c) => {
     `).bind(productId, user.id).first()
 
     if (!product) {
-      return c.json({ error: 'Produkt nicht gefunden' }, 404)
+      return c.json({ 
+        success: false,
+        error: 'Produkt nicht gefunden' 
+      }, 404)
     }
 
     const productWithNutrients = {
@@ -74,7 +79,10 @@ productRoutes.get('/:id', async (c) => {
         product.nutrients_json.split(',').map(n => JSON.parse(n)) : []
     }
 
-    return c.json(productWithNutrients)
+    return c.json({
+      success: true,
+      data: productWithNutrients
+    })
   } catch (error) {
     console.error('Error fetching product:', error)
     return c.json({ error: 'Fehler beim Laden des Produkts' }, 500)
@@ -119,8 +127,10 @@ productRoutes.post('/', async (c) => {
 
     // Create product
     const productResult = await c.env.DB.prepare(`
-      INSERT INTO products (user_id, name, brand, form, price_per_package, servings_per_package, shop_url, affiliate_url, image_url)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO products (user_id, name, brand, form, price_per_package, servings_per_package, 
+                          shop_url, affiliate_url, image_url, description, benefits, warnings, 
+                          dosage_recommendation, category)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       user.id,
       body.name,
@@ -130,7 +140,12 @@ productRoutes.post('/', async (c) => {
       body.servings_per_package,
       body.shop_url,
       affiliateUrl,
-      body.image_url || null
+      body.image_url || null,
+      body.description || null,
+      body.benefits || null,
+      body.warnings || null,
+      body.dosage_recommendation || null,
+      body.category || null
     ).run()
 
     if (!productResult.success) {
@@ -189,7 +204,9 @@ productRoutes.put('/:id', async (c) => {
     await c.env.DB.prepare(`
       UPDATE products 
       SET name = ?, brand = ?, form = ?, price_per_package = ?, 
-          servings_per_package = ?, shop_url = ?, image_url = ?, updated_at = CURRENT_TIMESTAMP
+          servings_per_package = ?, shop_url = ?, image_url = ?, 
+          description = ?, benefits = ?, warnings = ?, dosage_recommendation = ?, 
+          category = ?, updated_at = CURRENT_TIMESTAMP
       WHERE id = ? AND user_id = ?
     `).bind(
       body.name,
@@ -199,6 +216,11 @@ productRoutes.put('/:id', async (c) => {
       body.servings_per_package,
       body.shop_url,
       body.image_url || null,
+      body.description || null,
+      body.benefits || null,
+      body.warnings || null,
+      body.dosage_recommendation || null,
+      body.category || null,
       productId,
       user.id
     ).run()

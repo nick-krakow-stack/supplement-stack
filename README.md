@@ -1,163 +1,176 @@
-# Supplement Stack
+# Supplement Stack - Nährstoffbasiertes System
 
-Eine moderne, webbasierte Anwendung zur intelligenten Verwaltung von Nahrungsergänzungsmitteln.
+Eine moderne, webbasierte Anwendung zur intelligenten Verwaltung von Nahrungsergänzungsmitteln mit **nährstoffbasierter Architektur**.
 
 ## 📋 Projektübersicht
 
-**Supplement Stack** ist eine vollständig in TypeScript/Hono entwickelte Web-Anwendung, die es Nutzern ermöglicht, ihre Nahrungsergänzungsmittel systematisch zu verwalten, zu kombinieren und zu optimieren. Die Anwendung läuft auf Cloudflare Pages mit Edge-Computing und bietet eine moderne, responsive Benutzeroberfläche.
+**Supplement Stack** ist eine vollständig in TypeScript/Hono entwickelte Web-Anwendung, die es Nutzern ermöglicht, ihre Nahrungsergänzungsmittel systematisch über **Nährstoffe und Wirkstoffe** zu verwalten, zu kombinieren und zu optimieren. Die Anwendung läuft auf Cloudflare Pages mit Edge-Computing und bietet eine moderne, responsive Benutzeroberfläche.
 
 ### 🎯 Hauptfunktionen
 
-- **Professionelle Landing Page**: EAAT-konforme Präsentation mit Vertrauenssignalen
-- **Produktverwaltung**: Vollständige CRUD-Operationen für Nahrungsergänzungsmittel  
-- **Stack-Management**: Intelligente Kombinationen mit Dosierungsempfehlungen
-- **Affiliate-System**: Automatische Link-Verfolgung und Klick-Statistiken
-- **Admin-Interface**: Dubletten-Management, Nährstoff-Verwaltung, Statistiken
-- **Interaktionswarnungen**: Automatische Prüfung auf Nährstoff-Interaktionen
-- **Kostenberechnung**: Detaillierte Preis-pro-Tag und Verbrauchsanalyse
-- **Responsive Design**: Optimiert für Desktop und Mobile mit modernen Animationen
+- **✨ Nährstoffbasiertes System**: Produkte werden Wirkstoffen zugeordnet (Vitamin D3, Magnesium, etc.)
+- **🧮 Automatische Dosierungsberechnung**: Gewünschte Nährstoffmenge → benötigte Produkteinheiten
+- **📊 DGE-Empfehlungen**: Integrierte Deutsche Gesellschaft für Ernährung Referenzwerte
+- **📱 Tab-basierte Details**: Mobile-optimierte Modals mit Übersicht, Nährstoff, Dosierung, Kosten
+- **🔄 Intelligenter Stack-Workflow**: Wirkstoff wählen → DGE-Empfehlung → Anpassung → Produktauswahl
+- **💊 Moderne Produktverwaltung**: Klare, intuitive Formulare mit Live-Berechnung
+- **📱 Mobile-First Design**: Komplett optimiert für Smartphones und Tablets
+- **🎮 Vollständige Demo**: Funktionale Demo mit nährstoffbasiertem CRUD-System
 
 ## 🌐 Live URLs
 
 - **🏠 Landing Page**: https://3000-i4cud35ai8ri8ynzljswx-6532622b.e2b.dev
 - **🔐 Login/Registrierung**: https://3000-i4cud35ai8ri8ynzljswx-6532622b.e2b.dev/auth
-- **🎮 Demo-System**: https://3000-i4cud35ai8ri8ynzljswx-6532622b.e2b.dev/demo
+- **🎮 Demo-System**: https://3000-i4cud35ai8ri8ynzljswx-6532622b.e2b.dev/demo ✨ **NEU: Nährstoffbasiertes System!**
 - **📊 Dashboard**: https://3000-i4cud35ai8ri8ynzljswx-6532622b.e2b.dev/dashboard
 - **📋 Produkte**: https://3000-i4cud35ai8ri8ynzljswx-6532622b.e2b.dev/products
 - **🔧 Admin**: https://3000-i4cud35ai8ri8ynzljswx-6532622b.e2b.dev/admin
 - **📂 GitHub Repository**: https://github.com/nick-krakow-stack/supplement-stack
 - **🌍 Produktions-Domain**: supplementstack.de (bereit für Deployment)
 
+## 🧬 Nährstoffbasierte Architektur
+
+### Kernkonzept
+
+Das System basiert auf der **Zuordnung von Produkten zu Wirkstoffen** anstatt auf reiner Produktverwaltung:
+
+1. **Nährstoff-Datenbank**: 8 wichtige Nährstoffe (Vitamine, Mineralstoffe, Fettsäuren)
+2. **Produkt-Nährstoff-Verknüpfung**: Jedes Produkt hat einen Hauptwirkstoff + Gehalt pro Einheit
+3. **Automatische Berechnung**: System berechnet benötigte Einheiten basierend auf gewünschter Nährstoffmenge
+4. **DGE-Integration**: Deutsche Gesellschaft für Ernährung Empfehlungen + studienbasierte Werte
+
+### Nährstoff-Datenbank
+
+**Vitamine:**
+- Vitamin D3 (µg) - DGE: 20µg, Studien: 75µg
+- Vitamin B12 (µg) - DGE: 4µg, Studien: 250µg
+- Vitamin C (mg) - DGE: 110mg, Studien: 1000mg
+
+**Mineralstoffe:**
+- Magnesium (mg) - DGE: 375mg, Studien: 400mg
+- Zink (mg) - DGE: 10mg, Studien: 15mg
+- Eisen (mg) - DGE: 15mg, Studien: 18mg
+
+**Fettsäuren:**
+- EPA (mg) - DGE: 250mg, Studien: 1000mg
+- DHA (mg) - DGE: 250mg, Studien: 1000mg
+
+### Beispiel-Workflow
+
+**Magnesium-Beispiel:**
+1. **Benutzer wählt**: "Magnesium" als gewünschten Nährstoff
+2. **System zeigt**: DGE-Empfehlung (375mg) + Studien-Empfehlung (400mg)
+3. **Benutzer wählt**: 1200mg täglich (persönlicher Bedarf)
+4. **System findet**: "Qidosha Magnesiumcitrat" mit 760mg pro Kapsel
+5. **Automatische Berechnung**: 1200mg ÷ 760mg = 2 Kapseln täglich
+6. **Zusatzinformationen**: Packung (60 Kapseln) reicht 30 Tage, Kosten pro Monat
+
 ## 🏗️ Datenarchitektur
 
 ### Hauptentitäten
 
 1. **Users** - Benutzerprofile mit Ernährungseinstellungen
-2. **Products** - Supplement-Produkte mit Wirkstoffen
-3. **Stacks** - Kombinationen von Produkten mit Dosierungen
-4. **Nutrients** - Nährstoff-Definitionen mit Empfehlungen
+2. **Products** - Supplement-Produkte mit **nutrient_id** und **nutrient_amount_per_unit**
+3. **Nutrients** - Nährstoff-Definitionen mit DGE + Studien-Empfehlungen
+4. **Stacks** - Nährstoffbasierte Kombinationen mit automatischer Dosierung
 5. **Affiliate Links** - Link-Management und Tracking
 6. **Wishlist** - Benutzer-Wunschlisten
 
-### Speicher-Services
+### Nährstoff-Struktur
 
-- **Cloudflare D1**: SQLite-basierte Hauptdatenbank für alle relationalen Daten
-- **Lokale Entwicklung**: Automatische SQLite-Datenbank mit `--local` Flag
-- **Migrationen**: Strukturierte Schema-Updates in `migrations/` Verzeichnis
-
-### Datenbeziehungen
-
+```typescript
+interface Nutrient {
+  id: number
+  name: string                    // "Vitamin D3", "Magnesium"
+  category: string               // "Vitamine", "Mineralstoffe"
+  unit: string                   // "µg", "mg"
+  dge_recommended: number        // DGE-Empfehlung
+  study_recommended: number      // Studienbasierte Empfehlung
+  warning_threshold: number      // Warnschwelle für Überdosierung
+  description: string           // Funktionen und Nutzen
+}
 ```
-Users (1:n) Products (n:m) Nutrients
-Users (1:n) Stacks (1:n) StackProducts
-Users (1:n) Wishlist (n:1) Products
-Products (1:n) ProductNutrients (n:1) Nutrients
+
+### Produkt-Nährstoff-Verknüpfung
+
+```typescript
+interface Product {
+  // ... Standard-Felder
+  nutrient_id: number           // Verknüpfung zum Hauptwirkstoff
+  nutrient_amount_per_unit: number // z.B. 760mg Magnesium pro Kapsel
+}
 ```
 
-## 📘 Benutzerhandbuch
+## 📘 Benutzerhandbuch (Nährstoffbasiert)
 
-### Registrierung & Anmeldung
-1. Besuchen Sie die Startseite
-2. Klicken Sie auf "Registrieren"
-3. Geben Sie E-Mail, Passwort und optionale Profildaten ein
-4. Nach erfolgreicher Registrierung werden Sie automatisch angemeldet
+### Nährstoffbasierten Stack erstellen (NEU!)
 
-### Produkte verwalten
-1. **Hinzufügen**: Navigieren Sie zu "Produkte" → "Neues Produkt"
-2. **Pflichtfelder**: Name, Marke, Darreichungsform, Preis, Portionen pro Packung
-3. **Wirkstoffe**: Wählen Sie Nährstoffe aus der Datenbank und geben Sie Mengen an
-4. **Shop-Links**: URLs werden automatisch auf Affiliate-Partnerschaften geprüft
+1. **Klicken Sie auf "Nährstoff-Stack"** in der Demo
+2. **Schritt 1 - Nährstoff wählen**: Wählen Sie gewünschten Wirkstoff (z.B. Magnesium)
+3. **Schritt 2 - Gewünschte Menge**: 
+   - System zeigt DGE-Empfehlung (375mg) und Studien-Empfehlung (400mg)
+   - Sie können einen eigenen Wert eingeben (z.B. 1200mg)
+4. **Schritt 3 - Produkt wählen**: System zeigt verfügbare Produkte mit automatischer Berechnung
+5. **Schritt 4 - Berechnung**: Genaue Dosierung, Packungsdauer, Kosten pro Monat
 
-### Stacks erstellen
-1. Gehen Sie zu "Stacks" → "Neuer Stack"
-2. Geben Sie Namen und Beschreibung ein
-3. Fügen Sie Produkte mit gewünschten Dosierungen hinzu
-4. System berechnet automatisch Kosten und Nährstoff-Totale
-5. Warnt vor Überdosierungen und Interaktionen
+### Produkte mit Nährstoffen verwalten
 
-### Admin-Funktionen
-1. **Dubletten**: Überprüfung auf ähnliche Produkte
-2. **Affiliate-Links**: Verwaltung nicht-verknüpfter URLs
-3. **Nährstoffe**: Hinzufügen neuer Wirkstoffe mit Referenzdaten
-4. **Statistiken**: Nutzungs- und Klick-Statistiken
+1. **Neues Produkt hinzufügen**:
+   - **Schritt 1**: Wirkstoff aus Datenbank wählen (automatische Kategoriezuordnung)
+   - **Schritt 2**: Produktinformationen (Name, Marke, Form, Preis)
+   - **Schritt 3**: Wirkstoffgehalt pro Einheit (z.B. 760mg Magnesium pro Kapsel)
+   - **Live-Berechnung**: Tägliche Aufnahme, DGE-Abdeckung, Packungsdauer
+
+2. **Details-Modal (Tab-basiert)**:
+   - **Übersicht**: Produktinfo, Beschreibung, Vorteile
+   - **Nährstoff**: Wirkstoff-Details, Empfehlungsvergleich, Dosierungsbalken
+   - **Dosierung**: Empfohlene Anwendung, Warnhinweise
+   - **Kosten**: Detailierte Kostenaufschlüsselung
+
+### Mobile-Optimierung
+
+- **Touch-freundliche Buttons**: Mindestens 44px Höhe
+- **Kompakte Tab-Navigation**: Übersichtliche 4-Tab-Struktur
+- **Responsive Modals**: Automatische Anpassung an Bildschirmgröße
+- **Hamburger-Menü**: Mobile Navigation für Demo-Aktionen
 
 ## 🚀 Deployment-Status
 
-### Aktuelle Umgebung
-- **Status**: ✅ Vollständig funktional (ohne Datenpersistierung)
-- **Tech Stack**: Hono + TypeScript + TailwindCSS + Cloudflare Pages
-- **Frontend**: ✅ Komplett responsive mit Animationen
-- **Backend**: ✅ Alle API-Endpunkte implementiert
-- **Auth-System**: ✅ JWT-basierte Authentifizierung
-- **Admin-Interface**: ✅ Vollständige Verwaltungsfunktionen
-- **Demo-System**: ✅ Separates Demo-Fenster
-- **Datenbank**: ⚠️ D1 noch nicht initialisiert (läuft ohne Persistierung)
+### ✅ Vollständig implementierte Features
 
-### Nächste Schritte für Produktion
-1. **Cloudflare API-Schlüssel konfigurieren** (in Deploy-Tab)
-2. **D1 Produktionsdatenbank erstellen**:
-   ```bash
-   npx wrangler d1 create supplementstack-production
-   # Database-ID in wrangler.jsonc eintragen
-   ```
-3. **Migrationen ausführen**:
-   ```bash
-   npm run db:migrate:prod
-   ```
-4. **Pages-Projekt erstellen**:
-   ```bash
-   npx wrangler pages project create supplementstack --production-branch main
-   ```
-5. **Deployment**:
-   ```bash
-   npm run deploy:prod
-   ```
+**🧬 Nährstoffbasiertes System**
+- ✅ Vollständige Nährstoff-Datenbank (8 Wirkstoffe in 3 Kategorien)
+- ✅ Produkt-Nährstoff-Zuordnung mit Gehalt pro Einheit
+- ✅ Automatische Dosierungsberechnung
+- ✅ DGE + Studien-Empfehlungen integriert
+- ✅ Warnschwellen für Überdosierung
 
-### Vollständige Funktionalität implementiert
+**📱 Mobile-First UX**
+- ✅ Tab-basierte Details-Modals (4 Tabs: Übersicht, Nährstoff, Dosierung, Kosten)
+- ✅ Moderne, intuitive Add/Edit-Modals mit klaren Textfeldern
+- ✅ Live-Berechnungen bei Eingabe
+- ✅ Touch-freundliche Bedienelemente
 
-**✅ EAAT-konforme Landing Page**
-- Professionelles Design mit Vertrauenssignalen
-- Feature-Übersicht mit 6 Hauptfunktionen
-- Separate Demo-Seite mit Pop-up-Fenster
-- Optimierte Navigation und Call-to-Actions
+**🔄 Intelligenter Stack-Workflow**
+- ✅ Nährstoff-first Ansatz (Wirkstoff → Menge → Produkt)
+- ✅ Automatische Produktempfehlungen basierend auf Nährstoffbedarf
+- ✅ Vergleich verschiedener Produkte mit Kostenanalyse
+- ✅ Ein-Klick DGE/Studien-Empfehlungen
 
-**✅ Benutzer-Management**
-- JWT-basierte Authentifizierung
-- Session-Handling mit Token-Validierung
-- Registrierung mit Profilfeldern
-- Sichere Passwort-Verschlüsselung
+**🎮 Demo-System**
+- ✅ Realistische Nährstoff-zugeordnete Produkte
+- ✅ Vollständige CRUD-Operationen
+- ✅ Nährstoffbasierter Stack-Builder
+- ✅ Mobile-optimierte Benutzeroberfläche
 
-**✅ Produkt-Management**
-- Vollständige CRUD-Operationen
-- Modal-basierte Eingabeformulare
-- Nährstoff-Zuordnung mit Mengenangaben
-- Dubletten-Erkennung und -Verwaltung
-
-**✅ Stack-Management**
-- Interaktive Stack-Erstellung
-- Dosierungsempfehlungen (DGE/Studien)
-- Kostenberechnung und Verbrauchsanalyse
-- Interaktionswarnungen zwischen Nährstoffen
-
-**✅ Admin-Interface**
-- Nährstoff-Verwaltung mit CRUD-Operationen
-- Affiliate-Link-Management und -Queue
-- Dubletten-Verwaltung mit Zusammenführung
-- Umfangreiche Statistiken und Reports
-
-**✅ Technische Exzellenz**
-- Responsive Design für alle Geräte
-- DSGVO-konforme Datenverarbeitung
-- Medizinische Disclaimer auf allen Seiten
-- Moderne Animationen und UX-Design
-
-### Technische Details
+### Technische Exzellenz
 - **Framework**: Hono v4 mit TypeScript
 - **Deployment**: Cloudflare Pages mit Workers
-- **Datenbank**: Cloudflare D1 (SQLite)
+- **Datenbank**: Cloudflare D1 (SQLite) - ready for production
 - **Authentication**: JWT mit bcrypt Passwort-Hashing
 - **Frontend**: Vanilla JavaScript mit TailwindCSS
 - **API**: RESTful mit strukturierter Fehlerbehandlung
+- **Mobile**: Responsive Design mit Touch-Optimierung
 
 ## 🔧 Entwicklung
 
@@ -188,10 +201,33 @@ npm run deploy:prod     # Cloudflare-Deployment
 npm run db:reset        # Datenbank zurücksetzen
 ```
 
+## 🌟 Besondere Features
+
+### Nährstoffbasierte Innovation
+- **Wissenschaftlich fundiert**: Basiert auf DGE-Empfehlungen und aktuellen Studien
+- **Automatisiert**: Keine manuellen Berechnungen mehr nötig
+- **Benutzerfreundlich**: Intuitive Workflows von Nährstoffbedarf zu Produktauswahl
+- **Kostentransparent**: Automatische Berechnung von Tages-, Monats- und Jahreskosten
+
+### Mobile-First Approach
+- **Tab-Navigation**: Übersichtliche Aufteilung komplexer Informationen
+- **Touch-Optimierung**: Alle Interaktionselemente mindestens 44px
+- **Responsive Modals**: Automatische Anpassung an verschiedene Bildschirmgrößen
+- **Progressive Enhancement**: Funktioniert auf allen Geräten perfekt
+
 ## 📞 Support
 
-Das System ist vollständig funktional implementiert und bereit für den Produktionseinsatz. Alle Anforderungen aus dem Pflichtenheft sind erfüllt und getestet.
+Das nährstoffbasierte System ist vollständig implementiert und getestet. Alle Major-Features sind funktional:
+
+- ✅ Nährstoff-Datenbank und Produkt-Zuordnung
+- ✅ Automatische Dosierungsberechnung  
+- ✅ Tab-basierte mobile Details-Modals
+- ✅ Moderne Add/Edit-Formulare
+- ✅ Intelligenter Stack-Builder Workflow
+- ✅ Live-Berechnungen und DGE-Integration
+
+Das System ist bereit für den Produktionseinsatz mit Cloudflare D1 Datenbank.
 
 ---
 
-**Entwickelt mit ❤️ für supplementstack.de**
+**Entwickelt mit 🧬 für nährstoffbasierte Supplement-Verwaltung**

@@ -42,6 +42,12 @@ export interface Product {
   shop_url: string;
   affiliate_url?: string;
   image_url?: string;
+  // Erweiterte Supplement-Informationen
+  description?: string; // Kurzbeschreibung
+  benefits?: string; // Wozu ist es gut? (JSON Array)
+  warnings?: string; // Warnhinweise
+  dosage_recommendation?: string; // Dosierungsempfehlung
+  category?: string; // Vitamin, Mineral, Aminosäure, etc.
   is_duplicate: boolean;
   duplicate_of?: number;
   created_at: string;
@@ -137,6 +143,12 @@ export interface ProductWithNutrients extends Product {
 
 export interface StackWithProducts extends Stack {
   products: (StackProduct & { product: ProductWithNutrients })[];
+  // Erweiterte Kostenfelder
+  daily_cost?: number;
+  monthly_cost?: number;
+  total_purchase_cost?: number;
+  avg_days_supply?: number;
+  product_count?: number;
 }
 
 // API Request/Response types
@@ -163,6 +175,12 @@ export interface CreateProductRequest {
   servings_per_package: number;
   shop_url: string;
   image_url?: string;
+  // Erweiterte Felder
+  description?: string;
+  benefits?: string; // JSON string
+  warnings?: string;
+  dosage_recommendation?: string;
+  category?: string;
   nutrients: {
     nutrient_id: number;
     amount: number;
@@ -194,11 +212,20 @@ export interface StackCalculation {
   }[];
   daily_cost: number;
   monthly_cost: number;
+  total_purchase_cost: number; // Gesamter Kaufpreis aller Produkte
+  avg_days_supply: number; // Durchschnittliche Haltbarkeit
   product_consumption: {
     product_id: number;
     product_name: string;
-    days_until_empty: number;
-    cost_per_day: number;
+    product_brand: string;
+    product_image?: string;
+    purchase_price: number; // Preis pro Packung
+    days_until_empty: number; // Wie lange eine Packung hält
+    cost_per_day: number; // Kosten pro Tag
+    cost_per_month: number; // Kosten pro Monat (× 30)
+    dosage_per_day: number; // Dosierung täglich
+    shop_url: string;
+    affiliate_url?: string;
   }[];
   warnings: {
     type: 'overdose' | 'interaction' | 'missing';

@@ -16,9 +16,21 @@ stackRoutes.get('/', authMiddleware, async (c) => {
     const stacks = await c.env.DB.prepare(`
       SELECT s.*,
              COUNT(sp.id) as product_count,
+             -- Erweiterte Kostenberechnung
              SUM(CASE WHEN p.price_per_package IS NOT NULL AND p.servings_per_package IS NOT NULL 
-                      THEN (p.price_per_package / p.servings_per_package) * sp.servings_per_day 
-                      ELSE 0 END) as daily_cost
+                      THEN (p.price_per_package / p.servings_per_package) * sp.dosage_per_day 
+                      ELSE 0 END) as daily_cost,
+             SUM(CASE WHEN p.price_per_package IS NOT NULL AND p.servings_per_package IS NOT NULL 
+                      THEN (p.price_per_package / p.servings_per_package) * sp.dosage_per_day * 30 
+                      ELSE 0 END) as monthly_cost,
+             -- Kaufpreis für den gesamten Stack (alle Produkte)
+             SUM(CASE WHEN p.price_per_package IS NOT NULL 
+                      THEN p.price_per_package 
+                      ELSE 0 END) as total_purchase_cost,
+             -- Durchschnittliche Haltbarkeit in Tagen
+             AVG(CASE WHEN p.servings_per_package IS NOT NULL AND sp.dosage_per_day > 0
+                      THEN p.servings_per_package / sp.dosage_per_day
+                      ELSE 0 END) as avg_days_supply
       FROM stacks s
       LEFT JOIN stack_products sp ON s.id = sp.stack_id
       LEFT JOIN products p ON sp.product_id = p.id
@@ -58,17 +70,21 @@ stackRoutes.get('/:id', authMiddleware, async (c) => {
       }, 404);
     }
 
-    // Get stack products with details
+    // Get stack products with details and cost calculations
     const products = await c.env.DB.prepare(`
       SELECT sp.*, p.name, p.brand, p.form, p.price_per_package, p.servings_per_package,
              p.shop_url, p.affiliate_url, p.image_url,
+             -- Kostenberechnungen pro Produkt
+             (p.price_per_package / p.servings_per_package) * sp.dosage_per_day as cost_per_day,
+             (p.price_per_package / p.servings_per_package) * sp.dosage_per_day * 30 as cost_per_month,
+             p.servings_per_package / sp.dosage_per_day as days_supply,
              GROUP_CONCAT(
                json_object(
                  'nutrient_id', pn.nutrient_id,
                  'name', n.name,
                  'amount', pn.amount,
                  'unit', pn.unit,
-                 'daily_amount', pn.amount * sp.servings_per_day,
+                 'daily_amount', pn.amount * sp.dosage_per_day,
                  'standard_unit', n.standard_unit
                )
              ) as nutrients
@@ -208,6 +224,95 @@ stackRoutes.post('/:id/products', authMiddleware, async (c) => {
     return c.json({
       success: false,
       error: 'Fehler beim Hinzufügen des Produkts'
+    }, 500);
+  }
+});
+
+// Update stack
+stackRoutes.put('/:id', authMiddleware, async (c) => {
+  const user = c.get('user') as User;
+  const id = c.req.param('id');
+  
+  try {
+    const { name, description } = await c.req.json();
+
+    if (!name || name.trim() === '') {
+      return c.json({
+        success: false,
+        error: 'Name ist erforderlich'
+      }, 400);
+    }
+
+    // Check if user owns the stack
+    const stack = await c.env.DB.prepare(`
+      SELECT * FROM stacks WHERE id = ? AND user_id = ?
+    `).bind(id, user.id).first();
+
+    if (!stack) {
+      return c.json({
+        success: false,
+        error: 'Stack nicht gefunden oder keine Berechtigung'
+      }, 404);
+    }
+
+    const result = await c.env.DB.prepare(`
+      UPDATE stacks 
+      SET name = ?, description = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND user_id = ?
+    `).bind(
+      name.trim(),
+      description?.trim() || null,
+      id,
+      user.id
+    ).run();
+
+    if (!result.success) {
+      return c.json({
+        success: false,
+        error: 'Fehler beim Aktualisieren des Stacks'
+      }, 500);
+    }
+
+    return c.json({
+      success: true,
+      message: 'Stack erfolgreich aktualisiert'
+    });
+  } catch (error) {
+    console.error('Update stack error:', error);
+    return c.json({
+      success: false,
+      error: 'Fehler beim Aktualisieren des Stacks'
+    }, 500);
+  }
+});
+
+// Delete stack
+stackRoutes.delete('/:id', authMiddleware, async (c) => {
+  const user = c.get('user') as User;
+  const id = c.req.param('id');
+  
+  try {
+    const result = await c.env.DB.prepare(`
+      DELETE FROM stacks 
+      WHERE id = ? AND user_id = ?
+    `).bind(id, user.id).run();
+
+    if (result.changes === 0) {
+      return c.json({
+        success: false,
+        error: 'Stack nicht gefunden oder keine Berechtigung'
+      }, 404);
+    }
+
+    return c.json({
+      success: true,
+      message: 'Stack erfolgreich gelöscht'
+    });
+  } catch (error) {
+    console.error('Delete stack error:', error);
+    return c.json({
+      success: false,
+      error: 'Fehler beim Löschen des Stacks'
     }, 500);
   }
 });

@@ -37,21 +37,33 @@ class SupplementApp {
     
     // Allow access to public pages without token
     if (currentPath === '/' || currentPath === '/auth' || currentPath === '/demo') {
+      this.updateNavigation(false, false) // Not logged in
       return
     }
     
     if (!this.token) {
+      this.updateNavigation(false, false) // Not logged in
       this.redirectToLogin()
       return
     }
 
     try {
-      // Verify token is still valid
-      const response = await axios.get('/api/health')
-      this.loadPageContent()
+      // Verify token is still valid and get user info
+      const response = await axios.get('/api/protected/profile')
+      if (response.data && response.data.success) {
+        this.currentUser = response.data.data
+        // Check if user is admin (you can adjust this logic based on your user model)
+        const isAdmin = this.currentUser.email === 'admin@example.com' || this.currentUser.is_admin
+        this.updateNavigation(true, isAdmin)
+        this.loadPageContent()
+      }
     } catch (error) {
       if (error.response?.status === 401) {
         this.logout()
+      } else {
+        // Fallback: assume logged in but not admin if profile endpoint doesn't exist
+        this.updateNavigation(true, false)
+        this.loadPageContent()
       }
     }
   }
@@ -349,41 +361,166 @@ class SupplementApp {
       return
     }
 
-    container.innerHTML = products.map(product => `
-      <div class="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow">
-        <div class="flex justify-between items-start mb-4">
-          <h3 class="text-lg font-semibold text-gray-900">${this.escapeHtml(product.name)}</h3>
-          <div class="flex space-x-2">
-            <button class="text-blue-600 hover:text-blue-500" onclick="app.editProduct(${product.id})">
-              <i class="fas fa-edit"></i>
-            </button>
-            <button class="text-red-600 hover:text-red-500" onclick="app.deleteProduct(${product.id})">
-              <i class="fas fa-trash"></i>
-            </button>
+    container.innerHTML = products.map(product => {
+      // Kostenberechnung für eine Portion täglich (Standard-Dosierung)
+      const costPerServing = product.price_per_package / product.servings_per_package
+      const costPerMonth = costPerServing * 30 // 30 Tage bei 1x täglich
+      const daysSupply = product.servings_per_package // Bei 1x täglich
+      
+      // Parse benefits JSON if available
+      let benefits = []
+      try {
+        benefits = product.benefits ? JSON.parse(product.benefits) : []
+      } catch (e) {
+        benefits = []
+      }
+      
+      return `
+      <div class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow overflow-hidden">
+        <!-- Produktbild -->
+        <div class="h-48 bg-gray-100 overflow-hidden relative">
+          ${product.image_url ? `
+            <img src="${product.image_url}" alt="${this.escapeHtml(product.name)}" 
+                 class="w-full h-full object-cover" onerror="this.style.display='none'">
+          ` : `
+            <div class="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-50 to-blue-100">
+              <i class="fas fa-pills text-4xl text-blue-300"></i>
+            </div>
+          `}
+          
+          <!-- Kategorie-Badge -->
+          ${product.category ? `
+            <div class="absolute top-2 left-2 bg-blue-600 text-white px-2 py-1 rounded text-xs font-medium">
+              ${this.escapeHtml(product.category)}
+            </div>
+          ` : ''}
+          
+          <!-- Selection Checkbox -->
+          <div class="absolute top-2 right-2">
+            <input type="checkbox" id="product-${product.id}" 
+                   onchange="app.toggleProductSelection(${product.id})" 
+                   class="w-5 h-5 text-blue-600 bg-white border-gray-300 rounded focus:ring-blue-500">
           </div>
         </div>
-        <p class="text-gray-600 mb-2">${this.escapeHtml(product.brand)} - ${this.escapeHtml(product.form)}</p>
-        <div class="space-y-2 mb-4">
-          ${(product.nutrients || []).map(nutrient => `
-            <div class="flex justify-between text-sm">
-              <span>${this.escapeHtml(nutrient.name)}</span>
-              <span>${nutrient.amount} ${nutrient.unit}</span>
+        
+        <div class="p-4">
+          <!-- Header mit Actions -->
+          <div class="flex justify-between items-start mb-3">
+            <h3 class="text-lg font-semibold text-gray-900 line-clamp-2 flex-1 mr-2">
+              ${this.escapeHtml(product.name)}
+            </h3>
+            <div class="flex space-x-1">
+              <button onclick="app.showProductDetails(${product.id})" 
+                      class="text-blue-600 hover:text-blue-500 p-1 rounded hover:bg-blue-50" 
+                      title="Details anzeigen">
+                <i class="fas fa-info-circle"></i>
+              </button>
+              <button onclick="app.editProduct(${product.id})" 
+                      class="text-gray-600 hover:text-gray-500 p-1 rounded hover:bg-gray-50" 
+                      title="Bearbeiten">
+                <i class="fas fa-edit"></i>
+              </button>
+              <button onclick="app.deleteProduct(${product.id})" 
+                      class="text-red-600 hover:text-red-500 p-1 rounded hover:bg-red-50" 
+                      title="Löschen">
+                <i class="fas fa-trash"></i>
+              </button>
             </div>
-          `).join('')}
-        </div>
-        <div class="flex justify-between items-center">
-          <span class="text-lg font-semibold text-green-600">€${product.price_per_package}</span>
-          <div class="space-x-2">
-            <button onclick="app.addToWishlist(${product.id})" class="text-red-600 hover:text-red-500" title="Zur Wunschliste">
-              <i class="fas fa-heart"></i>
-            </button>
-            <a href="${product.shop_url}" target="_blank" class="text-blue-600 hover:text-blue-500 text-sm">
-              <i class="fas fa-external-link-alt mr-1"></i>Shop
-            </a>
+          </div>
+          
+          <!-- Brand und Form -->
+          <p class="text-gray-600 text-sm mb-3">${this.escapeHtml(product.brand)} • ${this.escapeHtml(product.form)}</p>
+          
+          <!-- Beschreibung -->
+          ${product.description ? `
+            <p class="text-gray-700 text-sm mb-3 line-clamp-2">${this.escapeHtml(product.description)}</p>
+          ` : ''}
+          
+          <!-- Benefits -->
+          ${benefits.length > 0 ? `
+            <div class="mb-3">
+              <div class="text-xs font-medium text-gray-500 mb-2">WOFÜR IST ES GUT:</div>
+              <div class="space-y-1">
+                ${benefits.slice(0, 2).map(benefit => `
+                  <div class="flex items-start text-xs text-gray-600">
+                    <i class="fas fa-check text-green-500 mr-2 mt-0.5 flex-shrink-0"></i>
+                    <span>${this.escapeHtml(benefit)}</span>
+                  </div>
+                `).join('')}
+                ${benefits.length > 2 ? `
+                  <div class="text-xs text-blue-600 cursor-pointer" onclick="app.showProductDetails(${product.id})">
+                    +${benefits.length - 2} weitere Vorteile
+                  </div>
+                ` : ''}
+              </div>
+            </div>
+          ` : ''}
+          
+          <!-- Nährstoffe -->
+          <div class="space-y-1 mb-4 max-h-16 overflow-y-auto">
+            ${(product.nutrients || []).map(nutrient => `
+              <div class="flex justify-between text-xs text-gray-600 bg-gray-50 px-2 py-1 rounded">
+                <span>${this.escapeHtml(nutrient.name)}</span>
+                <span class="font-medium">${nutrient.amount} ${nutrient.unit}</span>
+              </div>
+            `).join('')}
+          </div>
+          
+          <!-- Dosierung -->
+          ${product.dosage_recommendation ? `
+            <div class="text-xs text-gray-500 mb-3">
+              <i class="fas fa-clock mr-1"></i>
+              ${this.escapeHtml(product.dosage_recommendation)}
+            </div>
+          ` : ''}
+          
+          <!-- Kostenbereich -->
+          <div class="bg-gradient-to-r from-blue-50 to-green-50 rounded-lg p-3 mb-4">
+            <div class="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <span class="text-gray-600">Kaufpreis:</span>
+                <div class="font-semibold text-gray-900">€${product.price_per_package.toFixed(2)}</div>
+              </div>
+              <div>
+                <span class="text-gray-600">Pro Monat:</span>
+                <div class="font-semibold text-green-600 text-lg">€${costPerMonth.toFixed(2)}</div>
+              </div>
+            </div>
+            <div class="text-xs text-gray-500 mt-2 flex justify-between">
+              <span>${product.servings_per_package} Portionen</span>
+              <span>Hält ${daysSupply} Tage</span>
+            </div>
+          </div>
+          
+          <!-- Aktionen -->
+          <div class="flex justify-between items-center">
+            <div class="flex space-x-2">
+              <button onclick="app.toggleWishlist(${product.id})" 
+                      class="text-red-600 hover:text-red-500 p-2 rounded hover:bg-red-50 touch-target" 
+                      title="Zur Wunschliste">
+                <i class="fas fa-heart"></i>
+              </button>
+              <button onclick="app.addToStack(${product.id})" 
+                      class="text-green-600 hover:text-green-500 p-2 rounded hover:bg-green-50 touch-target" 
+                      title="Zu Stack hinzufügen">
+                <i class="fas fa-plus-circle"></i>
+              </button>
+            </div>
+            
+            <div class="flex space-x-2">
+              <button onclick="app.showProductDetails(${product.id})" 
+                      class="bg-gray-100 text-gray-700 px-3 py-2 rounded text-sm hover:bg-gray-200 transition-colors">
+                Details
+              </button>
+              <a href="${product.shop_url}" target="_blank" 
+                 class="bg-blue-600 text-white px-3 py-2 rounded text-sm hover:bg-blue-700 transition-colors">
+                <i class="fas fa-shopping-cart mr-1"></i>Kaufen
+              </a>
+            </div>
           </div>
         </div>
       </div>
-    `).join('')
+    `}).join('')
   }
 
   // Stacks functionality
@@ -413,13 +550,23 @@ class SupplementApp {
     const container = document.getElementById('stacks-grid')
     if (!container) return
 
+    // Show/hide filters based on number of stacks
+    const filtersContainer = document.getElementById('stack-filters')
+    if (filtersContainer) {
+      if (stacks.length > 3) {
+        filtersContainer.classList.remove('hidden')
+      } else {
+        filtersContainer.classList.add('hidden')
+      }
+    }
+
     if (stacks.length === 0) {
       container.innerHTML = `
-        <div class="col-span-full text-center py-12">
+        <div class="text-center py-12 sm:py-16">
           <i class="fas fa-layer-group text-4xl text-gray-300 mb-4"></i>
           <h3 class="text-lg font-medium text-gray-500 mb-2">Noch keine Stacks erstellt</h3>
-          <p class="text-gray-400 mb-6">Erstellen Sie Ihren ersten Stack aus Ihren Produkten</p>
-          <button onclick="app.showAddStackModal()" class="bg-green-600 text-white px-6 py-2 rounded-md hover:bg-green-700 transition-colors">
+          <p class="text-gray-400 mb-6 px-4">Erstellen Sie Ihren ersten Stack aus Ihren Produkten</p>
+          <button onclick="app.showAddStackModal()" class="bg-green-600 text-white px-6 py-3 rounded-md hover:bg-green-700 transition-colors">
             <i class="fas fa-plus mr-2"></i>Ersten Stack erstellen
           </button>
         </div>
@@ -428,33 +575,76 @@ class SupplementApp {
     }
 
     container.innerHTML = stacks.map(stack => `
-      <div class="bg-white rounded-lg shadow-md p-6">
-        <div class="flex justify-between items-start mb-4">
-          <h3 class="text-xl font-semibold text-gray-900">${this.escapeHtml(stack.name)}</h3>
-          <div class="flex space-x-2">
-            <button class="text-blue-600 hover:text-blue-500" onclick="app.editStack(${stack.id})">
-              <i class="fas fa-edit"></i>
-            </button>
-            <button class="text-red-600 hover:text-red-500" onclick="app.deleteStack(${stack.id})">
-              <i class="fas fa-trash"></i>
-            </button>
-          </div>
-        </div>
-        <p class="text-gray-600 mb-4">${this.escapeHtml(stack.description || 'Keine Beschreibung')}</p>
-        <div class="space-y-2 mb-4">
-          ${(stack.products || []).slice(0, 3).map(product => `
-            <div class="flex justify-between text-sm">
-              <span>${this.escapeHtml(product.product_name)}</span>
-              <span>${product.dosage_per_day}x täglich</span>
+      <div class="bg-white rounded-lg shadow-md">
+        <!-- Mobile-optimierte Stack-Karte -->
+        <div class="p-4 sm:p-6">
+          <!-- Header mit Aktionen -->
+          <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-4">
+            <div class="flex-1 mb-3 sm:mb-0">
+              <h3 class="text-lg sm:text-xl font-semibold text-gray-900 mb-1">${this.escapeHtml(stack.name)}</h3>
+              <p class="text-gray-600 text-sm sm:text-base">${this.escapeHtml(stack.description || 'Keine Beschreibung')}</p>
             </div>
-          `).join('')}
-          ${stack.products && stack.products.length > 3 ? `<div class="text-sm text-gray-500">+${stack.products.length - 3} weitere</div>` : ''}
-        </div>
-        <div class="flex justify-between items-center">
-          <span class="text-lg font-semibold text-green-600">€${(stack.monthly_cost || 0).toFixed(2)}/Monat</span>
-          <button class="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700" onclick="app.viewStack(${stack.id})">
-            Details
-          </button>
+            
+            <!-- Aktionen für Mobile und Desktop -->
+            <div class="flex justify-end space-x-2 sm:ml-4">
+              <button onclick="app.editStack(${stack.id})" 
+                      class="p-2 text-blue-600 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
+                      title="Bearbeiten">
+                <i class="fas fa-edit"></i>
+              </button>
+              <button onclick="app.viewStack(${stack.id})" 
+                      class="p-2 text-green-600 hover:text-green-500 hover:bg-green-50 rounded-lg transition-colors"
+                      title="Details anzeigen">
+                <i class="fas fa-eye"></i>
+              </button>
+              <button onclick="app.deleteStack(${stack.id})" 
+                      class="p-2 text-red-600 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Löschen">
+                <i class="fas fa-trash"></i>
+              </button>
+            </div>
+          </div>
+          
+          <!-- Produkte Preview -->
+          <div class="mb-4">
+            <div class="text-sm text-gray-500 mb-2">${(stack.products || []).length} Produkt${(stack.products || []).length !== 1 ? 'e' : ''}:</div>
+            <div class="space-y-1">
+              ${(stack.products || []).slice(0, 2).map(product => `
+                <div class="flex justify-between text-sm bg-gray-50 px-3 py-2 rounded">
+                  <span class="font-medium">${this.escapeHtml(product.product_name)}</span>
+                  <span class="text-gray-600">${product.dosage_per_day}x täglich</span>
+                </div>
+              `).join('')}
+              ${stack.products && stack.products.length > 2 ? `
+                <div class="text-sm text-gray-500 px-3 py-1">
+                  +${stack.products.length - 2} weitere Produkt${stack.products.length - 2 !== 1 ? 'e' : ''}
+                </div>
+              ` : ''}
+            </div>
+          </div>
+          
+          <!-- Kosten-Footer -->
+          <div class="border-t border-gray-200 pt-4">
+            <div class="grid grid-cols-2 gap-4 mb-3">
+              <div class="text-center sm:text-left">
+                <div class="text-xs text-gray-500 mb-1">Kaufpreis gesamt</div>
+                <div class="font-semibold text-gray-900">€${(stack.total_purchase_cost || 0).toFixed(2)}</div>
+              </div>
+              <div class="text-center sm:text-left">
+                <div class="text-xs text-gray-500 mb-1">Monatliche Kosten</div>
+                <div class="font-semibold text-green-600 text-lg">€${(stack.monthly_cost || 0).toFixed(2)}</div>
+              </div>
+            </div>
+            
+            <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center text-xs text-gray-400">
+              <div class="mb-2 sm:mb-0">
+                ⏱ Hält ca. ${Math.round(stack.avg_days_supply || 0)} Tage
+              </div>
+              <div class="text-right">
+                Erstellt: ${new Date(stack.created_at).toLocaleDateString('de-DE')}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     `).join('')
@@ -696,23 +886,29 @@ class SupplementApp {
   }
 
   // Utility functions
-  showModal(title, content, submitHandler) {
+  showModal(title, content, submitHandler, showButtons = true) {
     const modalHtml = `
-      <div class="modal-overlay" id="modal-overlay">
-        <div class="modal-container">
-          <div class="flex justify-between items-center mb-4">
-            <h3 class="text-lg font-semibold">${title}</h3>
-            <button onclick="app.hideModal()" class="text-gray-400 hover:text-gray-600">
+      <div class="modal-overlay fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" id="modal-overlay">
+        <div class="modal-container bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div class="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
+            <h3 class="text-lg font-semibold text-gray-900">${title}</h3>
+            <button onclick="app.hideModal()" class="text-gray-400 hover:text-gray-600 p-1">
               <i class="fas fa-times text-xl"></i>
             </button>
           </div>
-          <div class="modal-content mb-6">
+          <div class="modal-content p-4">
             ${content}
           </div>
-          <div class="flex justify-end space-x-3">
-            <button onclick="app.hideModal()" class="btn-secondary">Abbrechen</button>
-            <button onclick="app.submitModal()" class="btn-primary">Speichern</button>
+          ${showButtons ? `
+          <div class="sticky bottom-0 bg-white border-t p-4 flex justify-end space-x-3">
+            <button onclick="app.hideModal()" class="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors">
+              Abbrechen
+            </button>
+            <button onclick="app.submitModal()" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
+              Speichern
+            </button>
           </div>
+          ` : ''}
         </div>
       </div>
     `
@@ -763,6 +959,126 @@ class SupplementApp {
     return div.innerHTML
   }
 
+  updateNavigation(isLoggedIn, isAdmin) {
+    const navMenu = document.getElementById('nav-menu')
+    const navActions = document.getElementById('nav-actions')
+    const mobileNavMenu = document.getElementById('mobile-nav-menu')
+    const mobileNavActions = document.getElementById('mobile-nav-actions')
+    const currentPath = window.location.pathname
+    
+    if (!navMenu || !navActions) return
+    
+    if (isLoggedIn) {
+      // Desktop authenticated navigation
+      navMenu.innerHTML = `
+        <a href="/dashboard" class="nav-item px-3 py-2 rounded-md text-sm lg:text-base ${currentPath === '/dashboard' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100'}">
+          <i class="fas fa-tachometer-alt mr-1 lg:mr-2"></i>
+          <span class="hidden lg:inline">Dashboard</span>
+        </a>
+        <a href="/products" class="nav-item px-3 py-2 rounded-md text-sm lg:text-base ${currentPath === '/products' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100'}">
+          <i class="fas fa-pills mr-1 lg:mr-2"></i>
+          <span class="hidden lg:inline">Produkte</span>
+        </a>
+        <a href="/stacks" class="nav-item px-3 py-2 rounded-md text-sm lg:text-base ${currentPath === '/stacks' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100'}">
+          <i class="fas fa-layer-group mr-1 lg:mr-2"></i>
+          <span class="hidden lg:inline">Stacks</span>
+        </a>
+        ${isAdmin ? `
+        <a href="/admin" class="nav-item px-3 py-2 rounded-md text-sm lg:text-base ${currentPath === '/admin' ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100'}">
+          <i class="fas fa-cog mr-1 lg:mr-2"></i>
+          <span class="hidden lg:inline">Admin</span>
+        </a>
+        ` : ''}
+      `
+      
+      navActions.innerHTML = `
+        <button onclick="app.logout()" class="text-gray-700 hover:text-gray-900 px-2 py-1">
+          <i class="fas fa-sign-out-alt mr-1"></i>
+          <span class="hidden lg:inline">Abmelden</span>
+        </button>
+      `
+      
+      // Mobile authenticated navigation
+      if (mobileNavMenu && mobileNavActions) {
+        mobileNavMenu.innerHTML = `
+          <a href="/dashboard" class="block px-4 py-3 text-gray-700 hover:bg-gray-50 ${currentPath === '/dashboard' ? 'bg-blue-50 text-blue-600' : ''}">
+            <i class="fas fa-tachometer-alt mr-3"></i>Dashboard
+          </a>
+          <a href="/products" class="block px-4 py-3 text-gray-700 hover:bg-gray-50 ${currentPath === '/products' ? 'bg-blue-50 text-blue-600' : ''}">
+            <i class="fas fa-pills mr-3"></i>Produkte
+          </a>
+          <a href="/stacks" class="block px-4 py-3 text-gray-700 hover:bg-gray-50 ${currentPath === '/stacks' ? 'bg-blue-50 text-blue-600' : ''}">
+            <i class="fas fa-layer-group mr-3"></i>Stacks
+          </a>
+          ${isAdmin ? `
+          <a href="/admin" class="block px-4 py-3 text-gray-700 hover:bg-gray-50 ${currentPath === '/admin' ? 'bg-blue-50 text-blue-600' : ''}">
+            <i class="fas fa-cog mr-3"></i>Admin
+          </a>
+          ` : ''}
+        `
+        
+        mobileNavActions.innerHTML = `
+          <button onclick="app.logout()" class="w-full text-left px-4 py-3 text-red-600 hover:bg-red-50">
+            <i class="fas fa-sign-out-alt mr-3"></i>Abmelden
+          </button>
+        `
+      }
+    } else {
+      // Public navigation
+      navMenu.innerHTML = `
+        <a href="#features" class="text-gray-700 hover:text-blue-600 transition-colors px-3 py-2">Features</a>
+        <button onclick="app.openDemo()" class="text-gray-700 hover:text-blue-600 transition-colors px-3 py-2">Demo</button>
+      `
+      
+      navActions.innerHTML = `
+        <a href="/auth" class="bg-blue-600 text-white px-3 py-2 sm:px-4 sm:py-2 rounded-md hover:bg-blue-700 transition-colors text-sm sm:text-base">
+          Anmelden
+        </a>
+      `
+      
+      // Mobile public navigation
+      if (mobileNavMenu && mobileNavActions) {
+        mobileNavMenu.innerHTML = `
+          <a href="#features" class="block px-4 py-3 text-gray-700 hover:bg-gray-50">Features</a>
+          <button onclick="app.openDemo()" class="block w-full text-left px-4 py-3 text-gray-700 hover:bg-gray-50">Demo</button>
+        `
+        
+        mobileNavActions.innerHTML = `
+          <a href="/auth" class="block bg-blue-600 text-white px-4 py-3 text-center rounded-md hover:bg-blue-700 transition-colors">
+            Anmelden
+          </a>
+        `
+      }
+    }
+    
+    // Show navigation
+    navMenu.classList.remove('hidden')
+    navMenu.classList.add('md:flex', 'space-x-2', 'lg:space-x-4')
+    navActions.classList.remove('hidden')
+    navActions.classList.add('md:flex')
+    
+    // Setup mobile menu toggle
+    this.setupMobileMenu()
+  }
+  
+  setupMobileMenu() {
+    const mobileMenuBtn = document.getElementById('mobile-menu-btn')
+    const mobileMenu = document.getElementById('mobile-menu')
+    
+    if (mobileMenuBtn && mobileMenu) {
+      mobileMenuBtn.onclick = () => {
+        const isHidden = mobileMenu.classList.contains('hidden')
+        if (isHidden) {
+          mobileMenu.classList.remove('hidden')
+          mobileMenuBtn.innerHTML = '<i class="fas fa-times text-xl"></i>'
+        } else {
+          mobileMenu.classList.add('hidden')
+          mobileMenuBtn.innerHTML = '<i class="fas fa-bars text-xl"></i>'
+        }
+      }
+    }
+  }
+
   loadPageContent() {
     const path = window.location.pathname
     
@@ -779,15 +1095,572 @@ class SupplementApp {
     }
   }
 
-  // Placeholder functions for missing functionality
-  editProduct(id) { this.showError('Produkt bearbeiten - wird implementiert') }
-  deleteProduct(id) { this.showError('Produkt löschen - wird implementiert') }
-  addToWishlist(id) { this.showSuccess('Zur Wunschliste hinzugefügt') }
-  editStack(id) { this.showError('Stack bearbeiten - wird implementiert') }
-  deleteStack(id) { this.showError('Stack löschen - wird implementiert') }
-  viewStack(id) { this.showError('Stack Details - wird implementiert') }
-  addNutrientField() { this.showError('Nährstoff-Feld hinzufügen - wird implementiert') }
-  loadProductsForStack() { this.showError('Produkte für Stack laden - wird implementiert') }
+  // Stack-Funktionen
+  async editStack(id) {
+    try {
+      this.showLoading('Lade Stack-Daten...')
+      const response = await axios.get(`/api/protected/stacks/${id}`)
+      
+      if (response.data && response.data.success) {
+        const stack = response.data.data
+        this.showStackEditModal(stack)
+      }
+    } catch (error) {
+      console.error('Error loading stack:', error)
+      this.showError('Fehler beim Laden des Stacks')
+    } finally {
+      this.hideLoading()
+    }
+  }
+
+  async deleteStack(id) {
+    if (!confirm('Möchten Sie diesen Stack wirklich löschen?')) {
+      return
+    }
+
+    try {
+      this.showLoading('Lösche Stack...')
+      const response = await axios.delete(`/api/protected/stacks/${id}`)
+      
+      if (response.data && response.data.success) {
+        this.showSuccess('Stack erfolgreich gelöscht')
+        this.loadStacks()
+      }
+    } catch (error) {
+      console.error('Error deleting stack:', error)
+      this.showError('Fehler beim Löschen des Stacks')
+    } finally {
+      this.hideLoading()
+    }
+  }
+
+  async viewStack(id) {
+    try {
+      this.showLoading('Lade Stack-Details...')
+      const response = await axios.get(`/api/protected/stacks/${id}`)
+      
+      if (response.data && response.data.success) {
+        const stack = response.data.data
+        this.showStackDetailsModal(stack)
+      }
+    } catch (error) {
+      console.error('Error loading stack details:', error)
+      this.showError('Fehler beim Laden der Stack-Details')
+    } finally {
+      this.hideLoading()
+    }
+  }
+
+  showStackEditModal(stack) {
+    const modalContent = `
+      <form id="edit-stack-form" class="space-y-4">
+        <input type="hidden" name="stack_id" value="${stack.id}">
+        
+        <div>
+          <label class="form-label">Stack-Name *</label>
+          <input type="text" name="name" value="${this.escapeHtml(stack.name)}" required 
+                 class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+        </div>
+        
+        <div>
+          <label class="form-label">Beschreibung</label>
+          <textarea name="description" rows="3" 
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500">${this.escapeHtml(stack.description || '')}</textarea>
+        </div>
+        
+        <div>
+          <label class="form-label">Produkte im Stack</label>
+          <div id="stack-products" class="space-y-2 max-h-60 overflow-y-auto">
+            ${(stack.products || []).map(product => `
+              <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div class="flex-1">
+                  <div class="font-medium">${this.escapeHtml(product.name)}</div>
+                  <div class="text-sm text-gray-600">${this.escapeHtml(product.brand)} - ${this.escapeHtml(product.form)}</div>
+                </div>
+                <div class="flex items-center space-x-2">
+                  <input type="number" name="dosage_${product.product_id}" value="${product.dosage_per_day}" 
+                         min="0.1" step="0.1" class="w-16 px-2 py-1 border border-gray-300 rounded text-sm">
+                  <span class="text-sm text-gray-500">x täglich</span>
+                  <button type="button" onclick="this.parentElement.parentElement.parentElement.remove()" 
+                          class="text-red-600 hover:text-red-500 p-1">
+                    <i class="fas fa-times"></i>
+                  </button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+          <button type="button" onclick="app.showAddProductToStackModal(${stack.id})" 
+                  class="mt-2 text-blue-600 hover:text-blue-500 text-sm">
+            <i class="fas fa-plus mr-1"></i>Produkt hinzufügen
+          </button>
+        </div>
+      </form>
+    `
+    
+    this.showModal(`Stack bearbeiten: ${stack.name}`, modalContent, this.handleEditStack.bind(this))
+  }
+
+  showStackDetailsModal(stack) {
+    const modalContent = `
+      <div class="space-y-4">
+        <div>
+          <h3 class="text-lg font-semibold text-gray-900 mb-2">${this.escapeHtml(stack.name)}</h3>
+          <p class="text-gray-600">${this.escapeHtml(stack.description || 'Keine Beschreibung')}</p>
+        </div>
+        
+        <div>
+          <h4 class="font-medium text-gray-900 mb-3">Produkte (${(stack.products || []).length})</h4>
+          <div class="space-y-3 max-h-80 overflow-y-auto">
+            ${(stack.products || []).map(product => `
+              <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div class="flex-1">
+                  <div class="font-medium">${this.escapeHtml(product.name)}</div>
+                  <div class="text-sm text-gray-600">${this.escapeHtml(product.brand)} - ${this.escapeHtml(product.form)}</div>
+                  <div class="text-xs text-gray-500 mt-1">
+                    €${product.price_per_package} • ${product.servings_per_package} Portionen
+                  </div>
+                </div>
+                <div class="text-right">
+                  <div class="font-medium">${product.dosage_per_day}x täglich</div>
+                  <div class="text-sm text-green-600">€${((product.price_per_package / product.servings_per_package) * product.dosage_per_day * 30).toFixed(2)}/Monat</div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+        
+        <div class="border-t pt-4">
+          <div class="grid grid-cols-2 gap-4 text-center">
+            <div>
+              <div class="text-sm text-gray-500 mb-1">Gesamter Kaufpreis</div>
+              <div class="text-lg font-semibold text-gray-900">€${(stack.total_purchase_cost || 0).toFixed(2)}</div>
+            </div>
+            <div>
+              <div class="text-sm text-gray-500 mb-1">Monatliche Kosten</div>
+              <div class="text-lg font-semibold text-green-600">€${(stack.monthly_cost || 0).toFixed(2)}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="flex justify-end space-x-3 mt-6">
+        <button onclick="app.hideModal()" class="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors">
+          Schließen
+        </button>
+        <button onclick="app.editStack(${stack.id}); app.hideModal()" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
+          Bearbeiten
+        </button>
+      </div>
+    `
+    
+    this.showModal(`Stack-Details: ${stack.name}`, modalContent, null, false)
+  }
+
+  async handleEditStack(formData) {
+    try {
+      this.showLoading('Speichere Änderungen...')
+      
+      const stackId = formData.get('stack_id')
+      const stackData = {
+        name: formData.get('name'),
+        description: formData.get('description') || null
+      }
+
+      const response = await axios.put(`/api/protected/stacks/${stackId}`, stackData)
+      
+      if (response.data && response.data.success) {
+        this.showSuccess('Stack erfolgreich aktualisiert!')
+        this.hideModal()
+        this.loadStacks()
+        
+        // Reload dashboard if we're on it
+        if (window.location.pathname === '/dashboard') {
+          this.loadDashboardData()
+        }
+      }
+    } catch (error) {
+      console.error('Error updating stack:', error)
+      this.showError(error.response?.data?.error || 'Fehler beim Aktualisieren des Stacks')
+    } finally {
+      this.hideLoading()
+    }
+  }
+
+  // Produktfunktionen
+  selectedProducts = new Set() // Für Produkt-Auswahl
+  
+  async showProductDetails(id) {
+    try {
+      this.showLoading('Lade Produktdetails...')
+      const response = await axios.get(`/api/protected/products/${id}`)
+      
+      if (response.data && response.data.success) {
+        const product = response.data.data
+        this.displayProductDetailsModal(product)
+      }
+    } catch (error) {
+      console.error('Error loading product details:', error)
+      this.showError('Fehler beim Laden der Produktdetails')
+    } finally {
+      this.hideLoading()
+    }
+  }
+  
+  displayProductDetailsModal(product) {
+    let benefits = []
+    let warnings = []
+    
+    try {
+      benefits = product.benefits ? JSON.parse(product.benefits) : []
+      warnings = product.warnings ? product.warnings.split('\n').filter(w => w.trim()) : []
+    } catch (e) {
+      benefits = []
+      warnings = []
+    }
+    
+    const modalContent = `
+      <div class="space-y-6">
+        <!-- Header mit Bild -->
+        <div class="flex flex-col sm:flex-row gap-4">
+          <div class="w-full sm:w-32 h-32 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
+            ${product.image_url ? `
+              <img src="${product.image_url}" alt="${this.escapeHtml(product.name)}" 
+                   class="w-full h-full object-cover">
+            ` : `
+              <div class="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-50 to-blue-100">
+                <i class="fas fa-pills text-2xl text-blue-300"></i>
+              </div>
+            `}
+          </div>
+          
+          <div class="flex-1">
+            <h2 class="text-xl font-bold text-gray-900 mb-2">${this.escapeHtml(product.name)}</h2>
+            <p class="text-gray-600 mb-2">${this.escapeHtml(product.brand)} • ${this.escapeHtml(product.form)}</p>
+            ${product.category ? `
+              <span class="inline-block bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm font-medium">
+                ${this.escapeHtml(product.category)}
+              </span>
+            ` : ''}
+          </div>
+        </div>
+        
+        <!-- Beschreibung -->
+        ${product.description ? `
+          <div>
+            <h3 class="font-semibold text-gray-900 mb-2">Beschreibung</h3>
+            <p class="text-gray-700">${this.escapeHtml(product.description)}</p>
+          </div>
+        ` : ''}
+        
+        <!-- Wofür ist es gut -->
+        ${benefits.length > 0 ? `
+          <div>
+            <h3 class="font-semibold text-gray-900 mb-3">Wofür ist es gut?</h3>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              ${benefits.map(benefit => `
+                <div class="flex items-start text-sm">
+                  <i class="fas fa-check-circle text-green-500 mr-2 mt-0.5 flex-shrink-0"></i>
+                  <span class="text-gray-700">${this.escapeHtml(benefit)}</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+        
+        <!-- Nährstoffe -->
+        <div>
+          <h3 class="font-semibold text-gray-900 mb-3">Inhaltsstoffe</h3>
+          <div class="space-y-2">
+            ${(product.nutrients || []).map(nutrient => `
+              <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                <div>
+                  <span class="font-medium text-gray-900">${this.escapeHtml(nutrient.name)}</span>
+                </div>
+                <div class="text-right">
+                  <div class="font-semibold text-gray-900">${nutrient.amount} ${nutrient.unit}</div>
+                  ${nutrient.dge_recommended ? `
+                    <div class="text-xs text-gray-500">DGE: ${nutrient.dge_recommended} ${nutrient.unit}</div>
+                  ` : ''}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+        
+        <!-- Dosierung -->
+        ${product.dosage_recommendation ? `
+          <div>
+            <h3 class="font-semibold text-gray-900 mb-2">Dosierungsempfehlung</h3>
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <i class="fas fa-info-circle text-blue-600 mr-2"></i>
+              <span class="text-blue-800">${this.escapeHtml(product.dosage_recommendation)}</span>
+            </div>
+          </div>
+        ` : ''}
+        
+        <!-- Warnhinweise -->
+        ${warnings.length > 0 ? `
+          <div>
+            <h3 class="font-semibold text-gray-900 mb-2">Wichtige Hinweise</h3>
+            <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+              ${warnings.map(warning => `
+                <div class="flex items-start text-sm text-yellow-800 mb-1">
+                  <i class="fas fa-exclamation-triangle text-yellow-600 mr-2 mt-0.5 flex-shrink-0"></i>
+                  <span>${this.escapeHtml(warning)}</span>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+        
+        <!-- Kosten und Verfügbarkeit -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+            <h4 class="font-semibold text-green-800 mb-2">Preisinformationen</h4>
+            <div class="space-y-1 text-sm">
+              <div class="flex justify-between">
+                <span class="text-green-700">Kaufpreis:</span>
+                <span class="font-semibold">€${product.price_per_package.toFixed(2)}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-green-700">Pro Portion:</span>
+                <span class="font-semibold">€${(product.price_per_package / product.servings_per_package).toFixed(3)}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-green-700">Pro Monat:</span>
+                <span class="font-semibold">€${(product.price_per_package / product.servings_per_package * 30).toFixed(2)}</span>
+              </div>
+            </div>
+          </div>
+          
+          <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <h4 class="font-semibold text-blue-800 mb-2">Packungsinhalt</h4>
+            <div class="space-y-1 text-sm">
+              <div class="flex justify-between">
+                <span class="text-blue-700">Portionen:</span>
+                <span class="font-semibold">${product.servings_per_package}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-blue-700">Haltbarkeit:</span>
+                <span class="font-semibold">${product.servings_per_package} Tage*</span>
+              </div>
+              <div class="text-xs text-blue-600 mt-2">*bei 1x täglicher Einnahme</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Footer mit Aktionen -->
+      <div class="flex flex-col sm:flex-row gap-3 mt-6 pt-4 border-t border-gray-200">
+        <button onclick="app.hideModal()" 
+                class="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors">
+          Schließen
+        </button>
+        <button onclick="app.addToStack(${product.id}); app.hideModal()" 
+                class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors">
+          <i class="fas fa-plus mr-2"></i>Zu Stack hinzufügen
+        </button>
+        <button onclick="app.editProduct(${product.id}); app.hideModal()" 
+                class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
+          <i class="fas fa-edit mr-2"></i>Bearbeiten
+        </button>
+        <a href="${product.shop_url}" target="_blank" 
+           class="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors text-center">
+          <i class="fas fa-shopping-cart mr-2"></i>Jetzt kaufen
+        </a>
+      </div>
+    `
+    
+    this.showModal(`${product.name} - Details`, modalContent, null, false)
+  }
+
+  toggleProductSelection(id) {
+    if (this.selectedProducts.has(id)) {
+      this.selectedProducts.delete(id)
+    } else {
+      this.selectedProducts.add(id)
+    }
+    this.updateSelectedProductsUI()
+  }
+  
+  updateSelectedProductsUI() {
+    const count = this.selectedProducts.size
+    // Aktualisiere UI für ausgewählte Produkte
+    console.log(`${count} Produkte ausgewählt:`, Array.from(this.selectedProducts))
+  }
+
+  async editProduct(id) {
+    try {
+      this.showLoading('Lade Produktdaten...')
+      const response = await axios.get(`/api/protected/products/${id}`)
+      
+      if (response.data && response.data.success) {
+        const product = response.data.data
+        this.showProductEditModal(product)
+      }
+    } catch (error) {
+      console.error('Error loading product:', error)
+      this.showError('Fehler beim Laden der Produktdaten')
+    } finally {
+      this.hideLoading()
+    }
+  }
+
+  showProductEditModal(product) {
+    let benefits = []
+    try {
+      benefits = product.benefits ? JSON.parse(product.benefits) : []
+    } catch (e) {
+      benefits = []
+    }
+    
+    const modalContent = `
+      <form id="edit-product-form" class="space-y-4">
+        <input type="hidden" name="product_id" value="${product.id}">
+        
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="form-label">Produktname *</label>
+            <input type="text" name="name" value="${this.escapeHtml(product.name)}" required class="form-input">
+          </div>
+          <div>
+            <label class="form-label">Marke *</label>
+            <input type="text" name="brand" value="${this.escapeHtml(product.brand)}" required class="form-input">
+          </div>
+        </div>
+        
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div>
+            <label class="form-label">Form *</label>
+            <select name="form" required class="form-input">
+              <option value="">Auswählen</option>
+              <option value="Kapsel" ${product.form === 'Kapsel' ? 'selected' : ''}>Kapsel</option>
+              <option value="Tablette" ${product.form === 'Tablette' ? 'selected' : ''}>Tablette</option>
+              <option value="Tropfen" ${product.form === 'Tropfen' ? 'selected' : ''}>Tropfen</option>
+              <option value="Pulver" ${product.form === 'Pulver' ? 'selected' : ''}>Pulver</option>
+              <option value="Öl" ${product.form === 'Öl' ? 'selected' : ''}>Öl</option>
+            </select>
+          </div>
+          <div>
+            <label class="form-label">Preis (€) *</label>
+            <input type="number" name="price" step="0.01" value="${product.price_per_package}" required class="form-input">
+          </div>
+          <div>
+            <label class="form-label">Portionen *</label>
+            <input type="number" name="servings" value="${product.servings_per_package}" required class="form-input">
+          </div>
+        </div>
+        
+        <div>
+          <label class="form-label">Beschreibung</label>
+          <textarea name="description" rows="2" class="form-input">${this.escapeHtml(product.description || '')}</textarea>
+        </div>
+        
+        <div>
+          <label class="form-label">Kategorie</label>
+          <select name="category" class="form-input">
+            <option value="">Auswählen</option>
+            <option value="Vitamin" ${product.category === 'Vitamin' ? 'selected' : ''}>Vitamin</option>
+            <option value="Mineral" ${product.category === 'Mineral' ? 'selected' : ''}>Mineral</option>
+            <option value="Fettsäure" ${product.category === 'Fettsäure' ? 'selected' : ''}>Fettsäure</option>
+            <option value="Aminosäure" ${product.category === 'Aminosäure' ? 'selected' : ''}>Aminosäure</option>
+            <option value="Antioxidans" ${product.category === 'Antioxidans' ? 'selected' : ''}>Antioxidans</option>
+          </select>
+        </div>
+        
+        <div>
+          <label class="form-label">Shop-URL *</label>
+          <input type="url" name="shop_url" value="${product.shop_url}" required class="form-input">
+        </div>
+        
+        <div>
+          <label class="form-label">Bild-URL</label>
+          <input type="url" name="image_url" value="${product.image_url || ''}" class="form-input">
+        </div>
+        
+        <div>
+          <label class="form-label">Dosierungsempfehlung</label>
+          <input type="text" name="dosage_recommendation" value="${this.escapeHtml(product.dosage_recommendation || '')}" class="form-input">
+        </div>
+      </form>
+    `
+    
+    this.showModal(`Produkt bearbeiten: ${product.name}`, modalContent, this.handleEditProduct.bind(this))
+  }
+
+  async handleEditProduct(formData) {
+    try {
+      this.showLoading('Speichere Änderungen...')
+      
+      const productId = formData.get('product_id')
+      const productData = {
+        name: formData.get('name'),
+        brand: formData.get('brand'),
+        form: formData.get('form'),
+        price_per_package: parseFloat(formData.get('price')),
+        servings_per_package: parseInt(formData.get('servings')),
+        shop_url: formData.get('shop_url'),
+        image_url: formData.get('image_url') || null,
+        description: formData.get('description') || null,
+        category: formData.get('category') || null,
+        dosage_recommendation: formData.get('dosage_recommendation') || null
+      }
+
+      const response = await axios.put(`/api/protected/products/${productId}`, productData)
+      
+      if (response.data && response.data.success) {
+        this.showSuccess('Produkt erfolgreich aktualisiert!')
+        this.hideModal()
+        this.loadProducts()
+      }
+    } catch (error) {
+      console.error('Error updating product:', error)
+      this.showError(error.response?.data?.error || 'Fehler beim Aktualisieren des Produkts')
+    } finally {
+      this.hideLoading()
+    }
+  }
+
+  async deleteProduct(id) {
+    if (!confirm('Möchten Sie dieses Produkt wirklich löschen?')) {
+      return
+    }
+
+    try {
+      this.showLoading('Lösche Produkt...')
+      const response = await axios.delete(`/api/protected/products/${id}`)
+      
+      if (response.data && response.data.success) {
+        this.showSuccess('Produkt erfolgreich gelöscht')
+        this.loadProducts()
+      }
+    } catch (error) {
+      console.error('Error deleting product:', error)
+      this.showError('Fehler beim Löschen des Produkts')
+    } finally {
+      this.hideLoading()
+    }
+  }
+
+  toggleWishlist(id) { 
+    this.showSuccess('Zur Wunschliste hinzugefügt') 
+  }
+  
+  addToStack(id) { 
+    this.showError('Zu Stack hinzufügen - wird implementiert') 
+  }
+  
+  addNutrientField() { 
+    this.showError('Nährstoff-Feld hinzufügen - wird implementiert') 
+  }
+  
+  loadProductsForStack() { 
+    this.showError('Produkte für Stack laden - wird implementiert') 
+  }
+  
+  showAddProductToStackModal(stackId) { 
+    this.showError('Produkt zu Stack hinzufügen - wird implementiert') 
+  }
 }
 
 // Landing page specific functionality
