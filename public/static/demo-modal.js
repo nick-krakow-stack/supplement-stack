@@ -321,7 +321,7 @@ class SupplementDemoApp {
         unit: 'IE', 
         category: 'Vitamine', 
         dge_recommendation: 800, 
-        upper_limit: 4000, 
+        dge_upper_limit: 4000, 
         description: 'Wichtig für Knochengesundheit und Immunsystem',
         study_recommendation: 2000,
         study_url: 'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6266123/',
@@ -333,7 +333,7 @@ class SupplementDemoApp {
         unit: 'µg', 
         category: 'Vitamine', 
         dge_recommendation: 4, 
-        upper_limit: 1000, 
+        dge_upper_limit: 1000, 
         description: 'Essential für Nervensystem und Blutbildung' 
       },
       { 
@@ -342,7 +342,7 @@ class SupplementDemoApp {
         unit: 'mg', 
         category: 'Mineralien', 
         dge_recommendation: 375, 
-        upper_limit: 350, 
+        dge_upper_limit: 350, 
         description: 'Wichtig für Muskeln und Energiestoffwechsel',
         study_recommendation: 400,
         study_url: 'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5637834/',
@@ -354,7 +354,7 @@ class SupplementDemoApp {
         unit: 'mg', 
         category: 'Fettsäuren', 
         dge_recommendation: 250, 
-        upper_limit: 5000, 
+        dge_upper_limit: 5000, 
         description: 'Omega-3-Fettsäure für Herz und Gehirn' 
       },
       { 
@@ -363,7 +363,7 @@ class SupplementDemoApp {
         unit: 'mg', 
         category: 'Mineralien', 
         dge_recommendation: 10, 
-        upper_limit: 25, 
+        dge_upper_limit: 25, 
         description: 'Essential für Immunsystem und Wundheilung' 
       },
       { 
@@ -372,7 +372,7 @@ class SupplementDemoApp {
         unit: 'mg', 
         category: 'Vitamine', 
         dge_recommendation: 110, 
-        upper_limit: 1000, 
+        dge_upper_limit: 1000, 
         description: 'Antioxidans und Kollagenbildung',
         study_recommendation: 1000,
         study_url: 'https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7579810/',
@@ -384,7 +384,7 @@ class SupplementDemoApp {
         unit: 'mg', 
         category: 'Vitamine', 
         dge_recommendation: 1.4, 
-        upper_limit: 25, 
+        dge_upper_limit: 25, 
         description: 'Aminosäurestoffwechsel und Nervenfunktion' 
       },
       { 
@@ -393,7 +393,7 @@ class SupplementDemoApp {
         unit: 'µg', 
         category: 'Vitamine', 
         dge_recommendation: 400, 
-        upper_limit: 1000, 
+        dge_upper_limit: 1000, 
         description: 'DNA-Synthese und Zellteilung' 
       },
       { 
@@ -402,7 +402,7 @@ class SupplementDemoApp {
         unit: 'mg', 
         category: 'Mineralien', 
         dge_recommendation: 15, 
-        upper_limit: 45, 
+        dge_upper_limit: 45, 
         description: 'Sauerstofftransport und Energiestoffwechsel' 
       },
       { 
@@ -411,7 +411,7 @@ class SupplementDemoApp {
         unit: 'mg', 
         category: 'Mineralien', 
         dge_recommendation: 1000, 
-        upper_limit: 2500, 
+        dge_upper_limit: 2500, 
         description: 'Knochen- und Zahngesundheit' 
       },
       { 
@@ -420,7 +420,7 @@ class SupplementDemoApp {
         unit: 'mg', 
         category: 'Aminosäuren', 
         dge_recommendation: 300, 
-        upper_limit: 3000, 
+        dge_upper_limit: 3000, 
         description: 'Unterstützt Fettstoffwechsel und Energieproduktion' 
       }
     ]
@@ -435,30 +435,26 @@ class SupplementDemoApp {
     
     const html = this.products.map(product => `
       <div class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow overflow-hidden">
-        <!-- Produktbild -->
-        ${product.product_image ? `
-          <div class="aspect-w-16 aspect-h-12 bg-gray-200">
-            <img src="${product.product_image}" alt="${product.name}" class="w-full h-32 object-cover">
-          </div>
-        ` : ''}
-        
         <div class="p-4">
+          <!-- Subtiles kleines Produktbild in der Ecke -->
           <div class="flex items-start justify-between mb-2">
-            <h3 class="font-semibold text-gray-900 text-sm sm:text-base flex-1 pr-2">${product.name}</h3>
-            <div class="flex space-x-1">
-              <button data-action="details" data-product-id="${product.id}" class="p-1 text-gray-400 hover:text-blue-600 touch-target" title="Details">
-                <i class="fas fa-eye text-sm"></i>
-              </button>
-              <button data-action="edit" data-product-id="${product.id}" class="p-1 text-gray-400 hover:text-blue-600 touch-target" title="Bearbeiten">
-                <i class="fas fa-edit text-sm"></i>
-              </button>
-              <button data-action="delete" data-product-id="${product.id}" class="p-1 text-gray-400 hover:text-red-600 touch-target" title="Löschen">
-                <i class="fas fa-trash text-sm"></i>
-              </button>
+            <div class="flex-1 pr-3">
+              <h3 class="font-semibold text-gray-900 text-sm sm:text-base mb-1">${product.name}</h3>
+              <p class="text-xs sm:text-sm text-gray-600">${product.brand} • ${product.form}</p>
             </div>
+            
+            <!-- Kleines subtiles Produktbild -->
+            ${product.product_image ? `
+              <div class="w-12 h-12 sm:w-16 sm:h-16 flex-shrink-0 rounded-lg overflow-hidden bg-gray-100 border border-gray-200">
+                <img src="${product.product_image}" alt="${product.name}" class="w-full h-full object-cover opacity-80">
+              </div>
+            ` : `
+              <div class="w-12 h-12 sm:w-16 sm:h-16 flex-shrink-0 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center">
+                <i class="fas fa-pills text-gray-400 text-sm"></i>
+              </div>
+            `}
           </div>
-          
-          <p class="text-xs sm:text-sm text-gray-600 mb-3">${product.brand} • ${product.form}</p>
+
           
           <div class="bg-blue-50 rounded-lg p-3 mb-3">
             ${(() => {
@@ -1056,26 +1052,26 @@ class SupplementDemoApp {
     
     dosageSafety.classList.remove('hidden')
     
-    if (amount > nutrient.upper_limit) {
+    if (amount > nutrient.dge_upper_limit) {
       // Gefährlich hoch
       dosageSafety.className = 'p-3 rounded-lg border border-red-200 bg-red-50 mb-4'
-      safetyTitle.textContent = 'Achtung: Obere Grenze überschritten!'
+      safetyTitle.textContent = 'Hinweis: Über DGE-Empfehlung'
       safetyTitle.className = 'font-medium mb-1 text-red-800'
-      safetyMessage.textContent = `Die Dosierung liegt über der sicheren Obergrenze von ${nutrient.upper_limit}${nutrient.unit}. Konsultieren Sie einen Arzt.`
+      safetyMessage.innerHTML = `Die Dosierung liegt über der <a href="https://dge.de" target="_blank" class="text-blue-600 underline">DGE-Obergrenze</a> von ${nutrient.dge_upper_limit}${nutrient.unit}. <a href="https://dge.de" target="_blank" class="text-blue-600 underline">Mehr Infos bei der DGE</a>`
       safetyMessage.className = 'text-red-700'
     } else if (amount > nutrient.dge_recommendation * 2) {
       // Hoch aber noch sicher
       dosageSafety.className = 'p-3 rounded-lg border border-yellow-200 bg-yellow-50 mb-4'
       safetyTitle.textContent = 'Hohe Dosierung'
       safetyTitle.className = 'font-medium mb-1 text-yellow-800'
-      safetyMessage.textContent = `Diese Dosierung ist ${Math.round(amount / nutrient.dge_recommendation)}x höher als die DGE-Empfehlung, aber noch im sicheren Bereich.`
+      safetyMessage.innerHTML = `Diese Dosierung ist ${Math.round(amount / nutrient.dge_recommendation)}x höher als die <a href="https://dge.de" target="_blank" class="text-blue-600 underline">DGE-Empfehlung</a>.`
       safetyMessage.className = 'text-yellow-700'
     } else {
       // Sicher
       dosageSafety.className = 'p-3 rounded-lg border border-green-200 bg-green-50 mb-4'
-      safetyTitle.textContent = 'Sichere Dosierung'
+      safetyTitle.textContent = 'Innerhalb DGE-Empfehlung'
       safetyTitle.className = 'font-medium mb-1 text-green-800'
-      safetyMessage.textContent = `Diese Dosierung liegt im empfohlenen Bereich (${Math.round(amount / nutrient.dge_recommendation * 100)}% der DGE-Empfehlung).`
+      safetyMessage.innerHTML = `Diese Dosierung entspricht ${Math.round(amount / nutrient.dge_recommendation * 100)}% der <a href="https://dge.de" target="_blank" class="text-blue-600 underline">DGE-Empfehlung</a>.`
       safetyMessage.className = 'text-green-700'
     }
   }
@@ -1254,26 +1250,21 @@ class SupplementDemoApp {
   addSelectedProductToStack(product, nutrient, dosage) {
     console.log('[Demo Modal] Produkt zu Stack hinzugefügt:', product.name, 'Dosierung:', dosage.amount + dosage.unit)
     
-    // Prüfung auf doppelte Produkte
-    const existingProduct = this.products.find(p => p.id === product.id)
-    if (existingProduct) {
-      this.showDuplicateProductDialog(product, nutrient, dosage, existingProduct)
-      return
-    }
-    
-    // Prüfung auf gleichen Wirkstoff (verschiedene Produkte)
-    const existingNutrient = this.products.find(p => {
+    // HAUPTPRÜFUNG: Prüfung auf gleichen Wirkstoff/Nährstoff (wichtiger als Produkt)
+    const existingNutrientProduct = this.products.find(p => {
       if (p.main_nutrients) {
         return p.main_nutrients.some(n => n.nutrient_id === nutrient.id)
       }
       return p.nutrient_id === nutrient.id // Fallback für alte Struktur
     })
     
-    if (existingNutrient && existingNutrient.id !== product.id) {
-      this.showDuplicateNutrientDialog(product, nutrient, dosage, existingNutrient)
+    if (existingNutrientProduct) {
+      // Gleicher Nährstoff bereits im Stack - egal ob gleiches oder anderes Produkt
+      this.showDuplicateNutrientDialog(product, nutrient, dosage, existingNutrientProduct)
       return
     }
     
+    // Wenn kein Nährstoff-Konflikt: Direkt hinzufügen
     this.finalizeAddProduct(product, nutrient, dosage)
   }
 
@@ -1956,18 +1947,18 @@ class SupplementDemoApp {
             <span class="font-medium ${dgePercent >= 100 ? 'text-green-600' : 'text-orange-500'}">${dgePercent}%</span>
           </div>
           <div class="flex justify-between items-center py-2">
-            <span class="text-gray-600">Obere Grenze:</span>
-            <span class="font-medium ${dailyAmount > nutrient.upper_limit ? 'text-red-600' : 'text-gray-900'}">${nutrient.upper_limit}${nutrient.unit}</span>
+            <span class="text-gray-600">DGE-Obergrenze:</span>
+            <span class="font-medium ${dailyAmount > nutrient.dge_upper_limit ? 'text-red-600' : 'text-gray-900'}">${nutrient.dge_upper_limit}${nutrient.unit}</span>
           </div>
         </div>
         
-        ${dailyAmount > nutrient.upper_limit ? `
+        ${dailyAmount > nutrient.dge_upper_limit ? `
           <div class="bg-red-50 border border-red-200 rounded-lg p-3">
             <div class="flex items-center text-red-800">
               <i class="fas fa-exclamation-triangle mr-2"></i>
-              <span class="font-medium">Achtung: Obere Grenze überschritten!</span>
+              <span class="font-medium">Hinweis: Liegt über DGE-Empfehlung</span>
             </div>
-            <p class="text-red-700 text-sm mt-1">Die tägliche Aufnahme liegt über der empfohlenen Obergrenze.</p>
+            <p class="text-red-700 text-sm mt-1">Die tägliche Aufnahme liegt über der <a href="https://dge.de" target="_blank" class="text-blue-600 underline">DGE-Obergrenze</a>.</p>
           </div>
         ` : ''}
       </div>
