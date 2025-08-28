@@ -1006,7 +1006,42 @@ function getDemoHTML() {
             </div>
         </div>
 
-        <!-- Demo Stack wird dynamisch generiert -->
+        <!-- Stack-Bereich wie im Screenshot -->
+        <div class="bg-white rounded-lg shadow mt-8">
+            <div class="p-6 border-b border-gray-200">
+                <h2 class="text-lg font-semibold text-gray-900 flex items-center">
+                    <i class="fas fa-leaf text-green-600 mr-2"></i>
+                    Allgemeine Versorgung
+                </h2>
+            </div>
+            <div class="p-6">
+                <div id="demo-stack-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+                    <!-- Stack-Produkte werden hier dynamisch eingefügt -->
+                </div>
+                
+                <!-- Stack-Summary wie im Screenshot -->
+                <div id="stack-summary" class="border-t border-gray-200 pt-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <span class="text-sm text-gray-600">Gewählte Supplements</span>
+                            <div class="flex items-center space-x-6 mt-2">
+                                <div>
+                                    <span class="text-sm text-gray-600">Einmalkosten</span>
+                                    <div id="total-purchase-cost" class="text-lg font-bold text-gray-900">€0,00</div>
+                                </div>
+                                <div>
+                                    <span class="text-sm text-gray-600">Pro Monat</span>
+                                    <div id="total-monthly-cost" class="text-lg font-bold text-green-600">€0,00</div>
+                                </div>
+                            </div>
+                        </div>
+                        <button id="select-all-supplements" class="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition-colors">
+                            Alle auswählen
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
   `)
 }

@@ -18,6 +18,9 @@ class SupplementDemoApp {
     // Demo-Stack mit ein paar Produkten vorbesetzen
     this.addDemoStackProducts()
     
+    // Stack-Rendering nach DOM-Load
+    setTimeout(() => this.renderStack(), 500)
+    
     this.updateStats()
     console.log(`[Demo Modal] Initialisierung abgeschlossen - ${this.availableProducts.length} verfügbare Produkte, ${this.products.length} im Stack`)
   }
@@ -527,7 +530,110 @@ class SupplementDemoApp {
     `).join('')
     
     grid.innerHTML = html
-    console.log('[Demo Modal] Produkte gerendert:', this.products.length)
+    console.log('[Demo Modal] Produkte gerendert:', this.availableProducts.length)
+    
+    // Render auch den Stack
+    this.renderStack()
+  }
+
+  renderStack() {
+    const stackGrid = document.getElementById('demo-stack-grid')
+    if (!stackGrid) {
+      console.log('[Demo Modal] Stack-Grid nicht gefunden - wird später geladen')
+      return
+    }
+    
+    const html = this.products.map((product, index) => {
+      // Verschiedene Einnahmezeiten für Demo
+      const intakeTimes = ['Nach dem Aufstehen', 'Zum Frühstück', 'Zum Mittagessen', 'Am Abend']
+      const intakeTime = intakeTimes[index % intakeTimes.length]
+      
+      // Verschiedene Farben für Intake-Labels
+      const labelColors = ['bg-orange-100 text-orange-800', 'bg-green-100 text-green-800', 'bg-blue-100 text-blue-800', 'bg-purple-100 text-purple-800']
+      const labelColor = labelColors[index % labelColors.length]
+      
+      return `
+        <div class="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-lg transition-shadow">
+          <!-- Checkbox oben rechts -->
+          <div class="flex justify-between items-start mb-3">
+            <div></div>
+            <input type="checkbox" class="product-checkbox w-5 h-5 text-blue-600 rounded" data-product-id="${product.id}" checked>
+          </div>
+          
+          <!-- Produktbild und Info -->
+          <div class="flex items-start mb-4">
+            ${product.product_image ? `
+              <div class="w-16 h-16 flex-shrink-0 rounded-lg overflow-hidden bg-gray-100 border border-gray-200 mr-3">
+                <img src="${product.product_image}" alt="${product.name}" class="w-full h-full object-cover">
+              </div>
+            ` : `
+              <div class="w-16 h-16 flex-shrink-0 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center mr-3">
+                <i class="fas fa-pills text-gray-400 text-lg"></i>
+              </div>
+            `}
+            
+            <div class="flex-1">
+              <h3 class="font-semibold text-gray-900 text-sm mb-1">${product.name}</h3>
+              <p class="text-xs text-gray-600 mb-2">${product.brand}</p>
+              <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${labelColor}">
+                ${intakeTime}
+              </span>
+            </div>
+          </div>
+          
+          <!-- Dosierung -->
+          <div class="mb-3">
+            <div class="text-sm text-gray-700">
+              <strong>Dosierung:</strong><br>
+              ${product.dosage_per_day} ${this.getPluralForm(product.dosage_per_day, product.form)} täglich
+            </div>
+            <div class="text-xs text-gray-500 mt-1">
+              Reicht für: ${Math.floor(product.quantity / product.dosage_per_day)} Tage
+            </div>
+          </div>
+          
+          <!-- Wirkung -->
+          <div class="mb-4">
+            <div class="text-sm text-gray-700">
+              <strong>Wirkung:</strong><br>
+              <span class="text-xs text-gray-600">${(product.benefits || []).slice(0, 2).join(', ')}</span>
+            </div>
+          </div>
+          
+          <!-- Preise -->
+          <div class="grid grid-cols-2 gap-4 mb-4">
+            <div>
+              <span class="text-xs text-gray-500">Einmalkosten</span>
+              <div class="font-semibold text-gray-900">€${product.purchase_price.toFixed(2)}</div>
+            </div>
+            <div>
+              <span class="text-xs text-gray-500">Pro Monat</span>
+              <div class="font-semibold text-green-600">€${product.monthly_cost.toFixed(2)}</div>
+            </div>
+          </div>
+          
+          <!-- Amazon Button -->
+          <button class="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors text-sm">
+            <i class="fas fa-external-link-alt mr-2"></i>Bei Amazon kaufen
+          </button>
+        </div>
+      `
+    }).join('')
+    
+    stackGrid.innerHTML = html
+    this.updateStackSummary()
+    console.log('[Demo Modal] Stack gerendert:', this.products.length, 'Produkte')
+  }
+
+  updateStackSummary() {
+    const totalPurchase = this.products.reduce((sum, p) => sum + p.purchase_price, 0)
+    const totalMonthly = this.products.reduce((sum, p) => sum + p.monthly_cost, 0)
+    
+    const purchaseCostEl = document.getElementById('total-purchase-cost')
+    const monthlyCostEl = document.getElementById('total-monthly-cost')
+    
+    if (purchaseCostEl) purchaseCostEl.textContent = `€${totalPurchase.toFixed(2)}`
+    if (monthlyCostEl) monthlyCostEl.textContent = `€${totalMonthly.toFixed(2)}`
   }
 
   getNutrientName(nutrientId) {
@@ -683,7 +789,7 @@ class SupplementDemoApp {
   clearStack() {
     if (confirm('Möchten Sie wirklich alle Produkte aus dem Stack entfernen?')) {
       this.products = []
-      this.renderProducts()
+      this.renderStack()
       this.updateStats()
       this.showMessage('🗑️ Stack geleert', 'info')
     }
@@ -1464,7 +1570,7 @@ class SupplementDemoApp {
       custom_notes: dosage.notes
     }
     this.products.push(customProduct)
-    this.renderProducts()
+    this.renderStack()
   }
 
   updateDosageCalculation(form) {
