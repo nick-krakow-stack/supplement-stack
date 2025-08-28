@@ -275,8 +275,11 @@ class SupplementDemoApp {
         warnings: ['Kühl lagern', 'Nach Anbruch 3 Monate haltbar'],
         dosage_recommendation: '1 Teelöffel täglich zu einer Mahlzeit',
         category: 'Fettsäuren',
-        nutrient_id: 4,
-        nutrient_amount_per_unit: 1000,
+        main_nutrients: [{ nutrient_id: 4, amount_per_unit: 1000 }], // EPA 1000mg
+        secondary_nutrients: [],
+        recommended: true,
+        recommendation_rank: 1,
+        product_image: 'https://images.unsplash.com/photo-1559181567-c3190ca9959b?w=400&h=400&fit=crop&crop=center',
         shop_url: 'https://example.com/omega3'
       },
       {
@@ -295,8 +298,11 @@ class SupplementDemoApp {
         warnings: ['Nicht auf nüchternen Magen', 'Abstand zu Kaffee und Tee'],
         dosage_recommendation: '1 Kapsel täglich zu einer Mahlzeit',
         category: 'Mineralien',
-        nutrient_id: 5,
-        nutrient_amount_per_unit: 15,
+        main_nutrients: [{ nutrient_id: 5, amount_per_unit: 15 }], // Zink 15mg
+        secondary_nutrients: [],
+        recommended: true,
+        recommendation_rank: 1,
+        product_image: 'https://images.unsplash.com/photo-1471864190281-a93a3070b6de?w=400&h=400&fit=crop&crop=center',
         shop_url: 'https://example.com/zink'
       },
       {
@@ -315,8 +321,11 @@ class SupplementDemoApp {
         warnings: ['Bei Nierensteinen vorsichtig dosieren'],
         dosage_recommendation: '1 Kapsel täglich zu einer Mahlzeit',
         category: 'Vitamine',
-        nutrient_id: 6,
-        nutrient_amount_per_unit: 1000,
+        main_nutrients: [{ nutrient_id: 6, amount_per_unit: 1000 }], // Vitamin C 1000mg
+        secondary_nutrients: [],
+        recommended: true,
+        recommendation_rank: 1,
+        product_image: 'https://images.unsplash.com/photo-1550572017-edd951aa8f72?w=400&h=400&fit=crop&crop=center',
         shop_url: 'https://example.com/vitamin-c'
       }
     ]
@@ -1231,7 +1240,7 @@ class SupplementDemoApp {
     selectedNutrientName.textContent = `${nutrient.name} (${dosage.amount}${dosage.unit})`
 
     // Produkte für diesen Wirkstoff finden
-    const availableProducts = this.products.filter(product => 
+    const availableProducts = this.availableProducts.filter(product => 
       product.main_nutrients?.some(n => n.nutrient_id == nutrient.id)
     )
 
