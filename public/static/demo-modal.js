@@ -1489,13 +1489,23 @@ class SupplementDemoApp {
         try {
           this.addSelectedProductToStack(finalProduct, finalNutrient, finalDosage)
           this.showSuccess(`${finalProduct.name} erfolgreich hinzugefügt!`)
-          // Modal IMMER schließen, auch bei Fehlern in der Verarbeitung
-          setTimeout(() => modal.remove(), 100)
+          
+          // Stack sofort aktualisieren
+          console.log('[Demo Modal] Triggering immediate stack update after product addition')
+          setTimeout(() => {
+            this.renderStack()
+            this.updateStats()
+          }, 50)
+          
+          // Modal IMMER schließen nach erfolgreichem Hinzufügen
+          console.log('[Demo Modal] Closing modal after successful addition')
+          setTimeout(() => modal.remove(), 200)
+          
         } catch (error) {
           console.error('Fehler beim Hinzufügen:', error)
           this.showError(`Fehler beim Hinzufügen: ${error.message || 'Unbekannter Fehler'}`)
           // Modal auch bei Fehler schließen
-          setTimeout(() => modal.remove(), 1000)
+          setTimeout(() => modal.remove(), 2000)
         }
       } else {
         console.error('[Demo Modal] Missing selections for final add')
@@ -2020,32 +2030,43 @@ class SupplementDemoApp {
       custom_notes: dosage.notes || ''
     }
     
-    // Zum aktuellen Stack hinzufügen
+    // Zum aktuellen Stack hinzufügen - WICHTIG: SOWOHL zu this.products ALS AUCH zu currentStack.products
+    console.log('[Demo Modal] Adding product to current display and stack data')
+    
+    // 1. Immer zu this.products hinzufügen (für sofortige Anzeige)
+    this.products.push(customProduct)
+    console.log('[Demo Modal] Added to this.products, now has', this.products.length, 'products')
+    
+    // 2. Auch zu currentStack.products hinzufügen (für Persistierung)
     if (this.currentStackId) {
-      // Finde den aktuellen Stack und füge das Produkt hinzu
       const currentStack = this.stacks.find(s => s.id == this.currentStackId)
       if (currentStack) {
-        console.log('[Demo Modal] Adding product to stack:', currentStack.name)
+        console.log('[Demo Modal] Also adding product to stack data:', currentStack.name)
         // Initialisiere products Array falls noch nicht vorhanden
         if (!currentStack.products) {
           currentStack.products = []
         }
-        currentStack.products.push(customProduct)
-        console.log('[Demo Modal] Stack now has', currentStack.products.length, 'products')
+        // Prüfe ob Produkt bereits in Stack vorhanden (Duplikate vermeiden)
+        const existingProduct = currentStack.products.find(p => 
+          (typeof p === 'object' ? p.id : p) == customProduct.id
+        )
+        if (!existingProduct) {
+          currentStack.products.push(customProduct)
+        }
+        console.log('[Demo Modal] Stack data now has', currentStack.products.length, 'products')
       } else {
         console.error('[Demo Modal] Current stack not found:', this.currentStackId)
       }
-    } else {
-      // Fallback: Zur globalen Produktliste hinzufügen (Basisausstattung)
-      console.log('[Demo Modal] Adding to global products list')
-      this.products.push(customProduct)
     }
     
     // Stack-Anzeige aktualisieren
+    console.log('[Demo Modal] finalizeAddProduct - Updating stack display')
     this.renderStack()
+    this.updateStats()
     
-    // Modal schließen
-    this.closeAllModals()
+    // WICHTIG: Modal nicht hier schließen, das macht der Event Handler
+    // this.closeAllModals() - ENTFERNT, wird vom Modal-Handler gemacht
+    console.log('[Demo Modal] finalizeAddProduct completed, product added to stack')
   }
 
   updateDosageCalculation(form) {
