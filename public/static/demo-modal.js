@@ -73,25 +73,42 @@ class SupplementDemoApp {
 
   showQuickNotification(message, type = 'info') {
     const notification = document.createElement('div')
-    notification.className = `fixed top-4 right-4 z-50 p-2 px-3 rounded-lg shadow-lg text-sm transition-all duration-300 ${
-      type === 'success' ? 'bg-green-500 text-white' :
-      type === 'error' ? 'bg-red-500 text-white' :
-      'bg-blue-500 text-white'
+    notification.className = `fixed top-6 right-6 z-50 px-4 py-3 rounded-2xl shadow-2xl text-sm font-semibold transition-all duration-500 transform translate-x-full ${
+      type === 'success' ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white' :
+      type === 'error' ? 'bg-gradient-to-r from-red-500 to-pink-500 text-white' :
+      'bg-gradient-to-r from-blue-500 to-indigo-500 text-white'
     }`
     
-    notification.textContent = message
+    // Add icon based on type
+    const icon = type === 'success' ? 'fas fa-check-circle' : 
+                type === 'error' ? 'fas fa-exclamation-circle' : 
+                'fas fa-info-circle'
+    
+    notification.innerHTML = `
+      <div class="flex items-center space-x-2">
+        <i class="${icon}"></i>
+        <span>${message}</span>
+      </div>
+    `
+    
     document.body.appendChild(notification)
     
-    // Kurze Anzeige (1 Sekunde)
+    // Einblenden
     setTimeout(() => {
-      notification.style.opacity = '0'
-      notification.style.transform = 'translateY(-20px)'
+      notification.classList.remove('translate-x-full')
+      notification.classList.add('translate-x-0')
+    }, 100)
+    
+    // Ausblenden nach 1.5 Sekunden
+    setTimeout(() => {
+      notification.classList.remove('translate-x-0')
+      notification.classList.add('translate-x-full')
       setTimeout(() => {
         if (notification.parentElement) {
           notification.remove()
         }
-      }, 300)
-    }, 1000)
+      }, 500)
+    }, 1500)
   }
 
   addDemoStackProducts() {
@@ -648,69 +665,91 @@ class SupplementDemoApp {
       const labelColor = labelColors[index % labelColors.length]
       
       return `
-        <div class="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-lg transition-shadow">
-          <!-- Checkbox oben rechts -->
-          <div class="flex justify-between items-start mb-3">
-            <div></div>
-            <input type="checkbox" class="product-checkbox w-5 h-5 text-blue-600 rounded" data-product-id="${product.id}" checked>
+        <div class="bg-white border-0 rounded-2xl p-5 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 relative overflow-hidden">
+          <!-- Gradient Overlay für Premium-Look -->
+          <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-400 via-teal-500 to-blue-500"></div>
+          
+          <!-- Checkbox mit modernem Design -->
+          <div class="flex justify-between items-start mb-4">
+            <div class="flex items-center space-x-2">
+              <!-- Premium Badge falls empfohlen -->
+              ${product.recommended ? `
+                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-purple-100 to-pink-100 text-purple-800 border border-purple-200">
+                  <i class="fas fa-star text-purple-500 mr-1"></i>Top
+                </span>
+              ` : ''}
+            </div>
+            <input type="checkbox" class="product-checkbox w-5 h-5 text-emerald-600 rounded-md focus:ring-emerald-500 focus:ring-2" data-product-id="${product.id}" checked>
           </div>
           
-          <!-- Produktbild und Info -->
-          <div class="flex items-start mb-4">
+          <!-- Kompaktes Produktbild und Info -->
+          <div class="flex items-center mb-4 space-x-3">
             ${product.product_image ? `
-              <div class="w-16 h-16 flex-shrink-0 rounded-lg overflow-hidden bg-gray-100 border border-gray-200 mr-3">
+              <div class="w-14 h-14 flex-shrink-0 rounded-xl overflow-hidden bg-gradient-to-br from-slate-50 to-slate-100 border border-slate-200 shadow-sm">
                 <img src="${product.product_image}" alt="${product.name}" class="w-full h-full object-cover">
               </div>
             ` : `
-              <div class="w-16 h-16 flex-shrink-0 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center mr-3">
-                <i class="fas fa-pills text-gray-400 text-lg"></i>
+              <div class="w-14 h-14 flex-shrink-0 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200 flex items-center justify-center shadow-sm">
+                <i class="fas fa-pills text-emerald-500 text-lg"></i>
               </div>
             `}
             
-            <div class="flex-1">
-              <h3 class="font-semibold text-gray-900 text-sm mb-1">${product.name}</h3>
-              <p class="text-xs text-gray-600 mb-2">${product.brand}</p>
-              <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${labelColor}">
-                ${intakeTime}
+            <div class="flex-1 min-w-0">
+              <h3 class="font-bold text-slate-800 text-sm mb-1 truncate">${product.name}</h3>
+              <p class="text-xs text-slate-500 mb-2 font-medium">${product.brand}</p>
+              <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold ${labelColor} shadow-sm">
+                <i class="fas fa-clock mr-1"></i>${intakeTime}
               </span>
             </div>
           </div>
           
-          <!-- Dosierung -->
-          <div class="mb-3">
-            <div class="text-sm text-gray-700">
-              <strong>Dosierung:</strong><br>
-              ${product.dosage_per_day} ${this.getPluralForm(product.dosage_per_day, product.form)} täglich
+          <!-- Kompakte Info-Grid -->
+          <div class="grid grid-cols-2 gap-3 mb-4">
+            <!-- Dosierung -->
+            <div class="bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl p-3 border border-slate-200">
+              <div class="text-xs text-slate-600 font-medium mb-1">Dosierung</div>
+              <div class="text-sm font-bold text-slate-800">${product.dosage_per_day} ${this.getPluralForm(product.dosage_per_day, product.form)}</div>
+              <div class="text-xs text-slate-500">täglich</div>
             </div>
-            <div class="text-xs text-gray-500 mt-1">
-              Reicht für: ${Math.floor(product.quantity / product.dosage_per_day)} Tage
-            </div>
-          </div>
-          
-          <!-- Wirkung -->
-          <div class="mb-4">
-            <div class="text-sm text-gray-700">
-              <strong>Wirkung:</strong><br>
-              <span class="text-xs text-gray-600">${(product.benefits || []).slice(0, 2).join(', ')}</span>
+            
+            <!-- Vorrat -->
+            <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-3 border border-blue-200">
+              <div class="text-xs text-blue-600 font-medium mb-1">Vorrat</div>
+              <div class="text-sm font-bold text-blue-800">${Math.floor(product.quantity / product.dosage_per_day)}</div>
+              <div class="text-xs text-blue-500">Tage</div>
             </div>
           </div>
           
-          <!-- Preise -->
-          <div class="grid grid-cols-2 gap-4 mb-4">
-            <div>
-              <span class="text-xs text-gray-500">Einmalkosten</span>
-              <div class="font-semibold text-gray-900">€${(product.purchase_price || 0).toFixed(2)}</div>
-            </div>
-            <div>
-              <span class="text-xs text-gray-500">Pro Monat</span>
-              <div class="font-semibold text-green-600">€${(product.monthly_cost || 0).toFixed(2)}</div>
+          <!-- Wirkung kompakt -->
+          <div class="mb-4 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl p-3 border border-emerald-200">
+            <div class="flex items-start space-x-2">
+              <i class="fas fa-leaf text-emerald-500 mt-0.5 flex-shrink-0"></i>
+              <div>
+                <div class="text-xs font-semibold text-emerald-700 mb-1">Wirkung</div>
+                <div class="text-xs text-emerald-600 leading-relaxed">${(product.benefits || []).slice(0, 2).join(' • ')}</div>
+              </div>
             </div>
           </div>
           
-          <!-- Amazon Button -->
-          <button class="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors text-sm">
-            <i class="fas fa-external-link-alt mr-2"></i>Bei Amazon kaufen
+          <!-- Preise mit modernem Design -->
+          <div class="grid grid-cols-2 gap-3 mb-4">
+            <div class="text-center bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl p-3 border border-slate-200">
+              <div class="text-xs text-slate-600 font-medium">Einmalig</div>
+              <div class="text-lg font-bold text-slate-800">€${(product.purchase_price || 0).toFixed(2)}</div>
+            </div>
+            <div class="text-center bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl p-3 border border-emerald-200">
+              <div class="text-xs text-emerald-600 font-medium">Monatlich</div>
+              <div class="text-lg font-bold text-emerald-700">€${(product.monthly_cost || 0).toFixed(2)}</div>
+            </div>
+          </div>
+          
+          <!-- Moderner CTA Button -->
+          <button class="w-full bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold py-3 px-4 rounded-xl transition-all duration-300 transform hover:scale-105 hover:shadow-lg focus:ring-4 focus:ring-orange-200 focus:outline-none text-sm">
+            <i class="fas fa-shopping-cart mr-2"></i>Jetzt bestellen
           </button>
+          
+          <!-- Hover-Effekt Shine -->
+          <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-0 hover:opacity-20 transition-opacity duration-500 pointer-events-none transform -skew-x-12 -translate-x-full hover:translate-x-full"></div>
         </div>
       `
     }).join('')
@@ -895,7 +934,7 @@ class SupplementDemoApp {
     if (!footer) {
       footer = document.createElement('div')
       footer.id = 'price-footer'
-      footer.className = 'fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-40 transform translate-y-full transition-transform duration-300'
+      footer.className = 'fixed bottom-0 left-0 right-0 bg-gradient-to-r from-white to-slate-50 backdrop-blur-lg border-t border-slate-200 shadow-2xl z-40 transform translate-y-full transition-all duration-500'
       document.body.appendChild(footer)
     }
     
@@ -903,42 +942,77 @@ class SupplementDemoApp {
     const allSelected = this.areAllProductsSelected()
     
     footer.innerHTML = `
-      <div class="max-w-7xl mx-auto px-4 py-3">
+      <div class="max-w-7xl mx-auto px-4 py-4">
         <div class="flex items-center justify-between">
-          <div class="flex items-center space-x-4">
-            <div class="text-sm text-gray-600">
-              <i class="fas fa-shopping-cart mr-1"></i>
-              ${productCount} ${productCount === 1 ? 'Produkt' : 'Produkte'} im Stack
+          <div class="flex items-center space-x-6">
+            <!-- Produkt-Counter -->
+            <div class="flex items-center space-x-2 bg-gradient-to-br from-emerald-50 to-teal-50 px-3 py-2 rounded-xl border border-emerald-200">
+              <div class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
+              <span class="text-sm font-semibold text-emerald-700">
+                ${productCount} ${productCount === 1 ? 'Produkt' : 'Produkte'}
+              </span>
             </div>
-            <div class="text-sm">
-              <span class="text-gray-600">Einmalig:</span>
-              <span class="font-semibold text-gray-900">€${purchasePrice.toFixed(2)}</span>
-            </div>
-            <div class="text-sm">
-              <span class="text-gray-600">Monatlich:</span>
-              <span class="font-semibold text-green-600">€${monthlyPrice.toFixed(2)}</span>
+            
+            <!-- Preise -->
+            <div class="flex items-center space-x-4">
+              <div class="text-center">
+                <div class="text-xs text-slate-500 font-medium">Einmalig</div>
+                <div class="text-lg font-bold text-slate-800">€${purchasePrice.toFixed(2)}</div>
+              </div>
+              <div class="w-px h-8 bg-slate-300"></div>
+              <div class="text-center">
+                <div class="text-xs text-emerald-600 font-medium">Pro Monat</div>
+                <div class="text-lg font-bold text-emerald-700">€${monthlyPrice.toFixed(2)}</div>
+              </div>
             </div>
           </div>
           
-          <div class="flex items-center space-x-2">
+          <div class="flex items-center space-x-3">
             ${allSelected ? `
-              <button onclick="window.demoApp.deselectAllProducts()" class="bg-orange-600 text-white px-4 py-2 rounded-md hover:bg-orange-700 transition-colors text-sm font-medium">
+              <button onclick="window.demoApp.deselectAllProducts()" class="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white px-4 py-2 rounded-xl transition-all duration-300 transform hover:scale-105 text-sm font-semibold shadow-lg hover:shadow-xl focus:ring-4 focus:ring-orange-200 focus:outline-none">
                 <i class="fas fa-times mr-2"></i>Alles abwählen
               </button>
             ` : `
-              <button onclick="window.demoApp.selectAllProducts()" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors text-sm font-medium">
+              <button onclick="window.demoApp.selectAllProducts()" class="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white px-4 py-2 rounded-xl transition-all duration-300 transform hover:scale-105 text-sm font-semibold shadow-lg hover:shadow-xl focus:ring-4 focus:ring-emerald-200 focus:outline-none">
                 <i class="fas fa-check mr-2"></i>Alles auswählen
               </button>
             `}
-            <button onclick="window.demoApp.hidePriceFooter()" class="text-gray-400 hover:text-gray-600 p-2">
+            
+            <!-- Alle bestellen Button -->
+            <button onclick="window.demoApp.proceedToCheckout()" class="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-6 py-2 rounded-xl transition-all duration-300 transform hover:scale-105 text-sm font-bold shadow-lg hover:shadow-xl focus:ring-4 focus:ring-blue-200 focus:outline-none">
+              <i class="fas fa-shopping-cart mr-2"></i>Alle bestellen
+            </button>
+            
+            <button onclick="window.demoApp.hidePriceFooter()" class="text-slate-400 hover:text-slate-600 p-2 rounded-lg hover:bg-slate-100 transition-colors">
               <i class="fas fa-times"></i>
             </button>
+          </div>
+        </div>
+        
+        <!-- Zusätzliche Info-Leiste -->
+        <div class="mt-3 pt-3 border-t border-slate-200 flex items-center justify-between text-xs text-slate-500">
+          <div class="flex items-center space-x-4">
+            <span class="flex items-center">
+              <i class="fas fa-shield-alt mr-1 text-emerald-500"></i>
+              Geprüfte Qualität
+            </span>
+            <span class="flex items-center">
+              <i class="fas fa-truck mr-1 text-blue-500"></i>
+              Schneller Versand
+            </span>
+            <span class="flex items-center">
+              <i class="fas fa-undo mr-1 text-purple-500"></i>
+              30 Tage Rückgabe
+            </span>
+          </div>
+          <div class="text-slate-400">
+            Preise inkl. MwSt. • Änderungen vorbehalten
           </div>
         </div>
       </div>
     `
     
-    // Footer einblenden
+    // Footer einblenden mit eleganter Animation
     setTimeout(() => {
       footer.classList.remove('translate-y-full')
       footer.classList.add('translate-y-0')
