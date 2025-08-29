@@ -71,6 +71,29 @@ class SupplementDemoApp {
     }, 5000)
   }
 
+  showQuickNotification(message, type = 'info') {
+    const notification = document.createElement('div')
+    notification.className = `fixed top-4 right-4 z-50 p-2 px-3 rounded-lg shadow-lg text-sm transition-all duration-300 ${
+      type === 'success' ? 'bg-green-500 text-white' :
+      type === 'error' ? 'bg-red-500 text-white' :
+      'bg-blue-500 text-white'
+    }`
+    
+    notification.textContent = message
+    document.body.appendChild(notification)
+    
+    // Kurze Anzeige (1 Sekunde)
+    setTimeout(() => {
+      notification.style.opacity = '0'
+      notification.style.transform = 'translateY(-20px)'
+      setTimeout(() => {
+        if (notification.parentElement) {
+          notification.remove()
+        }
+      }, 300)
+    }, 1000)
+  }
+
   addDemoStackProducts() {
     console.log('[Demo Modal] Skipping addDemoStackProducts - using predefined stacks instead')
     // Diese Funktion wird nicht mehr benötigt, da wir vordefinierte Stacks verwenden
@@ -120,6 +143,28 @@ class SupplementDemoApp {
           button.id?.includes('create-stack')) {
         e.preventDefault()
         this.showNutrientBasedStackModal()
+      }
+    })
+
+    // Event Delegation für Checkbox-Änderungen in Produkten
+    document.addEventListener('change', (e) => {
+      if (e.target.classList.contains('product-checkbox')) {
+        console.log('[Demo Modal] Product checkbox changed:', e.target.dataset.productId, 'checked:', e.target.checked)
+        
+        // Aktualisiere Footer-Preise wenn Checkbox geändert wird
+        this.updatePriceFooter()
+        
+        // Optional: Zeige kurze Rückmeldung
+        const productId = e.target.dataset.productId
+        const product = this.products.find(p => p.id == productId)
+        if (product) {
+          const message = e.target.checked ? 
+            `✅ ${product.name} ausgewählt` : 
+            `❌ ${product.name} abgewählt`
+          
+          // Kurze Benachrichtigung (nur 1 Sekunde)
+          this.showQuickNotification(message, e.target.checked ? 'success' : 'info')
+        }
       }
     })
   }
@@ -672,6 +717,12 @@ class SupplementDemoApp {
     
       stackGrid.innerHTML = html
       this.updateStackSummary()
+      
+      // WICHTIG: Nach dem Rendering auch Footer aktualisieren
+      setTimeout(() => {
+        this.updatePriceFooter()
+      }, 100)
+      
       console.log('[Demo Modal] Stack gerendert:', currentProducts.length, 'Produkte')
       
     } catch (error) {
@@ -707,9 +758,10 @@ class SupplementDemoApp {
   }
 
   updateStackSummary() {
-    const currentProducts = this.getCurrentProducts()
-    const totalPurchase = currentProducts.reduce((sum, p) => sum + p.purchase_price, 0)
-    const totalMonthly = currentProducts.reduce((sum, p) => sum + p.monthly_cost, 0)
+    // Verwende nur ausgewählte Produkte für die Berechnung
+    const selectedProducts = this.getSelectedProducts()
+    const totalPurchase = selectedProducts.reduce((sum, p) => sum + p.purchase_price, 0)
+    const totalMonthly = selectedProducts.reduce((sum, p) => sum + p.monthly_cost, 0)
     
     const purchaseCostEl = document.getElementById('total-purchase-cost')
     const monthlyCostEl = document.getElementById('total-monthly-cost')
@@ -789,7 +841,8 @@ class SupplementDemoApp {
       stackCountElement.textContent = totalStacks
     }
     
-    // Update price footer
+    // Update price footer and stack summary
+    this.updateStackSummary()
     this.updatePriceFooter()
   }
 
@@ -801,16 +854,39 @@ class SupplementDemoApp {
       return
     }
     
-    // Berechne Gesamtkosten
-    const totalMonthlyPrice = this.products.reduce((sum, product) => {
+    // Berechne Gesamtkosten nur für ausgewählte/aktivierte Produkte
+    const selectedProducts = this.getSelectedProducts()
+    const totalMonthlyPrice = selectedProducts.reduce((sum, product) => {
       return sum + (product.monthly_cost || 0)
     }, 0)
     
-    const totalPurchasePrice = this.products.reduce((sum, product) => {
+    const totalPurchasePrice = selectedProducts.reduce((sum, product) => {
       return sum + (product.purchase_price || 0)
     }, 0)
     
-    this.showPriceFooter(totalProducts, totalMonthlyPrice, totalPurchasePrice)
+    this.showPriceFooter(selectedProducts.length, totalMonthlyPrice, totalPurchasePrice)
+  }
+
+  // Neue Hilfsfunktion: Gibt nur die ausgewählten (aktivierten) Produkte zurück
+  getSelectedProducts() {
+    // Sichere Prüfung ob DOM bereit ist
+    const checkboxes = document.querySelectorAll('.product-checkbox:checked')
+    
+    // Falls noch keine Checkboxen existieren, gebe alle Produkte zurück (Fallback)
+    if (checkboxes.length === 0) {
+      // Prüfe ob überhaupt Checkboxen da sind (vs. alle abgewählt)
+      const allCheckboxes = document.querySelectorAll('.product-checkbox')
+      if (allCheckboxes.length === 0) {
+        // Noch keine Checkboxen gerendert - gebe alle Produkte zurück
+        return this.products || []
+      } else {
+        // Checkboxen existieren aber alle sind abgewählt - gebe leeres Array zurück
+        return []
+      }
+    }
+    
+    const selectedProductIds = Array.from(checkboxes).map(cb => parseInt(cb.dataset.productId))
+    return this.products.filter(product => selectedProductIds.includes(product.id))
   }
 
   showPriceFooter(productCount, monthlyPrice, purchasePrice) {
