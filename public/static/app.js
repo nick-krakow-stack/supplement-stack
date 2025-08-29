@@ -11,6 +11,7 @@ class SupplementApp {
   init() {
     this.setupAxiosDefaults()
     this.setupEventListeners()
+    this.initWishlist()  // Wunschliste initialisieren
     this.checkAuthStatus()
   }
 
@@ -334,7 +335,11 @@ class SupplementApp {
     try {
       this.showLoading('Lade Produkte...')
       const response = await axios.get('/api/protected/products')
+      this.products = response.data  // Produkte speichern für Wunschliste
       this.displayProducts(response.data)
+      
+      // Wunschlisten-Visuals nach dem Laden aktualisieren
+      setTimeout(() => this.updateWishlistVisuals(), 500)
     } catch (error) {
       console.error('Error loading products:', error)
       this.showError('Fehler beim Laden der Produkte')
@@ -950,6 +955,10 @@ class SupplementApp {
 
   showSuccess(message) {
     alert(`Erfolg: ${message}`)
+  }
+
+  showInfo(message) {
+    alert(`Info: ${message}`)
   }
 
   escapeHtml(text) {
@@ -1642,8 +1651,254 @@ class SupplementApp {
     }
   }
 
-  toggleWishlist(id) { 
-    this.showSuccess('Zur Wunschliste hinzugefügt') 
+  // ============== WUNSCHLISTEN-FUNKTIONALITÄT ==============
+  
+  initWishlist() {
+    // Wunschliste aus localStorage laden
+    const saved = localStorage.getItem('supplement_wishlist')
+    this.wishlist = saved ? JSON.parse(saved) : []
+    this.updateWishlistCounter()
+  }
+  
+  saveWishlist() {
+    // Wunschliste in localStorage speichern
+    localStorage.setItem('supplement_wishlist', JSON.stringify(this.wishlist))
+    this.updateWishlistCounter()
+  }
+  
+  isInWishlist(productId) {
+    return this.wishlist.some(item => item.id === productId)
+  }
+  
+  toggleWishlist(productId) {
+    console.log('[Wishlist] Toggle for product:', productId)
+    
+    if (this.isInWishlist(productId)) {
+      // Von Wunschliste entfernen
+      this.wishlist = this.wishlist.filter(item => item.id !== productId)
+      this.showSuccess('❌ Von Wunschliste entfernt')
+      
+      // Heart-Button visuell aktualisieren
+      const heartButton = document.querySelector(`button[onclick="app.toggleWishlist(${productId})"] i`)
+      if (heartButton) {
+        heartButton.className = 'fas fa-heart'
+        heartButton.parentElement.className = heartButton.parentElement.className.replace('text-red-600', 'text-gray-400')
+      }
+    } else {
+      // Zur Wunschliste hinzufügen - hole Produktdaten
+      const product = this.findProductById(productId)
+      if (product) {
+        const wishlistItem = {
+          id: product.id,
+          name: product.name,
+          brand: product.brand || 'Unbekannt',
+          price: product.purchase_price || 0,
+          monthly_cost: product.monthly_cost || 0,
+          form: product.form || 'Kapsel',
+          added_date: new Date().toISOString(),
+          category: product.category || 'Supplement'
+        }
+        
+        this.wishlist.push(wishlistItem)
+        this.showSuccess('❤️ Zur Wunschliste hinzugefügt')
+        
+        // Heart-Button visuell aktualisieren
+        const heartButton = document.querySelector(`button[onclick="app.toggleWishlist(${productId})"] i`)
+        if (heartButton) {
+          heartButton.className = 'fas fa-heart text-red-600'
+          heartButton.parentElement.className = heartButton.parentElement.className.replace('text-gray-400', 'text-red-600')
+        }
+      } else {
+        this.showError('Produkt nicht gefunden')
+        return
+      }
+    }
+    
+    this.saveWishlist()
+    this.updateWishlistVisuals()
+  }
+  
+  findProductById(productId) {
+    // Suche Produkt in verschiedenen Quellen
+    if (this.products && this.products.length > 0) {
+      const found = this.products.find(p => p.id === productId)
+      if (found) return found
+    }
+    
+    // Fallback: Demo-Produkte
+    const demoProducts = [
+      { id: 1, name: 'Vitamin D3 4000 IU', brand: 'Sunday Natural', purchase_price: 19.90, monthly_cost: 11.94, form: 'Kapsel', category: 'Vitamine' },
+      { id: 2, name: 'B12 Methylcobalamin', brand: 'InnoNature', purchase_price: 24.90, monthly_cost: 12.45, form: 'Tropfen', category: 'Vitamine' },
+      { id: 3, name: 'Magnesium Glycinat', brand: 'Biomenta', purchase_price: 16.90, monthly_cost: 16.90, form: 'Kapsel', category: 'Mineralien' }
+    ]
+    
+    return demoProducts.find(p => p.id === productId)
+  }
+  
+  updateWishlistCounter() {
+    const counter = document.getElementById('wishlist-count')
+    if (counter) {
+      counter.textContent = this.wishlist.length
+    }
+    
+    // Demo Counter auch updaten
+    const demoCounter = document.getElementById('demo-wishlist-count')
+    if (demoCounter) {
+      demoCounter.textContent = this.wishlist.length
+    }
+  }
+  
+  updateWishlistVisuals() {
+    // Alle Heart-Buttons basierend auf Wunschlisten-Status aktualisieren
+    document.querySelectorAll('[onclick*="toggleWishlist"]').forEach(button => {
+      const onclick = button.getAttribute('onclick')
+      const productId = parseInt(onclick.match(/toggleWishlist\((\d+)\)/)?.[1])
+      
+      if (productId) {
+        const heartIcon = button.querySelector('i')
+        if (this.isInWishlist(productId)) {
+          heartIcon.className = 'fas fa-heart'
+          button.className = button.className.replace('text-gray-400', 'text-red-600')
+          button.title = 'Von Wunschliste entfernen'
+        } else {
+          heartIcon.className = 'fas fa-heart'
+          button.className = button.className.replace('text-red-600', 'text-gray-400')
+          button.title = 'Zur Wunschliste hinzufügen'
+        }
+      }
+    })
+  }
+  
+  showWishlistModal() {
+    if (this.wishlist.length === 0) {
+      this.showInfo('Ihre Wunschliste ist noch leer. Fügen Sie Produkte über das ❤️ Symbol hinzu!')
+      return
+    }
+    
+    const modal = document.createElement('div')
+    modal.className = 'modal-overlay'
+    modal.style.cssText = `
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(4px);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 9999; padding: 16px;
+    `
+    
+    modal.innerHTML = `
+      <div class="modal-container" style="background: white; border-radius: 16px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); width: 100%; max-width: 48rem; max-height: 90vh; overflow-y: auto;">
+        <div class="p-6">
+          <!-- Header -->
+          <div class="flex justify-between items-start mb-6">
+            <div>
+              <h2 class="text-2xl font-bold text-slate-800 flex items-center">
+                <i class="fas fa-heart text-red-500 mr-3"></i>
+                Meine Wunschliste
+              </h2>
+              <p class="text-slate-600 mt-1">${this.wishlist.length} ${this.wishlist.length === 1 ? 'Produkt' : 'Produkte'} gemerkt</p>
+            </div>
+            <button class="close-modal p-2 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors">
+              <i class="fas fa-times text-xl"></i>
+            </button>
+          </div>
+          
+          <!-- Wunschlisten-Produkte -->
+          <div class="space-y-4">
+            ${this.wishlist.map(item => `
+              <div class="bg-gradient-to-r from-slate-50 to-slate-100 rounded-2xl p-4 border border-slate-200 hover:shadow-md transition-all duration-300">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center space-x-4 flex-1">
+                    <!-- Produkt Icon -->
+                    <div class="w-12 h-12 bg-gradient-to-br from-emerald-100 to-teal-100 rounded-xl flex items-center justify-center">
+                      <i class="fas fa-pills text-emerald-600"></i>
+                    </div>
+                    
+                    <!-- Produkt Info -->
+                    <div class="flex-1 min-w-0">
+                      <h3 class="font-bold text-slate-800 text-sm truncate">${item.name}</h3>
+                      <p class="text-xs text-slate-600 mb-1">${item.brand} • ${item.form}</p>
+                      <div class="flex items-center space-x-3 text-xs">
+                        <span class="text-slate-600">€${item.price?.toFixed(2) || '0.00'} einmalig</span>
+                        <span class="text-emerald-600 font-semibold">€${item.monthly_cost?.toFixed(2) || '0.00'}/Monat</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <!-- Aktionen -->
+                  <div class="flex items-center space-x-2 ml-4">
+                    <button onclick="app.addToStackFromWishlist(${item.id})" 
+                            class="bg-gradient-to-r from-emerald-500 to-teal-500 text-white px-3 py-2 rounded-xl text-xs font-semibold hover:from-emerald-600 hover:to-teal-600 transition-all duration-300 transform hover:scale-105">
+                      <i class="fas fa-plus mr-1"></i>Stack
+                    </button>
+                    <button onclick="app.removeFromWishlist(${item.id})" 
+                            class="text-red-500 hover:text-red-600 p-2 rounded-lg hover:bg-red-50 transition-colors" 
+                            title="Von Wunschliste entfernen">
+                      <i class="fas fa-trash-alt"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+          
+          <!-- Footer -->
+          <div class="mt-6 pt-4 border-t border-slate-200 flex justify-between items-center">
+            <div class="text-sm text-slate-600">
+              Gespeichert seit: ${new Date(this.wishlist[0]?.added_date || Date.now()).toLocaleDateString('de-DE')}
+            </div>
+            <div class="flex space-x-3">
+              <button onclick="app.clearWishlist()" class="text-orange-600 hover:text-orange-700 px-4 py-2 rounded-xl hover:bg-orange-50 transition-colors text-sm font-semibold">
+                <i class="fas fa-trash mr-2"></i>Alle löschen
+              </button>
+              <button class="close-modal bg-gradient-to-r from-slate-600 to-slate-700 text-white px-6 py-2 rounded-xl hover:from-slate-700 hover:to-slate-800 transition-all duration-300 text-sm font-semibold">
+                Schließen
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `
+    
+    document.body.appendChild(modal)
+    
+    // Modal schließen
+    modal.querySelector('.close-modal').addEventListener('click', () => modal.remove())
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.remove()
+    })
+  }
+  
+  addToStackFromWishlist(productId) {
+    // Hier könnte später die echte Stack-Funktionalität implementiert werden
+    this.showSuccess(`Produkt wird zu Ihrem Stack hinzugefügt (Demo)`)
+  }
+  
+  removeFromWishlist(productId) {
+    this.wishlist = this.wishlist.filter(item => item.id !== productId)
+    this.saveWishlist()
+    this.updateWishlistVisuals()
+    this.showSuccess('Von Wunschliste entfernt')
+    
+    // Modal neu laden falls offen
+    const existingModal = document.querySelector('.modal-overlay')
+    if (existingModal) {
+      existingModal.remove()
+      this.showWishlistModal()
+    }
+  }
+  
+  clearWishlist() {
+    if (confirm('Möchten Sie wirklich alle Produkte von der Wunschliste entfernen?')) {
+      this.wishlist = []
+      this.saveWishlist()
+      this.updateWishlistVisuals()
+      this.showSuccess('Wunschliste geleert')
+      
+      // Modal schließen
+      const existingModal = document.querySelector('.modal-overlay')
+      if (existingModal) {
+        existingModal.remove()
+      }
+    }
   }
   
   addToStack(id) { 

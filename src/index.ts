@@ -213,12 +213,12 @@ app.get('/demo', (c) => {
                         </div>
                     </div>
                 </div>
-                <div class="bg-white rounded-lg shadow p-4">
+                <div class="bg-white rounded-lg shadow p-4 cursor-pointer hover:shadow-lg transition-shadow" onclick="app.showWishlistModal()" title="Wunschliste anzeigen">
                     <div class="flex items-center">
                         <i class="fas fa-heart text-red-500 text-2xl mr-3"></i>
                         <div>
                             <p class="text-sm text-gray-600">Wunschliste</p>
-                            <p class="text-xl font-bold" id="demo-wishlist-count">3</p>
+                            <p class="text-xl font-bold" id="demo-wishlist-count">0</p>
                         </div>
                     </div>
                 </div>
