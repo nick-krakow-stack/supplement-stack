@@ -82,7 +82,7 @@ authRoutes.post('/register', async (c) => {
         html: emailTemplate.html,
         text: emailTemplate.text,
         tags: ['registration', 'email-verification']
-      })
+      }, c.env.MAILERSEND_API_KEY)
       console.log('[AUTH] Verification email sent to:', body.email)
     } catch (error) {
       console.error('[AUTH] Failed to send verification email:', error)
@@ -203,7 +203,7 @@ authRoutes.get('/verify-email', async (c) => {
         html: welcomeTemplate.html,
         text: welcomeTemplate.text,
         tags: ['welcome', 'onboarding']
-      })
+      }, c.env.MAILERSEND_API_KEY)
       
       console.log('[AUTH] Welcome email sent to:', user.email)
     } catch (error) {
@@ -329,7 +329,7 @@ authRoutes.post('/resend-verification', async (c) => {
         html: emailTemplate.html,
         text: emailTemplate.text,
         tags: ['resend-verification', 'email-verification']
-      })
+      }, c.env.MAILERSEND_API_KEY)
       
       return c.json({ 
         message: 'Bestätigungs-E-Mail wurde erneut gesendet. Bitte überprüfe dein Postfach.' 
@@ -390,7 +390,7 @@ authRoutes.post('/forgot-password', async (c) => {
         html: emailTemplate.html,
         text: emailTemplate.text,
         tags: ['password-reset', 'security']
-      })
+      }, c.env.MAILERSEND_API_KEY)
       
       console.log('[AUTH] Password reset email sent to:', body.email)
     } catch (error) {

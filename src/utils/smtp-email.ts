@@ -32,7 +32,7 @@ export interface SendEmailOptions {
 // Simple SMTP email sender using fetch to MailerSend API (more reliable than raw SMTP in Workers)
 export async function sendEmail(options: SendEmailOptions, apiKey?: string): Promise<boolean> {
   try {
-    // Use MailerSend API with proper authentication
+    // Use MailerSend API with proper authentication - fallback to hardcoded for development
     const MAILERSEND_API_KEY = apiKey || 'mlsn.b93df73e534656b9e6fecf1dadb07c3b960a19d789482e559ac531b79b8ce745'
     
     const payload = {
