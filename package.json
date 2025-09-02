@@ -22,6 +22,7 @@
     "db:console:prod": "wrangler d1 execute supplementstack-production"
   },
   "dependencies": {
+    "form-data": "^4.0.4",
     "hono": "^4.0.0"
   },
   "devDependencies": {

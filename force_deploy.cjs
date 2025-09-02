@@ -39,22 +39,29 @@ async function createDirectDeployment() {
   const files = getAllFiles('dist')
   console.log(`📁 Found ${files.length} files to deploy`)
   
-  // Create manifest
+  // Create manifest with 32-character hex hashes (MD5)
   const manifest = {}
   
   for (const file of files) {
     const content = fs.readFileSync(file.fullPath)
-    const hash = require('crypto').createHash('sha1').update(content).digest('hex')
+    const hash = require('crypto').createHash('md5').update(content).digest('hex')
     
-    manifest[file.path] = {
+    // Use proper path format (leading slash)
+    const manifestPath = file.path.startsWith('/') ? file.path : '/' + file.path
+    
+    manifest[manifestPath] = {
       hash: hash,
       size: file.size
     }
   }
   
   console.log('📋 Manifest created with', Object.keys(manifest).length, 'files')
+  console.log('📄 Sample files:')
+  Object.keys(manifest).slice(0, 3).forEach(path => {
+    console.log(`   ${path} (${manifest[path].size} bytes, hash: ${manifest[path].hash})`)
+  })
   
-  // Try to create deployment with manifest
+  // Try to create deployment with proper manifest format
   const deployUrl = `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}/pages/projects/${PROJECT_NAME}/deployments`
   
   try {
@@ -66,8 +73,7 @@ async function createDirectDeployment() {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        manifest: manifest,
-        branch: 'main'
+        manifest: manifest
       })
     })
     
