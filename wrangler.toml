@@ -9,11 +9,11 @@ name = "supplement-stack"
 [env.production.vars]
 ENVIRONMENT = "production"
 
-# D1 Database binding for production
-[[env.production.d1_databases]]
-binding = "DB"
-database_name = "supplementstack-production"
-database_id = "placeholder-will-be-replaced-after-creation"
+# D1 Database binding for production (temporarily disabled for initial deployment)
+# [[env.production.d1_databases]]
+# binding = "DB"
+# database_name = "supplementstack-production"
+# database_id = "f1336769-9231-4cfa-a54b-91a261f07b08"
 
 # Secrets (will be set via Cloudflare Dashboard or CLI)
 # JWT_SECRET = "your-production-jwt-secret"
@@ -36,7 +36,7 @@ custom_domain = true
 [env.development]
 name = "supplement-stack-dev"
 
-[[env.development.d1_databases]]
-binding = "DB"
-database_name = "supplementstack-development"
-database_id = "placeholder-will-be-replaced-after-creation"
+# [[env.development.d1_databases]]
+# binding = "DB"
+# database_name = "supplementstack-development"
+# database_id = "placeholder-will-be-replaced-after-creation"
