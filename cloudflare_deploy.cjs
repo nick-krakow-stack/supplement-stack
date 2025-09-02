@@ -5,7 +5,7 @@ const fs = require('fs')
 const path = require('path')
 const crypto = require('crypto')
 
-const CLOUDFLARE_API_TOKEN = '6de775cfcd599b036dae4a07cf8309d956f6d' // Global API Key as token
+const CLOUDFLARE_API_TOKEN = 'IrSFUcV2uMusmZA2hlGHBmlxUSdy-Im8du_teCSi' // Workers API Token
 const ACCOUNT_ID = 'd8f0c1d7e9e70f806edb067057227cbe'
 const SCRIPT_NAME = 'supplementstack'
 
@@ -181,10 +181,7 @@ async function phase3_deployWorker(completionJWT) {
   const form = new FormData()
   
   // Add the main worker script
-  form.append('main.js', workerContent, {
-    contentType: 'application/javascript',
-    filename: 'main.js'
-  })
+  form.append('main.js', workerContent)
   
   // Add metadata with assets JWT
   const metadata = {
@@ -201,9 +198,7 @@ async function phase3_deployWorker(completionJWT) {
     ]
   }
   
-  form.append('metadata', JSON.stringify(metadata), {
-    contentType: 'application/json'
-  })
+  form.append('metadata', JSON.stringify(metadata))
   
   const deployUrl = `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}/workers/scripts/${SCRIPT_NAME}`
   
