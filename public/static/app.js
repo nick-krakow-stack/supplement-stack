@@ -165,7 +165,13 @@ class SupplementApp {
         this.redirectToDashboard()
       }
     } catch (error) {
-      this.showError(error.response?.data?.error || 'Anmeldung fehlgeschlagen')
+      const errorData = error.response?.data
+      if (errorData?.requiresVerification) {
+        // Show email verification required message
+        this.showEmailVerificationRequired(errorData.email)
+      } else {
+        this.showError(errorData?.error || 'Anmeldung fehlgeschlagen')
+      }
     } finally {
       this.hideLoading()
     }
@@ -186,7 +192,11 @@ class SupplementApp {
         diet_type: formData.get('diet_type')
       })
 
-      if (response.data.token) {
+      if (response.data.requiresVerification) {
+        // New 2FA flow - show email verification message
+        this.showEmailVerificationSuccess(response.data.email, response.data.message)
+      } else if (response.data.token) {
+        // Legacy flow (shouldn't happen with new system)
         this.token = response.data.token
         localStorage.setItem('auth_token', this.token)
         axios.defaults.headers.common['Authorization'] = `Bearer ${this.token}`
@@ -959,6 +969,102 @@ class SupplementApp {
 
   showInfo(message) {
     alert(`Info: ${message}`)
+  }
+
+  // New email verification success modal
+  showEmailVerificationSuccess(email, message) {
+    const modalHtml = `
+      <div class="bg-white rounded-2xl p-8 max-w-md w-full text-center shadow-2xl">
+        <div class="mb-6">
+          <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+            </svg>
+          </div>
+          <h2 class="text-2xl font-bold text-gray-900 mb-2">🚀 Willkommen!</h2>
+          <p class="text-gray-600 mb-4">
+            ${message}
+          </p>
+        </div>
+        
+        <div class="space-y-4">
+          <div class="bg-gradient-to-r from-blue-50 to-emerald-50 p-4 rounded-lg border border-blue-200">
+            <div class="flex items-center space-x-2 text-blue-700 font-medium mb-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+              </svg>
+              <span>2-Faktor-Authentifizierung</span>
+            </div>
+            <p class="text-sm text-gray-600">
+              Wir haben eine Bestätigungs-E-Mail an <strong>${email}</strong> gesendet.<br>
+              Bitte öffne die E-Mail und klicke auf den Bestätigungslink.
+            </p>
+          </div>
+          
+          <div class="flex flex-col space-y-2">
+            <button 
+              onclick="window.appInstance.resendVerificationEmail('${email}')" 
+              class="bg-gradient-to-r from-gray-500 to-gray-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:from-gray-600 hover:to-gray-700 transition-all">
+              📧 E-Mail erneut senden
+            </button>
+            
+            <button 
+              onclick="window.appInstance.hideEmailVerificationModal()" 
+              class="bg-gradient-to-r from-emerald-500 to-teal-600 text-white px-6 py-3 rounded-lg font-semibold hover:from-emerald-600 hover:to-teal-700 transition-all">
+              OK, verstanden
+            </button>
+          </div>
+          
+          <p class="text-xs text-gray-500 mt-4">
+            ⚡ Nach der Bestätigung wirst du automatisch angemeldet!
+          </p>
+        </div>
+      </div>
+    `
+    
+    // Create modal backdrop
+    const modalBackdrop = document.createElement('div')
+    modalBackdrop.id = 'email-verification-modal'
+    modalBackdrop.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50'
+    modalBackdrop.innerHTML = modalHtml
+    
+    document.body.appendChild(modalBackdrop)
+    
+    // Close on backdrop click
+    modalBackdrop.addEventListener('click', (e) => {
+      if (e.target === modalBackdrop) {
+        this.hideEmailVerificationModal()
+      }
+    })
+  }
+
+  hideEmailVerificationModal() {
+    const modal = document.getElementById('email-verification-modal')
+    if (modal) {
+      modal.remove()
+    }
+  }
+
+  async resendVerificationEmail(email) {
+    try {
+      this.showLoading()
+      
+      const response = await axios.post('/api/auth/resend-verification', {
+        email: email
+      })
+      
+      this.showSuccess(response.data.message)
+      
+    } catch (error) {
+      this.showError(error.response?.data?.error || 'Fehler beim Senden der E-Mail')
+    } finally {
+      this.hideLoading()
+    }
+  }
+
+  showEmailVerificationRequired(email) {
+    const message = `Deine E-Mail-Adresse ist noch nicht bestätigt. Bitte überprüfe dein Postfach und klicke auf den Bestätigungslink.`
+    this.showEmailVerificationSuccess(email, message)
   }
 
   escapeHtml(text) {
@@ -1922,6 +2028,7 @@ class SupplementApp {
 document.addEventListener('DOMContentLoaded', () => {
   // Initialize app
   window.app = new SupplementApp()
+  window.appInstance = window.app // Reference for modal callbacks
 
   // Handle demo button on landing page
   const demoBtn = document.getElementById('demo-btn')
