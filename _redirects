@@ -1,0 +1,8 @@
+# Redirect www to non-www
+https://www.supplementstack.de/* https://supplementstack.de/:splat 301!
+
+# SPA fallback for client-side routing
+/* /index.html 200
+
+# API routes should not fallback
+/api/* /api/:splat 200
