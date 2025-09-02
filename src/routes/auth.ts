@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { sign, verify } from 'hono/jwt'
 import type { Bindings, LoginRequest, RegisterRequest, User } from '../types'
-import { sendEmail, generateVerificationEmail, generateSecureToken, generatePasswordResetEmail, generateWelcomeEmail } from '../utils/mailersend'
+import { sendEmail, generateVerificationEmail, generateSecureToken, generatePasswordResetEmail, generateWelcomeEmail } from '../utils/smtp-email'
 
 // Cloudflare Workers compatible password hashing
 const hashPassword = async (password: string): Promise<string> => {
@@ -195,7 +195,7 @@ authRoutes.get('/verify-email', async (c) => {
     // Send welcome email after successful verification
     try {
       const baseUrl = new URL(c.req.url).origin
-      const welcomeTemplate = generateWelcomeEmail(user.email.split('@')[0], user.email, baseUrl)
+      const welcomeTemplate = generateWelcomeEmail(user.email, user.email.split('@')[0])
       
       await sendEmail({
         to: [{ email: user.email }],
