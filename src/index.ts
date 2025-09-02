@@ -298,6 +298,147 @@ app.get('/demo', (c) => {
   `)
 })
 
+// Authentication page
+app.get('/auth', (c) => {
+  return c.html(`
+    <!DOCTYPE html>
+    <html lang="de">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Anmeldung - Supplement Stack</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+        <style>
+          body {
+            background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 50%, #f0f9ff 100%);
+          }
+          .form-input {
+            @apply w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all;
+          }
+          .form-label {
+            @apply block text-sm font-medium text-gray-700 mb-2;
+          }
+        </style>
+    </head>
+    <body class="min-h-screen flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full">
+            <!-- Header -->
+            <div class="text-center mb-8">
+                <div class="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <svg class="w-8 h-8 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                    </svg>
+                </div>
+                <h1 class="text-2xl font-bold text-gray-900 mb-2">🏋️ Supplement Stack</h1>
+                <p class="text-gray-600">Wissenschaftlich fundierte Gesundheits-Optimierung</p>
+            </div>
+
+            <!-- Login Form -->
+            <form id="login-form" class="space-y-6">
+                <h2 class="text-xl font-semibold text-center text-gray-800 mb-6">Anmelden</h2>
+                
+                <div>
+                    <label class="form-label">E-Mail-Adresse</label>
+                    <input type="email" name="email" required class="form-input" placeholder="deine@email.de">
+                </div>
+                
+                <div>
+                    <label class="form-label">Passwort</label>
+                    <input type="password" name="password" required class="form-input" placeholder="Dein Passwort">
+                </div>
+
+                <button type="submit" class="w-full bg-gradient-to-r from-emerald-500 to-teal-600 text-white px-6 py-3 rounded-lg font-semibold hover:from-emerald-600 hover:to-teal-700 transition-all transform hover:scale-105">
+                    🔑 Anmelden
+                </button>
+
+                <div class="text-center">
+                    <button type="button" id="forgot-password-btn" class="text-red-600 hover:text-red-700 font-medium text-sm">
+                        🔑 Passwort vergessen?
+                    </button>
+                </div>
+
+                <div class="text-center">
+                    <span class="text-gray-600 text-sm">Noch kein Konto?</span>
+                    <button type="button" id="show-register" class="text-emerald-600 hover:text-emerald-700 font-medium ml-1">
+                        Jetzt registrieren
+                    </button>
+                </div>
+            </form>
+
+            <!-- Register Form (initially hidden) -->
+            <form id="register-form" class="space-y-6 hidden">
+                <h2 class="text-xl font-semibold text-center text-gray-800 mb-6">Registrieren</h2>
+                
+                <div>
+                    <label class="form-label">E-Mail-Adresse</label>
+                    <input type="email" name="email" required class="form-input" placeholder="deine@email.de">
+                </div>
+                
+                <div>
+                    <label class="form-label">Passwort</label>
+                    <input type="password" name="password" required minlength="8" class="form-input" placeholder="Mindestens 8 Zeichen">
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="form-label">Alter (optional)</label>
+                        <input type="number" name="age" min="13" max="120" class="form-input" placeholder="25">
+                    </div>
+                    <div>
+                        <label class="form-label">Gewicht (optional)</label>
+                        <input type="number" name="weight" min="30" max="300" step="0.1" class="form-input" placeholder="70.5">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="form-label">Ernährungsform (optional)</label>
+                    <select name="diet_type" class="form-input">
+                        <option value="omnivore">Omnivore (Alles)</option>
+                        <option value="vegetarisch">Vegetarisch</option>
+                        <option value="vegan">Vegan</option>
+                    </select>
+                </div>
+
+                <button type="submit" class="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-lg font-semibold hover:from-blue-600 hover:to-purple-700 transition-all transform hover:scale-105">
+                    🚀 Registrieren
+                </button>
+
+                <div class="text-center">
+                    <span class="text-gray-600 text-sm">Bereits registriert?</span>
+                    <button type="button" id="show-login" class="text-emerald-600 hover:text-emerald-700 font-medium ml-1">
+                        Jetzt anmelden
+                    </button>
+                </div>
+            </form>
+
+            <!-- Back to Home -->
+            <div class="mt-8 text-center">
+                <a href="/" class="text-gray-500 hover:text-gray-700 font-medium">
+                    ← Zurück zur Startseite
+                </a>
+            </div>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loading" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white rounded-lg p-6 text-center">
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500 mx-auto mb-4"></div>
+                <p id="loading-text" class="text-gray-600">Laden...</p>
+            </div>
+        </div>
+
+        <script src="/static/app.js"></script>
+    </body>
+    </html>
+  `)
+})
+
+// Password reset page
+app.get('/reset-password', (c) => {
+  return serveStatic({ root: './public', path: 'reset-password.html' })(c)
+})
+
 // Health check
 app.get('/health', (c) => {
   return c.json({ status: 'ok', timestamp: new Date().toISOString() })

@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { sign, verify } from 'hono/jwt'
 import type { Bindings, LoginRequest, RegisterRequest, User } from '../types'
-import { sendEmail, generateVerificationEmail, generateVerificationToken } from '../utils/email'
+import { sendEmail, generateVerificationEmail, generateSecureToken, generatePasswordResetEmail, generateWelcomeEmail } from '../utils/mailersend'
 
 // Cloudflare Workers compatible password hashing
 const hashPassword = async (password: string): Promise<string> => {
@@ -46,7 +46,7 @@ authRoutes.post('/register', async (c) => {
     const passwordHash = await hashPassword(body.password)
     
     // Generate email verification token
-    const verificationToken = generateVerificationToken()
+    const verificationToken = generateSecureToken()
     const verificationExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
     
     // Create user with email verification
@@ -77,10 +77,11 @@ authRoutes.post('/register', async (c) => {
     
     try {
       await sendEmail({
-        to: body.email,
+        to: [{ email: body.email }],
         subject: emailTemplate.subject,
         html: emailTemplate.html,
-        text: emailTemplate.text
+        text: emailTemplate.text,
+        tags: ['registration', 'email-verification']
       })
       console.log('[AUTH] Verification email sent to:', body.email)
     } catch (error) {
@@ -191,6 +192,25 @@ authRoutes.get('/verify-email', async (c) => {
       WHERE id = ?
     `).bind(user.id).run()
     
+    // Send welcome email after successful verification
+    try {
+      const baseUrl = new URL(c.req.url).origin
+      const welcomeTemplate = generateWelcomeEmail(user.email.split('@')[0], user.email, baseUrl)
+      
+      await sendEmail({
+        to: [{ email: user.email }],
+        subject: welcomeTemplate.subject,
+        html: welcomeTemplate.html,
+        text: welcomeTemplate.text,
+        tags: ['welcome', 'onboarding']
+      })
+      
+      console.log('[AUTH] Welcome email sent to:', user.email)
+    } catch (error) {
+      console.error('[AUTH] Failed to send welcome email:', error)
+      // Don't fail verification if welcome email fails
+    }
+    
     // Generate JWT token for automatic login
     const jwtToken = await sign(
       { 
@@ -286,7 +306,7 @@ authRoutes.post('/resend-verification', async (c) => {
     }
     
     // Generate new verification token
-    const verificationToken = generateVerificationToken()
+    const verificationToken = generateSecureToken()
     const verificationExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000) // 24 hours
     
     // Update user with new token
@@ -304,10 +324,11 @@ authRoutes.post('/resend-verification', async (c) => {
     
     try {
       await sendEmail({
-        to: body.email,
+        to: [{ email: body.email }],
         subject: emailTemplate.subject,
         html: emailTemplate.html,
-        text: emailTemplate.text
+        text: emailTemplate.text,
+        tags: ['resend-verification', 'email-verification']
       })
       
       return c.json({ 
@@ -320,6 +341,113 @@ authRoutes.post('/resend-verification', async (c) => {
     
   } catch (error) {
     console.error('Resend verification error:', error)
+    return c.json({ error: 'Interner Server-Fehler' }, 500)
+  }
+})
+
+// Forgot password endpoint
+authRoutes.post('/forgot-password', async (c) => {
+  try {
+    const body = await c.req.json<{ email: string }>()
+    
+    if (!body.email) {
+      return c.json({ error: 'E-Mail-Adresse ist erforderlich' }, 400)
+    }
+    
+    // Find user
+    const user = await c.env.DB.prepare(`
+      SELECT * FROM users WHERE email = ?
+    `).bind(body.email).first<User>()
+    
+    if (!user) {
+      // For security, always return success even if user doesn't exist
+      return c.json({ 
+        message: 'Falls ein Konto mit dieser E-Mail existiert, wurde eine Passwort-Zurücksetzung gesendet.' 
+      })
+    }
+    
+    // Generate password reset token
+    const resetToken = generateSecureToken()
+    const resetExpiresAt = new Date(Date.now() + 60 * 60 * 1000) // 1 hour
+    
+    // Store reset token
+    await c.env.DB.prepare(`
+      UPDATE users 
+      SET email_verification_token = ?,
+          email_verification_expires_at = ?,
+          updated_at = datetime('now')
+      WHERE id = ?
+    `).bind(resetToken, resetExpiresAt.toISOString(), user.id).run()
+    
+    // Send password reset email
+    const baseUrl = new URL(c.req.url).origin
+    const emailTemplate = generatePasswordResetEmail(body.email, resetToken, baseUrl)
+    
+    try {
+      await sendEmail({
+        to: [{ email: body.email }],
+        subject: emailTemplate.subject,
+        html: emailTemplate.html,
+        text: emailTemplate.text,
+        tags: ['password-reset', 'security']
+      })
+      
+      console.log('[AUTH] Password reset email sent to:', body.email)
+    } catch (error) {
+      console.error('[AUTH] Failed to send password reset email:', error)
+    }
+    
+    return c.json({ 
+      message: 'Falls ein Konto mit dieser E-Mail existiert, wurde eine Passwort-Zurücksetzung gesendet.' 
+    })
+    
+  } catch (error) {
+    console.error('Forgot password error:', error)
+    return c.json({ error: 'Interner Server-Fehler' }, 500)
+  }
+})
+
+// Reset password endpoint
+authRoutes.post('/reset-password', async (c) => {
+  try {
+    const body = await c.req.json<{ token: string; password: string }>()
+    
+    if (!body.token || !body.password) {
+      return c.json({ error: 'Token und neues Passwort sind erforderlich' }, 400)
+    }
+    
+    if (body.password.length < 8) {
+      return c.json({ error: 'Passwort muss mindestens 8 Zeichen lang sein' }, 400)
+    }
+    
+    // Find user with valid reset token
+    const user = await c.env.DB.prepare(`
+      SELECT * FROM users 
+      WHERE email_verification_token = ? 
+      AND email_verification_expires_at > datetime('now')
+    `).bind(body.token).first<User>()
+    
+    if (!user) {
+      return c.json({ error: 'Ungültiger oder abgelaufener Reset-Token' }, 400)
+    }
+    
+    // Hash new password
+    const passwordHash = await hashPassword(body.password)
+    
+    // Update password and clear reset token
+    await c.env.DB.prepare(`
+      UPDATE users 
+      SET password_hash = ?,
+          email_verification_token = NULL,
+          email_verification_expires_at = NULL,
+          updated_at = datetime('now')
+      WHERE id = ?
+    `).bind(passwordHash, user.id).run()
+    
+    return c.json({ message: 'Passwort erfolgreich zurückgesetzt' })
+    
+  } catch (error) {
+    console.error('Reset password error:', error)
     return c.json({ error: 'Interner Server-Fehler' }, 500)
   }
 })

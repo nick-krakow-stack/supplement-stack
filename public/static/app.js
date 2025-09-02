@@ -102,6 +102,15 @@ class SupplementApp {
       })
     }
 
+    // Forgot password button
+    const forgotPasswordBtn = document.getElementById('forgot-password-btn')
+    if (forgotPasswordBtn) {
+      forgotPasswordBtn.addEventListener('click', (e) => {
+        e.preventDefault()
+        this.showForgotPasswordModal()
+      })
+    }
+
     // Logout button - both ID-based and onclick handlers
     const logoutBtn = document.getElementById('logout-btn')
     if (logoutBtn) {
@@ -1065,6 +1074,122 @@ class SupplementApp {
   showEmailVerificationRequired(email) {
     const message = `Deine E-Mail-Adresse ist noch nicht bestätigt. Bitte überprüfe dein Postfach und klicke auf den Bestätigungslink.`
     this.showEmailVerificationSuccess(email, message)
+  }
+
+  // Password reset functionality
+  async forgotPassword(email) {
+    try {
+      this.showLoading('Passwort-Reset wird gesendet...')
+      
+      const response = await axios.post('/api/auth/forgot-password', {
+        email: email
+      })
+      
+      this.showSuccess(response.data.message)
+      
+    } catch (error) {
+      this.showError(error.response?.data?.error || 'Fehler beim Senden der Passwort-Zurücksetzung')
+    } finally {
+      this.hideLoading()
+    }
+  }
+
+  async resetPassword(token, newPassword) {
+    try {
+      this.showLoading('Passwort wird zurückgesetzt...')
+      
+      const response = await axios.post('/api/auth/reset-password', {
+        token: token,
+        password: newPassword
+      })
+      
+      this.showSuccess(response.data.message + ' Du kannst dich jetzt mit dem neuen Passwort anmelden.')
+      
+      // Redirect to login after successful reset
+      setTimeout(() => {
+        window.location.href = '/auth'
+      }, 2000)
+      
+    } catch (error) {
+      this.showError(error.response?.data?.error || 'Fehler beim Zurücksetzen des Passworts')
+    } finally {
+      this.hideLoading()
+    }
+  }
+
+  showForgotPasswordModal() {
+    const modalHtml = `
+      <div class="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl">
+        <div class="mb-6 text-center">
+          <div class="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg class="w-8 h-8 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-3a1 1 0 011-1h2.586l6.414-6.414A6 6 0 0119 9z"></path>
+            </svg>
+          </div>
+          <h2 class="text-2xl font-bold text-gray-900 mb-2">🔑 Passwort vergessen?</h2>
+          <p class="text-gray-600 mb-6">
+            Gib deine E-Mail-Adresse ein und wir senden dir einen Link zum Zurücksetzen.
+          </p>
+        </div>
+        
+        <form id="forgot-password-form" class="space-y-4">
+          <div>
+            <label class="form-label">E-Mail-Adresse</label>
+            <input type="email" name="email" required class="form-input" placeholder="deine@email.de">
+          </div>
+          
+          <div class="flex flex-col space-y-2">
+            <button 
+              type="submit"
+              class="bg-gradient-to-r from-orange-500 to-red-600 text-white px-6 py-3 rounded-lg font-semibold hover:from-orange-600 hover:to-red-700 transition-all">
+              🔑 Reset-Link senden
+            </button>
+            
+            <button 
+              type="button"
+              onclick="window.appInstance.hideForgotPasswordModal()" 
+              class="bg-gray-500 text-white px-6 py-3 rounded-lg font-semibold hover:bg-gray-600 transition-all">
+              Abbrechen
+            </button>
+          </div>
+          
+          <p class="text-xs text-gray-500 mt-4 text-center">
+            🛡️ Der Link ist 1 Stunde gültig und kann nur einmal verwendet werden.
+          </p>
+        </form>
+      </div>
+    `
+    
+    // Create modal backdrop
+    const modalBackdrop = document.createElement('div')
+    modalBackdrop.id = 'forgot-password-modal'
+    modalBackdrop.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50'
+    modalBackdrop.innerHTML = modalHtml
+    
+    document.body.appendChild(modalBackdrop)
+    
+    // Handle form submission
+    const form = document.getElementById('forgot-password-form')
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault()
+      const formData = new FormData(e.target)
+      await this.forgotPassword(formData.get('email'))
+      this.hideForgotPasswordModal()
+    })
+    
+    // Close on backdrop click
+    modalBackdrop.addEventListener('click', (e) => {
+      if (e.target === modalBackdrop) {
+        this.hideForgotPasswordModal()
+      }
+    })
+  }
+
+  hideForgotPasswordModal() {
+    const modal = document.getElementById('forgot-password-modal')
+    if (modal) {
+      modal.remove()
+    }
   }
 
   escapeHtml(text) {
