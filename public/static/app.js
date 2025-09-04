@@ -5,10 +5,6 @@ class SupplementApp {
   constructor() {
     this.token = localStorage.getItem('auth_token')
     this.currentUser = null
-    
-    // Debug token loading
-    alert(`🔍 DEBUG: Token beim Laden - ${this.token ? 'GEFUNDEN' : 'NICHT GEFUNDEN'} - Länge: ${this.token?.length || 0}`)
-    
     this.init()
   }
 
@@ -174,15 +170,7 @@ class SupplementApp {
         axios.defaults.headers.common['Authorization'] = `Bearer ${this.token}`
         
         this.currentUser = response.data.user
-        
-        // Debug: Verify token is stored
-        const storedToken = localStorage.getItem('auth_token')
-        alert(`🔍 DEBUG: Token gespeichert? ${storedToken ? 'JA' : 'NEIN'} - Länge: ${storedToken?.length || 0}`)
-        
-        // Small delay to ensure token is stored before redirect
-        setTimeout(() => {
-          this.redirectToDashboard()
-        }, 100)
+        this.redirectToDashboard()
       }
     } catch (error) {
       const errorData = error.response?.data
@@ -289,12 +277,11 @@ class SupplementApp {
   async loadDashboardData() {
     try {
       this.showLoading('Lade Dashboard...')
-      alert('🔄 DEBUG: Starting dashboard load...')
       
       // Check authentication first
       const currentToken = this.token || localStorage.getItem('auth_token')
       if (!currentToken) {
-        alert(`❌ DEBUG: Benutzer nicht angemeldet - Token fehlt\nthis.token: ${this.token}\nlocalStorage: ${localStorage.getItem('auth_token')}`)
+        console.log('No token found, redirecting to login')
         this.showError('Benutzer nicht angemeldet')
         return
       }
@@ -303,51 +290,14 @@ class SupplementApp {
       if (!this.token && currentToken) {
         this.token = currentToken
         axios.defaults.headers.common['Authorization'] = `Bearer ${this.token}`
-        alert('🔄 DEBUG: Token aus localStorage wiederhergestellt')
       }
       
-      alert(`✅ DEBUG: Token vorhanden - Länge: ${currentToken.length}`)
-      
-      // Make API calls with detailed error handling
-      let productsResponse, stacksResponse, wishlistResponse
-      
-      try {
-        alert('🔄 DEBUG: Rufe API-Endpoints auf...')
-        const responses = await Promise.all([
-          axios.get('/api/protected/products').catch(e => ({ error: 'products', details: e })),
-          axios.get('/api/protected/stacks').catch(e => ({ error: 'stacks', details: e })),
-          axios.get('/api/protected/wishlist').catch(e => ({ error: 'wishlist', details: e }))
-        ])
-        
-        productsResponse = responses[0]
-        stacksResponse = responses[1]
-        wishlistResponse = responses[2]
-        
-        // Check for API errors
-        if (productsResponse.error) {
-          alert(`❌ DEBUG: Products API Fehler - ${productsResponse.details.response?.status} ${productsResponse.details.response?.statusText}`)
-          throw new Error(`Products API failed: ${productsResponse.details.message}`)
-        }
-        if (stacksResponse.error) {
-          alert(`❌ DEBUG: Stacks API Fehler - ${stacksResponse.details.response?.status} ${stacksResponse.details.response?.statusText}`)
-          throw new Error(`Stacks API failed: ${stacksResponse.details.message}`)
-        }
-        if (wishlistResponse.error) {
-          alert(`❌ DEBUG: Wishlist API Fehler - ${wishlistResponse.details.response?.status} ${wishlistResponse.details.response?.statusText}`)
-          throw new Error(`Wishlist API failed: ${wishlistResponse.details.message}`)
-        }
-        
-        alert('✅ DEBUG: Alle API-Aufrufe erfolgreich')
-        
-      } catch (apiError) {
-        alert(`❌ DEBUG: API-Aufrufe fehlgeschlagen: ${apiError.message}`)
-        throw apiError
-      }
-
-      // Debug response data
-      alert(`🔍 DEBUG: Products Response: ${JSON.stringify(productsResponse.data).substring(0, 100)}...`)
-      alert(`🔍 DEBUG: Stacks Response: ${JSON.stringify(stacksResponse.data).substring(0, 100)}...`)
-      alert(`🔍 DEBUG: Wishlist Response: ${JSON.stringify(wishlistResponse.data).substring(0, 100)}...`)
+      // Make API calls
+      const [productsResponse, stacksResponse, wishlistResponse] = await Promise.all([
+        axios.get('/api/protected/products'),
+        axios.get('/api/protected/stacks'),
+        axios.get('/api/protected/wishlist')
+      ])
 
       // Find DOM elements
       const productsCount = document.getElementById('products-count')
@@ -355,89 +305,47 @@ class SupplementApp {
       const wishlistCount = document.getElementById('wishlist-count')
       
       if (!productsCount || !stacksCount || !wishlistCount) {
-        alert('❌ DEBUG: Dashboard DOM-Elemente nicht gefunden - falsche Seite?')
         throw new Error('Dashboard DOM elements not found')
       }
-      alert('✅ DEBUG: Dashboard DOM-Elemente gefunden')
       
-      // Process data with type safety
-      let products, stacks, wishlist
-      
-      try {
-        // Products processing
-        products = Array.isArray(productsResponse.data) ? productsResponse.data : []
-        alert(`✅ DEBUG: Products verarbeitet - ${products.length} Einträge`)
-        
-        // Stacks processing with detailed checking
-        if (stacksResponse.data && typeof stacksResponse.data === 'object') {
-          if (stacksResponse.data.success && Array.isArray(stacksResponse.data.data)) {
-            stacks = stacksResponse.data.data
-            alert(`✅ DEBUG: Stacks (Format: {success, data}) verarbeitet - ${stacks.length} Einträge`)
-          } else if (Array.isArray(stacksResponse.data)) {
-            stacks = stacksResponse.data
-            alert(`✅ DEBUG: Stacks (Array Format) verarbeitet - ${stacks.length} Einträge`)
-          } else {
-            stacks = []
-            alert('⚠️ DEBUG: Stacks - unerwartetes Format, verwende leeres Array')
-          }
-        } else {
-          stacks = []
-          alert('⚠️ DEBUG: Stacks - keine Daten, verwende leeres Array')
-        }
-        
-        // Wishlist processing
-        wishlist = Array.isArray(wishlistResponse.data) ? wishlistResponse.data : []
-        alert(`✅ DEBUG: Wishlist verarbeitet - ${wishlist.length} Einträge`)
-        
-      } catch (processingError) {
-        alert(`❌ DEBUG: Datenverarbeitung fehlgeschlagen: ${processingError.message}`)
-        throw processingError
-      }
+      // Process data safely
+      const products = Array.isArray(productsResponse.data) ? productsResponse.data : []
+      const stacks = (stacksResponse.data && stacksResponse.data.success && Array.isArray(stacksResponse.data.data)) 
+                      ? stacksResponse.data.data 
+                      : (Array.isArray(stacksResponse.data) ? stacksResponse.data : [])
+      const wishlist = Array.isArray(wishlistResponse.data) ? wishlistResponse.data : []
       
       // Update counters
-      try {
-        productsCount.textContent = products.length
-        stacksCount.textContent = stacks.length
-        wishlistCount.textContent = wishlist.length
-        alert('✅ DEBUG: Counter aktualisiert')
-      } catch (counterError) {
-        alert(`❌ DEBUG: Counter-Update fehlgeschlagen: ${counterError.message}`)
-        throw counterError
-      }
+      productsCount.textContent = products.length
+      stacksCount.textContent = stacks.length
+      wishlistCount.textContent = wishlist.length
 
       // Calculate monthly costs
-      try {
-        if (!Array.isArray(stacks)) {
-          alert(`❌ DEBUG: Stacks ist kein Array für Kostenberechnung: ${typeof stacks}`)
-          throw new Error('Stacks ist kein Array für Kostenberechnung')
-        }
-        
-        const monthlyCost = this.calculateMonthlyCosts(stacks)
-        const monthlyCostElement = document.getElementById('monthly-cost')
-        if (monthlyCostElement) {
-          monthlyCostElement.textContent = `€${monthlyCost.toFixed(2)}`
-          alert(`✅ DEBUG: Monatliche Kosten berechnet: €${monthlyCost.toFixed(2)}`)
-        }
-      } catch (costError) {
-        alert(`❌ DEBUG: Kostenberechnung fehlgeschlagen: ${costError.message}`)
-        throw costError
+      const monthlyCost = this.calculateMonthlyCosts(stacks)
+      const monthlyCostElement = document.getElementById('monthly-cost')
+      if (monthlyCostElement) {
+        monthlyCostElement.textContent = `€${monthlyCost.toFixed(2)}`
       }
 
       // Display recent stacks
-      try {
-        this.displayRecentStacks(stacks)
-        alert('✅ DEBUG: Recent Stacks angezeigt')
-      } catch (displayError) {
-        alert(`❌ DEBUG: Stack-Anzeige fehlgeschlagen: ${displayError.message}`)
-        throw displayError
-      }
-      
-      alert('🎉 DEBUG: Dashboard erfolgreich geladen!')
+      this.displayRecentStacks(stacks)
 
     } catch (error) {
       console.error('Error loading dashboard data:', error)
-      alert(`💥 DEBUG: FINALER FEHLER: ${error.message || error}`)
-      this.showError(`Fehler beim Laden der Dashboard-Daten: ${error.message || 'Unbekannter Fehler'}`)
+      
+      // Better error messages based on error type
+      let errorMessage = 'Fehler beim Laden der Dashboard-Daten'
+      if (error.response?.status === 401) {
+        errorMessage = 'Sitzung abgelaufen. Bitte melden Sie sich erneut an.'
+        this.logout()
+        return
+      } else if (error.response?.status === 403) {
+        errorMessage = 'Keine Berechtigung für diese Daten'
+      } else if (error.response?.status >= 500) {
+        errorMessage = 'Server-Fehler. Bitte versuchen Sie es später erneut.'
+      }
+      
+      this.showError(errorMessage)
     } finally {
       this.hideLoading()
     }
@@ -446,33 +354,25 @@ class SupplementApp {
   calculateMonthlyCosts(stacks) {
     if (!Array.isArray(stacks)) {
       console.error('calculateMonthlyCosts: stacks is not an array:', typeof stacks, stacks)
-      alert(`❌ DEBUG: calculateMonthlyCosts - stacks ist kein Array: ${typeof stacks}`)
       return 0
     }
     
     try {
-      const total = stacks.reduce((total, stack) => {
+      return stacks.reduce((total, stack) => {
         const cost = (stack && typeof stack === 'object') ? (stack.monthly_cost || 0) : 0
         return total + cost
       }, 0)
-      console.log('Monthly costs calculated:', total)
-      return total
     } catch (error) {
       console.error('Error calculating monthly costs:', error)
-      alert(`❌ DEBUG: calculateMonthlyCosts Fehler: ${error.message}`)
       return 0
     }
   }
 
   displayRecentStacks(stacks) {
     const container = document.getElementById('recent-stacks')
-    if (!container) {
-      alert('❌ DEBUG: recent-stacks Container nicht gefunden')
-      return
-    }
+    if (!container) return
 
     if (!Array.isArray(stacks)) {
-      alert(`❌ DEBUG: displayRecentStacks - stacks ist kein Array: ${typeof stacks}`)
       console.error('displayRecentStacks: stacks is not an array:', stacks)
       container.innerHTML = '<p class="text-red-500 text-center py-4">Fehler: Stacks-Daten haben falsches Format</p>'
       return
@@ -480,7 +380,6 @@ class SupplementApp {
 
     if (stacks.length === 0) {
       container.innerHTML = '<p class="text-gray-500 text-center py-4">Noch keine Stacks erstellt</p>'
-      alert('✅ DEBUG: Leere Stacks-Liste angezeigt')
       return
     }
 
@@ -503,10 +402,7 @@ class SupplementApp {
         `
       }).join('')
       
-      alert(`✅ DEBUG: ${stacks.length} Stacks erfolgreich angezeigt`)
-      
     } catch (error) {
-      alert(`❌ DEBUG: displayRecentStacks Fehler: ${error.message}`)
       console.error('Error displaying recent stacks:', error)
       container.innerHTML = '<p class="text-red-500 text-center py-4">Fehler beim Anzeigen der Stacks</p>'
     }

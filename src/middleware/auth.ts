@@ -1,5 +1,6 @@
 import { Context, Next } from 'hono';
 import { getCookie } from 'hono/cookie';
+import { verify } from 'hono/jwt';
 import { User } from '../types';
 
 type Bindings = {
@@ -7,6 +8,35 @@ type Bindings = {
 }
 
 export async function authMiddleware(c: Context<{ Bindings: Bindings }>, next: Next) {
+  // Try JWT token first (Authorization header)
+  const authHeader = c.req.header('Authorization');
+  
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const token = authHeader.substring(7);
+      const jwtSecret = c.env.JWT_SECRET || 'fallback-secret-for-dev';
+      const payload = await verify(token, jwtSecret);
+      
+      // Get user from database using JWT payload
+      const user = await c.env.DB.prepare(`
+        SELECT id, email, age, gender, weight, diet_type, personal_goals, 
+               guideline_source, email_verified, created_at, updated_at
+        FROM users 
+        WHERE id = ?
+      `).bind(payload.userId).first<User>();
+      
+      if (user) {
+        c.set('user', user);
+        await next();
+        return;
+      }
+    } catch (error) {
+      console.error('JWT verification failed:', error);
+      // Continue to try session-based auth
+    }
+  }
+  
+  // Fallback to session-based authentication
   const sessionId = getCookie(c, 'session_id');
   
   if (!sessionId) {
