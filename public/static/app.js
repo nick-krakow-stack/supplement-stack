@@ -5,6 +5,10 @@ class SupplementApp {
   constructor() {
     this.token = localStorage.getItem('auth_token')
     this.currentUser = null
+    
+    // Debug token loading
+    alert(`🔍 DEBUG: Token beim Laden - ${this.token ? 'GEFUNDEN' : 'NICHT GEFUNDEN'} - Länge: ${this.token?.length || 0}`)
+    
     this.init()
   }
 
@@ -170,7 +174,15 @@ class SupplementApp {
         axios.defaults.headers.common['Authorization'] = `Bearer ${this.token}`
         
         this.currentUser = response.data.user
-        this.redirectToDashboard()
+        
+        // Debug: Verify token is stored
+        const storedToken = localStorage.getItem('auth_token')
+        alert(`🔍 DEBUG: Token gespeichert? ${storedToken ? 'JA' : 'NEIN'} - Länge: ${storedToken?.length || 0}`)
+        
+        // Small delay to ensure token is stored before redirect
+        setTimeout(() => {
+          this.redirectToDashboard()
+        }, 100)
       }
     } catch (error) {
       const errorData = error.response?.data
@@ -280,12 +292,21 @@ class SupplementApp {
       alert('🔄 DEBUG: Starting dashboard load...')
       
       // Check authentication first
-      if (!this.token) {
-        alert('❌ DEBUG: Benutzer nicht angemeldet - Token fehlt')
+      const currentToken = this.token || localStorage.getItem('auth_token')
+      if (!currentToken) {
+        alert(`❌ DEBUG: Benutzer nicht angemeldet - Token fehlt\nthis.token: ${this.token}\nlocalStorage: ${localStorage.getItem('auth_token')}`)
         this.showError('Benutzer nicht angemeldet')
         return
       }
-      alert('✅ DEBUG: Token vorhanden')
+      
+      // Update token if needed
+      if (!this.token && currentToken) {
+        this.token = currentToken
+        axios.defaults.headers.common['Authorization'] = `Bearer ${this.token}`
+        alert('🔄 DEBUG: Token aus localStorage wiederhergestellt')
+      }
+      
+      alert(`✅ DEBUG: Token vorhanden - Länge: ${currentToken.length}`)
       
       // Make API calls with detailed error handling
       let productsResponse, stacksResponse, wishlistResponse
