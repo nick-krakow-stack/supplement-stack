@@ -200,8 +200,10 @@ apiRoutes.get('/protected/profile', async (c) => {
       SELECT id, email, age, gender, weight, diet_type, personal_goals, 
              guideline_source, email_verified, created_at, updated_at
       FROM users 
-      WHERE id = ? AND email_verified = TRUE
+      WHERE id = ?
     `).bind(payload.userId).first<User>();
+    
+    console.log('[PROFILE] User found:', user ? `Yes (${user.email})` : 'No');
 
     if (!user) {
       return c.json({ success: false, error: 'Benutzer nicht gefunden' }, 404);
