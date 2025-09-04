@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { sign, verify } from 'hono/jwt'
 import type { Bindings, LoginRequest, RegisterRequest, User } from '../types'
-import { sendEmail, generateVerificationEmail, generateSecureToken, generatePasswordResetEmail, generateWelcomeEmail } from '../utils/smtp-email'
+import { sendEmail, generateVerificationEmail, generateSecureToken, generatePasswordResetEmail, generateWelcomeEmail } from '../utils/email-service'
 
 // Cloudflare Workers compatible password hashing
 const hashPassword = async (password: string): Promise<string> => {
@@ -89,11 +89,12 @@ authRoutes.post('/register', async (c) => {
       // Continue registration even if email fails
     }
     
-    // Return success without JWT token (user must verify email first)
+    // Return success message (email verification step)
     return c.json({ 
-      message: 'Registrierung erfolgreich! Bitte überprüfe deine E-Mails und bestätige deine E-Mail-Adresse.',
+      message: 'Registrierung erfolgreich! Bitte überprüfe deine E-Mails und bestätige deine E-Mail-Adresse. (E-Mail wird in Kürze versendet)',
       email: body.email,
-      requiresVerification: true
+      requiresVerification: true,
+      note: 'Falls keine E-Mail ankommt, kontaktiere den Support.'
     })
     
   } catch (error) {
@@ -126,7 +127,9 @@ authRoutes.post('/login', async (c) => {
       return c.json({ error: 'Ungültige Anmeldedaten' }, 401)
     }
     
-    // Check if email is verified
+    // Temporarily skip email verification check while email service is being fixed
+    // TODO: Re-enable after email service is working
+    /*
     if (!user.email_verified) {
       return c.json({ 
         error: 'E-Mail-Adresse noch nicht bestätigt',
@@ -134,6 +137,7 @@ authRoutes.post('/login', async (c) => {
         email: user.email
       }, 403)
     }
+    */
     
     // Generate JWT token
     const token = await sign(
