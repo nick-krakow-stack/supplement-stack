@@ -291,7 +291,9 @@ class SupplementApp {
       
       // Handle different response formats 
       const products = productsResponse.data || []
-      const stacks = stacksResponse.data.data || stacksResponse.data || []
+      const stacks = (stacksResponse.data.data && Array.isArray(stacksResponse.data.data)) 
+                      ? stacksResponse.data.data 
+                      : (Array.isArray(stacksResponse.data) ? stacksResponse.data : [])
       const wishlist = wishlistResponse.data || []
       
       if (productsCount) productsCount.textContent = products.length

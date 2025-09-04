@@ -41,7 +41,7 @@ stackRoutes.get('/', authMiddleware, async (c) => {
 
     return c.json({
       success: true,
-      data: stacks.results
+      data: stacks.results || []
     });
   } catch (error) {
     console.error('Get stacks error:', error);
