@@ -167,22 +167,31 @@ apiRoutes.post('/check-interactions', optionalAuthMiddleware, async (c) => {
 
 // Protected routes (require authentication)
 apiRoutes.get('/protected/profile', async (c) => {
+  console.log('[PROFILE] Profile endpoint called');
+  
   try {
     // Check for Authorization header
     const authHeader = c.req.header('Authorization');
+    console.log('[PROFILE] Auth header:', authHeader ? 'Present' : 'Missing');
+    
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log('[PROFILE] Invalid or missing Bearer token');
       return c.json({ success: false, error: 'Keine Berechtigung' }, 401);
     }
 
     const token = authHeader.substring(7); // Remove "Bearer " prefix
+    console.log('[PROFILE] Token extracted, length:', token.length);
     
     // Verify JWT token
     const jwtSecret = c.env.JWT_SECRET || 'fallback-secret-for-dev';
+    console.log('[PROFILE] Using JWT secret:', jwtSecret ? 'Set' : 'Not set');
     let payload;
     
     try {
       payload = await verify(token, jwtSecret);
+      console.log('[PROFILE] Token verified, userId:', payload.userId);
     } catch (error) {
+      console.error('[PROFILE] Token verification failed:', error);
       return c.json({ success: false, error: 'Ungültiger Token' }, 401);
     }
 
