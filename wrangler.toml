@@ -1,10 +1,10 @@
-name = "supplement-stack"
+name = "supplementstack"
 compatibility_date = "2024-09-01"
 compatibility_flags = ["nodejs_compat"]
 
 # Environment bindings
 [env.production]
-name = "supplement-stack"
+name = "supplementstack"
 
 [env.production.vars]
 ENVIRONMENT = "production"
