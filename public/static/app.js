@@ -277,68 +277,218 @@ class SupplementApp {
   async loadDashboardData() {
     try {
       this.showLoading('Lade Dashboard...')
+      alert('🔄 DEBUG: Starting dashboard load...')
       
-      const [productsResponse, stacksResponse, wishlistResponse] = await Promise.all([
-        axios.get('/api/protected/products'),
-        axios.get('/api/protected/stacks'),
-        axios.get('/api/protected/wishlist')
-      ])
+      // Check authentication first
+      if (!this.token) {
+        alert('❌ DEBUG: Benutzer nicht angemeldet - Token fehlt')
+        this.showError('Benutzer nicht angemeldet')
+        return
+      }
+      alert('✅ DEBUG: Token vorhanden')
+      
+      // Make API calls with detailed error handling
+      let productsResponse, stacksResponse, wishlistResponse
+      
+      try {
+        alert('🔄 DEBUG: Rufe API-Endpoints auf...')
+        const responses = await Promise.all([
+          axios.get('/api/protected/products').catch(e => ({ error: 'products', details: e })),
+          axios.get('/api/protected/stacks').catch(e => ({ error: 'stacks', details: e })),
+          axios.get('/api/protected/wishlist').catch(e => ({ error: 'wishlist', details: e }))
+        ])
+        
+        productsResponse = responses[0]
+        stacksResponse = responses[1]
+        wishlistResponse = responses[2]
+        
+        // Check for API errors
+        if (productsResponse.error) {
+          alert(`❌ DEBUG: Products API Fehler - ${productsResponse.details.response?.status} ${productsResponse.details.response?.statusText}`)
+          throw new Error(`Products API failed: ${productsResponse.details.message}`)
+        }
+        if (stacksResponse.error) {
+          alert(`❌ DEBUG: Stacks API Fehler - ${stacksResponse.details.response?.status} ${stacksResponse.details.response?.statusText}`)
+          throw new Error(`Stacks API failed: ${stacksResponse.details.message}`)
+        }
+        if (wishlistResponse.error) {
+          alert(`❌ DEBUG: Wishlist API Fehler - ${wishlistResponse.details.response?.status} ${wishlistResponse.details.response?.statusText}`)
+          throw new Error(`Wishlist API failed: ${wishlistResponse.details.message}`)
+        }
+        
+        alert('✅ DEBUG: Alle API-Aufrufe erfolgreich')
+        
+      } catch (apiError) {
+        alert(`❌ DEBUG: API-Aufrufe fehlgeschlagen: ${apiError.message}`)
+        throw apiError
+      }
 
-      // Update counters
+      // Debug response data
+      alert(`🔍 DEBUG: Products Response: ${JSON.stringify(productsResponse.data).substring(0, 100)}...`)
+      alert(`🔍 DEBUG: Stacks Response: ${JSON.stringify(stacksResponse.data).substring(0, 100)}...`)
+      alert(`🔍 DEBUG: Wishlist Response: ${JSON.stringify(wishlistResponse.data).substring(0, 100)}...`)
+
+      // Find DOM elements
       const productsCount = document.getElementById('products-count')
       const stacksCount = document.getElementById('stacks-count')
       const wishlistCount = document.getElementById('wishlist-count')
       
-      // Handle different response formats 
-      const products = productsResponse.data || []
-      const stacks = (stacksResponse.data.data && Array.isArray(stacksResponse.data.data)) 
-                      ? stacksResponse.data.data 
-                      : (Array.isArray(stacksResponse.data) ? stacksResponse.data : [])
-      const wishlist = wishlistResponse.data || []
+      if (!productsCount || !stacksCount || !wishlistCount) {
+        alert('❌ DEBUG: Dashboard DOM-Elemente nicht gefunden - falsche Seite?')
+        throw new Error('Dashboard DOM elements not found')
+      }
+      alert('✅ DEBUG: Dashboard DOM-Elemente gefunden')
       
-      if (productsCount) productsCount.textContent = products.length
-      if (stacksCount) stacksCount.textContent = stacks.length
-      if (wishlistCount) wishlistCount.textContent = wishlist.length
+      // Process data with type safety
+      let products, stacks, wishlist
+      
+      try {
+        // Products processing
+        products = Array.isArray(productsResponse.data) ? productsResponse.data : []
+        alert(`✅ DEBUG: Products verarbeitet - ${products.length} Einträge`)
+        
+        // Stacks processing with detailed checking
+        if (stacksResponse.data && typeof stacksResponse.data === 'object') {
+          if (stacksResponse.data.success && Array.isArray(stacksResponse.data.data)) {
+            stacks = stacksResponse.data.data
+            alert(`✅ DEBUG: Stacks (Format: {success, data}) verarbeitet - ${stacks.length} Einträge`)
+          } else if (Array.isArray(stacksResponse.data)) {
+            stacks = stacksResponse.data
+            alert(`✅ DEBUG: Stacks (Array Format) verarbeitet - ${stacks.length} Einträge`)
+          } else {
+            stacks = []
+            alert('⚠️ DEBUG: Stacks - unerwartetes Format, verwende leeres Array')
+          }
+        } else {
+          stacks = []
+          alert('⚠️ DEBUG: Stacks - keine Daten, verwende leeres Array')
+        }
+        
+        // Wishlist processing
+        wishlist = Array.isArray(wishlistResponse.data) ? wishlistResponse.data : []
+        alert(`✅ DEBUG: Wishlist verarbeitet - ${wishlist.length} Einträge`)
+        
+      } catch (processingError) {
+        alert(`❌ DEBUG: Datenverarbeitung fehlgeschlagen: ${processingError.message}`)
+        throw processingError
+      }
+      
+      // Update counters
+      try {
+        productsCount.textContent = products.length
+        stacksCount.textContent = stacks.length
+        wishlistCount.textContent = wishlist.length
+        alert('✅ DEBUG: Counter aktualisiert')
+      } catch (counterError) {
+        alert(`❌ DEBUG: Counter-Update fehlgeschlagen: ${counterError.message}`)
+        throw counterError
+      }
 
       // Calculate monthly costs
-      const monthlyCost = this.calculateMonthlyCosts(stacks)
-      const monthlyCostElement = document.getElementById('monthly-cost')
-      if (monthlyCostElement) monthlyCostElement.textContent = `€${monthlyCost.toFixed(2)}`
+      try {
+        if (!Array.isArray(stacks)) {
+          alert(`❌ DEBUG: Stacks ist kein Array für Kostenberechnung: ${typeof stacks}`)
+          throw new Error('Stacks ist kein Array für Kostenberechnung')
+        }
+        
+        const monthlyCost = this.calculateMonthlyCosts(stacks)
+        const monthlyCostElement = document.getElementById('monthly-cost')
+        if (monthlyCostElement) {
+          monthlyCostElement.textContent = `€${monthlyCost.toFixed(2)}`
+          alert(`✅ DEBUG: Monatliche Kosten berechnet: €${monthlyCost.toFixed(2)}`)
+        }
+      } catch (costError) {
+        alert(`❌ DEBUG: Kostenberechnung fehlgeschlagen: ${costError.message}`)
+        throw costError
+      }
 
       // Display recent stacks
-      this.displayRecentStacks(stacks)
+      try {
+        this.displayRecentStacks(stacks)
+        alert('✅ DEBUG: Recent Stacks angezeigt')
+      } catch (displayError) {
+        alert(`❌ DEBUG: Stack-Anzeige fehlgeschlagen: ${displayError.message}`)
+        throw displayError
+      }
+      
+      alert('🎉 DEBUG: Dashboard erfolgreich geladen!')
 
     } catch (error) {
       console.error('Error loading dashboard data:', error)
-      this.showError('Fehler beim Laden der Dashboard-Daten')
+      alert(`💥 DEBUG: FINALER FEHLER: ${error.message || error}`)
+      this.showError(`Fehler beim Laden der Dashboard-Daten: ${error.message || 'Unbekannter Fehler'}`)
     } finally {
       this.hideLoading()
     }
   }
 
   calculateMonthlyCosts(stacks) {
-    return stacks.reduce((total, stack) => total + (stack.monthly_cost || 0), 0)
+    if (!Array.isArray(stacks)) {
+      console.error('calculateMonthlyCosts: stacks is not an array:', typeof stacks, stacks)
+      alert(`❌ DEBUG: calculateMonthlyCosts - stacks ist kein Array: ${typeof stacks}`)
+      return 0
+    }
+    
+    try {
+      const total = stacks.reduce((total, stack) => {
+        const cost = (stack && typeof stack === 'object') ? (stack.monthly_cost || 0) : 0
+        return total + cost
+      }, 0)
+      console.log('Monthly costs calculated:', total)
+      return total
+    } catch (error) {
+      console.error('Error calculating monthly costs:', error)
+      alert(`❌ DEBUG: calculateMonthlyCosts Fehler: ${error.message}`)
+      return 0
+    }
   }
 
   displayRecentStacks(stacks) {
     const container = document.getElementById('recent-stacks')
-    if (!container) return
-
-    if (stacks.length === 0) {
-      container.innerHTML = '<p class="text-gray-500 text-center py-4">Noch keine Stacks erstellt</p>'
+    if (!container) {
+      alert('❌ DEBUG: recent-stacks Container nicht gefunden')
       return
     }
 
-    container.innerHTML = stacks.slice(0, 3).map(stack => `
-      <div class="border-b border-gray-200 last:border-b-0 pb-4 last:pb-0 mb-4 last:mb-0">
-        <h3 class="font-medium text-gray-900">${this.escapeHtml(stack.name)}</h3>
-        <p class="text-sm text-gray-500 mt-1">${this.escapeHtml(stack.description || 'Keine Beschreibung')}</p>
-        <div class="flex justify-between items-center mt-2">
-          <span class="text-xs text-gray-400">${stack.product_count || 0} Produkte</span>
-          <a href="/stacks?id=${stack.id}" class="text-blue-600 hover:text-blue-500 text-sm">Bearbeiten</a>
-        </div>
-      </div>
-    `).join('')
+    if (!Array.isArray(stacks)) {
+      alert(`❌ DEBUG: displayRecentStacks - stacks ist kein Array: ${typeof stacks}`)
+      console.error('displayRecentStacks: stacks is not an array:', stacks)
+      container.innerHTML = '<p class="text-red-500 text-center py-4">Fehler: Stacks-Daten haben falsches Format</p>'
+      return
+    }
+
+    if (stacks.length === 0) {
+      container.innerHTML = '<p class="text-gray-500 text-center py-4">Noch keine Stacks erstellt</p>'
+      alert('✅ DEBUG: Leere Stacks-Liste angezeigt')
+      return
+    }
+
+    try {
+      container.innerHTML = stacks.slice(0, 3).map(stack => {
+        if (!stack || typeof stack !== 'object') {
+          console.warn('Invalid stack object:', stack)
+          return '<div class="text-red-500">Ungültiger Stack</div>'
+        }
+        
+        return `
+          <div class="border-b border-gray-200 last:border-b-0 pb-4 last:pb-0 mb-4 last:mb-0">
+            <h3 class="font-medium text-gray-900">${this.escapeHtml(stack.name || 'Unbenannter Stack')}</h3>
+            <p class="text-sm text-gray-500 mt-1">${this.escapeHtml(stack.description || 'Keine Beschreibung')}</p>
+            <div class="flex justify-between items-center mt-2">
+              <span class="text-xs text-gray-400">${stack.product_count || 0} Produkte</span>
+              <a href="/stacks?id=${stack.id}" class="text-blue-600 hover:text-blue-500 text-sm">Bearbeiten</a>
+            </div>
+          </div>
+        `
+      }).join('')
+      
+      alert(`✅ DEBUG: ${stacks.length} Stacks erfolgreich angezeigt`)
+      
+    } catch (error) {
+      alert(`❌ DEBUG: displayRecentStacks Fehler: ${error.message}`)
+      console.error('Error displaying recent stacks:', error)
+      container.innerHTML = '<p class="text-red-500 text-center py-4">Fehler beim Anzeigen der Stacks</p>'
+    }
   }
 
   // Products functionality
