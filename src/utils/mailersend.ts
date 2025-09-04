@@ -78,7 +78,7 @@ export function generateVerificationEmail(
   verificationToken: string, 
   baseUrl: string
 ): EmailTemplate {
-  const verificationUrl = `${baseUrl}/verify-email?token=${verificationToken}`
+  const verificationUrl = `${baseUrl}/api/auth/verify-email?token=${verificationToken}`
   
   const subject = '✅ Supplement Stack - E-Mail bestätigen'
   
