@@ -170,7 +170,6 @@ class SupplementApp {
         axios.defaults.headers.common['Authorization'] = `Bearer ${this.token}`
         
         this.currentUser = response.data.user
-        this.showSuccess('Erfolgreich angemeldet!')
         this.redirectToDashboard()
       }
     } catch (error) {
@@ -290,17 +289,22 @@ class SupplementApp {
       const stacksCount = document.getElementById('stacks-count')
       const wishlistCount = document.getElementById('wishlist-count')
       
-      if (productsCount) productsCount.textContent = productsResponse.data.length
-      if (stacksCount) stacksCount.textContent = stacksResponse.data.length
-      if (wishlistCount) wishlistCount.textContent = wishlistResponse.data.length
+      // Handle different response formats 
+      const products = productsResponse.data || []
+      const stacks = stacksResponse.data.data || stacksResponse.data || []
+      const wishlist = wishlistResponse.data || []
+      
+      if (productsCount) productsCount.textContent = products.length
+      if (stacksCount) stacksCount.textContent = stacks.length
+      if (wishlistCount) wishlistCount.textContent = wishlist.length
 
       // Calculate monthly costs
-      const monthlyCost = this.calculateMonthlyCosts(stacksResponse.data)
+      const monthlyCost = this.calculateMonthlyCosts(stacks)
       const monthlyCostElement = document.getElementById('monthly-cost')
       if (monthlyCostElement) monthlyCostElement.textContent = `€${monthlyCost.toFixed(2)}`
 
       // Display recent stacks
-      this.displayRecentStacks(stacksResponse.data)
+      this.displayRecentStacks(stacks)
 
     } catch (error) {
       console.error('Error loading dashboard data:', error)

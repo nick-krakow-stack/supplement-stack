@@ -4,6 +4,7 @@ import { serveStatic } from 'hono/cloudflare-workers'
 import { authRoutes } from './routes/auth'
 import { productRoutes } from './routes/products'
 import { stackRoutes } from './routes/stacks'
+import { wishlistRoutes } from './routes/wishlist'
 import { affiliateRoutes } from './routes/affiliate'
 import { adminRoutes } from './routes/admin'
 import { apiRoutes } from './routes/api'
@@ -23,8 +24,9 @@ app.use('/static/*', serveStatic({ root: './public' }))
 // API routes
 app.route('/api', apiRoutes)
 app.route('/api/auth', authRoutes)
-app.route('/api/products', productRoutes)
-app.route('/api/stacks', stackRoutes)
+app.route('/api/protected/products', productRoutes)
+app.route('/api/protected/stacks', stackRoutes)
+app.route('/api/protected/wishlist', wishlistRoutes)
 app.route('/api/affiliate', affiliateRoutes)
 app.route('/api/admin', adminRoutes)
 

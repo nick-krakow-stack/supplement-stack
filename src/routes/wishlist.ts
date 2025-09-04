@@ -1,10 +1,11 @@
 import { Hono } from 'hono'
+import { authMiddleware } from '../middleware/auth'
 import type { Bindings, SessionUser } from '../types'
 
 export const wishlistRoutes = new Hono<{ Bindings: Bindings; Variables: { user: SessionUser } }>()
 
 // Get user's wishlist
-wishlistRoutes.get('/', async (c) => {
+wishlistRoutes.get('/', authMiddleware, async (c) => {
   try {
     const user = c.get('user')
     
@@ -24,7 +25,7 @@ wishlistRoutes.get('/', async (c) => {
 })
 
 // Add product to wishlist
-wishlistRoutes.post('/', async (c) => {
+wishlistRoutes.post('/', authMiddleware, async (c) => {
   try {
     const user = c.get('user')
     const { product_id } = await c.req.json()
@@ -65,7 +66,7 @@ wishlistRoutes.post('/', async (c) => {
 })
 
 // Remove product from wishlist
-wishlistRoutes.delete('/:productId', async (c) => {
+wishlistRoutes.delete('/:productId', authMiddleware, async (c) => {
   try {
     const user = c.get('user')
     const productId = c.req.param('productId')

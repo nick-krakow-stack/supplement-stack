@@ -1,10 +1,11 @@
 import { Hono } from 'hono'
+import { authMiddleware } from '../middleware/auth'
 import type { Bindings, SessionUser, CreateProductRequest, Product, ProductWithNutrients } from '../types'
 
 export const productRoutes = new Hono<{ Bindings: Bindings; Variables: { user: SessionUser } }>()
 
 // Get all products for current user
-productRoutes.get('/', async (c) => {
+productRoutes.get('/', authMiddleware, async (c) => {
   try {
     const user = c.get('user')
     
@@ -46,7 +47,7 @@ productRoutes.get('/', async (c) => {
 })
 
 // Get single product by ID
-productRoutes.get('/:id', async (c) => {
+productRoutes.get('/:id', authMiddleware, async (c) => {
   try {
     const user = c.get('user')
     const productId = c.req.param('id')
@@ -98,7 +99,7 @@ productRoutes.get('/:id', async (c) => {
 })
 
 // Create new product
-productRoutes.post('/', async (c) => {
+productRoutes.post('/', authMiddleware, async (c) => {
   try {
     const user = c.get('user')
     const body = await c.req.json<CreateProductRequest>()
@@ -205,7 +206,7 @@ productRoutes.post('/', async (c) => {
 })
 
 // Update product
-productRoutes.put('/:id', async (c) => {
+productRoutes.put('/:id', authMiddleware, async (c) => {
   try {
     const user = c.get('user')
     const productId = c.req.param('id')
@@ -286,7 +287,7 @@ productRoutes.put('/:id', async (c) => {
 })
 
 // Delete product
-productRoutes.delete('/:id', async (c) => {
+productRoutes.delete('/:id', authMiddleware, async (c) => {
   try {
     const user = c.get('user')
     const productId = c.req.param('id')
@@ -325,7 +326,7 @@ productRoutes.delete('/:id', async (c) => {
 })
 
 // Get available nutrients for product creation
-productRoutes.get('/nutrients/available', async (c) => {
+productRoutes.get('/nutrients/available', authMiddleware, async (c) => {
   try {
     const nutrients = await c.env.DB.prepare(`
       SELECT n.id, n.name, n.standard_unit, n.external_article_url, n.link_label, 
@@ -343,7 +344,7 @@ productRoutes.get('/nutrients/available', async (c) => {
 })
 
 // Get all categories
-productRoutes.get('/categories', async (c) => {
+productRoutes.get('/categories', authMiddleware, async (c) => {
   try {
     const categories = await c.env.DB.prepare(`
       SELECT id, name, description, sort_order
@@ -359,7 +360,7 @@ productRoutes.get('/categories', async (c) => {
 })
 
 // Get products by category
-productRoutes.get('/category/:categoryId', async (c) => {
+productRoutes.get('/category/:categoryId', authMiddleware, async (c) => {
   try {
     const user = c.get('user')
     const categoryId = c.req.param('categoryId')
@@ -402,7 +403,7 @@ productRoutes.get('/category/:categoryId', async (c) => {
 })
 
 // Add note to product
-productRoutes.post('/:id/notes', async (c) => {
+productRoutes.post('/:id/notes', authMiddleware, async (c) => {
   try {
     const user = c.get('user')
     const productId = c.req.param('id')
@@ -436,7 +437,7 @@ productRoutes.post('/:id/notes', async (c) => {
 })
 
 // Get product note
-productRoutes.get('/:id/notes', async (c) => {
+productRoutes.get('/:id/notes', authMiddleware, async (c) => {
   try {
     const user = c.get('user')
     const productId = c.req.param('id')
