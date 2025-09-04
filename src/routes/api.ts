@@ -1,5 +1,7 @@
 import { Hono } from 'hono';
-import { optionalAuthMiddleware } from '../middleware/auth';
+import { optionalAuthMiddleware, authMiddleware } from '../middleware/auth';
+import { verify } from 'hono/jwt';
+import type { User } from '../types';
 
 type Bindings = {
   DB: D1Database;
@@ -159,6 +161,64 @@ apiRoutes.post('/check-interactions', optionalAuthMiddleware, async (c) => {
     return c.json({ 
       success: false, 
       error: 'Fehler beim Prüfen der Interaktionen' 
+    }, 500);
+  }
+});
+
+// Protected routes (require authentication)
+apiRoutes.get('/protected/profile', async (c) => {
+  try {
+    // Check for Authorization header
+    const authHeader = c.req.header('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return c.json({ success: false, error: 'Keine Berechtigung' }, 401);
+    }
+
+    const token = authHeader.substring(7); // Remove "Bearer " prefix
+    
+    // Verify JWT token
+    const jwtSecret = c.env.JWT_SECRET || 'fallback-secret-for-dev';
+    let payload;
+    
+    try {
+      payload = await verify(token, jwtSecret);
+    } catch (error) {
+      return c.json({ success: false, error: 'Ungültiger Token' }, 401);
+    }
+
+    // Get user from database
+    const user = await c.env.DB.prepare(`
+      SELECT id, email, age, gender, weight, diet_type, personal_goals, 
+             guideline_source, email_verified, created_at, updated_at
+      FROM users 
+      WHERE id = ? AND email_verified = TRUE
+    `).bind(payload.userId).first<User>();
+
+    if (!user) {
+      return c.json({ success: false, error: 'Benutzer nicht gefunden' }, 404);
+    }
+
+    return c.json({ 
+      success: true, 
+      data: {
+        id: user.id,
+        email: user.email,
+        age: user.age,
+        gender: user.gender,
+        weight: user.weight,
+        diet_type: user.diet_type,
+        personal_goals: user.personal_goals,
+        guideline_source: user.guideline_source,
+        email_verified: user.email_verified,
+        created_at: user.created_at,
+        updated_at: user.updated_at
+      }
+    });
+  } catch (error) {
+    console.error('Get profile error:', error);
+    return c.json({ 
+      success: false, 
+      error: 'Fehler beim Laden des Profils' 
     }, 500);
   }
 });
