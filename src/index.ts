@@ -439,6 +439,16 @@ app.get('/reset-password', (c) => {
   return serveStatic({ root: './public', path: 'reset-password.html' })(c)
 })
 
+// Email verification fallback route (in case URL is missing /api/auth)
+app.get('/verify-email', async (c) => {
+  const token = c.req.query('token')
+  if (token) {
+    // Redirect to the correct API endpoint
+    return c.redirect(`/api/auth/verify-email?token=${token}`)
+  }
+  return c.json({ error: 'Token fehlt' }, 400)
+})
+
 // Health check
 app.get('/health', (c) => {
   return c.json({ status: 'ok', timestamp: new Date().toISOString() })
