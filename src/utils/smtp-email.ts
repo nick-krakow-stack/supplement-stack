@@ -39,8 +39,10 @@ export async function sendEmail(options: SendEmailOptions, apiKey?: string): Pro
       timestamp: new Date().toISOString()
     })
     
-    // Use MailerSend API with proper authentication - fallback to hardcoded for development
-    const MAILERSEND_API_KEY = apiKey || 'mlsn.b93df73e534656b9e6fecf1dadb07c3b960a19d789482e559ac531b79b8ce745'
+    // Use MailerSend API with proper authentication - force use hardcoded key for now
+    const MAILERSEND_API_KEY = 'mlsn.b93df73e534656b9e6fecf1dadb07c3b960a19d789482e559ac531b79b8ce745'
+    
+    console.log('[SMTP] Using API key:', MAILERSEND_API_KEY.substring(0, 10) + '...')
     
     const payload = {
       from: {
@@ -81,8 +83,7 @@ export async function sendEmail(options: SendEmailOptions, apiKey?: string): Pro
         error: responseData,
         payload: JSON.stringify(payload)
       })
-      // Return true temporarily to not break registration, but log the error
-      return true
+      return false
     }
   } catch (error) {
     console.error('[SMTP] Email send error:', error)
