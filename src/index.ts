@@ -146,8 +146,167 @@ app.get('/', (c) => {
         <link href="/static/styles.css" rel="stylesheet">
     </head>
     <body class="bg-gray-50">
-        <!-- Main content will be loaded here -->
-        <div id="app">Loading...</div>
+        <!-- Main content loaded directly -->
+        <div id="app">
+            <!-- Hero Section -->
+            <div class="bg-gradient-to-br from-blue-50 via-white to-blue-100 py-20">
+                <div class="max-w-6xl mx-auto px-4 text-center">
+                    <div class="mb-8">
+                        <i class="fas fa-capsules text-6xl text-blue-600 mb-6"></i>
+                        <h1 class="text-5xl font-bold text-gray-900 mb-4">
+                            Dein intelligenter<br>
+                            <span class="text-blue-600">Supplement Manager</span>
+                        </h1>
+                        <p class="text-xl text-gray-600 mb-8 max-w-3xl mx-auto leading-relaxed">
+                            Verwalte deine Nahrungsergänzungsmittel professionell. Mit wissenschaftlich 
+                            fundierten Dosierungsempfehlungen, Interaktionswarnungen und automatischer 
+                            Preisberechnung.
+                        </p>
+                    </div>
+                    
+                    <div class="flex flex-col sm:flex-row gap-4 justify-center mb-8">
+                        <a href="/auth" class="bg-blue-600 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-blue-700 transition-colors shadow-lg">
+                            Kostenlos registrieren
+                        </a>
+                        <a href="/demo" class="border-2 border-blue-600 text-blue-600 px-8 py-4 rounded-lg text-lg font-semibold hover:bg-blue-50 transition-colors">
+                            Demo anschauen
+                        </a>
+                    </div>
+                    
+                    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 max-w-4xl mx-auto">
+                        <div class="flex items-center justify-center">
+                            <i class="fas fa-exclamation-triangle text-yellow-600 mr-3"></i>
+                            <p class="text-yellow-800 text-sm">
+                                <strong>Hinweis:</strong> Diese Anwendung stellt keine medizinische Beratung dar. Konsultieren Sie bei gesundheitlichen Fragen immer einen Arzt oder Apotheker.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Features Section -->
+            <div id="features" class="py-20 bg-white">
+                <div class="max-w-6xl mx-auto px-4">
+                    <h2 class="text-3xl font-bold text-center text-gray-900 mb-16">
+                        Alles für deine Supplement-Verwaltung
+                    </h2>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                        <!-- Feature 1: Produkt-Management -->
+                        <div class="text-center p-6 bg-white rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300">
+                            <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <i class="fas fa-pills text-2xl text-blue-600"></i>
+                            </div>
+                            <h3 class="text-xl font-semibold text-gray-900 mb-3">Produkt-Management</h3>
+                            <p class="text-gray-600 leading-relaxed">
+                                Erfasse deine Supplements mit allen wichtigen Details. 
+                                Automatische Dubletten-Erkennung und intelligente 
+                                Produktkategorisierung.
+                            </p>
+                        </div>
+
+                        <!-- Feature 2: Stack-Verwaltung -->
+                        <div class="text-center p-6 bg-white rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300">
+                            <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <i class="fas fa-layer-group text-2xl text-green-600"></i>
+                            </div>
+                            <h3 class="text-xl font-semibold text-gray-900 mb-3">Stack-Verwaltung</h3>
+                            <p class="text-gray-600 leading-relaxed">
+                                Erstelle individuelle Supplement-Kombinationen mit intelligenten 
+                                Dosierungsempfehlungen basierend auf DGE oder Studien.
+                            </p>
+                        </div>
+
+                        <!-- Feature 3: Interaktions-Warnungen -->
+                        <div class="text-center p-6 bg-white rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300">
+                            <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <i class="fas fa-exclamation-triangle text-2xl text-red-600"></i>
+                            </div>
+                            <h3 class="text-xl font-semibold text-gray-900 mb-3">Interaktions-Warnungen</h3>
+                            <p class="text-gray-600 leading-relaxed">
+                                Erhalte automatische Warnungen bei Überdosierungen oder negativen 
+                                Wechselwirkungen zwischen verschiedenen Wirkstoffen.
+                            </p>
+                        </div>
+
+                        <!-- Feature 4: Preisberechnung -->
+                        <div class="text-center p-6 bg-white rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300">
+                            <div class="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <i class="fas fa-calculator text-2xl text-purple-600"></i>
+                            </div>
+                            <h3 class="text-xl font-semibold text-gray-900 mb-3">Preisberechnung</h3>
+                            <p class="text-gray-600 leading-relaxed">
+                                Automatische Berechnung der Kosten pro Tag, Woche und Monat. 
+                                Verbrauchsübersicht und Nachkauf-Erinnerungen.
+                            </p>
+                        </div>
+
+                        <!-- Feature 5: Intelligente Analyse -->
+                        <div class="text-center p-6 bg-white rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300">
+                            <div class="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <i class="fas fa-chart-line text-2xl text-yellow-600"></i>
+                            </div>
+                            <h3 class="text-xl font-semibold text-gray-900 mb-3">Intelligente Analyse</h3>
+                            <p class="text-gray-600 leading-relaxed">
+                                Analysiere deine Supplement-Aufnahme und erkenne Über- oder 
+                                Unterversorgung basierend auf Referenzwerten.
+                            </p>
+                        </div>
+
+                        <!-- Feature 6: Wissensdatenbank -->
+                        <div class="text-center p-6 bg-white rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300">
+                            <div class="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <i class="fas fa-book text-2xl text-indigo-600"></i>
+                            </div>
+                            <h3 class="text-xl font-semibold text-gray-900 mb-3">Wissensdatenbank</h3>
+                            <p class="text-gray-600 leading-relaxed">
+                                Detaillierte Informationen zu jedem Nährstoff: Dosierungsempfehlungen und 
+                                Mangelerscheinungen.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CTA Section -->
+            <div class="bg-gradient-to-r from-blue-600 to-blue-700 py-20">
+                <div class="max-w-4xl mx-auto px-4 text-center">
+                    <h2 class="text-3xl font-bold text-white mb-4">
+                        Bereit für intelligente Supplement-Verwaltung?
+                    </h2>
+                    <p class="text-xl text-blue-100 mb-8">
+                        Starte jetzt kostenlos und optimiere deine Nahrungsergänzung.
+                    </p>
+                    <a href="/auth" class="bg-white text-blue-600 px-8 py-4 rounded-lg text-lg font-semibold hover:bg-gray-100 transition-colors shadow-lg inline-block">
+                        Jetzt kostenlos registrieren
+                    </a>
+                </div>
+            </div>
+
+            <!-- Trust Section -->
+            <div class="py-16 bg-gray-50">
+                <div class="max-w-4xl mx-auto px-4">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
+                        <div>
+                            <i class="fas fa-shield-alt text-3xl text-green-600 mb-4"></i>
+                            <h3 class="text-lg font-semibold text-gray-900 mb-2">DSGVO-konform</h3>
+                            <p class="text-gray-600">Deine Daten sind sicher und werden nur für die Funktionalität verwendet.</p>
+                        </div>
+                        <div>
+                            <i class="fas fa-university text-3xl text-blue-600 mb-4"></i>
+                            <h3 class="text-lg font-semibold text-gray-900 mb-2">Wissenschaftlich fundiert</h3>
+                            <p class="text-gray-600">Basiert auf DGE-Empfehlungen und aktuellen Forschungsergebnissen.</p>
+                        </div>
+                        <div>
+                            <i class="fas fa-mobile-alt text-3xl text-purple-600 mb-4"></i>
+                            <h3 class="text-lg font-semibold text-gray-900 mb-2">Überall verfügbar</h3>
+                            <p class="text-gray-600">Optimiert für Desktop und Mobile - immer und überall nutzbar.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
         <script src="/static/app.js"></script>
     </body>
     </html>
@@ -170,6 +329,7 @@ app.get('/demo', (c) => {
     <body class="bg-gray-50">
         <!-- Demo content will be loaded here -->
         <div id="demo-app">Loading Demo...</div>
+        <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
         <script src="/static/demo-modal.js"></script>
     </body>
     </html>
@@ -321,6 +481,7 @@ app.get('/dashboard', (c) => {
     </head>
     <body class="bg-gray-50">
         <div id="dashboard-app">Loading Dashboard...</div>
+        <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
         <script src="/static/app.js"></script>
     </body>
     </html>
