@@ -146,6 +146,47 @@ app.get('/', (c) => {
         <link href="/static/styles.css" rel="stylesheet">
     </head>
     <body class="bg-gray-50">
+        <!-- Header Navigation -->
+        <nav class="bg-white shadow-sm border-b border-gray-200">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center h-16">
+                    <div class="flex items-center">
+                        <a href="/" class="flex items-center">
+                            <i class="fas fa-capsules text-2xl text-blue-600 mr-3"></i>
+                            <span class="text-xl font-bold text-gray-900">Supplement Stack</span>
+                        </a>
+                    </div>
+                    
+                    <!-- Navigation Menu -->
+                    <div id="nav-menu" class="hidden md:flex space-x-4">
+                        <!-- Will be populated by app.js -->
+                    </div>
+                    
+                    <!-- Navigation Actions -->
+                    <div id="nav-actions" class="hidden md:flex">
+                        <!-- Will be populated by app.js -->
+                    </div>
+                    
+                    <!-- Mobile menu button -->
+                    <button id="mobile-menu-btn" class="md:hidden p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100">
+                        <i class="fas fa-bars text-xl"></i>
+                    </button>
+                </div>
+                
+                <!-- Mobile menu -->
+                <div id="mobile-menu" class="hidden md:hidden">
+                    <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+                        <div id="mobile-nav-menu">
+                            <!-- Will be populated by app.js -->
+                        </div>
+                        <div id="mobile-nav-actions" class="pt-4 border-t border-gray-200">
+                            <!-- Will be populated by app.js -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
         <!-- Main content loaded directly -->
         <div id="app">
             <!-- Hero Section -->
@@ -306,8 +347,79 @@ app.get('/', (c) => {
                 </div>
             </div>
         </div>
+
+        <!-- Footer -->
+        <footer class="bg-gray-900 text-white">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
+                    <!-- Brand Column -->
+                    <div class="col-span-1 md:col-span-2">
+                        <div class="flex items-center mb-4">
+                            <i class="fas fa-capsules text-2xl text-blue-400 mr-3"></i>
+                            <span class="text-xl font-bold">Supplement Stack</span>
+                        </div>
+                        <p class="text-gray-300 mb-4 max-w-md">
+                            Ihr intelligenter Supplement Manager für eine wissenschaftlich fundierte und sichere Nahrungsergänzung.
+                        </p>
+                        <div class="bg-yellow-900 border border-yellow-700 rounded-lg p-3">
+                            <p class="text-yellow-200 text-sm">
+                                <i class="fas fa-exclamation-triangle mr-2"></i>
+                                <strong>Wichtiger Hinweis:</strong> Diese Anwendung ersetzt keine medizinische Beratung.
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <!-- Quick Links -->
+                    <div>
+                        <h3 class="text-lg font-semibold mb-4">Schnellzugriff</h3>
+                        <ul class="space-y-2">
+                            <li><a href="/" class="text-gray-300 hover:text-white transition-colors">Startseite</a></li>
+                            <li><a href="/demo" class="text-gray-300 hover:text-white transition-colors">Demo</a></li>
+                            <li><a href="/auth" class="text-gray-300 hover:text-white transition-colors">Anmelden</a></li>
+                            <li><a href="/dashboard" class="text-gray-300 hover:text-white transition-colors">Dashboard</a></li>
+                        </ul>
+                    </div>
+                    
+                    <!-- Legal Links -->
+                    <div>
+                        <h3 class="text-lg font-semibold mb-4">Rechtliches</h3>
+                        <ul class="space-y-2">
+                            <li><a href="/datenschutz" class="text-gray-300 hover:text-white transition-colors">Datenschutz</a></li>
+                            <li><a href="/impressum" class="text-gray-300 hover:text-white transition-colors">Impressum</a></li>
+                            <li><a href="/agb" class="text-gray-300 hover:text-white transition-colors">AGB</a></li>
+                            <li><a href="/kontakt" class="text-gray-300 hover:text-white transition-colors">Kontakt</a></li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <!-- Bottom Bar -->
+                <div class="border-t border-gray-700 mt-8 pt-8 flex flex-col sm:flex-row justify-between items-center">
+                    <p class="text-gray-300 text-sm">
+                        © 2025 Supplement Stack. Alle Rechte vorbehalten.
+                    </p>
+                    <div class="flex items-center space-x-4 mt-4 sm:mt-0">
+                        <span class="text-gray-300 text-sm">DSGVO-konform</span>
+                        <span class="text-gray-300 text-sm">•</span>
+                        <span class="text-gray-300 text-sm">Made in Germany</span>
+                    </div>
+                </div>
+            </div>
+        </footer>
+
         <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
         <script src="/static/app.js"></script>
+        <script>
+            // Initialize main app when page loads
+            document.addEventListener('DOMContentLoaded', function() {
+                console.log('Landing page loaded, initializing SupplementApp...');
+                try {
+                    window.app = new SupplementApp();
+                    console.log('SupplementApp initialized successfully');
+                } catch (error) {
+                    console.error('Failed to initialize SupplementApp:', error);
+                }
+            });
+        </script>
     </body>
     </html>
   `)
@@ -327,6 +439,47 @@ app.get('/demo', (c) => {
         <link href="/static/styles.css" rel="stylesheet">
     </head>
     <body class="bg-gray-50 min-h-screen">
+        <!-- Header Navigation -->
+        <nav class="bg-white shadow-sm border-b border-gray-200">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center h-16">
+                    <div class="flex items-center">
+                        <a href="/" class="flex items-center">
+                            <i class="fas fa-capsules text-2xl text-blue-600 mr-3"></i>
+                            <span class="text-xl font-bold text-gray-900">Supplement Stack</span>
+                        </a>
+                    </div>
+                    
+                    <!-- Navigation Menu -->
+                    <div id="nav-menu" class="hidden md:flex space-x-4">
+                        <!-- Will be populated by app.js -->
+                    </div>
+                    
+                    <!-- Navigation Actions -->
+                    <div id="nav-actions" class="hidden md:flex">
+                        <!-- Will be populated by app.js -->
+                    </div>
+                    
+                    <!-- Mobile menu button -->
+                    <button id="mobile-menu-btn" class="md:hidden p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100">
+                        <i class="fas fa-bars text-xl"></i>
+                    </button>
+                </div>
+                
+                <!-- Mobile menu -->
+                <div id="mobile-menu" class="hidden md:hidden">
+                    <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+                        <div id="mobile-nav-menu">
+                            <!-- Will be populated by app.js -->
+                        </div>
+                        <div id="mobile-nav-actions" class="pt-4 border-t border-gray-200">
+                            <!-- Will be populated by app.js -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
         <div class="container mx-auto px-4 py-8">
             <!-- Header -->
             <div class="text-center mb-8">
@@ -427,6 +580,64 @@ app.get('/demo', (c) => {
                 </div>
             </div>
         </div>
+
+        <!-- Footer -->
+        <footer class="bg-gray-900 text-white">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
+                    <!-- Brand Column -->
+                    <div class="col-span-1 md:col-span-2">
+                        <div class="flex items-center mb-4">
+                            <i class="fas fa-capsules text-2xl text-blue-400 mr-3"></i>
+                            <span class="text-xl font-bold">Supplement Stack</span>
+                        </div>
+                        <p class="text-gray-300 mb-4 max-w-md">
+                            Ihr intelligenter Supplement Manager für eine wissenschaftlich fundierte und sichere Nahrungsergänzung.
+                        </p>
+                        <div class="bg-yellow-900 border border-yellow-700 rounded-lg p-3">
+                            <p class="text-yellow-200 text-sm">
+                                <i class="fas fa-exclamation-triangle mr-2"></i>
+                                <strong>Wichtiger Hinweis:</strong> Diese Anwendung ersetzt keine medizinische Beratung.
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <!-- Quick Links -->
+                    <div>
+                        <h3 class="text-lg font-semibold mb-4">Schnellzugriff</h3>
+                        <ul class="space-y-2">
+                            <li><a href="/" class="text-gray-300 hover:text-white transition-colors">Startseite</a></li>
+                            <li><a href="/demo" class="text-gray-300 hover:text-white transition-colors">Demo</a></li>
+                            <li><a href="/auth" class="text-gray-300 hover:text-white transition-colors">Anmelden</a></li>
+                            <li><a href="/dashboard" class="text-gray-300 hover:text-white transition-colors">Dashboard</a></li>
+                        </ul>
+                    </div>
+                    
+                    <!-- Legal Links -->
+                    <div>
+                        <h3 class="text-lg font-semibold mb-4">Rechtliches</h3>
+                        <ul class="space-y-2">
+                            <li><a href="/datenschutz" class="text-gray-300 hover:text-white transition-colors">Datenschutz</a></li>
+                            <li><a href="/impressum" class="text-gray-300 hover:text-white transition-colors">Impressum</a></li>
+                            <li><a href="/agb" class="text-gray-300 hover:text-white transition-colors">AGB</a></li>
+                            <li><a href="/kontakt" class="text-gray-300 hover:text-white transition-colors">Kontakt</a></li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <!-- Bottom Bar -->
+                <div class="border-t border-gray-700 mt-8 pt-8 flex flex-col sm:flex-row justify-between items-center">
+                    <p class="text-gray-300 text-sm">
+                        © 2025 Supplement Stack. Alle Rechte vorbehalten.
+                    </p>
+                    <div class="flex items-center space-x-4 mt-4 sm:mt-0">
+                        <span class="text-gray-300 text-sm">DSGVO-konform</span>
+                        <span class="text-gray-300 text-sm">•</span>
+                        <span class="text-gray-300 text-sm">Made in Germany</span>
+                    </div>
+                </div>
+            </div>
+        </footer>
 
         <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
         <script src="/static/demo-modal.js"></script>
@@ -766,6 +977,64 @@ app.get('/dashboard', (c) => {
                 </div>
             </div>
         </div>
+
+        <!-- Footer -->
+        <footer class="bg-gray-900 text-white">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
+                    <!-- Brand Column -->
+                    <div class="col-span-1 md:col-span-2">
+                        <div class="flex items-center mb-4">
+                            <i class="fas fa-capsules text-2xl text-blue-400 mr-3"></i>
+                            <span class="text-xl font-bold">Supplement Stack</span>
+                        </div>
+                        <p class="text-gray-300 mb-4 max-w-md">
+                            Ihr intelligenter Supplement Manager für eine wissenschaftlich fundierte und sichere Nahrungsergänzung.
+                        </p>
+                        <div class="bg-yellow-900 border border-yellow-700 rounded-lg p-3">
+                            <p class="text-yellow-200 text-sm">
+                                <i class="fas fa-exclamation-triangle mr-2"></i>
+                                <strong>Wichtiger Hinweis:</strong> Diese Anwendung ersetzt keine medizinische Beratung.
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <!-- Quick Links -->
+                    <div>
+                        <h3 class="text-lg font-semibold mb-4">Schnellzugriff</h3>
+                        <ul class="space-y-2">
+                            <li><a href="/" class="text-gray-300 hover:text-white transition-colors">Startseite</a></li>
+                            <li><a href="/demo" class="text-gray-300 hover:text-white transition-colors">Demo</a></li>
+                            <li><a href="/auth" class="text-gray-300 hover:text-white transition-colors">Anmelden</a></li>
+                            <li><a href="/dashboard" class="text-gray-300 hover:text-white transition-colors">Dashboard</a></li>
+                        </ul>
+                    </div>
+                    
+                    <!-- Legal Links -->
+                    <div>
+                        <h3 class="text-lg font-semibold mb-4">Rechtliches</h3>
+                        <ul class="space-y-2">
+                            <li><a href="/datenschutz" class="text-gray-300 hover:text-white transition-colors">Datenschutz</a></li>
+                            <li><a href="/impressum" class="text-gray-300 hover:text-white transition-colors">Impressum</a></li>
+                            <li><a href="/agb" class="text-gray-300 hover:text-white transition-colors">AGB</a></li>
+                            <li><a href="/kontakt" class="text-gray-300 hover:text-white transition-colors">Kontakt</a></li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <!-- Bottom Bar -->
+                <div class="border-t border-gray-700 mt-8 pt-8 flex flex-col sm:flex-row justify-between items-center">
+                    <p class="text-gray-300 text-sm">
+                        © 2025 Supplement Stack. Alle Rechte vorbehalten.
+                    </p>
+                    <div class="flex items-center space-x-4 mt-4 sm:mt-0">
+                        <span class="text-gray-300 text-sm">DSGVO-konform</span>
+                        <span class="text-gray-300 text-sm">•</span>
+                        <span class="text-gray-300 text-sm">Made in Germany</span>
+                    </div>
+                </div>
+            </div>
+        </footer>
 
         <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
         <script src="/static/app.js"></script>
