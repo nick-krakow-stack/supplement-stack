@@ -460,4 +460,454 @@ app.get('/health', (c) => {
   })
 })
 
+// Authenticated Dashboard Route (same UI as demo but with database integration)
+app.get('/dashboard', (c) => {
+  return c.html(`
+    <!DOCTYPE html>
+    <html lang="de">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Dashboard - Supplement Stack</title>
+        <meta name="description" content="Dein persönliches Supplement Dashboard">
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+        <link href="/static/styles.css" rel="stylesheet">
+        <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+        <script>
+          tailwind.config = {
+            theme: {
+              extend: {
+                colors: {
+                  primary: '#16a34a',
+                  secondary: '#059669'
+                }
+              }
+            }
+          }
+        </script>
+    </head>
+    <body class="bg-gray-50">
+        <!-- Navigation -->
+        <nav class="bg-white shadow-lg">
+            <div class="max-w-7xl mx-auto px-4">
+                <div class="flex justify-between items-center h-16">
+                    <div class="flex items-center">
+                        <i class="fas fa-pills text-primary text-2xl mr-2"></i>
+                        <span class="text-xl font-bold text-gray-800">Supplement Stack</span>
+                        <span class="ml-3 px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">DASHBOARD</span>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <a href="/dashboard" class="text-primary font-medium">Dashboard</a>
+                        <a href="/products" class="text-gray-600 hover:text-primary">Produkte</a>
+                        <a href="/stacks" class="text-gray-600 hover:text-primary">Stacks</a>
+                        <button id="logout-btn" class="text-red-600 hover:text-red-700 font-medium">
+                            <i class="fas fa-sign-out-alt mr-1"></i>Abmelden
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Dashboard Container -->
+        <div class="max-w-7xl mx-auto px-4 py-6">
+            <!-- Dashboard Header -->
+            <div class="bg-gradient-to-r from-green-500 to-teal-600 text-white rounded-lg p-6 mb-6">
+                <h1 class="text-3xl font-bold mb-2">🏋️ Dein Supplement Dashboard</h1>
+                <p class="text-green-100">Verwalte deine Supplements intelligent mit wissenschaftlich fundierten Empfehlungen</p>
+            </div>
+
+            <!-- Loading State -->
+            <div id="loading" class="text-center py-8">
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                <p class="text-gray-600">Lade Dashboard-Daten...</p>
+            </div>
+
+            <!-- Error State -->
+            <div id="error-state" class="hidden bg-red-50 border border-red-200 rounded-lg p-6 mb-6">
+                <div class="flex items-center text-red-800 mb-2">
+                    <i class="fas fa-exclamation-triangle mr-2"></i>
+                    <span class="font-semibold">Fehler beim Laden der Dashboard-Daten</span>
+                </div>
+                <p id="error-message" class="text-red-700"></p>
+                <button id="retry-btn" class="mt-4 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700">
+                    Erneut versuchen
+                </button>
+            </div>
+
+            <!-- Main Content (hidden initially) -->
+            <div id="dashboard-content" class="hidden">
+                <!-- Stats Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-white rounded-lg shadow p-4">
+                        <div class="flex items-center">
+                            <i class="fas fa-box text-blue-500 text-2xl mr-3"></i>
+                            <div>
+                                <p class="text-sm text-gray-600">Produkte</p>
+                                <p class="text-xl font-bold" id="products-count">0</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-lg shadow p-4">
+                        <div class="flex items-center">
+                            <i class="fas fa-layer-group text-green-500 text-2xl mr-3"></i>
+                            <div>
+                                <p class="text-sm text-gray-600">Stacks</p>
+                                <p class="text-xl font-bold" id="stacks-count">0</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-lg shadow p-4">
+                        <div class="flex items-center">
+                            <i class="fas fa-euro-sign text-yellow-500 text-2xl mr-3"></i>
+                            <div>
+                                <p class="text-sm text-gray-600">Monatlich</p>
+                                <p class="text-xl font-bold" id="monthly-cost">€0.00</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-lg shadow p-4">
+                        <div class="flex items-center">
+                            <i class="fas fa-heart text-red-500 text-2xl mr-3"></i>
+                            <div>
+                                <p class="text-sm text-gray-600">Wunschliste</p>
+                                <p class="text-xl font-bold" id="wishlist-count">0</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="flex flex-wrap gap-3 mb-6">
+                    <button id="add-product-btn" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center">
+                        <i class="fas fa-plus mr-2"></i>
+                        <span class="hidden sm:inline">Produkt hinzufügen</span>
+                        <span class="sm:hidden">Produkt</span>
+                    </button>
+                    <button id="create-stack-btn" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center">
+                        <i class="fas fa-layer-group mr-2"></i>
+                        <span class="hidden sm:inline">Neuer Stack</span>
+                        <span class="sm:hidden">Stack</span>
+                    </button>
+                    <!-- Stack Selection Dropdown -->
+                    <div class="relative">
+                        <select id="stack-selector" class="bg-white border border-gray-300 rounded-lg px-4 py-2 pr-8 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <option value="">Stack auswählen</option>
+                            <!-- Options filled by JavaScript -->
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Main Content Area -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- Products Section -->
+                    <div class="lg:col-span-2">
+                        <div class="bg-white rounded-lg shadow">
+                            <div class="p-4 border-b border-gray-200">
+                                <h2 class="text-xl font-semibold text-gray-800 flex items-center">
+                                    <i class="fas fa-box mr-2 text-blue-500"></i>
+                                    Meine Produkte
+                                </h2>
+                            </div>
+                            <div class="p-4">
+                                <div id="products-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <!-- Products filled by JavaScript -->
+                                </div>
+                                <!-- Fallback when no products -->
+                                <div id="products-fallback" class="text-center py-8 text-gray-500" style="display: none;">
+                                    <i class="fas fa-box text-3xl mb-3"></i>
+                                    <p class="text-lg font-medium mb-2">Noch keine Produkte</p>
+                                    <p class="text-sm">Fügen Sie Ihr erstes Produkt hinzu!</p>
+                                    <button class="mt-4 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700" onclick="document.getElementById('add-product-btn').click()">
+                                        <i class="fas fa-plus mr-2"></i>Produkt hinzufügen
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Stacks Section -->
+                    <div>
+                        <div class="bg-white rounded-lg shadow">
+                            <div class="p-4 border-b border-gray-200">
+                                <h2 class="text-xl font-semibold text-gray-800 flex items-center">
+                                    <i class="fas fa-layer-group mr-2 text-green-500"></i>
+                                    Meine Stacks
+                                </h2>
+                            </div>
+                            <div class="p-4">
+                                <div id="stacks-grid" class="space-y-3">
+                                    <!-- Stacks filled by JavaScript -->
+                                </div>
+                                <!-- Fallback when no stacks -->
+                                <div id="stacks-fallback" class="text-center py-8 text-gray-500" style="display: none;">
+                                    <i class="fas fa-layer-group text-3xl mb-3"></i>
+                                    <p class="text-lg font-medium mb-2">Noch keine Stacks</p>
+                                    <p class="text-sm">Erstellen Sie Ihren ersten Stack!</p>
+                                    <button class="mt-4 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700" onclick="document.getElementById('create-stack-btn').click()">
+                                        <i class="fas fa-plus mr-2"></i>Stack erstellen
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scripts -->
+        <script src="/static/app.js"></script>
+        <script src="/static/dashboard-app.js"></script>
+    </body>
+    </html>
+  `)
+})
+
+// Authenticated Products Route
+app.get('/products', (c) => {
+  return c.html(`
+    <!DOCTYPE html>
+    <html lang="de">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Produkte - Supplement Stack</title>
+        <meta name="description" content="Verwalte deine Supplement-Produkte">
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+        <link href="/static/styles.css" rel="stylesheet">
+        <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+        <script>
+          tailwind.config = {
+            theme: {
+              extend: {
+                colors: {
+                  primary: '#16a34a',
+                  secondary: '#059669'
+                }
+              }
+            }
+          }
+        </script>
+    </head>
+    <body class="bg-gray-50">
+        <!-- Navigation -->
+        <nav class="bg-white shadow-lg">
+            <div class="max-w-7xl mx-auto px-4">
+                <div class="flex justify-between items-center h-16">
+                    <div class="flex items-center">
+                        <i class="fas fa-pills text-primary text-2xl mr-2"></i>
+                        <span class="text-xl font-bold text-gray-800">Supplement Stack</span>
+                        <span class="ml-3 px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">PRODUKTE</span>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <a href="/dashboard" class="text-gray-600 hover:text-primary">Dashboard</a>
+                        <a href="/products" class="text-primary font-medium">Produkte</a>
+                        <a href="/stacks" class="text-gray-600 hover:text-primary">Stacks</a>
+                        <button id="logout-btn" class="text-red-600 hover:text-red-700 font-medium">
+                            <i class="fas fa-sign-out-alt mr-1"></i>Abmelden
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Products Container -->
+        <div class="max-w-7xl mx-auto px-4 py-6">
+            <!-- Products Header -->
+            <div class="bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg p-6 mb-6">
+                <h1 class="text-3xl font-bold mb-2">📦 Meine Produkte</h1>
+                <p class="text-blue-100">Verwalte deine Supplement-Produkte und optimiere deine Nährstoffzufuhr</p>
+            </div>
+
+            <!-- Action Bar -->
+            <div class="bg-white rounded-lg shadow p-4 mb-6">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div class="flex items-center gap-3">
+                        <button id="add-product-btn" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center">
+                            <i class="fas fa-plus mr-2"></i>Produkt hinzufügen
+                        </button>
+                        <button id="bulk-actions-btn" class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors flex items-center">
+                            <i class="fas fa-check-square mr-2"></i>Auswahl-Modus
+                        </button>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <input type="text" id="search-products" placeholder="Produkte durchsuchen..." class="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        <select id="filter-category" class="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <option value="">Alle Kategorien</option>
+                            <option value="Vitamine">Vitamine</option>
+                            <option value="Mineralien">Mineralien</option>
+                            <option value="Aminosäuren">Aminosäuren</option>
+                            <option value="Fettsäuren">Fettsäuren</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Loading/Error States -->
+            <div id="loading" class="text-center py-8">
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                <p class="text-gray-600">Lade Produkte...</p>
+            </div>
+
+            <div id="error-state" class="hidden bg-red-50 border border-red-200 rounded-lg p-6 mb-6">
+                <div class="flex items-center text-red-800 mb-2">
+                    <i class="fas fa-exclamation-triangle mr-2"></i>
+                    <span class="font-semibold">Fehler beim Laden der Produkte</span>
+                </div>
+                <p id="error-message" class="text-red-700"></p>
+                <button id="retry-btn" class="mt-4 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700">
+                    Erneut versuchen
+                </button>
+            </div>
+
+            <!-- Products Grid -->
+            <div id="products-content" class="hidden">
+                <div id="products-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- Products filled by JavaScript -->
+                </div>
+                
+                <!-- Fallback when no products -->
+                <div id="products-fallback" class="text-center py-12 text-gray-500" style="display: none;">
+                    <i class="fas fa-box text-5xl mb-4"></i>
+                    <h3 class="text-xl font-semibold mb-2">Noch keine Produkte</h3>
+                    <p class="text-gray-400 mb-6">Fügen Sie Ihr erstes Supplement-Produkt hinzu, um zu beginnen.</p>
+                    <button class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors" onclick="document.getElementById('add-product-btn').click()">
+                        <i class="fas fa-plus mr-2"></i>Erstes Produkt hinzufügen
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scripts -->
+        <script src="/static/app.js"></script>
+        <script src="/static/products-app.js"></script>
+    </body>
+    </html>
+  `)
+})
+
+// Authenticated Stacks Route  
+app.get('/stacks', (c) => {
+  return c.html(`
+    <!DOCTYPE html>
+    <html lang="de">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Stacks - Supplement Stack</title>
+        <meta name="description" content="Verwalte deine Supplement-Stacks">
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+        <link href="/static/styles.css" rel="stylesheet">
+        <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+        <script>
+          tailwind.config = {
+            theme: {
+              extend: {
+                colors: {
+                  primary: '#16a34a',
+                  secondary: '#059669'
+                }
+              }
+            }
+          }
+        </script>
+    </head>
+    <body class="bg-gray-50">
+        <!-- Navigation -->
+        <nav class="bg-white shadow-lg">
+            <div class="max-w-7xl mx-auto px-4">
+                <div class="flex justify-between items-center h-16">
+                    <div class="flex items-center">
+                        <i class="fas fa-pills text-primary text-2xl mr-2"></i>
+                        <span class="text-xl font-bold text-gray-800">Supplement Stack</span>
+                        <span class="ml-3 px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">STACKS</span>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <a href="/dashboard" class="text-gray-600 hover:text-primary">Dashboard</a>
+                        <a href="/products" class="text-gray-600 hover:text-primary">Produkte</a>
+                        <a href="/stacks" class="text-primary font-medium">Stacks</a>
+                        <button id="logout-btn" class="text-red-600 hover:text-red-700 font-medium">
+                            <i class="fas fa-sign-out-alt mr-1"></i>Abmelden
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Stacks Container -->
+        <div class="max-w-7xl mx-auto px-4 py-6">
+            <!-- Stacks Header -->
+            <div class="bg-gradient-to-r from-green-500 to-teal-600 text-white rounded-lg p-6 mb-6">
+                <h1 class="text-3xl font-bold mb-2">🏗️ Meine Stacks</h1>
+                <p class="text-green-100">Organisiere deine Supplements in intelligente Stacks für optimale Wirkung</p>
+            </div>
+
+            <!-- Action Bar -->
+            <div class="bg-white rounded-lg shadow p-4 mb-6">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                    <div class="flex items-center gap-3">
+                        <button id="create-stack-btn" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center">
+                            <i class="fas fa-plus mr-2"></i>Neuer Stack
+                        </button>
+                        <button id="stack-templates-btn" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center">
+                            <i class="fas fa-magic mr-2"></i>Vorlagen
+                        </button>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <input type="text" id="search-stacks" placeholder="Stacks durchsuchen..." class="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:border-green-500">
+                        <select id="sort-stacks" class="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:border-green-500">
+                            <option value="name">Nach Name</option>
+                            <option value="date">Nach Erstellungsdatum</option>
+                            <option value="cost">Nach Kosten</option>
+                            <option value="products">Nach Produktanzahl</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Loading/Error States -->
+            <div id="loading" class="text-center py-8">
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500 mx-auto mb-4"></div>
+                <p class="text-gray-600">Lade Stacks...</p>
+            </div>
+
+            <div id="error-state" class="hidden bg-red-50 border border-red-200 rounded-lg p-6 mb-6">
+                <div class="flex items-center text-red-800 mb-2">
+                    <i class="fas fa-exclamation-triangle mr-2"></i>
+                    <span class="font-semibold">Fehler beim Laden der Stacks</span>
+                </div>
+                <p id="error-message" class="text-red-700"></p>
+                <button id="retry-btn" class="mt-4 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700">
+                    Erneut versuchen
+                </button>
+            </div>
+
+            <!-- Stacks Grid -->
+            <div id="stacks-content" class="hidden">
+                <div id="stacks-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- Stacks filled by JavaScript -->
+                </div>
+                
+                <!-- Fallback when no stacks -->
+                <div id="stacks-fallback" class="text-center py-12 text-gray-500" style="display: none;">
+                    <i class="fas fa-layer-group text-5xl mb-4"></i>
+                    <h3 class="text-xl font-semibold mb-2">Noch keine Stacks</h3>
+                    <p class="text-gray-400 mb-6">Erstellen Sie Ihren ersten Supplement-Stack, um zu beginnen.</p>
+                    <button class="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors" onclick="document.getElementById('create-stack-btn').click()">
+                        <i class="fas fa-plus mr-2"></i>Ersten Stack erstellen
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scripts -->
+        <script src="/static/app.js"></script>
+        <script src="/static/stacks-app.js"></script>
+    </body>
+    </html>
+  `)
+})
+
 export default app
