@@ -349,6 +349,191 @@ app.post('/api/protected/products', async (c) => {
   }
 });
 
+// Get Single Product endpoint
+app.get('/api/protected/products/:id', async (c) => {
+  try {
+    const authHeader = c.req.header('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return c.json({ success: false, error: 'Authentifizierung erforderlich' }, 401);
+    }
+
+    const token = authHeader.substring(7);
+    const [userId] = atob(token).split(':');
+    const productId = c.req.param('id');
+
+    console.log('[PRODUCT] Getting product:', productId, 'for user:', userId);
+
+    // Get product
+    const product = await c.env.DB.prepare(`
+      SELECT p.*, c.name as category_name
+      FROM products p
+      LEFT JOIN categories c ON p.category_id = c.id
+      WHERE p.id = ? AND p.user_id = ?
+    `).bind(productId, userId).first();
+
+    if (!product) {
+      return c.json({ success: false, error: 'Produkt nicht gefunden' }, 404);
+    }
+
+    // Get nutrients for this product
+    const nutrients = await c.env.DB.prepare(`
+      SELECT pn.*, n.name, n.dge_recommended, n.study_recommended, n.standard_unit
+      FROM product_nutrients pn
+      JOIN nutrients n ON pn.nutrient_id = n.id
+      WHERE pn.product_id = ?
+    `).bind(productId).all();
+
+    const productWithNutrients = {
+      ...product,
+      nutrients: nutrients.results || []
+    };
+
+    return c.json({ success: true, data: productWithNutrients });
+
+  } catch (error) {
+    console.error('[PRODUCT] Get single product error:', error);
+    return c.json({ 
+      success: false, 
+      error: 'Fehler beim Laden des Produkts',
+      debug: error.message
+    }, 500);
+  }
+});
+
+// Update Product endpoint
+app.put('/api/protected/products/:id', async (c) => {
+  try {
+    const authHeader = c.req.header('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return c.json({ success: false, error: 'Authentifizierung erforderlich' }, 401);
+    }
+
+    const token = authHeader.substring(7);
+    const [userId] = atob(token).split(':');
+    const productId = c.req.param('id');
+    
+    const body = await c.req.json();
+
+    if (!body.name || !body.brand || !body.form || !body.price_per_package || !body.servings_per_package || !body.shop_url) {
+      return c.json({ error: 'Alle Pflichtfelder müssen ausgefüllt werden' }, 400);
+    }
+
+    // Check if product belongs to user
+    const existingProduct = await c.env.DB.prepare(`
+      SELECT id FROM products WHERE id = ? AND user_id = ?
+    `).bind(productId, userId).first();
+
+    if (!existingProduct) {
+      return c.json({ success: false, error: 'Produkt nicht gefunden oder keine Berechtigung' }, 404);
+    }
+
+    // Update product
+    const updateResult = await c.env.DB.prepare(`
+      UPDATE products SET 
+        name = ?, brand = ?, form = ?, price_per_package = ?, servings_per_package = ?,
+        shop_url = ?, affiliate_url = ?, image_url = ?, description = ?, benefits = ?,
+        warnings = ?, dosage_recommendation = ?, category_id = ?, updated_at = datetime('now')
+      WHERE id = ? AND user_id = ?
+    `).bind(
+      body.name,
+      body.brand,
+      body.form,
+      body.price_per_package,
+      body.servings_per_package,
+      body.shop_url,
+      body.shop_url, // affiliate_url same as shop_url for now
+      body.image_url || null,
+      body.description || null,
+      JSON.stringify(body.benefits || []),
+      body.warnings || null,
+      body.dosage_recommendation || null,
+      body.category_id || 1,
+      productId,
+      userId
+    ).run();
+
+    if (!updateResult.success || updateResult.changes === 0) {
+      return c.json({ success: false, error: 'Fehler beim Aktualisieren des Produkts' }, 500);
+    }
+
+    // Delete existing nutrients
+    await c.env.DB.prepare(`
+      DELETE FROM product_nutrients WHERE product_id = ?
+    `).bind(productId).run();
+
+    // Add new nutrients
+    if (body.nutrients && body.nutrients.length > 0) {
+      for (const nutrient of body.nutrients) {
+        await c.env.DB.prepare(`
+          INSERT INTO product_nutrients (product_id, nutrient_id, amount, unit, amount_standardized)
+          VALUES (?, ?, ?, ?, ?)
+        `).bind(
+          productId,
+          nutrient.nutrient_id,
+          nutrient.amount,
+          nutrient.unit,
+          nutrient.amount // simplified standardization
+        ).run();
+      }
+    }
+
+    return c.json({
+      success: true,
+      message: 'Produkt erfolgreich aktualisiert'
+    });
+
+  } catch (error) {
+    console.error('Update product error:', error);
+    return c.json({ success: false, error: 'Fehler beim Aktualisieren des Produkts' }, 500);
+  }
+});
+
+// Delete Product endpoint
+app.delete('/api/protected/products/:id', async (c) => {
+  try {
+    const authHeader = c.req.header('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return c.json({ success: false, error: 'Authentifizierung erforderlich' }, 401);
+    }
+
+    const token = authHeader.substring(7);
+    const [userId] = atob(token).split(':');
+    const productId = c.req.param('id');
+
+    // Check if product belongs to user
+    const existingProduct = await c.env.DB.prepare(`
+      SELECT id FROM products WHERE id = ? AND user_id = ?
+    `).bind(productId, userId).first();
+
+    if (!existingProduct) {
+      return c.json({ success: false, error: 'Produkt nicht gefunden oder keine Berechtigung' }, 404);
+    }
+
+    // Delete product nutrients first (foreign key constraint)
+    await c.env.DB.prepare(`
+      DELETE FROM product_nutrients WHERE product_id = ?
+    `).bind(productId).run();
+
+    // Delete product
+    const deleteResult = await c.env.DB.prepare(`
+      DELETE FROM products WHERE id = ? AND user_id = ?
+    `).bind(productId, userId).run();
+
+    if (!deleteResult.success || deleteResult.changes === 0) {
+      return c.json({ success: false, error: 'Fehler beim Löschen des Produkts' }, 500);
+    }
+
+    return c.json({
+      success: true,
+      message: 'Produkt erfolgreich gelöscht'
+    });
+
+  } catch (error) {
+    console.error('Delete product error:', error);
+    return c.json({ success: false, error: 'Fehler beim Löschen des Produkts' }, 500);
+  }
+});
+
 // Dashboard endpoint
 app.get('/api/protected/dashboard', async (c) => {
   try {

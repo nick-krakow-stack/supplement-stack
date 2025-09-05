@@ -6,9 +6,6 @@ compatibility_flags = ["nodejs_compat"]
 [env.production]
 name = "supplementstack"
 
-[env.production.vars]
-ENVIRONMENT = "production"
-
 # D1 Database binding for production
 [[env.production.d1_databases]]
 binding = "DB"
@@ -17,6 +14,7 @@ database_id = "f1336769-9231-4cfa-a54b-91a261f07b08"
 
 # Environment Variables for Production
 [env.production.vars]
+ENVIRONMENT = "production"
 MAILERSEND_API_KEY = "mlsn.b93df73e534656b9e6fecf1dadb07c3b960a19d789482e559ac531b79b8ce745"
 JWT_SECRET = "supplement-stack-jwt-2024-secure-production-key"
 
