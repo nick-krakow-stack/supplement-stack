@@ -178,33 +178,7 @@ async function authMiddleware(c: any, next: any) {
 // AUTH API ROUTES
 // =================================
 
-// Debug route to check database and users
-app.get('/api/debug/users', async (c) => {
-  try {
-    console.log('Debug: Checking database connection...');
-    
-    // Check if we can query the database at all
-    const userCount = await c.env.DB.prepare('SELECT COUNT(*) as count FROM users').first();
-    console.log('Total users in database:', userCount?.count || 0);
-    
-    // Get all users (for debugging - remove in production)
-    const users = await c.env.DB.prepare('SELECT id, email, email_verified FROM users').all();
-    console.log('Users found:', users.results?.length || 0);
-    
-    return c.json({
-      database_connected: true,
-      user_count: userCount?.count || 0,
-      users: users.results || []
-    });
-    
-  } catch (error) {
-    console.error('Database debug error:', error);
-    return c.json({
-      database_connected: false,
-      error: error.message || 'Unknown database error'
-    }, 500);
-  }
-});
+
 
 // Get current user profile
 app.get('/api/auth/profile', authMiddleware, async (c) => {
@@ -1419,9 +1393,9 @@ app.post('/api/auth/login', async (c) => {
     const token = await sign(payload, c.env.JWT_SECRET);
     console.log('JWT token generated successfully');
 
-    // Update last login
+    // Update last login using existing updated_at column
     await c.env.DB.prepare(
-      'UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?'
+      'UPDATE users SET updated_at = CURRENT_TIMESTAMP WHERE id = ?'
     ).bind(user.id).run();
     
     console.log('Login successful for user:', user.email);
