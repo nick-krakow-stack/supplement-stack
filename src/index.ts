@@ -542,24 +542,7 @@ app.get('/demo', (c) => {
             </div>
 
             <!-- Summary Cards -->
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                <div class="bg-white rounded-lg shadow-md p-6 text-center">
-                    <div class="text-3xl font-bold text-blue-600" id="total-purchase-cost">€0.00</div>
-                    <p class="text-gray-600 mt-2">Gesamter Kaufpreis</p>
-                </div>
-                <div class="bg-white rounded-lg shadow-md p-6 text-center">
-                    <div class="text-3xl font-bold text-green-600" id="total-monthly-cost">€0.00</div>
-                    <p class="text-gray-600 mt-2">Monatliche Kosten</p>
-                </div>
-                <div class="bg-white rounded-lg shadow-md p-6 text-center">
-                    <div class="text-3xl font-bold text-purple-600" id="demo-wishlist-count">0</div>
-                    <p class="text-gray-600 mt-2">Auf Wunschliste</p>
-                </div>
-                <div class="bg-white rounded-lg shadow-md p-6 text-center">
-                    <div class="text-3xl font-bold text-orange-600">Demo</div>
-                    <p class="text-gray-600 mt-2">Testmodus aktiv</p>
-                </div>
-            </div>
+
 
             <!-- Footer Info -->
             <div class="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-6 border border-blue-200">
@@ -856,68 +839,7 @@ app.get('/dashboard', (c) => {
                 <p class="text-gray-600">Überblick über Ihre Supplements und Stacks</p>
             </div>
 
-            <!-- Stats Cards -->
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                <!-- Products Count -->
-                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <i class="fas fa-pills text-2xl text-blue-600"></i>
-                        </div>
-                        <div class="ml-5 w-0 flex-1">
-                            <dl>
-                                <dt class="text-sm font-medium text-gray-500 truncate">Produkte</dt>
-                                <dd class="text-lg font-medium text-gray-900" id="products-count">0</dd>
-                            </dl>
-                        </div>
-                    </div>
-                </div>
 
-                <!-- Stacks Count -->
-                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <i class="fas fa-layer-group text-2xl text-green-600"></i>
-                        </div>
-                        <div class="ml-5 w-0 flex-1">
-                            <dl>
-                                <dt class="text-sm font-medium text-gray-500 truncate">Stacks</dt>
-                                <dd class="text-lg font-medium text-gray-900" id="stacks-count">0</dd>
-                            </dl>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Monthly Costs -->
-                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <i class="fas fa-euro-sign text-2xl text-purple-600"></i>
-                        </div>
-                        <div class="ml-5 w-0 flex-1">
-                            <dl>
-                                <dt class="text-sm font-medium text-gray-500 truncate">Monatliche Kosten</dt>
-                                <dd class="text-lg font-medium text-gray-900" id="monthly-cost">€0.00</dd>
-                            </dl>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Wishlist Count -->
-                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <i class="fas fa-heart text-2xl text-red-600"></i>
-                        </div>
-                        <div class="ml-5 w-0 flex-1">
-                            <dl>
-                                <dt class="text-sm font-medium text-gray-500 truncate">Wunschliste</dt>
-                                <dd class="text-lg font-medium text-gray-900" id="wishlist-count">0</dd>
-                            </dl>
-                        </div>
-                    </div>
-                </div>
-            </div>
 
             <!-- Recent Stacks -->
             <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
