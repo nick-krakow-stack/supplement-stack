@@ -1,0 +1,261 @@
+
+    <!DOCTYPE html>
+    <html lang="de">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Dashboard - Supplement Stack</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+        <style>
+          /* Custom styles for supplement management */
+          .supplement-card { @apply bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow; }
+          .nav-item.active { @apply bg-blue-600 text-white; }
+          .warning-high { @apply bg-red-100 border-red-500 text-red-700; }
+          .warning-medium { @apply bg-yellow-100 border-yellow-500 text-yellow-700; }
+          .safe { @apply bg-green-100 border-green-500 text-green-700; }
+          
+          /* Mobile-optimiertes Design */
+          @media (max-width: 768px) {
+            /* Reduzierte Padding für Mobile */
+            .container-mobile { @apply px-2; }
+            
+            /* Responsive Text */
+            .text-responsive { @apply text-sm sm:text-base; }
+            
+            /* Responsive Grid */
+            .grid-responsive { @apply grid-cols-1 sm:grid-cols-2 lg:grid-cols-3; }
+            
+            /* Mobile Navigation */
+            #nav-menu { @apply hidden; }
+            
+            /* Kompakte Cards */
+            .card-mobile { @apply p-3 sm:p-4 lg:p-6; }
+            
+            /* Responsive Buttons */
+            .btn-mobile { @apply px-3 py-2 text-sm sm:px-4 sm:py-2 sm:text-base; }
+          }
+          
+          /* Utility Classes */
+          .line-clamp-2 {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+          }
+          
+          .line-clamp-3 {
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+          }
+          
+          /* Mobile-friendly modals */
+          .modal-overlay {
+            @apply fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4;
+          }
+          
+          .modal-container {
+            @apply bg-white rounded-lg shadow-xl w-full max-w-lg sm:max-w-2xl max-h-[95vh] overflow-y-auto;
+          }
+          
+          /* Touch-friendly elements */
+          .touch-target {
+            min-height: 44px;
+            min-width: 44px;
+          }
+          
+          /* Improved form styling */
+          .form-input {
+            @apply w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base;
+          }
+          
+          .form-label {
+            @apply block text-sm font-medium text-gray-700 mb-1;
+          }
+          
+          /* Responsive spacing */
+          .space-mobile { @apply space-y-3 sm:space-y-4 lg:space-y-6; }
+        </style>
+    </head>
+    <body class="bg-gray-50 min-h-screen">
+        <!-- DSGVO Disclaimer -->
+        <div class="bg-blue-600 text-white text-center py-2 text-sm">
+            <i class="fas fa-info-circle mr-2"></i>
+            Diese Plattform bietet keine medizinische Beratung. Konsultieren Sie bei gesundheitlichen Fragen einen Arzt.
+        </div>
+        
+        <!-- Navigation -->
+        
+    <nav class="bg-white shadow-sm border-b">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center">
+                    <a href="/" class="text-xl sm:text-2xl font-bold text-blue-600">
+                        <i class="fas fa-capsules mr-2"></i>
+                        <span class="hidden sm:inline">Supplement Stack</span>
+                        <span class="sm:hidden">SS</span>
+                    </a>
+                </div>
+                
+                <!-- Mobile Menu Button -->
+                <button id="mobile-menu-btn" class="md:hidden p-2 text-gray-600 hover:text-blue-600">
+                    <i class="fas fa-bars text-xl"></i>
+                </button>
+                
+                <!-- Desktop Navigation -->
+                <div id="nav-menu" class="hidden md:flex space-x-2 lg:space-x-4">
+                    <!-- Menü-Items werden basierend auf Login-Status angezeigt -->
+                </div>
+                
+                <div id="nav-actions" class="hidden md:flex items-center space-x-2 sm:space-x-4">
+                    <!-- Login/Logout-Buttons werden dynamisch geladen -->
+                </div>
+            </div>
+            
+            <!-- Mobile Navigation Menu -->
+            <div id="mobile-menu" class="hidden md:hidden border-t border-gray-200 py-4">
+                <div id="mobile-nav-menu" class="space-y-2">
+                    <!-- Mobile Menü-Items werden dynamisch geladen -->
+                </div>
+                <div id="mobile-nav-actions" class="pt-4 border-t border-gray-200 mt-4">
+                    <!-- Mobile Login/Logout-Buttons werden dynamisch geladen -->  
+                </div>
+            </div>
+        </div>
+    </nav>
+  
+        
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto px-4 py-8">
+            
+    <div class="space-y-4 sm:space-y-6">
+        <!-- Mobile-optimierte Überschrift -->
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+            <h1 class="text-2xl sm:text-3xl font-bold text-gray-800 mb-2 sm:mb-0">
+                <i class="fas fa-tachometer-alt mr-2"></i>Dashboard
+            </h1>
+            <div class="text-sm text-gray-500">
+                Letztes Update: <span id="last-update">-</span>
+            </div>
+        </div>
+        
+        <!-- Kompakte Mobile Stats -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            <div class="bg-white rounded-lg shadow p-3 sm:p-4">
+                <div class="flex flex-col sm:flex-row sm:items-center">
+                    <div class="p-2 sm:p-3 rounded-full bg-blue-500 bg-opacity-10 mb-2 sm:mb-0 self-start">
+                        <i class="fas fa-pills text-blue-500 text-lg"></i>
+                    </div>
+                    <div class="sm:ml-3">
+                        <p class="text-xs sm:text-sm font-medium text-gray-500">Produkte</p>
+                        <p id="products-count" class="text-xl sm:text-2xl font-semibold text-gray-900">-</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow p-3 sm:p-4">
+                <div class="flex flex-col sm:flex-row sm:items-center">
+                    <div class="p-2 sm:p-3 rounded-full bg-green-500 bg-opacity-10 mb-2 sm:mb-0 self-start">
+                        <i class="fas fa-layer-group text-green-500 text-lg"></i>
+                    </div>
+                    <div class="sm:ml-3">
+                        <p class="text-xs sm:text-sm font-medium text-gray-500">Stacks</p>
+                        <p id="stacks-count" class="text-xl sm:text-2xl font-semibold text-gray-900">-</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow p-3 sm:p-4 col-span-2 lg:col-span-1">
+                <div class="flex flex-col sm:flex-row sm:items-center">
+                    <div class="p-2 sm:p-3 rounded-full bg-yellow-500 bg-opacity-10 mb-2 sm:mb-0 self-start">
+                        <i class="fas fa-euro-sign text-yellow-500 text-lg"></i>
+                    </div>
+                    <div class="sm:ml-3">
+                        <p class="text-xs sm:text-sm font-medium text-gray-500">Monatlich</p>
+                        <p id="monthly-cost" class="text-xl sm:text-2xl font-semibold text-green-600">-</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow p-3 sm:p-4 lg:block hidden">
+                <div class="flex flex-col sm:flex-row sm:items-center">
+                    <div class="p-2 sm:p-3 rounded-full bg-red-500 bg-opacity-10 mb-2 sm:mb-0 self-start">
+                        <i class="fas fa-heart text-red-500 text-lg"></i>
+                    </div>
+                    <div class="sm:ml-3">
+                        <p class="text-xs sm:text-sm font-medium text-gray-500">Wunschliste</p>
+                        <p id="wishlist-count" class="text-xl sm:text-2xl font-semibold text-gray-900">-</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Schnellaktionen -->
+        <div class="bg-white rounded-lg shadow p-4">
+            <h2 class="text-lg font-semibold text-gray-900 mb-3">Schnellaktionen</h2>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <button onclick="app.showAddProductModal()" class="flex flex-col items-center p-3 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors text-center">
+                    <i class="fas fa-plus text-blue-600 text-xl mb-2"></i>
+                    <span class="text-sm font-medium text-blue-700">Produkt hinzufügen</span>
+                </button>
+                <button onclick="app.showAddStackModal()" class="flex flex-col items-center p-3 bg-green-50 hover:bg-green-100 rounded-lg transition-colors text-center">
+                    <i class="fas fa-layer-group text-green-600 text-xl mb-2"></i>
+                    <span class="text-sm font-medium text-green-700">Stack erstellen</span>
+                </button>
+                <a href="/products" class="flex flex-col items-center p-3 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors text-center">
+                    <i class="fas fa-pills text-purple-600 text-xl mb-2"></i>
+                    <span class="text-sm font-medium text-purple-700">Alle Produkte</span>
+                </a>
+                <a href="/stacks" class="flex flex-col items-center p-3 bg-orange-50 hover:bg-orange-100 rounded-lg transition-colors text-center">
+                    <i class="fas fa-th-list text-orange-600 text-xl mb-2"></i>
+                    <span class="text-sm font-medium text-orange-700">Alle Stacks</span>
+                </a>
+            </div>
+        </div>
+        
+        <!-- Aktuelle Stacks - Mobile optimiert -->
+        <div class="bg-white rounded-lg shadow">
+            <div class="p-4 border-b border-gray-200 flex justify-between items-center">
+                <h2 class="text-lg font-semibold text-gray-900">Aktuelle Stacks</h2>
+                <a href="/stacks" class="text-sm text-blue-600 hover:text-blue-500">Alle anzeigen</a>
+            </div>
+            <div id="recent-stacks" class="p-4">
+                <div class="text-gray-500 text-center py-4">Lade Daten...</div>
+            </div>
+        </div>
+        
+        <!-- Wichtige Hinweise - Nur bei Bedarf -->
+        <div id="important-notices" class="hidden">
+            <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <div class="flex items-start">
+                    <i class="fas fa-exclamation-triangle text-yellow-600 mr-3 mt-0.5"></i>
+                    <div>
+                        <h3 class="font-medium text-yellow-800">Hinweise</h3>
+                        <div id="notices-content" class="text-yellow-700 text-sm mt-1"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+  
+        </main>
+        
+        <!-- Footer -->
+        <footer class="bg-gray-800 text-white py-8 mt-16">
+            <div class="max-w-7xl mx-auto px-4 text-center">
+                <p>&copy; 2025 Supplement Stack. Alle Rechte vorbehalten.</p>
+                <div class="mt-4 space-x-4">
+                    <a href="/legal/datenschutz" class="text-gray-400 hover:text-white">Datenschutz</a>
+                    <a href="/legal/impressum" class="text-gray-400 hover:text-white">Impressum</a>
+                    <a href="/legal/agb" class="text-gray-400 hover:text-white">AGB</a>
+                </div>
+            </div>
+        </footer>
+        
+        <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
+        <script src="/static/app.js"></script>
+    </body>
+    </html>
+  
