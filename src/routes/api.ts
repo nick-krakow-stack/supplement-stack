@@ -10,27 +10,29 @@ type Bindings = {
 export const apiRoutes = new Hono<{ Bindings: Bindings }>();
 
 // Get all nutrients
-apiRoutes.get('/nutrients', optionalAuthMiddleware, async (c) => {
+apiRoutes.get('/nutrients', async (c) => {
+  console.log('[API] Nutrients endpoint called');
   try {
-    const nutrients = await c.env.DB.prepare(`
-      SELECT * FROM nutrients ORDER BY name
-    `).all();
-
+    console.log('[API] Attempting to query nutrients');
+    const result = await c.env.DB.prepare(`SELECT * FROM nutrients ORDER BY name`).all();
+    console.log('[API] Query result:', result);
+    
     return c.json({ 
       success: true, 
-      data: nutrients.results 
+      data: result.results || [] 
     });
   } catch (error) {
-    console.error('Get nutrients error:', error);
+    console.error('[API] Get nutrients error:', error);
     return c.json({ 
       success: false, 
-      error: 'Fehler beim Laden der Nährstoffe' 
+      error: 'Fehler beim Laden der Nährstoffe',
+      debug: error.message 
     }, 500);
   }
 });
 
 // Get nutrient by ID with recommendations
-apiRoutes.get('/nutrients/:id', optionalAuthMiddleware, async (c) => {
+apiRoutes.get('/nutrients/:id', async (c) => {
   const id = c.req.param('id');
   
   try {
@@ -45,19 +47,32 @@ apiRoutes.get('/nutrients/:id', optionalAuthMiddleware, async (c) => {
       }, 404);
     }
 
-    // Get dosage recommendations
-    const recommendations = await c.env.DB.prepare(`
-      SELECT dr.*, gs.name as source_name, gs.code as source_code
-      FROM dosage_recommendations dr
-      JOIN guideline_sources gs ON dr.guideline_source_id = gs.id
-      WHERE dr.nutrient_id = ?
-    `).bind(id).all();
+    // Build recommendations from existing data
+    const recommendations = [];
+    
+    if (nutrient.dge_recommended) {
+      recommendations.push({
+        source: 'DGE',
+        amount: nutrient.dge_recommended,
+        unit: nutrient.standard_unit,
+        description: 'Deutsche Gesellschaft für Ernährung Empfehlung'
+      });
+    }
+    
+    if (nutrient.study_recommended) {
+      recommendations.push({
+        source: 'Studien',
+        amount: nutrient.study_recommended,
+        unit: nutrient.standard_unit,
+        description: 'Studienbasierte Empfehlung'
+      });
+    }
 
     return c.json({ 
       success: true, 
       data: {
         ...nutrient,
-        recommendations: recommendations.results
+        recommendations: recommendations
       }
     });
   } catch (error) {
@@ -69,16 +84,33 @@ apiRoutes.get('/nutrients/:id', optionalAuthMiddleware, async (c) => {
   }
 });
 
-// Get guideline sources
-apiRoutes.get('/guideline-sources', optionalAuthMiddleware, async (c) => {
+// Get guideline sources (hardcoded for demo compatibility)
+apiRoutes.get('/guideline-sources', async (c) => {
   try {
-    const sources = await c.env.DB.prepare(`
-      SELECT * FROM guideline_sources ORDER BY name
-    `).all();
+    const sources = [
+      {
+        id: 1,
+        name: 'DGE',
+        code: 'dge',
+        description: 'Deutsche Gesellschaft für Ernährung'
+      },
+      {
+        id: 2,
+        name: 'Studien',
+        code: 'studien', 
+        description: 'Studienbasierte Empfehlungen'
+      },
+      {
+        id: 3,
+        name: 'Influencer',
+        code: 'influencer',
+        description: 'Influencer Empfehlungen'
+      }
+    ];
 
     return c.json({ 
       success: true, 
-      data: sources.results 
+      data: sources 
     });
   } catch (error) {
     console.error('Get guideline sources error:', error);
@@ -90,7 +122,7 @@ apiRoutes.get('/guideline-sources', optionalAuthMiddleware, async (c) => {
 });
 
 // Search public products
-apiRoutes.get('/search/products', optionalAuthMiddleware, async (c) => {
+apiRoutes.get('/search/products', async (c) => {
   const query = c.req.query('q') || '';
   const limit = parseInt(c.req.query('limit') || '20');
   const offset = parseInt(c.req.query('offset') || '0');
@@ -102,8 +134,7 @@ apiRoutes.get('/search/products', optionalAuthMiddleware, async (c) => {
       FROM products p
       LEFT JOIN product_nutrients pn ON p.id = pn.product_id
       LEFT JOIN nutrients n ON pn.nutrient_id = n.id
-      WHERE p.is_public = 1 
-        AND (p.name LIKE ? OR p.brand LIKE ? OR n.name LIKE ?)
+      WHERE (p.name LIKE ? OR p.brand LIKE ? OR n.name LIKE ?)
       GROUP BY p.id
       ORDER BY p.name
       LIMIT ? OFFSET ?
@@ -129,7 +160,7 @@ apiRoutes.get('/search/products', optionalAuthMiddleware, async (c) => {
 });
 
 // Check for nutrient interactions
-apiRoutes.post('/check-interactions', optionalAuthMiddleware, async (c) => {
+apiRoutes.post('/check-interactions', async (c) => {
   try {
     const { nutrient_ids } = await c.req.json();
     
@@ -161,6 +192,26 @@ apiRoutes.post('/check-interactions', optionalAuthMiddleware, async (c) => {
     return c.json({ 
       success: false, 
       error: 'Fehler beim Prüfen der Interaktionen' 
+    }, 500);
+  }
+});
+
+// Get all categories
+apiRoutes.get('/categories', async (c) => {
+  try {
+    const categories = await c.env.DB.prepare(`
+      SELECT * FROM categories ORDER BY sort_order, name
+    `).all();
+
+    return c.json({ 
+      success: true, 
+      data: categories.results 
+    });
+  } catch (error) {
+    console.error('Get categories error:', error);
+    return c.json({ 
+      success: false, 
+      error: 'Fehler beim Laden der Kategorien' 
     }, 500);
   }
 });

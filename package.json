@@ -23,7 +23,8 @@
   },
   "dependencies": {
     "form-data": "^4.0.4",
-    "hono": "^4.0.0"
+    "hono": "^4.0.0",
+    "pm2": "^6.0.10"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "4.20250705.0",
