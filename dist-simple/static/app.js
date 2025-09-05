@@ -170,6 +170,7 @@ class SupplementApp {
         axios.defaults.headers.common['Authorization'] = `Bearer ${this.token}`
         
         this.currentUser = response.data.user
+        this.showSuccess('Erfolgreich angemeldet!')
         this.redirectToDashboard()
       }
     } catch (error) {
@@ -278,134 +279,60 @@ class SupplementApp {
     try {
       this.showLoading('Lade Dashboard...')
       
-      // Check authentication first
-      const currentToken = this.token || localStorage.getItem('auth_token')
-      if (!currentToken) {
-        console.log('No token found, redirecting to login')
-        this.showError('Benutzer nicht angemeldet')
-        return
-      }
-      
-      // Update token if needed
-      if (!this.token && currentToken) {
-        this.token = currentToken
-        axios.defaults.headers.common['Authorization'] = `Bearer ${this.token}`
-      }
-      
-      // Make API calls
       const [productsResponse, stacksResponse, wishlistResponse] = await Promise.all([
         axios.get('/api/protected/products'),
         axios.get('/api/protected/stacks'),
         axios.get('/api/protected/wishlist')
       ])
 
-      // Find DOM elements
+      // Update counters
       const productsCount = document.getElementById('products-count')
       const stacksCount = document.getElementById('stacks-count')
       const wishlistCount = document.getElementById('wishlist-count')
       
-      if (!productsCount || !stacksCount || !wishlistCount) {
-        throw new Error('Dashboard DOM elements not found')
-      }
-      
-      // Process data safely
-      const products = Array.isArray(productsResponse.data) ? productsResponse.data : []
-      const stacks = (stacksResponse.data && stacksResponse.data.success && Array.isArray(stacksResponse.data.data)) 
-                      ? stacksResponse.data.data 
-                      : (Array.isArray(stacksResponse.data) ? stacksResponse.data : [])
-      const wishlist = Array.isArray(wishlistResponse.data) ? wishlistResponse.data : []
-      
-      // Update counters
-      productsCount.textContent = products.length
-      stacksCount.textContent = stacks.length
-      wishlistCount.textContent = wishlist.length
+      if (productsCount) productsCount.textContent = productsResponse.data.length
+      if (stacksCount) stacksCount.textContent = stacksResponse.data.length
+      if (wishlistCount) wishlistCount.textContent = wishlistResponse.data.length
 
       // Calculate monthly costs
-      const monthlyCost = this.calculateMonthlyCosts(stacks)
+      const monthlyCost = this.calculateMonthlyCosts(stacksResponse.data)
       const monthlyCostElement = document.getElementById('monthly-cost')
-      if (monthlyCostElement) {
-        monthlyCostElement.textContent = `€${monthlyCost.toFixed(2)}`
-      }
+      if (monthlyCostElement) monthlyCostElement.textContent = `€${monthlyCost.toFixed(2)}`
 
       // Display recent stacks
-      this.displayRecentStacks(stacks)
+      this.displayRecentStacks(stacksResponse.data)
 
     } catch (error) {
       console.error('Error loading dashboard data:', error)
-      
-      // Better error messages based on error type
-      let errorMessage = 'Fehler beim Laden der Dashboard-Daten'
-      if (error.response?.status === 401) {
-        errorMessage = 'Sitzung abgelaufen. Bitte melden Sie sich erneut an.'
-        this.logout()
-        return
-      } else if (error.response?.status === 403) {
-        errorMessage = 'Keine Berechtigung für diese Daten'
-      } else if (error.response?.status >= 500) {
-        errorMessage = 'Server-Fehler. Bitte versuchen Sie es später erneut.'
-      }
-      
-      this.showError(errorMessage)
+      this.showError('Fehler beim Laden der Dashboard-Daten')
     } finally {
       this.hideLoading()
     }
   }
 
   calculateMonthlyCosts(stacks) {
-    if (!Array.isArray(stacks)) {
-      console.error('calculateMonthlyCosts: stacks is not an array:', typeof stacks, stacks)
-      return 0
-    }
-    
-    try {
-      return stacks.reduce((total, stack) => {
-        const cost = (stack && typeof stack === 'object') ? (stack.monthly_cost || 0) : 0
-        return total + cost
-      }, 0)
-    } catch (error) {
-      console.error('Error calculating monthly costs:', error)
-      return 0
-    }
+    return stacks.reduce((total, stack) => total + (stack.monthly_cost || 0), 0)
   }
 
   displayRecentStacks(stacks) {
     const container = document.getElementById('recent-stacks')
     if (!container) return
 
-    if (!Array.isArray(stacks)) {
-      console.error('displayRecentStacks: stacks is not an array:', stacks)
-      container.innerHTML = '<p class="text-red-500 text-center py-4">Fehler: Stacks-Daten haben falsches Format</p>'
-      return
-    }
-
     if (stacks.length === 0) {
       container.innerHTML = '<p class="text-gray-500 text-center py-4">Noch keine Stacks erstellt</p>'
       return
     }
 
-    try {
-      container.innerHTML = stacks.slice(0, 3).map(stack => {
-        if (!stack || typeof stack !== 'object') {
-          console.warn('Invalid stack object:', stack)
-          return '<div class="text-red-500">Ungültiger Stack</div>'
-        }
-        
-        return `
-          <div class="border-b border-gray-200 last:border-b-0 pb-4 last:pb-0 mb-4 last:mb-0">
-            <h3 class="font-medium text-gray-900">${this.escapeHtml(stack.name || 'Unbenannter Stack')}</h3>
-            <p class="text-sm text-gray-500 mt-1">${this.escapeHtml(stack.description || 'Keine Beschreibung')}</p>
-            <div class="flex justify-between items-center mt-2">
-              <span class="text-xs text-gray-400">${stack.product_count || 0} Produkte</span>
-              <a href="/stacks?id=${stack.id}" class="text-blue-600 hover:text-blue-500 text-sm">Bearbeiten</a>
-            </div>
-          </div>
-        `
-      }).join('')
-      
-    } catch (error) {
-      console.error('Error displaying recent stacks:', error)
-      container.innerHTML = '<p class="text-red-500 text-center py-4">Fehler beim Anzeigen der Stacks</p>'
-    }
+    container.innerHTML = stacks.slice(0, 3).map(stack => `
+      <div class="border-b border-gray-200 last:border-b-0 pb-4 last:pb-0 mb-4 last:mb-0">
+        <h3 class="font-medium text-gray-900">${this.escapeHtml(stack.name)}</h3>
+        <p class="text-sm text-gray-500 mt-1">${this.escapeHtml(stack.description || 'Keine Beschreibung')}</p>
+        <div class="flex justify-between items-center mt-2">
+          <span class="text-xs text-gray-400">${stack.product_count || 0} Produkte</span>
+          <a href="/stacks?id=${stack.id}" class="text-blue-600 hover:text-blue-500 text-sm">Bearbeiten</a>
+        </div>
+      </div>
+    `).join('')
   }
 
   // Products functionality

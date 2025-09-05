@@ -1,1 +1,9 @@
-{"version":1,"include":["/*"],"exclude":["/reset-password.html","/static/*"]}
+{
+  "version": 1,
+  "include": [
+    "/api/*"
+  ],
+  "exclude": [
+    "/static/*"
+  ]
+}
