@@ -1,7 +1,6 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { serveStatic } from 'hono/cloudflare-workers'
-// Imports temporarily removed for debugging
 
 type Bindings = {
   DB: D1Database;
@@ -15,40 +14,848 @@ app.use('/api/*', cors())
 // Serve static files
 app.use('/static/*', serveStatic({ root: './public' }))
 
-// Test API routes directly
-app.get('/api/test-direct', (c) => {
-  try {
-    return c.json({
-      message: 'Direct API test',
-      working: true,
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    return c.text('Error in direct API: ' + error.message);
-  }
+// Simple API endpoints
+app.get('/api/health', (c) => {
+  return c.json({
+    status: 'healthy',
+    message: 'Minimal API is working',
+    timestamp: new Date().toISOString(),
+    version: 'minimal-1.0'
+  });
 });
 
-app.get('/api/nutrients-direct', (c) => {
+app.get('/api/nutrients', (c) => {
+  return c.json({
+    success: true,
+    data: [
+      {
+        id: 1,
+        name: 'Vitamin D3',
+        synonyms: ["D3", "Cholecalciferol", "Vitamin D", "Sonnenvitamin"],
+        standard_unit: 'IE',
+        dge_recommended: 800,
+        study_recommended: 2000,
+        max_safe_dose: 4000,
+        warning_threshold: 4000
+      },
+      {
+        id: 2,
+        name: 'Vitamin B12',
+        synonyms: ["B12", "Cobalamin", "Methylcobalamin", "Cyanocobalamin"],
+        standard_unit: 'µg',
+        dge_recommended: 4,
+        study_recommended: 250,
+        max_safe_dose: 1000,
+        warning_threshold: 1000
+      },
+      {
+        id: 3,
+        name: 'Magnesium',
+        synonyms: ["Mg", "Magnium"],
+        standard_unit: 'mg',
+        dge_recommended: 300,
+        study_recommended: 400,
+        max_safe_dose: 350,
+        warning_threshold: 350
+      },
+      {
+        id: 4,
+        name: 'Omega-3',
+        synonyms: ["Omega 3", "Fischöl", "Algenöl", "Marine Omega"],
+        standard_unit: 'mg',
+        dge_recommended: 250,
+        study_recommended: 1000,
+        max_safe_dose: 5000,
+        warning_threshold: 5000
+      },
+      {
+        id: 5,
+        name: 'Zink',
+        synonyms: ["Zn", "Zinc", "Bisglycinat", "Citrat"],
+        standard_unit: 'mg',
+        dge_recommended: 10,
+        study_recommended: 15,
+        max_safe_dose: 25,
+        warning_threshold: 25
+      },
+      {
+        id: 6,
+        name: 'Vitamin C',
+        synonyms: ["C", "Ascorbinsäure", "Ester-C"],
+        standard_unit: 'mg',
+        dge_recommended: 110,
+        study_recommended: 1000,
+        max_safe_dose: 1000,
+        warning_threshold: 1000
+      }
+    ]
+  });
+});
+
+app.get('/api/categories', (c) => {
+  return c.json({
+    success: true,
+    data: [
+      {
+        id: 1,
+        name: 'Vitamine',
+        description: 'Fettlösliche und wasserlösliche Vitamine',
+        sort_order: 1
+      },
+      {
+        id: 2,
+        name: 'Mineralstoffe',
+        description: 'Mengen- und Spurenelemente',
+        sort_order: 2
+      },
+      {
+        id: 3,
+        name: 'Aminosäuren',
+        description: 'Essentielle und nicht-essentielle Aminosäuren',
+        sort_order: 3
+      },
+      {
+        id: 4,
+        name: 'Fettsäuren',
+        description: 'Omega-3/6/9 Fettsäuren',
+        sort_order: 4
+      }
+    ]
+  });
+});
+
+// Auth endpoints
+app.post('/api/auth/register', async (c) => {
   try {
+    console.log('[REGISTER] Starting registration');
+    const body = await c.req.json();
+    console.log('[REGISTER] Body received:', Object.keys(body));
+    
+    const { email, password, age, gender, weight, diet_type } = body;
+    
+    if (!email || !password) {
+      console.log('[REGISTER] Missing email or password');
+      return c.json({ success: false, error: 'Email und Passwort sind erforderlich' }, 400);
+    }
+
+    // Check if user exists
+    const existingUser = await c.env.DB.prepare(`
+      SELECT id FROM users WHERE email = ?
+    `).bind(email).first();
+
+    if (existingUser) {
+      return c.json({ success: false, error: 'Benutzer existiert bereits' }, 409);
+    }
+
+    // Hash password (simplified - in production use proper bcrypt)
+    const passwordBytes = new TextEncoder().encode(password + 'supplement-salt');
+    const hashedPassword = await crypto.subtle.digest('SHA-256', passwordBytes);
+    const passwordHash = Array.from(new Uint8Array(hashedPassword)).map(b => b.toString(16).padStart(2, '0')).join('');
+
+    // Create user
+    const result = await c.env.DB.prepare(`
+      INSERT INTO users (email, password_hash, age, gender, weight, diet_type, guideline_source, email_verified, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, 'DGE', true, datetime('now'), datetime('now'))
+    `).bind(email, passwordHash, age || null, gender || null, weight || null, diet_type || null).run();
+
+    if (!result.success) {
+      return c.json({ success: false, error: 'Fehler beim Erstellen des Benutzers' }, 500);
+    }
+
     return c.json({
       success: true,
-      message: 'Direct nutrients API working',
-      data: [
-        {
-          id: 1,
-          name: 'Vitamin D3',
-          standard_unit: 'IE',
-          dge_recommended: 800,
-          study_recommended: 2000
-        }
-      ]
+      message: 'Benutzer erfolgreich registriert',
+      user: { id: result.meta.last_row_id, email }
     });
+
   } catch (error) {
-    return c.text('Error in nutrients API: ' + error.message);
+    console.error('Registration error:', error);
+    return c.json({ 
+      success: false, 
+      error: 'Registrierungsfehler',
+      debug: error.message,
+      stack: error.stack
+    }, 500);
   }
 });
 
-// Complex API routes temporarily removed for debugging
+app.post('/api/auth/login', async (c) => {
+  try {
+    const { email, password } = await c.req.json();
+    
+    if (!email || !password) {
+      return c.json({ success: false, error: 'Email und Passwort sind erforderlich' }, 400);
+    }
+
+    // Hash provided password  
+    const passwordBytes = new TextEncoder().encode(password + 'supplement-salt');
+    const hashedPassword = await crypto.subtle.digest('SHA-256', passwordBytes);
+    const passwordHash = Array.from(new Uint8Array(hashedPassword)).map(b => b.toString(16).padStart(2, '0')).join('');
+
+    // Find user
+    const user = await c.env.DB.prepare(`
+      SELECT * FROM users WHERE email = ? AND password_hash = ?
+    `).bind(email, passwordHash).first();
+
+    if (!user) {
+      return c.json({ success: false, error: 'Ungültige Anmeldedaten' }, 401);
+    }
+
+    // Create simple token (in production, use proper JWT)
+    const token = btoa(`${user.id}:${Date.now()}`);
+
+    return c.json({
+      success: true,
+      message: 'Erfolgreich angemeldet',
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        age: user.age,
+        gender: user.gender,
+        weight: user.weight,
+        diet_type: user.diet_type
+      }
+    });
+
+  } catch (error) {
+    console.error('Login error:', error);
+    return c.json({ success: false, error: 'Anmeldefehler' }, 500);
+  }
+});
+
+// Protected Products API  
+app.get('/api/protected/products', async (c) => {
+  try {
+    // Simple auth check (in production, use proper JWT middleware)
+    const authHeader = c.req.header('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return c.json({ success: false, error: 'Authentifizierung erforderlich' }, 401);
+    }
+
+    const token = authHeader.substring(7);
+    const [userId] = atob(token).split(':');
+
+    console.log('[PRODUCTS] Getting products for user:', userId);
+
+    // First get products
+    const products = await c.env.DB.prepare(`
+      SELECT p.*, c.name as category_name
+      FROM products p
+      LEFT JOIN categories c ON p.category_id = c.id
+      WHERE p.user_id = ?
+      ORDER BY p.created_at DESC
+    `).bind(userId).all();
+
+    console.log('[PRODUCTS] Found products:', products.results?.length || 0);
+
+    // Then get nutrients for each product
+    const productsWithNutrients = [];
+    for (const product of products.results || []) {
+      const nutrients = await c.env.DB.prepare(`
+        SELECT pn.*, n.name, n.dge_recommended, n.study_recommended
+        FROM product_nutrients pn
+        JOIN nutrients n ON pn.nutrient_id = n.id
+        WHERE pn.product_id = ?
+      `).bind(product.id).all();
+
+      productsWithNutrients.push({
+        ...product,
+        nutrients: nutrients.results || []
+      });
+    }
+
+    return c.json({ success: true, data: productsWithNutrients });
+  } catch (error) {
+    console.error('[PRODUCTS] Get products error:', error);
+    return c.json({ 
+      success: false, 
+      error: 'Fehler beim Laden der Produkte',
+      debug: error.message
+    }, 500);
+  }
+});
+
+app.post('/api/protected/products', async (c) => {
+  try {
+    const authHeader = c.req.header('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return c.json({ success: false, error: 'Authentifizierung erforderlich' }, 401);
+    }
+
+    const token = authHeader.substring(7);
+    const [userId] = atob(token).split(':');
+    
+    const body = await c.req.json();
+
+    if (!body.name || !body.brand || !body.form || !body.price_per_package || !body.servings_per_package || !body.shop_url) {
+      return c.json({ error: 'Alle Pflichtfelder müssen ausgefüllt werden' }, 400);
+    }
+
+    // Create product
+    const productResult = await c.env.DB.prepare(`
+      INSERT INTO products (user_id, name, brand, form, price_per_package, servings_per_package, 
+                          shop_url, affiliate_url, image_url, description, benefits, warnings, 
+                          dosage_recommendation, category_id, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+    `).bind(
+      userId,
+      body.name,
+      body.brand,
+      body.form,
+      body.price_per_package,
+      body.servings_per_package,
+      body.shop_url,
+      body.shop_url, // affiliate_url same as shop_url for now
+      body.image_url || null,
+      body.description || null,
+      JSON.stringify(body.benefits || []),
+      body.warnings || null,
+      body.dosage_recommendation || null,
+      body.category_id || 1
+    ).run();
+
+    if (!productResult.success) {
+      return c.json({ error: 'Fehler beim Erstellen des Produkts' }, 500);
+    }
+
+    const productId = productResult.meta.last_row_id;
+
+    // Add nutrients
+    if (body.nutrients && body.nutrients.length > 0) {
+      for (const nutrient of body.nutrients) {
+        await c.env.DB.prepare(`
+          INSERT INTO product_nutrients (product_id, nutrient_id, amount, unit, amount_standardized)
+          VALUES (?, ?, ?, ?, ?)
+        `).bind(
+          productId,
+          nutrient.nutrient_id,
+          nutrient.amount,
+          nutrient.unit,
+          nutrient.amount // simplified standardization
+        ).run();
+      }
+    }
+
+    return c.json({
+      success: true,
+      message: 'Produkt erfolgreich erstellt',
+      product_id: productId
+    });
+
+  } catch (error) {
+    console.error('Create product error:', error);
+    return c.json({ success: false, error: 'Fehler beim Erstellen des Produkts' }, 500);
+  }
+});
+
+// Dashboard endpoint
+app.get('/api/protected/dashboard', async (c) => {
+  try {
+    const authHeader = c.req.header('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return c.json({ success: false, error: 'Authentifizierung erforderlich' }, 401);
+    }
+
+    const token = authHeader.substring(7);
+    const [userId] = atob(token).split(':');
+
+    // Get user stats
+    const productCount = await c.env.DB.prepare(`
+      SELECT COUNT(*) as count FROM products WHERE user_id = ?
+    `).bind(userId).first();
+
+    const stackCount = await c.env.DB.prepare(`
+      SELECT COUNT(*) as count FROM stacks WHERE user_id = ?
+    `).bind(userId).first();
+
+    // Get recent products
+    const recentProducts = await c.env.DB.prepare(`
+      SELECT p.*, c.name as category_name
+      FROM products p
+      LEFT JOIN categories c ON p.category_id = c.id
+      WHERE p.user_id = ?
+      ORDER BY p.created_at DESC
+      LIMIT 5
+    `).bind(userId).all();
+
+    return c.json({
+      success: true,
+      data: {
+        stats: {
+          products: productCount?.count || 0,
+          stacks: stackCount?.count || 0
+        },
+        recentProducts: recentProducts.results || []
+      }
+    });
+
+  } catch (error) {
+    console.error('Dashboard error:', error);
+    return c.json({ success: false, error: 'Fehler beim Laden des Dashboards' }, 500);
+  }
+});
+
+// Stacks API
+app.get('/api/protected/stacks', async (c) => {
+  try {
+    const authHeader = c.req.header('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return c.json({ success: false, error: 'Authentifizierung erforderlich' }, 401);
+    }
+
+    const token = authHeader.substring(7);
+    const [userId] = atob(token).split(':');
+
+    const stacks = await c.env.DB.prepare(`
+      SELECT * FROM stacks WHERE user_id = ? ORDER BY created_at DESC
+    `).bind(userId).all();
+
+    return c.json({ success: true, data: stacks.results || [] });
+  } catch (error) {
+    console.error('Get stacks error:', error);
+    return c.json({ success: false, error: 'Fehler beim Laden der Stacks' }, 500);
+  }
+});
+
+app.post('/api/protected/stacks', async (c) => {
+  try {
+    const authHeader = c.req.header('Authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return c.json({ success: false, error: 'Authentifizierung erforderlich' }, 401);
+    }
+
+    const token = authHeader.substring(7);
+    const [userId] = atob(token).split(':');
+    
+    const { name, description } = await c.req.json();
+
+    if (!name) {
+      return c.json({ error: 'Stack-Name ist erforderlich' }, 400);
+    }
+
+    const result = await c.env.DB.prepare(`
+      INSERT INTO stacks (user_id, name, description, created_at, updated_at)
+      VALUES (?, ?, ?, datetime('now'), datetime('now'))
+    `).bind(userId, name, description || null).run();
+
+    if (!result.success) {
+      return c.json({ error: 'Fehler beim Erstellen des Stacks' }, 500);
+    }
+
+    return c.json({
+      success: true,
+      message: 'Stack erfolgreich erstellt',
+      stack_id: result.meta.last_row_id
+    });
+
+  } catch (error) {
+    console.error('Create stack error:', error);
+    return c.json({ success: false, error: 'Fehler beim Erstellen des Stacks' }, 500);
+  }
+});
+
+// Dashboard page
+app.get('/dashboard', (c) => {
+  return c.html(`
+    <!DOCTYPE html>
+    <html lang="de">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Dashboard - Supplement Stack</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+        <script>
+          tailwind.config = {
+            theme: {
+              extend: {
+                colors: {
+                  primary: '#16a34a',
+                  secondary: '#059669'
+                }
+              }
+            }
+          }
+        </script>
+    </head>
+    <body class="bg-gray-50">
+        <!-- Navigation -->
+        <nav class="bg-white shadow-lg">
+            <div class="max-w-7xl mx-auto px-4">
+                <div class="flex justify-between items-center h-16">
+                    <div class="flex items-center">
+                        <i class="fas fa-pills text-primary text-2xl mr-2"></i>
+                        <span class="text-xl font-bold text-gray-800">Supplement Stack</span>
+                    </div>
+                    <div class="hidden md:flex items-center space-x-4">
+                        <a href="/dashboard" class="text-primary font-semibold">Dashboard</a>
+                        <a href="/products" class="text-gray-600 hover:text-primary">Produkte</a>
+                        <a href="/demo" class="text-gray-600 hover:text-primary">Demo</a>
+                        <button id="logoutBtn" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">Abmelden</button>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <div class="max-w-7xl mx-auto px-4 py-8">
+            <h1 class="text-3xl font-bold text-gray-800 mb-8">Dashboard</h1>
+            
+            <!-- Stats Cards -->
+            <div id="statsGrid" class="grid md:grid-cols-2 gap-6 mb-8">
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <div class="flex items-center">
+                        <i class="fas fa-pills text-primary text-2xl mr-4"></i>
+                        <div>
+                            <p class="text-gray-600">Produkte</p>
+                            <p id="productCount" class="text-2xl font-bold text-gray-800">-</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <div class="flex items-center">
+                        <i class="fas fa-layer-group text-primary text-2xl mr-4"></i>
+                        <div>
+                            <p class="text-gray-600">Stacks</p>
+                            <p id="stackCount" class="text-2xl font-bold text-gray-800">-</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Products -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4">Neueste Produkte</h2>
+                <div id="recentProducts" class="space-y-3">
+                    <div class="text-gray-500">Lade Daten...</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="message" class="hidden fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50"></div>
+
+        <script>
+        // Check authentication
+        const token = localStorage.getItem('authToken');
+        if (!token) {
+            window.location.href = '/auth';
+        }
+
+        function showMessage(text, type = 'info') {
+            const messageDiv = document.getElementById('message');
+            messageDiv.textContent = text;
+            messageDiv.className = 'fixed top-4 right-4 p-4 rounded-lg shadow-lg z-50 ' + 
+                (type === 'error' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700');
+            messageDiv.classList.remove('hidden');
+            setTimeout(() => messageDiv.classList.add('hidden'), 3000);
+        }
+
+        async function loadDashboard() {
+            try {
+                const response = await fetch('/api/protected/dashboard', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    document.getElementById('productCount').textContent = data.data.stats.products;
+                    document.getElementById('stackCount').textContent = data.data.stats.stacks;
+                    
+                    const recentProducts = data.data.recentProducts;
+                    const container = document.getElementById('recentProducts');
+                    
+                    if (recentProducts.length === 0) {
+                        container.innerHTML = '<div class="text-gray-500">Noch keine Produkte vorhanden. <a href="/products" class="text-primary hover:underline">Produkt hinzufügen</a></div>';
+                    } else {
+                        container.innerHTML = recentProducts.map(product => `
+                            <div class="flex items-center justify-between p-3 border border-gray-200 rounded">
+                                <div>
+                                    <div class="font-medium">${product.name}</div>
+                                    <div class="text-sm text-gray-500">${product.brand} - ${product.category_name || 'Keine Kategorie'}</div>
+                                </div>
+                                <div class="text-sm text-gray-400">
+                                    ${new Date(product.created_at).toLocaleDateString('de-DE')}
+                                </div>
+                            </div>
+                        `).join('');
+                    }
+                } else {
+                    showMessage(data.error || 'Fehler beim Laden des Dashboards', 'error');
+                }
+            } catch (error) {
+                showMessage('Fehler beim Laden des Dashboards', 'error');
+            }
+        }
+
+        document.getElementById('logoutBtn').addEventListener('click', function() {
+            localStorage.removeItem('authToken');
+            window.location.href = '/';
+        });
+
+        // Load dashboard on page load
+        loadDashboard();
+        </script>
+    </body>
+    </html>
+  `);
+});
+
+// Auth page
+app.get('/auth', (c) => {
+  return c.html(`
+    <!DOCTYPE html>
+    <html lang="de">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Anmeldung - Supplement Stack</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+        <script>
+          tailwind.config = {
+            theme: {
+              extend: {
+                colors: {
+                  primary: '#16a34a',
+                  secondary: '#059669'
+                }
+              }
+            }
+          }
+        </script>
+    </head>
+    <body class="bg-gray-50">
+        <div class="min-h-screen flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+            <div class="max-w-md w-full space-y-8">
+                <div>
+                    <div class="mx-auto h-12 w-12 flex items-center justify-center rounded-full bg-primary">
+                        <i class="fas fa-pills text-white text-xl"></i>
+                    </div>
+                    <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900">
+                        Supplement Stack
+                    </h2>
+                    <p class="mt-2 text-center text-sm text-gray-600">
+                        Verwalte deine Supplements intelligent
+                    </p>
+                </div>
+
+                <!-- Login Form -->
+                <div id="loginForm" class="mt-8 space-y-6">
+                    <div>
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Anmelden</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <input id="loginEmail" type="email" required
+                                    class="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-primary focus:border-primary"
+                                    placeholder="E-Mail-Adresse">
+                            </div>
+                            <div>
+                                <input id="loginPassword" type="password" required
+                                    class="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-primary focus:border-primary"
+                                    placeholder="Passwort">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <button id="loginBtn" type="button"
+                            class="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-primary hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                            Anmelden
+                        </button>
+                    </div>
+
+                    <div class="text-center">
+                        <button id="showRegister" class="text-primary hover:text-secondary">
+                            Noch kein Konto? Hier registrieren
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Register Form -->
+                <div id="registerForm" class="mt-8 space-y-6 hidden">
+                    <div>
+                        <h3 class="text-lg font-medium text-gray-900 mb-4">Registrieren</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <input id="registerEmail" type="email" required
+                                    class="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-primary focus:border-primary"
+                                    placeholder="E-Mail-Adresse">
+                            </div>
+                            <div>
+                                <input id="registerPassword" type="password" required
+                                    class="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-primary focus:border-primary"
+                                    placeholder="Passwort">
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <input id="age" type="number" placeholder="Alter"
+                                    class="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-primary focus:border-primary">
+                                <select id="gender"
+                                    class="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-primary focus:border-primary">
+                                    <option value="">Geschlecht</option>
+                                    <option value="männlich">Männlich</option>
+                                    <option value="weiblich">Weiblich</option>
+                                    <option value="divers">Divers</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <button id="registerBtn" type="button"
+                            class="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-primary hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary">
+                            Registrieren
+                        </button>
+                    </div>
+
+                    <div class="text-center">
+                        <button id="showLogin" class="text-primary hover:text-secondary">
+                            Bereits registriert? Hier anmelden
+                        </button>
+                    </div>
+                </div>
+
+                <div id="message" class="hidden mt-4 p-4 rounded-md"></div>
+            </div>
+        </div>
+
+        <script>
+        document.getElementById('showRegister').addEventListener('click', function() {
+            document.getElementById('loginForm').classList.add('hidden');
+            document.getElementById('registerForm').classList.remove('hidden');
+        });
+
+        document.getElementById('showLogin').addEventListener('click', function() {
+            document.getElementById('registerForm').classList.add('hidden');
+            document.getElementById('loginForm').classList.remove('hidden');
+        });
+
+        function showMessage(text, type = 'info') {
+            const messageDiv = document.getElementById('message');
+            messageDiv.textContent = text;
+            messageDiv.className = 'mt-4 p-4 rounded-md ' + (type === 'error' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700');
+            messageDiv.classList.remove('hidden');
+        }
+
+        document.getElementById('loginBtn').addEventListener('click', async function() {
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    localStorage.setItem('authToken', data.token);
+                    showMessage('Erfolgreich angemeldet! Weiterleitung...');
+                    setTimeout(() => {
+                        window.location.href = '/dashboard';
+                    }, 1000);
+                } else {
+                    showMessage(data.error || 'Anmeldung fehlgeschlagen', 'error');
+                }
+            } catch (error) {
+                showMessage('Fehler bei der Anmeldung', 'error');
+            }
+        });
+
+        document.getElementById('registerBtn').addEventListener('click', async function() {
+            const email = document.getElementById('registerEmail').value;
+            const password = document.getElementById('registerPassword').value;
+            const age = document.getElementById('age').value;
+            const gender = document.getElementById('gender').value;
+
+            try {
+                const response = await fetch('/api/auth/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password, age, gender })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showMessage('Erfolgreich registriert! Sie können sich nun anmelden.');
+                    document.getElementById('registerForm').classList.add('hidden');
+                    document.getElementById('loginForm').classList.remove('hidden');
+                } else {
+                    showMessage(data.error || 'Registrierung fehlgeschlagen', 'error');
+                }
+            } catch (error) {
+                showMessage('Fehler bei der Registrierung', 'error');
+            }
+        });
+        </script>
+    </body>
+    </html>
+  `);
+});
+
+// Demo page
+app.get('/demo', (c) => {
+  return c.html(`
+    <!DOCTYPE html>
+    <html lang="de">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Demo - Supplement Stack</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+        <script>
+          tailwind.config = {
+            theme: {
+              extend: {
+                colors: {
+                  primary: '#16a34a',
+                  secondary: '#059669'
+                }
+              }
+            }
+          }
+        </script>
+    </head>
+    <body class="bg-gray-50">
+        <div class="container mx-auto px-4 py-8">
+            <h1 class="text-3xl font-bold text-center mb-8">Supplement Stack - Demo</h1>
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h2 class="text-xl font-semibold mb-4">Nährstoffbasiertes System</h2>
+                <p class="text-gray-600 mb-4">Diese Demo zeigt das nährstoffbasierte Verwaltungssystem für Supplements.</p>
+                
+                <div class="grid md:grid-cols-2 gap-6">
+                    <div class="border rounded-lg p-4">
+                        <h3 class="font-semibold text-lg mb-2">API-Endpunkte</h3>
+                        <ul class="space-y-2">
+                            <li><a href="/api/nutrients" class="text-blue-600 hover:underline">/api/nutrients</a> - Alle Nährstoffe</li>
+                            <li><a href="/api/categories" class="text-blue-600 hover:underline">/api/categories</a> - Kategorien</li>
+                            <li><a href="/api/health" class="text-blue-600 hover:underline">/api/health</a> - Status</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="border rounded-lg p-4">
+                        <h3 class="font-semibold text-lg mb-2">Features</h3>
+                        <ul class="space-y-1 text-sm text-gray-600">
+                            <li>✅ Nährstoff-Datenbank</li>
+                            <li>✅ DGE & Studien-Empfehlungen</li>
+                            <li>✅ Automatische Dosierungsberechnung</li>
+                            <li>✅ Kategorie-Verwaltung</li>
+                            <li>✅ Mobile-First Design</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <script src="/static/demo-modal.js"></script>
+    </body>
+    </html>
+  `);
+});
 
 // Main application page
 app.get('/', (c) => {
@@ -86,6 +893,7 @@ app.get('/', (c) => {
                         <span class="text-xl font-bold text-gray-800">Supplement Stack</span>
                     </div>
                     <div class="hidden md:flex items-center space-x-4">
+                        <a href="/demo" class="text-gray-600 hover:text-primary">Demo</a>
                         <a href="#products" class="text-gray-600 hover:text-primary">Produkte</a>
                         <a href="#stacks" class="text-gray-600 hover:text-primary">Stacks</a>
                         <a href="#dashboard" class="text-gray-600 hover:text-primary">Dashboard</a>
@@ -101,7 +909,10 @@ app.get('/', (c) => {
             <div class="max-w-7xl mx-auto px-4 text-center">
                 <h1 class="text-5xl font-bold mb-6">Verwalte deine Supplements intelligent</h1>
                 <p class="text-xl mb-8">Erstelle personalisierte Supplement-Stacks, vermeide Überdosierungen und finde die besten Angebote.</p>
-                <button id="getStartedBtn" class="bg-white text-primary px-8 py-3 rounded-lg font-semibold text-lg hover:bg-gray-100">Jetzt starten</button>
+                <div class="space-x-4">
+                    <a href="/demo" class="bg-white text-primary px-8 py-3 rounded-lg font-semibold text-lg hover:bg-gray-100 inline-block">Demo testen</a>
+                    <button id="getStartedBtn" class="border-2 border-white text-white px-8 py-3 rounded-lg font-semibold text-lg hover:bg-white hover:text-primary">Jetzt starten</button>
+                </div>
             </div>
         </section>
 
@@ -109,902 +920,62 @@ app.get('/', (c) => {
         <section class="py-20">
             <div class="max-w-7xl mx-auto px-4">
                 <div class="text-center mb-16">
-                    <h2 class="text-3xl font-bold text-gray-800 mb-4">Funktionen</h2>
-                    <p class="text-gray-600">Alles was du für dein Supplement-Management brauchst</p>
+                    <h2 class="text-3xl font-bold text-gray-800 mb-4">Nährstoffbasierte Features</h2>
+                    <p class="text-gray-600">Alles was du für dein intelligentes Supplement-Management brauchst</p>
                 </div>
                 <div class="grid md:grid-cols-3 gap-8">
                     <div class="text-center p-6">
-                        <i class="fas fa-layer-group text-primary text-4xl mb-4"></i>
-                        <h3 class="text-xl font-semibold mb-2">Stacks erstellen</h3>
-                        <p class="text-gray-600">Kombiniere Supplements zu sinnvollen Stacks mit automatischer Dosierungsberechnung.</p>
+                        <i class="fas fa-atom text-primary text-4xl mb-4"></i>
+                        <h3 class="text-xl font-semibold mb-2">Nährstoffbasiert</h3>
+                        <p class="text-gray-600">Produkte werden Wirkstoffen zugeordnet mit automatischer Dosierungsberechnung.</p>
                     </div>
                     <div class="text-center p-6">
-                        <i class="fas fa-exclamation-triangle text-primary text-4xl mb-4"></i>
-                        <h3 class="text-xl font-semibold mb-2">Überdosierung vermeiden</h3>
-                        <p class="text-gray-600">Automatische Warnungen bei zu hohen Dosierungen oder gefährlichen Kombinationen.</p>
+                        <i class="fas fa-calculator text-primary text-4xl mb-4"></i>
+                        <h3 class="text-xl font-semibold mb-2">DGE-Integration</h3>
+                        <p class="text-gray-600">Deutsche Gesellschaft für Ernährung Empfehlungen plus aktuelle Studiendaten.</p>
                     </div>
                     <div class="text-center p-6">
-                        <i class="fas fa-shopping-cart text-primary text-4xl mb-4"></i>
-                        <h3 class="text-xl font-semibold mb-2">Smart Shopping</h3>
-                        <p class="text-gray-600">Finde die besten Angebote und bestelle direkt über unsere Partner-Links.</p>
+                        <i class="fas fa-mobile-alt text-primary text-4xl mb-4"></i>
+                        <h3 class="text-xl font-semibold mb-2">Mobile-First</h3>
+                        <p class="text-gray-600">Vollständig optimiert für Smartphones mit Touch-freundlichen Bedienelementen.</p>
                     </div>
                 </div>
             </div>
         </section>
 
-        <!-- App Container -->
-        <div id="app" class="min-h-screen bg-gray-50">
-            <!-- Content will be loaded here by JavaScript -->
-        </div>
-
-        <!-- Footer -->
-        <footer class="bg-gray-800 text-white py-8">
+        <!-- CTA Section -->
+        <section class="bg-gray-100 py-20">
             <div class="max-w-7xl mx-auto px-4 text-center">
-                <div class="mb-4">
-                    <p class="text-yellow-400 font-semibold">⚠️ Wichtiger Hinweis</p>
-                    <p class="text-sm">Diese Anwendung ersetzt keine medizinische Beratung. Konsultiere bei gesundheitlichen Fragen immer einen Arzt.</p>
+                <h2 class="text-3xl font-bold text-gray-800 mb-6">Bereit für intelligentes Supplement-Management?</h2>
+                <p class="text-xl text-gray-600 mb-8">Teste jetzt die nährstoffbasierte Demo oder starte direkt durch!</p>
+                <div class="space-x-4">
+                    <a href="/demo" class="bg-primary text-white px-8 py-3 rounded-lg font-semibold text-lg hover:bg-secondary inline-block">Demo starten</a>
+                    <button id="signupBtn" class="border-2 border-primary text-primary px-8 py-3 rounded-lg font-semibold text-lg hover:bg-primary hover:text-white">Kostenlos registrieren</button>
                 </div>
-                <p class="text-gray-400">&copy; 2024 Supplement Stack. Alle Rechte vorbehalten.</p>
             </div>
-        </footer>
+        </section>
 
-        <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
-        <script src="/static/app.js"></script>
-    </body>
-    </html>
-  `)
-})
-
-// Demo page
-app.get('/demo', (c) => {
-  return c.html(`
-    <!DOCTYPE html>
-    <html lang="de">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Demo - Supplement Stack (UPDATED VERSION)</title>
-        <meta name="description" content="Demo der Supplement Stack Anwendung mit nährstoffbasiertem System">
-        <script src="https://cdn.tailwindcss.com"></script>
-        <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
-        <link href="/static/styles.css" rel="stylesheet">
         <script>
-          tailwind.config = {
-            theme: {
-              extend: {
-                colors: {
-                  primary: '#16a34a',
-                  secondary: '#059669'
-                }
-              }
-            }
-          }
-        </script>
-    </head>
-    <body class="bg-gray-50">
-        <!-- Navigation -->
-        <nav class="bg-white shadow-lg">
-            <div class="max-w-7xl mx-auto px-4">
-                <div class="flex justify-between items-center h-16">
-                    <div class="flex items-center">
-                        <i class="fas fa-pills text-primary text-2xl mr-2"></i>
-                        <span class="text-xl font-bold text-gray-800">Supplement Stack</span>
-                        <span class="ml-3 px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">DEMO</span>
-                    </div>
-                    <div class="flex items-center space-x-4">
-                        <a href="/" class="text-gray-600 hover:text-primary">← Zurück</a>
-                    </div>
-                </div>
-            </div>
-        </nav>
-
-        <!-- Demo Container -->
-        <div class="max-w-7xl mx-auto px-4 py-6">
-            <!-- Demo Header -->
-            <div class="bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg p-6 mb-6">
-                <h1 class="text-3xl font-bold mb-2">🧬 Nährstoffbasiertes Demo-System</h1>
-                <p class="text-blue-100">Vollständige CRUD-Demo mit automatischer Dosierungsberechnung und intelligenten Stack-Workflows</p>
-            </div>
-
-            <!-- Stats Cards -->
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                <div class="bg-white rounded-lg shadow p-4">
-                    <div class="flex items-center">
-                        <i class="fas fa-box text-blue-500 text-2xl mr-3"></i>
-                        <div>
-                            <p class="text-sm text-gray-600">Produkte</p>
-                            <p class="text-xl font-bold" id="demo-products-count">0</p>
-                        </div>
-                    </div>
-                </div>
-                <div class="bg-white rounded-lg shadow p-4">
-                    <div class="flex items-center">
-                        <i class="fas fa-layer-group text-green-500 text-2xl mr-3"></i>
-                        <div>
-                            <p class="text-sm text-gray-600">Stacks</p>
-                            <p class="text-xl font-bold" id="demo-stacks-count">0</p>
-                        </div>
-                    </div>
-                </div>
-                <div class="bg-white rounded-lg shadow p-4">
-                    <div class="flex items-center">
-                        <i class="fas fa-euro-sign text-yellow-500 text-2xl mr-3"></i>
-                        <div>
-                            <p class="text-sm text-gray-600">Monatlich</p>
-                            <p class="text-xl font-bold" id="demo-monthly-cost">€0.00</p>
-                        </div>
-                    </div>
-                </div>
-                <div class="bg-white rounded-lg shadow p-4 cursor-pointer hover:shadow-lg transition-shadow" onclick="app.showWishlistModal()" title="Wunschliste anzeigen">
-                    <div class="flex items-center">
-                        <i class="fas fa-heart text-red-500 text-2xl mr-3"></i>
-                        <div>
-                            <p class="text-sm text-gray-600">Wunschliste</p>
-                            <p class="text-xl font-bold" id="demo-wishlist-count">0</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Action Buttons -->
-            <div class="flex flex-wrap gap-3 mb-6">
-                <button id="demo-add-product-main" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center">
-                    <i class="fas fa-plus mr-2"></i>
-                    <span class="hidden sm:inline">Produkt hinzufügen</span>
-                    <span class="sm:hidden">Produkt</span>
-                </button>
-                <button id="demo-create-stack-main" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center">
-                    <i class="fas fa-layer-group mr-2"></i>
-                    <span class="hidden sm:inline">Nährstoff-Stack</span>
-                    <span class="sm:hidden">Stack</span>
-                </button>
-                <!-- Stack Selection Dropdown -->
-                <div class="relative">
-                    <select id="stack-selector" class="bg-white border border-gray-300 rounded-lg px-4 py-2 pr-8 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                        <option value="">Stack auswählen</option>
-                        <!-- Optionen werden dynamisch von JavaScript hinzugefügt -->
-                    </select>
-                </div>
-            </div>
-
-            <!-- Main Content Area -->
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <!-- Produkte Sektion -->
-                <div class="lg:col-span-2">
-                    <div class="bg-white rounded-lg shadow">
-                        <div class="p-4 border-b border-gray-200">
-                            <h2 class="text-xl font-semibold text-gray-800 flex items-center">
-                                <i class="fas fa-box mr-2 text-blue-500"></i>
-                                Produkte
-                            </h2>
-                        </div>
-                        <div class="p-4">
-                            <div id="demo-products-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                <!-- Produkte werden hier eingefügt -->
-                            </div>
-                            <!-- Fallback wenn keine Produkte -->
-                            <div id="demo-fallback" class="text-center py-8 text-gray-500" style="display: none;">
-                                <i class="fas fa-box text-3xl mb-3"></i>
-                                <p class="text-lg font-medium mb-2">Noch keine Produkte</p>
-                                <p class="text-sm">Fügen Sie Ihr erstes Produkt hinzu!</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Stacks Sektion -->
-                <div>
-                    <div class="bg-white rounded-lg shadow">
-                        <div class="p-4 border-b border-gray-200">
-                            <h2 class="text-xl font-semibold text-gray-800 flex items-center">
-                                <i class="fas fa-layer-group mr-2 text-green-500"></i>
-                                Meine Stacks
-                            </h2>
-                        </div>
-                        <div class="p-4">
-                            <div id="demo-stacks-grid" class="space-y-3">
-                                <!-- Stacks werden hier eingefügt -->
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Scripts -->
-        <script src="/static/demo-app.js"></script>
-        <script src="/static/demo-modal.js"></script>
-        <script src="/static/demo-fix.js"></script>
-    </body>
-    </html>
-  `)
-})
-
-// Authentication page
-app.get('/auth', (c) => {
-  return c.html(`
-    <!DOCTYPE html>
-    <html lang="de">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Anmeldung - Supplement Stack</title>
-        <script src="https://cdn.tailwindcss.com"></script>
-        <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
-        <style>
-          body {
-            background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 50%, #f0f9ff 100%);
-          }
-          .form-input {
-            @apply w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all;
-          }
-          .form-label {
-            @apply block text-sm font-medium text-gray-700 mb-2;
-          }
-        </style>
-    </head>
-    <body class="min-h-screen flex items-center justify-center p-4">
-        <div class="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full">
-            <!-- Header -->
-            <div class="text-center mb-8">
-                <div class="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <svg class="w-8 h-8 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
-                    </svg>
-                </div>
-                <h1 class="text-2xl font-bold text-gray-900 mb-2">🏋️ Supplement Stack</h1>
-                <p class="text-gray-600">Wissenschaftlich fundierte Gesundheits-Optimierung</p>
-            </div>
-
-            <!-- Login Form -->
-            <form id="login-form" class="space-y-6">
-                <h2 class="text-xl font-semibold text-center text-gray-800 mb-6">Anmelden</h2>
-                
-                <div>
-                    <label class="form-label">E-Mail-Adresse</label>
-                    <input type="email" name="email" required class="form-input" placeholder="deine@email.de">
-                </div>
-                
-                <div>
-                    <label class="form-label">Passwort</label>
-                    <input type="password" name="password" required class="form-input" placeholder="Dein Passwort">
-                </div>
-
-                <button type="submit" class="w-full bg-gradient-to-r from-emerald-500 to-teal-600 text-white px-6 py-3 rounded-lg font-semibold hover:from-emerald-600 hover:to-teal-700 transition-all transform hover:scale-105">
-                    🔑 Anmelden
-                </button>
-
-                <div class="text-center">
-                    <button type="button" id="forgot-password-btn" class="text-red-600 hover:text-red-700 font-medium text-sm">
-                        🔑 Passwort vergessen?
-                    </button>
-                </div>
-
-                <div class="text-center">
-                    <span class="text-gray-600 text-sm">Noch kein Konto?</span>
-                    <button type="button" id="show-register" class="text-emerald-600 hover:text-emerald-700 font-medium ml-1">
-                        Jetzt registrieren
-                    </button>
-                </div>
-            </form>
-
-            <!-- Register Form (initially hidden) -->
-            <form id="register-form" class="space-y-6 hidden">
-                <h2 class="text-xl font-semibold text-center text-gray-800 mb-6">Registrieren</h2>
-                
-                <div>
-                    <label class="form-label">E-Mail-Adresse</label>
-                    <input type="email" name="email" required class="form-input" placeholder="deine@email.de">
-                </div>
-                
-                <div>
-                    <label class="form-label">Passwort</label>
-                    <input type="password" name="password" required minlength="8" class="form-input" placeholder="Mindestens 8 Zeichen">
-                </div>
-
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="form-label">Alter (optional)</label>
-                        <input type="number" name="age" min="13" max="120" class="form-input" placeholder="25">
-                    </div>
-                    <div>
-                        <label class="form-label">Gewicht (optional)</label>
-                        <input type="number" name="weight" min="30" max="300" step="0.1" class="form-input" placeholder="70.5">
-                    </div>
-                </div>
-
-                <div>
-                    <label class="form-label">Ernährungsform (optional)</label>
-                    <select name="diet_type" class="form-input">
-                        <option value="omnivore">Omnivore (Alles)</option>
-                        <option value="vegetarisch">Vegetarisch</option>
-                        <option value="vegan">Vegan</option>
-                    </select>
-                </div>
-
-                <button type="submit" class="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-lg font-semibold hover:from-blue-600 hover:to-purple-700 transition-all transform hover:scale-105">
-                    🚀 Registrieren
-                </button>
-
-                <div class="text-center">
-                    <span class="text-gray-600 text-sm">Bereits registriert?</span>
-                    <button type="button" id="show-login" class="text-emerald-600 hover:text-emerald-700 font-medium ml-1">
-                        Jetzt anmelden
-                    </button>
-                </div>
-            </form>
-
-            <!-- Back to Home -->
-            <div class="mt-8 text-center">
-                <a href="/" class="text-gray-500 hover:text-gray-700 font-medium">
-                    ← Zurück zur Startseite
-                </a>
-            </div>
-        </div>
-
-        <!-- Loading State -->
-        <div id="loading" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div class="bg-white rounded-lg p-6 text-center">
-                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500 mx-auto mb-4"></div>
-                <p id="loading-text" class="text-gray-600">Laden...</p>
-            </div>
-        </div>
-
-        <script src="/static/app.js"></script>
-    </body>
-    </html>
-  `)
-})
-
-// Password reset page
-app.get('/reset-password', (c) => {
-  return serveStatic({ root: './public', path: 'reset-password.html' })(c)
-})
-
-// Email verification fallback route (in case URL is missing /api/auth)
-app.get('/verify-email', async (c) => {
-  const token = c.req.query('token')
-  if (token) {
-    // Redirect to the correct API endpoint
-    return c.redirect(`/api/auth/verify-email?token=${token}`)
-  }
-  return c.json({ error: 'Token fehlt' }, 400)
-})
-
-// Health check
-app.get('/health', (c) => {
-  return c.json({ 
-    status: 'ok', 
-    timestamp: new Date().toISOString(),
-    version: '1.0.1-email-fix' 
-  })
-})
-
-// Authenticated Dashboard Route (EXACT same UI as demo but with database integration)
-app.get('/dashboard', (c) => {
-  return c.html(`
-    <!DOCTYPE html>
-    <html lang="de">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Dashboard - Supplement Stack (Authenticated)</title>
-        <meta name="description" content="Dein persönliches Supplement Dashboard">
-        <script src="https://cdn.tailwindcss.com"></script>
-        <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
-        <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
-        <style>
-          /* Custom styles for supplement management */
-          .supplement-card { @apply bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow; }
-          .nav-item.active { @apply bg-blue-600 text-white; }
-          .warning-high { @apply bg-red-100 border-red-500 text-red-700; }
-          .warning-medium { @apply bg-yellow-100 border-yellow-500 text-yellow-700; }
-          .safe { @apply bg-green-100 border-green-500 text-green-700; }
-          
-          /* Mobile-optimiertes Design für Demo */
-          @media (max-width: 768px) {
-            .container-mobile { @apply px-2; }
-            .card-mobile { @apply p-3; }
-            .btn-mobile { @apply px-3 py-2 text-sm; }
-            .text-responsive { @apply text-sm; }
-          }
-          
-          /* Modal Styles */
-          .modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background-color: rgba(0, 0, 0, 0.5);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 9999;
-            padding: 8px;
-          }
-          
-          .modal-container {
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-            width: 100%;
-            max-width: 32rem;
-            max-height: 95vh;
-            overflow-y: auto;
-          }
-          
-          @media (min-width: 640px) {
-            .modal-container {
-              max-width: 42rem;
-              padding: 16px;
-            }
-            .modal-overlay {
-              padding: 16px;
-            }
-          }
-          
-          /* Touch-friendly elements */
-          .touch-target {
-            min-height: 44px;
-            min-width: 44px;
-          }
-          
-          /* Form styling */
-          .form-input {
-            @apply w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base;
-          }
-          
-          .form-label {
-            @apply block text-sm font-medium text-gray-700 mb-1;
-          }
-        </style>
-        <script>
-          tailwind.config = {
-            theme: {
-              extend: {
-                colors: {
-                  primary: '#16a34a',
-                  secondary: '#059669'
-                }
-              }
-            }
-          }
-        </script>
-    </head>
-    <body class="bg-gray-50 min-h-screen">
-        <!-- DSGVO Disclaimer -->
-        <div class="bg-blue-600 text-white text-center py-2 text-sm">
-            <i class="fas fa-info-circle mr-2"></i>
-            Diese Plattform bietet keine medizinische Beratung. Konsultieren Sie bei gesundheitlichen Fragen einen Arzt.
-        </div>
+        // Simple navigation handlers
+        document.getElementById('loginBtn')?.addEventListener('click', () => {
+            window.location.href = '/auth';
+        });
         
-        <!-- Main Content -->
-        <main class="max-w-7xl mx-auto container-mobile py-4 sm:py-8">
-            
-    <!-- Dashboard Header - Mobile optimiert -->
-    <div class="bg-blue-600 text-white py-3 sm:py-4">
-        <div class="max-w-6xl mx-auto px-2 sm:px-4">
-            <!-- Mobile Header -->
-            <div class="flex flex-col space-y-3 sm:hidden">
-                <div class="flex items-center justify-between">
-                    <h1 class="text-lg font-bold">
-                        <i class="fas fa-capsules mr-2"></i>Supplement Stack Dashboard
-                    </h1>
-                </div>
-                <!-- Immer sichtbare Mobile-Buttons -->
-                <div class="grid grid-cols-2 gap-2">
-                    <button id="demo-create-stack-mobile" class="bg-purple-600 text-white px-3 py-2 rounded-md hover:bg-purple-700 transition-colors text-xs">
-                        <i class="fas fa-flask mr-1"></i>Nährstoff-Stack
-                    </button>
-                    <button id="demo-add-product-mobile" class="bg-green-600 text-white px-3 py-2 rounded-md hover:bg-green-700 transition-colors text-xs">
-                        <i class="fas fa-plus mr-1"></i>Produkt hinzufügen
-                    </button>
-                </div>
-            </div>
-            
-            <!-- Desktop Header -->
-            <div class="hidden sm:flex justify-between items-center">
-                <h1 class="text-xl sm:text-2xl font-bold">
-                    <i class="fas fa-capsules mr-2"></i>Supplement Stack - Dashboard
-                </h1>
-                <div class="space-x-2 sm:space-x-4">
-                    <button id="demo-create-stack-desktop" class="bg-purple-600 text-white px-3 py-2 sm:px-4 sm:py-2 rounded-md hover:bg-purple-700 transition-colors text-sm sm:text-base">
-                        <i class="fas fa-flask mr-1 sm:mr-2"></i><span class="hidden sm:inline">Nährstoff-Stack</span><span class="sm:hidden">Stack</span>
-                    </button>
-                    <button id="demo-add-product-desktop" class="bg-green-600 text-white px-3 py-2 sm:px-4 sm:py-2 rounded-md hover:bg-green-700 transition-colors text-sm sm:text-base">
-                        <i class="fas fa-plus mr-1 sm:mr-2"></i><span class="hidden sm:inline">Produkt hinzufügen</span><span class="sm:hidden">Hinzufügen</span>
-                    </button>
-                    <a href="/products" class="bg-white text-blue-600 px-4 py-2 sm:px-6 sm:py-2 rounded-md hover:bg-gray-100 transition-colors font-semibold text-sm sm:text-base">
-                        Alle Produkte
-                    </a>
-                    <button id="logout-btn" class="bg-red-600 text-white px-4 py-2 sm:px-6 sm:py-2 rounded-md hover:bg-red-700 transition-colors font-semibold text-sm sm:text-base">
-                        <i class="fas fa-sign-out-alt mr-1 sm:mr-2"></i>Abmelden
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Dashboard Content -->
-    <div class="space-y-8">
-        <div class="bg-green-50 border border-green-200 rounded-lg p-4">
-            <div class="flex items-center">
-                <i class="fas fa-user-check text-green-600 mr-3"></i>
-                <div>
-                    <h3 class="font-semibold text-green-800">Authentifiziertes Dashboard</h3>
-                    <p class="text-green-700">Ihre Daten werden in der Datenbank gespeichert und bleiben dauerhaft erhalten.</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- Dashboard Stats - Mobile optimiert -->
-        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-6">
-            <div class="bg-white rounded-lg shadow p-3 sm:p-6">
-                <div class="flex flex-col sm:flex-row sm:items-center">
-                    <div class="p-2 sm:p-3 rounded-full bg-blue-500 bg-opacity-10 mb-2 sm:mb-0 self-start">
-                        <i class="fas fa-pills text-blue-500 text-lg sm:text-xl"></i>
-                    </div>
-                    <div class="sm:ml-4">
-                        <p class="text-xs sm:text-sm font-medium text-gray-500">Produkte</p>
-                        <p id="products-count" class="text-xl sm:text-2xl font-semibold text-gray-900">0</p>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="bg-white rounded-lg shadow p-3 sm:p-6">
-                <div class="flex flex-col sm:flex-row sm:items-center">
-                    <div class="p-2 sm:p-3 rounded-full bg-green-500 bg-opacity-10 mb-2 sm:mb-0 self-start">
-                        <i class="fas fa-layer-group text-green-500 text-lg sm:text-xl"></i>
-                    </div>
-                    <div class="sm:ml-4">
-                        <p class="text-xs sm:text-sm font-medium text-gray-500">Stacks</p>
-                        <p id="stacks-count" class="text-xl sm:text-2xl font-semibold text-gray-900">0</p>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="bg-white rounded-lg shadow p-3 sm:p-6 col-span-2 sm:col-span-1">
-                <div class="flex flex-col sm:flex-row sm:items-center">
-                    <div class="p-2 sm:p-3 rounded-full bg-yellow-500 bg-opacity-10 mb-2 sm:mb-0 self-start">
-                        <i class="fas fa-euro-sign text-yellow-500 text-lg sm:text-xl"></i>
-                    </div>
-                    <div class="sm:ml-4">
-                        <p class="text-xs sm:text-sm font-medium text-gray-500">Monatlich</p>
-                        <p id="monthly-cost" class="text-xl sm:text-2xl font-semibold text-green-600">€0.00</p>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="bg-white rounded-lg shadow p-3 sm:p-6 hidden sm:block">
-                <div class="flex flex-col sm:flex-row sm:items-center">
-                    <div class="p-2 sm:p-3 rounded-full bg-red-500 bg-opacity-10 mb-2 sm:mb-0 self-start">
-                        <i class="fas fa-heart text-red-500 text-lg sm:text-xl"></i>
-                    </div>
-                    <div class="sm:ml-4">
-                        <p class="text-xs sm:text-sm font-medium text-gray-500">Wunschliste</p>
-                        <p id="wishlist-count" class="text-xl sm:text-2xl font-semibold text-gray-900">0</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Loading State -->
-        <div id="loading" class="text-center py-8">
-            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
-            <p class="text-gray-600">Lade Dashboard-Daten...</p>
-        </div>
-
-        <!-- Error State -->
-        <div id="error-state" class="hidden bg-red-50 border border-red-200 rounded-lg p-6 mb-6">
-            <div class="flex items-center text-red-800 mb-2">
-                <i class="fas fa-exclamation-triangle mr-2"></i>
-                <span class="font-semibold">Fehler beim Laden der Dashboard-Daten</span>
-            </div>
-            <p id="error-message" class="text-red-700"></p>
-            <button id="retry-btn" class="mt-4 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700">
-                Erneut versuchen
-            </button>
-        </div>
-
-        <!-- Stack-Bereich wie im Demo -->
-        <div id="dashboard-content" class="bg-white rounded-lg shadow mt-8 hidden">
-            <div class="p-6 border-b border-gray-200">
-                <div class="flex justify-between items-center">
-                    <div class="flex items-center space-x-4">
-                        <h2 class="text-lg font-semibold text-gray-900 flex items-center">
-                            <i class="fas fa-leaf text-green-600 mr-2"></i>
-                            Stack-Verwaltung
-                        </h2>
-                        <!-- Stack-Auswahl -->
-                        <select id="stack-selector" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            <option value="">Stack auswählen...</option>
-                        </select>
-                    </div>
-                    <!-- Action-Buttons im Header -->
-                    <div class="flex gap-2">
-                        <button id="demo-add-product-main" class="bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm">
-                            <i class="fas fa-plus mr-1"></i>Produkt hinzufügen
-                        </button>
-                        <button id="demo-create-stack-main" class="bg-purple-600 text-white px-3 py-2 rounded-lg hover:bg-purple-700 transition-colors text-sm">
-                            <i class="fas fa-flask mr-1"></i>Stack erstellen
-                        </button>
-                    </div>
-                </div>
-            </div>
-            <div class="p-6">
-                <div id="products-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
-                    <!-- Stack-Produkte werden hier dynamisch eingefügt -->
-                </div>
-                
-                <!-- Fallback when no products -->
-                <div id="products-fallback" class="text-center py-8 text-gray-500" style="display: none;">
-                    <i class="fas fa-box text-3xl mb-3"></i>
-                    <p class="text-lg font-medium mb-2">Noch keine Produkte</p>
-                    <p class="text-sm">Fügen Sie Ihr erstes Produkt hinzu!</p>
-                    <button class="mt-4 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700" onclick="document.getElementById('demo-add-product-main').click()">
-                        <i class="fas fa-plus mr-2"></i>Produkt hinzufügen
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-  
-        </main>
+        document.getElementById('registerBtn')?.addEventListener('click', () => {
+            window.location.href = '/auth';
+        });
         
-        <!-- Scripts - Load demo modal system and dashboard app -->
-        <script src="/static/demo-modal.js"></script>
-        <script src="/static/dashboard-app.js"></script>
-    </body>
-    </html>
-  `)
-})
-
-// Authenticated Products Route
-app.get('/products', (c) => {
-  return c.html(`
-    <!DOCTYPE html>
-    <html lang="de">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Produkte - Supplement Stack</title>
-        <meta name="description" content="Verwalte deine Supplement-Produkte">
-        <script src="https://cdn.tailwindcss.com"></script>
-        <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
-        <link href="/static/styles.css" rel="stylesheet">
-        <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
-        <script>
-          tailwind.config = {
-            theme: {
-              extend: {
-                colors: {
-                  primary: '#16a34a',
-                  secondary: '#059669'
-                }
-              }
-            }
-          }
+        document.getElementById('getStartedBtn')?.addEventListener('click', () => {
+            window.location.href = '/demo';
+        });
+        
+        document.getElementById('signupBtn')?.addEventListener('click', () => {
+            window.location.href = '/auth';
+        });
         </script>
-    </head>
-    <body class="bg-gray-50">
-        <!-- Navigation -->
-        <nav class="bg-white shadow-lg">
-            <div class="max-w-7xl mx-auto px-4">
-                <div class="flex justify-between items-center h-16">
-                    <div class="flex items-center">
-                        <i class="fas fa-pills text-primary text-2xl mr-2"></i>
-                        <span class="text-xl font-bold text-gray-800">Supplement Stack</span>
-                        <span class="ml-3 px-2 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">PRODUKTE</span>
-                    </div>
-                    <div class="flex items-center space-x-4">
-                        <a href="/dashboard" class="text-gray-600 hover:text-primary">Dashboard</a>
-                        <a href="/products" class="text-primary font-medium">Produkte</a>
-                        <a href="/stacks" class="text-gray-600 hover:text-primary">Stacks</a>
-                        <button id="logout-btn" class="text-red-600 hover:text-red-700 font-medium">
-                            <i class="fas fa-sign-out-alt mr-1"></i>Abmelden
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </nav>
-
-        <!-- Products Container -->
-        <div class="max-w-7xl mx-auto px-4 py-6">
-            <!-- Products Header -->
-            <div class="bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg p-6 mb-6">
-                <h1 class="text-3xl font-bold mb-2">📦 Meine Produkte</h1>
-                <p class="text-blue-100">Verwalte deine Supplement-Produkte und optimiere deine Nährstoffzufuhr</p>
-            </div>
-
-            <!-- Action Bar -->
-            <div class="bg-white rounded-lg shadow p-4 mb-6">
-                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                    <div class="flex items-center gap-3">
-                        <button id="add-product-btn" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center">
-                            <i class="fas fa-plus mr-2"></i>Produkt hinzufügen
-                        </button>
-                        <button id="bulk-actions-btn" class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition-colors flex items-center">
-                            <i class="fas fa-check-square mr-2"></i>Auswahl-Modus
-                        </button>
-                    </div>
-                    <div class="flex items-center gap-3">
-                        <input type="text" id="search-products" placeholder="Produkte durchsuchen..." class="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                        <select id="filter-category" class="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            <option value="">Alle Kategorien</option>
-                            <option value="Vitamine">Vitamine</option>
-                            <option value="Mineralien">Mineralien</option>
-                            <option value="Aminosäuren">Aminosäuren</option>
-                            <option value="Fettsäuren">Fettsäuren</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Loading/Error States -->
-            <div id="loading" class="text-center py-8">
-                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
-                <p class="text-gray-600">Lade Produkte...</p>
-            </div>
-
-            <div id="error-state" class="hidden bg-red-50 border border-red-200 rounded-lg p-6 mb-6">
-                <div class="flex items-center text-red-800 mb-2">
-                    <i class="fas fa-exclamation-triangle mr-2"></i>
-                    <span class="font-semibold">Fehler beim Laden der Produkte</span>
-                </div>
-                <p id="error-message" class="text-red-700"></p>
-                <button id="retry-btn" class="mt-4 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700">
-                    Erneut versuchen
-                </button>
-            </div>
-
-            <!-- Products Grid -->
-            <div id="products-content" class="hidden">
-                <div id="products-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <!-- Products filled by JavaScript -->
-                </div>
-                
-                <!-- Fallback when no products -->
-                <div id="products-fallback" class="text-center py-12 text-gray-500" style="display: none;">
-                    <i class="fas fa-box text-5xl mb-4"></i>
-                    <h3 class="text-xl font-semibold mb-2">Noch keine Produkte</h3>
-                    <p class="text-gray-400 mb-6">Fügen Sie Ihr erstes Supplement-Produkt hinzu, um zu beginnen.</p>
-                    <button class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors" onclick="document.getElementById('add-product-btn').click()">
-                        <i class="fas fa-plus mr-2"></i>Erstes Produkt hinzufügen
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Scripts -->
-        <script src="/static/app.js"></script>
-        <script src="/static/products-app.js"></script>
     </body>
     </html>
-  `)
-})
-
-// Authenticated Stacks Route  
-app.get('/stacks', (c) => {
-  return c.html(`
-    <!DOCTYPE html>
-    <html lang="de">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Stacks - Supplement Stack</title>
-        <meta name="description" content="Verwalte deine Supplement-Stacks">
-        <script src="https://cdn.tailwindcss.com"></script>
-        <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
-        <link href="/static/styles.css" rel="stylesheet">
-        <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
-        <script>
-          tailwind.config = {
-            theme: {
-              extend: {
-                colors: {
-                  primary: '#16a34a',
-                  secondary: '#059669'
-                }
-              }
-            }
-          }
-        </script>
-    </head>
-    <body class="bg-gray-50">
-        <!-- Navigation -->
-        <nav class="bg-white shadow-lg">
-            <div class="max-w-7xl mx-auto px-4">
-                <div class="flex justify-between items-center h-16">
-                    <div class="flex items-center">
-                        <i class="fas fa-pills text-primary text-2xl mr-2"></i>
-                        <span class="text-xl font-bold text-gray-800">Supplement Stack</span>
-                        <span class="ml-3 px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">STACKS</span>
-                    </div>
-                    <div class="flex items-center space-x-4">
-                        <a href="/dashboard" class="text-gray-600 hover:text-primary">Dashboard</a>
-                        <a href="/products" class="text-gray-600 hover:text-primary">Produkte</a>
-                        <a href="/stacks" class="text-primary font-medium">Stacks</a>
-                        <button id="logout-btn" class="text-red-600 hover:text-red-700 font-medium">
-                            <i class="fas fa-sign-out-alt mr-1"></i>Abmelden
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </nav>
-
-        <!-- Stacks Container -->
-        <div class="max-w-7xl mx-auto px-4 py-6">
-            <!-- Stacks Header -->
-            <div class="bg-gradient-to-r from-green-500 to-teal-600 text-white rounded-lg p-6 mb-6">
-                <h1 class="text-3xl font-bold mb-2">🏗️ Meine Stacks</h1>
-                <p class="text-green-100">Organisiere deine Supplements in intelligente Stacks für optimale Wirkung</p>
-            </div>
-
-            <!-- Action Bar -->
-            <div class="bg-white rounded-lg shadow p-4 mb-6">
-                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                    <div class="flex items-center gap-3">
-                        <button id="create-stack-btn" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center">
-                            <i class="fas fa-plus mr-2"></i>Neuer Stack
-                        </button>
-                        <button id="stack-templates-btn" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center">
-                            <i class="fas fa-magic mr-2"></i>Vorlagen
-                        </button>
-                    </div>
-                    <div class="flex items-center gap-3">
-                        <input type="text" id="search-stacks" placeholder="Stacks durchsuchen..." class="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:border-green-500">
-                        <select id="sort-stacks" class="border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:border-green-500">
-                            <option value="name">Nach Name</option>
-                            <option value="date">Nach Erstellungsdatum</option>
-                            <option value="cost">Nach Kosten</option>
-                            <option value="products">Nach Produktanzahl</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Loading/Error States -->
-            <div id="loading" class="text-center py-8">
-                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500 mx-auto mb-4"></div>
-                <p class="text-gray-600">Lade Stacks...</p>
-            </div>
-
-            <div id="error-state" class="hidden bg-red-50 border border-red-200 rounded-lg p-6 mb-6">
-                <div class="flex items-center text-red-800 mb-2">
-                    <i class="fas fa-exclamation-triangle mr-2"></i>
-                    <span class="font-semibold">Fehler beim Laden der Stacks</span>
-                </div>
-                <p id="error-message" class="text-red-700"></p>
-                <button id="retry-btn" class="mt-4 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700">
-                    Erneut versuchen
-                </button>
-            </div>
-
-            <!-- Stacks Grid -->
-            <div id="stacks-content" class="hidden">
-                <div id="stacks-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <!-- Stacks filled by JavaScript -->
-                </div>
-                
-                <!-- Fallback when no stacks -->
-                <div id="stacks-fallback" class="text-center py-12 text-gray-500" style="display: none;">
-                    <i class="fas fa-layer-group text-5xl mb-4"></i>
-                    <h3 class="text-xl font-semibold mb-2">Noch keine Stacks</h3>
-                    <p class="text-gray-400 mb-6">Erstellen Sie Ihren ersten Supplement-Stack, um zu beginnen.</p>
-                    <button class="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors" onclick="document.getElementById('create-stack-btn').click()">
-                        <i class="fas fa-plus mr-2"></i>Ersten Stack erstellen
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Scripts -->
-        <script src="/static/app.js"></script>
-        <script src="/static/stacks-app.js"></script>
-    </body>
-    </html>
-  `)
-})
+  `);
+});
 
 export default app

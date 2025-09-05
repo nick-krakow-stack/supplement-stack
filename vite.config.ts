@@ -2,9 +2,7 @@ import { defineConfig } from 'vite'
 import pages from '@hono/vite-cloudflare-pages'
 
 export default defineConfig({
-  plugins: [pages({
-    entry: 'src/index_minimal.ts'
-  })],
+  plugins: [pages()],
   build: {
     outDir: 'dist',
     rollupOptions: {
