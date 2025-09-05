@@ -326,11 +326,123 @@ app.get('/demo', (c) => {
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
         <link href="/static/styles.css" rel="stylesheet">
     </head>
-    <body class="bg-gray-50">
-        <!-- Demo content will be loaded here -->
-        <div id="demo-app">Loading Demo...</div>
+    <body class="bg-gray-50 min-h-screen">
+        <div class="container mx-auto px-4 py-8">
+            <!-- Header -->
+            <div class="text-center mb-8">
+                <h1 class="text-4xl font-bold text-gray-900 mb-2">
+                    <i class="fas fa-flask mr-3 text-blue-600"></i>
+                    Demo - Supplement Stack
+                </h1>
+                <p class="text-xl text-gray-600 mb-4">Testen Sie alle Funktionen unseres intelligenten Supplement Managers</p>
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-4xl mx-auto">
+                    <p class="text-blue-800 text-sm">
+                        <i class="fas fa-info-circle mr-2"></i>
+                        <strong>Interaktive Demo:</strong> Alle Funktionen sind voll funktionsfähig. 
+                        Testen Sie das Hinzufügen von Produkten, Stack-Erstellung und Kostenberechnungen.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Controls -->
+            <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+                <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                    <div class="flex flex-col sm:flex-row gap-4 flex-1">
+                        <div class="flex-1">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Stack auswählen:</label>
+                            <select id="stack-selector" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="">Lade Stacks...</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="flex flex-col sm:flex-row gap-3">
+                        <button id="demo-add-product-main" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors text-sm font-medium shadow-sm">
+                            <i class="fas fa-plus mr-2"></i>Produkt hinzufügen
+                        </button>
+                        <button id="demo-create-stack-main" class="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition-colors text-sm font-medium shadow-sm">
+                            <i class="fas fa-magic mr-2"></i>Stack erstellen
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stack Grid -->
+            <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-2xl font-bold text-gray-900">
+                        <i class="fas fa-layer-group mr-2 text-green-600"></i>
+                        Ihr Demo Stack
+                    </h2>
+                    <div class="flex items-center space-x-4 text-sm text-gray-600">
+                        <span class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full font-medium">
+                            <i class="fas fa-box mr-1"></i>
+                            Produkte im Stack
+                        </span>
+                    </div>
+                </div>
+                
+                <!-- Products Grid - will be populated by JavaScript -->
+                <div id="demo-stack-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mb-6">
+                    <!-- Products will be loaded here by demo-modal.js -->
+                </div>
+            </div>
+
+            <!-- Summary Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div class="bg-white rounded-lg shadow-md p-6 text-center">
+                    <div class="text-3xl font-bold text-blue-600" id="total-purchase-cost">€0.00</div>
+                    <p class="text-gray-600 mt-2">Gesamter Kaufpreis</p>
+                </div>
+                <div class="bg-white rounded-lg shadow-md p-6 text-center">
+                    <div class="text-3xl font-bold text-green-600" id="total-monthly-cost">€0.00</div>
+                    <p class="text-gray-600 mt-2">Monatliche Kosten</p>
+                </div>
+                <div class="bg-white rounded-lg shadow-md p-6 text-center">
+                    <div class="text-3xl font-bold text-purple-600" id="demo-wishlist-count">0</div>
+                    <p class="text-gray-600 mt-2">Auf Wunschliste</p>
+                </div>
+                <div class="bg-white rounded-lg shadow-md p-6 text-center">
+                    <div class="text-3xl font-bold text-orange-600">Demo</div>
+                    <p class="text-gray-600 mt-2">Testmodus aktiv</p>
+                </div>
+            </div>
+
+            <!-- Footer Info -->
+            <div class="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-6 border border-blue-200">
+                <div class="text-center">
+                    <h3 class="text-lg font-semibold text-gray-900 mb-2">
+                        <i class="fas fa-rocket mr-2 text-blue-600"></i>
+                        Gefällt Ihnen die Demo?
+                    </h3>
+                    <p class="text-gray-600 mb-4">Registrieren Sie sich kostenlos und verwalten Sie Ihre echten Supplements!</p>
+                    <div class="flex flex-col sm:flex-row gap-3 justify-center">
+                        <a href="/auth" class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm">
+                            <i class="fas fa-user-plus mr-2"></i>Jetzt registrieren
+                        </a>
+                        <a href="/" class="bg-gray-200 text-gray-800 px-6 py-3 rounded-lg hover:bg-gray-300 transition-colors font-medium">
+                            <i class="fas fa-home mr-2"></i>Zur Startseite
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
         <script src="/static/demo-modal.js"></script>
+        <script>
+            // Initialize demo app when page loads
+            document.addEventListener('DOMContentLoaded', function() {
+                console.log('Demo page loaded, initializing SupplementDemoApp...');
+                try {
+                    window.demoApp = new SupplementDemoApp();
+                    console.log('SupplementDemoApp initialized successfully');
+                } catch (error) {
+                    console.error('Failed to initialize SupplementDemoApp:', error);
+                    document.getElementById('demo-stack-grid').innerHTML = '<div class="col-span-full text-center py-8 text-red-600"><i class="fas fa-exclamation-triangle text-2xl mb-2"></i><p>Demo konnte nicht geladen werden</p><p class="text-sm">Bitte laden Sie die Seite neu</p></div>';
+                }
+            });
+        </script>
     </body>
     </html>
   `)
@@ -478,11 +590,198 @@ app.get('/dashboard', (c) => {
         <title>Dashboard - Supplement Stack</title>
         <script src="https://cdn.tailwindcss.com"></script>
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
+        <link href="/static/styles.css" rel="stylesheet">
     </head>
-    <body class="bg-gray-50">
-        <div id="dashboard-app">Loading Dashboard...</div>
+    <body class="bg-gray-50 min-h-screen">
+        <!-- Navigation -->
+        <nav class="bg-white shadow-sm border-b border-gray-200">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center h-16">
+                    <div class="flex items-center">
+                        <a href="/" class="flex items-center">
+                            <i class="fas fa-capsules text-2xl text-blue-600 mr-3"></i>
+                            <span class="text-xl font-bold text-gray-900">Supplement Stack</span>
+                        </a>
+                    </div>
+                    
+                    <!-- Navigation Menu -->
+                    <div id="nav-menu" class="hidden md:flex space-x-4">
+                        <!-- Will be populated by app.js -->
+                    </div>
+                    
+                    <!-- Navigation Actions -->
+                    <div id="nav-actions" class="hidden md:flex">
+                        <!-- Will be populated by app.js -->
+                    </div>
+                    
+                    <!-- Mobile menu button -->
+                    <button id="mobile-menu-btn" class="md:hidden p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100">
+                        <i class="fas fa-bars text-xl"></i>
+                    </button>
+                </div>
+                
+                <!-- Mobile menu -->
+                <div id="mobile-menu" class="hidden md:hidden">
+                    <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+                        <div id="mobile-nav-menu">
+                            <!-- Will be populated by app.js -->
+                        </div>
+                        <div id="mobile-nav-actions" class="pt-4 border-t border-gray-200">
+                            <!-- Will be populated by app.js -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <!-- Dashboard Header -->
+            <div class="mb-8">
+                <h1 class="text-3xl font-bold text-gray-900 mb-2">
+                    <i class="fas fa-tachometer-alt mr-3 text-blue-600"></i>
+                    Dashboard
+                </h1>
+                <p class="text-gray-600">Überblick über Ihre Supplements und Stacks</p>
+            </div>
+
+            <!-- Stats Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <!-- Products Count -->
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-pills text-2xl text-blue-600"></i>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-500 truncate">Produkte</dt>
+                                <dd class="text-lg font-medium text-gray-900" id="products-count">0</dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Stacks Count -->
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-layer-group text-2xl text-green-600"></i>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-500 truncate">Stacks</dt>
+                                <dd class="text-lg font-medium text-gray-900" id="stacks-count">0</dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Monthly Costs -->
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-euro-sign text-2xl text-purple-600"></i>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-500 truncate">Monatliche Kosten</dt>
+                                <dd class="text-lg font-medium text-gray-900" id="monthly-cost">€0.00</dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Wishlist Count -->
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-heart text-2xl text-red-600"></i>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                            <dl>
+                                <dt class="text-sm font-medium text-gray-500 truncate">Wunschliste</dt>
+                                <dd class="text-lg font-medium text-gray-900" id="wishlist-count">0</dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Stacks -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
+                <div class="flex items-center justify-between mb-6">
+                    <h2 class="text-xl font-semibold text-gray-900">
+                        <i class="fas fa-clock mr-2 text-gray-600"></i>
+                        Aktuelle Stacks
+                    </h2>
+                    <a href="/stacks" class="text-blue-600 hover:text-blue-500 text-sm font-medium">
+                        Alle anzeigen <i class="fas fa-arrow-right ml-1"></i>
+                    </a>
+                </div>
+                <div id="recent-stacks">
+                    <!-- Will be populated by app.js -->
+                    <p class="text-gray-500 text-center py-4">Lade aktuelle Stacks...</p>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h2 class="text-xl font-semibold text-gray-900 mb-6">
+                    <i class="fas fa-bolt mr-2 text-yellow-600"></i>
+                    Schnellaktionen
+                </h2>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <a href="/products" class="flex items-center p-4 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors group">
+                        <i class="fas fa-plus text-blue-600 text-xl mr-3 group-hover:scale-110 transition-transform"></i>
+                        <div>
+                            <div class="font-medium text-gray-900">Produkt hinzufügen</div>
+                            <div class="text-sm text-gray-600">Neues Supplement erfassen</div>
+                        </div>
+                    </a>
+                    
+                    <a href="/stacks" class="flex items-center p-4 bg-green-50 hover:bg-green-100 rounded-lg transition-colors group">
+                        <i class="fas fa-layer-group text-green-600 text-xl mr-3 group-hover:scale-110 transition-transform"></i>
+                        <div>
+                            <div class="font-medium text-gray-900">Stack erstellen</div>
+                            <div class="text-sm text-gray-600">Neue Kombination anlegen</div>
+                        </div>
+                    </a>
+                    
+                    <button onclick="app.openDemo()" class="flex items-center p-4 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors group">
+                        <i class="fas fa-flask text-purple-600 text-xl mr-3 group-hover:scale-110 transition-transform"></i>
+                        <div>
+                            <div class="font-medium text-gray-900">Demo öffnen</div>
+                            <div class="text-sm text-gray-600">Funktionen testen</div>
+                        </div>
+                    </button>
+                    
+                    <a href="/products" class="flex items-center p-4 bg-orange-50 hover:bg-orange-100 rounded-lg transition-colors group">
+                        <i class="fas fa-search text-orange-600 text-xl mr-3 group-hover:scale-110 transition-transform"></i>
+                        <div>
+                            <div class="font-medium text-gray-900">Produkte durchsuchen</div>
+                            <div class="text-sm text-gray-600">Vorhandene Supplements</div>
+                        </div>
+                    </a>
+                </div>
+            </div>
+        </div>
+
         <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
         <script src="/static/app.js"></script>
+        <script>
+            // Initialize main app when page loads
+            document.addEventListener('DOMContentLoaded', function() {
+                console.log('Dashboard page loaded, initializing SupplementApp...');
+                try {
+                    window.app = new SupplementApp();
+                    console.log('SupplementApp initialized successfully');
+                } catch (error) {
+                    console.error('Failed to initialize SupplementApp:', error);
+                    document.getElementById('recent-stacks').innerHTML = '<div class="text-center py-8 text-red-600"><i class="fas fa-exclamation-triangle text-2xl mb-2"></i><p>Dashboard konnte nicht geladen werden</p><p class="text-sm">Bitte laden Sie die Seite neu oder melden Sie sich erneut an</p></div>';
+                }
+            });
+        </script>
     </body>
     </html>
   `)
