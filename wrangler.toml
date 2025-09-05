@@ -2,6 +2,9 @@ name = "supplementstack"
 compatibility_date = "2024-09-01"
 compatibility_flags = ["nodejs_compat"]
 
+# Pages configuration
+pages_build_output_dir = "dist"
+
 # Environment bindings
 [env.production]
 name = "supplementstack"
@@ -18,24 +21,12 @@ ENVIRONMENT = "production"
 MAILERSEND_API_KEY = "mlsn.b93df73e534656b9e6fecf1dadb07c3b960a19d789482e559ac531b79b8ce745"
 JWT_SECRET = "supplement-stack-jwt-2024-secure-production-key"
 
-[build]
-command = "npm run build"
-publish = "dist"
+# Build configuration removed - Pages will use pages_build_output_dir
 
-# Routes for custom domain
-[[routes]]
-pattern = "supplementstack.de/*"
-custom_domain = true
+# Routes configuration removed for Pages deployment
 
-[[routes]]
-pattern = "www.supplementstack.de/*"
-custom_domain = true
+# Preview environment for Pages
+[env.preview]
+name = "supplementstack-preview"
 
-# Development environment
-[env.development]
-name = "supplement-stack-dev"
-
-# [[env.development.d1_databases]]
-# binding = "DB"
-# database_name = "supplementstack-development"
-# database_id = "placeholder-will-be-replaced-after-creation"
+# Production is already configured above
