@@ -1285,46 +1285,28 @@ app.post('/api/auth/login', async (c) => {
       }, 403);
     }
 
-    // Generate login verification token
-    const loginToken = generateSecureToken();
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 minutes
+    // Generate JWT token for direct login (simplified approach)
+    const payload = {
+      userId: user.id,
+      email: user.email,
+      exp: Math.floor(Date.now() / 1000) + (24 * 60 * 60) // 24 hours
+    };
 
-    await c.env.DB.prepare(`
-      INSERT INTO email_verification_tokens (user_id, token, expires_at)
-      VALUES (?, ?, ?)
-    `).bind(user.id, loginToken, expiresAt).run();
+    const token = await sign(payload, c.env.JWT_SECRET);
 
-    // Send login verification email
-    const baseUrl = c.env.ENVIRONMENT === 'production' 
-      ? 'https://supplementstack.de' 
-      : `https://${c.req.header('host')}`;
-
-    const loginLink = `${baseUrl}/api/auth/verify-login?token=${loginToken}`;
-    
-    const emailHtml = `
-      <h2>Anmeldung bestätigen</h2>
-      <p>Jemand möchte sich mit Ihrem Supplement Stack Konto anmelden.</p>
-      <p>Falls Sie es waren, klicken Sie hier:</p>
-      <a href="${loginLink}" style="background: #3B82F6; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
-        Anmeldung bestätigen
-      </a>
-      <p>Link gültig für 15 Minuten. Falls Sie es nicht waren, ignorieren Sie diese E-Mail.</p>
-    `;
-
-    const emailText = `Anmeldung bestätigen: ${loginLink}`;
-
-    await sendEmail(
-      c.env.MAILERSEND_API_KEY,
-      user.email,
-      'Anmeldung bestätigen - Supplement Stack',
-      emailHtml,
-      emailText
-    );
+    // Update last login
+    await c.env.DB.prepare(
+      'UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?'
+    ).bind(user.id).run();
 
     return c.json({
-      message: 'Anmeldedaten korrekt. Bitte überprüfen Sie Ihre E-Mails und bestätigen Sie die Anmeldung.',
-      emailSent: true,
-      requiresVerification: true
+      message: 'Anmeldung erfolgreich',
+      token: token,
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name
+      }
     }, 200);
 
   } catch (error) {

@@ -108,7 +108,16 @@ class AuthSystem {
       const result = await response.json();
 
       if (response.ok) {
-        if (result.requiresVerification) {
+        if (result.token) {
+          // Store JWT token
+          localStorage.setItem('auth_token', result.token);
+          localStorage.setItem('user', JSON.stringify(result.user));
+          
+          this.showMessage('Anmeldung erfolgreich!', 'success');
+          setTimeout(() => {
+            window.location.href = '/dashboard';
+          }, 1000);
+        } else if (result.requiresVerification) {
           this.showMessage('Anmeldedaten korrekt! Bitte überprüfen Sie Ihre E-Mails und bestätigen Sie die Anmeldung.', 'info');
         } else {
           this.showMessage('Anmeldung erfolgreich!', 'success');
