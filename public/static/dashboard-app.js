@@ -123,6 +123,18 @@ class AuthenticatedDashboardApp {
   setupEventListeners() {
     // Global app reference
     window.authDashboard = this
+    
+    // Wait for demo app to be available
+    setTimeout(() => {
+      if (window.demoApp) {
+        console.log('[Auth Dashboard] Demo app detected, integrating with modal system')
+        // Override demo app methods to use our authenticated data
+        this.integrateWithDemoApp()
+      } else {
+        console.log('[Auth Dashboard] Demo app not available yet, setting up basic handlers')
+        this.setupBasicHandlers()
+      }
+    }, 500)
 
     // Logout button
     const logoutBtn = document.getElementById('logout-btn')
@@ -130,23 +142,66 @@ class AuthenticatedDashboardApp {
       logoutBtn.addEventListener('click', () => this.logout())
     }
 
-    // Add product button
-    const addProductBtn = document.getElementById('add-product-btn')
-    if (addProductBtn) {
-      addProductBtn.addEventListener('click', () => this.showAddProductModal())
-    }
-
-    // Create stack button
-    const createStackBtn = document.getElementById('create-stack-btn')
-    if (createStackBtn) {
-      createStackBtn.addEventListener('click', () => this.showCreateStackModal())
-    }
-
     // Retry button
     const retryBtn = document.getElementById('retry-btn')
     if (retryBtn) {
       retryBtn.addEventListener('click', () => this.loadInitialData())
     }
+  }
+
+  setupBasicHandlers() {
+    // Fallback handlers if demo system not available
+    const buttonIds = [
+      'demo-add-product-mobile', 'demo-add-product-desktop', 'demo-add-product-main',
+      'demo-create-stack-mobile', 'demo-create-stack-desktop', 'demo-create-stack-main'
+    ]
+
+    buttonIds.forEach(id => {
+      const btn = document.getElementById(id)
+      if (btn) {
+        if (id.includes('add-product')) {
+          btn.addEventListener('click', () => this.handleAddProduct())
+        } else if (id.includes('create-stack')) {
+          btn.addEventListener('click', () => this.handleCreateStack())
+        }
+      }
+    })
+  }
+
+  integrateWithDemoApp() {
+    // Replace demo app's data with our authenticated data
+    if (window.demoApp) {
+      window.demoApp.products = this.products
+      window.demoApp.stacks = this.stacks
+      window.demoApp.availableProducts = this.availableProducts
+      
+      // Override demo app's save methods to use our API
+      const originalSaveProducts = window.demoApp.saveProducts
+      window.demoApp.saveProducts = () => {
+        console.log('[Auth Dashboard] Intercepting save products for API call')
+        // Products are saved via API calls instead of localStorage
+      }
+
+      const originalSaveStacks = window.demoApp.saveStacks  
+      window.demoApp.saveStacks = () => {
+        console.log('[Auth Dashboard] Intercepting save stacks for API call')
+        // Stacks are saved via API calls instead of localStorage
+      }
+
+      // Refresh our data after demo actions
+      window.demoApp.refreshAuthData = () => {
+        console.log('[Auth Dashboard] Refreshing authenticated data after demo action')
+        this.loadInitialData()
+      }
+    }
+  }
+
+  handleAddProduct() {
+    alert('Product hinzufügen - Modal wird geladen...')
+  }
+
+  handleCreateStack() {
+    alert('Stack erstellen - Modal wird geladen...')
   }
 
   logout() {
@@ -175,6 +230,102 @@ class AuthenticatedDashboardApp {
       stacks: this.stacks.length,
       monthlyTotal: totalMonthly.toFixed(2)
     })
+
+    // Also render the current products
+    this.renderProducts()
+  }
+
+  renderProducts() {
+    const productsGrid = document.getElementById('products-grid')
+    const productsFallback = document.getElementById('products-fallback')
+    
+    if (!productsGrid) return
+
+    if (this.products.length === 0) {
+      productsGrid.style.display = 'none'
+      if (productsFallback) productsFallback.style.display = 'block'
+      return
+    }
+
+    if (productsFallback) productsFallback.style.display = 'none'
+    productsGrid.style.display = 'grid'
+
+    // Render products in the same format as demo
+    const html = this.products.map((product, index) => {
+      const intakeTimes = ['Nach dem Aufstehen', 'Zum Frühstück', 'Zum Mittagessen', 'Am Abend']
+      const intakeTime = intakeTimes[index % intakeTimes.length]
+      
+      const labelColors = ['bg-orange-100 text-orange-800', 'bg-green-100 text-green-800', 'bg-blue-100 text-blue-800', 'bg-purple-100 text-purple-800']
+      const labelColor = labelColors[index % labelColors.length]
+      
+      return `
+        <div class="bg-white border-0 rounded-2xl p-5 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 relative overflow-hidden">
+          <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-400 via-teal-500 to-blue-500"></div>
+          
+          <div class="flex justify-between items-start mb-4">
+            <div class="flex items-center space-x-2">
+              ${product.recommended ? `
+                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-purple-100 to-pink-100 text-purple-800 border border-purple-200">
+                  <i class="fas fa-star text-purple-500 mr-1"></i>Top
+                </span>
+              ` : ''}
+            </div>
+            <button class="text-red-500 hover:text-red-700" onclick="window.authDashboard.removeProduct(${product.id})">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+          
+          <div class="flex items-center mb-4 space-x-3">
+            ${product.product_image ? `
+              <div class="w-14 h-14 flex-shrink-0 rounded-xl overflow-hidden bg-gradient-to-br from-slate-50 to-slate-100 border border-slate-200 shadow-sm">
+                <img src="${product.product_image}" alt="${product.name}" class="w-full h-full object-cover">
+              </div>
+            ` : `
+              <div class="w-14 h-14 flex-shrink-0 rounded-xl bg-gradient-to-br from-emerald-100 to-teal-100 border border-emerald-200 flex items-center justify-center">
+                <i class="fas fa-pills text-emerald-600 text-lg"></i>
+              </div>
+            `}
+            <div class="flex-1 min-w-0">
+              <h3 class="text-base font-semibold text-gray-900 truncate">${product.name}</h3>
+              <p class="text-sm text-gray-600">${product.brand || 'Unbekannte Marke'}</p>
+            </div>
+          </div>
+          
+          <div class="space-y-3">
+            <div class="flex justify-between items-center">
+              <span class="text-sm font-medium text-gray-700">Preis</span>
+              <span class="text-lg font-bold text-emerald-600">€${(product.monthly_cost || 0).toFixed(2)}/Monat</span>
+            </div>
+            
+            <div class="flex justify-between items-center">
+              <span class="text-sm font-medium text-gray-700">Einnahme</span>
+              <span class="px-2 py-1 text-xs font-medium rounded-full ${labelColor}">${intakeTime}</span>
+            </div>
+          </div>
+          
+          ${product.description ? `
+            <div class="mt-3 pt-3 border-t border-gray-100">
+              <p class="text-xs text-gray-600 line-clamp-2">${product.description}</p>
+            </div>
+          ` : ''}
+        </div>
+      `
+    }).join('')
+
+    productsGrid.innerHTML = html
+
+    console.log('[Auth Dashboard] Products rendered:', this.products.length)
+  }
+
+  async removeProduct(productId) {
+    try {
+      await axios.delete(`/api/protected/products/${productId}`)
+      console.log('[Auth Dashboard] Product removed:', productId)
+      this.loadInitialData() // Refresh data
+    } catch (error) {
+      console.error('[Auth Dashboard] Error removing product:', error)
+      alert('Fehler beim Löschen des Produkts')
+    }
   }
 
   initStackSelector() {

@@ -460,7 +460,7 @@ app.get('/health', (c) => {
   })
 })
 
-// Authenticated Dashboard Route (same UI as demo but with database integration)
+// Authenticated Dashboard Route (EXACT same UI as demo but with database integration)
 app.get('/dashboard', (c) => {
   return c.html(`
     <!DOCTYPE html>
@@ -468,12 +468,77 @@ app.get('/dashboard', (c) => {
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Dashboard - Supplement Stack</title>
+        <title>Dashboard - Supplement Stack (Authenticated)</title>
         <meta name="description" content="Dein persönliches Supplement Dashboard">
         <script src="https://cdn.tailwindcss.com"></script>
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet">
-        <link href="/static/styles.css" rel="stylesheet">
         <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+        <style>
+          /* Custom styles for supplement management */
+          .supplement-card { @apply bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow; }
+          .nav-item.active { @apply bg-blue-600 text-white; }
+          .warning-high { @apply bg-red-100 border-red-500 text-red-700; }
+          .warning-medium { @apply bg-yellow-100 border-yellow-500 text-yellow-700; }
+          .safe { @apply bg-green-100 border-green-500 text-green-700; }
+          
+          /* Mobile-optimiertes Design für Demo */
+          @media (max-width: 768px) {
+            .container-mobile { @apply px-2; }
+            .card-mobile { @apply p-3; }
+            .btn-mobile { @apply px-3 py-2 text-sm; }
+            .text-responsive { @apply text-sm; }
+          }
+          
+          /* Modal Styles */
+          .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            padding: 8px;
+          }
+          
+          .modal-container {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            width: 100%;
+            max-width: 32rem;
+            max-height: 95vh;
+            overflow-y: auto;
+          }
+          
+          @media (min-width: 640px) {
+            .modal-container {
+              max-width: 42rem;
+              padding: 16px;
+            }
+            .modal-overlay {
+              padding: 16px;
+            }
+          }
+          
+          /* Touch-friendly elements */
+          .touch-target {
+            min-height: 44px;
+            min-width: 44px;
+          }
+          
+          /* Form styling */
+          .form-input {
+            @apply w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base;
+          }
+          
+          .form-label {
+            @apply block text-sm font-medium text-gray-700 mb-1;
+          }
+        </style>
         <script>
           tailwind.config = {
             theme: {
@@ -487,176 +552,188 @@ app.get('/dashboard', (c) => {
           }
         </script>
     </head>
-    <body class="bg-gray-50">
-        <!-- Navigation -->
-        <nav class="bg-white shadow-lg">
-            <div class="max-w-7xl mx-auto px-4">
-                <div class="flex justify-between items-center h-16">
-                    <div class="flex items-center">
-                        <i class="fas fa-pills text-primary text-2xl mr-2"></i>
-                        <span class="text-xl font-bold text-gray-800">Supplement Stack</span>
-                        <span class="ml-3 px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">DASHBOARD</span>
-                    </div>
-                    <div class="flex items-center space-x-4">
-                        <a href="/dashboard" class="text-primary font-medium">Dashboard</a>
-                        <a href="/products" class="text-gray-600 hover:text-primary">Produkte</a>
-                        <a href="/stacks" class="text-gray-600 hover:text-primary">Stacks</a>
-                        <button id="logout-btn" class="text-red-600 hover:text-red-700 font-medium">
-                            <i class="fas fa-sign-out-alt mr-1"></i>Abmelden
-                        </button>
-                    </div>
+    <body class="bg-gray-50 min-h-screen">
+        <!-- DSGVO Disclaimer -->
+        <div class="bg-blue-600 text-white text-center py-2 text-sm">
+            <i class="fas fa-info-circle mr-2"></i>
+            Diese Plattform bietet keine medizinische Beratung. Konsultieren Sie bei gesundheitlichen Fragen einen Arzt.
+        </div>
+        
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto container-mobile py-4 sm:py-8">
+            
+    <!-- Dashboard Header - Mobile optimiert -->
+    <div class="bg-blue-600 text-white py-3 sm:py-4">
+        <div class="max-w-6xl mx-auto px-2 sm:px-4">
+            <!-- Mobile Header -->
+            <div class="flex flex-col space-y-3 sm:hidden">
+                <div class="flex items-center justify-between">
+                    <h1 class="text-lg font-bold">
+                        <i class="fas fa-capsules mr-2"></i>Supplement Stack Dashboard
+                    </h1>
                 </div>
-            </div>
-        </nav>
-
-        <!-- Dashboard Container -->
-        <div class="max-w-7xl mx-auto px-4 py-6">
-            <!-- Dashboard Header -->
-            <div class="bg-gradient-to-r from-green-500 to-teal-600 text-white rounded-lg p-6 mb-6">
-                <h1 class="text-3xl font-bold mb-2">🏋️ Dein Supplement Dashboard</h1>
-                <p class="text-green-100">Verwalte deine Supplements intelligent mit wissenschaftlich fundierten Empfehlungen</p>
-            </div>
-
-            <!-- Loading State -->
-            <div id="loading" class="text-center py-8">
-                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-                <p class="text-gray-600">Lade Dashboard-Daten...</p>
-            </div>
-
-            <!-- Error State -->
-            <div id="error-state" class="hidden bg-red-50 border border-red-200 rounded-lg p-6 mb-6">
-                <div class="flex items-center text-red-800 mb-2">
-                    <i class="fas fa-exclamation-triangle mr-2"></i>
-                    <span class="font-semibold">Fehler beim Laden der Dashboard-Daten</span>
-                </div>
-                <p id="error-message" class="text-red-700"></p>
-                <button id="retry-btn" class="mt-4 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700">
-                    Erneut versuchen
-                </button>
-            </div>
-
-            <!-- Main Content (hidden initially) -->
-            <div id="dashboard-content" class="hidden">
-                <!-- Stats Cards -->
-                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                    <div class="bg-white rounded-lg shadow p-4">
-                        <div class="flex items-center">
-                            <i class="fas fa-box text-blue-500 text-2xl mr-3"></i>
-                            <div>
-                                <p class="text-sm text-gray-600">Produkte</p>
-                                <p class="text-xl font-bold" id="products-count">0</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="bg-white rounded-lg shadow p-4">
-                        <div class="flex items-center">
-                            <i class="fas fa-layer-group text-green-500 text-2xl mr-3"></i>
-                            <div>
-                                <p class="text-sm text-gray-600">Stacks</p>
-                                <p class="text-xl font-bold" id="stacks-count">0</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="bg-white rounded-lg shadow p-4">
-                        <div class="flex items-center">
-                            <i class="fas fa-euro-sign text-yellow-500 text-2xl mr-3"></i>
-                            <div>
-                                <p class="text-sm text-gray-600">Monatlich</p>
-                                <p class="text-xl font-bold" id="monthly-cost">€0.00</p>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="bg-white rounded-lg shadow p-4">
-                        <div class="flex items-center">
-                            <i class="fas fa-heart text-red-500 text-2xl mr-3"></i>
-                            <div>
-                                <p class="text-sm text-gray-600">Wunschliste</p>
-                                <p class="text-xl font-bold" id="wishlist-count">0</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Action Buttons -->
-                <div class="flex flex-wrap gap-3 mb-6">
-                    <button id="add-product-btn" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center">
-                        <i class="fas fa-plus mr-2"></i>
-                        <span class="hidden sm:inline">Produkt hinzufügen</span>
-                        <span class="sm:hidden">Produkt</span>
+                <!-- Immer sichtbare Mobile-Buttons -->
+                <div class="grid grid-cols-2 gap-2">
+                    <button id="demo-create-stack-mobile" class="bg-purple-600 text-white px-3 py-2 rounded-md hover:bg-purple-700 transition-colors text-xs">
+                        <i class="fas fa-flask mr-1"></i>Nährstoff-Stack
                     </button>
-                    <button id="create-stack-btn" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors flex items-center">
-                        <i class="fas fa-layer-group mr-2"></i>
-                        <span class="hidden sm:inline">Neuer Stack</span>
-                        <span class="sm:hidden">Stack</span>
+                    <button id="demo-add-product-mobile" class="bg-green-600 text-white px-3 py-2 rounded-md hover:bg-green-700 transition-colors text-xs">
+                        <i class="fas fa-plus mr-1"></i>Produkt hinzufügen
                     </button>
-                    <!-- Stack Selection Dropdown -->
-                    <div class="relative">
-                        <select id="stack-selector" class="bg-white border border-gray-300 rounded-lg px-4 py-2 pr-8 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                            <option value="">Stack auswählen</option>
-                            <!-- Options filled by JavaScript -->
-                        </select>
+                </div>
+            </div>
+            
+            <!-- Desktop Header -->
+            <div class="hidden sm:flex justify-between items-center">
+                <h1 class="text-xl sm:text-2xl font-bold">
+                    <i class="fas fa-capsules mr-2"></i>Supplement Stack - Dashboard
+                </h1>
+                <div class="space-x-2 sm:space-x-4">
+                    <button id="demo-create-stack-desktop" class="bg-purple-600 text-white px-3 py-2 sm:px-4 sm:py-2 rounded-md hover:bg-purple-700 transition-colors text-sm sm:text-base">
+                        <i class="fas fa-flask mr-1 sm:mr-2"></i><span class="hidden sm:inline">Nährstoff-Stack</span><span class="sm:hidden">Stack</span>
+                    </button>
+                    <button id="demo-add-product-desktop" class="bg-green-600 text-white px-3 py-2 sm:px-4 sm:py-2 rounded-md hover:bg-green-700 transition-colors text-sm sm:text-base">
+                        <i class="fas fa-plus mr-1 sm:mr-2"></i><span class="hidden sm:inline">Produkt hinzufügen</span><span class="sm:hidden">Hinzufügen</span>
+                    </button>
+                    <a href="/products" class="bg-white text-blue-600 px-4 py-2 sm:px-6 sm:py-2 rounded-md hover:bg-gray-100 transition-colors font-semibold text-sm sm:text-base">
+                        Alle Produkte
+                    </a>
+                    <button id="logout-btn" class="bg-red-600 text-white px-4 py-2 sm:px-6 sm:py-2 rounded-md hover:bg-red-700 transition-colors font-semibold text-sm sm:text-base">
+                        <i class="fas fa-sign-out-alt mr-1 sm:mr-2"></i>Abmelden
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dashboard Content -->
+    <div class="space-y-8">
+        <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+            <div class="flex items-center">
+                <i class="fas fa-user-check text-green-600 mr-3"></i>
+                <div>
+                    <h3 class="font-semibold text-green-800">Authentifiziertes Dashboard</h3>
+                    <p class="text-green-700">Ihre Daten werden in der Datenbank gespeichert und bleiben dauerhaft erhalten.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Dashboard Stats - Mobile optimiert -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-6">
+            <div class="bg-white rounded-lg shadow p-3 sm:p-6">
+                <div class="flex flex-col sm:flex-row sm:items-center">
+                    <div class="p-2 sm:p-3 rounded-full bg-blue-500 bg-opacity-10 mb-2 sm:mb-0 self-start">
+                        <i class="fas fa-pills text-blue-500 text-lg sm:text-xl"></i>
+                    </div>
+                    <div class="sm:ml-4">
+                        <p class="text-xs sm:text-sm font-medium text-gray-500">Produkte</p>
+                        <p id="products-count" class="text-xl sm:text-2xl font-semibold text-gray-900">0</p>
                     </div>
                 </div>
-
-                <!-- Main Content Area -->
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <!-- Products Section -->
-                    <div class="lg:col-span-2">
-                        <div class="bg-white rounded-lg shadow">
-                            <div class="p-4 border-b border-gray-200">
-                                <h2 class="text-xl font-semibold text-gray-800 flex items-center">
-                                    <i class="fas fa-box mr-2 text-blue-500"></i>
-                                    Meine Produkte
-                                </h2>
-                            </div>
-                            <div class="p-4">
-                                <div id="products-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <!-- Products filled by JavaScript -->
-                                </div>
-                                <!-- Fallback when no products -->
-                                <div id="products-fallback" class="text-center py-8 text-gray-500" style="display: none;">
-                                    <i class="fas fa-box text-3xl mb-3"></i>
-                                    <p class="text-lg font-medium mb-2">Noch keine Produkte</p>
-                                    <p class="text-sm">Fügen Sie Ihr erstes Produkt hinzu!</p>
-                                    <button class="mt-4 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700" onclick="document.getElementById('add-product-btn').click()">
-                                        <i class="fas fa-plus mr-2"></i>Produkt hinzufügen
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow p-3 sm:p-6">
+                <div class="flex flex-col sm:flex-row sm:items-center">
+                    <div class="p-2 sm:p-3 rounded-full bg-green-500 bg-opacity-10 mb-2 sm:mb-0 self-start">
+                        <i class="fas fa-layer-group text-green-500 text-lg sm:text-xl"></i>
                     </div>
-
-                    <!-- Stacks Section -->
-                    <div>
-                        <div class="bg-white rounded-lg shadow">
-                            <div class="p-4 border-b border-gray-200">
-                                <h2 class="text-xl font-semibold text-gray-800 flex items-center">
-                                    <i class="fas fa-layer-group mr-2 text-green-500"></i>
-                                    Meine Stacks
-                                </h2>
-                            </div>
-                            <div class="p-4">
-                                <div id="stacks-grid" class="space-y-3">
-                                    <!-- Stacks filled by JavaScript -->
-                                </div>
-                                <!-- Fallback when no stacks -->
-                                <div id="stacks-fallback" class="text-center py-8 text-gray-500" style="display: none;">
-                                    <i class="fas fa-layer-group text-3xl mb-3"></i>
-                                    <p class="text-lg font-medium mb-2">Noch keine Stacks</p>
-                                    <p class="text-sm">Erstellen Sie Ihren ersten Stack!</p>
-                                    <button class="mt-4 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700" onclick="document.getElementById('create-stack-btn').click()">
-                                        <i class="fas fa-plus mr-2"></i>Stack erstellen
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
+                    <div class="sm:ml-4">
+                        <p class="text-xs sm:text-sm font-medium text-gray-500">Stacks</p>
+                        <p id="stacks-count" class="text-xl sm:text-2xl font-semibold text-gray-900">0</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow p-3 sm:p-6 col-span-2 sm:col-span-1">
+                <div class="flex flex-col sm:flex-row sm:items-center">
+                    <div class="p-2 sm:p-3 rounded-full bg-yellow-500 bg-opacity-10 mb-2 sm:mb-0 self-start">
+                        <i class="fas fa-euro-sign text-yellow-500 text-lg sm:text-xl"></i>
+                    </div>
+                    <div class="sm:ml-4">
+                        <p class="text-xs sm:text-sm font-medium text-gray-500">Monatlich</p>
+                        <p id="monthly-cost" class="text-xl sm:text-2xl font-semibold text-green-600">€0.00</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow p-3 sm:p-6 hidden sm:block">
+                <div class="flex flex-col sm:flex-row sm:items-center">
+                    <div class="p-2 sm:p-3 rounded-full bg-red-500 bg-opacity-10 mb-2 sm:mb-0 self-start">
+                        <i class="fas fa-heart text-red-500 text-lg sm:text-xl"></i>
+                    </div>
+                    <div class="sm:ml-4">
+                        <p class="text-xs sm:text-sm font-medium text-gray-500">Wunschliste</p>
+                        <p id="wishlist-count" class="text-xl sm:text-2xl font-semibold text-gray-900">0</p>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Scripts -->
-        <script src="/static/app.js"></script>
+        <!-- Loading State -->
+        <div id="loading" class="text-center py-8">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto mb-4"></div>
+            <p class="text-gray-600">Lade Dashboard-Daten...</p>
+        </div>
+
+        <!-- Error State -->
+        <div id="error-state" class="hidden bg-red-50 border border-red-200 rounded-lg p-6 mb-6">
+            <div class="flex items-center text-red-800 mb-2">
+                <i class="fas fa-exclamation-triangle mr-2"></i>
+                <span class="font-semibold">Fehler beim Laden der Dashboard-Daten</span>
+            </div>
+            <p id="error-message" class="text-red-700"></p>
+            <button id="retry-btn" class="mt-4 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700">
+                Erneut versuchen
+            </button>
+        </div>
+
+        <!-- Stack-Bereich wie im Demo -->
+        <div id="dashboard-content" class="bg-white rounded-lg shadow mt-8 hidden">
+            <div class="p-6 border-b border-gray-200">
+                <div class="flex justify-between items-center">
+                    <div class="flex items-center space-x-4">
+                        <h2 class="text-lg font-semibold text-gray-900 flex items-center">
+                            <i class="fas fa-leaf text-green-600 mr-2"></i>
+                            Stack-Verwaltung
+                        </h2>
+                        <!-- Stack-Auswahl -->
+                        <select id="stack-selector" class="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                            <option value="">Stack auswählen...</option>
+                        </select>
+                    </div>
+                    <!-- Action-Buttons im Header -->
+                    <div class="flex gap-2">
+                        <button id="demo-add-product-main" class="bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 transition-colors text-sm">
+                            <i class="fas fa-plus mr-1"></i>Produkt hinzufügen
+                        </button>
+                        <button id="demo-create-stack-main" class="bg-purple-600 text-white px-3 py-2 rounded-lg hover:bg-purple-700 transition-colors text-sm">
+                            <i class="fas fa-flask mr-1"></i>Stack erstellen
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="p-6">
+                <div id="products-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+                    <!-- Stack-Produkte werden hier dynamisch eingefügt -->
+                </div>
+                
+                <!-- Fallback when no products -->
+                <div id="products-fallback" class="text-center py-8 text-gray-500" style="display: none;">
+                    <i class="fas fa-box text-3xl mb-3"></i>
+                    <p class="text-lg font-medium mb-2">Noch keine Produkte</p>
+                    <p class="text-sm">Fügen Sie Ihr erstes Produkt hinzu!</p>
+                    <button class="mt-4 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700" onclick="document.getElementById('demo-add-product-main').click()">
+                        <i class="fas fa-plus mr-2"></i>Produkt hinzufügen
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+  
+        </main>
+        
+        <!-- Scripts - Load demo modal system and dashboard app -->
+        <script src="/static/demo-modal.js"></script>
         <script src="/static/dashboard-app.js"></script>
     </body>
     </html>
