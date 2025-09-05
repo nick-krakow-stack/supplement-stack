@@ -743,9 +743,9 @@ class SupplementDemoApp {
             </div>
           </div>
           
-          <!-- Moderner CTA Button -->
-          <button class="w-full bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold py-3 px-4 rounded-xl transition-all duration-300 transform hover:scale-105 hover:shadow-lg focus:ring-4 focus:ring-orange-200 focus:outline-none text-sm">
-            <i class="fas fa-shopping-cart mr-2"></i>Jetzt bestellen
+          <!-- Info Button instead of Order -->
+          <button class="w-full bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white font-bold py-3 px-4 rounded-xl transition-all duration-300 transform hover:scale-105 hover:shadow-lg focus:ring-4 focus:ring-blue-200 focus:outline-none text-sm">
+            <i class="fas fa-info-circle mr-2"></i>Details anzeigen
           </button>
           
           <!-- Hover-Effekt Shine -->
@@ -977,11 +977,7 @@ class SupplementDemoApp {
                 <i class="fas fa-check mr-2"></i>Alles auswählen
               </button>
             `}
-            
-            <!-- Alle bestellen Button -->
-            <button onclick="window.demoApp.proceedToCheckout()" class="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-6 py-2 rounded-xl transition-all duration-300 transform hover:scale-105 text-sm font-bold shadow-lg hover:shadow-xl focus:ring-4 focus:ring-blue-200 focus:outline-none">
-              <i class="fas fa-shopping-cart mr-2"></i>Alle bestellen
-            </button>
+
             
             <button onclick="window.demoApp.hidePriceFooter()" class="text-slate-400 hover:text-slate-600 p-2 rounded-lg hover:bg-slate-100 transition-colors">
               <i class="fas fa-times"></i>
@@ -1066,13 +1062,7 @@ class SupplementDemoApp {
     this.showMessage('❌ Alle Produkte abgewählt', 'info')
   }
 
-  proceedToCheckout() {
-    const totalMonthlyPrice = this.products.reduce((sum, product) => {
-      return sum + (product.monthly_cost || 0)
-    }, 0)
-    
-    this.showMessage(`🛒 Demo-Checkout\n\n${this.products.length} Produkte\n💰 €${totalMonthlyPrice.toFixed(2)}/Monat\n\nIn der Vollversion werden Sie zu Amazon weitergeleitet.`, 'info')
-  }
+
 
   initStackSelector() {
     const selector = document.getElementById('stack-selector')
@@ -1305,7 +1295,7 @@ class SupplementDemoApp {
           <div id="step-product-selection" class="step-container hidden">
             <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
               <h3 class="font-semibold text-green-900 mb-3 flex items-center">
-                <i class="fas fa-shopping-cart mr-2"></i>
+                <i class="fas fa-pills mr-2"></i>
                 Produktauswahl für <span id="selected-nutrient-name" class="font-bold">-</span>
               </h3>
               
