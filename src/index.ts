@@ -499,7 +499,7 @@ app.get('/demo', (c) => {
 
             <!-- Controls -->
             <div class="bg-white rounded-lg shadow-md p-6 mb-8">
-                <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
                     <div class="flex flex-col sm:flex-row gap-4 flex-1">
                         <div class="flex-1">
                             <label class="block text-sm font-medium text-gray-700 mb-2">Stack auswählen:</label>

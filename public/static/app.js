@@ -538,7 +538,7 @@ class SupplementApp {
               </button>
               <a href="${product.shop_url}" target="_blank" 
                  class="bg-blue-600 text-white px-3 py-2 rounded text-sm hover:bg-blue-700 transition-colors">
-                <i class="fas fa-shopping-cart mr-1"></i>Kaufen
+                <i class="fas fa-external-link-alt mr-1"></i>Shop besuchen
               </a>
             </div>
           </div>
@@ -1706,7 +1706,7 @@ class SupplementApp {
         </button>
         <a href="${product.shop_url}" target="_blank" 
            class="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors text-center">
-          <i class="fas fa-shopping-cart mr-2"></i>Jetzt kaufen
+          <i class="fas fa-external-link-alt mr-2"></i>Shop besuchen
         </a>
       </div>
     `
