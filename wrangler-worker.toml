@@ -1,0 +1,9 @@
+name = "supplementstack-worker"
+main = "dist/_worker.js" 
+compatibility_date = "2024-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "supplementstack-production"
+database_id = "f1336769-9231-4cfa-a54b-91a261f07b08"

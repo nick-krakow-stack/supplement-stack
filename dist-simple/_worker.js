@@ -1,3 +1,5 @@
+
+// Simple Cloudflare Worker export
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { serveStatic } from 'hono/cloudflare-workers'
@@ -1164,3 +1166,6 @@ app.get('/', (c) => {
 });
 
 export default app
+
+// Export for Cloudflare Workers
+export default app;
