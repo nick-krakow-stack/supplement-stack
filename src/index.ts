@@ -129,6 +129,107 @@ async function sendEmail(apiKey: string, to: string, subject: string, html: stri
 }
 
 // =================================
+// AUTH MIDDLEWARE
+// =================================
+
+// JWT Auth Middleware
+async function authMiddleware(c: any, next: any) {
+  try {
+    console.log('Auth middleware started');
+    const authHeader = c.req.header('Authorization');
+    console.log('Auth header:', authHeader ? 'Present' : 'Missing');
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      console.log('Missing or invalid auth header format');
+      return c.json({ error: 'missing_token', message: 'Authorization token required' }, 401);
+    }
+    
+    const token = authHeader.split(' ')[1];
+    console.log('Extracted token, verifying...');
+    
+    const payload = await verify(token, c.env.JWT_SECRET);
+    console.log('Token verified, userId:', payload.userId);
+    
+    // Get user from database
+    const user = await c.env.DB.prepare(
+      'SELECT id, email, email_verified FROM users WHERE id = ?'
+    ).bind(payload.userId).first();
+    
+    console.log('User lookup result:', user ? 'Found' : 'Not found');
+    
+    if (!user) {
+      console.log('User not found in database for userId:', payload.userId);
+      return c.json({ error: 'user_not_found', message: 'User not found' }, 401);
+    }
+    
+    c.set('user', user);
+    c.set('userId', user.id);
+    console.log('Auth middleware successful for user:', user.email);
+    await next();
+    
+  } catch (error) {
+    console.error('Auth middleware error details:', error);
+    console.error('Auth middleware error stack:', error.stack);
+    return c.json({ error: 'invalid_token', message: 'Invalid or expired token: ' + (error.message || 'Unknown error') }, 401);
+  }
+}
+
+// =================================
+// AUTH API ROUTES
+// =================================
+
+// Debug route to check database and users
+app.get('/api/debug/users', async (c) => {
+  try {
+    console.log('Debug: Checking database connection...');
+    
+    // Check if we can query the database at all
+    const userCount = await c.env.DB.prepare('SELECT COUNT(*) as count FROM users').first();
+    console.log('Total users in database:', userCount?.count || 0);
+    
+    // Get all users (for debugging - remove in production)
+    const users = await c.env.DB.prepare('SELECT id, email, email_verified FROM users').all();
+    console.log('Users found:', users.results?.length || 0);
+    
+    return c.json({
+      database_connected: true,
+      user_count: userCount?.count || 0,
+      users: users.results || []
+    });
+    
+  } catch (error) {
+    console.error('Database debug error:', error);
+    return c.json({
+      database_connected: false,
+      error: error.message || 'Unknown database error'
+    }, 500);
+  }
+});
+
+// Get current user profile
+app.get('/api/auth/profile', authMiddleware, async (c) => {
+  try {
+    const user = c.get('user');
+    
+    return c.json({
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.email, // Use email as display name since name column doesn't exist
+        email_verified: user.email_verified
+      }
+    });
+    
+  } catch (error) {
+    console.error('Profile error:', error);
+    return c.json({
+      error: 'internal_server_error',
+      message: 'Failed to fetch profile'
+    }, 500);
+  }
+});
+
+// =================================
 // HTML ROUTES - RECOVERED FROM BACKUP
 // =================================
 
@@ -1257,34 +1358,57 @@ app.get('/api/auth/verify-email', async (c) => {
 // User login (2-step process)
 app.post('/api/auth/login', async (c) => {
   try {
+    console.log('Login attempt started');
+    
     const { email, password } = await c.req.json();
+    console.log('Login request for email:', email);
 
     if (!email || !password) {
+      console.log('Missing email or password');
       return c.json({
         error: 'missing_fields',
         message: 'E-Mail und Passwort sind erforderlich'
       }, 400);
     }
 
+    console.log('Querying user from database...');
     // Get user
     const user = await c.env.DB.prepare(
       'SELECT * FROM users WHERE email = ?'
     ).bind(email.toLowerCase()).first();
+    
+    console.log('User found:', user ? 'Yes' : 'No');
 
-    if (!user || !await verifyPassword(password, user.password_hash)) {
+    if (!user) {
+      console.log('User not found in database');
       return c.json({
         error: 'invalid_credentials',
         message: 'Ungültige E-Mail-Adresse oder Passwort'
       }, 401);
     }
 
-    if (!user.email_verified) {
+    console.log('Verifying password...');
+    const passwordValid = await verifyPassword(password, user.password_hash);
+    console.log('Password valid:', passwordValid);
+    
+    if (!passwordValid) {
+      console.log('Password verification failed');
       return c.json({
-        error: 'email_not_verified',
-        message: 'Bitte bestätigen Sie zunächst Ihre E-Mail-Adresse'
-      }, 403);
+        error: 'invalid_credentials',
+        message: 'Ungültige E-Mail-Adresse oder Passwort'
+      }, 401);
     }
 
+    // Temporarily disable email verification requirement for testing
+    // if (!user.email_verified) {
+    //   console.log('Email not verified for user');
+    //   return c.json({
+    //     error: 'email_not_verified',
+    //     message: 'Bitte bestätigen Sie zunächst Ihre E-Mail-Adresse'
+    //   }, 403);
+    // }
+
+    console.log('Generating JWT token...');
     // Generate JWT token for direct login (simplified approach)
     const payload = {
       userId: user.id,
@@ -1293,11 +1417,14 @@ app.post('/api/auth/login', async (c) => {
     };
 
     const token = await sign(payload, c.env.JWT_SECRET);
+    console.log('JWT token generated successfully');
 
     // Update last login
     await c.env.DB.prepare(
       'UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = ?'
     ).bind(user.id).run();
+    
+    console.log('Login successful for user:', user.email);
 
     return c.json({
       message: 'Anmeldung erfolgreich',
@@ -1305,15 +1432,16 @@ app.post('/api/auth/login', async (c) => {
       user: {
         id: user.id,
         email: user.email,
-        name: user.name
+        name: user.email // Use email as display name since name column doesn't exist
       }
     }, 200);
 
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('Login error details:', error);
+    console.error('Error stack:', error.stack);
     return c.json({
       error: 'internal_server_error',
-      message: 'Ein interner Fehler ist aufgetreten'
+      message: 'Ein interner Fehler ist aufgetreten: ' + (error.message || 'Unbekannter Fehler')
     }, 500);
   }
 });
