@@ -34,7 +34,7 @@ stackRoutes.get('/', authMiddleware, async (c) => {
       FROM stacks s
       LEFT JOIN stack_products sp ON s.id = sp.stack_id
       LEFT JOIN products p ON sp.product_id = p.id
-      WHERE s.user_id = ? OR s.is_public = 1
+      WHERE s.user_id = ?
       GROUP BY s.id
       ORDER BY s.created_at DESC
     `).bind(user.id).all();
@@ -60,7 +60,7 @@ stackRoutes.get('/:id', authMiddleware, async (c) => {
   try {
     const stack = await c.env.DB.prepare(`
       SELECT * FROM stacks 
-      WHERE id = ? AND (user_id = ? OR is_public = 1)
+      WHERE id = ? AND user_id = ?
     `).bind(id, user.id).first();
 
     if (!stack) {
@@ -118,7 +118,7 @@ stackRoutes.post('/', authMiddleware, async (c) => {
   const user = c.get('user') as User;
   
   try {
-    const { name, description, is_public } = await c.req.json();
+    const { name, description } = await c.req.json();
 
     if (!name || name.trim() === '') {
       return c.json({
@@ -128,13 +128,12 @@ stackRoutes.post('/', authMiddleware, async (c) => {
     }
 
     const result = await c.env.DB.prepare(`
-      INSERT INTO stacks (name, description, user_id, is_public)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO stacks (name, description, user_id)
+      VALUES (?, ?, ?)
     `).bind(
       name.trim(),
       description?.trim() || null,
-      user.id,
-      is_public || false
+      user.id
     ).run();
 
     if (!result.success) {
@@ -164,7 +163,7 @@ stackRoutes.post('/:id/products', authMiddleware, async (c) => {
   const stackId = c.req.param('id');
   
   try {
-    const { product_id, servings_per_day, dosage_source, notes } = await c.req.json();
+    const { product_id, dosage_per_day, dosage_source, notes } = await c.req.json();
 
     // Check if user owns the stack
     const stack = await c.env.DB.prepare(`
@@ -181,7 +180,7 @@ stackRoutes.post('/:id/products', authMiddleware, async (c) => {
     // Check if product exists and is accessible
     const product = await c.env.DB.prepare(`
       SELECT * FROM products 
-      WHERE id = ? AND (user_id = ? OR is_public = 1)
+      WHERE id = ? AND user_id = ?
     `).bind(product_id, user.id).first();
 
     if (!product) {
@@ -205,14 +204,14 @@ stackRoutes.post('/:id/products', authMiddleware, async (c) => {
     }
 
     await c.env.DB.prepare(`
-      INSERT INTO stack_products (stack_id, product_id, servings_per_day, dosage_source, notes)
+      INSERT INTO stack_products (stack_id, product_id, dosage_per_day, dosage_source, custom_dosage)
       VALUES (?, ?, ?, ?, ?)
     `).bind(
       stackId,
       product_id,
-      servings_per_day || 1,
-      dosage_source || 'user',
-      notes?.trim() || null
+      dosage_per_day || 1,
+      dosage_source || 'custom',
+      dosage_per_day || 1
     ).run();
 
     return c.json({
