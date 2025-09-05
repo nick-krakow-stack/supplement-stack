@@ -64,7 +64,7 @@ function generateSecureToken(): string {
 
 // Validate email format
 function validateEmail(email: string): boolean {
-  const emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return emailRegex.test(email);
 }
 
@@ -86,7 +86,7 @@ function validatePassword(password: string): { valid: boolean; message?: string 
     return { valid: false, message: 'Passwort muss mindestens eine Zahl enthalten' };
   }
   
-  if (!/[!@#$%^&*()_+\\-=\\[\\]{};':"\\\\|,.<>\\?]/.test(password)) {
+  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>?]/.test(password)) {
     return { valid: false, message: 'Passwort muss mindestens ein Sonderzeichen enthalten' };
   }
   
