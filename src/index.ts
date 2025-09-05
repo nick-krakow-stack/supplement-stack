@@ -1,13 +1,7 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { serveStatic } from 'hono/cloudflare-workers'
-import { authRoutes } from './routes/auth'
-import { productRoutes } from './routes/products'
-import { stackRoutes } from './routes/stacks'
-import { wishlistRoutes } from './routes/wishlist'
-import { affiliateRoutes } from './routes/affiliate'
-import { adminRoutes } from './routes/admin'
-import { apiRoutes } from './routes/api'
+// Imports temporarily removed for debugging
 
 type Bindings = {
   DB: D1Database;
@@ -21,14 +15,40 @@ app.use('/api/*', cors())
 // Serve static files
 app.use('/static/*', serveStatic({ root: './public' }))
 
-// API routes
-app.route('/api', apiRoutes)
-app.route('/api/auth', authRoutes)
-app.route('/api/protected/products', productRoutes)
-app.route('/api/protected/stacks', stackRoutes)
-app.route('/api/protected/wishlist', wishlistRoutes)
-app.route('/api/affiliate', affiliateRoutes)
-app.route('/api/admin', adminRoutes)
+// Test API routes directly
+app.get('/api/test-direct', (c) => {
+  try {
+    return c.json({
+      message: 'Direct API test',
+      working: true,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    return c.text('Error in direct API: ' + error.message);
+  }
+});
+
+app.get('/api/nutrients-direct', (c) => {
+  try {
+    return c.json({
+      success: true,
+      message: 'Direct nutrients API working',
+      data: [
+        {
+          id: 1,
+          name: 'Vitamin D3',
+          standard_unit: 'IE',
+          dge_recommended: 800,
+          study_recommended: 2000
+        }
+      ]
+    });
+  } catch (error) {
+    return c.text('Error in nutrients API: ' + error.message);
+  }
+});
+
+// Complex API routes temporarily removed for debugging
 
 // Main application page
 app.get('/', (c) => {

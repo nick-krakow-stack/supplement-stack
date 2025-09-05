@@ -9,6 +9,38 @@ type Bindings = {
 
 export const apiRoutes = new Hono<{ Bindings: Bindings }>();
 
+// Simple health check
+apiRoutes.get('/health', async (c) => {
+  return c.json({ 
+    success: true, 
+    message: 'API is working',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Get all nutrients (hardcoded for now to test)
+apiRoutes.get('/nutrients-test', async (c) => {
+  return c.json({
+    success: true,
+    data: [
+      {
+        id: 1,
+        name: 'Vitamin D3',
+        standard_unit: 'IE',
+        dge_recommended: 800,
+        study_recommended: 2000
+      },
+      {
+        id: 2,
+        name: 'Vitamin B12',
+        standard_unit: 'µg',
+        dge_recommended: 4,
+        study_recommended: 250
+      }
+    ]
+  });
+});
+
 // Get all nutrients
 apiRoutes.get('/nutrients', async (c) => {
   console.log('[API] Nutrients endpoint called');
