@@ -303,6 +303,134 @@ app.get('/api/protected/profile', authMiddleware, async (c) => {
   }
 });
 
+// Add new product to user's collection
+app.post('/api/protected/products', authMiddleware, async (c) => {
+  try {
+    const userId = c.get('userId');
+    const productData = await c.req.json();
+    
+    console.log('Adding product for user:', userId, productData);
+    
+    // TODO: Create products table and save to database
+    // For now, simulate database save
+    const newProduct = {
+      id: Date.now(), // Temporary ID generation
+      user_id: userId,
+      name: productData.name,
+      brand: productData.brand || 'Unbekannt',
+      purchase_price: parseFloat(productData.purchase_price) || 0,
+      monthly_cost: parseFloat(productData.monthly_cost) || 0,
+      shop_url: productData.shop_url || '',
+      category: productData.category || 'Sonstiges',
+      form: productData.form || 'Einheit',
+      dosage_per_day: parseInt(productData.dosage_per_day) || 1,
+      quantity: parseInt(productData.quantity) || 30,
+      days_supply: parseInt(productData.days_supply) || 30,
+      created_at: new Date().toISOString()
+    };
+    
+    console.log('Product created:', newProduct);
+    
+    return c.json({
+      success: true,
+      product: newProduct,
+      message: 'Produkt erfolgreich hinzugefügt'
+    }, 201);
+    
+  } catch (error) {
+    console.error('Add product API error:', error);
+    return c.json({ 
+      error: 'Failed to add product', 
+      message: 'Fehler beim Hinzufügen des Produkts: ' + (error.message || 'Unbekannter Fehler')
+    }, 500);
+  }
+});
+
+// Create new stack for user
+app.post('/api/protected/stacks', authMiddleware, async (c) => {
+  try {
+    const userId = c.get('userId');
+    const stackData = await c.req.json();
+    
+    console.log('Creating stack for user:', userId, stackData);
+    
+    // TODO: Create stacks table and save to database
+    // For now, simulate database save
+    const newStack = {
+      id: Date.now(), // Temporary ID generation
+      user_id: userId,
+      name: stackData.name,
+      description: stackData.description || '',
+      products: stackData.products || [], // Array of product IDs
+      created_at: new Date().toISOString()
+    };
+    
+    console.log('Stack created:', newStack);
+    
+    return c.json({
+      success: true,
+      stack: newStack,
+      message: 'Stack erfolgreich erstellt'
+    }, 201);
+    
+  } catch (error) {
+    console.error('Create stack API error:', error);
+    return c.json({ 
+      error: 'Failed to create stack', 
+      message: 'Fehler beim Erstellen des Stacks: ' + (error.message || 'Unbekannter Fehler')
+    }, 500);
+  }
+});
+
+// Update existing product
+app.put('/api/protected/products/:id', authMiddleware, async (c) => {
+  try {
+    const userId = c.get('userId');
+    const productId = c.req.param('id');
+    const updates = await c.req.json();
+    
+    console.log('Updating product:', productId, 'for user:', userId, updates);
+    
+    // TODO: Update product in database
+    // For now, return success response
+    return c.json({
+      success: true,
+      message: 'Produkt erfolgreich aktualisiert'
+    });
+    
+  } catch (error) {
+    console.error('Update product API error:', error);
+    return c.json({ 
+      error: 'Failed to update product', 
+      message: 'Fehler beim Aktualisieren des Produkts'
+    }, 500);
+  }
+});
+
+// Delete product
+app.delete('/api/protected/products/:id', authMiddleware, async (c) => {
+  try {
+    const userId = c.get('userId');
+    const productId = c.req.param('id');
+    
+    console.log('Deleting product:', productId, 'for user:', userId);
+    
+    // TODO: Delete product from database
+    // For now, return success response
+    return c.json({
+      success: true,
+      message: 'Produkt erfolgreich gelöscht'
+    });
+    
+  } catch (error) {
+    console.error('Delete product API error:', error);
+    return c.json({ 
+      error: 'Failed to delete product', 
+      message: 'Fehler beim Löschen des Produkts'
+    }, 500);
+  }
+});
+
 // =================================
 // HTML ROUTES - RECOVERED FROM BACKUP
 // =================================

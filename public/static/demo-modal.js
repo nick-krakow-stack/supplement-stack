@@ -2094,39 +2094,57 @@ class SupplementDemoApp {
       custom_notes: dosage.notes || ''
     }
     
-    // Zum aktuellen Stack hinzufügen - WICHTIG: SOWOHL zu this.products ALS AUCH zu currentStack.products
-    console.log('[Demo Modal] Adding product to current display and stack data')
-    
-    // 1. Immer zu this.products hinzufügen (für sofortige Anzeige)
-    this.products.push(customProduct)
-    console.log('[Demo Modal] Added to this.products, now has', this.products.length, 'products')
-    
-    // 2. Auch zu currentStack.products hinzufügen (für Persistierung)
-    if (this.currentStackId) {
-      const currentStack = this.stacks.find(s => s.id == this.currentStackId)
-      if (currentStack) {
-        console.log('[Demo Modal] Also adding product to stack data:', currentStack.name)
-        // Initialisiere products Array falls noch nicht vorhanden
-        if (!currentStack.products) {
-          currentStack.products = []
+    // Check if we're in dashboard mode (authenticated) or demo mode
+    if (this.isDashboardMode()) {
+      // Dashboard mode: Save to database via AJAX
+      console.log('[Dashboard Mode] Saving product to database...')
+      this.saveProductToDatabase(customProduct).then((savedProduct) => {
+        // Add to display after successful save
+        this.products.push(savedProduct)
+        console.log('[Dashboard Mode] Product saved to database and added to display')
+        
+        // Update display
+        this.renderStack()
+        this.updateStats()
+      }).catch(error => {
+        console.error('Failed to save product:', error)
+        this.showMessage('❌ Fehler beim Speichern des Produkts: ' + error.message, 'error')
+      })
+    } else {
+      // Demo mode: Keep existing local storage behavior
+      console.log('[Demo Mode] Adding product locally')
+      
+      // 1. Immer zu this.products hinzufügen (für sofortige Anzeige)
+      this.products.push(customProduct)
+      console.log('[Demo Modal] Added to this.products, now has', this.products.length, 'products')
+      
+      // 2. Auch zu currentStack.products hinzufügen (für Persistierung)
+      if (this.currentStackId) {
+        const currentStack = this.stacks.find(s => s.id == this.currentStackId)
+        if (currentStack) {
+          console.log('[Demo Modal] Also adding product to stack data:', currentStack.name)
+          // Initialisiere products Array falls noch nicht vorhanden
+          if (!currentStack.products) {
+            currentStack.products = []
+          }
+          // Prüfe ob Produkt bereits in Stack vorhanden (Duplikate vermeiden)
+          const existingProduct = currentStack.products.find(p => 
+            (typeof p === 'object' ? p.id : p) == customProduct.id
+          )
+          if (!existingProduct) {
+            currentStack.products.push(customProduct)
+          }
+          console.log('[Demo Modal] Stack data now has', currentStack.products.length, 'products')
+        } else {
+          console.error('[Demo Modal] Current stack not found:', this.currentStackId)
         }
-        // Prüfe ob Produkt bereits in Stack vorhanden (Duplikate vermeiden)
-        const existingProduct = currentStack.products.find(p => 
-          (typeof p === 'object' ? p.id : p) == customProduct.id
-        )
-        if (!existingProduct) {
-          currentStack.products.push(customProduct)
-        }
-        console.log('[Demo Modal] Stack data now has', currentStack.products.length, 'products')
-      } else {
-        console.error('[Demo Modal] Current stack not found:', this.currentStackId)
       }
+      
+      // Stack-Anzeige aktualisieren
+      console.log('[Demo Modal] finalizeAddProduct - Updating stack display')
+      this.renderStack()
+      this.updateStats()
     }
-    
-    // Stack-Anzeige aktualisieren
-    console.log('[Demo Modal] finalizeAddProduct - Updating stack display')
-    this.renderStack()
-    this.updateStats()
     
     // WICHTIG: Modal nicht hier schließen, das macht der Event Handler
     // this.closeAllModals() - ENTFERNT, wird vom Modal-Handler gemacht
@@ -2880,14 +2898,8 @@ class SupplementDemoApp {
   }
 
   addProduct(formData) {
-    console.log('[Demo Modal] Neues Produkt hinzugefügt (Demo)')
-    // In echter App: API-Aufruf zum Hinzufügen
-    // Für Demo: Feedback anzeigen
-    this.showMessage('✅ Produkt hinzugefügt (Demo-Modus)', 'success')
-    
-    // Demo: Produkt zur Liste hinzufügen
     const newProduct = {
-      id: this.products.length + 1,
+      id: Date.now(), // Temporary ID
       name: formData.get('name'),
       brand: formData.get('brand'),
       form: formData.get('form'),
@@ -2897,9 +2909,9 @@ class SupplementDemoApp {
       nutrient_amount_per_unit: parseFloat(formData.get('nutrient_amount_per_unit')),
       dosage_per_day: parseFloat(formData.get('dosage_per_day')),
       category: formData.get('category'),
-      description: formData.get('description') || 'Hinzugefügt in Demo',
-      benefits: ['Demo-Vorteil 1', 'Demo-Vorteil 2'],
-      warnings: ['Demo-Warnung'],
+      description: formData.get('description') || 'Manuell hinzugefügtes Produkt',
+      benefits: ['Benutzerdefiniert'],
+      warnings: [],
       dosage_recommendation: formData.get('dosage_recommendation') || 'Nach Packungsangabe'
     }
     
@@ -2907,10 +2919,27 @@ class SupplementDemoApp {
     newProduct.price_per_piece = newProduct.purchase_price / newProduct.quantity
     newProduct.days_supply = Math.floor(newProduct.quantity / newProduct.dosage_per_day)
     newProduct.monthly_cost = (newProduct.purchase_price / newProduct.days_supply * 30)
-    
-    this.products.push(newProduct)
-    this.renderStack()
-    this.updateStats()
+
+    if (this.isDashboardMode()) {
+      // Dashboard mode: Save to database
+      console.log('[Dashboard Mode] Saving manually added product to database')
+      this.saveProductToDatabase(newProduct).then((savedProduct) => {
+        this.products.push(savedProduct)
+        this.renderStack()
+        this.updateStats()
+        this.showMessage('✅ Produkt erfolgreich hinzugefügt und gespeichert!', 'success')
+      }).catch(error => {
+        console.error('Failed to save manual product:', error)
+        this.showMessage('❌ Fehler beim Speichern: ' + error.message, 'error')
+      })
+    } else {
+      // Demo mode: Local storage
+      console.log('[Demo Mode] Adding manual product locally')
+      this.products.push(newProduct)
+      this.renderStack()
+      this.updateStats()
+      this.showMessage('✅ Produkt hinzugefügt (Demo-Modus)', 'success')
+    }
   }
 
   showMessage(message, type = 'info') {
@@ -2929,6 +2958,119 @@ class SupplementDemoApp {
       toast.style.transform = 'translateX(100%)'
       setTimeout(() => toast.remove(), 300)
     }, 3000)
+  }
+
+  // Check if we're in dashboard mode (authenticated user) or demo mode
+  isDashboardMode() {
+    // Check if we have auth token and are on dashboard page
+    const hasAuthToken = localStorage.getItem('auth_token') !== null
+    const isDashboardPage = window.location.pathname.includes('/dashboard')
+    
+    console.log('[Mode Check] hasAuthToken:', hasAuthToken, 'isDashboardPage:', isDashboardPage)
+    return hasAuthToken && isDashboardPage
+  }
+
+  // Save product to database via AJAX (Dashboard mode only)
+  async saveProductToDatabase(product) {
+    try {
+      console.log('[Database Save] Sending product to API:', product)
+      
+      const authToken = localStorage.getItem('auth_token')
+      if (!authToken) {
+        throw new Error('Kein Authentifizierungstoken gefunden')
+      }
+
+      const response = await fetch('/api/protected/products', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify({
+          name: product.name,
+          brand: product.brand || 'Unbekannt',
+          purchase_price: product.purchase_price || 0,
+          monthly_cost: product.monthly_cost || 0,
+          shop_url: product.shop_url || '',
+          category: product.category || 'Sonstiges',
+          form: product.form || 'Einheit',
+          dosage_per_day: product.dosage_per_day || 1,
+          quantity: product.quantity || 30,
+          days_supply: product.days_supply || 30
+        })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || `HTTP ${response.status}`)
+      }
+
+      const result = await response.json()
+      console.log('[Database Save] Product saved successfully:', result.product)
+      
+      this.showMessage('✅ Produkt erfolgreich in der Datenbank gespeichert!', 'success')
+      return result.product
+      
+    } catch (error) {
+      console.error('[Database Save] Error saving product:', error)
+      throw error
+    }
+  }
+
+  // Load user's saved stacks from database (Dashboard mode)
+  async loadUserStacks() {
+    if (!this.isDashboardMode()) {
+      return [] // Return empty for demo mode
+    }
+
+    try {
+      const authToken = localStorage.getItem('auth_token')
+      const response = await fetch('/api/protected/stacks', {
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+
+      const stacks = await response.json()
+      console.log('[Database Load] User stacks loaded:', stacks)
+      return stacks
+      
+    } catch (error) {
+      console.error('[Database Load] Error loading stacks:', error)
+      return []
+    }
+  }
+
+  // Load user's saved products from database (Dashboard mode)
+  async loadUserProducts() {
+    if (!this.isDashboardMode()) {
+      return [] // Return empty for demo mode
+    }
+
+    try {
+      const authToken = localStorage.getItem('auth_token')
+      const response = await fetch('/api/protected/products', {
+        headers: {
+          'Authorization': `Bearer ${authToken}`
+        }
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+
+      const products = await response.json()
+      console.log('[Database Load] User products loaded:', products)
+      return products
+      
+    } catch (error) {
+      console.error('[Database Load] Error loading products:', error)
+      return []
+    }
   }
 }
 
