@@ -204,6 +204,106 @@ app.get('/api/auth/profile', authMiddleware, async (c) => {
 });
 
 // =================================
+// PROTECTED API ROUTES (Dashboard Data)
+// =================================
+
+// Get user's products
+app.get('/api/protected/products', authMiddleware, async (c) => {
+  try {
+    const userId = c.get('userId');
+    
+    // For now, return demo data - later we'll implement database storage per user
+    const products = [
+      {
+        id: 1,
+        name: "Vitamin D3 + K2",
+        brand: "Sunday Natural",
+        purchase_price: 24.90,
+        monthly_cost: 8.30,
+        shop_url: "https://sunday.de/vitamin-d3-k2",
+        category: "Vitamine"
+      },
+      {
+        id: 2,
+        name: "Omega-3 Kapseln",
+        brand: "Norsan", 
+        purchase_price: 32.50,
+        monthly_cost: 16.25,
+        shop_url: "https://norsan.de/omega-3",
+        category: "Fettsäuren"
+      }
+    ];
+    
+    return c.json(products);
+    
+  } catch (error) {
+    console.error('Products API error:', error);
+    return c.json({ error: 'Failed to load products' }, 500);
+  }
+});
+
+// Get user's stacks  
+app.get('/api/protected/stacks', authMiddleware, async (c) => {
+  try {
+    const userId = c.get('userId');
+    
+    // For now, return demo data - later we'll implement database storage per user
+    const stacks = [
+      {
+        id: 1,
+        name: "Grundausstattung",
+        description: "Basis Supplements für jeden Tag",
+        products: [1, 2], // Product IDs
+        created_at: new Date().toISOString()
+      }
+    ];
+    
+    return c.json(stacks);
+    
+  } catch (error) {
+    console.error('Stacks API error:', error);
+    return c.json({ error: 'Failed to load stacks' }, 500);
+  }
+});
+
+// Get user's wishlist
+app.get('/api/protected/wishlist', authMiddleware, async (c) => {
+  try {
+    const userId = c.get('userId');
+    
+    // For now, return empty array - later we'll implement database storage per user
+    const wishlist = [];
+    
+    return c.json(wishlist);
+    
+  } catch (error) {
+    console.error('Wishlist API error:', error);
+    return c.json({ error: 'Failed to load wishlist' }, 500);
+  }
+});
+
+// Get user profile (different from auth profile)
+app.get('/api/protected/profile', authMiddleware, async (c) => {
+  try {
+    const user = c.get('user');
+    
+    return c.json({
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.email,
+        email_verified: user.email_verified,
+        created_at: new Date().toISOString()
+      }
+    });
+    
+  } catch (error) {
+    console.error('Protected profile API error:', error);
+    return c.json({ error: 'Failed to load profile' }, 500);
+  }
+});
+
+// =================================
 // HTML ROUTES - RECOVERED FROM BACKUP
 // =================================
 
@@ -906,71 +1006,128 @@ app.get('/dashboard', (c) => {
         <!-- Main Content -->
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <!-- Dashboard Header -->
-            <div class="mb-8">
-                <h1 class="text-3xl font-bold text-gray-900 mb-2">
+            <div class="text-center mb-8">
+                <h1 class="text-4xl font-bold text-gray-900 mb-2">
                     <i class="fas fa-tachometer-alt mr-3 text-blue-600"></i>
-                    Dashboard
+                    Ihr Dashboard
                 </h1>
-                <p class="text-gray-600">Überblick über Ihre Supplements und Stacks</p>
+                <p class="text-xl text-gray-600 mb-4">Verwalten Sie Ihre persönlichen Supplements und Stacks</p>
+                <div class="bg-green-50 border border-green-200 rounded-lg p-4 max-w-4xl mx-auto">
+                    <p class="text-green-800 text-sm">
+                        <i class="fas fa-user-check mr-2"></i>
+                        <strong>Persönlicher Bereich:</strong> Alle Ihre Daten werden sicher gespeichert. 
+                        Erstellen Sie Stacks, verwalten Sie Produkte und behalten Sie Ihre Kosten im Blick.
+                    </p>
+                </div>
             </div>
 
+            <!-- Controls -->
+            <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+                <div class="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+                    <div class="flex flex-col sm:flex-row gap-4 flex-1">
+                        <div class="flex-1">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Stack auswählen:</label>
+                            <select id="stack-selector" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="">Lade Ihre Stacks...</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="flex flex-col sm:flex-row gap-3">
+                        <button id="add-product-main" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors text-sm font-medium shadow-sm">
+                            <i class="fas fa-plus mr-2"></i>Produkt hinzufügen
+                        </button>
+                        <button id="create-stack-main" class="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition-colors text-sm font-medium shadow-sm">
+                            <i class="fas fa-magic mr-2"></i>Stack erstellen
+                        </button>
+                    </div>
+                </div>
+            </div>
 
-
-            <!-- Recent Stacks -->
-            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
+            <!-- Stack Grid -->
+            <div class="bg-white rounded-lg shadow-md p-6 mb-8">
                 <div class="flex items-center justify-between mb-6">
-                    <h2 class="text-xl font-semibold text-gray-900">
-                        <i class="fas fa-clock mr-2 text-gray-600"></i>
-                        Aktuelle Stacks
+                    <h2 class="text-2xl font-bold text-gray-900">
+                        <i class="fas fa-layer-group mr-2 text-green-600"></i>
+                        Ihr aktueller Stack
                     </h2>
-                    <a href="/stacks" class="text-blue-600 hover:text-blue-500 text-sm font-medium">
-                        Alle anzeigen <i class="fas fa-arrow-right ml-1"></i>
-                    </a>
+                    <div class="flex items-center space-x-4 text-sm text-gray-600">
+                        <span class="bg-blue-100 text-blue-800 px-3 py-1 rounded-full font-medium">
+                            <i class="fas fa-box mr-1"></i>
+                            Produkte im Stack
+                        </span>
+                    </div>
                 </div>
-                <div id="recent-stacks">
-                    <!-- Will be populated by app.js -->
-                    <p class="text-gray-500 text-center py-4">Lade aktuelle Stacks...</p>
+                
+                <div id="dashboard-stack-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    <!-- Products will be loaded here by JavaScript -->
+                    <div class="text-center py-8 col-span-full">
+                        <i class="fas fa-box-open text-4xl text-gray-300 mb-4"></i>
+                        <p class="text-gray-500">Wählen Sie einen Stack aus oder erstellen Sie einen neuen</p>
+                    </div>
                 </div>
             </div>
 
-            <!-- Quick Actions -->
-            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <h2 class="text-xl font-semibold text-gray-900 mb-6">
-                    <i class="fas fa-bolt mr-2 text-yellow-600"></i>
-                    Schnellaktionen
-                </h2>
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <a href="/products" class="flex items-center p-4 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors group">
-                        <i class="fas fa-plus text-blue-600 text-xl mr-3 group-hover:scale-110 transition-transform"></i>
-                        <div>
-                            <div class="font-medium text-gray-900">Produkt hinzufügen</div>
-                            <div class="text-sm text-gray-600">Neues Supplement erfassen</div>
-                        </div>
-                    </a>
-                    
-                    <a href="/stacks" class="flex items-center p-4 bg-green-50 hover:bg-green-100 rounded-lg transition-colors group">
-                        <i class="fas fa-layer-group text-green-600 text-xl mr-3 group-hover:scale-110 transition-transform"></i>
-                        <div>
-                            <div class="font-medium text-gray-900">Stack erstellen</div>
-                            <div class="text-sm text-gray-600">Neue Kombination anlegen</div>
-                        </div>
-                    </a>
-                    
-                    <button onclick="app.openDemo()" class="flex items-center p-4 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors group">
-                        <i class="fas fa-flask text-purple-600 text-xl mr-3 group-hover:scale-110 transition-transform"></i>
-                        <div>
-                            <div class="font-medium text-gray-900">Demo öffnen</div>
-                            <div class="text-sm text-gray-600">Funktionen testen</div>
-                        </div>
+            <!-- Layer Toggle and Stack-wide Info -->
+            <div id="dashboard-layer-section" class="bg-white rounded-lg shadow-md p-6 mb-8 hidden">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-gray-900">
+                        <i class="fas fa-eye mr-2 text-blue-600"></i>
+                        Transparenter Einblick
+                    </h3>
+                    <button id="dashboard-toggle-layer" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors text-sm font-medium">
+                        <i class="fas fa-layer-group mr-2"></i>Layer öffnen
                     </button>
-                    
-                    <a href="/products" class="flex items-center p-4 bg-orange-50 hover:bg-orange-100 rounded-lg transition-colors group">
-                        <i class="fas fa-search text-orange-600 text-xl mr-3 group-hover:scale-110 transition-transform"></i>
-                        <div>
-                            <div class="font-medium text-gray-900">Produkte durchsuchen</div>
-                            <div class="text-sm text-gray-600">Vorhandene Supplements</div>
+                </div>
+                
+                <div id="dashboard-layer-content" class="hidden">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <!-- Cost Overview -->
+                        <div class="bg-gray-50 rounded-lg p-4">
+                            <h4 class="font-semibold text-gray-900 mb-3">
+                                <i class="fas fa-calculator mr-2 text-green-600"></i>
+                                Kostenübersicht
+                            </h4>
+                            <div class="space-y-2 text-sm">
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Einmalige Kosten:</span>
+                                    <span class="font-medium" id="dashboard-total-purchase">€0.00</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-gray-600">Monatliche Kosten:</span>
+                                    <span class="font-medium" id="dashboard-total-monthly">€0.00</span>
+                                </div>
+                                <div class="flex justify-between pt-2 border-t border-gray-200">
+                                    <span class="font-semibold text-gray-900">Kosten pro Tag:</span>
+                                    <span class="font-semibold text-blue-600" id="dashboard-daily-cost">€0.00</span>
+                                </div>
+                            </div>
                         </div>
-                    </a>
+                        
+                        <!-- Nutrient Coverage -->
+                        <div class="bg-gray-50 rounded-lg p-4">
+                            <h4 class="font-semibold text-gray-900 mb-3">
+                                <i class="fas fa-chart-pie mr-2 text-purple-600"></i>
+                                Nährstoff-Abdeckung
+                            </h4>
+                            <div id="dashboard-nutrient-coverage" class="space-y-2 text-sm">
+                                <p class="text-gray-600">Wird berechnet...</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Additional Info -->
+                        <div class="bg-gray-50 rounded-lg p-4">
+                            <h4 class="font-semibold text-gray-900 mb-3">
+                                <i class="fas fa-info-circle mr-2 text-orange-600"></i>
+                                Stack-Informationen
+                            </h4>
+                            <div class="space-y-2 text-sm text-gray-600">
+                                <p><strong>Produkte:</strong> <span id="dashboard-product-count">0</span></p>
+                                <p><strong>Marken:</strong> <span id="dashboard-brand-count">0</span></p>
+                                <p><strong>Kategorien:</strong> <span id="dashboard-category-count">0</span></p>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1035,16 +1192,115 @@ app.get('/dashboard', (c) => {
 
         <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
         <script src="/static/app.js"></script>
+        <script src="/static/demo-modal.js"></script>
         <script>
             // Initialize main app when page loads
             document.addEventListener('DOMContentLoaded', function() {
                 console.log('Dashboard page loaded, initializing SupplementApp...');
                 try {
+                    // Initialize main app
                     window.app = new SupplementApp();
                     console.log('SupplementApp initialized successfully');
+                    
+                    // Initialize dashboard demo functionality
+                    window.dashboardApp = new SupplementDemoApp();
+                    console.log('Dashboard SupplementDemoApp initialized successfully');
+                    
+                    // Setup dashboard-specific event listeners
+                    setupDashboardEvents();
+                    
                 } catch (error) {
-                    console.error('Failed to initialize SupplementApp:', error);
-                    document.getElementById('recent-stacks').innerHTML = '<div class="text-center py-8 text-red-600"><i class="fas fa-exclamation-triangle text-2xl mb-2"></i><p>Dashboard konnte nicht geladen werden</p><p class="text-sm">Bitte laden Sie die Seite neu oder melden Sie sich erneut an</p></div>';
+                    console.error('Failed to initialize Dashboard:', error);
+                    document.getElementById('dashboard-stack-grid').innerHTML = '<div class="text-center py-8 text-red-600 col-span-full"><i class="fas fa-exclamation-triangle text-2xl mb-2"></i><p>Dashboard konnte nicht geladen werden</p><p class="text-sm">Bitte laden Sie die Seite neu oder melden Sie sich erneut an</p></div>';
+                }
+                
+                function setupDashboardEvents() {
+                    // Add Product Button
+                    const addProductBtn = document.getElementById('add-product-main');
+                    if (addProductBtn) {
+                        addProductBtn.addEventListener('click', () => {
+                            window.dashboardApp.showAddProductModal();
+                        });
+                    }
+                    
+                    // Create Stack Button
+                    const createStackBtn = document.getElementById('create-stack-main');
+                    if (createStackBtn) {
+                        createStackBtn.addEventListener('click', () => {
+                            window.dashboardApp.showStackCreationModal();
+                        });
+                    }
+                    
+                    // Layer Toggle Button
+                    const layerToggleBtn = document.getElementById('dashboard-toggle-layer');
+                    if (layerToggleBtn) {
+                        layerToggleBtn.addEventListener('click', () => {
+                            const layerContent = document.getElementById('dashboard-layer-content');
+                            if (layerContent.classList.contains('hidden')) {
+                                layerContent.classList.remove('hidden');
+                                layerToggleBtn.innerHTML = '<i class="fas fa-eye-slash mr-2"></i>Layer schließen';
+                            } else {
+                                layerContent.classList.add('hidden');
+                                layerToggleBtn.innerHTML = '<i class="fas fa-layer-group mr-2"></i>Layer öffnen';
+                            }
+                        });
+                    }
+                    
+                    // Stack Selector
+                    const stackSelector = document.getElementById('stack-selector');
+                    if (stackSelector) {
+                        stackSelector.addEventListener('change', (e) => {
+                            const stackId = e.target.value;
+                            if (stackId) {
+                                loadDashboardStack(stackId);
+                            }
+                        });
+                    }
+                    
+                    // Load initial data
+                    loadDashboardData();
+                }
+                
+                async function loadDashboardData() {
+                    try {
+                        // Load stacks for selector
+                        const stacks = await window.dashboardApp.loadAvailableStacks();
+                        populateStackSelector(stacks);
+                        
+                        // Load default stack if available
+                        if (stacks.length > 0) {
+                            loadDashboardStack(stacks[0].id);
+                        }
+                        
+                    } catch (error) {
+                        console.error('Error loading dashboard data:', error);
+                    }
+                }
+                
+                function populateStackSelector(stacks) {
+                    const selector = document.getElementById('stack-selector');
+                    if (selector) {
+                        selector.innerHTML = '<option value="">Wählen Sie einen Stack...</option>';
+                        stacks.forEach(stack => {
+                            selector.innerHTML += \`<option value="\${stack.id}">\${stack.name}</option>\`;
+                        });
+                    }
+                }
+                
+                function loadDashboardStack(stackId) {
+                    try {
+                        // Load stack products into grid
+                        window.dashboardApp.loadStackById(stackId);
+                        
+                        // Show layer section
+                        const layerSection = document.getElementById('dashboard-layer-section');
+                        if (layerSection) {
+                            layerSection.classList.remove('hidden');
+                        }
+                        
+                    } catch (error) {
+                        console.error('Error loading stack:', error);
+                    }
                 }
             });
         </script>
