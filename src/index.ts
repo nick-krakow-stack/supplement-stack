@@ -1211,6 +1211,9 @@ app.get('/demo', (c) => {
                         <button id="demo-create-stack-main" class="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition-colors text-sm font-medium shadow-sm">
                             <i class="fas fa-magic mr-2"></i>Stack erstellen
                         </button>
+                        <button id="demo-delete-stack-main" class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors text-sm font-medium shadow-sm" style="display: none;">
+                            <i class="fas fa-trash mr-2"></i>Stack löschen
+                        </button>
                     </div>
                 </div>
             </div>
@@ -1326,11 +1329,61 @@ app.get('/demo', (c) => {
                 try {
                     window.demoApp = new SupplementDemoApp();
                     console.log('SupplementDemoApp initialized successfully');
+                    
+                    // Setup demo-specific event listeners
+                    setupDemoEvents();
                 } catch (error) {
                     console.error('Failed to initialize SupplementDemoApp:', error);
                     document.getElementById('demo-stack-grid').innerHTML = '<div class="col-span-full text-center py-8 text-red-600"><i class="fas fa-exclamation-triangle text-2xl mb-2"></i><p>Demo konnte nicht geladen werden</p><p class="text-sm">Bitte laden Sie die Seite neu</p></div>';
                 }
             });
+            
+            function setupDemoEvents() {
+                // Delete Stack Button for Demo Mode
+                const deleteStackBtn = document.getElementById('demo-delete-stack-main');
+                if (deleteStackBtn) {
+                    deleteStackBtn.addEventListener('click', async () => {
+                        const stackSelector = document.getElementById('stack-selector');
+                        const selectedStackId = stackSelector?.value;
+                        
+                        if (!selectedStackId) {
+                            alert('Bitte wählen Sie zuerst einen Stack aus.');
+                            return;
+                        }
+                        
+                        const selectedStackName = stackSelector.options[stackSelector.selectedIndex].text;
+                        
+                        if (confirm('Möchten Sie den Stack "' + selectedStackName + '" wirklich löschen?')) {
+                            try {
+                                if (window.demoApp && typeof window.demoApp.deleteStack === 'function') {
+                                    await window.demoApp.deleteStack(selectedStackId);
+                                } else {
+                                    console.error('demoApp not found or deleteStack method not available');
+                                    alert('Fehler: Stack-Löschfunktion nicht verfügbar');
+                                }
+                            } catch (error) {
+                                console.error('Error deleting stack:', error);
+                                alert('Fehler beim Löschen des Stacks: ' + error.message);
+                            }
+                        }
+                    });
+                }
+                
+                // Demo Stack Selector - Show/Hide delete button
+                const stackSelector = document.getElementById('stack-selector');
+                if (stackSelector) {
+                    stackSelector.addEventListener('change', (e) => {
+                        const stackId = e.target.value;
+                        const deleteBtn = document.getElementById('demo-delete-stack-main');
+                        
+                        if (stackId && deleteBtn) {
+                            deleteBtn.style.display = 'block';
+                        } else if (deleteBtn) {
+                            deleteBtn.style.display = 'none';
+                        }
+                    });
+                }
+            }
         </script>
     </body>
     </html>
@@ -1679,9 +1732,12 @@ app.get('/dashboard', (c) => {
                     window.app = new SupplementApp();
                     console.log('SupplementApp initialized successfully');
                     
-                    // Initialize dashboard demo functionality
-                    window.dashboardApp = new SupplementDemoApp();
+                    // Initialize dashboard demo functionality (using unified demoApp instance)
+                    window.demoApp = new SupplementDemoApp();
                     console.log('Dashboard SupplementDemoApp initialized successfully');
+                    
+                    // Backward compatibility - keep dashboardApp reference
+                    window.dashboardApp = window.demoApp;
                     
                     // Setup dashboard-specific event listeners
                     setupDashboardEvents();
@@ -1696,7 +1752,12 @@ app.get('/dashboard', (c) => {
                     const addProductBtn = document.getElementById('add-product-main');
                     if (addProductBtn) {
                         addProductBtn.addEventListener('click', () => {
-                            window.dashboardApp.showAddProductModal();
+                            // Use demoApp (unified app instance) instead of dashboardApp
+                            if (window.demoApp) {
+                                window.demoApp.showAddProductModal();
+                            } else {
+                                console.error('demoApp not found');
+                            }
                         });
                     }
                     
@@ -1704,7 +1765,12 @@ app.get('/dashboard', (c) => {
                     const createStackBtn = document.getElementById('create-stack-main');
                     if (createStackBtn) {
                         createStackBtn.addEventListener('click', () => {
-                            window.dashboardApp.showNutrientBasedStackModal();
+                            // Use demoApp (unified app instance) instead of dashboardApp
+                            if (window.demoApp) {
+                                window.demoApp.showNutrientBasedStackModal();
+                            } else {
+                                console.error('demoApp not found');
+                            }
                         });
                     }
                     
@@ -1724,9 +1790,16 @@ app.get('/dashboard', (c) => {
                             
                             if (confirm('M\u00f6chten Sie den Stack "' + selectedStackName + '" wirklich l\u00f6schen? Diese Aktion kann nicht r\u00fcckg\u00e4ngig gemacht werden.')) {
                                 try {
-                                    await window.dashboardApp.deleteStack(selectedStackId);
+                                    // Use demoApp (unified app instance) instead of dashboardApp
+                                    if (window.demoApp && typeof window.demoApp.deleteStack === 'function') {
+                                        await window.demoApp.deleteStack(selectedStackId);
+                                    } else {
+                                        console.error('demoApp not found or deleteStack method not available');
+                                        alert('Fehler: Stack-Löschfunktion nicht verfügbar');
+                                    }
                                 } catch (error) {
                                     console.error('Error deleting stack:', error);
+                                    alert('Fehler beim Löschen des Stacks: ' + error.message);
                                 }
                             }
                         });

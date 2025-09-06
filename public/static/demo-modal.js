@@ -1086,6 +1086,19 @@ class SupplementDemoApp {
       return
     }
     
+    // In Dashboard mode, refresh stacks from database to ensure we have the latest data
+    if (this.isDashboardMode()) {
+      console.log('[Dashboard] Refreshing stacks from database before updating selector')
+      try {
+        const refreshedStacks = await this.loadUserStacks()
+        this.userStacks = refreshedStacks
+        this.stacks = this.userStacks
+        console.log('[Dashboard] Refreshed stacks from database:', this.stacks.length, 'stacks')
+      } catch (error) {
+        console.error('[Dashboard] Error refreshing stacks:', error)
+      }
+    }
+    
     // Stacks in Dropdown laden - nur validierte Stacks anzeigen
     console.log('[Demo Modal] Updating stack selector with', this.stacks.length, 'stacks')
     
@@ -2343,12 +2356,10 @@ class SupplementDemoApp {
           throw new Error('Server returned invalid stack data')
         }
         
-        // Add to local stacks list
-        this.stacks.push(newStack)
-        this.userStacks.push(newStack)
-        
-        console.log('[Dashboard] Added stack to local lists. Total stacks:', this.stacks.length)
-        console.log('[Dashboard] Stack added - ID:', newStack.id, 'Name:', newStack.name)
+        // In Dashboard mode, don't add to local lists here - 
+        // the stack will be loaded from database when initStackSelector() calls refreshStackFromDatabase()
+        console.log('[Dashboard] Stack created in database - ID:', newStack.id, 'Name:', newStack.name)
+        console.log('[Dashboard] Stack will be loaded from database during selector initialization')
         
       } catch (error) {
         console.error('[Dashboard] Error creating stack:', error)
