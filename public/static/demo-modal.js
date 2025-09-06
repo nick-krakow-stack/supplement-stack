@@ -756,10 +756,15 @@ class SupplementDemoApp {
             </div>
           </div>
           
-          <!-- Info Button instead of Order -->
-          <button class="w-full bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white font-bold py-3 px-4 rounded-xl transition-all duration-300 transform hover:scale-105 hover:shadow-lg focus:ring-4 focus:ring-blue-200 focus:outline-none text-sm">
-            <i class="fas fa-info-circle mr-2"></i>Details anzeigen
-          </button>
+          <!-- Action Buttons for Edit/Delete -->
+          <div class="flex gap-2">
+            <button onclick="window.demoApp && window.demoApp.editProduct(${product.id})" class="flex-1 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white font-bold py-3 px-4 rounded-xl transition-all duration-300 transform hover:scale-105 hover:shadow-lg focus:ring-4 focus:ring-blue-200 focus:outline-none text-sm">
+              <i class="fas fa-edit mr-2"></i>Bearbeiten
+            </button>
+            <button onclick="window.demoApp && window.demoApp.deleteProduct(${product.id})" class="bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 text-white font-bold py-3 px-2 rounded-xl transition-all duration-300 transform hover:scale-105 hover:shadow-lg focus:ring-4 focus:ring-red-200 focus:outline-none text-sm">
+              <i class="fas fa-trash"></i>
+            </button>
+          </div>
           
           <!-- Hover-Effekt Shine -->
           <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-0 hover:opacity-20 transition-opacity duration-500 pointer-events-none transform -skew-x-12 -translate-x-full hover:translate-x-full"></div>
