@@ -731,6 +731,49 @@ app.post('/api/protected/stacks/:stackId/products', authMiddleware, async (c) =>
   }
 });
 
+// Delete stack
+app.delete('/api/protected/stacks/:id', authMiddleware, async (c) => {
+  try {
+    const userId = c.get('userId');
+    const stackId = c.req.param('id');
+    
+    console.log('Deleting stack:', stackId, 'for user:', userId);
+    
+    // Verify stack belongs to user
+    const stack = await c.env.DB.prepare(`
+      SELECT id FROM stacks WHERE id = ? AND user_id = ?
+    `).bind(stackId, userId).first();
+    
+    if (!stack) {
+      return c.json({ error: 'Stack not found or access denied' }, 404);
+    }
+    
+    // Delete stack products first (foreign key constraint)
+    await c.env.DB.prepare(`
+      DELETE FROM stack_products WHERE stack_id = ?
+    `).bind(stackId).run();
+    
+    // Delete the stack
+    await c.env.DB.prepare(`
+      DELETE FROM stacks WHERE id = ? AND user_id = ?
+    `).bind(stackId, userId).run();
+    
+    console.log('Stack deleted successfully:', stackId);
+    
+    return c.json({
+      success: true,
+      message: 'Stack erfolgreich gelöscht'
+    });
+    
+  } catch (error) {
+    console.error('Delete stack API error:', error);
+    return c.json({ 
+      error: 'Failed to delete stack', 
+      message: 'Fehler beim Löschen des Stacks: ' + (error.message || 'Unbekannter Fehler')
+    }, 500);
+  }
+});
+
 // Update existing product
 app.put('/api/protected/products/:id', authMiddleware, async (c) => {
   try {
@@ -1517,6 +1560,9 @@ app.get('/dashboard', (c) => {
                         <button id="create-stack-main" class="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition-colors text-sm font-medium shadow-sm">
                             <i class="fas fa-magic mr-2"></i>Stack erstellen
                         </button>
+                        <button id="delete-stack-main" class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors text-sm font-medium shadow-sm" style="display: none;">
+                            <i class="fas fa-trash mr-2"></i>Stack löschen
+                        </button>
                     </div>
                 </div>
             </div>
@@ -1658,7 +1704,31 @@ app.get('/dashboard', (c) => {
                     const createStackBtn = document.getElementById('create-stack-main');
                     if (createStackBtn) {
                         createStackBtn.addEventListener('click', () => {
-                            window.dashboardApp.showStackCreationModal();
+                            window.dashboardApp.showNutrientBasedStackModal();
+                        });
+                    }
+                    
+                    // Delete Stack Button
+                    const deleteStackBtn = document.getElementById('delete-stack-main');
+                    if (deleteStackBtn) {
+                        deleteStackBtn.addEventListener('click', async () => {
+                            const stackSelector = document.getElementById('stack-selector');
+                            const selectedStackId = stackSelector?.value;
+                            
+                            if (!selectedStackId) {
+                                alert('Bitte wählen Sie zuerst einen Stack aus.');
+                                return;
+                            }
+                            
+                            const selectedStackName = stackSelector.options[stackSelector.selectedIndex].text;
+                            
+                            if (confirm(`Möchten Sie den Stack "${selectedStackName}" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`)) {
+                                try {
+                                    await window.dashboardApp.deleteStack(selectedStackId);
+                                } catch (error) {
+                                    console.error('Error deleting stack:', error);
+                                }
+                            }
                         });
                     }
                     
@@ -1682,8 +1752,15 @@ app.get('/dashboard', (c) => {
                     if (stackSelector) {
                         stackSelector.addEventListener('change', (e) => {
                             const stackId = e.target.value;
+                            const deleteBtn = document.getElementById('delete-stack-main');
+                            
                             if (stackId) {
                                 loadDashboardStack(stackId);
+                                // Show delete button when a stack is selected
+                                if (deleteBtn) deleteBtn.style.display = 'block';
+                            } else {
+                                // Hide delete button when no stack is selected
+                                if (deleteBtn) deleteBtn.style.display = 'none';
                             }
                         });
                     }

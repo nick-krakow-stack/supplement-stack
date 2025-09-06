@@ -2209,8 +2209,7 @@ class SupplementDemoApp {
     }
   }
 
-  createStack(formData) {
-    console.log('[Demo Modal] Neuer Stack erstellt (Demo)')
+  async createStack(formData) {
     const stackName = formData.get('stack_name')
     const description = formData.get('description') || ''
     
@@ -2224,17 +2223,63 @@ class SupplementDemoApp {
       throw new Error('Ein Stack mit diesem Namen existiert bereits')
     }
     
-    // Demo: Stack zur Liste hinzufügen
-    const newStack = {
-      id: this.stacks.length + 1,
-      name: stackName.trim(),
-      description: description.trim(),
-      products: [],
-      total_monthly_cost: 0,
-      created_at: new Date().toISOString()
-    }
+    let newStack
     
-    this.stacks.push(newStack)
+    if (this.isDashboardMode()) {
+      console.log('[Dashboard] Creating stack in database...')
+      
+      // Dashboard mode: Create stack in database
+      try {
+        const authToken = localStorage.getItem('auth_token')
+        if (!authToken) {
+          throw new Error('No authentication token found')
+        }
+        
+        const response = await fetch('/api/protected/stacks', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            name: stackName.trim(),
+            description: description.trim(),
+            products: []
+          })
+        })
+        
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.message || `HTTP ${response.status}`)
+        }
+        
+        newStack = await response.json()
+        console.log('[Dashboard] Stack created in database:', newStack)
+        
+        // Add to local stacks list
+        this.stacks.push(newStack)
+        this.userStacks.push(newStack)
+        
+      } catch (error) {
+        console.error('[Dashboard] Error creating stack:', error)
+        throw error
+      }
+      
+    } else {
+      console.log('[Demo Modal] Neuer Stack erstellt (Demo)')
+      
+      // Demo mode: Create stack locally only
+      newStack = {
+        id: this.stacks.length + 1,
+        name: stackName.trim(),
+        description: description.trim(),
+        products: [],
+        total_monthly_cost: 0,
+        created_at: new Date().toISOString()
+      }
+      
+      this.stacks.push(newStack)
+    }
     
     // Stack-Selector aktualisieren (mit Error Handling)
     try {
@@ -2332,10 +2377,10 @@ class SupplementDemoApp {
     const form = modal.querySelector('#create-stack-form')
     
     if (form) {
-      form.addEventListener('submit', (e) => {
+      form.addEventListener('submit', async (e) => {
         e.preventDefault()
         try {
-          const newStack = this.createStack(new FormData(form))
+          const newStack = await this.createStack(new FormData(form))
           this.showSuccess(`Stack "${newStack.name}" erfolgreich erstellt!`)
           // Modal IMMER schließen nach erfolgreichem Erstellen
           setTimeout(() => modal.remove(), 100)
@@ -3351,6 +3396,63 @@ class SupplementDemoApp {
       console.error('[Available Products] Error loading available products:', error)
       console.log('[Available Products] Falling back to demo products')
       return this.loadDemoProducts()
+    }
+  }
+  
+  // Delete stack
+  async deleteStack(stackId) {
+    if (!this.isDashboardMode()) {
+      // Demo mode: just remove from local list
+      this.stacks = this.stacks.filter(s => s.id !== stackId)
+      this.initStackSelector()
+      this.showSuccess('Stack erfolgreich gelöscht!')
+      return
+    }
+    
+    try {
+      const authToken = localStorage.getItem('auth_token')
+      if (!authToken) {
+        throw new Error('No authentication token found')
+      }
+      
+      console.log('[Dashboard] Deleting stack:', stackId)
+      
+      const response = await fetch(`/api/protected/stacks/${stackId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || `HTTP ${response.status}`)
+      }
+      
+      console.log('[Dashboard] Stack deleted successfully')
+      
+      // Remove from local lists
+      this.stacks = this.stacks.filter(s => s.id !== stackId)
+      this.userStacks = this.userStacks.filter(s => s.id !== stackId)
+      
+      // Update UI
+      this.initStackSelector()
+      
+      // If no stacks left, create a default one
+      if (this.stacks.length === 0) {
+        const defaultStack = await this.createDefaultStackInDatabase()
+        this.stacks = [defaultStack]
+        this.userStacks = [defaultStack]
+        this.initStackSelector()
+      }
+      
+      this.showSuccess('Stack erfolgreich gelöscht!')
+      
+    } catch (error) {
+      console.error('[Dashboard] Error deleting stack:', error)
+      this.showError(error.message || 'Fehler beim Löschen des Stacks')
+      throw error
     }
   }
 }
