@@ -211,30 +211,30 @@ app.get('/api/auth/profile', authMiddleware, async (c) => {
 app.get('/api/protected/products', authMiddleware, async (c) => {
   try {
     const userId = c.get('userId');
+    console.log('Loading products for user:', userId);
     
-    // For now, return demo data - later we'll implement database storage per user
-    const products = [
-      {
-        id: 1,
-        name: "Vitamin D3 + K2",
-        brand: "Sunday Natural",
-        purchase_price: 24.90,
-        monthly_cost: 8.30,
-        shop_url: "https://sunday.de/vitamin-d3-k2",
-        category: "Vitamine"
-      },
-      {
-        id: 2,
-        name: "Omega-3 Kapseln",
-        brand: "Norsan", 
-        purchase_price: 32.50,
-        monthly_cost: 16.25,
-        shop_url: "https://norsan.de/omega-3",
-        category: "Fettsäuren"
-      }
-    ];
+    // Query user's products from database
+    const products = await c.env.DB.prepare(`
+      SELECT 
+        p.id,
+        p.name,
+        p.brand,
+        p.form,
+        p.price_per_package as purchase_price,
+        p.servings_per_package as quantity,
+        p.shop_url,
+        COALESCE(p.price_per_package / NULLIF(p.servings_per_package, 0) * 30, 0) as monthly_cost,
+        'Supplements' as category,
+        1 as dosage_per_day,
+        COALESCE(p.servings_per_package, 30) as days_supply
+      FROM products p 
+      WHERE p.user_id = ? 
+      ORDER BY p.created_at DESC
+    `).bind(userId).all();
     
-    return c.json(products);
+    console.log('Found', products.results?.length || 0, 'products for user', userId);
+    
+    return c.json(products.results || []);
     
   } catch (error) {
     console.error('Products API error:', error);
@@ -246,19 +246,36 @@ app.get('/api/protected/products', authMiddleware, async (c) => {
 app.get('/api/protected/stacks', authMiddleware, async (c) => {
   try {
     const userId = c.get('userId');
+    console.log('Loading stacks for user:', userId);
     
-    // For now, return demo data - later we'll implement database storage per user
-    const stacks = [
-      {
-        id: 1,
-        name: "Grundausstattung",
-        description: "Basis Supplements für jeden Tag",
-        products: [1, 2], // Product IDs
-        created_at: new Date().toISOString()
-      }
-    ];
+    // Query user's stacks from database with their products
+    const stacks = await c.env.DB.prepare(`
+      SELECT 
+        s.id,
+        s.name,
+        s.description,
+        s.created_at,
+        GROUP_CONCAT(sp.product_id) as product_ids
+      FROM stacks s 
+      LEFT JOIN stack_products sp ON s.id = sp.stack_id
+      WHERE s.user_id = ? 
+      GROUP BY s.id, s.name, s.description, s.created_at
+      ORDER BY s.created_at DESC
+    `).bind(userId).all();
     
-    return c.json(stacks);
+    // Format the results to match frontend expectations
+    const formattedStacks = stacks.results?.map(stack => ({
+      id: stack.id,
+      name: stack.name,
+      description: stack.description || '',
+      products: stack.product_ids ? stack.product_ids.split(',').map(id => parseInt(id)).filter(id => !isNaN(id)) : [],
+      total_monthly_cost: 0, // Will be calculated on frontend
+      created_at: stack.created_at
+    })) || [];
+    
+    console.log('Found', formattedStacks.length, 'stacks for user', userId);
+    
+    return c.json(formattedStacks);
     
   } catch (error) {
     console.error('Stacks API error:', error);
@@ -311,25 +328,51 @@ app.post('/api/protected/products', authMiddleware, async (c) => {
     
     console.log('Adding product for user:', userId, productData);
     
-    // TODO: Create products table and save to database
-    // For now, simulate database save
-    const newProduct = {
-      id: Date.now(), // Temporary ID generation
-      user_id: userId,
-      name: productData.name,
-      brand: productData.brand || 'Unbekannt',
-      purchase_price: parseFloat(productData.purchase_price) || 0,
-      monthly_cost: parseFloat(productData.monthly_cost) || 0,
-      shop_url: productData.shop_url || '',
-      category: productData.category || 'Sonstiges',
-      form: productData.form || 'Einheit',
-      dosage_per_day: parseInt(productData.dosage_per_day) || 1,
-      quantity: parseInt(productData.quantity) || 30,
-      days_supply: parseInt(productData.days_supply) || 30,
-      created_at: new Date().toISOString()
-    };
+    // Insert product into database
+    const result = await c.env.DB.prepare(`
+      INSERT INTO products (
+        user_id, 
+        name, 
+        brand, 
+        form, 
+        price_per_package, 
+        servings_per_package, 
+        shop_url
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      userId,
+      productData.name || 'Unbekanntes Produkt',
+      productData.brand || 'Unbekannt',
+      productData.form || 'Einheit',
+      parseFloat(productData.purchase_price) || 0,
+      parseInt(productData.quantity) || 30,
+      productData.shop_url || ''
+    ).run();
     
-    console.log('Product created:', newProduct);
+    if (!result.success) {
+      throw new Error('Failed to insert product into database');
+    }
+    
+    // Get the inserted product
+    const newProduct = await c.env.DB.prepare(`
+      SELECT 
+        id,
+        name,
+        brand,
+        form,
+        price_per_package as purchase_price,
+        servings_per_package as quantity,
+        shop_url,
+        COALESCE(price_per_package / NULLIF(servings_per_package, 0) * 30, 0) as monthly_cost,
+        'Supplements' as category,
+        1 as dosage_per_day,
+        COALESCE(servings_per_package, 30) as days_supply,
+        created_at
+      FROM products 
+      WHERE id = ?
+    `).bind(result.meta.last_row_id).first();
+    
+    console.log('Product saved to database:', newProduct);
     
     return c.json({
       success: true,
@@ -354,22 +397,65 @@ app.post('/api/protected/stacks', authMiddleware, async (c) => {
     
     console.log('Creating stack for user:', userId, stackData);
     
-    // TODO: Create stacks table and save to database
-    // For now, simulate database save
-    const newStack = {
-      id: Date.now(), // Temporary ID generation
-      user_id: userId,
-      name: stackData.name,
-      description: stackData.description || '',
-      products: stackData.products || [], // Array of product IDs
-      created_at: new Date().toISOString()
+    // Insert stack into database
+    const stackResult = await c.env.DB.prepare(`
+      INSERT INTO stacks (user_id, name, description) 
+      VALUES (?, ?, ?)
+    `).bind(
+      userId,
+      stackData.name || 'Neuer Stack',
+      stackData.description || ''
+    ).run();
+    
+    if (!stackResult.success) {
+      throw new Error('Failed to insert stack into database');
+    }
+    
+    const stackId = stackResult.meta.last_row_id;
+    
+    // Add products to stack if provided
+    if (stackData.products && Array.isArray(stackData.products) && stackData.products.length > 0) {
+      for (const productId of stackData.products) {
+        try {
+          await c.env.DB.prepare(`
+            INSERT INTO stack_products (stack_id, product_id, dosage_per_day) 
+            VALUES (?, ?, ?)
+          `).bind(stackId, productId, 1).run();
+        } catch (error) {
+          console.warn('Failed to add product', productId, 'to stack:', error);
+          // Continue with other products even if one fails
+        }
+      }
+    }
+    
+    // Get the created stack with its products
+    const newStack = await c.env.DB.prepare(`
+      SELECT 
+        s.id,
+        s.name,
+        s.description,
+        s.created_at,
+        GROUP_CONCAT(sp.product_id) as product_ids
+      FROM stacks s 
+      LEFT JOIN stack_products sp ON s.id = sp.stack_id
+      WHERE s.id = ? AND s.user_id = ?
+      GROUP BY s.id, s.name, s.description, s.created_at
+    `).bind(stackId, userId).first();
+    
+    const formattedStack = {
+      id: newStack.id,
+      name: newStack.name,
+      description: newStack.description || '',
+      products: newStack.product_ids ? newStack.product_ids.split(',').map(id => parseInt(id)).filter(id => !isNaN(id)) : [],
+      total_monthly_cost: 0,
+      created_at: newStack.created_at
     };
     
-    console.log('Stack created:', newStack);
+    console.log('Stack created in database:', formattedStack);
     
     return c.json({
       success: true,
-      stack: newStack,
+      stack: formattedStack,
       message: 'Stack erfolgreich erstellt'
     }, 201);
     
@@ -378,6 +464,44 @@ app.post('/api/protected/stacks', authMiddleware, async (c) => {
     return c.json({ 
       error: 'Failed to create stack', 
       message: 'Fehler beim Erstellen des Stacks: ' + (error.message || 'Unbekannter Fehler')
+    }, 500);
+  }
+});
+
+// Add product to existing stack
+app.post('/api/protected/stacks/:stackId/products', authMiddleware, async (c) => {
+  try {
+    const userId = c.get('userId');
+    const stackId = c.req.param('stackId');
+    const { productId, dosagePerDay = 1 } = await c.req.json();
+    
+    console.log('Adding product', productId, 'to stack', stackId, 'for user', userId);
+    
+    // Verify stack belongs to user
+    const stack = await c.env.DB.prepare(`
+      SELECT id FROM stacks WHERE id = ? AND user_id = ?
+    `).bind(stackId, userId).first();
+    
+    if (!stack) {
+      return c.json({ error: 'Stack not found or access denied' }, 404);
+    }
+    
+    // Add product to stack (or update dosage if already exists)
+    await c.env.DB.prepare(`
+      INSERT OR REPLACE INTO stack_products (stack_id, product_id, dosage_per_day) 
+      VALUES (?, ?, ?)
+    `).bind(stackId, productId, dosagePerDay).run();
+    
+    return c.json({
+      success: true,
+      message: 'Produkt erfolgreich zum Stack hinzugefügt'
+    });
+    
+  } catch (error) {
+    console.error('Add product to stack API error:', error);
+    return c.json({ 
+      error: 'Failed to add product to stack', 
+      message: 'Fehler beim Hinzufügen des Produkts zum Stack: ' + (error.message || 'Unbekannter Fehler')
     }, 500);
   }
 });

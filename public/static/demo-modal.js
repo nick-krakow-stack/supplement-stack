@@ -3,21 +3,33 @@
 
 class SupplementDemoApp {
   constructor() {
-    this.availableProducts = this.loadDemoProducts()  // Verfügbare Produkte
+    this.availableProducts = this.loadDemoProducts()  // Verfügbare Produkte (Demo-Daten als Fallback)
     this.products = []  // Produkte im Stack (initial leer)
-    this.stacks = this.loadDemoStacks()
+    this.stacks = []  // Will be loaded based on mode
     this.nutrients = this.loadNutrients()
     this.currentStackId = null  // Aktuell ausgewählter Stack
+    this.userStacks = []  // User's personal stacks (Dashboard only)
+    this.userProducts = []  // User's personal products (Dashboard only)
+    this.dataLoaded = false  // Track if user data has been loaded
     this.init()
   }
 
-  init() {
+  async init() {
     console.log('[Demo Modal] Initialisierung startet...')
     
     // Add visible indicator that JavaScript is working
     document.title = 'Demo - Supplement Stack (JS Modal Loaded!)'
     
     this.setupEventListeners()
+    
+    // Check if we're in dashboard mode and load user data
+    if (this.isDashboardMode()) {
+      console.log('[Dashboard Mode] Loading user-specific data...')
+      await this.loadDashboardData()
+    } else {
+      console.log('[Demo Mode] Loading demo stacks...')
+      this.stacks = this.loadDemoStacks()
+    }
     
     // Stack-Selector initialisieren
     setTimeout(() => this.initStackSelector(), 100)
@@ -30,10 +42,13 @@ class SupplementDemoApp {
     
     this.updateStats()
     
-    // Show success message that JS is working
-    this.showSuccess('Demo-Modal-App erfolgreich geladen! Modals schließen sich jetzt automatisch.')
+    // Show success message based on mode
+    const modeMessage = this.isDashboardMode() ? 
+      'Dashboard erfolgreich geladen! Ihre Daten werden automatisch gespeichert.' :
+      'Demo-Modal-App erfolgreich geladen! Modals schließen sich jetzt automatisch.'
+    this.showSuccess(modeMessage)
     
-    console.log(`[Demo Modal] Initialisierung abgeschlossen - ${this.availableProducts.length} verfügbare Produkte, ${this.products.length} im Stack`)
+    console.log(`[Demo Modal] Initialisierung abgeschlossen - ${this.availableProducts.length} verfügbare Produkte, ${this.products.length} im Stack, Mode: ${this.isDashboardMode() ? 'Dashboard' : 'Demo'}`)
   }
   
   showSuccess(message) {
@@ -2970,6 +2985,52 @@ class SupplementDemoApp {
     return hasAuthToken && isDashboardPage
   }
 
+  // Load dashboard-specific data (user stacks and products)
+  async loadDashboardData() {
+    try {
+      console.log('[Dashboard Data] Loading user-specific stacks and products...')
+      
+      // Load user stacks and products in parallel
+      const [userStacks, userProducts] = await Promise.all([
+        this.loadUserStacks(),
+        this.loadUserProducts()
+      ])
+      
+      console.log('[Dashboard Data] Loaded:', userStacks.length, 'stacks and', userProducts.length, 'products')
+      
+      // Set the data
+      this.userStacks = userStacks || []
+      this.userProducts = userProducts || []
+      this.stacks = this.userStacks.length > 0 ? this.userStacks : this.createDefaultDashboardStack()
+      
+      // If user has products, use them as available products (combined with demo products for variety)
+      if (this.userProducts.length > 0) {
+        this.availableProducts = [...this.userProducts, ...this.availableProducts]
+      }
+      
+      this.dataLoaded = true
+      console.log('[Dashboard Data] Dashboard data loaded successfully')
+      
+    } catch (error) {
+      console.error('[Dashboard Data] Error loading dashboard data:', error)
+      // Fallback to demo data if user data fails to load
+      this.stacks = this.loadDemoStacks()
+      this.showMessage('⚠️ Fehler beim Laden der Benutzerdaten, Demo-Daten werden verwendet', 'error')
+    }
+  }
+
+  // Create a default empty stack for new dashboard users
+  createDefaultDashboardStack() {
+    return [{
+      id: 'user-default',
+      name: 'Mein Stack',
+      description: 'Ihr persönlicher Supplement-Stack',
+      products: [],
+      total_monthly_cost: 0,
+      created_at: new Date().toISOString()
+    }]
+  }
+
   // Save product to database via AJAX (Dashboard mode only)
   async saveProductToDatabase(product) {
     try {
@@ -3008,11 +3069,56 @@ class SupplementDemoApp {
       const result = await response.json()
       console.log('[Database Save] Product saved successfully:', result.product)
       
+      // If we have a current stack, add the product to it
+      if (this.currentStackId && result.product?.id) {
+        try {
+          await this.addProductToStack(result.product.id, this.currentStackId)
+        } catch (stackError) {
+          console.warn('[Database Save] Failed to add product to stack:', stackError)
+          // Don't fail the whole operation if adding to stack fails
+        }
+      }
+      
       this.showMessage('✅ Produkt erfolgreich in der Datenbank gespeichert!', 'success')
       return result.product
       
     } catch (error) {
       console.error('[Database Save] Error saving product:', error)
+      throw error
+    }
+  }
+
+  // Add product to stack via API (Dashboard mode only)
+  async addProductToStack(productId, stackId, dosagePerDay = 1) {
+    try {
+      const authToken = localStorage.getItem('auth_token')
+      if (!authToken) {
+        throw new Error('Kein Authentifizierungstoken gefunden')
+      }
+
+      const response = await fetch(`/api/protected/stacks/${stackId}/products`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify({
+          productId: productId,
+          dosagePerDay: dosagePerDay
+        })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || `HTTP ${response.status}`)
+      }
+
+      const result = await response.json()
+      console.log('[Database Save] Product added to stack successfully')
+      return result
+      
+    } catch (error) {
+      console.error('[Database Save] Error adding product to stack:', error)
       throw error
     }
   }
