@@ -674,20 +674,48 @@ app.post('/api/protected/stacks/:stackId/products', authMiddleware, async (c) =>
     
     console.log('Adding product', productId, 'to stack', stackId, 'for user', userId);
     
-    // Verify stack belongs to user
-    const stack = await c.env.DB.prepare(`
-      SELECT id FROM stacks WHERE id = ? AND user_id = ?
-    `).bind(stackId, userId).first();
+    let actualStackId = stackId;
     
-    if (!stack) {
-      return c.json({ error: 'Stack not found or access denied' }, 404);
+    // Handle special case: 'user-default' stack ID
+    if (stackId === 'user-default') {
+      console.log('Creating or finding default stack for user', userId);
+      
+      // Try to find existing default stack for user
+      let defaultStack = await c.env.DB.prepare(`
+        SELECT id FROM stacks WHERE user_id = ? AND name = 'Mein Stack'
+      `).bind(userId).first();
+      
+      // If no default stack exists, create one
+      if (!defaultStack) {
+        const createResult = await c.env.DB.prepare(`
+          INSERT INTO stacks (user_id, name, description) 
+          VALUES (?, ?, ?)
+        `).bind(userId, 'Mein Stack', 'Ihr persönlicher Supplement-Stack').run();
+        
+        actualStackId = createResult.meta.last_row_id;
+        console.log('Created new default stack with ID:', actualStackId);
+      } else {
+        actualStackId = defaultStack.id;
+        console.log('Using existing default stack with ID:', actualStackId);
+      }
+    } else {
+      // Verify stack belongs to user for non-default stacks
+      const stack = await c.env.DB.prepare(`
+        SELECT id FROM stacks WHERE id = ? AND user_id = ?
+      `).bind(stackId, userId).first();
+      
+      if (!stack) {
+        return c.json({ error: 'Stack not found or access denied' }, 404);
+      }
     }
     
     // Add product to stack (or update dosage if already exists)
     await c.env.DB.prepare(`
       INSERT OR REPLACE INTO stack_products (stack_id, product_id, dosage_per_day) 
       VALUES (?, ?, ?)
-    `).bind(stackId, productId, dosagePerDay).run();
+    `).bind(actualStackId, productId, dosagePerDay).run();
+    
+    console.log('Successfully added product', productId, 'to stack', actualStackId);
     
     return c.json({
       success: true,

@@ -3010,7 +3010,22 @@ class SupplementDemoApp {
       // Set the data
       this.userStacks = userStacks || []
       this.userProducts = userProducts || []
-      this.stacks = this.userStacks.length > 0 ? this.userStacks : this.createDefaultDashboardStack()
+      
+      // If user has no stacks, create a default one in the database
+      if (this.userStacks.length === 0) {
+        console.log('[Dashboard Data] User has no stacks, creating default stack...')
+        try {
+          const defaultStack = await this.createDefaultStackInDatabase()
+          this.userStacks = [defaultStack]
+          this.stacks = this.userStacks
+          console.log('[Dashboard Data] Default stack created:', defaultStack)
+        } catch (error) {
+          console.error('[Dashboard Data] Failed to create default stack, using local fallback:', error)
+          this.stacks = this.createDefaultDashboardStack()
+        }
+      } else {
+        this.stacks = this.userStacks
+      }
       
       // Set available products from API (these are the products users can choose to add)
       this.availableProducts = availableProducts || this.loadDemoProducts()
@@ -3036,7 +3051,7 @@ class SupplementDemoApp {
     }
   }
 
-  // Create a default empty stack for new dashboard users
+  // Create a default empty stack for new dashboard users (local fallback)
   createDefaultDashboardStack() {
     return [{
       id: 'user-default',
@@ -3046,6 +3061,52 @@ class SupplementDemoApp {
       total_monthly_cost: 0,
       created_at: new Date().toISOString()
     }]
+  }
+  
+  // Create a default stack in the database for new users
+  async createDefaultStackInDatabase() {
+    try {
+      const authToken = localStorage.getItem('auth_token')
+      if (!authToken) {
+        throw new Error('No authentication token found')
+      }
+      
+      console.log('[Database Create] Creating default stack in database...')
+      
+      const response = await fetch('/api/protected/stacks', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: 'Mein Stack',
+          description: 'Ihr persönlicher Supplement-Stack',
+          products: []
+        })
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || `HTTP ${response.status}`)
+      }
+      
+      const stack = await response.json()
+      console.log('[Database Create] Default stack created successfully:', stack)
+      
+      return {
+        id: stack.id,
+        name: stack.name,
+        description: stack.description,
+        products: stack.products || [],
+        total_monthly_cost: 0,
+        created_at: stack.created_at
+      }
+      
+    } catch (error) {
+      console.error('[Database Create] Error creating default stack:', error)
+      throw error
+    }
   }
 
   // Save product to database via AJAX (Dashboard mode only)
