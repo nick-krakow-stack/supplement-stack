@@ -3065,14 +3065,17 @@ class SupplementDemoApp {
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label class="block text-sm font-medium text-gray-700 mb-2">
-                    Tägliche Dosierung (${this.getPluralForm(2, product.form)})
+                    Tägliche Wirkstoffmenge (${this.getNutrientUnit(product.nutrient_id)})
                   </label>
-                  <input type="number" name="dosage_per_day" value="${product.dosage_per_day}" step="0.1" min="0.1" 
+                  <input type="number" name="daily_nutrient_amount" 
+                    value="${(product.dosage_per_day * product.nutrient_amount_per_unit).toFixed(1)}" 
+                    step="0.1" min="0.1" 
                     class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    onchange="window.demoApp.updateCostPreview()">
+                    onchange="window.demoApp.updateDosageFromNutrientAmount()">
                   <div class="text-xs text-gray-500 mt-1">
-                    Das entspricht ${(product.dosage_per_day * product.nutrient_amount_per_unit).toFixed(1)}${this.getNutrientUnit(product.nutrient_id)} ${this.getNutrientName(product.nutrient_id)} pro Tag
+                    Das entspricht <span id="capsule-equivalent">${product.dosage_per_day.toFixed(1)}</span> ${this.getPluralForm(product.dosage_per_day, product.form)} pro Tag
                   </div>
+                  <input type="hidden" name="dosage_per_day" value="${product.dosage_per_day}">
                 </div>
                 
                 <div>
@@ -3103,34 +3106,24 @@ class SupplementDemoApp {
             </div>
             
             ${alternativeProducts.length > 0 ? `
-            <!-- Alternative Products -->
+            <!-- Product Switch Button -->
             <div class="space-y-4">
-              <h3 class="font-semibold text-gray-900">Zu anderem ${this.getNutrientName(product.nutrient_id)}-Produkt wechseln</h3>
+              <h3 class="font-semibold text-gray-900">Produkt wechseln</h3>
               <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
                 <p class="text-blue-800 text-sm">
                   <i class="fas fa-info-circle mr-1"></i>
-                  Sie können zu einem anderen Produkt mit demselben Wirkstoff wechseln. Ihre Dosierung wird automatisch angepasst.
+                  Sie können zu einem anderen ${this.getNutrientName(product.nutrient_id)}-Produkt wechseln. Ihre Wirkstoffmenge bleibt gleich.
                 </p>
               </div>
               
-              <div class="space-y-2 max-h-48 overflow-y-auto">
-                <div>
-                  <input type="radio" name="selected_product" value="${product.id}" id="current-product" checked 
-                    class="mr-2" onchange="window.demoApp.updateCostPreview()">
-                  <label for="current-product" class="text-sm">
-                    <strong>Aktuell:</strong> ${product.name} (${product.brand}) - €${product.purchase_price.toFixed(2)}
-                  </label>
-                </div>
-                ${alternativeProducts.map(altProduct => `
-                  <div>
-                    <input type="radio" name="selected_product" value="${altProduct.id}" id="product-${altProduct.id}" 
-                      class="mr-2" onchange="window.demoApp.updateCostPreview()">
-                    <label for="product-${altProduct.id}" class="text-sm">
-                      <strong>${altProduct.name}</strong> (${altProduct.brand}) - ${altProduct.nutrient_amount_per_unit}${this.getNutrientUnit(altProduct.nutrient_id)}/${altProduct.form} - €${altProduct.purchase_price.toFixed(2)}
-                    </label>
-                  </div>
-                `).join('')}
+              <div class="text-center">
+                <button type="button" onclick="window.demoApp.showProductSwitchModal(${product.id}, ${product.nutrient_id})" 
+                  class="bg-blue-600 text-white px-6 py-3 rounded-md hover:bg-blue-700 transition-colors font-medium">
+                  <i class="fas fa-exchange-alt mr-2"></i>Produkt wechseln
+                </button>
               </div>
+              
+              <input type="hidden" name="selected_product" value="${product.id}" id="selected-product-input">
             </div>
             ` : ''}
             
@@ -3250,6 +3243,7 @@ class SupplementDemoApp {
     const selectedProductId = formData.get('selected_product')
     const newDosage = parseFloat(formData.get('dosage_per_day'))
     const customNotes = formData.get('custom_notes')
+    const dailyNutrientAmount = parseFloat(formData.get('daily_nutrient_amount'))
     
     console.log('[Dashboard] Form data:', { selectedProductId, newDosage, customNotes })
     
@@ -3325,12 +3319,12 @@ class SupplementDemoApp {
     }
   }
   
-  updateCostPreview() {
+  updateDosageFromNutrientAmount() {
     const form = document.getElementById('edit-stack-settings-form')
     if (!form) return
     
-    const selectedProductId = form.querySelector('input[name="selected_product"]:checked')?.value
-    const dosage = parseFloat(form.querySelector('input[name="dosage_per_day"]').value) || 1
+    const selectedProductId = form.querySelector('input[name="selected_product"]')?.value
+    const dailyNutrientAmount = parseFloat(form.querySelector('input[name="daily_nutrient_amount"]').value) || 0
     
     let selectedProduct
     if (selectedProductId) {
@@ -3338,10 +3332,44 @@ class SupplementDemoApp {
                       this.products.find(p => p.id == selectedProductId)
     }
     
+    if (selectedProduct && selectedProduct.nutrient_amount_per_unit > 0) {
+      // Calculate how many capsules/tablets needed for desired nutrient amount
+      const newDosagePerDay = dailyNutrientAmount / selectedProduct.nutrient_amount_per_unit
+      
+      // Update hidden dosage field
+      const dosageInput = form.querySelector('input[name="dosage_per_day"]')
+      if (dosageInput) {
+        dosageInput.value = newDosagePerDay.toFixed(2)
+      }
+      
+      // Update display
+      const capsuleEquivalent = document.getElementById('capsule-equivalent')
+      if (capsuleEquivalent) {
+        capsuleEquivalent.textContent = newDosagePerDay.toFixed(1)
+      }
+      
+      // Update cost preview
+      this.updateCostPreview(selectedProduct, newDosagePerDay)
+    }
+  }
+  
+  updateCostPreview(product = null, dosage = null) {
+    const form = document.getElementById('edit-stack-settings-form')
+    if (!form) return
+    
+    const selectedProductId = form.querySelector('input[name="selected_product"]')?.value
+    const calculatedDosage = dosage || parseFloat(form.querySelector('input[name="dosage_per_day"]').value) || 1
+    
+    let selectedProduct = product
+    if (!selectedProduct && selectedProductId) {
+      selectedProduct = this.availableProducts.find(p => p.id == selectedProductId) || 
+                      this.products.find(p => p.id == selectedProductId)
+    }
+    
     if (selectedProduct) {
-      const daysSupply = Math.floor(selectedProduct.quantity / dosage)
-      const monthlyCost = (selectedProduct.purchase_price / selectedProduct.quantity * dosage * 30)
-      const yearlyCost = (selectedProduct.purchase_price / selectedProduct.quantity * dosage * 365)
+      const daysSupply = Math.floor(selectedProduct.quantity / calculatedDosage)
+      const monthlyCost = (selectedProduct.purchase_price / selectedProduct.quantity * calculatedDosage * 30)
+      const yearlyCost = (selectedProduct.purchase_price / selectedProduct.quantity * calculatedDosage * 365)
       
       const preview = document.getElementById('cost-preview')
       if (preview) {
@@ -3364,6 +3392,161 @@ class SupplementDemoApp {
         `
       }
     }
+  }
+  
+  showProductSwitchModal(currentProductId, nutrientId) {
+    console.log('[Demo Modal] Show product switch modal for nutrient:', nutrientId)
+    
+    // Get alternative products with the same nutrient
+    const alternativeProducts = this.availableProducts.filter(p => 
+      p.nutrient_id === nutrientId
+    )
+    
+    const currentProduct = this.products.find(p => p.id === currentProductId)
+    if (!currentProduct) return
+    
+    this.closeAllModals()
+    
+    const modal = document.createElement('div')
+    modal.className = 'modal-overlay product-switch-modal'
+    modal.style.cssText = `
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.5); display: flex;
+      align-items: center; justify-content: center;
+      z-index: 10000; padding: 16px;
+    `
+    
+    modal.innerHTML = `
+      <div class="modal-container" style="background: white; border-radius: 8px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); width: 100%; max-width: 48rem; max-height: 95vh; overflow-y: auto;">
+        <div class="p-4 sm:p-6">
+          <div class="flex justify-between items-start mb-4">
+            <h2 class="text-lg sm:text-xl font-bold text-gray-900">
+              <i class="fas fa-exchange-alt mr-2 text-blue-600"></i>
+              ${this.getNutrientName(nutrientId)}-Produkt wählen
+            </h2>
+            <button class="close-modal p-2 text-gray-400 hover:text-gray-600 touch-target">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+          
+          <div class="mb-4">
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+              <p class="text-blue-800 text-sm">
+                <i class="fas fa-info-circle mr-1"></i>
+                Wählen Sie ein ${this.getNutrientName(nutrientId)}-Produkt aus. Ihre gewünschte Wirkstoffmenge bleibt erhalten.
+              </p>
+            </div>
+          </div>
+          
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-96 overflow-y-auto" id="product-selection-grid">
+            ${alternativeProducts.map(product => `
+              <div class="product-card border rounded-lg p-4 cursor-pointer hover:bg-blue-50 hover:border-blue-300 transition-all" 
+                   data-product-id="${product.id}" onclick="window.demoApp.selectProductForSwitch(${product.id})">
+                <div class="flex items-center justify-between mb-2">
+                  <input type="radio" name="switch_product" value="${product.id}" class="text-blue-600" 
+                    ${product.id === currentProductId ? 'checked' : ''}>
+                  ${product.id === currentProductId ? '<span class="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">Aktuell</span>' : ''}
+                </div>
+                
+                <h4 class="font-semibold text-gray-900 text-sm mb-1">${product.name}</h4>
+                <p class="text-xs text-gray-600 mb-2">${product.brand}</p>
+                
+                <div class="space-y-1 text-xs">
+                  <div class="flex justify-between">
+                    <span class="text-gray-600">Gehalt:</span>
+                    <span class="font-medium">${product.nutrient_amount_per_unit}${this.getNutrientUnit(product.nutrient_id)}/${product.form}</span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span class="text-gray-600">Preis:</span>
+                    <span class="font-medium">€${product.purchase_price.toFixed(2)}</span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span class="text-gray-600">Menge:</span>
+                    <span class="font-medium">${product.quantity} ${this.getPluralForm(product.quantity, product.form)}</span>
+                  </div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+          
+          <div class="mt-6 flex justify-end space-x-3">
+            <button onclick="this.closest('.modal-overlay').remove()" class="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition-colors">
+              Abbrechen
+            </button>
+            <button onclick="window.demoApp.confirmProductSwitch()" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">
+              <i class="fas fa-check mr-2"></i>Produkt wählen
+            </button>
+          </div>
+        </div>
+      </div>
+    `
+    
+    document.body.appendChild(modal)
+    
+    // Modal schließen
+    modal.querySelector('.close-modal').addEventListener('click', () => modal.remove())
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.remove()
+    })
+  }
+  
+  selectProductForSwitch(productId) {
+    // Update radio button
+    const radio = document.querySelector(`input[name="switch_product"][value="${productId}"]`)
+    if (radio) {
+      radio.checked = true
+    }
+    
+    // Visual feedback
+    document.querySelectorAll('.product-card').forEach(card => {
+      card.classList.remove('bg-blue-50', 'border-blue-300')
+      card.classList.add('hover:bg-blue-50', 'hover:border-blue-300')
+    })
+    
+    const selectedCard = document.querySelector(`[data-product-id="${productId}"]`)
+    if (selectedCard) {
+      selectedCard.classList.add('bg-blue-50', 'border-blue-300')
+      selectedCard.classList.remove('hover:bg-blue-50', 'hover:border-blue-300')
+    }
+  }
+  
+  confirmProductSwitch() {
+    const selectedRadio = document.querySelector('input[name="switch_product"]:checked')
+    if (!selectedRadio) return
+    
+    const newProductId = selectedRadio.value
+    
+    // Update the hidden input in the main form
+    const mainForm = document.getElementById('edit-stack-settings-form')
+    if (mainForm) {
+      const hiddenInput = mainForm.querySelector('input[name="selected_product"]')
+      if (hiddenInput) {
+        hiddenInput.value = newProductId
+      }
+      
+      // Trigger cost update with new product
+      const newProduct = this.availableProducts.find(p => p.id == newProductId)
+      if (newProduct) {
+        // Recalculate dosage based on current nutrient amount
+        const currentNutrientAmount = parseFloat(mainForm.querySelector('input[name="daily_nutrient_amount"]').value) || 0
+        const newDosagePerDay = currentNutrientAmount / newProduct.nutrient_amount_per_unit
+        
+        mainForm.querySelector('input[name="dosage_per_day"]').value = newDosagePerDay.toFixed(2)
+        
+        // Update capsule equivalent display
+        const capsuleEquivalent = document.getElementById('capsule-equivalent')
+        if (capsuleEquivalent) {
+          capsuleEquivalent.textContent = newDosagePerDay.toFixed(1)
+        }
+        
+        this.updateCostPreview(newProduct, newDosagePerDay)
+      }
+    }
+    
+    // Close modal
+    document.querySelector('.product-switch-modal').remove()
+    
+    this.showMessage(`✅ Produkt ausgewählt! Vergessen Sie nicht zu speichern.`, 'success')
   }
 
   deleteProduct(productId) {
