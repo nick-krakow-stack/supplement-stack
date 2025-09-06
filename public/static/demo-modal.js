@@ -1086,19 +1086,32 @@ class SupplementDemoApp {
       return
     }
     
-    // Stacks in Dropdown laden
+    // Stacks in Dropdown laden - nur validierte Stacks anzeigen
+    console.log('[Demo Modal] Updating stack selector with', this.stacks.length, 'stacks')
+    
+    // Filter out invalid stacks
+    const validStacks = this.stacks.filter(stack => {
+      const isValid = stack && stack.id !== undefined && stack.id !== null && 
+                     stack.name !== undefined && stack.name !== null && stack.name.trim() !== ''
+      if (!isValid) {
+        console.warn('[Demo Modal] Invalid stack found:', stack)
+      }
+      return isValid
+    })
+    
+    console.log('[Demo Modal] Found', validStacks.length, 'valid stacks out of', this.stacks.length, 'total stacks')
+    
     selector.innerHTML = `
       <option value="">Stack auswählen...</option>
-      ${this.stacks.map(stack => `
+      ${validStacks.map(stack => `
         <option value="${stack.id}">${stack.name}</option>
       `).join('')}
     `
     
-    // Vorherige Event Listener entfernen um Duplikate zu vermeiden
+    // Event Listener für Stack-Wechsel (remove old ones first)
     const newSelector = selector.cloneNode(true)
     selector.parentNode.replaceChild(newSelector, selector)
     
-    // Event Listener für Stack-Wechsel
     newSelector.addEventListener('change', (e) => {
       const stackId = e.target.value ? parseInt(e.target.value) : null
       console.log('[Demo Modal] Stack switching to:', stackId, 'from selector value:', e.target.value)
@@ -2256,9 +2269,19 @@ class SupplementDemoApp {
         newStack = await response.json()
         console.log('[Dashboard] Stack created in database:', newStack)
         
+        // Validate stack data before adding to lists
+        if (!newStack || newStack.id === undefined || newStack.id === null || 
+            !newStack.name || newStack.name.trim() === '') {
+          console.error('[Dashboard] Invalid stack data received from API:', newStack)
+          throw new Error('Server returned invalid stack data')
+        }
+        
         // Add to local stacks list
         this.stacks.push(newStack)
         this.userStacks.push(newStack)
+        
+        console.log('[Dashboard] Added stack to local lists. Total stacks:', this.stacks.length)
+        console.log('[Dashboard] Stack added - ID:', newStack.id, 'Name:', newStack.name)
         
       } catch (error) {
         console.error('[Dashboard] Error creating stack:', error)
@@ -2283,18 +2306,28 @@ class SupplementDemoApp {
     
     // Stack-Selector aktualisieren (mit Error Handling)
     try {
+      console.log('[Dashboard] About to update stack selector. Current stacks:', this.stacks.length)
+      console.log('[Dashboard] All stack names:', this.stacks.map(s => s.name))
+      
       this.initStackSelector()
       
       // Neuen Stack automatisch auswählen
       const selector = document.getElementById('stack-selector')
-      if (selector) {
+      if (selector && newStack && newStack.id) {
+        console.log('[Dashboard] Setting selector to new stack ID:', newStack.id)
         selector.value = newStack.id
         this.loadStack(newStack.id)
+      } else {
+        console.warn('[Dashboard] Cannot select new stack - selector or newStack invalid:', {
+          selector: !!selector,
+          newStack: newStack,
+          newStackId: newStack?.id
+        })
       }
       
       this.updateStats()
     } catch (error) {
-      console.warn('Warnung beim Aktualisieren der UI:', error)
+      console.warn('[Dashboard] Error updating UI after stack creation:', error)
       // Fehler beim UI-Update sollen Stack-Erstellung nicht verhindern
     }
     
