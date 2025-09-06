@@ -1150,14 +1150,24 @@ class SupplementDemoApp {
       
       stack.products.forEach((product, index) => {
         if (typeof product === 'number') {
-          // Falls es eine Produkt-ID ist (vordefinierte Struktur)
+          // Product ID - need to find it in either userProducts (for dashboard) or availableProducts (for demo)
           console.log(`[Demo Modal] Looking for product ID: ${product}`)
-          const foundProduct = this.availableProducts.find(p => p.id == product) // Use == for type-flexible comparison
+          
+          // First try to find in userProducts (Dashboard mode)
+          let foundProduct = this.userProducts ? this.userProducts.find(p => p.id == product) : null
+          
           if (foundProduct) {
-            console.log(`[Demo Modal] Found product:`, foundProduct.name)
+            console.log(`[Demo Modal] Found user product:`, foundProduct.name)
             this.products.push({ ...foundProduct })
           } else {
-            console.warn(`[Demo Modal] Product with ID ${product} not found in availableProducts`)
+            // Fallback: try availableProducts (Demo mode or for available products)
+            foundProduct = this.availableProducts.find(p => p.id == product)
+            if (foundProduct) {
+              console.log(`[Demo Modal] Found available product:`, foundProduct.name)
+              this.products.push({ ...foundProduct })
+            } else {
+              console.warn(`[Demo Modal] Product with ID ${product} not found in userProducts or availableProducts`)
+            }
           }
         } else if (typeof product === 'object' && product !== null) {
           // Falls es bereits ein vollständiges Produktobjekt ist (benutzererstellte Struktur)
@@ -3011,7 +3021,7 @@ class SupplementDemoApp {
       this.userStacks = userStacks || []
       this.userProducts = userProducts || []
       
-      // If user has no stacks, create a default one in the database
+      // Set stacks data
       if (this.userStacks.length === 0) {
         console.log('[Dashboard Data] User has no stacks, creating default stack...')
         try {
@@ -3024,7 +3034,18 @@ class SupplementDemoApp {
           this.stacks = this.createDefaultDashboardStack()
         }
       } else {
+        console.log('[Dashboard Data] User has', this.userStacks.length, 'stacks, using them directly')
         this.stacks = this.userStacks
+        
+        // Debug: Log all stack names to identify the naming issue
+        this.userStacks.forEach((stack, index) => {
+          console.log(`[Dashboard Data] Stack ${index + 1}:`, {
+            id: stack.id,
+            name: stack.name,
+            description: stack.description,
+            products: stack.products?.length || 0
+          })
+        })
       }
       
       // Set available products from API (these are the products users can choose to add)
@@ -3073,17 +3094,21 @@ class SupplementDemoApp {
       
       console.log('[Database Create] Creating default stack in database...')
       
+      const stackData = {
+        name: 'Mein Stack',
+        description: 'Ihr persönlicher Supplement-Stack',
+        products: []
+      }
+      
+      console.log('[Database Create] Sending stack creation request:', stackData)
+      
       const response = await fetch('/api/protected/stacks', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${authToken}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          name: 'Mein Stack',
-          description: 'Ihr persönlicher Supplement-Stack',
-          products: []
-        })
+        body: JSON.stringify(stackData)
       })
       
       if (!response.ok) {

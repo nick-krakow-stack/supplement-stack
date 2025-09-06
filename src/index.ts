@@ -680,9 +680,9 @@ app.post('/api/protected/stacks/:stackId/products', authMiddleware, async (c) =>
     if (stackId === 'user-default') {
       console.log('Creating or finding default stack for user', userId);
       
-      // Try to find existing default stack for user
+      // Try to find existing default stack for user (oldest one with 'Mein Stack' name)
       let defaultStack = await c.env.DB.prepare(`
-        SELECT id FROM stacks WHERE user_id = ? AND name = 'Mein Stack'
+        SELECT id FROM stacks WHERE user_id = ? AND name = 'Mein Stack' ORDER BY created_at ASC LIMIT 1
       `).bind(userId).first();
       
       // If no default stack exists, create one
