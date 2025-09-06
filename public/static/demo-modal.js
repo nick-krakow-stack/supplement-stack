@@ -3029,71 +3029,115 @@ class SupplementDemoApp {
       z-index: 9999; padding: 16px;
     `
     
+    // Get alternative products with the same nutrient
+    const alternativeProducts = this.availableProducts.filter(p => 
+      p.nutrient_id === product.nutrient_id && p.id !== product.id
+    )
+    
     modal.innerHTML = `
-      <div class="modal-container" style="background: white; border-radius: 8px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); width: 100%; max-width: 36rem; max-height: 95vh; overflow-y: auto;">
+      <div class="modal-container" style="background: white; border-radius: 8px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); width: 100%; max-width: 40rem; max-height: 95vh; overflow-y: auto;">
         <div class="p-4 sm:p-6">
           <div class="flex justify-between items-start mb-4">
             <h2 class="text-lg sm:text-xl font-bold text-gray-900">
               <i class="fas fa-edit mr-2 text-blue-600"></i>
-              ${product.name} bearbeiten
+              Stack-Einstellungen für ${this.getNutrientName(product.nutrient_id)}
             </h2>
             <button class="close-modal p-2 text-gray-400 hover:text-gray-600 touch-target">
               <i class="fas fa-times"></i>
             </button>
           </div>
           
-          <form id="edit-product-form" class="space-y-4">
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">Produktname</label>
-                <input type="text" name="name" value="${product.name}" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">Marke</label>
-                <input type="text" name="brand" value="${product.brand}" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-              </div>
-            </div>
-            
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">Preis (€)</label>
-                <input type="number" name="purchase_price" value="${product.purchase_price}" step="0.01" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">Menge</label>
-                <input type="number" name="quantity" value="${product.quantity}" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">Dosierung/Tag</label>
-                <input type="number" name="dosage_per_day" value="${product.dosage_per_day}" step="0.1" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <form id="edit-stack-settings-form" class="space-y-6">
+            <!-- Current Product Info -->
+            <div class="bg-gray-50 rounded-lg p-4">
+              <h3 class="font-semibold text-gray-900 mb-2">Aktuelles Produkt</h3>
+              <div class="text-sm text-gray-600">
+                <div><strong>${product.name}</strong> von ${product.brand}</div>
+                <div>${product.nutrient_amount_per_unit}${this.getNutrientUnit(product.nutrient_id)} pro ${product.form}</div>
+                <div>€${product.purchase_price.toFixed(2)} für ${product.quantity} ${this.getPluralForm(product.quantity, product.form)}</div>
               </div>
             </div>
             
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">Form</label>
-                <select name="form" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  <option value="Kapsel" ${product.form === 'Kapsel' ? 'selected' : ''}>Kapsel</option>
-                  <option value="Tablette" ${product.form === 'Tablette' ? 'selected' : ''}>Tablette</option>
-                  <option value="Tropfen" ${product.form === 'Tropfen' ? 'selected' : ''}>Tropfen</option>
-                  <option value="Pulver" ${product.form === 'Pulver' ? 'selected' : ''}>Pulver</option>
-                </select>
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-2">Wirkstoffmenge pro Einheit</label>
-                <input type="number" name="nutrient_amount_per_unit" value="${product.nutrient_amount_per_unit}" step="0.1" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <!-- Dosage Settings -->
+            <div class="space-y-4">
+              <h3 class="font-semibold text-gray-900">Ihre Einnahme-Einstellungen</h3>
+              
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-2">
+                    Tägliche Dosierung (${this.getPluralForm(2, product.form)})
+                  </label>
+                  <input type="number" name="dosage_per_day" value="${product.dosage_per_day}" step="0.1" min="0.1" 
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    onchange="window.demoApp.updateCostPreview()">
+                  <div class="text-xs text-gray-500 mt-1">
+                    Das entspricht ${(product.dosage_per_day * product.nutrient_amount_per_unit).toFixed(1)}${this.getNutrientUnit(product.nutrient_id)} ${this.getNutrientName(product.nutrient_id)} pro Tag
+                  </div>
+                </div>
+                
+                <div>
+                  <label class="block text-sm font-medium text-gray-700 mb-2">Notizen (optional)</label>
+                  <input type="text" name="custom_notes" value="${product.custom_notes || ''}" placeholder="z.B. morgens mit dem Frühstück"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
               </div>
             </div>
             
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-2">Beschreibung</label>
-              <textarea name="description" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">${product.description || ''}</textarea>
+            <!-- Cost Preview -->
+            <div id="cost-preview" class="bg-green-50 border border-green-200 rounded-lg p-4">
+              <h4 class="font-semibold text-green-900 mb-2">Kostenberechnung</h4>
+              <div class="grid grid-cols-3 gap-4 text-sm">
+                <div>
+                  <div class="text-green-600">Vorrat reicht für</div>
+                  <div class="font-semibold">${Math.floor(product.quantity / product.dosage_per_day)} Tage</div>
+                </div>
+                <div>
+                  <div class="text-green-600">Kosten pro Monat</div>
+                  <div class="font-semibold">€${((product.purchase_price / product.quantity * product.dosage_per_day * 30)).toFixed(2)}</div>
+                </div>
+                <div>
+                  <div class="text-green-600">Kosten pro Jahr</div>
+                  <div class="font-semibold">€${((product.purchase_price / product.quantity * product.dosage_per_day * 365)).toFixed(2)}</div>
+                </div>
+              </div>
             </div>
             
-            <div class="bg-red-50 border border-red-200 rounded-lg p-3">
-              <p class="text-red-800 text-sm">
-                <i class="fas fa-info-circle mr-1"></i>
-                Änderungen werden sofort in der Datenbank gespeichert.
+            ${alternativeProducts.length > 0 ? `
+            <!-- Alternative Products -->
+            <div class="space-y-4">
+              <h3 class="font-semibold text-gray-900">Zu anderem ${this.getNutrientName(product.nutrient_id)}-Produkt wechseln</h3>
+              <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
+                <p class="text-blue-800 text-sm">
+                  <i class="fas fa-info-circle mr-1"></i>
+                  Sie können zu einem anderen Produkt mit demselben Wirkstoff wechseln. Ihre Dosierung wird automatisch angepasst.
+                </p>
+              </div>
+              
+              <div class="space-y-2 max-h-48 overflow-y-auto">
+                <div>
+                  <input type="radio" name="selected_product" value="${product.id}" id="current-product" checked 
+                    class="mr-2" onchange="window.demoApp.updateCostPreview()">
+                  <label for="current-product" class="text-sm">
+                    <strong>Aktuell:</strong> ${product.name} (${product.brand}) - €${product.purchase_price.toFixed(2)}
+                  </label>
+                </div>
+                ${alternativeProducts.map(altProduct => `
+                  <div>
+                    <input type="radio" name="selected_product" value="${altProduct.id}" id="product-${altProduct.id}" 
+                      class="mr-2" onchange="window.demoApp.updateCostPreview()">
+                    <label for="product-${altProduct.id}" class="text-sm">
+                      <strong>${altProduct.name}</strong> (${altProduct.brand}) - ${altProduct.nutrient_amount_per_unit}${this.getNutrientUnit(altProduct.nutrient_id)}/${altProduct.form} - €${altProduct.purchase_price.toFixed(2)}
+                    </label>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+            ` : ''}
+            
+            <div class="bg-orange-50 border border-orange-200 rounded-lg p-3">
+              <p class="text-orange-800 text-sm">
+                <i class="fas fa-save mr-1"></i>
+                Änderungen werden in Ihrem persönlichen Stack gespeichert.
               </p>
             </div>
           </form>
@@ -3102,8 +3146,8 @@ class SupplementDemoApp {
             <button onclick="this.closest('.modal-overlay').remove()" class="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition-colors">
               Abbrechen
             </button>
-            <button onclick="window.demoApp.saveProductEdits(${product.id}); this.closest('.modal-overlay').remove()" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">
-              <i class="fas fa-save mr-2"></i>Speichern
+            <button onclick="window.demoApp.saveStackSettings(${product.id}); this.closest('.modal-overlay').remove()" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">
+              <i class="fas fa-save mr-2"></i>Einstellungen speichern
             </button>
           </div>
         </div>
@@ -3193,48 +3237,45 @@ class SupplementDemoApp {
     })
   }
   
-  async saveProductEdits(productId) {
-    console.log('[Dashboard] Saving product edits for ID:', productId)
+  async saveStackSettings(currentProductId) {
+    console.log('[Dashboard] Saving stack settings for product:', currentProductId)
     
-    const form = document.getElementById('edit-product-form')
+    const form = document.getElementById('edit-stack-settings-form')
     if (!form) {
-      console.error('Edit form not found')
+      console.error('Stack settings form not found')
       return
     }
     
     const formData = new FormData(form)
-    const updatedProduct = {
-      name: formData.get('name'),
-      brand: formData.get('brand'),
-      purchase_price: parseFloat(formData.get('purchase_price')),
-      quantity: parseInt(formData.get('quantity')),
-      dosage_per_day: parseFloat(formData.get('dosage_per_day')),
-      form: formData.get('form'),
-      nutrient_amount_per_unit: parseFloat(formData.get('nutrient_amount_per_unit')),
-      description: formData.get('description')
-    }
+    const selectedProductId = formData.get('selected_product')
+    const newDosage = parseFloat(formData.get('dosage_per_day'))
+    const customNotes = formData.get('custom_notes')
     
-    // Calculate derived values
-    updatedProduct.price_per_piece = updatedProduct.purchase_price / updatedProduct.quantity
-    updatedProduct.days_supply = Math.floor(updatedProduct.quantity / updatedProduct.dosage_per_day)
-    updatedProduct.monthly_cost = (updatedProduct.purchase_price / updatedProduct.days_supply * 30)
+    console.log('[Dashboard] Form data:', { selectedProductId, newDosage, customNotes })
     
     if (this.isDashboardMode()) {
-      // Dashboard mode: Save to database
+      // Dashboard mode: Update stack_products table
       try {
         const authToken = localStorage.getItem('auth_token')
         if (!authToken) {
           throw new Error('No authentication token found')
         }
         
-        console.log('[Dashboard] Updating product in database:', productId, updatedProduct)
-        const response = await fetch(`/api/protected/products/${productId}`, {
+        const updateData = {
+          new_product_id: parseInt(selectedProductId),
+          dosage_per_day: newDosage,
+          custom_notes: customNotes,
+          stack_id: this.currentStackId
+        }
+        
+        console.log('[Dashboard] Updating stack settings:', updateData)
+        const response = await fetch(`/api/protected/stack-products/${currentProductId}`, {
           method: 'PUT',
           headers: {
             'Authorization': `Bearer ${authToken}`,
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify(updatedProduct)
+          body: JSON.stringify(updateData)
         })
         
         if (!response.ok) {
@@ -3242,35 +3283,86 @@ class SupplementDemoApp {
           throw new Error(errorData.message || `HTTP ${response.status}`)
         }
         
-        const savedProduct = await response.json()
-        console.log('[Dashboard] Product updated in database:', savedProduct)
+        const result = await response.json()
+        console.log('[Dashboard] Stack settings updated:', result)
         
-        // Update local product in array
-        const productIndex = this.products.findIndex(p => p.id === productId)
-        if (productIndex !== -1) {
-          this.products[productIndex] = { ...this.products[productIndex], ...updatedProduct }
-        }
-        
-        // Update display
+        // Refresh the current stack to show changes
+        await this.refreshStackFromDatabase(this.currentStackId)
         this.renderStack()
         this.updateStats()
         
-        this.showMessage('✅ Produkt erfolgreich aktualisiert!', 'success')
-        console.log('[Dashboard] Product successfully updated')
+        this.showMessage('✅ Stack-Einstellungen erfolgreich gespeichert!', 'success')
         
       } catch (error) {
-        console.error('[Dashboard] Error updating product:', error)
-        this.showMessage('❌ Fehler beim Aktualisieren: ' + error.message, 'error')
+        console.error('[Dashboard] Error updating stack settings:', error)
+        this.showMessage('❌ Fehler beim Speichern: ' + error.message, 'error')
       }
     } else {
-      // Demo mode: Just update local array
-      const productIndex = this.products.findIndex(p => p.id === productId)
+      // Demo mode: Update local product
+      const productIndex = this.products.findIndex(p => p.id === currentProductId)
       if (productIndex !== -1) {
-        this.products[productIndex] = { ...this.products[productIndex], ...updatedProduct }
+        // If product changed, replace with new product
+        if (selectedProductId != currentProductId) {
+          const newProduct = this.availableProducts.find(p => p.id == selectedProductId)
+          if (newProduct) {
+            this.products[productIndex] = { ...newProduct, dosage_per_day: newDosage, custom_notes: customNotes }
+          }
+        } else {
+          // Just update dosage and notes
+          this.products[productIndex].dosage_per_day = newDosage
+          this.products[productIndex].custom_notes = customNotes
+        }
+        
+        // Recalculate costs
+        const product = this.products[productIndex]
+        product.days_supply = Math.floor(product.quantity / product.dosage_per_day)
+        product.monthly_cost = (product.purchase_price / product.days_supply * 30)
       }
+      
       this.renderStack()
       this.updateStats()
-      this.showMessage('✅ Produkt aktualisiert (Demo-Modus)', 'success')
+      this.showMessage('✅ Stack-Einstellungen aktualisiert (Demo-Modus)', 'success')
+    }
+  }
+  
+  updateCostPreview() {
+    const form = document.getElementById('edit-stack-settings-form')
+    if (!form) return
+    
+    const selectedProductId = form.querySelector('input[name="selected_product"]:checked')?.value
+    const dosage = parseFloat(form.querySelector('input[name="dosage_per_day"]').value) || 1
+    
+    let selectedProduct
+    if (selectedProductId) {
+      selectedProduct = this.availableProducts.find(p => p.id == selectedProductId) || 
+                      this.products.find(p => p.id == selectedProductId)
+    }
+    
+    if (selectedProduct) {
+      const daysSupply = Math.floor(selectedProduct.quantity / dosage)
+      const monthlyCost = (selectedProduct.purchase_price / selectedProduct.quantity * dosage * 30)
+      const yearlyCost = (selectedProduct.purchase_price / selectedProduct.quantity * dosage * 365)
+      
+      const preview = document.getElementById('cost-preview')
+      if (preview) {
+        preview.innerHTML = `
+          <h4 class="font-semibold text-green-900 mb-2">Kostenberechnung</h4>
+          <div class="grid grid-cols-3 gap-4 text-sm">
+            <div>
+              <div class="text-green-600">Vorrat reicht für</div>
+              <div class="font-semibold">${daysSupply} Tage</div>
+            </div>
+            <div>
+              <div class="text-green-600">Kosten pro Monat</div>
+              <div class="font-semibold">€${monthlyCost.toFixed(2)}</div>
+            </div>
+            <div>
+              <div class="text-green-600">Kosten pro Jahr</div>
+              <div class="font-semibold">€${yearlyCost.toFixed(2)}</div>
+            </div>
+          </div>
+        `
+      }
     }
   }
 

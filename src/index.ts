@@ -850,6 +850,107 @@ app.put('/api/protected/products/:id', authMiddleware, async (c) => {
   }
 });
 
+// Update stack product settings (dosage, switch product, notes)
+app.put('/api/protected/stack-products/:currentProductId', authMiddleware, async (c) => {
+  try {
+    const userId = c.get('userId');
+    const currentProductId = c.req.param('currentProductId');
+    const updates = await c.req.json();
+    
+    console.log('Updating stack product settings:', {
+      currentProductId, 
+      userId, 
+      updates
+    });
+    
+    const { new_product_id, dosage_per_day, custom_notes, stack_id } = updates;
+    
+    // Verify the stack belongs to the user
+    const stack = await c.env.DB.prepare(`
+      SELECT id FROM stacks WHERE id = ? AND user_id = ?
+    `).bind(stack_id, userId).first();
+    
+    if (!stack) {
+      return c.json({
+        error: 'Stack not found or not owned by user',
+        message: 'Stack nicht gefunden oder keine Berechtigung'
+      }, 404);
+    }
+    
+    // Check if we're switching to a different product
+    if (new_product_id != currentProductId) {
+      console.log('Switching product from', currentProductId, 'to', new_product_id);
+      
+      // Verify the new product exists
+      const newProduct = await c.env.DB.prepare(`
+        SELECT id FROM available_products WHERE id = ?
+      `).bind(new_product_id).first();
+      
+      if (!newProduct) {
+        return c.json({
+          error: 'New product not found',
+          message: 'Neues Produkt nicht gefunden'
+        }, 404);
+      }
+      
+      // Update the stack_products entry to use the new product
+      const result = await c.env.DB.prepare(`
+        UPDATE stack_products SET
+          product_id = ?,
+          dosage_per_day = ?,
+          custom_notes = ?,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE product_id = ? AND stack_id = ?
+      `).bind(new_product_id, dosage_per_day, custom_notes || null, currentProductId, stack_id).run();
+      
+      if (result.changes === 0) {
+        return c.json({
+          error: 'Stack product relationship not found',
+          message: 'Produkt nicht in diesem Stack gefunden'
+        }, 404);
+      }
+      
+    } else {
+      // Just updating dosage and notes for the same product
+      console.log('Updating dosage and notes for product', currentProductId);
+      
+      const result = await c.env.DB.prepare(`
+        UPDATE stack_products SET
+          dosage_per_day = ?,
+          custom_notes = ?,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE product_id = ? AND stack_id = ?
+      `).bind(dosage_per_day, custom_notes || null, currentProductId, stack_id).run();
+      
+      if (result.changes === 0) {
+        return c.json({
+          error: 'Stack product relationship not found',
+          message: 'Produkt nicht in diesem Stack gefunden'
+        }, 404);
+      }
+    }
+    
+    console.log('Stack product settings updated successfully');
+    
+    return c.json({
+      success: true,
+      message: 'Stack-Einstellungen erfolgreich aktualisiert',
+      updated: {
+        product_id: new_product_id,
+        dosage_per_day,
+        custom_notes
+      }
+    });
+    
+  } catch (error) {
+    console.error('Update stack product settings error:', error);
+    return c.json({ 
+      error: 'Failed to update stack product settings', 
+      message: 'Fehler beim Aktualisieren der Stack-Einstellungen'
+    }, 500);
+  }
+});
+
 // Delete product
 app.delete('/api/protected/products/:id', authMiddleware, async (c) => {
   try {
