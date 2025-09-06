@@ -671,13 +671,11 @@ class SupplementDemoApp {
       console.log('[Demo Modal] Rendering stack with', currentProducts.length, 'products')
     
     const html = currentProducts.map((product, index) => {
-      // Verschiedene Einnahmezeiten für Demo
-      const intakeTimes = ['Nach dem Aufstehen', 'Zum Frühstück', 'Zum Mittagessen', 'Am Abend']
-      const intakeTime = intakeTimes[index % intakeTimes.length]
+      // Bestimme Einnahmezeit basierend auf Produkttyp/Name für Konsistenz
+      const intakeTime = this.getProductIntakeTime(product)
       
-      // Verschiedene Farben für Intake-Labels
-      const labelColors = ['bg-orange-100 text-orange-800', 'bg-green-100 text-green-800', 'bg-blue-100 text-blue-800', 'bg-purple-100 text-purple-800']
-      const labelColor = labelColors[index % labelColors.length]
+      // Bestimme Farbe basierend auf Einnahmezeit
+      const labelColor = this.getIntakeTimeLabelColor(intakeTime)
       
       return `
         <div class="bg-white border-0 rounded-2xl p-5 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 relative overflow-hidden">
@@ -796,19 +794,12 @@ class SupplementDemoApp {
   // Hilfsmethode: Gibt die aktuellen Produkte basierend auf dem ausgewählten Stack zurück
   getCurrentProducts() {
     console.log('[Demo Modal] getCurrentProducts called, currentStackId:', this.currentStackId)
+    console.log('[Demo Modal] App instance check - this === window.demoApp:', this === window.demoApp)
     
-    if (this.currentStackId) {
-      const currentStack = this.stacks.find(s => s.id == this.currentStackId) // Use == for type-flexible comparison
-      console.log('[Demo Modal] Found current stack:', currentStack ? currentStack.name : 'NOT FOUND')
-      
-      // WICHTIG: Verwende this.products (die geladenen Vollständigen Objekte)
-      // nicht currentStack.products (die nur IDs sind)
-      console.log('[Demo Modal] Returning loaded products from this.products:', this.products.length)
-      return this.products || []
-    } else {
-      console.log('[Demo Modal] No currentStackId, returning global products:', this.products.length)
-      return this.products || []
-    }
+    // Always return this.products as it contains the loaded products for the current stack
+    // regardless of currentStackId state
+    console.log('[Demo Modal] Returning loaded products from this.products:', this.products.length)
+    return this.products || []
   }
 
   updateStackSummary() {
@@ -1129,13 +1120,22 @@ class SupplementDemoApp {
       selector.parentNode.replaceChild(newSelector, selector)
     } else {
       console.warn('[Demo Modal] Selector has no parent node, using original selector')
-      // Clear existing event listeners by removing and re-adding the element
-      const parent = selector.parentElement || document.getElementById('stack-selector').parentElement
-      if (parent) {
-        const clone = selector.cloneNode(true)
-        parent.removeChild(selector)
-        parent.appendChild(clone)
-        newSelector = clone
+      // Try to find parent more safely
+      const parent = selector.parentElement || selector.parentNode
+      if (parent && parent.contains && parent.contains(selector)) {
+        try {
+          const clone = selector.cloneNode(true)
+          parent.removeChild(selector)
+          parent.appendChild(clone)
+          newSelector = clone
+        } catch (error) {
+          console.warn('[Demo Modal] Failed to replace selector element:', error)
+          // Use original selector as fallback
+          newSelector = selector
+        }
+      } else {
+        console.warn('[Demo Modal] Parent does not contain selector, using original')
+        newSelector = selector
       }
     }
     
@@ -1293,6 +1293,44 @@ class SupplementDemoApp {
   closeAllModals() {
     const modals = document.querySelectorAll('.modal-overlay')
     modals.forEach(modal => modal.remove())
+  }
+
+  // Bestimme Einnahmezeit basierend auf Produkt für konsistente Zuordnung
+  getProductIntakeTime(product) {
+    const productName = product.name?.toLowerCase() || ''
+    const productId = product.id || 0
+    
+    // Definiere feste Regeln basierend auf Produkttyp/Inhalt
+    if (productName.includes('vitamin d') || productName.includes('d3')) {
+      return 'Zum Frühstück'  // Vitamin D optimal mit Fett
+    }
+    if (productName.includes('b12') || productName.includes('b-komplex') || productName.includes('b6')) {
+      return 'Nach dem Aufstehen'  // B-Vitamine für Energie am Morgen
+    }
+    if (productName.includes('magnesium') || productName.includes('melatonin')) {
+      return 'Am Abend'  // Magnesium für Entspannung
+    }
+    if (productName.includes('eisen') || productName.includes('iron')) {
+      return 'Nach dem Aufstehen'  // Eisen auf leeren Magen optimal
+    }
+    if (productName.includes('omega') || productName.includes('fischöl')) {
+      return 'Zum Mittagessen'  // Omega-3 mit Hauptmahlzeit
+    }
+    
+    // Fallback: Verwende Produkt-ID für konsistente Zuordnung
+    const intakeTimes = ['Nach dem Aufstehen', 'Zum Frühstück', 'Zum Mittagessen', 'Am Abend']
+    return intakeTimes[productId % intakeTimes.length]
+  }
+  
+  // Bestimme Labelfarbe basierend auf Einnahmezeit
+  getIntakeTimeLabelColor(intakeTime) {
+    const colorMap = {
+      'Nach dem Aufstehen': 'bg-orange-100 text-orange-800',
+      'Zum Frühstück': 'bg-green-100 text-green-800', 
+      'Zum Mittagessen': 'bg-blue-100 text-blue-800',
+      'Am Abend': 'bg-purple-100 text-purple-800'
+    }
+    return colorMap[intakeTime] || 'bg-gray-100 text-gray-800'
   }
 
   // MODAL FUNKTIONEN - Ersetzen die alert()-Dialoge
@@ -3364,7 +3402,7 @@ class SupplementDemoApp {
           // Don't fail the whole operation if adding to stack fails
         }
       } else {
-        console.warn('[Database Save] Cannot add to stack - currentStackId:', this.currentStackId, 'productId:', result.product?.id)
+        console.info('[Database Save] Using fallback stack selection - currentStackId:', this.currentStackId, 'productId:', result.product?.id)
         
         // Try to get current stack from selector as fallback
         const stackSelector = document.getElementById('stack-selector')
@@ -3375,8 +3413,10 @@ class SupplementDemoApp {
             await this.addProductToStack(result.product.id, fallbackStackId)
             console.log('[Database Save] Successfully added product to fallback stack')
           } catch (stackError) {
-            console.warn('[Database Save] Fallback stack addition also failed:', stackError)
+            console.warn('[Database Save] Fallback stack addition failed:', stackError)
           }
+        } else {
+          console.warn('[Database Save] No fallback stack available - selector:', !!stackSelector, 'value:', stackSelector?.value)
         }
       }
       

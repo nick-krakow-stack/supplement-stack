@@ -1733,8 +1733,12 @@ app.get('/dashboard', (c) => {
                     console.log('SupplementApp initialized successfully');
                     
                     // Initialize dashboard demo functionality (using unified demoApp instance)
-                    window.demoApp = new SupplementDemoApp();
-                    console.log('Dashboard SupplementDemoApp initialized successfully');
+                    if (!window.demoApp) {
+                        window.demoApp = new SupplementDemoApp();
+                        console.log('Dashboard SupplementDemoApp initialized successfully');
+                    } else {
+                        console.log('Dashboard SupplementDemoApp already exists, reusing instance');
+                    }
                     
                     // Backward compatibility - keep dashboardApp reference
                     window.dashboardApp = window.demoApp;
