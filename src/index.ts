@@ -1187,7 +1187,7 @@ app.get('/dashboard', (c) => {
                     </div>
                 </div>
                 
-                <div id="dashboard-stack-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                <div id="demo-stack-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                     <!-- Products will be loaded here by JavaScript -->
                     <div class="text-center py-8 col-span-full">
                         <i class="fas fa-box-open text-4xl text-gray-300 mb-4"></i>
@@ -1219,15 +1219,15 @@ app.get('/dashboard', (c) => {
                             <div class="space-y-2 text-sm">
                                 <div class="flex justify-between">
                                     <span class="text-gray-600">Einmalige Kosten:</span>
-                                    <span class="font-medium" id="dashboard-total-purchase">€0.00</span>
+                                    <span class="font-medium" id="total-purchase-cost">€0.00</span>
                                 </div>
                                 <div class="flex justify-between">
                                     <span class="text-gray-600">Monatliche Kosten:</span>
-                                    <span class="font-medium" id="dashboard-total-monthly">€0.00</span>
+                                    <span class="font-medium" id="total-monthly-cost">€0.00</span>
                                 </div>
                                 <div class="flex justify-between pt-2 border-t border-gray-200">
                                     <span class="font-semibold text-gray-900">Kosten pro Tag:</span>
-                                    <span class="font-semibold text-blue-600" id="dashboard-daily-cost">€0.00</span>
+                                    <span class="font-semibold text-blue-600" id="daily-cost">€0.00</span>
                                 </div>
                             </div>
                         </div>
@@ -1391,8 +1391,9 @@ app.get('/dashboard', (c) => {
                 
                 async function loadDashboardData() {
                     try {
-                        // Load stacks for selector
-                        const stacks = await window.dashboardApp.loadAvailableStacks();
+                        // Get stacks from demo app (they're already loaded)
+                        const stacks = window.dashboardApp.stacks || [];
+                        console.log('Dashboard: Found stacks:', stacks);
                         populateStackSelector(stacks);
                         
                         // Load default stack if available
@@ -1417,8 +1418,10 @@ app.get('/dashboard', (c) => {
                 
                 function loadDashboardStack(stackId) {
                     try {
-                        // Load stack products into grid
-                        window.dashboardApp.loadStackById(stackId);
+                        console.log('Dashboard: Loading stack with ID:', stackId);
+                        
+                        // Load stack products into grid using demo app's function
+                        window.dashboardApp.loadStack(stackId);
                         
                         // Show layer section
                         const layerSection = document.getElementById('dashboard-layer-section');
