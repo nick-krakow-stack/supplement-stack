@@ -210,9 +210,8 @@ app.get('/api/auth/profile', authMiddleware, async (c) => {
 // Run database migrations
 app.get('/api/admin/migrate', async (c) => {
   try {
-    // Execute the available_products migration
-    const migrationSQL = `
-      CREATE TABLE IF NOT EXISTS available_products (
+    // Execute the available_products migration - split into separate statements
+    const createTableSQL = `CREATE TABLE IF NOT EXISTS available_products (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
         brand TEXT NOT NULL,
@@ -236,13 +235,15 @@ app.get('/api/admin/migrate', async (c) => {
         shop_url TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-      
-      CREATE INDEX IF NOT EXISTS idx_available_products_category ON available_products(category);
-      CREATE INDEX IF NOT EXISTS idx_available_products_recommended ON available_products(recommended, recommendation_rank);
-    `;
+      )`;
     
-    await c.env.DB.exec(migrationSQL);
+    const index1SQL = `CREATE INDEX IF NOT EXISTS idx_available_products_category ON available_products(category)`;
+    const index2SQL = `CREATE INDEX IF NOT EXISTS idx_available_products_recommended ON available_products(recommended, recommendation_rank)`;
+    
+    // Execute statements separately
+    await c.env.DB.prepare(createTableSQL).run();
+    await c.env.DB.prepare(index1SQL).run();
+    await c.env.DB.prepare(index2SQL).run();
     
     return c.json({ success: true, message: 'Migration completed successfully' });
     
@@ -389,8 +390,8 @@ app.get('/api/available-products', async (c) => {
         ap.product_image,
         ap.shop_url
       FROM available_products ap
-      WHERE json_extract(ap.main_nutrients, '$[*].nutrient_id') LIKE '%' || ? || '%'
-         OR json_extract(ap.secondary_nutrients, '$[*].nutrient_id') LIKE '%' || ? || '%'
+      WHERE ap.main_nutrients LIKE '%"nutrient_id":' || ? || '%'
+         OR ap.secondary_nutrients LIKE '%"nutrient_id":' || ? || '%'
       ORDER BY ap.recommended DESC, ap.recommendation_rank ASC
     `).bind(nutrientId, nutrientId).all();
     
