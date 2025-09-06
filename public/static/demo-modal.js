@@ -3112,12 +3112,21 @@ class SupplementDemoApp {
             Möchten Sie <strong>"${product.name}"</strong> wirklich löschen?
           </p>
           
+          ${!this.isDashboardMode() ? `
           <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
             <p class="text-yellow-800 text-sm">
               <i class="fas fa-info-circle mr-1"></i>
               In der Demo werden keine Daten dauerhaft gelöscht.
             </p>
           </div>
+          ` : `
+          <div class="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+            <p class="text-red-800 text-sm">
+              <i class="fas fa-exclamation-triangle mr-1"></i>
+              Achtung: Diese Aktion kann nicht rückgängig gemacht werden!
+            </p>
+          </div>
+          `}
           
           <div class="flex justify-end space-x-3">
             <button onclick="this.closest('.modal-overlay').remove()" class="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition-colors">
@@ -3139,11 +3148,53 @@ class SupplementDemoApp {
     })
   }
 
-  confirmDelete(productId) {
-    console.log('[Demo Modal] Produkt gelöscht (Demo):', productId)
-    // In echter App: API-Aufruf zum Löschen
-    // Für Demo: Feedback anzeigen
-    this.showMessage('✅ Produkt gelöscht (Demo-Modus)', 'success')
+  async confirmDelete(productId) {
+    console.log('[Demo Modal] Confirming delete for product:', productId)
+    
+    if (this.isDashboardMode()) {
+      // Dashboard mode: Delete from database
+      try {
+        const authToken = localStorage.getItem('auth_token')
+        if (!authToken) {
+          throw new Error('No authentication token found')
+        }
+        
+        console.log('[Dashboard] Deleting product from database:', productId)
+        const response = await fetch(`/api/protected/products/${productId}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json'
+          }
+        })
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ message: 'Unknown error' }))
+          throw new Error(errorData.message || `HTTP ${response.status}`)
+        }
+        
+        // Remove from local display
+        this.products = this.products.filter(p => p.id !== productId)
+        
+        // Update display
+        this.renderStack()
+        this.updateStats()
+        
+        this.showMessage('✅ Produkt erfolgreich gelöscht!', 'success')
+        console.log('[Dashboard] Product successfully deleted from database')
+        
+      } catch (error) {
+        console.error('[Dashboard] Error deleting product:', error)
+        this.showMessage('❌ Fehler beim Löschen: ' + error.message, 'error')
+      }
+    } else {
+      // Demo mode: Just remove from local array
+      console.log('[Demo Modal] Produkt gelöscht (Demo):', productId)
+      this.products = this.products.filter(p => p.id !== productId)
+      this.renderStack()
+      this.updateStats()
+      this.showMessage('✅ Produkt gelöscht (Demo-Modus)', 'success')
+    }
   }
 
   addProduct(formData) {
