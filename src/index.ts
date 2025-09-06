@@ -1722,7 +1722,7 @@ app.get('/dashboard', (c) => {
                             
                             const selectedStackName = stackSelector.options[stackSelector.selectedIndex].text;
                             
-                            if (confirm(`Möchten Sie den Stack "${selectedStackName}" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.`)) {
+                            if (confirm('M\u00f6chten Sie den Stack "' + selectedStackName + '" wirklich l\u00f6schen? Diese Aktion kann nicht r\u00fcckg\u00e4ngig gemacht werden.')) {
                                 try {
                                     await window.dashboardApp.deleteStack(selectedStackId);
                                 } catch (error) {
