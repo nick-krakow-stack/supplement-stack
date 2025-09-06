@@ -1122,8 +1122,22 @@ class SupplementDemoApp {
     `
     
     // Event Listener für Stack-Wechsel (remove old ones first)
-    const newSelector = selector.cloneNode(true)
-    selector.parentNode.replaceChild(newSelector, selector)
+    // Check if selector has a parent before replacing
+    let newSelector = selector
+    if (selector.parentNode) {
+      newSelector = selector.cloneNode(true)
+      selector.parentNode.replaceChild(newSelector, selector)
+    } else {
+      console.warn('[Demo Modal] Selector has no parent node, using original selector')
+      // Clear existing event listeners by removing and re-adding the element
+      const parent = selector.parentElement || document.getElementById('stack-selector').parentElement
+      if (parent) {
+        const clone = selector.cloneNode(true)
+        parent.removeChild(selector)
+        parent.appendChild(clone)
+        newSelector = clone
+      }
+    }
     
     newSelector.addEventListener('change', async (e) => {
       const stackId = e.target.value ? parseInt(e.target.value) : null
@@ -1143,8 +1157,16 @@ class SupplementDemoApp {
     
     // Ersten Stack automatisch laden
     if (this.stacks.length > 0) {
-      newSelector.value = this.stacks[0].id
-      await this.loadStack(this.stacks[0].id)
+      const firstStack = this.stacks[0]
+      console.log('[Demo Modal] Auto-selecting first stack:', firstStack.name, 'ID:', firstStack.id)
+      newSelector.value = firstStack.id
+      
+      // Ensure currentStackId is set before loading
+      this.currentStackId = firstStack.id
+      await this.loadStack(firstStack.id)
+    } else {
+      console.warn('[Demo Modal] No stacks available for auto-selection')
+      this.currentStackId = null
     }
   }
 
@@ -1200,6 +1222,9 @@ class SupplementDemoApp {
               this.products.push({ ...foundProduct })
             } else {
               console.warn(`[Demo Modal] Product with ID ${product} not found in userProducts or availableProducts`)
+              console.log(`[Demo Modal] Available userProducts IDs:`, this.userProducts ? this.userProducts.map(p => p.id) : 'none')
+              console.log(`[Demo Modal] Available availableProducts IDs:`, this.availableProducts ? this.availableProducts.map(p => p.id) : 'none')
+              console.log(`[Demo Modal] Looking for product ID:`, product, typeof product)
             }
           }
         } else if (typeof product === 'object' && product !== null) {
@@ -3330,11 +3355,28 @@ class SupplementDemoApp {
       
       // If we have a current stack, add the product to it
       if (this.currentStackId && result.product?.id) {
+        console.log('[Database Save] Adding product', result.product.id, 'to current stack', this.currentStackId)
         try {
           await this.addProductToStack(result.product.id, this.currentStackId)
+          console.log('[Database Save] Successfully added product to stack')
         } catch (stackError) {
           console.warn('[Database Save] Failed to add product to stack:', stackError)
           // Don't fail the whole operation if adding to stack fails
+        }
+      } else {
+        console.warn('[Database Save] Cannot add to stack - currentStackId:', this.currentStackId, 'productId:', result.product?.id)
+        
+        // Try to get current stack from selector as fallback
+        const stackSelector = document.getElementById('stack-selector')
+        if (stackSelector?.value && result.product?.id) {
+          const fallbackStackId = parseInt(stackSelector.value)
+          console.log('[Database Save] Using fallback stack ID from selector:', fallbackStackId)
+          try {
+            await this.addProductToStack(result.product.id, fallbackStackId)
+            console.log('[Database Save] Successfully added product to fallback stack')
+          } catch (stackError) {
+            console.warn('[Database Save] Fallback stack addition also failed:', stackError)
+          }
         }
       }
       
