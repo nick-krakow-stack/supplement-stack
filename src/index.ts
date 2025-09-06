@@ -807,11 +807,32 @@ app.delete('/api/protected/products/:id', authMiddleware, async (c) => {
     
     console.log('Deleting product:', productId, 'for user:', userId);
     
-    // TODO: Delete product from database
-    // For now, return success response
+    // First, remove product from all stacks (stack_products table)
+    await c.env.DB.prepare(`
+      DELETE FROM stack_products 
+      WHERE product_id = ? 
+      AND stack_id IN (SELECT id FROM stacks WHERE user_id = ?)
+    `).bind(productId, userId).run();
+    
+    // Then delete the product itself
+    const result = await c.env.DB.prepare(`
+      DELETE FROM products 
+      WHERE id = ? AND user_id = ?
+    `).bind(productId, userId).run();
+    
+    if (result.changes === 0) {
+      return c.json({
+        error: 'Product not found or not owned by user',
+        message: 'Produkt nicht gefunden oder keine Berechtigung zum Löschen'
+      }, 404);
+    }
+    
+    console.log('Product deleted successfully:', productId, 'changes:', result.changes);
+    
     return c.json({
       success: true,
-      message: 'Produkt erfolgreich gelöscht'
+      message: 'Produkt erfolgreich gelöscht',
+      productId: productId
     });
     
   } catch (error) {
