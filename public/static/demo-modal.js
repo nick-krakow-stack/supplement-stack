@@ -2990,6 +2990,14 @@ class SupplementDemoApp {
     try {
       console.log('[Dashboard Data] Loading user-specific stacks and products...')
       
+      // Double-check authentication before loading data
+      const authToken = localStorage.getItem('auth_token')
+      if (!authToken) {
+        console.log('[Dashboard Data] No auth token found, redirecting to login')
+        window.location.href = '/auth'
+        return
+      }
+      
       // Load user stacks and products in parallel
       const [userStacks, userProducts] = await Promise.all([
         this.loadUserStacks(),
@@ -3003,9 +3011,14 @@ class SupplementDemoApp {
       this.userProducts = userProducts || []
       this.stacks = this.userStacks.length > 0 ? this.userStacks : this.createDefaultDashboardStack()
       
-      // If user has products, use them as available products (combined with demo products for variety)
+      // Replace available products entirely with user products for dashboard mode
+      // This ensures dashboard users only see their own products, not demo products
       if (this.userProducts.length > 0) {
-        this.availableProducts = [...this.userProducts, ...this.availableProducts]
+        this.availableProducts = [...this.userProducts]
+        console.log('[Dashboard Data] Using user products as available products:', this.userProducts.length)
+      } else {
+        // If user has no products yet, use demo products as templates they can choose from
+        console.log('[Dashboard Data] User has no products yet, showing demo products as templates')
       }
       
       this.dataLoaded = true
@@ -3013,9 +3026,18 @@ class SupplementDemoApp {
       
     } catch (error) {
       console.error('[Dashboard Data] Error loading dashboard data:', error)
-      // Fallback to demo data if user data fails to load
-      this.stacks = this.loadDemoStacks()
-      this.showMessage('⚠️ Fehler beim Laden der Benutzerdaten, Demo-Daten werden verwendet', 'error')
+      
+      // If authentication fails (401), redirect to login
+      if (error.message && (error.message.includes('401') || error.message.includes('Unauthorized'))) {
+        console.log('[Dashboard Data] Authentication failed, redirecting to login')
+        localStorage.removeItem('auth_token')
+        window.location.href = '/auth'
+        return
+      }
+      
+      // For other errors, show error message but stay on page
+      this.stacks = this.createDefaultDashboardStack()
+      this.showMessage('⚠️ Fehler beim Laden der Benutzerdaten. Bitte versuchen Sie es erneut.', 'error')
     }
   }
 
@@ -3125,57 +3147,79 @@ class SupplementDemoApp {
 
   // Load user's saved stacks from database (Dashboard mode)
   async loadUserStacks() {
-    if (!this.isDashboardMode()) {
-      return [] // Return empty for demo mode
-    }
-
     try {
       const authToken = localStorage.getItem('auth_token')
+      if (!authToken) {
+        throw new Error('No authentication token found')
+      }
+
+      console.log('[Database Load] Loading user stacks with token:', authToken.substring(0, 20) + '...')
+      
       const response = await fetch('/api/protected/stacks', {
         headers: {
-          'Authorization': `Bearer ${authToken}`
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json'
         }
       })
 
+      console.log('[Database Load] Stacks API response status:', response.status)
+
+      if (response.status === 401) {
+        throw new Error('401 Unauthorized - Invalid or expired token')
+      }
+
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
+        const errorText = await response.text()
+        console.error('[Database Load] Stacks API error response:', errorText)
+        throw new Error(`HTTP ${response.status}: ${errorText}`)
       }
 
       const stacks = await response.json()
-      console.log('[Database Load] User stacks loaded:', stacks)
+      console.log('[Database Load] User stacks loaded successfully:', stacks)
       return stacks
       
     } catch (error) {
       console.error('[Database Load] Error loading stacks:', error)
-      return []
+      throw error // Re-throw to let caller handle it
     }
   }
 
   // Load user's saved products from database (Dashboard mode)
   async loadUserProducts() {
-    if (!this.isDashboardMode()) {
-      return [] // Return empty for demo mode
-    }
-
     try {
       const authToken = localStorage.getItem('auth_token')
+      if (!authToken) {
+        throw new Error('No authentication token found')
+      }
+
+      console.log('[Database Load] Loading user products with token:', authToken.substring(0, 20) + '...')
+      
       const response = await fetch('/api/protected/products', {
         headers: {
-          'Authorization': `Bearer ${authToken}`
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json'
         }
       })
 
+      console.log('[Database Load] Products API response status:', response.status)
+
+      if (response.status === 401) {
+        throw new Error('401 Unauthorized - Invalid or expired token')
+      }
+
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
+        const errorText = await response.text()
+        console.error('[Database Load] Products API error response:', errorText)
+        throw new Error(`HTTP ${response.status}: ${errorText}`)
       }
 
       const products = await response.json()
-      console.log('[Database Load] User products loaded:', products)
+      console.log('[Database Load] User products loaded successfully:', products)
       return products
       
     } catch (error) {
       console.error('[Database Load] Error loading products:', error)
-      return []
+      throw error // Re-throw to let caller handle it
     }
   }
 }

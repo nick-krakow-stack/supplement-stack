@@ -1333,53 +1333,7 @@ app.get('/dashboard', (c) => {
                 </div>
                 
                 <div id="dashboard-layer-content" class="hidden">
-                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        <!-- Cost Overview -->
-                        <div class="bg-gray-50 rounded-lg p-4">
-                            <h4 class="font-semibold text-gray-900 mb-3">
-                                <i class="fas fa-calculator mr-2 text-green-600"></i>
-                                Kostenübersicht
-                            </h4>
-                            <div class="space-y-2 text-sm">
-                                <div class="flex justify-between">
-                                    <span class="text-gray-600">Einmalige Kosten:</span>
-                                    <span class="font-medium" id="total-purchase-cost">€0.00</span>
-                                </div>
-                                <div class="flex justify-between">
-                                    <span class="text-gray-600">Monatliche Kosten:</span>
-                                    <span class="font-medium" id="total-monthly-cost">€0.00</span>
-                                </div>
-                                <div class="flex justify-between pt-2 border-t border-gray-200">
-                                    <span class="font-semibold text-gray-900">Kosten pro Tag:</span>
-                                    <span class="font-semibold text-blue-600" id="daily-cost">€0.00</span>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- Nutrient Coverage -->
-                        <div class="bg-gray-50 rounded-lg p-4">
-                            <h4 class="font-semibold text-gray-900 mb-3">
-                                <i class="fas fa-chart-pie mr-2 text-purple-600"></i>
-                                Nährstoff-Abdeckung
-                            </h4>
-                            <div id="dashboard-nutrient-coverage" class="space-y-2 text-sm">
-                                <p class="text-gray-600">Wird berechnet...</p>
-                            </div>
-                        </div>
-                        
-                        <!-- Additional Info -->
-                        <div class="bg-gray-50 rounded-lg p-4">
-                            <h4 class="font-semibold text-gray-900 mb-3">
-                                <i class="fas fa-info-circle mr-2 text-orange-600"></i>
-                                Stack-Informationen
-                            </h4>
-                            <div class="space-y-2 text-sm text-gray-600">
-                                <p><strong>Produkte:</strong> <span id="dashboard-product-count">0</span></p>
-                                <p><strong>Marken:</strong> <span id="dashboard-brand-count">0</span></p>
-                                <p><strong>Kategorien:</strong> <span id="dashboard-category-count">0</span></p>
-                            </div>
-                        </div>
-                    </div>
+                    <!-- Info-Bereich entfernt auf Anfrage -->
                 </div>
             </div>
         </div>
