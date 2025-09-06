@@ -32,7 +32,7 @@ class SupplementDemoApp {
     }
     
     // Stack-Selector initialisieren
-    setTimeout(() => this.initStackSelector(), 100)
+    setTimeout(async () => await this.initStackSelector(), 100)
     
     // Demo-Stack mit ein paar Produkten vorbesetzen
     // this.addDemoStackProducts() // Deaktiviert, da wir vordefinierte Stacks verwenden
@@ -1079,7 +1079,7 @@ class SupplementDemoApp {
 
 
 
-  initStackSelector() {
+  async initStackSelector() {
     const selector = document.getElementById('stack-selector')
     if (!selector) {
       console.log('[Demo Modal] Stack-Selector nicht gefunden')
@@ -1112,12 +1112,12 @@ class SupplementDemoApp {
     const newSelector = selector.cloneNode(true)
     selector.parentNode.replaceChild(newSelector, selector)
     
-    newSelector.addEventListener('change', (e) => {
+    newSelector.addEventListener('change', async (e) => {
       const stackId = e.target.value ? parseInt(e.target.value) : null
       console.log('[Demo Modal] Stack switching to:', stackId, 'from selector value:', e.target.value)
       
       if (stackId) {
-        this.loadStack(stackId)
+        await this.loadStack(stackId)
       } else {
         // Leeren Stack anzeigen wenn nichts ausgewählt
         console.log('[Demo Modal] No stack selected, clearing products')
@@ -1131,11 +1131,11 @@ class SupplementDemoApp {
     // Ersten Stack automatisch laden
     if (this.stacks.length > 0) {
       newSelector.value = this.stacks[0].id
-      this.loadStack(this.stacks[0].id)
+      await this.loadStack(this.stacks[0].id)
     }
   }
 
-  loadStack(stackId) {
+  async loadStack(stackId) {
     console.log(`[Demo Modal] Loading stack with ID: ${stackId}`)
     
     if (!stackId) {
@@ -1143,6 +1143,14 @@ class SupplementDemoApp {
       this.products = []
       this.renderStack()
       return
+    }
+    
+    this.currentStackId = stackId
+    
+    // In Dashboard mode, refresh stack data from database to get latest products
+    if (this.isDashboardMode()) {
+      console.log(`[Dashboard] Refreshing stack ${stackId} from database to get latest products`)
+      await this.refreshStackFromDatabase(stackId)
     }
     
     const stack = this.stacks.find(s => s.id == stackId) // Use == for type-flexible comparison
@@ -1153,8 +1161,7 @@ class SupplementDemoApp {
     
     console.log(`[Demo Modal] Found stack:`, stack)
     console.log(`[Demo Modal] Available products:`, this.availableProducts.length)
-    
-    this.currentStackId = stackId
+    console.log(`[Demo Modal] User products:`, this.userProducts?.length || 0)
     
     // Produkte für diesen Stack laden
     this.products = []
@@ -1197,6 +1204,52 @@ class SupplementDemoApp {
     
     this.renderStack()
     this.updateStats()
+  }
+
+  // Refresh a specific stack from database to get latest product associations
+  async refreshStackFromDatabase(stackId) {
+    try {
+      if (!this.isDashboardMode()) {
+        console.log('[Demo Modal] Not in dashboard mode, skipping database refresh')
+        return
+      }
+      
+      const authToken = localStorage.getItem('auth_token')
+      if (!authToken) {
+        console.error('[Dashboard] No auth token for stack refresh')
+        return
+      }
+      
+      console.log(`[Dashboard] Refreshing stack ${stackId} from database`)
+      
+      const response = await fetch('/api/protected/stacks', {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      
+      if (!response.ok) {
+        console.error('[Dashboard] Failed to refresh stacks:', response.status)
+        return
+      }
+      
+      const refreshedStacks = await response.json()
+      console.log('[Dashboard] Refreshed stacks from database:', refreshedStacks)
+      
+      // Update our local stacks array with fresh data
+      this.userStacks = refreshedStacks
+      this.stacks = this.userStacks
+      
+      // Find the specific stack we're loading to verify it has updated products
+      const refreshedStack = this.stacks.find(s => s.id == stackId)
+      if (refreshedStack) {
+        console.log(`[Dashboard] Refreshed stack ${stackId} now has ${refreshedStack.products?.length || 0} products:`, refreshedStack.products)
+      }
+      
+    } catch (error) {
+      console.error('[Dashboard] Error refreshing stack from database:', error)
+    }
   }
 
   closeAllModals() {
@@ -2266,7 +2319,21 @@ class SupplementDemoApp {
           throw new Error(errorData.message || `HTTP ${response.status}`)
         }
         
-        newStack = await response.json()
+        const responseData = await response.json()
+        console.log('[Dashboard] API response:', responseData)
+        
+        // Extract stack from response - handle nested response format
+        if (responseData.stack) {
+          newStack = responseData.stack
+          console.log('[Dashboard] Extracted stack from nested response:', newStack)
+        } else if (responseData.success && responseData.data) {
+          newStack = responseData.data
+          console.log('[Dashboard] Extracted stack from data property:', newStack)
+        } else {
+          newStack = responseData
+          console.log('[Dashboard] Using response directly as stack:', newStack)
+        }
+        
         console.log('[Dashboard] Stack created in database:', newStack)
         
         // Validate stack data before adding to lists
@@ -2309,14 +2376,14 @@ class SupplementDemoApp {
       console.log('[Dashboard] About to update stack selector. Current stacks:', this.stacks.length)
       console.log('[Dashboard] All stack names:', this.stacks.map(s => s.name))
       
-      this.initStackSelector()
+      await this.initStackSelector()
       
       // Neuen Stack automatisch auswählen
       const selector = document.getElementById('stack-selector')
       if (selector && newStack && newStack.id) {
         console.log('[Dashboard] Setting selector to new stack ID:', newStack.id)
         selector.value = newStack.id
-        this.loadStack(newStack.id)
+        await this.loadStack(newStack.id)
       } else {
         console.warn('[Dashboard] Cannot select new stack - selector or newStack invalid:', {
           selector: !!selector,
@@ -3437,7 +3504,7 @@ class SupplementDemoApp {
     if (!this.isDashboardMode()) {
       // Demo mode: just remove from local list
       this.stacks = this.stacks.filter(s => s.id !== stackId)
-      this.initStackSelector()
+      await this.initStackSelector()
       this.showSuccess('Stack erfolgreich gelöscht!')
       return
     }
@@ -3470,14 +3537,14 @@ class SupplementDemoApp {
       this.userStacks = this.userStacks.filter(s => s.id !== stackId)
       
       // Update UI
-      this.initStackSelector()
+      await this.initStackSelector()
       
       // If no stacks left, create a default one
       if (this.stacks.length === 0) {
         const defaultStack = await this.createDefaultStackInDatabase()
         this.stacks = [defaultStack]
         this.userStacks = [defaultStack]
-        this.initStackSelector()
+        await this.initStackSelector()
       }
       
       this.showSuccess('Stack erfolgreich gelöscht!')

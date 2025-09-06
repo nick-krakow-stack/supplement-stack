@@ -3,15 +3,18 @@
 
 class SupplementDemoApp {
   constructor() {
-    this.availableProducts = this.loadDemoProducts()  // Verfügbare Produkte
+    this.availableProducts = this.loadDemoProducts()  // Verfügbare Produkte (Demo-Daten als Fallback)
     this.products = []  // Produkte im Stack (initial leer)
-    this.stacks = this.loadDemoStacks()
+    this.stacks = []  // Will be loaded based on mode
     this.nutrients = this.loadNutrients()
     this.currentStackId = null  // Aktuell ausgewählter Stack
+    this.userStacks = []  // User's personal stacks (Dashboard only)
+    this.userProducts = []  // User's personal products (Dashboard only)
+    this.dataLoaded = false  // Track if user data has been loaded
     this.init()
   }
 
-  init() {
+  async init() {
     console.log('[Demo Modal] Initialisierung startet...')
     
     // Add visible indicator that JavaScript is working
@@ -19,8 +22,17 @@ class SupplementDemoApp {
     
     this.setupEventListeners()
     
+    // Check if we're in dashboard mode and load user data
+    if (this.isDashboardMode()) {
+      console.log('[Dashboard Mode] Loading user-specific data...')
+      await this.loadDashboardData()
+    } else {
+      console.log('[Demo Mode] Loading demo stacks...')
+      this.stacks = this.loadDemoStacks()
+    }
+    
     // Stack-Selector initialisieren
-    setTimeout(() => this.initStackSelector(), 100)
+    setTimeout(async () => await this.initStackSelector(), 100)
     
     // Demo-Stack mit ein paar Produkten vorbesetzen
     // this.addDemoStackProducts() // Deaktiviert, da wir vordefinierte Stacks verwenden
@@ -30,10 +42,13 @@ class SupplementDemoApp {
     
     this.updateStats()
     
-    // Show success message that JS is working
-    this.showSuccess('Demo-Modal-App erfolgreich geladen! Modals schließen sich jetzt automatisch.')
+    // Show success message based on mode
+    const modeMessage = this.isDashboardMode() ? 
+      'Dashboard erfolgreich geladen! Ihre Daten werden automatisch gespeichert.' :
+      'Demo-Modal-App erfolgreich geladen! Modals schließen sich jetzt automatisch.'
+    this.showSuccess(modeMessage)
     
-    console.log(`[Demo Modal] Initialisierung abgeschlossen - ${this.availableProducts.length} verfügbare Produkte, ${this.products.length} im Stack`)
+    console.log(`[Demo Modal] Initialisierung abgeschlossen - ${this.availableProducts.length} verfügbare Produkte, ${this.products.length} im Stack, Mode: ${this.isDashboardMode() ? 'Dashboard' : 'Demo'}`)
   }
   
   showSuccess(message) {
@@ -743,9 +758,9 @@ class SupplementDemoApp {
             </div>
           </div>
           
-          <!-- Moderner CTA Button -->
-          <button class="w-full bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white font-bold py-3 px-4 rounded-xl transition-all duration-300 transform hover:scale-105 hover:shadow-lg focus:ring-4 focus:ring-orange-200 focus:outline-none text-sm">
-            <i class="fas fa-shopping-cart mr-2"></i>Jetzt bestellen
+          <!-- Info Button instead of Order -->
+          <button class="w-full bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white font-bold py-3 px-4 rounded-xl transition-all duration-300 transform hover:scale-105 hover:shadow-lg focus:ring-4 focus:ring-blue-200 focus:outline-none text-sm">
+            <i class="fas fa-info-circle mr-2"></i>Details anzeigen
           </button>
           
           <!-- Hover-Effekt Shine -->
@@ -977,11 +992,7 @@ class SupplementDemoApp {
                 <i class="fas fa-check mr-2"></i>Alles auswählen
               </button>
             `}
-            
-            <!-- Alle bestellen Button -->
-            <button onclick="window.demoApp.proceedToCheckout()" class="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-6 py-2 rounded-xl transition-all duration-300 transform hover:scale-105 text-sm font-bold shadow-lg hover:shadow-xl focus:ring-4 focus:ring-blue-200 focus:outline-none">
-              <i class="fas fa-shopping-cart mr-2"></i>Alle bestellen
-            </button>
+
             
             <button onclick="window.demoApp.hidePriceFooter()" class="text-slate-400 hover:text-slate-600 p-2 rounded-lg hover:bg-slate-100 transition-colors">
               <i class="fas fa-times"></i>
@@ -1066,40 +1077,47 @@ class SupplementDemoApp {
     this.showMessage('❌ Alle Produkte abgewählt', 'info')
   }
 
-  proceedToCheckout() {
-    const totalMonthlyPrice = this.products.reduce((sum, product) => {
-      return sum + (product.monthly_cost || 0)
-    }, 0)
-    
-    this.showMessage(`🛒 Demo-Checkout\n\n${this.products.length} Produkte\n💰 €${totalMonthlyPrice.toFixed(2)}/Monat\n\nIn der Vollversion werden Sie zu Amazon weitergeleitet.`, 'info')
-  }
 
-  initStackSelector() {
+
+  async initStackSelector() {
     const selector = document.getElementById('stack-selector')
     if (!selector) {
       console.log('[Demo Modal] Stack-Selector nicht gefunden')
       return
     }
     
-    // Stacks in Dropdown laden
+    // Stacks in Dropdown laden - nur validierte Stacks anzeigen
+    console.log('[Demo Modal] Updating stack selector with', this.stacks.length, 'stacks')
+    
+    // Filter out invalid stacks
+    const validStacks = this.stacks.filter(stack => {
+      const isValid = stack && stack.id !== undefined && stack.id !== null && 
+                     stack.name !== undefined && stack.name !== null && stack.name.trim() !== ''
+      if (!isValid) {
+        console.warn('[Demo Modal] Invalid stack found:', stack)
+      }
+      return isValid
+    })
+    
+    console.log('[Demo Modal] Found', validStacks.length, 'valid stacks out of', this.stacks.length, 'total stacks')
+    
     selector.innerHTML = `
       <option value="">Stack auswählen...</option>
-      ${this.stacks.map(stack => `
+      ${validStacks.map(stack => `
         <option value="${stack.id}">${stack.name}</option>
       `).join('')}
     `
     
-    // Vorherige Event Listener entfernen um Duplikate zu vermeiden
+    // Event Listener für Stack-Wechsel (remove old ones first)
     const newSelector = selector.cloneNode(true)
     selector.parentNode.replaceChild(newSelector, selector)
     
-    // Event Listener für Stack-Wechsel
-    newSelector.addEventListener('change', (e) => {
+    newSelector.addEventListener('change', async (e) => {
       const stackId = e.target.value ? parseInt(e.target.value) : null
       console.log('[Demo Modal] Stack switching to:', stackId, 'from selector value:', e.target.value)
       
       if (stackId) {
-        this.loadStack(stackId)
+        await this.loadStack(stackId)
       } else {
         // Leeren Stack anzeigen wenn nichts ausgewählt
         console.log('[Demo Modal] No stack selected, clearing products')
@@ -1113,11 +1131,11 @@ class SupplementDemoApp {
     // Ersten Stack automatisch laden
     if (this.stacks.length > 0) {
       newSelector.value = this.stacks[0].id
-      this.loadStack(this.stacks[0].id)
+      await this.loadStack(this.stacks[0].id)
     }
   }
 
-  loadStack(stackId) {
+  async loadStack(stackId) {
     console.log(`[Demo Modal] Loading stack with ID: ${stackId}`)
     
     if (!stackId) {
@@ -1125,6 +1143,14 @@ class SupplementDemoApp {
       this.products = []
       this.renderStack()
       return
+    }
+    
+    this.currentStackId = stackId
+    
+    // In Dashboard mode, refresh stack data from database to get latest products
+    if (this.isDashboardMode()) {
+      console.log(`[Dashboard] Refreshing stack ${stackId} from database to get latest products`)
+      await this.refreshStackFromDatabase(stackId)
     }
     
     const stack = this.stacks.find(s => s.id == stackId) // Use == for type-flexible comparison
@@ -1135,8 +1161,7 @@ class SupplementDemoApp {
     
     console.log(`[Demo Modal] Found stack:`, stack)
     console.log(`[Demo Modal] Available products:`, this.availableProducts.length)
-    
-    this.currentStackId = stackId
+    console.log(`[Demo Modal] User products:`, this.userProducts?.length || 0)
     
     // Produkte für diesen Stack laden
     this.products = []
@@ -1145,14 +1170,24 @@ class SupplementDemoApp {
       
       stack.products.forEach((product, index) => {
         if (typeof product === 'number') {
-          // Falls es eine Produkt-ID ist (vordefinierte Struktur)
+          // Product ID - need to find it in either userProducts (for dashboard) or availableProducts (for demo)
           console.log(`[Demo Modal] Looking for product ID: ${product}`)
-          const foundProduct = this.availableProducts.find(p => p.id == product) // Use == for type-flexible comparison
+          
+          // First try to find in userProducts (Dashboard mode)
+          let foundProduct = this.userProducts ? this.userProducts.find(p => p.id == product) : null
+          
           if (foundProduct) {
-            console.log(`[Demo Modal] Found product:`, foundProduct.name)
+            console.log(`[Demo Modal] Found user product:`, foundProduct.name)
             this.products.push({ ...foundProduct })
           } else {
-            console.warn(`[Demo Modal] Product with ID ${product} not found in availableProducts`)
+            // Fallback: try availableProducts (Demo mode or for available products)
+            foundProduct = this.availableProducts.find(p => p.id == product)
+            if (foundProduct) {
+              console.log(`[Demo Modal] Found available product:`, foundProduct.name)
+              this.products.push({ ...foundProduct })
+            } else {
+              console.warn(`[Demo Modal] Product with ID ${product} not found in userProducts or availableProducts`)
+            }
           }
         } else if (typeof product === 'object' && product !== null) {
           // Falls es bereits ein vollständiges Produktobjekt ist (benutzererstellte Struktur)
@@ -1169,6 +1204,52 @@ class SupplementDemoApp {
     
     this.renderStack()
     this.updateStats()
+  }
+
+  // Refresh a specific stack from database to get latest product associations
+  async refreshStackFromDatabase(stackId) {
+    try {
+      if (!this.isDashboardMode()) {
+        console.log('[Demo Modal] Not in dashboard mode, skipping database refresh')
+        return
+      }
+      
+      const authToken = localStorage.getItem('auth_token')
+      if (!authToken) {
+        console.error('[Dashboard] No auth token for stack refresh')
+        return
+      }
+      
+      console.log(`[Dashboard] Refreshing stack ${stackId} from database`)
+      
+      const response = await fetch('/api/protected/stacks', {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      
+      if (!response.ok) {
+        console.error('[Dashboard] Failed to refresh stacks:', response.status)
+        return
+      }
+      
+      const refreshedStacks = await response.json()
+      console.log('[Dashboard] Refreshed stacks from database:', refreshedStacks)
+      
+      // Update our local stacks array with fresh data
+      this.userStacks = refreshedStacks
+      this.stacks = this.userStacks
+      
+      // Find the specific stack we're loading to verify it has updated products
+      const refreshedStack = this.stacks.find(s => s.id == stackId)
+      if (refreshedStack) {
+        console.log(`[Dashboard] Refreshed stack ${stackId} now has ${refreshedStack.products?.length || 0} products:`, refreshedStack.products)
+      }
+      
+    } catch (error) {
+      console.error('[Dashboard] Error refreshing stack from database:', error)
+    }
   }
 
   closeAllModals() {
@@ -1305,7 +1386,7 @@ class SupplementDemoApp {
           <div id="step-product-selection" class="step-container hidden">
             <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
               <h3 class="font-semibold text-green-900 mb-3 flex items-center">
-                <i class="fas fa-shopping-cart mr-2"></i>
+                <i class="fas fa-pills mr-2"></i>
                 Produktauswahl für <span id="selected-nutrient-name" class="font-bold">-</span>
               </h3>
               
@@ -2104,39 +2185,57 @@ class SupplementDemoApp {
       custom_notes: dosage.notes || ''
     }
     
-    // Zum aktuellen Stack hinzufügen - WICHTIG: SOWOHL zu this.products ALS AUCH zu currentStack.products
-    console.log('[Demo Modal] Adding product to current display and stack data')
-    
-    // 1. Immer zu this.products hinzufügen (für sofortige Anzeige)
-    this.products.push(customProduct)
-    console.log('[Demo Modal] Added to this.products, now has', this.products.length, 'products')
-    
-    // 2. Auch zu currentStack.products hinzufügen (für Persistierung)
-    if (this.currentStackId) {
-      const currentStack = this.stacks.find(s => s.id == this.currentStackId)
-      if (currentStack) {
-        console.log('[Demo Modal] Also adding product to stack data:', currentStack.name)
-        // Initialisiere products Array falls noch nicht vorhanden
-        if (!currentStack.products) {
-          currentStack.products = []
+    // Check if we're in dashboard mode (authenticated) or demo mode
+    if (this.isDashboardMode()) {
+      // Dashboard mode: Save to database via AJAX
+      console.log('[Dashboard Mode] Saving product to database...')
+      this.saveProductToDatabase(customProduct).then((savedProduct) => {
+        // Add to display after successful save
+        this.products.push(savedProduct)
+        console.log('[Dashboard Mode] Product saved to database and added to display')
+        
+        // Update display
+        this.renderStack()
+        this.updateStats()
+      }).catch(error => {
+        console.error('Failed to save product:', error)
+        this.showMessage('❌ Fehler beim Speichern des Produkts: ' + error.message, 'error')
+      })
+    } else {
+      // Demo mode: Keep existing local storage behavior
+      console.log('[Demo Mode] Adding product locally')
+      
+      // 1. Immer zu this.products hinzufügen (für sofortige Anzeige)
+      this.products.push(customProduct)
+      console.log('[Demo Modal] Added to this.products, now has', this.products.length, 'products')
+      
+      // 2. Auch zu currentStack.products hinzufügen (für Persistierung)
+      if (this.currentStackId) {
+        const currentStack = this.stacks.find(s => s.id == this.currentStackId)
+        if (currentStack) {
+          console.log('[Demo Modal] Also adding product to stack data:', currentStack.name)
+          // Initialisiere products Array falls noch nicht vorhanden
+          if (!currentStack.products) {
+            currentStack.products = []
+          }
+          // Prüfe ob Produkt bereits in Stack vorhanden (Duplikate vermeiden)
+          const existingProduct = currentStack.products.find(p => 
+            (typeof p === 'object' ? p.id : p) == customProduct.id
+          )
+          if (!existingProduct) {
+            currentStack.products.push(customProduct)
+          }
+          console.log('[Demo Modal] Stack data now has', currentStack.products.length, 'products')
+        } else {
+          console.error('[Demo Modal] Current stack not found:', this.currentStackId)
         }
-        // Prüfe ob Produkt bereits in Stack vorhanden (Duplikate vermeiden)
-        const existingProduct = currentStack.products.find(p => 
-          (typeof p === 'object' ? p.id : p) == customProduct.id
-        )
-        if (!existingProduct) {
-          currentStack.products.push(customProduct)
-        }
-        console.log('[Demo Modal] Stack data now has', currentStack.products.length, 'products')
-      } else {
-        console.error('[Demo Modal] Current stack not found:', this.currentStackId)
       }
+      
+      // Stack-Anzeige aktualisieren
+      console.log('[Demo Modal] finalizeAddProduct - Updating stack display')
+      this.renderStack()
+      this.updateStats()
     }
-    
-    // Stack-Anzeige aktualisieren
-    console.log('[Demo Modal] finalizeAddProduct - Updating stack display')
-    this.renderStack()
-    this.updateStats()
     
     // WICHTIG: Modal nicht hier schließen, das macht der Event Handler
     // this.closeAllModals() - ENTFERNT, wird vom Modal-Handler gemacht
@@ -2176,8 +2275,7 @@ class SupplementDemoApp {
     }
   }
 
-  createStack(formData) {
-    console.log('[Demo Modal] Neuer Stack erstellt (Demo)')
+  async createStack(formData) {
     const stackName = formData.get('stack_name')
     const description = formData.get('description') || ''
     
@@ -2191,32 +2289,112 @@ class SupplementDemoApp {
       throw new Error('Ein Stack mit diesem Namen existiert bereits')
     }
     
-    // Demo: Stack zur Liste hinzufügen
-    const newStack = {
-      id: this.stacks.length + 1,
-      name: stackName.trim(),
-      description: description.trim(),
-      products: [],
-      total_monthly_cost: 0,
-      created_at: new Date().toISOString()
-    }
+    let newStack
     
-    this.stacks.push(newStack)
+    if (this.isDashboardMode()) {
+      console.log('[Dashboard] Creating stack in database...')
+      
+      // Dashboard mode: Create stack in database
+      try {
+        const authToken = localStorage.getItem('auth_token')
+        if (!authToken) {
+          throw new Error('No authentication token found')
+        }
+        
+        const response = await fetch('/api/protected/stacks', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            name: stackName.trim(),
+            description: description.trim(),
+            products: []
+          })
+        })
+        
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.message || `HTTP ${response.status}`)
+        }
+        
+        const responseData = await response.json()
+        console.log('[Dashboard] API response:', responseData)
+        
+        // Extract stack from response - handle nested response format
+        if (responseData.stack) {
+          newStack = responseData.stack
+          console.log('[Dashboard] Extracted stack from nested response:', newStack)
+        } else if (responseData.success && responseData.data) {
+          newStack = responseData.data
+          console.log('[Dashboard] Extracted stack from data property:', newStack)
+        } else {
+          newStack = responseData
+          console.log('[Dashboard] Using response directly as stack:', newStack)
+        }
+        
+        console.log('[Dashboard] Stack created in database:', newStack)
+        
+        // Validate stack data before adding to lists
+        if (!newStack || newStack.id === undefined || newStack.id === null || 
+            !newStack.name || newStack.name.trim() === '') {
+          console.error('[Dashboard] Invalid stack data received from API:', newStack)
+          throw new Error('Server returned invalid stack data')
+        }
+        
+        // Add to local stacks list
+        this.stacks.push(newStack)
+        this.userStacks.push(newStack)
+        
+        console.log('[Dashboard] Added stack to local lists. Total stacks:', this.stacks.length)
+        console.log('[Dashboard] Stack added - ID:', newStack.id, 'Name:', newStack.name)
+        
+      } catch (error) {
+        console.error('[Dashboard] Error creating stack:', error)
+        throw error
+      }
+      
+    } else {
+      console.log('[Demo Modal] Neuer Stack erstellt (Demo)')
+      
+      // Demo mode: Create stack locally only
+      newStack = {
+        id: this.stacks.length + 1,
+        name: stackName.trim(),
+        description: description.trim(),
+        products: [],
+        total_monthly_cost: 0,
+        created_at: new Date().toISOString()
+      }
+      
+      this.stacks.push(newStack)
+    }
     
     // Stack-Selector aktualisieren (mit Error Handling)
     try {
-      this.initStackSelector()
+      console.log('[Dashboard] About to update stack selector. Current stacks:', this.stacks.length)
+      console.log('[Dashboard] All stack names:', this.stacks.map(s => s.name))
+      
+      await this.initStackSelector()
       
       // Neuen Stack automatisch auswählen
       const selector = document.getElementById('stack-selector')
-      if (selector) {
+      if (selector && newStack && newStack.id) {
+        console.log('[Dashboard] Setting selector to new stack ID:', newStack.id)
         selector.value = newStack.id
-        this.loadStack(newStack.id)
+        await this.loadStack(newStack.id)
+      } else {
+        console.warn('[Dashboard] Cannot select new stack - selector or newStack invalid:', {
+          selector: !!selector,
+          newStack: newStack,
+          newStackId: newStack?.id
+        })
       }
       
       this.updateStats()
     } catch (error) {
-      console.warn('Warnung beim Aktualisieren der UI:', error)
+      console.warn('[Dashboard] Error updating UI after stack creation:', error)
       // Fehler beim UI-Update sollen Stack-Erstellung nicht verhindern
     }
     
@@ -2299,10 +2477,10 @@ class SupplementDemoApp {
     const form = modal.querySelector('#create-stack-form')
     
     if (form) {
-      form.addEventListener('submit', (e) => {
+      form.addEventListener('submit', async (e) => {
         e.preventDefault()
         try {
-          const newStack = this.createStack(new FormData(form))
+          const newStack = await this.createStack(new FormData(form))
           this.showSuccess(`Stack "${newStack.name}" erfolgreich erstellt!`)
           // Modal IMMER schließen nach erfolgreichem Erstellen
           setTimeout(() => modal.remove(), 100)
@@ -2890,14 +3068,8 @@ class SupplementDemoApp {
   }
 
   addProduct(formData) {
-    console.log('[Demo Modal] Neues Produkt hinzugefügt (Demo)')
-    // In echter App: API-Aufruf zum Hinzufügen
-    // Für Demo: Feedback anzeigen
-    this.showMessage('✅ Produkt hinzugefügt (Demo-Modus)', 'success')
-    
-    // Demo: Produkt zur Liste hinzufügen
     const newProduct = {
-      id: this.products.length + 1,
+      id: Date.now(), // Temporary ID
       name: formData.get('name'),
       brand: formData.get('brand'),
       form: formData.get('form'),
@@ -2907,9 +3079,9 @@ class SupplementDemoApp {
       nutrient_amount_per_unit: parseFloat(formData.get('nutrient_amount_per_unit')),
       dosage_per_day: parseFloat(formData.get('dosage_per_day')),
       category: formData.get('category'),
-      description: formData.get('description') || 'Hinzugefügt in Demo',
-      benefits: ['Demo-Vorteil 1', 'Demo-Vorteil 2'],
-      warnings: ['Demo-Warnung'],
+      description: formData.get('description') || 'Manuell hinzugefügtes Produkt',
+      benefits: ['Benutzerdefiniert'],
+      warnings: [],
       dosage_recommendation: formData.get('dosage_recommendation') || 'Nach Packungsangabe'
     }
     
@@ -2917,10 +3089,27 @@ class SupplementDemoApp {
     newProduct.price_per_piece = newProduct.purchase_price / newProduct.quantity
     newProduct.days_supply = Math.floor(newProduct.quantity / newProduct.dosage_per_day)
     newProduct.monthly_cost = (newProduct.purchase_price / newProduct.days_supply * 30)
-    
-    this.products.push(newProduct)
-    this.renderStack()
-    this.updateStats()
+
+    if (this.isDashboardMode()) {
+      // Dashboard mode: Save to database
+      console.log('[Dashboard Mode] Saving manually added product to database')
+      this.saveProductToDatabase(newProduct).then((savedProduct) => {
+        this.products.push(savedProduct)
+        this.renderStack()
+        this.updateStats()
+        this.showMessage('✅ Produkt erfolgreich hinzugefügt und gespeichert!', 'success')
+      }).catch(error => {
+        console.error('Failed to save manual product:', error)
+        this.showMessage('❌ Fehler beim Speichern: ' + error.message, 'error')
+      })
+    } else {
+      // Demo mode: Local storage
+      console.log('[Demo Mode] Adding manual product locally')
+      this.products.push(newProduct)
+      this.renderStack()
+      this.updateStats()
+      this.showMessage('✅ Produkt hinzugefügt (Demo-Modus)', 'success')
+    }
   }
 
   showMessage(message, type = 'info') {
@@ -2939,6 +3128,432 @@ class SupplementDemoApp {
       toast.style.transform = 'translateX(100%)'
       setTimeout(() => toast.remove(), 300)
     }, 3000)
+  }
+
+  // Check if we're in dashboard mode (authenticated user) or demo mode
+  isDashboardMode() {
+    // Check if we have auth token and are on dashboard page
+    const hasAuthToken = localStorage.getItem('auth_token') !== null
+    const isDashboardPage = window.location.pathname.includes('/dashboard')
+    
+    console.log('[Mode Check] hasAuthToken:', hasAuthToken, 'isDashboardPage:', isDashboardPage)
+    return hasAuthToken && isDashboardPage
+  }
+
+  // Load dashboard-specific data (user stacks and products)
+  async loadDashboardData() {
+    try {
+      console.log('[Dashboard Data] Loading user-specific stacks and products...')
+      
+      // Double-check authentication before loading data
+      const authToken = localStorage.getItem('auth_token')
+      if (!authToken) {
+        console.log('[Dashboard Data] No auth token found, redirecting to login')
+        window.location.href = '/auth'
+        return
+      }
+      
+      // Load user stacks, user products, and available products in parallel
+      const [userStacks, userProducts, availableProducts] = await Promise.all([
+        this.loadUserStacks(),
+        this.loadUserProducts(),
+        this.loadAvailableProducts()
+      ])
+      
+      console.log('[Dashboard Data] Loaded:', userStacks.length, 'stacks,', userProducts.length, 'user products, and', availableProducts.length, 'available products')
+      
+      // Set the data
+      this.userStacks = userStacks || []
+      this.userProducts = userProducts || []
+      
+      // Set stacks data
+      if (this.userStacks.length === 0) {
+        console.log('[Dashboard Data] User has no stacks, creating default stack...')
+        try {
+          const defaultStack = await this.createDefaultStackInDatabase()
+          this.userStacks = [defaultStack]
+          this.stacks = this.userStacks
+          console.log('[Dashboard Data] Default stack created:', defaultStack)
+        } catch (error) {
+          console.error('[Dashboard Data] Failed to create default stack, using local fallback:', error)
+          this.stacks = this.createDefaultDashboardStack()
+        }
+      } else {
+        console.log('[Dashboard Data] User has', this.userStacks.length, 'stacks, using them directly')
+        this.stacks = this.userStacks
+        
+        // Debug: Log all stack names to identify the naming issue
+        this.userStacks.forEach((stack, index) => {
+          console.log(`[Dashboard Data] Stack ${index + 1}:`, {
+            id: stack.id,
+            name: stack.name,
+            description: stack.description,
+            products: stack.products?.length || 0
+          })
+        })
+      }
+      
+      // Set available products from API (these are the products users can choose to add)
+      this.availableProducts = availableProducts || this.loadDemoProducts()
+      console.log('[Dashboard Data] Available products for adding:', this.availableProducts.length)
+      
+      this.dataLoaded = true
+      console.log('[Dashboard Data] Dashboard data loaded successfully')
+      
+    } catch (error) {
+      console.error('[Dashboard Data] Error loading dashboard data:', error)
+      
+      // If authentication fails (401), redirect to login
+      if (error.message && (error.message.includes('401') || error.message.includes('Unauthorized'))) {
+        console.log('[Dashboard Data] Authentication failed, redirecting to login')
+        localStorage.removeItem('auth_token')
+        window.location.href = '/auth'
+        return
+      }
+      
+      // For other errors, show error message but stay on page
+      this.stacks = this.createDefaultDashboardStack()
+      this.showMessage('⚠️ Fehler beim Laden der Benutzerdaten. Bitte versuchen Sie es erneut.', 'error')
+    }
+  }
+
+  // Create a default empty stack for new dashboard users (local fallback)
+  createDefaultDashboardStack() {
+    return [{
+      id: 'user-default',
+      name: 'Mein Stack',
+      description: 'Ihr persönlicher Supplement-Stack',
+      products: [],
+      total_monthly_cost: 0,
+      created_at: new Date().toISOString()
+    }]
+  }
+  
+  // Create a default stack in the database for new users
+  async createDefaultStackInDatabase() {
+    try {
+      const authToken = localStorage.getItem('auth_token')
+      if (!authToken) {
+        throw new Error('No authentication token found')
+      }
+      
+      console.log('[Database Create] Creating default stack in database...')
+      
+      const stackData = {
+        name: 'Mein Stack',
+        description: 'Ihr persönlicher Supplement-Stack',
+        products: []
+      }
+      
+      console.log('[Database Create] Sending stack creation request:', stackData)
+      
+      const response = await fetch('/api/protected/stacks', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(stackData)
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || `HTTP ${response.status}`)
+      }
+      
+      const stack = await response.json()
+      console.log('[Database Create] Default stack created successfully:', stack)
+      
+      return {
+        id: stack.id,
+        name: stack.name,
+        description: stack.description,
+        products: stack.products || [],
+        total_monthly_cost: 0,
+        created_at: stack.created_at
+      }
+      
+    } catch (error) {
+      console.error('[Database Create] Error creating default stack:', error)
+      throw error
+    }
+  }
+
+  // Save product to database via AJAX (Dashboard mode only)
+  async saveProductToDatabase(product) {
+    try {
+      console.log('[Database Save] Sending product to API:', product)
+      
+      const authToken = localStorage.getItem('auth_token')
+      if (!authToken) {
+        throw new Error('Kein Authentifizierungstoken gefunden')
+      }
+
+      const response = await fetch('/api/protected/products', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify({
+          name: product.name,
+          brand: product.brand || 'Unbekannt',
+          purchase_price: product.purchase_price || 0,
+          monthly_cost: product.monthly_cost || 0,
+          shop_url: product.shop_url || '',
+          category: product.category || 'Sonstiges',
+          form: product.form || 'Einheit',
+          dosage_per_day: product.dosage_per_day || 1,
+          quantity: product.quantity || 30,
+          days_supply: product.days_supply || 30
+        })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || `HTTP ${response.status}`)
+      }
+
+      const result = await response.json()
+      console.log('[Database Save] Product saved successfully:', result.product)
+      
+      // If we have a current stack, add the product to it
+      if (this.currentStackId && result.product?.id) {
+        try {
+          await this.addProductToStack(result.product.id, this.currentStackId)
+        } catch (stackError) {
+          console.warn('[Database Save] Failed to add product to stack:', stackError)
+          // Don't fail the whole operation if adding to stack fails
+        }
+      }
+      
+      this.showMessage('✅ Produkt erfolgreich in der Datenbank gespeichert!', 'success')
+      return result.product
+      
+    } catch (error) {
+      console.error('[Database Save] Error saving product:', error)
+      throw error
+    }
+  }
+
+  // Add product to stack via API (Dashboard mode only)
+  async addProductToStack(productId, stackId, dosagePerDay = 1) {
+    try {
+      const authToken = localStorage.getItem('auth_token')
+      if (!authToken) {
+        throw new Error('Kein Authentifizierungstoken gefunden')
+      }
+
+      const response = await fetch(`/api/protected/stacks/${stackId}/products`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${authToken}`
+        },
+        body: JSON.stringify({
+          productId: productId,
+          dosagePerDay: dosagePerDay
+        })
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || `HTTP ${response.status}`)
+      }
+
+      const result = await response.json()
+      console.log('[Database Save] Product added to stack successfully')
+      return result
+      
+    } catch (error) {
+      console.error('[Database Save] Error adding product to stack:', error)
+      throw error
+    }
+  }
+
+  // Load user's saved stacks from database (Dashboard mode)
+  async loadUserStacks() {
+    try {
+      const authToken = localStorage.getItem('auth_token')
+      if (!authToken) {
+        throw new Error('No authentication token found')
+      }
+
+      console.log('[Database Load] Loading user stacks with token:', authToken.substring(0, 20) + '...')
+      
+      const response = await fetch('/api/protected/stacks', {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      console.log('[Database Load] Stacks API response status:', response.status)
+
+      if (response.status === 401) {
+        throw new Error('401 Unauthorized - Invalid or expired token')
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('[Database Load] Stacks API error response:', errorText)
+        throw new Error(`HTTP ${response.status}: ${errorText}`)
+      }
+
+      const stacks = await response.json()
+      console.log('[Database Load] User stacks loaded successfully:', stacks)
+      return stacks
+      
+    } catch (error) {
+      console.error('[Database Load] Error loading stacks:', error)
+      throw error // Re-throw to let caller handle it
+    }
+  }
+
+  // Load user's saved products from database (Dashboard mode)
+  async loadUserProducts() {
+    try {
+      const authToken = localStorage.getItem('auth_token')
+      if (!authToken) {
+        throw new Error('No authentication token found')
+      }
+
+      console.log('[Database Load] Loading user products with token:', authToken.substring(0, 20) + '...')
+      
+      const response = await fetch('/api/protected/products', {
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      console.log('[Database Load] Products API response status:', response.status)
+
+      if (response.status === 401) {
+        throw new Error('401 Unauthorized - Invalid or expired token')
+      }
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('[Database Load] Products API error response:', errorText)
+        throw new Error(`HTTP ${response.status}: ${errorText}`)
+      }
+
+      const products = await response.json()
+      console.log('[Database Load] User products loaded successfully:', products)
+      return products
+      
+    } catch (error) {
+      console.error('[Database Load] Error loading products:', error)
+      throw error // Re-throw to let caller handle it
+    }
+  }
+  // Load available products from API (products that users can choose to add)
+  async loadAvailableProducts() {
+    try {
+      console.log('[Available Products] Loading available products from API...')
+      
+      const response = await fetch('/api/available-products', {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+      
+      if (!response.ok) {
+        console.warn('[Available Products] API not available, using demo products as fallback')
+        return this.loadDemoProducts()
+      }
+      
+      const products = await response.json()
+      console.log('[Available Products] Loaded', products.length, 'available products from API')
+      
+      // Transform API products to match demo product format
+      return products.map(product => ({
+        id: product.id,
+        name: product.name,
+        brand: product.brand,
+        form: product.form,
+        purchase_price: product.purchase_price,
+        quantity: product.quantity,
+        price_per_piece: product.price_per_piece,
+        dosage_per_day: product.dosage_per_day,
+        days_supply: product.days_supply,
+        monthly_cost: product.monthly_cost,
+        description: product.description,
+        benefits: Array.isArray(product.benefits) ? product.benefits : JSON.parse(product.benefits || '[]'),
+        warnings: Array.isArray(product.warnings) ? product.warnings : JSON.parse(product.warnings || '[]'),
+        dosage_recommendation: product.dosage_recommendation,
+        category: product.category,
+        main_nutrients: Array.isArray(product.main_nutrients) ? product.main_nutrients : JSON.parse(product.main_nutrients || '[]'),
+        secondary_nutrients: Array.isArray(product.secondary_nutrients) ? product.secondary_nutrients : JSON.parse(product.secondary_nutrients || '[]'),
+        recommended: !!product.recommended,
+        recommendation_rank: product.recommendation_rank || 0,
+        product_image: product.product_image,
+        shop_url: product.shop_url
+      }))
+      
+    } catch (error) {
+      console.error('[Available Products] Error loading available products:', error)
+      console.log('[Available Products] Falling back to demo products')
+      return this.loadDemoProducts()
+    }
+  }
+  
+  // Delete stack
+  async deleteStack(stackId) {
+    if (!this.isDashboardMode()) {
+      // Demo mode: just remove from local list
+      this.stacks = this.stacks.filter(s => s.id !== stackId)
+      await this.initStackSelector()
+      this.showSuccess('Stack erfolgreich gelöscht!')
+      return
+    }
+    
+    try {
+      const authToken = localStorage.getItem('auth_token')
+      if (!authToken) {
+        throw new Error('No authentication token found')
+      }
+      
+      console.log('[Dashboard] Deleting stack:', stackId)
+      
+      const response = await fetch(`/api/protected/stacks/${stackId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || `HTTP ${response.status}`)
+      }
+      
+      console.log('[Dashboard] Stack deleted successfully')
+      
+      // Remove from local lists
+      this.stacks = this.stacks.filter(s => s.id !== stackId)
+      this.userStacks = this.userStacks.filter(s => s.id !== stackId)
+      
+      // Update UI
+      await this.initStackSelector()
+      
+      // If no stacks left, create a default one
+      if (this.stacks.length === 0) {
+        const defaultStack = await this.createDefaultStackInDatabase()
+        this.stacks = [defaultStack]
+        this.userStacks = [defaultStack]
+        await this.initStackSelector()
+      }
+      
+      this.showSuccess('Stack erfolgreich gelöscht!')
+      
+    } catch (error) {
+      console.error('[Dashboard] Error deleting stack:', error)
+      this.showError(error.message || 'Fehler beim Löschen des Stacks')
+      throw error
+    }
   }
 }
 
