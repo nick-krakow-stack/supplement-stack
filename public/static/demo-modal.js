@@ -3005,12 +3005,121 @@ class SupplementDemoApp {
 
   editProduct(productId) {
     console.log('[Demo Modal] Zeige Edit Modal für Produkt ID:', productId)
-    // Vereinfachte Edit-Funktion für Demo
     const product = this.products.find(p => p.id === productId)
     if (!product) return
 
     this.closeAllModals()
 
+    if (this.isDashboardMode()) {
+      // Dashboard mode: Show real edit form
+      this.showRealEditModal(product)
+    } else {
+      // Demo mode: Show demo info
+      this.showDemoEditModal(product)
+    }
+  }
+  
+  showRealEditModal(product) {
+    const modal = document.createElement('div')
+    modal.className = 'modal-overlay'
+    modal.style.cssText = `
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.5); display: flex;
+      align-items: center; justify-content: center;
+      z-index: 9999; padding: 16px;
+    `
+    
+    modal.innerHTML = `
+      <div class="modal-container" style="background: white; border-radius: 8px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); width: 100%; max-width: 36rem; max-height: 95vh; overflow-y: auto;">
+        <div class="p-4 sm:p-6">
+          <div class="flex justify-between items-start mb-4">
+            <h2 class="text-lg sm:text-xl font-bold text-gray-900">
+              <i class="fas fa-edit mr-2 text-blue-600"></i>
+              ${product.name} bearbeiten
+            </h2>
+            <button class="close-modal p-2 text-gray-400 hover:text-gray-600 touch-target">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+          
+          <form id="edit-product-form" class="space-y-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Produktname</label>
+                <input type="text" name="name" value="${product.name}" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Marke</label>
+                <input type="text" name="brand" value="${product.brand}" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+              </div>
+            </div>
+            
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Preis (€)</label>
+                <input type="number" name="purchase_price" value="${product.purchase_price}" step="0.01" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Menge</label>
+                <input type="number" name="quantity" value="${product.quantity}" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Dosierung/Tag</label>
+                <input type="number" name="dosage_per_day" value="${product.dosage_per_day}" step="0.1" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+              </div>
+            </div>
+            
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Form</label>
+                <select name="form" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="Kapsel" ${product.form === 'Kapsel' ? 'selected' : ''}>Kapsel</option>
+                  <option value="Tablette" ${product.form === 'Tablette' ? 'selected' : ''}>Tablette</option>
+                  <option value="Tropfen" ${product.form === 'Tropfen' ? 'selected' : ''}>Tropfen</option>
+                  <option value="Pulver" ${product.form === 'Pulver' ? 'selected' : ''}>Pulver</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Wirkstoffmenge pro Einheit</label>
+                <input type="number" name="nutrient_amount_per_unit" value="${product.nutrient_amount_per_unit}" step="0.1" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+              </div>
+            </div>
+            
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Beschreibung</label>
+              <textarea name="description" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">${product.description || ''}</textarea>
+            </div>
+            
+            <div class="bg-red-50 border border-red-200 rounded-lg p-3">
+              <p class="text-red-800 text-sm">
+                <i class="fas fa-info-circle mr-1"></i>
+                Änderungen werden sofort in der Datenbank gespeichert.
+              </p>
+            </div>
+          </form>
+          
+          <div class="mt-6 flex justify-end space-x-3">
+            <button onclick="this.closest('.modal-overlay').remove()" class="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition-colors">
+              Abbrechen
+            </button>
+            <button onclick="window.demoApp.saveProductEdits(${product.id}); this.closest('.modal-overlay').remove()" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">
+              <i class="fas fa-save mr-2"></i>Speichern
+            </button>
+          </div>
+        </div>
+      </div>
+    `
+    
+    document.body.appendChild(modal)
+    
+    // Modal schließen
+    modal.querySelector('.close-modal').addEventListener('click', () => modal.remove())
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.remove()
+    })
+  }
+  
+  showDemoEditModal(product) {
     const modal = document.createElement('div')
     modal.className = 'modal-overlay'
     modal.style.cssText = `
@@ -3082,6 +3191,87 @@ class SupplementDemoApp {
     modal.addEventListener('click', (e) => {
       if (e.target === modal) modal.remove()
     })
+  }
+  
+  async saveProductEdits(productId) {
+    console.log('[Dashboard] Saving product edits for ID:', productId)
+    
+    const form = document.getElementById('edit-product-form')
+    if (!form) {
+      console.error('Edit form not found')
+      return
+    }
+    
+    const formData = new FormData(form)
+    const updatedProduct = {
+      name: formData.get('name'),
+      brand: formData.get('brand'),
+      purchase_price: parseFloat(formData.get('purchase_price')),
+      quantity: parseInt(formData.get('quantity')),
+      dosage_per_day: parseFloat(formData.get('dosage_per_day')),
+      form: formData.get('form'),
+      nutrient_amount_per_unit: parseFloat(formData.get('nutrient_amount_per_unit')),
+      description: formData.get('description')
+    }
+    
+    // Calculate derived values
+    updatedProduct.price_per_piece = updatedProduct.purchase_price / updatedProduct.quantity
+    updatedProduct.days_supply = Math.floor(updatedProduct.quantity / updatedProduct.dosage_per_day)
+    updatedProduct.monthly_cost = (updatedProduct.purchase_price / updatedProduct.days_supply * 30)
+    
+    if (this.isDashboardMode()) {
+      // Dashboard mode: Save to database
+      try {
+        const authToken = localStorage.getItem('auth_token')
+        if (!authToken) {
+          throw new Error('No authentication token found')
+        }
+        
+        console.log('[Dashboard] Updating product in database:', productId, updatedProduct)
+        const response = await fetch(`/api/protected/products/${productId}`, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${authToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(updatedProduct)
+        })
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ message: 'Unknown error' }))
+          throw new Error(errorData.message || `HTTP ${response.status}`)
+        }
+        
+        const savedProduct = await response.json()
+        console.log('[Dashboard] Product updated in database:', savedProduct)
+        
+        // Update local product in array
+        const productIndex = this.products.findIndex(p => p.id === productId)
+        if (productIndex !== -1) {
+          this.products[productIndex] = { ...this.products[productIndex], ...updatedProduct }
+        }
+        
+        // Update display
+        this.renderStack()
+        this.updateStats()
+        
+        this.showMessage('✅ Produkt erfolgreich aktualisiert!', 'success')
+        console.log('[Dashboard] Product successfully updated')
+        
+      } catch (error) {
+        console.error('[Dashboard] Error updating product:', error)
+        this.showMessage('❌ Fehler beim Aktualisieren: ' + error.message, 'error')
+      }
+    } else {
+      // Demo mode: Just update local array
+      const productIndex = this.products.findIndex(p => p.id === productId)
+      if (productIndex !== -1) {
+        this.products[productIndex] = { ...this.products[productIndex], ...updatedProduct }
+      }
+      this.renderStack()
+      this.updateStats()
+      this.showMessage('✅ Produkt aktualisiert (Demo-Modus)', 'success')
+    }
   }
 
   deleteProduct(productId) {

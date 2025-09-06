@@ -783,11 +783,62 @@ app.put('/api/protected/products/:id', authMiddleware, async (c) => {
     
     console.log('Updating product:', productId, 'for user:', userId, updates);
     
-    // TODO: Update product in database
-    // For now, return success response
+    // Validate that the product belongs to the user before updating
+    const existingProduct = await c.env.DB.prepare(`
+      SELECT id FROM products WHERE id = ? AND user_id = ?
+    `).bind(productId, userId).first();
+    
+    if (!existingProduct) {
+      return c.json({
+        error: 'Product not found or not owned by user',
+        message: 'Produkt nicht gefunden oder keine Berechtigung zum Bearbeiten'
+      }, 404);
+    }
+    
+    // Update product in database
+    const result = await c.env.DB.prepare(`
+      UPDATE products SET
+        name = ?,
+        brand = ?,
+        purchase_price = ?,
+        quantity = ?,
+        dosage_per_day = ?,
+        form = ?,
+        nutrient_amount_per_unit = ?,
+        description = ?,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND user_id = ?
+    `).bind(
+      updates.name,
+      updates.brand,
+      updates.purchase_price,
+      updates.quantity,
+      updates.dosage_per_day,
+      updates.form,
+      updates.nutrient_amount_per_unit,
+      updates.description || null,
+      productId,
+      userId
+    ).run();
+    
+    if (result.changes === 0) {
+      return c.json({
+        error: 'Failed to update product',
+        message: 'Produkt konnte nicht aktualisiert werden'
+      }, 500);
+    }
+    
+    console.log('Product updated successfully:', productId, 'changes:', result.changes);
+    
+    // Return updated product data
+    const updatedProduct = await c.env.DB.prepare(`
+      SELECT * FROM products WHERE id = ? AND user_id = ?
+    `).bind(productId, userId).first();
+    
     return c.json({
       success: true,
-      message: 'Produkt erfolgreich aktualisiert'
+      message: 'Produkt erfolgreich aktualisiert',
+      product: updatedProduct
     });
     
   } catch (error) {
