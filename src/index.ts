@@ -204,8 +204,204 @@ app.get('/api/auth/profile', authMiddleware, async (c) => {
 });
 
 // =================================
+// DATABASE MANAGEMENT
+// =================================
+
+// Run database migrations
+app.get('/api/admin/migrate', async (c) => {
+  try {
+    // Execute the available_products migration
+    const migrationSQL = `
+      CREATE TABLE IF NOT EXISTS available_products (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        brand TEXT NOT NULL,
+        form TEXT NOT NULL,
+        purchase_price REAL NOT NULL,
+        quantity INTEGER NOT NULL,
+        price_per_piece REAL,
+        dosage_per_day INTEGER DEFAULT 1,
+        days_supply INTEGER,
+        monthly_cost REAL,
+        description TEXT,
+        benefits TEXT,
+        warnings TEXT,
+        dosage_recommendation TEXT,
+        category TEXT,
+        main_nutrients TEXT,
+        secondary_nutrients TEXT,
+        recommended BOOLEAN DEFAULT FALSE,
+        recommendation_rank INTEGER DEFAULT 0,
+        product_image TEXT,
+        shop_url TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+      
+      CREATE INDEX IF NOT EXISTS idx_available_products_category ON available_products(category);
+      CREATE INDEX IF NOT EXISTS idx_available_products_recommended ON available_products(recommended, recommendation_rank);
+    `;
+    
+    await c.env.DB.exec(migrationSQL);
+    
+    return c.json({ success: true, message: 'Migration completed successfully' });
+    
+  } catch (error) {
+    console.error('Migration error:', error);
+    return c.json({ error: 'Migration failed', details: error.message }, 500);
+  }
+});
+
+// Seed available products data
+app.post('/api/admin/seed-products', async (c) => {
+  try {
+    const products = [
+      {
+        id: 1, name: 'Vitamin D3 4000 IU', brand: 'Sunday Natural', form: 'Kapsel',
+        purchase_price: 19.90, quantity: 50, price_per_piece: 0.398,
+        dosage_per_day: 1, days_supply: 50, monthly_cost: 11.94,
+        description: 'Hochdosiertes Vitamin D3 (Cholecalciferol) aus Lanolin',
+        benefits: JSON.stringify(['Unterstützt das Immunsystem', 'Wichtig für Knochen und Zähne', 'Trägt zur normalen Muskelfunktion bei']),
+        warnings: JSON.stringify([]),
+        dosage_recommendation: '1 Kapsel täglich zu einer Mahlzeit', category: 'Vitamine',
+        main_nutrients: JSON.stringify([{nutrient_id: 1, amount_per_unit: 4000}]),
+        secondary_nutrients: JSON.stringify([]), recommended: 1, recommendation_rank: 1,
+        product_image: 'https://images.unsplash.com/photo-1550572017-edd951aa8f72?w=400&h=400&fit=crop&crop=center',
+        shop_url: 'https://example.com/vitamin-d3'
+      },
+      {
+        id: 2, name: 'B12 Methylcobalamin', brand: 'InnoNature', form: 'Tropfen',
+        purchase_price: 24.90, quantity: 60, price_per_piece: 0.415,
+        dosage_per_day: 1, days_supply: 60, monthly_cost: 12.45,
+        description: 'Bioaktives Vitamin B12 als Methylcobalamin',
+        benefits: JSON.stringify(['Reduziert Müdigkeit', 'Unterstützt Nervensystem', 'Wichtig für Blutbildung']),
+        warnings: JSON.stringify(['Hochdosiert - nicht für Schwangere ohne Rücksprache']),
+        dosage_recommendation: '1 Tropfen täglich', category: 'Vitamine',
+        main_nutrients: JSON.stringify([{nutrient_id: 2, amount_per_unit: 200}]),
+        secondary_nutrients: JSON.stringify([]), recommended: 1, recommendation_rank: 1,
+        product_image: 'https://images.unsplash.com/photo-1559181567-c3190ca9959b?w=400&h=400&fit=crop&crop=center',
+        shop_url: 'https://example.com/b12'
+      },
+      {
+        id: 12, name: 'B-Komplex Premium', brand: 'Biomenta', form: 'Kapsel',
+        purchase_price: 21.90, quantity: 60, price_per_piece: 0.365,
+        dosage_per_day: 1, days_supply: 60, monthly_cost: 10.95,
+        description: 'Vollständiger B-Vitamin Komplex mit allen wichtigen B-Vitaminen',
+        benefits: JSON.stringify(['Unterstützt Energiestoffwechsel', 'Nervensystem', 'Reduziert Müdigkeit']),
+        warnings: JSON.stringify(['Kann Urin gelb färben (normal)', 'Nicht auf nüchternen Magen']),
+        dosage_recommendation: '1 Kapsel täglich zu einer Mahlzeit', category: 'Vitamine',
+        main_nutrients: JSON.stringify([{nutrient_id: 2, amount_per_unit: 100}, {nutrient_id: 7, amount_per_unit: 5}, {nutrient_id: 8, amount_per_unit: 400}]),
+        secondary_nutrients: JSON.stringify([]), recommended: 0, recommendation_rank: 3,
+        product_image: null, shop_url: 'https://example.com/b-komplex'
+      }
+    ];
+    
+    for (const product of products) {
+      await c.env.DB.prepare(`
+        INSERT OR REPLACE INTO available_products (
+          id, name, brand, form, purchase_price, quantity, price_per_piece,
+          dosage_per_day, days_supply, monthly_cost, description, benefits,
+          warnings, dosage_recommendation, category, main_nutrients,
+          secondary_nutrients, recommended, recommendation_rank, product_image, shop_url
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).bind(
+        product.id, product.name, product.brand, product.form,
+        product.purchase_price, product.quantity, product.price_per_piece,
+        product.dosage_per_day, product.days_supply, product.monthly_cost,
+        product.description, product.benefits, product.warnings,
+        product.dosage_recommendation, product.category, product.main_nutrients,
+        product.secondary_nutrients, product.recommended, product.recommendation_rank,
+        product.product_image, product.shop_url
+      ).run();
+    }
+    
+    return c.json({ success: true, message: 'Products seeded successfully', count: products.length });
+    
+  } catch (error) {
+    console.error('Seed products error:', error);
+    return c.json({ error: 'Seeding failed', details: error.message }, 500);
+  }
+});
+
+// =================================
 // PROTECTED API ROUTES (Dashboard Data)
 // =================================
+
+// Get available products for adding (search by nutrient)
+app.get('/api/available-products', async (c) => {
+  try {
+    const nutrientId = c.req.query('nutrient_id');
+    
+    if (!nutrientId) {
+      // Return all available products if no nutrient filter
+      const products = await c.env.DB.prepare(`
+        SELECT 
+          ap.id,
+          ap.name,
+          ap.brand,
+          ap.form,
+          ap.purchase_price,
+          ap.quantity,
+          ap.price_per_piece,
+          ap.dosage_per_day,
+          ap.days_supply,
+          ap.monthly_cost,
+          ap.description,
+          ap.benefits,
+          ap.warnings,
+          ap.dosage_recommendation,
+          ap.category,
+          ap.main_nutrients,
+          ap.secondary_nutrients,
+          ap.recommended,
+          ap.recommendation_rank,
+          ap.product_image,
+          ap.shop_url
+        FROM available_products ap
+        ORDER BY ap.recommended DESC, ap.recommendation_rank ASC
+      `).all();
+      
+      return c.json(products.results || []);
+    }
+    
+    // Filter by nutrient_id
+    const products = await c.env.DB.prepare(`
+      SELECT 
+        ap.id,
+        ap.name,
+        ap.brand,
+        ap.form,
+        ap.purchase_price,
+        ap.quantity,
+        ap.price_per_piece,
+        ap.dosage_per_day,
+        ap.days_supply,
+        ap.monthly_cost,
+        ap.description,
+        ap.benefits,
+        ap.warnings,
+        ap.dosage_recommendation,
+        ap.category,
+        ap.main_nutrients,
+        ap.secondary_nutrients,
+        ap.recommended,
+        ap.recommendation_rank,
+        ap.product_image,
+        ap.shop_url
+      FROM available_products ap
+      WHERE json_extract(ap.main_nutrients, '$[*].nutrient_id') LIKE '%' || ? || '%'
+         OR json_extract(ap.secondary_nutrients, '$[*].nutrient_id') LIKE '%' || ? || '%'
+      ORDER BY ap.recommended DESC, ap.recommendation_rank ASC
+    `).bind(nutrientId, nutrientId).all();
+    
+    console.log('Found', products.results?.length || 0, 'available products for nutrient', nutrientId);
+    return c.json(products.results || []);
+    
+  } catch (error) {
+    console.error('Available products API error:', error);
+    return c.json({ error: 'Failed to load available products' }, 500);
+  }
+});
 
 // Get user's products
 app.get('/api/protected/products', authMiddleware, async (c) => {

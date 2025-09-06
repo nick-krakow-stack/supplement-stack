@@ -2998,28 +2998,23 @@ class SupplementDemoApp {
         return
       }
       
-      // Load user stacks and products in parallel
-      const [userStacks, userProducts] = await Promise.all([
+      // Load user stacks, user products, and available products in parallel
+      const [userStacks, userProducts, availableProducts] = await Promise.all([
         this.loadUserStacks(),
-        this.loadUserProducts()
+        this.loadUserProducts(),
+        this.loadAvailableProducts()
       ])
       
-      console.log('[Dashboard Data] Loaded:', userStacks.length, 'stacks and', userProducts.length, 'products')
+      console.log('[Dashboard Data] Loaded:', userStacks.length, 'stacks,', userProducts.length, 'user products, and', availableProducts.length, 'available products')
       
       // Set the data
       this.userStacks = userStacks || []
       this.userProducts = userProducts || []
       this.stacks = this.userStacks.length > 0 ? this.userStacks : this.createDefaultDashboardStack()
       
-      // Replace available products entirely with user products for dashboard mode
-      // This ensures dashboard users only see their own products, not demo products
-      if (this.userProducts.length > 0) {
-        this.availableProducts = [...this.userProducts]
-        console.log('[Dashboard Data] Using user products as available products:', this.userProducts.length)
-      } else {
-        // If user has no products yet, use demo products as templates they can choose from
-        console.log('[Dashboard Data] User has no products yet, showing demo products as templates')
-      }
+      // Set available products from API (these are the products users can choose to add)
+      this.availableProducts = availableProducts || this.loadDemoProducts()
+      console.log('[Dashboard Data] Available products for adding:', this.availableProducts.length)
       
       this.dataLoaded = true
       console.log('[Dashboard Data] Dashboard data loaded successfully')
@@ -3220,6 +3215,56 @@ class SupplementDemoApp {
     } catch (error) {
       console.error('[Database Load] Error loading products:', error)
       throw error // Re-throw to let caller handle it
+    }
+  }
+  // Load available products from API (products that users can choose to add)
+  async loadAvailableProducts() {
+    try {
+      console.log('[Available Products] Loading available products from API...')
+      
+      const response = await fetch('/api/available-products', {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+      
+      if (!response.ok) {
+        console.warn('[Available Products] API not available, using demo products as fallback')
+        return this.loadDemoProducts()
+      }
+      
+      const products = await response.json()
+      console.log('[Available Products] Loaded', products.length, 'available products from API')
+      
+      // Transform API products to match demo product format
+      return products.map(product => ({
+        id: product.id,
+        name: product.name,
+        brand: product.brand,
+        form: product.form,
+        purchase_price: product.purchase_price,
+        quantity: product.quantity,
+        price_per_piece: product.price_per_piece,
+        dosage_per_day: product.dosage_per_day,
+        days_supply: product.days_supply,
+        monthly_cost: product.monthly_cost,
+        description: product.description,
+        benefits: Array.isArray(product.benefits) ? product.benefits : JSON.parse(product.benefits || '[]'),
+        warnings: Array.isArray(product.warnings) ? product.warnings : JSON.parse(product.warnings || '[]'),
+        dosage_recommendation: product.dosage_recommendation,
+        category: product.category,
+        main_nutrients: Array.isArray(product.main_nutrients) ? product.main_nutrients : JSON.parse(product.main_nutrients || '[]'),
+        secondary_nutrients: Array.isArray(product.secondary_nutrients) ? product.secondary_nutrients : JSON.parse(product.secondary_nutrients || '[]'),
+        recommended: !!product.recommended,
+        recommendation_rank: product.recommendation_rank || 0,
+        product_image: product.product_image,
+        shop_url: product.shop_url
+      }))
+      
+    } catch (error) {
+      console.error('[Available Products] Error loading available products:', error)
+      console.log('[Available Products] Falling back to demo products')
+      return this.loadDemoProducts()
     }
   }
 }
