@@ -1171,16 +1171,22 @@ class SupplementDemoApp {
     selector.innerHTML = selectorHTML
     console.log('[Demo Modal] Selector innerHTML set, new option count:', selector.options.length)
     
-    // Remove any existing event listeners by cloning the element
-    const newSelector = selector.cloneNode(true) // Clone with the new content
-    if (selector.parentNode) {
-      selector.parentNode.replaceChild(newSelector, selector)
-      console.log('[Demo Modal] Selector replaced with fresh clone')
-    } else {
-      console.warn('[Demo Modal] Could not replace selector - no parent node')
-    }
+    // Remove existing event listeners without cloning the element
+    // Store reference to avoid losing DOM element reference that delete button handler uses
+    const oldSelector = selector.cloneNode(false)
     
-    newSelector.addEventListener('change', async (e) => {
+    // Clear event listeners by removing and re-adding all event attributes
+    const events = ['onchange', 'onclick', 'onmousedown', 'onmouseup']
+    events.forEach(event => {
+      if (selector[event]) {
+        selector[event] = null
+      }
+    })
+    
+    console.log('[Demo Modal] Event listeners cleared, keeping original DOM element')
+    
+    // Use original selector (not clone) to maintain DOM references
+    selector.addEventListener('change', async (e) => {
       const stackId = e.target.value ? parseInt(e.target.value) : null
       console.log('[Demo Modal] Stack switching to:', stackId, 'from selector value:', e.target.value)
       
@@ -1200,7 +1206,7 @@ class SupplementDemoApp {
     if (this.stacks.length > 0) {
       const firstStack = this.stacks[0]
       console.log('[Demo Modal] Auto-selecting first stack:', firstStack.name, 'ID:', firstStack.id)
-      newSelector.value = firstStack.id
+      selector.value = firstStack.id
       
       // Ensure currentStackId is set before loading
       this.currentStackId = firstStack.id
@@ -1209,7 +1215,7 @@ class SupplementDemoApp {
       // Trigger change event to enable delete button
       console.log('[Demo Modal] Triggering change event for delete button activation')
       const changeEvent = new Event('change', { bubbles: true })
-      newSelector.dispatchEvent(changeEvent)
+      selector.dispatchEvent(changeEvent)
       
       // Also call the global update function if available
       if (typeof window.updateDemoDeleteButtonState === 'function') {
@@ -4173,6 +4179,54 @@ class SupplementDemoApp {
     }
   }
   
+  // Force update stack selector DOM to reflect current stacks
+  forceUpdateStackSelectorDOM() {
+    console.log('[Demo Modal] Force updating stack selector DOM')
+    const selector = document.getElementById('stack-selector')
+    if (!selector) {
+      console.warn('[Demo Modal] Stack selector not found for DOM update')
+      return
+    }
+    
+    // Filter valid stacks
+    const validStacks = this.stacks.filter(stack => {
+      return stack && stack.id !== undefined && stack.name !== undefined && stack.name.trim() !== ''
+    })
+    
+    // Update HTML directly
+    const selectorHTML = `
+      <option value="">Stack auswählen...</option>
+      ${validStacks.map(stack => `
+        <option value="${stack.id}">${stack.name}</option>
+      `).join('')}
+    `
+    
+    console.log('[Demo Modal] Updating selector with', validStacks.length, 'valid stacks')
+    console.log('[Demo Modal] New selector HTML:', selectorHTML)
+    
+    selector.innerHTML = selectorHTML
+    
+    // Auto-select first stack if available
+    if (validStacks.length > 0) {
+      selector.value = validStacks[0].id
+      this.currentStackId = validStacks[0].id
+      console.log('[Demo Modal] Auto-selected first remaining stack:', validStacks[0].name)
+      
+      // Trigger change event for button updates
+      const changeEvent = new Event('change', { bubbles: true })
+      selector.dispatchEvent(changeEvent)
+      
+      // Load the selected stack
+      this.loadStack(validStacks[0].id)
+    } else {
+      selector.value = ''
+      this.currentStackId = null
+      this.products = []
+      this.renderStack()
+      console.log('[Demo Modal] No stacks remaining, cleared selection')
+    }
+  }
+  
   // Synchronize stack data across all app instances
   synchronizeAllAppInstances() {
     console.log('[Demo Modal] Synchronizing all app instances with current stacks')
@@ -4226,6 +4280,9 @@ class SupplementDemoApp {
       await this.initStackSelector()
       console.log('[Demo Modal] initStackSelector completed after deletion')
       
+      // Force update the DOM selector element to reflect changes
+      this.forceUpdateStackSelectorDOM()
+      
       // Synchronize all app instances
       this.synchronizeAllAppInstances()
       
@@ -4233,6 +4290,12 @@ class SupplementDemoApp {
       if (typeof window.updateDemoDeleteButtonState === 'function') {
         console.log('[Demo Modal] Calling demo delete button update function after stack deletion')
         window.updateDemoDeleteButtonState()
+      }
+      
+      // Additional button state update for dashboard mode
+      if (typeof window.updateDashboardDeleteButtonState === 'function') {
+        console.log('[Demo Modal] Calling dashboard delete button update function after stack deletion')
+        window.updateDashboardDeleteButtonState()
       }
       
       // If the deleted stack was the current one, we need to clear the current view
