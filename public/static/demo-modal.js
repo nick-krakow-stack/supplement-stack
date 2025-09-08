@@ -28,7 +28,17 @@ class SupplementDemoApp {
       await this.loadDashboardData()
     } else {
       console.log('[Demo Mode] Loading demo stacks...')
-      this.stacks = this.loadDemoStacks()
+      // Try to load from session storage first
+      const sessionStacks = this.loadDemoStacksFromSession()
+      if (sessionStacks && sessionStacks.length > 0) {
+        this.stacks = sessionStacks
+        console.log('[Demo Mode] Using session-stored stacks:', this.stacks.length)
+      } else {
+        this.stacks = this.loadDemoStacks()
+        console.log('[Demo Mode] Using default hardcoded stacks:', this.stacks.length)
+        // Save initial stacks to session
+        this.saveDemoStacksToSession()
+      }
     }
     
     // Stack-Selector initialisieren
@@ -438,6 +448,41 @@ class SupplementDemoApp {
         shop_url: 'https://example.com/vitamin-c'
       }
     ]
+  }
+
+  // Save stacks to session storage
+  saveDemoStacksToSession() {
+    try {
+      sessionStorage.setItem('demoStacks', JSON.stringify(this.stacks))
+      console.log('[Demo Modal] Saved', this.stacks.length, 'stacks to session storage')
+    } catch (error) {
+      console.warn('[Demo Modal] Failed to save stacks to session storage:', error)
+    }
+  }
+  
+  // Load stacks from session storage
+  loadDemoStacksFromSession() {
+    try {
+      const savedStacks = sessionStorage.getItem('demoStacks')
+      if (savedStacks) {
+        const stacks = JSON.parse(savedStacks)
+        console.log('[Demo Modal] Loaded', stacks.length, 'stacks from session storage')
+        return stacks
+      }
+    } catch (error) {
+      console.warn('[Demo Modal] Failed to load stacks from session storage:', error)
+    }
+    return null
+  }
+  
+  // Clear demo stacks from session storage
+  clearDemoStacksFromSession() {
+    try {
+      sessionStorage.removeItem('demoStacks')
+      console.log('[Demo Modal] Cleared stacks from session storage')
+    } catch (error) {
+      console.warn('[Demo Modal] Failed to clear stacks from session storage:', error)
+    }
   }
 
   loadDemoStacks() {
@@ -1093,6 +1138,10 @@ class SupplementDemoApp {
       } catch (error) {
         console.error('[Dashboard] Error refreshing stacks:', error)
       }
+    } else {
+      // In Demo mode, ensure we use session storage if available
+      console.log('[Demo Modal] Using current stacks for selector, not reloading from hardcoded source')
+      console.log('[Demo Modal] Current stack count:', this.stacks.length)
     }
     
     // Stacks in Dropdown laden - nur validierte Stacks anzeigen
@@ -2310,6 +2359,11 @@ class SupplementDemoApp {
             currentStack.products.push(customProduct)
           }
           console.log('[Demo Modal] Stack data now has', currentStack.products.length, 'products')
+          
+          // Save updated stacks to session storage when adding products in demo mode
+          if (!this.isDashboardMode()) {
+            this.saveDemoStacksToSession()
+          }
         } else {
           console.error('[Demo Modal] Current stack not found:', this.currentStackId)
         }
@@ -2451,6 +2505,9 @@ class SupplementDemoApp {
       }
       
       this.stacks.push(newStack)
+      
+      // Save updated stacks to session storage for demo mode
+      this.saveDemoStacksToSession()
     }
     
     // Stack-Selector aktualisieren (mit Error Handling)
@@ -4120,6 +4177,11 @@ class SupplementDemoApp {
   synchronizeAllAppInstances() {
     console.log('[Demo Modal] Synchronizing all app instances with current stacks')
     
+    // In demo mode, also update session storage during synchronization
+    if (!this.isDashboardMode()) {
+      this.saveDemoStacksToSession()
+    }
+    
     // Update window.demoApp if it exists and is different from this instance
     if (window.demoApp && window.demoApp !== this) {
       console.log('[Demo Modal] Updating window.demoApp stacks')
@@ -4155,6 +4217,9 @@ class SupplementDemoApp {
       this.stacks = this.stacks.filter(s => s.id !== stackId)
       console.log('[Demo Modal] Remaining stacks after deletion:', this.stacks.length)
       console.log('[Demo Modal] Remaining stack names:', this.stacks.map(s => s.name))
+      
+      // Save updated stacks to session storage
+      this.saveDemoStacksToSession()
       
       // Update the stack selector
       console.log('[Demo Modal] About to call initStackSelector after deletion')
