@@ -498,7 +498,8 @@ app.get('/api/protected/products', authMiddleware, async (c) => {
           pn.amount_standardized,
           n.id as nutrient_id,
           n.name as nutrient_name,
-          n.standard_unit
+          n.standard_unit,
+          n.effects
         FROM product_nutrients pn
         JOIN nutrients n ON pn.nutrient_id = n.id
         WHERE pn.product_id = ?
@@ -509,7 +510,8 @@ app.get('/api/protected/products', authMiddleware, async (c) => {
         nutrient_id: nutrient.nutrient_id,
         amount_per_unit: nutrient.amount_standardized || nutrient.amount,
         unit: nutrient.standard_unit || nutrient.unit,
-        name: nutrient.nutrient_name
+        name: nutrient.nutrient_name,
+        effects: nutrient.effects
       })) || [];
       
       // Fallback: If no nutrients found, try to match by name from available_products

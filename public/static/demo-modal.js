@@ -4659,7 +4659,8 @@ class SupplementDemoApp {
               name: standardizedName,
               amount: 0,
               unit: nutrientInfo.unit,
-              category: this.getNutrientCategory(standardizedName)
+              category: this.getNutrientCategory(standardizedName),
+              effects: mainNutrient.effects || nutrientInfo.effects || 'Keine Empfehlung'
             }
           }
           
@@ -4683,7 +4684,8 @@ class SupplementDemoApp {
               name: standardizedName,
               amount: 0,
               unit: nutrientInfo.unit,
-              category: this.getNutrientCategory(standardizedName)
+              category: this.getNutrientCategory(standardizedName),
+              effects: secondaryNutrient.effects || nutrientInfo.effects || 'Keine Empfehlung'
             }
           }
           
@@ -4703,7 +4705,8 @@ class SupplementDemoApp {
               name: standardizedName,
               amount: 0,
               unit: nutrient.unit,
-              category: this.getNutrientCategory(standardizedName)
+              category: this.getNutrientCategory(standardizedName),
+              effects: nutrient.effects || 'Keine Empfehlung'
             }
           }
           
@@ -4781,11 +4784,17 @@ class SupplementDemoApp {
       
       categories[category].forEach(nutrient => {
         const amount = Math.round(nutrient.amount * 100) / 100 // Round to 2 decimal places
+        // Check if nutrient has effects information
+        const effectsText = nutrient.effects || 'Keine Empfehlung'
+        
         html += `
-          <div class="bg-gray-50 rounded-lg p-3 border border-gray-200 hover:bg-blue-50 transition-colors">
-            <div class="flex items-center justify-between">
+          <div class="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:bg-blue-50 transition-colors">
+            <div class="flex items-center justify-between mb-2">
               <span class="font-medium text-gray-800 text-sm">${nutrient.name}</span>
               <span class="text-blue-600 font-semibold">${amount} ${nutrient.unit}</span>
+            </div>
+            <div class="text-xs text-gray-600">
+              <strong>Wirkung:</strong> ${effectsText}
             </div>
           </div>
         `
