@@ -782,16 +782,7 @@ class SupplementDemoApp {
             </div>
           </div>
           
-          <!-- Wirkung kompakt -->
-          <div class="mb-4 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl p-3 border border-emerald-200">
-            <div class="flex items-start space-x-2">
-              <i class="fas fa-leaf text-emerald-500 mt-0.5 flex-shrink-0"></i>
-              <div>
-                <div class="text-xs font-semibold text-emerald-700 mb-1">Wirkung</div>
-                <div class="text-xs text-emerald-600 leading-relaxed">${(product.benefits || []).slice(0, 2).join(' • ')}</div>
-              </div>
-            </div>
-          </div>
+
           
           <!-- Preise mit modernem Design -->
           <div class="grid grid-cols-2 gap-3 mb-4">
@@ -4660,7 +4651,10 @@ class SupplementDemoApp {
               amount: 0,
               unit: nutrientInfo.unit,
               category: this.getNutrientCategory(standardizedName),
-              effects: mainNutrient.effects || nutrientInfo.effects || 'Keine Empfehlung'
+              effects: mainNutrient.effects || nutrientInfo.effects || null,
+              deficiency_symptoms: mainNutrient.deficiency_symptoms || nutrientInfo.deficiency_symptoms || null,
+              excess_symptoms: mainNutrient.excess_symptoms || nutrientInfo.excess_symptoms || null,
+              external_article_url: mainNutrient.external_article_url || nutrientInfo.external_article_url || null
             }
           }
           
@@ -4685,7 +4679,10 @@ class SupplementDemoApp {
               amount: 0,
               unit: nutrientInfo.unit,
               category: this.getNutrientCategory(standardizedName),
-              effects: secondaryNutrient.effects || nutrientInfo.effects || 'Keine Empfehlung'
+              effects: secondaryNutrient.effects || nutrientInfo.effects || null,
+              deficiency_symptoms: secondaryNutrient.deficiency_symptoms || nutrientInfo.deficiency_symptoms || null,
+              excess_symptoms: secondaryNutrient.excess_symptoms || nutrientInfo.excess_symptoms || null,
+              external_article_url: secondaryNutrient.external_article_url || nutrientInfo.external_article_url || null
             }
           }
           
@@ -4706,7 +4703,10 @@ class SupplementDemoApp {
               amount: 0,
               unit: nutrient.unit,
               category: this.getNutrientCategory(standardizedName),
-              effects: nutrient.effects || 'Keine Empfehlung'
+              effects: nutrient.effects || null,
+              deficiency_symptoms: nutrient.deficiency_symptoms || null,
+              excess_symptoms: nutrient.excess_symptoms || null,
+              external_article_url: nutrient.external_article_url || null
             }
           }
           
@@ -4784,18 +4784,70 @@ class SupplementDemoApp {
       
       categories[category].forEach(nutrient => {
         const amount = Math.round(nutrient.amount * 100) / 100 // Round to 2 decimal places
-        // Check if nutrient has effects information
-        const effectsText = nutrient.effects || 'Keine Empfehlung'
+        
+        // Build symbols based on available data
+        let symbolsHtml = ''
+        
+        // Symbol 1: Functions (always show if effects available)
+        if (nutrient.effects) {
+          symbolsHtml += `
+            <div class="tooltip-container relative">
+              <i class="fas fa-heartbeat text-blue-500 hover:text-blue-700 cursor-help text-lg" 
+                 title="Funktionen im Körper"></i>
+              <div class="tooltip absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 pointer-events-none transition-opacity duration-200 w-64 z-50">
+                <strong>Funktionen:</strong><br>${nutrient.effects}
+              </div>
+            </div>
+          `
+        }
+        
+        // Symbol 2: Deficiency symptoms
+        if (nutrient.deficiency_symptoms) {
+          symbolsHtml += `
+            <div class="tooltip-container relative">
+              <i class="fas fa-arrow-down text-red-500 hover:text-red-700 cursor-help text-lg" 
+                 title="Mangelerscheinungen"></i>
+              <div class="tooltip absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 pointer-events-none transition-opacity duration-200 w-64 z-50">
+                <strong>Mangel:</strong><br>${nutrient.deficiency_symptoms}
+              </div>
+            </div>
+          `
+        }
+        
+        // Symbol 3: Excess symptoms
+        if (nutrient.excess_symptoms) {
+          symbolsHtml += `
+            <div class="tooltip-container relative">
+              <i class="fas fa-arrow-up text-orange-500 hover:text-orange-700 cursor-help text-lg" 
+                 title="Überdosierung"></i>
+              <div class="tooltip absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 pointer-events-none transition-opacity duration-200 w-64 z-50">
+                <strong>Überdosis:</strong><br>${nutrient.excess_symptoms}
+              </div>
+            </div>
+          `
+        }
+        
+        // Symbol 4: External link (only if URL exists)
+        if (nutrient.external_article_url) {
+          symbolsHtml += `
+            <a href="${nutrient.external_article_url}" target="_blank" rel="noopener noreferrer" 
+               class="inline-block" title="Wissenschaftlicher Artikel">
+              <i class="fas fa-external-link-alt text-green-500 hover:text-green-700 cursor-pointer text-lg"></i>
+            </a>
+          `
+        }
         
         html += `
           <div class="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:bg-blue-50 transition-colors">
-            <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center justify-between mb-3">
               <span class="font-medium text-gray-800 text-sm">${nutrient.name}</span>
               <span class="text-blue-600 font-semibold">${amount} ${nutrient.unit}</span>
             </div>
-            <div class="text-xs text-gray-600">
-              <strong>Wirkung:</strong> ${effectsText}
-            </div>
+            ${symbolsHtml ? `
+              <div class="flex items-center gap-3 justify-center">
+                ${symbolsHtml}
+              </div>
+            ` : ''}
           </div>
         `
       })
@@ -4807,7 +4859,33 @@ class SupplementDemoApp {
     })
 
     nutrientOverview.innerHTML = html
+    
+    // Add tooltip functionality
+    this.initializeTooltips()
+    
     console.log('[Nutrient Overview] Updated with', nutrientArray.length, 'nutrients across', Object.keys(categories).length, 'categories')
+  }
+
+  // Initialize tooltip hover effects
+  initializeTooltips() {
+    const tooltipContainers = document.querySelectorAll('.tooltip-container')
+    
+    tooltipContainers.forEach(container => {
+      const tooltip = container.querySelector('.tooltip')
+      const trigger = container.querySelector('i')
+      
+      if (trigger && tooltip) {
+        trigger.addEventListener('mouseenter', () => {
+          tooltip.style.opacity = '1'
+          tooltip.style.pointerEvents = 'auto'
+        })
+        
+        trigger.addEventListener('mouseleave', () => {
+          tooltip.style.opacity = '0'
+          tooltip.style.pointerEvents = 'none'
+        })
+      }
+    })
   }
 }
 

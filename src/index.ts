@@ -499,7 +499,10 @@ app.get('/api/protected/products', authMiddleware, async (c) => {
           n.id as nutrient_id,
           n.name as nutrient_name,
           n.standard_unit,
-          n.effects
+          n.effects,
+          n.deficiency_symptoms,
+          n.excess_symptoms,
+          n.external_article_url
         FROM product_nutrients pn
         JOIN nutrients n ON pn.nutrient_id = n.id
         WHERE pn.product_id = ?
@@ -511,7 +514,10 @@ app.get('/api/protected/products', authMiddleware, async (c) => {
         amount_per_unit: nutrient.amount_standardized || nutrient.amount,
         unit: nutrient.standard_unit || nutrient.unit,
         name: nutrient.nutrient_name,
-        effects: nutrient.effects
+        effects: nutrient.effects,
+        deficiency_symptoms: nutrient.deficiency_symptoms,
+        excess_symptoms: nutrient.excess_symptoms,
+        external_article_url: nutrient.external_article_url
       })) || [];
       
       // Fallback: If no nutrients found, try to match by name from available_products
