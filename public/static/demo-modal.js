@@ -821,8 +821,11 @@ class SupplementDemoApp {
       `
     }).join('')
     
-      stackGrid.innerHTML = html
-      this.updateStackSummary()
+    console.log('[Demo Modal] Generated HTML length:', html.length, 'characters')
+    console.log('[Demo Modal] Setting stackGrid innerHTML...')
+    stackGrid.innerHTML = html
+    console.log('[Demo Modal] StackGrid innerHTML set, element children:', stackGrid.children.length)
+    this.updateStackSummary()
       
       // WICHTIG: Nach dem Rendering auch Footer aktualisieren
       setTimeout(() => {
