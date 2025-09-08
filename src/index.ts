@@ -1384,7 +1384,7 @@ app.get('/demo', (c) => {
                         <button id="demo-create-stack-main" class="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition-colors text-sm font-medium shadow-sm">
                             <i class="fas fa-magic mr-2"></i>Stack erstellen
                         </button>
-                        <button id="demo-delete-stack-main" class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors text-sm font-medium shadow-sm" style="display: none;">
+                        <button id="demo-delete-stack-main" class="bg-gray-400 text-white px-4 py-2 rounded-md transition-colors text-sm font-medium shadow-sm cursor-not-allowed" disabled title="Wählen Sie zuerst einen Stack aus">
                             <i class="fas fa-trash mr-2"></i>Stack löschen
                         </button>
                     </div>
@@ -1516,6 +1516,11 @@ app.get('/demo', (c) => {
                 const deleteStackBtn = document.getElementById('demo-delete-stack-main');
                 if (deleteStackBtn) {
                     deleteStackBtn.addEventListener('click', async () => {
+                        // Don't proceed if button is disabled
+                        if (deleteStackBtn.disabled) {
+                            return;
+                        }
+                        
                         const stackSelector = document.getElementById('stack-selector');
                         const selectedStackId = stackSelector?.value;
                         
@@ -1550,9 +1555,13 @@ app.get('/demo', (c) => {
                         const deleteBtn = document.getElementById('demo-delete-stack-main');
                         
                         if (stackId && deleteBtn) {
-                            deleteBtn.style.display = 'block';
+                            deleteBtn.disabled = false;
+                            deleteBtn.className = 'bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors text-sm font-medium shadow-sm cursor-pointer';
+                            deleteBtn.title = 'Stack löschen';
                         } else if (deleteBtn) {
-                            deleteBtn.style.display = 'none';
+                            deleteBtn.disabled = true;
+                            deleteBtn.className = 'bg-gray-400 text-white px-4 py-2 rounded-md transition-colors text-sm font-medium shadow-sm cursor-not-allowed';
+                            deleteBtn.title = 'Wählen Sie zuerst einen Stack aus';
                         }
                     });
                 }
@@ -1786,7 +1795,7 @@ app.get('/dashboard', (c) => {
                         <button id="create-stack-main" class="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition-colors text-sm font-medium shadow-sm">
                             <i class="fas fa-magic mr-2"></i>Stack erstellen
                         </button>
-                        <button id="delete-stack-main" class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors text-sm font-medium shadow-sm" style="display: none;">
+                        <button id="delete-stack-main" class="bg-gray-400 text-white px-4 py-2 rounded-md transition-colors text-sm font-medium shadow-sm cursor-not-allowed" disabled title="Wählen Sie zuerst einen Stack aus">
                             <i class="fas fa-trash mr-2"></i>Stack löschen
                         </button>
                     </div>
@@ -1955,6 +1964,11 @@ app.get('/dashboard', (c) => {
                     const deleteStackBtn = document.getElementById('delete-stack-main');
                     if (deleteStackBtn) {
                         deleteStackBtn.addEventListener('click', async () => {
+                            // Don't proceed if button is disabled
+                            if (deleteStackBtn.disabled) {
+                                return;
+                            }
+                            
                             const stackSelector = document.getElementById('stack-selector');
                             const selectedStackId = stackSelector?.value;
                             
@@ -2006,11 +2020,19 @@ app.get('/dashboard', (c) => {
                             
                             if (stackId) {
                                 loadDashboardStack(stackId);
-                                // Show delete button when a stack is selected
-                                if (deleteBtn) deleteBtn.style.display = 'block';
+                                // Enable delete button when a stack is selected
+                                if (deleteBtn) {
+                                    deleteBtn.disabled = false;
+                                    deleteBtn.className = 'bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors text-sm font-medium shadow-sm cursor-pointer';
+                                    deleteBtn.title = 'Stack löschen';
+                                }
                             } else {
-                                // Hide delete button when no stack is selected
-                                if (deleteBtn) deleteBtn.style.display = 'none';
+                                // Disable delete button when no stack is selected
+                                if (deleteBtn) {
+                                    deleteBtn.disabled = true;
+                                    deleteBtn.className = 'bg-gray-400 text-white px-4 py-2 rounded-md transition-colors text-sm font-medium shadow-sm cursor-not-allowed';
+                                    deleteBtn.title = 'Wählen Sie zuerst einen Stack aus';
+                                }
                             }
                         });
                     }
