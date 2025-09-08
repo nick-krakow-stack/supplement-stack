@@ -4473,9 +4473,12 @@ class SupplementDemoApp {
       return
     }
 
-    // Get current stack
+    // Get current stack name for display
     const currentStack = this.stacks.find(s => s.id == this.currentStackId)
-    if (!currentStack || !currentStack.products || currentStack.products.length === 0) {
+    const stackName = currentStack ? currentStack.name : 'Aktueller Stack'
+    
+    // Use this.products which contains the fully loaded product objects
+    if (!this.products || this.products.length === 0) {
       nutrientOverview.innerHTML = `
         <div class="col-span-full text-center py-8">
           <i class="fas fa-info-circle text-gray-400 text-2xl mb-2"></i>
@@ -4486,12 +4489,12 @@ class SupplementDemoApp {
       return
     }
 
-    console.log('[Nutrient Overview] Calculating nutrients for stack:', currentStack.name, 'with', currentStack.products.length, 'products')
+    console.log('[Nutrient Overview] Calculating nutrients for stack:', stackName, 'with', this.products.length, 'products')
 
     // Aggregate nutrients from all products in the stack
     const nutrientTotals = {}
     
-    currentStack.products.forEach(product => {
+    this.products.forEach(product => {
       // Handle main_nutrients from database
       if (product.main_nutrients && Array.isArray(product.main_nutrients)) {
         product.main_nutrients.forEach(mainNutrient => {
