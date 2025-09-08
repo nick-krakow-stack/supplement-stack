@@ -274,6 +274,7 @@ app.get('/api/admin/debug-stacks', async (c) => {
     const userCount = await c.env.DB.prepare('SELECT COUNT(*) as count FROM users').first();
     const stackCount = await c.env.DB.prepare('SELECT COUNT(*) as count FROM stacks').first();
     const stackProductCount = await c.env.DB.prepare('SELECT COUNT(*) as count FROM stack_products').first();
+    const productNutrientCount = await c.env.DB.prepare('SELECT COUNT(*) as count FROM product_nutrients').first();
     
     // Get some sample stacks
     const sampleStacks = await c.env.DB.prepare(`
@@ -285,11 +286,23 @@ app.get('/api/admin/debug-stacks', async (c) => {
       LIMIT 5
     `).all();
     
+    // Check sample products and their nutrients
+    const sampleProducts = await c.env.DB.prepare(`
+      SELECT p.id, p.name, p.user_id,
+             GROUP_CONCAT(pn.nutrient_id || ':' || pn.amount) as nutrients
+      FROM products p
+      LEFT JOIN product_nutrients pn ON p.id = pn.product_id  
+      GROUP BY p.id, p.name, p.user_id
+      LIMIT 5
+    `).all();
+    
     return c.json({
       user_count: userCount.count,
       stack_count: stackCount.count, 
       stack_product_count: stackProductCount.count,
-      sample_stacks: sampleStacks.results
+      product_nutrient_count: productNutrientCount.count,
+      sample_stacks: sampleStacks.results,
+      sample_products: sampleProducts.results
     });
   } catch (error) {
     return c.json({ error: 'Debug failed', details: error.message }, 500);
