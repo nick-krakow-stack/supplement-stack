@@ -4487,16 +4487,6 @@ class SupplementDemoApp {
     }
 
     console.log('[Nutrient Overview] Calculating nutrients for stack:', currentStack.name, 'with', currentStack.products.length, 'products')
-    
-    // Debug: Log product structure
-    currentStack.products.forEach((product, index) => {
-      console.log(`[Nutrient Overview] Product ${index + 1}:`, {
-        name: product.name,
-        main_nutrients: product.main_nutrients,
-        secondary_nutrients: product.secondary_nutrients,
-        dosage_per_day: product.dosage_per_day
-      })
-    })
 
     // Aggregate nutrients from all products in the stack
     const nutrientTotals = {}
