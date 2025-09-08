@@ -472,9 +472,43 @@ app.get('/api/protected/products', authMiddleware, async (c) => {
       ORDER BY p.created_at DESC
     `).bind(userId).all();
     
-    console.log('Found', products.results?.length || 0, 'products for user', userId);
+    console.log('[Products API] Found', products.results?.length || 0, 'products for user', userId);
     
-    return c.json(products.results || []);
+    // For each product, get its nutrients
+    const productsWithNutrients = [];
+    for (const product of products.results || []) {
+      // Get nutrients for this product
+      const nutrients = await c.env.DB.prepare(`
+        SELECT 
+          pn.amount,
+          pn.unit,
+          pn.amount_standardized,
+          n.id as nutrient_id,
+          n.name as nutrient_name,
+          n.standard_unit
+        FROM product_nutrients pn
+        JOIN nutrients n ON pn.nutrient_id = n.id
+        WHERE pn.product_id = ?
+        ORDER BY n.name
+      `).bind(product.id).all();
+      
+      // Convert to main_nutrients format expected by frontend
+      const main_nutrients = nutrients.results?.map(nutrient => ({
+        nutrient_id: nutrient.nutrient_id,
+        amount_per_unit: nutrient.amount_standardized || nutrient.amount,
+        unit: nutrient.standard_unit || nutrient.unit,
+        name: nutrient.nutrient_name
+      })) || [];
+      
+      productsWithNutrients.push({
+        ...product,
+        main_nutrients: main_nutrients,
+        secondary_nutrients: [] // No secondary nutrients for user products for now
+      });
+    }
+    
+    console.log('[Products API] Loaded nutrients for', productsWithNutrients.length, 'products');
+    return c.json(productsWithNutrients);
     
   } catch (error) {
     console.error('Products API error:', error);
