@@ -4133,8 +4133,32 @@ class SupplementDemoApp {
   async deleteStack(stackId) {
     if (!this.isDashboardMode()) {
       // Demo mode: just remove from local list
+      console.log('[Demo Modal] Deleting stack in demo mode:', stackId)
+      
+      // Check if this is the currently selected stack
+      const isCurrentStack = this.currentStackId == stackId
+      
+      // Remove from stacks list
       this.stacks = this.stacks.filter(s => s.id !== stackId)
+      console.log('[Demo Modal] Remaining stacks after deletion:', this.stacks.length)
+      
+      // Update the stack selector
       await this.initStackSelector()
+      
+      // Update demo delete button state if function exists
+      if (typeof window.updateDemoDeleteButtonState === 'function') {
+        console.log('[Demo Modal] Calling demo delete button update function after stack deletion')
+        window.updateDemoDeleteButtonState()
+      }
+      
+      // If the deleted stack was the current one, we need to clear the current view
+      if (isCurrentStack) {
+        this.currentStackId = null
+        this.products = []
+        this.renderStack()
+        this.updateStats()
+      }
+      
       this.showSuccess('Stack erfolgreich gelöscht!')
       return
     }
@@ -4168,6 +4192,12 @@ class SupplementDemoApp {
       
       // Update UI
       await this.initStackSelector()
+      
+      // Update dashboard delete button state if function exists
+      if (typeof window.updateDashboardDeleteButtonState === 'function') {
+        console.log('[Dashboard] Calling dashboard delete button update function after stack deletion')
+        window.updateDashboardDeleteButtonState()
+      }
       
       // If no stacks left, create a default one
       if (this.stacks.length === 0) {

@@ -2092,6 +2092,54 @@ app.get('/dashboard', (c) => {
                         });
                     }
                     
+                    // Function to update dashboard delete button state
+                    function updateDashboardDeleteButtonState() {
+                        const stackSelector = document.getElementById('stack-selector');
+                        const deleteBtn = document.getElementById('delete-stack-main');
+                        
+                        if (deleteBtn && stackSelector) {
+                            const stackId = stackSelector.value;
+                            console.log('[Dashboard Events] Updating delete button state - stackId:', stackId, 'button exists:', !!deleteBtn);
+                            
+                            if (stackId) {
+                                deleteBtn.disabled = false;
+                                deleteBtn.className = 'bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors text-sm font-medium shadow-sm cursor-pointer';
+                                deleteBtn.title = 'Stack löschen';
+                                console.log('[Dashboard Events] Delete button ENABLED for stack:', stackId);
+                            } else {
+                                deleteBtn.disabled = true;
+                                deleteBtn.className = 'bg-gray-400 text-white px-4 py-2 rounded-md transition-colors text-sm font-medium shadow-sm cursor-not-allowed';
+                                deleteBtn.title = 'Wählen Sie zuerst einen Stack aus';
+                                console.log('[Dashboard Events] Delete button DISABLED - no stack selected');
+                            }
+                        } else {
+                            console.log('[Dashboard Events] Button state update failed - deleteBtn:', !!deleteBtn, 'stackSelector:', !!stackSelector);
+                        }
+                    }
+                    
+                    // Make the function globally available
+                    window.updateDashboardDeleteButtonState = updateDashboardDeleteButtonState;
+                    
+                    // Periodic checking for dashboard button state
+                    let checkCount = 0;
+                    const maxChecks = 20;
+                    const checkInterval = setInterval(() => {
+                        checkCount++;
+                        const stackSelector = document.getElementById('stack-selector');
+                        
+                        if (stackSelector) {
+                            updateDashboardDeleteButtonState();
+                            
+                            if (stackSelector.options.length > 1 || checkCount >= maxChecks) {
+                                clearInterval(checkInterval);
+                            }
+                        }
+                        
+                        if (checkCount >= maxChecks) {
+                            clearInterval(checkInterval);
+                        }
+                    }, 500);
+                    
                     // Load initial data
                     loadDashboardData();
                 }
@@ -2124,6 +2172,12 @@ app.get('/dashboard', (c) => {
                             // Trigger change event to enable delete button
                             const changeEvent = new Event('change');
                             selector.dispatchEvent(changeEvent);
+                            
+                            // Also call the dashboard button update function directly
+                            if (typeof window.updateDashboardDeleteButtonState === 'function') {
+                                console.log('[Dashboard] Calling dashboard delete button update after populating selector');
+                                window.updateDashboardDeleteButtonState();
+                            }
                         }
                     }
                 }
