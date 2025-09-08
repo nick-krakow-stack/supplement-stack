@@ -1110,39 +1110,25 @@ class SupplementDemoApp {
     
     console.log('[Demo Modal] Found', validStacks.length, 'valid stacks out of', this.stacks.length, 'total stacks')
     
-    selector.innerHTML = `
+    // Set the innerHTML directly - no cloning needed
+    const selectorHTML = `
       <option value="">Stack auswählen...</option>
       ${validStacks.map(stack => `
         <option value="${stack.id}">${stack.name}</option>
       `).join('')}
     `
     
-    // Event Listener für Stack-Wechsel (remove old ones first)
-    // Check if selector has a parent before replacing
-    let newSelector = selector
+    console.log('[Demo Modal] Setting selector HTML:', selectorHTML)
+    selector.innerHTML = selectorHTML
+    console.log('[Demo Modal] Selector innerHTML set, new option count:', selector.options.length)
+    
+    // Remove any existing event listeners by cloning the element
+    const newSelector = selector.cloneNode(true) // Clone with the new content
     if (selector.parentNode) {
-      newSelector = selector.cloneNode(true)
       selector.parentNode.replaceChild(newSelector, selector)
+      console.log('[Demo Modal] Selector replaced with fresh clone')
     } else {
-      console.warn('[Demo Modal] Selector has no parent node, using original selector')
-      // Try to find parent more safely
-      const parent = selector.parentElement || selector.parentNode
-      if (parent && parent.contains && parent.contains(selector)) {
-        try {
-          const clone = selector.cloneNode(true)
-          parent.removeChild(selector)
-          parent.appendChild(clone)
-          newSelector = clone
-        } catch (error) {
-          console.warn('[Demo Modal] Failed to replace selector element:', error)
-          // Use original selector as fallback
-          newSelector = selector
-        }
-      } else {
-        console.warn('[Demo Modal] Parent does not contain selector, using original')
-        newSelector = selector
-      }
-    }
+      console.warn('[Demo Modal] Could not replace selector - no parent node')
     
     newSelector.addEventListener('change', async (e) => {
       const stackId = e.target.value ? parseInt(e.target.value) : null
@@ -4129,6 +4115,32 @@ class SupplementDemoApp {
     }
   }
   
+  // Synchronize stack data across all app instances
+  synchronizeAllAppInstances() {
+    console.log('[Demo Modal] Synchronizing all app instances with current stacks')
+    
+    // Update window.demoApp if it exists and is different from this instance
+    if (window.demoApp && window.demoApp !== this) {
+      console.log('[Demo Modal] Updating window.demoApp stacks')
+      window.demoApp.stacks = [...this.stacks]
+      if (window.demoApp.userStacks) {
+        window.demoApp.userStacks = [...this.stacks]
+      }
+    }
+    
+    // Update window.dashboardApp if it exists
+    if (window.dashboardApp && window.dashboardApp !== this) {
+      console.log('[Demo Modal] Updating window.dashboardApp stacks')
+      window.dashboardApp.stacks = [...this.stacks]
+      if (window.dashboardApp.userStacks) {
+        window.dashboardApp.userStacks = [...this.stacks]
+      }
+    }
+    
+    // Also update this instance to be the primary one
+    window.demoApp = this
+  }
+  
   // Delete stack
   async deleteStack(stackId) {
     if (!this.isDashboardMode()) {
@@ -4141,9 +4153,15 @@ class SupplementDemoApp {
       // Remove from stacks list
       this.stacks = this.stacks.filter(s => s.id !== stackId)
       console.log('[Demo Modal] Remaining stacks after deletion:', this.stacks.length)
+      console.log('[Demo Modal] Remaining stack names:', this.stacks.map(s => s.name))
       
       // Update the stack selector
+      console.log('[Demo Modal] About to call initStackSelector after deletion')
       await this.initStackSelector()
+      console.log('[Demo Modal] initStackSelector completed after deletion')
+      
+      // Synchronize all app instances
+      this.synchronizeAllAppInstances()
       
       // Update demo delete button state if function exists
       if (typeof window.updateDemoDeleteButtonState === 'function') {
