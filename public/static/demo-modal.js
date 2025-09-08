@@ -4179,6 +4179,79 @@ class SupplementDemoApp {
     }
   }
   
+  // Show demo limitation modal with upgrade information
+  showDemoLimitationModal(title, content) {
+    this.closeAllModals()
+    
+    const modal = document.createElement('div')
+    modal.className = 'modal-overlay'
+    modal.style.cssText = `
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.5); display: flex;
+      align-items: center; justify-content: center;
+      z-index: 9999; padding: 16px;
+    `
+    
+    modal.innerHTML = `
+      <div class="modal-container" style="background: white; border-radius: 12px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); width: 100%; max-width: 28rem; max-height: 90vh; overflow-y: auto;">
+        <div class="p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-gray-900 flex items-center">
+              <i class="fas fa-star text-yellow-500 mr-2"></i>
+              ${title}
+            </h3>
+            <button class="modal-close text-gray-400 hover:text-gray-600 transition-colors">
+              <i class="fas fa-times text-xl"></i>
+            </button>
+          </div>
+          
+          <div class="text-gray-700 leading-relaxed">
+            ${content}
+          </div>
+          
+          <div class="flex gap-3 mt-6">
+            <button class="modal-close flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium">
+              Demo fortsetzen
+            </button>
+            <button class="upgrade-button flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium">
+              <i class="fas fa-rocket mr-2"></i>Vollversion starten
+            </button>
+          </div>
+        </div>
+      </div>
+    `
+    
+    document.body.appendChild(modal)
+    
+    // Event handlers
+    modal.querySelectorAll('.modal-close').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.body.removeChild(modal)
+      })
+    })
+    
+    modal.querySelector('.upgrade-button').addEventListener('click', () => {
+      // Redirect to registration/upgrade page
+      window.location.href = '/auth?action=register'
+    })
+    
+    // Close on backdrop click
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        document.body.removeChild(modal)
+      }
+    })
+    
+    // Close on escape key
+    const escHandler = (e) => {
+      if (e.key === 'Escape') {
+        document.body.removeChild(modal)
+        document.removeEventListener('keydown', escHandler)
+      }
+    }
+    document.addEventListener('keydown', escHandler)
+  }
+  
   // Force update stack selector DOM to reflect current stacks
   forceUpdateStackSelectorDOM() {
     console.log('[Demo Modal] Force updating stack selector DOM')
@@ -4261,52 +4334,31 @@ class SupplementDemoApp {
   // Delete stack
   async deleteStack(stackId) {
     if (!this.isDashboardMode()) {
-      // Demo mode: just remove from local list
-      console.log('[Demo Modal] Deleting stack in demo mode:', stackId)
+      // Demo mode: Show full version message instead of actual deletion
+      console.log('[Demo Modal] Stack deletion requested in demo mode - showing upgrade message')
       
-      // Check if this is the currently selected stack
-      const isCurrentStack = this.currentStackId == stackId
+      const stackName = this.stacks.find(s => s.id == stackId)?.name || 'Stack'
       
-      // Remove from stacks list
-      this.stacks = this.stacks.filter(s => s.id !== stackId)
-      console.log('[Demo Modal] Remaining stacks after deletion:', this.stacks.length)
-      console.log('[Demo Modal] Remaining stack names:', this.stacks.map(s => s.name))
-      
-      // Save updated stacks to session storage
-      this.saveDemoStacksToSession()
-      
-      // Update the stack selector
-      console.log('[Demo Modal] About to call initStackSelector after deletion')
-      await this.initStackSelector()
-      console.log('[Demo Modal] initStackSelector completed after deletion')
-      
-      // Force update the DOM selector element to reflect changes
-      this.forceUpdateStackSelectorDOM()
-      
-      // Synchronize all app instances
-      this.synchronizeAllAppInstances()
-      
-      // Update demo delete button state if function exists
-      if (typeof window.updateDemoDeleteButtonState === 'function') {
-        console.log('[Demo Modal] Calling demo delete button update function after stack deletion')
-        window.updateDemoDeleteButtonState()
-      }
-      
-      // Additional button state update for dashboard mode
-      if (typeof window.updateDashboardDeleteButtonState === 'function') {
-        console.log('[Demo Modal] Calling dashboard delete button update function after stack deletion')
-        window.updateDashboardDeleteButtonState()
-      }
-      
-      // If the deleted stack was the current one, we need to clear the current view
-      if (isCurrentStack) {
-        this.currentStackId = null
-        this.products = []
-        this.renderStack()
-        this.updateStats()
-      }
-      
-      this.showSuccess('Stack erfolgreich gelöscht!')
+      // Show informative modal about full version capabilities
+      this.showDemoLimitationModal(
+        'Stack-Verwaltung in der Vollversion',
+        `In der kostenlosen Vollversion können Sie Stacks wie "${stackName}" nach Ihren persönlichen Bedürfnissen löschen und hinzufügen.
+        
+        <div class="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <h4 class="font-semibold text-blue-900 mb-2">✨ In der Vollversion verfügbar:</h4>
+          <ul class="text-blue-800 text-sm space-y-1">
+            <li>• Unbegrenzte Stack-Erstellung</li>
+            <li>• Stacks nach Bedarf löschen</li>
+            <li>• Eigene Produkte hinzufügen</li>
+            <li>• Persönliche Datenbank</li>
+            <li>• Automatische Synchronisation</li>
+          </ul>
+        </div>
+        
+        <p class="mt-3 text-sm text-gray-600">
+          <strong>Demo-Modus:</strong> Hier können Sie alle Features testen, aber Änderungen werden nur für die aktuelle Sitzung gespeichert.
+        </p>`
+      )
       return
     }
     
