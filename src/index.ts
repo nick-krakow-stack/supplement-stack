@@ -1889,12 +1889,18 @@ app.get('/dashboard', (c) => {
                         Transparenter Einblick
                     </h3>
                     <button id="dashboard-toggle-layer" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors text-sm font-medium">
-                        <i class="fas fa-layer-group mr-2"></i>Layer öffnen
+                        <i class="fas fa-eye-slash mr-2"></i>Layer schließen
                     </button>
                 </div>
                 
-                <div id="dashboard-layer-content" class="hidden">
-                    <!-- Info-Bereich entfernt auf Anfrage -->
+                <div id="dashboard-layer-content" class="">
+                    <!-- Nutrient Overview -->
+                    <div id="nutrient-overview" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div id="nutrient-loading" class="col-span-full text-center py-8">
+                            <i class="fas fa-spinner fa-spin text-blue-600 text-2xl mb-2"></i>
+                            <p class="text-gray-500">Lade Nährstoffübersicht...</p>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

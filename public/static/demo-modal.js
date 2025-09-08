@@ -1203,6 +1203,7 @@ class SupplementDemoApp {
         this.products = []
         this.renderStack()
         this.updateStats()
+        this.updateNutrientOverview()
       }
     })
     
@@ -1309,6 +1310,10 @@ class SupplementDemoApp {
     if (typeof window.updateDemoDeleteButtonState === 'function') {
       window.updateDemoDeleteButtonState()
     }
+    
+    // Update layer section and nutrient overview after loading stack
+    this.updateLayerSectionVisibility()
+    this.updateNutrientOverview()
   }
 
   // Refresh a specific stack from database to get latest product associations
@@ -2340,6 +2345,7 @@ class SupplementDemoApp {
         // Update display
         this.renderStack()
         this.updateStats()
+        this.updateNutrientOverview()
       }).catch(error => {
         console.error('Failed to save product:', error)
         this.showMessage('❌ Fehler beim Speichern des Produkts: ' + error.message, 'error')
@@ -2383,6 +2389,7 @@ class SupplementDemoApp {
       console.log('[Demo Modal] finalizeAddProduct - Updating stack display')
       this.renderStack()
       this.updateStats()
+      this.updateNutrientOverview()
     }
     
     // WICHTIG: Modal nicht hier schließen, das macht der Event Handler
@@ -3714,6 +3721,7 @@ class SupplementDemoApp {
         // Update display
         this.renderStack()
         this.updateStats()
+        this.updateNutrientOverview()
         
         this.showMessage('✅ Produkt erfolgreich gelöscht!', 'success')
         console.log('[Dashboard] Product successfully deleted from database')
@@ -3728,6 +3736,7 @@ class SupplementDemoApp {
       this.products = this.products.filter(p => p.id !== productId)
       this.renderStack()
       this.updateStats()
+      this.updateNutrientOverview()
       this.showMessage('✅ Produkt gelöscht (Demo-Modus)', 'success')
     }
   }
@@ -3864,6 +3873,10 @@ class SupplementDemoApp {
       
       this.dataLoaded = true
       console.log('[Dashboard Data] Dashboard data loaded successfully')
+      
+      // Update layer section and nutrient overview after loading data
+      this.updateLayerSectionVisibility()
+      this.updateNutrientOverview()
       
     } catch (error) {
       console.error('[Dashboard Data] Error loading dashboard data:', error)
@@ -4417,6 +4430,128 @@ class SupplementDemoApp {
       this.showError(error.message || 'Fehler beim Löschen des Stacks')
       throw error
     }
+  }
+
+  // Show or hide the layer section based on whether stacks are available
+  updateLayerSectionVisibility() {
+    const layerSection = document.getElementById('dashboard-layer-section')
+    if (!layerSection) return
+
+    // Show if we have stacks and a current stack is selected
+    if (this.stacks && this.stacks.length > 0 && this.currentStackId) {
+      layerSection.classList.remove('hidden')
+    } else {
+      layerSection.classList.add('hidden')
+    }
+  }
+
+  // Update nutrient overview in the "Transparenter Einblick" section
+  updateNutrientOverview() {
+    const nutrientOverview = document.getElementById('nutrient-overview')
+    if (!nutrientOverview) {
+      console.log('[Nutrient Overview] Element not found')
+      return
+    }
+
+    // Get current stack
+    const currentStack = this.stacks.find(s => s.id == this.currentStackId)
+    if (!currentStack || !currentStack.products || currentStack.products.length === 0) {
+      nutrientOverview.innerHTML = `
+        <div class="col-span-full text-center py-8">
+          <i class="fas fa-info-circle text-gray-400 text-2xl mb-2"></i>
+          <p class="text-gray-500">Keine Produkte im aktuellen Stack</p>
+          <p class="text-gray-400 text-sm">Fügen Sie Produkte hinzu, um die Nährstoffübersicht zu sehen</p>
+        </div>
+      `
+      return
+    }
+
+    console.log('[Nutrient Overview] Calculating nutrients for stack:', currentStack.name, 'with', currentStack.products.length, 'products')
+
+    // Aggregate nutrients from all products in the stack
+    const nutrientTotals = {}
+    
+    currentStack.products.forEach(product => {
+      if (product.nutrients && Array.isArray(product.nutrients)) {
+        product.nutrients.forEach(nutrient => {
+          const key = nutrient.name
+          if (!nutrientTotals[key]) {
+            nutrientTotals[key] = {
+              name: nutrient.name,
+              amount: 0,
+              unit: nutrient.unit,
+              category: nutrient.category || 'Sonstige'
+            }
+          }
+          
+          // Calculate daily amount: nutrient amount per serving * daily dosage
+          const dailyAmount = (nutrient.amount || 0) * (product.dosage_per_day || 1)
+          nutrientTotals[key].amount += dailyAmount
+        })
+      }
+    })
+
+    // Convert to array and sort by category and name
+    const nutrientArray = Object.values(nutrientTotals).sort((a, b) => {
+      if (a.category !== b.category) {
+        return a.category.localeCompare(b.category)
+      }
+      return a.name.localeCompare(b.name)
+    })
+
+    if (nutrientArray.length === 0) {
+      nutrientOverview.innerHTML = `
+        <div class="col-span-full text-center py-8">
+          <i class="fas fa-flask text-gray-400 text-2xl mb-2"></i>
+          <p class="text-gray-500">Keine Nährstoffdaten verfügbar</p>
+          <p class="text-gray-400 text-sm">Die Produkte in diesem Stack haben noch keine Nährstoffinformationen</p>
+        </div>
+      `
+      return
+    }
+
+    // Group by category
+    const categories = {}
+    nutrientArray.forEach(nutrient => {
+      const category = nutrient.category || 'Sonstige'
+      if (!categories[category]) {
+        categories[category] = []
+      }
+      categories[category].push(nutrient)
+    })
+
+    // Generate HTML
+    let html = ''
+    Object.keys(categories).sort().forEach(category => {
+      html += `
+        <div class="col-span-full mb-6">
+          <h4 class="font-semibold text-gray-800 mb-3 border-b border-gray-200 pb-2">
+            <i class="fas fa-tags text-blue-600 mr-2"></i>
+            ${category}
+          </h4>
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+      `
+      
+      categories[category].forEach(nutrient => {
+        const amount = Math.round(nutrient.amount * 100) / 100 // Round to 2 decimal places
+        html += `
+          <div class="bg-gray-50 rounded-lg p-3 border border-gray-200">
+            <div class="flex items-center justify-between">
+              <span class="font-medium text-gray-800 text-sm">${nutrient.name}</span>
+              <span class="text-blue-600 font-semibold">${amount} ${nutrient.unit}</span>
+            </div>
+          </div>
+        `
+      })
+      
+      html += `
+          </div>
+        </div>
+      `
+    })
+
+    nutrientOverview.innerHTML = html
+    console.log('[Nutrient Overview] Updated with', nutrientArray.length, 'nutrients across', Object.keys(categories).length, 'categories')
   }
 }
 
