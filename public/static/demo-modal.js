@@ -17,8 +17,12 @@ class SupplementDemoApp {
   async init() {
     console.log('[Demo Modal] Initialisierung startet...')
     
-    // Add visible indicator that JavaScript is working
-    document.title = 'Demo - Supplement Stack (JS Modal Loaded!)'
+    // Add visible indicator that JavaScript is working - mode-aware title
+    if (this.isDashboardMode()) {
+      document.title = 'Dashboard - Supplement Stack (JS Modal Loaded!)'
+    } else {
+      document.title = 'Demo - Supplement Stack (JS Modal Loaded!)'
+    }
     
     this.setupEventListeners()
     
