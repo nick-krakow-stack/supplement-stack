@@ -490,7 +490,7 @@ app.get('/api/protected/products', authMiddleware, async (c) => {
     // For each product, get its nutrients
     const productsWithNutrients = [];
     for (const product of products.results || []) {
-      // Get nutrients for this product
+      // Get nutrients for this product from product_nutrients table
       const nutrients = await c.env.DB.prepare(`
         SELECT 
           pn.amount,
@@ -505,13 +505,33 @@ app.get('/api/protected/products', authMiddleware, async (c) => {
         ORDER BY n.name
       `).bind(product.id).all();
       
-      // Convert to main_nutrients format expected by frontend
-      const main_nutrients = nutrients.results?.map(nutrient => ({
+      let main_nutrients = nutrients.results?.map(nutrient => ({
         nutrient_id: nutrient.nutrient_id,
         amount_per_unit: nutrient.amount_standardized || nutrient.amount,
         unit: nutrient.standard_unit || nutrient.unit,
         name: nutrient.nutrient_name
       })) || [];
+      
+      // Fallback: If no nutrients found, try to match by name from available_products
+      if (main_nutrients.length === 0) {
+        console.log(`[Products API] No nutrients found for product ${product.id}, trying name match fallback`);
+        
+        const availableProduct = await c.env.DB.prepare(`
+          SELECT main_nutrients, secondary_nutrients 
+          FROM available_products 
+          WHERE name = ? OR name LIKE ?
+          LIMIT 1
+        `).bind(product.name, `%${product.name}%`).first();
+        
+        if (availableProduct) {
+          try {
+            main_nutrients = JSON.parse(availableProduct.main_nutrients || '[]');
+            console.log(`[Products API] Found fallback nutrients for ${product.name}:`, main_nutrients);
+          } catch (e) {
+            console.warn(`[Products API] Failed to parse fallback nutrients for ${product.name}`);
+          }
+        }
+      }
       
       productsWithNutrients.push({
         ...product,
@@ -521,7 +541,8 @@ app.get('/api/protected/products', authMiddleware, async (c) => {
       
       console.log(`[Products API] Product ${product.id} (${product.name}):`, {
         nutrient_count: main_nutrients.length,
-        nutrients: main_nutrients
+        nutrients: main_nutrients,
+        fallback_used: nutrients.results?.length === 0 && main_nutrients.length > 0
       });
     }
     
