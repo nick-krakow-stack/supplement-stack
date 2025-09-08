@@ -488,85 +488,32 @@ app.get('/api/protected/stacks', authMiddleware, async (c) => {
     const userId = c.get('userId');
     console.log('[Stacks API] Loading stacks for user:', userId);
     
-    // Query user's stacks from database
+    // Query user's stacks from database with their products - using both methods
     const stacks = await c.env.DB.prepare(`
       SELECT 
         s.id,
         s.name,
         s.description,
-        s.created_at
+        s.created_at,
+        GROUP_CONCAT(sp.product_id) as product_ids
       FROM stacks s 
+      LEFT JOIN stack_products sp ON s.id = sp.stack_id
       WHERE s.user_id = ? 
+      GROUP BY s.id, s.name, s.description, s.created_at
       ORDER BY s.created_at DESC
     `).bind(userId).all();
     
-    // For each stack, load its products with full details
-    const formattedStacks = [];
-    for (const stack of stacks.results || []) {
-      // Get products for this stack with their details from available_products
-      const stackProducts = await c.env.DB.prepare(`
-        SELECT 
-          sp.dosage_per_day,
-          ap.id,
-          ap.name,
-          ap.brand,
-          ap.form,
-          ap.purchase_price,
-          ap.quantity,
-          ap.price_per_piece,
-          ap.days_supply,
-          ap.monthly_cost,
-          ap.description,
-          ap.benefits,
-          ap.warnings,
-          ap.dosage_recommendation,
-          ap.category,
-          ap.main_nutrients,
-          ap.secondary_nutrients,
-          ap.recommended,
-          ap.recommendation_rank,
-          ap.product_image,
-          ap.shop_url
-        FROM stack_products sp
-        JOIN available_products ap ON sp.product_id = ap.id
-        WHERE sp.stack_id = ?
-        ORDER BY ap.name
-      `).bind(stack.id).all();
-
-      // Process products with proper data types
-      const products = stackProducts.results?.map(product => ({
-        id: product.id,
-        name: product.name,
-        brand: product.brand,
-        form: product.form,
-        purchase_price: product.purchase_price,
-        quantity: product.quantity,
-        price_per_piece: product.price_per_piece,
-        dosage_per_day: product.dosage_per_day,
-        days_supply: product.days_supply,
-        monthly_cost: product.monthly_cost,
-        description: product.description,
-        benefits: Array.isArray(product.benefits) ? product.benefits : JSON.parse(product.benefits || '[]'),
-        warnings: Array.isArray(product.warnings) ? product.warnings : JSON.parse(product.warnings || '[]'),
-        dosage_recommendation: product.dosage_recommendation,
-        category: product.category,
-        main_nutrients: Array.isArray(product.main_nutrients) ? product.main_nutrients : JSON.parse(product.main_nutrients || '[]'),
-        secondary_nutrients: Array.isArray(product.secondary_nutrients) ? product.secondary_nutrients : JSON.parse(product.secondary_nutrients || '[]'),
-        recommended: !!product.recommended,
-        recommendation_rank: product.recommendation_rank || 0,
-        product_image: product.product_image,
-        shop_url: product.shop_url
-      })) || [];
-
-      formattedStacks.push({
-        id: stack.id,
-        name: stack.name,
-        description: stack.description || '',
-        products: products,
-        total_monthly_cost: 0, // Will be calculated on frontend
-        created_at: stack.created_at
-      });
-    }
+    console.log('[Stacks API] Raw query result:', stacks);
+    
+    // Format the results to match frontend expectations
+    const formattedStacks = stacks.results?.map(stack => ({
+      id: stack.id,
+      name: stack.name,
+      description: stack.description || '',
+      products: stack.product_ids ? stack.product_ids.split(',').map(id => parseInt(id)).filter(id => !isNaN(id)) : [],
+      total_monthly_cost: 0, // Will be calculated on frontend
+      created_at: stack.created_at
+    })) || [];
     
     console.log('[Stacks API] Found', formattedStacks.length, 'stacks for user', userId);
     console.log('[Stacks API] Stack details:', JSON.stringify(formattedStacks, null, 2));
@@ -730,71 +677,19 @@ app.post('/api/protected/stacks', authMiddleware, async (c) => {
         s.id,
         s.name,
         s.description,
-        s.created_at
+        s.created_at,
+        GROUP_CONCAT(sp.product_id) as product_ids
       FROM stacks s 
+      LEFT JOIN stack_products sp ON s.id = sp.stack_id
       WHERE s.id = ? AND s.user_id = ?
+      GROUP BY s.id, s.name, s.description, s.created_at
     `).bind(stackId, userId).first();
-    
-    // Load products for this stack with full details
-    const stackProducts = await c.env.DB.prepare(`
-      SELECT 
-        sp.dosage_per_day,
-        ap.id,
-        ap.name,
-        ap.brand,
-        ap.form,
-        ap.purchase_price,
-        ap.quantity,
-        ap.price_per_piece,
-        ap.days_supply,
-        ap.monthly_cost,
-        ap.description,
-        ap.benefits,
-        ap.warnings,
-        ap.dosage_recommendation,
-        ap.category,
-        ap.main_nutrients,
-        ap.secondary_nutrients,
-        ap.recommended,
-        ap.recommendation_rank,
-        ap.product_image,
-        ap.shop_url
-      FROM stack_products sp
-      JOIN available_products ap ON sp.product_id = ap.id
-      WHERE sp.stack_id = ?
-      ORDER BY ap.name
-    `).bind(stackId).all();
-
-    // Process products with proper data types
-    const products = stackProducts.results?.map(product => ({
-      id: product.id,
-      name: product.name,
-      brand: product.brand,
-      form: product.form,
-      purchase_price: product.purchase_price,
-      quantity: product.quantity,
-      price_per_piece: product.price_per_piece,
-      dosage_per_day: product.dosage_per_day,
-      days_supply: product.days_supply,
-      monthly_cost: product.monthly_cost,
-      description: product.description,
-      benefits: Array.isArray(product.benefits) ? product.benefits : JSON.parse(product.benefits || '[]'),
-      warnings: Array.isArray(product.warnings) ? product.warnings : JSON.parse(product.warnings || '[]'),
-      dosage_recommendation: product.dosage_recommendation,
-      category: product.category,
-      main_nutrients: Array.isArray(product.main_nutrients) ? product.main_nutrients : JSON.parse(product.main_nutrients || '[]'),
-      secondary_nutrients: Array.isArray(product.secondary_nutrients) ? product.secondary_nutrients : JSON.parse(product.secondary_nutrients || '[]'),
-      recommended: !!product.recommended,
-      recommendation_rank: product.recommendation_rank || 0,
-      product_image: product.product_image,
-      shop_url: product.shop_url
-    })) || [];
     
     const formattedStack = {
       id: newStack.id,
       name: newStack.name,
       description: newStack.description || '',
-      products: products,
+      products: newStack.product_ids ? newStack.product_ids.split(',').map(id => parseInt(id)).filter(id => !isNaN(id)) : [],
       total_monthly_cost: 0,
       created_at: newStack.created_at
     };
