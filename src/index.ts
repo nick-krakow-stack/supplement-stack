@@ -505,9 +505,15 @@ app.get('/api/protected/products', authMiddleware, async (c) => {
         main_nutrients: main_nutrients,
         secondary_nutrients: [] // No secondary nutrients for user products for now
       });
+      
+      console.log(`[Products API] Product ${product.id} (${product.name}):`, {
+        nutrient_count: main_nutrients.length,
+        nutrients: main_nutrients
+      });
     }
     
     console.log('[Products API] Loaded nutrients for', productsWithNutrients.length, 'products');
+    console.log('[Products API] Sample product with nutrients:', JSON.stringify(productsWithNutrients[0], null, 2));
     return c.json(productsWithNutrients);
     
   } catch (error) {
