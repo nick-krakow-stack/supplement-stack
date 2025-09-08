@@ -1519,15 +1519,21 @@ app.get('/demo', (c) => {
                     
                     if (deleteBtn && stackSelector) {
                         const stackId = stackSelector.value;
+                        console.log('[Demo Events] Updating delete button state - stackId:', stackId, 'button exists:', !!deleteBtn);
+                        
                         if (stackId) {
                             deleteBtn.disabled = false;
                             deleteBtn.className = 'bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors text-sm font-medium shadow-sm cursor-pointer';
                             deleteBtn.title = 'Stack löschen';
+                            console.log('[Demo Events] Delete button ENABLED for stack:', stackId);
                         } else {
                             deleteBtn.disabled = true;
                             deleteBtn.className = 'bg-gray-400 text-white px-4 py-2 rounded-md transition-colors text-sm font-medium shadow-sm cursor-not-allowed';
                             deleteBtn.title = 'Wählen Sie zuerst einen Stack aus';
+                            console.log('[Demo Events] Delete button DISABLED - no stack selected');
                         }
+                    } else {
+                        console.log('[Demo Events] Button state update failed - deleteBtn:', !!deleteBtn, 'stackSelector:', !!stackSelector);
                     }
                 }
                 
