@@ -547,7 +547,6 @@ app.get('/api/protected/products', authMiddleware, async (c) => {
     }
     
     console.log('[Products API] Loaded nutrients for', productsWithNutrients.length, 'products');
-    console.log('[Products API] Sample product with nutrients:', JSON.stringify(productsWithNutrients[0], null, 2));
     return c.json(productsWithNutrients);
     
   } catch (error) {
