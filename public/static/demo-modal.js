@@ -1129,6 +1129,7 @@ class SupplementDemoApp {
       console.log('[Demo Modal] Selector replaced with fresh clone')
     } else {
       console.warn('[Demo Modal] Could not replace selector - no parent node')
+    }
     
     newSelector.addEventListener('change', async (e) => {
       const stackId = e.target.value ? parseInt(e.target.value) : null
