@@ -1512,6 +1512,46 @@ app.get('/demo', (c) => {
             });
             
             function setupDemoEvents() {
+                // Function to check and enable/disable delete button based on current selection
+                function updateDeleteButtonState() {
+                    const stackSelector = document.getElementById('stack-selector');
+                    const deleteBtn = document.getElementById('demo-delete-stack-main');
+                    
+                    if (deleteBtn && stackSelector) {
+                        const stackId = stackSelector.value;
+                        if (stackId) {
+                            deleteBtn.disabled = false;
+                            deleteBtn.className = 'bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors text-sm font-medium shadow-sm cursor-pointer';
+                            deleteBtn.title = 'Stack löschen';
+                        } else {
+                            deleteBtn.disabled = true;
+                            deleteBtn.className = 'bg-gray-400 text-white px-4 py-2 rounded-md transition-colors text-sm font-medium shadow-sm cursor-not-allowed';
+                            deleteBtn.title = 'Wählen Sie zuerst einen Stack aus';
+                        }
+                    }
+                }
+                
+                // Check button state periodically (for async stack loading)
+                let checkCount = 0;
+                const maxChecks = 20; // 10 seconds total
+                const checkInterval = setInterval(() => {
+                    checkCount++;
+                    const stackSelector = document.getElementById('stack-selector');
+                    
+                    if (stackSelector) {
+                        updateDeleteButtonState();
+                        
+                        // If we have stacks loaded or we've checked enough times, stop
+                        if (stackSelector.options.length > 1 || checkCount >= maxChecks) {
+                            clearInterval(checkInterval);
+                        }
+                    }
+                    
+                    if (checkCount >= maxChecks) {
+                        clearInterval(checkInterval);
+                    }
+                }, 500);
+                
                 // Delete Stack Button for Demo Mode
                 const deleteStackBtn = document.getElementById('demo-delete-stack-main');
                 if (deleteStackBtn) {
@@ -1552,17 +1592,26 @@ app.get('/demo', (c) => {
                 if (stackSelector) {
                     stackSelector.addEventListener('change', (e) => {
                         const stackId = e.target.value;
-                        const deleteBtn = document.getElementById('demo-delete-stack-main');
-                        
-                        if (stackId && deleteBtn) {
-                            deleteBtn.disabled = false;
-                            deleteBtn.className = 'bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors text-sm font-medium shadow-sm cursor-pointer';
-                            deleteBtn.title = 'Stack löschen';
-                        } else if (deleteBtn) {
-                            deleteBtn.disabled = true;
-                            deleteBtn.className = 'bg-gray-400 text-white px-4 py-2 rounded-md transition-colors text-sm font-medium shadow-sm cursor-not-allowed';
-                            deleteBtn.title = 'Wählen Sie zuerst einen Stack aus';
-                        }
+                        console.log('[Demo Events] Stack selector changed to:', stackId);
+                        updateDeleteButtonState();
+                    });
+                }
+                
+                // Make updateDeleteButtonState globally available for demo app
+                window.updateDemoDeleteButtonState = updateDeleteButtonState;
+                
+                // Also update button state when DOM changes (for dynamically loaded content)
+                const observer = new MutationObserver(() => {
+                    updateDeleteButtonState();
+                });
+                
+                // Observe changes to the stack selector
+                if (stackSelector) {
+                    observer.observe(stackSelector, { 
+                        childList: true, 
+                        subtree: true, 
+                        attributes: true, 
+                        attributeFilter: ['value'] 
                     });
                 }
             }
@@ -2048,10 +2097,7 @@ app.get('/dashboard', (c) => {
                         console.log('Dashboard: Found stacks:', stacks);
                         populateStackSelector(stacks);
                         
-                        // Load default stack if available
-                        if (stacks.length > 0) {
-                            loadDashboardStack(stacks[0].id);
-                        }
+                        // Stack selector will handle loading the first stack automatically
                         
                     } catch (error) {
                         console.error('Error loading dashboard data:', error);
@@ -2065,6 +2111,14 @@ app.get('/dashboard', (c) => {
                         stacks.forEach(stack => {
                             selector.innerHTML += \`<option value="\${stack.id}">\${stack.name}</option>\`;
                         });
+                        
+                        // If we have stacks, select the first one and trigger change event
+                        if (stacks.length > 0) {
+                            selector.value = stacks[0].id;
+                            // Trigger change event to enable delete button
+                            const changeEvent = new Event('change');
+                            selector.dispatchEvent(changeEvent);
+                        }
                     }
                 }
                 

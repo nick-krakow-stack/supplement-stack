@@ -1169,6 +1169,17 @@ class SupplementDemoApp {
       // Ensure currentStackId is set before loading
       this.currentStackId = firstStack.id
       await this.loadStack(firstStack.id)
+      
+      // Trigger change event to enable delete button
+      console.log('[Demo Modal] Triggering change event for delete button activation')
+      const changeEvent = new Event('change', { bubbles: true })
+      newSelector.dispatchEvent(changeEvent)
+      
+      // Also call the global update function if available
+      if (typeof window.updateDemoDeleteButtonState === 'function') {
+        console.log('[Demo Modal] Calling global delete button update function')
+        window.updateDemoDeleteButtonState()
+      }
     } else {
       console.warn('[Demo Modal] No stacks available for auto-selection')
       this.currentStackId = null
@@ -1247,6 +1258,11 @@ class SupplementDemoApp {
     
     this.renderStack()
     this.updateStats()
+    
+    // Update delete button state after loading stack
+    if (typeof window.updateDemoDeleteButtonState === 'function') {
+      window.updateDemoDeleteButtonState()
+    }
   }
 
   // Refresh a specific stack from database to get latest product associations
