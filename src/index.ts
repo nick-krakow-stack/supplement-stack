@@ -253,6 +253,21 @@ app.get('/api/admin/migrate', async (c) => {
   }
 });
 
+// Debug: Check available products count
+app.get('/api/admin/debug-products', async (c) => {
+  try {
+    const count = await c.env.DB.prepare('SELECT COUNT(*) as count FROM available_products').first();
+    const sampleProducts = await c.env.DB.prepare('SELECT id, name, main_nutrients FROM available_products LIMIT 3').all();
+    
+    return c.json({
+      total_products: count.count,
+      sample_products: sampleProducts.results
+    });
+  } catch (error) {
+    return c.json({ error: 'Debug failed', details: error.message }, 500);
+  }
+});
+
 // Seed available products data
 app.post('/api/admin/seed-products', async (c) => {
   try {
@@ -526,6 +541,7 @@ app.get('/api/protected/stacks', authMiddleware, async (c) => {
     }
     
     console.log('Found', formattedStacks.length, 'stacks for user', userId);
+    console.log('Stack details:', JSON.stringify(formattedStacks, null, 2));
     
     return c.json(formattedStacks);
     
