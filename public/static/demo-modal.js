@@ -4435,6 +4435,120 @@ class SupplementDemoApp {
     }
   }
 
+  // Helper function to standardize nutrient names for consistency
+  standardizeNutrientName(nutrientName) {
+    const name = nutrientName.toLowerCase()
+    
+    // Vitamin standardization: "Vitamin [X] (Chemical Name)"
+    const vitaminMappings = {
+      // Fettlösliche Vitamine
+      'vitamin a': 'Vitamin A (Retinol)',
+      'retinol': 'Vitamin A (Retinol)',
+      'beta-carotin': 'Vitamin A (Beta-Carotin)',
+      
+      'vitamin d': 'Vitamin D (Cholecalciferol)',
+      'vitamin d3': 'Vitamin D3 (Cholecalciferol)', 
+      'vitamin d2': 'Vitamin D2 (Ergocalciferol)',
+      'cholecalciferol': 'Vitamin D3 (Cholecalciferol)',
+      
+      'vitamin e': 'Vitamin E (Tocopherol)',
+      'tocopherol': 'Vitamin E (Tocopherol)',
+      'alpha-tocopherol': 'Vitamin E (Alpha-Tocopherol)',
+      
+      'vitamin k': 'Vitamin K (Phylloquinon)',
+      'vitamin k1': 'Vitamin K1 (Phylloquinon)',
+      'vitamin k2': 'Vitamin K2 (Menaquinon)',
+      'phylloquinon': 'Vitamin K1 (Phylloquinon)',
+      'menaquinon': 'Vitamin K2 (Menaquinon)',
+      'mk-7': 'Vitamin K2 (MK-7)',
+      
+      // Wasserlösliche Vitamine - B-Komplex
+      'vitamin b1': 'Vitamin B1 (Thiamin)',
+      'thiamin': 'Vitamin B1 (Thiamin)',
+      
+      'vitamin b2': 'Vitamin B2 (Riboflavin)',
+      'riboflavin': 'Vitamin B2 (Riboflavin)',
+      
+      'vitamin b3': 'Vitamin B3 (Niacin)',
+      'niacin': 'Vitamin B3 (Niacin)',
+      'nicotinsäure': 'Vitamin B3 (Niacin)',
+      
+      'vitamin b5': 'Vitamin B5 (Pantothensäure)',
+      'pantothensäure': 'Vitamin B5 (Pantothensäure)',
+      
+      'vitamin b6': 'Vitamin B6 (Pyridoxin)',
+      'pyridoxin': 'Vitamin B6 (Pyridoxin)',
+      
+      'vitamin b7': 'Vitamin B7 (Biotin)',
+      'biotin': 'Vitamin B7 (Biotin)',
+      'vitamin h': 'Vitamin B7 (Biotin)',
+      
+      'vitamin b9': 'Vitamin B9 (Folsäure)',
+      'folsäure': 'Vitamin B9 (Folsäure)',
+      'folat': 'Vitamin B9 (Folsäure)',
+      '5-mthf': 'Vitamin B9 (5-MTHF)',
+      
+      'vitamin b12': 'Vitamin B12 (Cobalamin)',
+      'b12': 'Vitamin B12 (Cobalamin)',
+      'cobalamin': 'Vitamin B12 (Cobalamin)',
+      'methylcobalamin': 'Vitamin B12 (Methylcobalamin)',
+      'cyanocobalamin': 'Vitamin B12 (Cyanocobalamin)',
+      
+      'vitamin c': 'Vitamin C (Ascorbinsäure)',
+      'ascorbinsäure': 'Vitamin C (Ascorbinsäure)',
+      'ester-c': 'Vitamin C (Ester-C)'
+    }
+    
+    // Check for exact matches first
+    for (const [key, standardName] of Object.entries(vitaminMappings)) {
+      if (name === key || name.includes(key)) {
+        return standardName
+      }
+    }
+    
+    // Mineral and trace element standardization
+    const mineralMappings = {
+      'magnesium': 'Magnesium',
+      'mg': 'Magnesium', 
+      'calcium': 'Calcium',
+      'ca': 'Calcium',
+      'kalium': 'Kalium',
+      'potassium': 'Kalium',
+      'k': 'Kalium',
+      'phosphor': 'Phosphor',
+      'natrium': 'Natrium',
+      'schwefel': 'Schwefel',
+      
+      'zink': 'Zink',
+      'zinc': 'Zink',
+      'zn': 'Zink',
+      'eisen': 'Eisen', 
+      'iron': 'Eisen',
+      'fe': 'Eisen',
+      'selen': 'Selen',
+      'selenium': 'Selen',
+      'se': 'Selen',
+      'jod': 'Jod',
+      'iodine': 'Jod',
+      'i': 'Jod',
+      'chrom': 'Chrom',
+      'chromium': 'Chrom',
+      'cr': 'Chrom',
+      'kupfer': 'Kupfer',
+      'copper': 'Kupfer',
+      'cu': 'Kupfer'
+    }
+    
+    for (const [key, standardName] of Object.entries(mineralMappings)) {
+      if (name === key || name.includes(key)) {
+        return standardName
+      }
+    }
+    
+    // Return original name if no mapping found (with proper capitalization)
+    return nutrientName.charAt(0).toUpperCase() + nutrientName.slice(1)
+  }
+
   // Helper function to categorize nutrients with proper hierarchy
   getNutrientCategory(nutrientName) {
     const name = nutrientName.toLowerCase()
@@ -4537,13 +4651,15 @@ class SupplementDemoApp {
             return
           }
           
-          const key = nutrientInfo.name
+          // Apply nutrient name standardization
+          const standardizedName = this.standardizeNutrientName(nutrientInfo.name)
+          const key = standardizedName
           if (!nutrientTotals[key]) {
             nutrientTotals[key] = {
-              name: nutrientInfo.name,
+              name: standardizedName,
               amount: 0,
               unit: nutrientInfo.unit,
-              category: this.getNutrientCategory(nutrientInfo.name)
+              category: this.getNutrientCategory(standardizedName)
             }
           }
           
@@ -4559,13 +4675,15 @@ class SupplementDemoApp {
           const nutrientInfo = this.nutrients.find(n => n.id === secondaryNutrient.nutrient_id)
           if (!nutrientInfo) return
           
-          const key = nutrientInfo.name
+          // Apply nutrient name standardization
+          const standardizedName = this.standardizeNutrientName(nutrientInfo.name)
+          const key = standardizedName
           if (!nutrientTotals[key]) {
             nutrientTotals[key] = {
-              name: nutrientInfo.name,
+              name: standardizedName,
               amount: 0,
               unit: nutrientInfo.unit,
-              category: this.getNutrientCategory(nutrientInfo.name)
+              category: this.getNutrientCategory(standardizedName)
             }
           }
           
@@ -4577,13 +4695,15 @@ class SupplementDemoApp {
       // Fallback: Handle old nutrient structure for backward compatibility
       if (product.nutrients && Array.isArray(product.nutrients)) {
         product.nutrients.forEach(nutrient => {
-          const key = nutrient.name
+          // Apply nutrient name standardization for fallback nutrients
+          const standardizedName = this.standardizeNutrientName(nutrient.name)
+          const key = standardizedName
           if (!nutrientTotals[key]) {
             nutrientTotals[key] = {
-              name: nutrient.name,
+              name: standardizedName,
               amount: 0,
               unit: nutrient.unit,
-              category: nutrient.category || 'Sonstige'
+              category: this.getNutrientCategory(standardizedName)
             }
           }
           
