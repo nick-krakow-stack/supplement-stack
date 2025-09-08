@@ -268,6 +268,34 @@ app.get('/api/admin/debug-products', async (c) => {
   }
 });
 
+// Debug: Check user stacks and database status
+app.get('/api/admin/debug-stacks', async (c) => {
+  try {
+    const userCount = await c.env.DB.prepare('SELECT COUNT(*) as count FROM users').first();
+    const stackCount = await c.env.DB.prepare('SELECT COUNT(*) as count FROM stacks').first();
+    const stackProductCount = await c.env.DB.prepare('SELECT COUNT(*) as count FROM stack_products').first();
+    
+    // Get some sample stacks
+    const sampleStacks = await c.env.DB.prepare(`
+      SELECT s.id, s.name, s.user_id, 
+             GROUP_CONCAT(sp.product_id) as product_ids
+      FROM stacks s 
+      LEFT JOIN stack_products sp ON s.id = sp.stack_id
+      GROUP BY s.id, s.name, s.user_id
+      LIMIT 5
+    `).all();
+    
+    return c.json({
+      user_count: userCount.count,
+      stack_count: stackCount.count, 
+      stack_product_count: stackProductCount.count,
+      sample_stacks: sampleStacks.results
+    });
+  } catch (error) {
+    return c.json({ error: 'Debug failed', details: error.message }, 500);
+  }
+});
+
 // Seed available products data
 app.post('/api/admin/seed-products', async (c) => {
   try {
@@ -458,7 +486,7 @@ app.get('/api/protected/products', authMiddleware, async (c) => {
 app.get('/api/protected/stacks', authMiddleware, async (c) => {
   try {
     const userId = c.get('userId');
-    console.log('Loading stacks for user:', userId);
+    console.log('[Stacks API] Loading stacks for user:', userId);
     
     // Query user's stacks from database
     const stacks = await c.env.DB.prepare(`
@@ -540,14 +568,14 @@ app.get('/api/protected/stacks', authMiddleware, async (c) => {
       });
     }
     
-    console.log('Found', formattedStacks.length, 'stacks for user', userId);
-    console.log('Stack details:', JSON.stringify(formattedStacks, null, 2));
+    console.log('[Stacks API] Found', formattedStacks.length, 'stacks for user', userId);
+    console.log('[Stacks API] Stack details:', JSON.stringify(formattedStacks, null, 2));
     
     return c.json(formattedStacks);
     
   } catch (error) {
-    console.error('Stacks API error:', error);
-    return c.json({ error: 'Failed to load stacks' }, 500);
+    console.error('[Stacks API] Error loading stacks:', error);
+    return c.json({ error: 'Failed to load stacks', details: error.message }, 500);
   }
 });
 
