@@ -4435,21 +4435,50 @@ class SupplementDemoApp {
     }
   }
 
-  // Helper function to categorize nutrients
+  // Helper function to categorize nutrients with proper hierarchy
   getNutrientCategory(nutrientName) {
-    const vitaminPattern = /vitamin|vitamine/i
-    const mineralPattern = /magnesium|zink|eisen|calcium|kalium|selen|jod|chrom|kupfer/i
-    const fattyAcidPattern = /omega|epa|dha|dpa|fett/i
-    const aminoAcidPattern = /carnitin|creatin|protein|amino/i
+    const name = nutrientName.toLowerCase()
     
-    if (vitaminPattern.test(nutrientName)) {
+    // Vitamine (A, B-Komplex, C, D, E, K, etc.)
+    if (name.includes('vitamin') || name.includes('folsäure') || name.includes('folat') || 
+        name.includes('biotin') || name.includes('niacin') || name.includes('pantothensäure')) {
       return 'Vitamine'
-    } else if (mineralPattern.test(nutrientName)) {
-      return 'Mineralien'
-    } else if (fattyAcidPattern.test(nutrientName)) {
+    }
+    
+    // Mineralstoffe (Makromineralien - größere Mengen benötigt)
+    if (name.includes('magnesium') || name.includes('calcium') || name.includes('kalium') || 
+        name.includes('phosphor') || name.includes('natrium') || name.includes('schwefel')) {
+      return 'Mineralstoffe'
+    }
+    
+    // Spurenelemente (Mikromineralien - kleinere Mengen benötigt)
+    if (name.includes('zink') || name.includes('eisen') || name.includes('selen') || 
+        name.includes('jod') || name.includes('chrom') || name.includes('kupfer') || 
+        name.includes('mangan') || name.includes('molybdän') || name.includes('kobalt') ||
+        name.includes('fluor') || name.includes('bor')) {
+      return 'Spurenelemente'
+    }
+    
+    // Fettsäuren
+    if (name.includes('omega') || name.includes('epa') || name.includes('dha') || 
+        name.includes('dpa') || name.includes('fett') || name.includes('linolsäure') ||
+        name.includes('alpha-linolensäure')) {
       return 'Fettsäuren'
-    } else if (aminoAcidPattern.test(nutrientName)) {
+    }
+    
+    // Aminosäuren und Proteine
+    if (name.includes('carnitin') || name.includes('creatin') || name.includes('protein') || 
+        name.includes('amino') || name.includes('lysin') || name.includes('leucin') ||
+        name.includes('valin') || name.includes('isoleucin') || name.includes('tryptophan') ||
+        name.includes('methionin') || name.includes('cystein') || name.includes('tyrosin')) {
       return 'Aminosäuren'
+    }
+    
+    // Antioxidantien und sekundäre Pflanzenstoffe
+    if (name.includes('coenzym') || name.includes('q10') || name.includes('glutathion') || 
+        name.includes('resveratrol') || name.includes('curcumin') || name.includes('quercetin') ||
+        name.includes('lycopin') || name.includes('anthocyan')) {
+      return 'Antioxidantien'
     }
     
     return 'Sonstige'
@@ -4593,13 +4622,38 @@ class SupplementDemoApp {
       categories[category].push(nutrient)
     })
 
-    // Generate HTML
+    // Define category order (hierarchy)
+    const categoryOrder = [
+      'Vitamine',
+      'Mineralstoffe', 
+      'Spurenelemente',
+      'Fettsäuren',
+      'Aminosäuren',
+      'Antioxidantien',
+      'Sonstige'
+    ]
+
+    // Generate HTML in proper order with appropriate icons
     let html = ''
-    Object.keys(categories).sort().forEach(category => {
+    categoryOrder.forEach(category => {
+      if (!categories[category] || categories[category].length === 0) return
+      
+      // Choose appropriate icon for each category
+      let categoryIcon = 'fas fa-circle'
+      switch(category) {
+        case 'Vitamine': categoryIcon = 'fas fa-sun'; break;
+        case 'Mineralstoffe': categoryIcon = 'fas fa-mountain'; break;
+        case 'Spurenelemente': categoryIcon = 'fas fa-atom'; break;
+        case 'Fettsäuren': categoryIcon = 'fas fa-tint'; break;
+        case 'Aminosäuren': categoryIcon = 'fas fa-link'; break;
+        case 'Antioxidantien': categoryIcon = 'fas fa-shield-alt'; break;
+        case 'Sonstige': categoryIcon = 'fas fa-ellipsis-h'; break;
+      }
+      
       html += `
         <div class="col-span-full mb-6">
           <h4 class="font-semibold text-gray-800 mb-3 border-b border-gray-200 pb-2">
-            <i class="fas fa-tags text-blue-600 mr-2"></i>
+            <i class="${categoryIcon} text-blue-600 mr-2"></i>
             ${category}
           </h4>
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -4608,7 +4662,7 @@ class SupplementDemoApp {
       categories[category].forEach(nutrient => {
         const amount = Math.round(nutrient.amount * 100) / 100 // Round to 2 decimal places
         html += `
-          <div class="bg-gray-50 rounded-lg p-3 border border-gray-200">
+          <div class="bg-gray-50 rounded-lg p-3 border border-gray-200 hover:bg-blue-50 transition-colors">
             <div class="flex items-center justify-between">
               <span class="font-medium text-gray-800 text-sm">${nutrient.name}</span>
               <span class="text-blue-600 font-semibold">${amount} ${nutrient.unit}</span>
