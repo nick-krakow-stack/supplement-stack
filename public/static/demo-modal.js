@@ -4432,6 +4432,26 @@ class SupplementDemoApp {
     }
   }
 
+  // Helper function to categorize nutrients
+  getNutrientCategory(nutrientName) {
+    const vitaminPattern = /vitamin|vitamine/i
+    const mineralPattern = /magnesium|zink|eisen|calcium|kalium|selen|jod|chrom|kupfer/i
+    const fattyAcidPattern = /omega|epa|dha|dpa|fett/i
+    const aminoAcidPattern = /carnitin|creatin|protein|amino/i
+    
+    if (vitaminPattern.test(nutrientName)) {
+      return 'Vitamine'
+    } else if (mineralPattern.test(nutrientName)) {
+      return 'Mineralien'
+    } else if (fattyAcidPattern.test(nutrientName)) {
+      return 'Fettsäuren'
+    } else if (aminoAcidPattern.test(nutrientName)) {
+      return 'Aminosäuren'
+    }
+    
+    return 'Sonstige'
+  }
+
   // Show or hide the layer section based on whether stacks are available
   updateLayerSectionVisibility() {
     const layerSection = document.getElementById('dashboard-layer-section')
@@ -4472,6 +4492,54 @@ class SupplementDemoApp {
     const nutrientTotals = {}
     
     currentStack.products.forEach(product => {
+      // Handle main_nutrients from database
+      if (product.main_nutrients && Array.isArray(product.main_nutrients)) {
+        product.main_nutrients.forEach(mainNutrient => {
+          // Find nutrient info by ID
+          const nutrientInfo = this.nutrients.find(n => n.id === mainNutrient.nutrient_id)
+          if (!nutrientInfo) {
+            console.warn('[Nutrient Overview] Nutrient not found:', mainNutrient.nutrient_id)
+            return
+          }
+          
+          const key = nutrientInfo.name
+          if (!nutrientTotals[key]) {
+            nutrientTotals[key] = {
+              name: nutrientInfo.name,
+              amount: 0,
+              unit: nutrientInfo.unit,
+              category: this.getNutrientCategory(nutrientInfo.name)
+            }
+          }
+          
+          // Calculate daily amount: nutrient amount per unit * daily dosage
+          const dailyAmount = (mainNutrient.amount_per_unit || 0) * (product.dosage_per_day || 1)
+          nutrientTotals[key].amount += dailyAmount
+        })
+      }
+      
+      // Handle secondary_nutrients as well
+      if (product.secondary_nutrients && Array.isArray(product.secondary_nutrients)) {
+        product.secondary_nutrients.forEach(secondaryNutrient => {
+          const nutrientInfo = this.nutrients.find(n => n.id === secondaryNutrient.nutrient_id)
+          if (!nutrientInfo) return
+          
+          const key = nutrientInfo.name
+          if (!nutrientTotals[key]) {
+            nutrientTotals[key] = {
+              name: nutrientInfo.name,
+              amount: 0,
+              unit: nutrientInfo.unit,
+              category: this.getNutrientCategory(nutrientInfo.name)
+            }
+          }
+          
+          const dailyAmount = (secondaryNutrient.amount_per_unit || 0) * (product.dosage_per_day || 1)
+          nutrientTotals[key].amount += dailyAmount
+        })
+      }
+      
+      // Fallback: Handle old nutrient structure for backward compatibility
       if (product.nutrients && Array.isArray(product.nutrients)) {
         product.nutrients.forEach(nutrient => {
           const key = nutrient.name
@@ -4484,7 +4552,6 @@ class SupplementDemoApp {
             }
           }
           
-          // Calculate daily amount: nutrient amount per serving * daily dosage
           const dailyAmount = (nutrient.amount || 0) * (product.dosage_per_day || 1)
           nutrientTotals[key].amount += dailyAmount
         })
