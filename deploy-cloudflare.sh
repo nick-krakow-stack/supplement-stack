@@ -54,9 +54,7 @@ echo "   URL: https://$PROJECT_NAME.pages.dev"
 
 # Deploy using wrangler
 wrangler pages deploy dist \
-    --project-name="$PROJECT_NAME" \
-    --compatibility-date="$WRANGLER_COMPATIBILITY_DATE" \
-    --binding="DB=$DATABASE_NAME"
+    --project-name="$PROJECT_NAME"
 
 if [[ $? -eq 0 ]]; then
     echo ""
