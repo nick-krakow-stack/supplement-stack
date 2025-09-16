@@ -137,13 +137,21 @@ class FastDemoApp {
         return
       }
 
-      // API-Call für User-Stacks
-      const stacks = await window.performanceCore.fetchWithCache('/api/protected/stacks', {
-        headers: { 'Authorization': `Bearer ${authToken}` }
-      })
+      // Lade sowohl User-Stacks als auch verfügbare Produkte parallel
+      const [stacks, availableProducts] = await Promise.all([
+        window.performanceCore.fetchWithCache('/api/protected/stacks', {
+          headers: { 'Authorization': `Bearer ${authToken}` },
+          bypassCache: true // User-Stacks immer frisch laden
+        }),
+        window.performanceCore.fetchWithCache('/api/available-products', {
+          cacheTTL: 600000 // 10 Minuten Cache für verfügbare Produkte
+        })
+      ])
       
       this.stacks = stacks || []
-      console.log('[Dashboard] Loaded', this.stacks.length, 'user stacks')
+      this.availableProducts = availableProducts || []
+      
+      console.log('[Dashboard] Loaded', this.stacks.length, 'user stacks and', this.availableProducts.length, 'available products')
 
       // Wenn keine Stacks vorhanden, Default-Stack erstellen
       if (this.stacks.length === 0) {
@@ -160,7 +168,13 @@ class FastDemoApp {
         return
       }
       
-      // Fallback: Default-Stack erstellen
+      // Fallback: Lade verfügbare Produkte und erstelle Default-Stack
+      try {
+        this.availableProducts = await window.performanceCore.fetchWithCache('/api/available-products')
+      } catch (e) {
+        this.availableProducts = this.getMinimalProducts()
+      }
+      
       this.stacks = [{
         id: 'user-default',
         name: 'Mein Stack',
@@ -171,27 +185,73 @@ class FastDemoApp {
   }
 
   async loadDemoStacks() {
-    // Prüfe Cache zuerst
-    const cachedStacks = window.performanceCore.getCache('demo_stacks')
-    if (cachedStacks) {
-      this.stacks = cachedStacks
-      console.log('[Fast Demo] Using cached stacks')
-    } else {
-      // Fallback zu Session Storage
+    try {
+      console.log('[Demo] Loading stacks from database (same as backend)...')
+      
+      // Demo verwendet dieselben verfügbaren Produkte aus der Datenbank
+      this.availableProducts = await window.performanceCore.fetchWithCache('/api/available-products', {
+        cacheTTL: 600000 // 10 Minuten Cache für Demo-Produkte
+      })
+      
+      console.log('[Demo] Loaded', this.availableProducts.length, 'products from database')
+      
+      // Demo-Stacks basieren auf echten DB-Produkten, aber werden lokal verwaltet
       const sessionData = sessionStorage.getItem('supplement_demo_stacks')
       if (sessionData) {
         this.stacks = JSON.parse(sessionData)
+        console.log('[Demo] Using session-stored stacks')
       } else {
-        this.stacks = this.getDefaultStacks()
+        // Erstelle Demo-Stacks basierend auf echten DB-Produkten
+        this.stacks = this.createDemoStacksFromDB()
         sessionStorage.setItem('supplement_demo_stacks', JSON.stringify(this.stacks))
+        console.log('[Demo] Created demo stacks from DB products')
       }
       
-      // Cache für nächsten Load
+      // Cache für Performance
       window.performanceCore.setCache('demo_stacks', this.stacks)
+      
+    } catch (error) {
+      console.error('[Demo] Error loading from database, using fallback:', error)
+      
+      // Fallback zu statischen Demo-Daten
+      this.stacks = this.getDefaultStacks()
+      this.availableProducts = this.getMinimalProducts()
+    }
+  }
+
+  createDemoStacksFromDB() {
+    // Erstelle Demo-Stacks basierend auf echten Produkten aus der DB
+    if (!this.availableProducts || this.availableProducts.length === 0) {
+      return this.getDefaultStacks() // Fallback
     }
 
-    // Verfügbare Produkte minimal laden
-    this.availableProducts = this.getMinimalProducts()
+    // Filtere Produkte nach Kategorien für Demo-Stacks
+    const vitamins = this.availableProducts.filter(p => 
+      p.category === 'Vitamine' || p.name.toLowerCase().includes('vitamin')
+    ).slice(0, 3)
+    
+    const minerals = this.availableProducts.filter(p => 
+      p.category === 'Mineralstoffe' || p.name.toLowerCase().includes('magnesium') || p.name.toLowerCase().includes('zink')
+    ).slice(0, 2)
+    
+    const others = this.availableProducts.filter(p => 
+      p.category === 'Fettsäuren' || p.name.toLowerCase().includes('omega') || p.name.toLowerCase().includes('kreatin')
+    ).slice(0, 2)
+
+    return [
+      {
+        id: 'demo-basis',
+        name: 'Basis Gesundheit',
+        description: 'Grundlegende Nährstoffe für den täglichen Bedarf (aus DB)',
+        products: vitamins.length > 0 ? vitamins : this.getDefaultStacks()[0].products
+      },
+      {
+        id: 'demo-advanced', 
+        name: 'Erweiterte Versorgung',
+        description: 'Optimierte Mineralstoff- und Omega-3-Versorgung (aus DB)',
+        products: [...minerals, ...others].length > 0 ? [...minerals, ...others] : this.getDefaultStacks()[1].products
+      }
+    ]
   }
 
   async createDefaultUserStack() {
@@ -386,9 +446,12 @@ class FastDemoApp {
   }
 
   renderProductCard(product) {
-    // Vollständiges Design-Template wie im ursprünglichen System
+    // Vollständiges Design-Template - funktioniert für DB- und Demo-Produkte
     const intakeTime = this.getProductIntakeTime(product)
     const labelColor = this.getIntakeTimeLabelColor(intakeTime)
+    
+    // Unterstütze sowohl DB-Produktstruktur als auch Demo-Produktstruktur
+    const productData = this.normalizeProductData(product)
     
     return `
       <div class="bg-white border-0 rounded-2xl p-5 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 relative overflow-hidden">
@@ -399,20 +462,20 @@ class FastDemoApp {
         <div class="flex justify-between items-start mb-4">
           <div class="flex items-center space-x-2">
             <!-- Premium Badge falls empfohlen -->
-            ${product.recommended ? `
+            ${productData.recommended ? `
               <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-purple-100 to-pink-100 text-purple-800 border border-purple-200">
                 <i class="fas fa-star text-purple-500 mr-1"></i>Top
               </span>
             ` : ''}
           </div>
-          <input type="checkbox" class="product-checkbox w-5 h-5 text-emerald-600 rounded-md focus:ring-emerald-500 focus:ring-2" data-product-id="${product.id}" checked>
+          <input type="checkbox" class="product-checkbox w-5 h-5 text-emerald-600 rounded-md focus:ring-emerald-500 focus:ring-2" data-product-id="${productData.id}" checked>
         </div>
         
         <!-- Kompaktes Produktbild und Info -->
         <div class="flex items-center mb-4 space-x-3">
-          ${product.product_image ? `
+          ${productData.product_image ? `
             <div class="w-14 h-14 flex-shrink-0 rounded-xl overflow-hidden bg-gradient-to-br from-slate-50 to-slate-100 border border-slate-200 shadow-sm">
-              <img src="${product.product_image}" alt="${product.name}" class="w-full h-full object-cover">
+              <img src="${productData.product_image}" alt="${productData.name}" class="w-full h-full object-cover">
             </div>
           ` : `
             <div class="w-14 h-14 flex-shrink-0 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200 flex items-center justify-center shadow-sm">
@@ -421,8 +484,8 @@ class FastDemoApp {
           `}
           
           <div class="flex-1 min-w-0">
-            <h3 class="font-bold text-slate-800 text-sm mb-1 truncate">${product.name}</h3>
-            <p class="text-xs text-slate-500 mb-2 font-medium">${product.brand}</p>
+            <h3 class="font-bold text-slate-800 text-sm mb-1 truncate">${productData.name}</h3>
+            <p class="text-xs text-slate-500 mb-2 font-medium">${productData.brand}</p>
             <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold ${labelColor} shadow-sm">
               <i class="fas fa-clock mr-1"></i>${intakeTime}
             </span>
@@ -434,14 +497,14 @@ class FastDemoApp {
           <!-- Dosierung -->
           <div class="bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl p-3 border border-slate-200">
             <div class="text-xs text-slate-600 font-medium mb-1">Dosierung</div>
-            <div class="text-sm font-bold text-slate-800">${product.dosage_per_day || 1} ${this.getPluralForm(product.dosage_per_day || 1, product.form)}</div>
+            <div class="text-sm font-bold text-slate-800">${productData.dosage_per_day || 1} ${this.getPluralForm(productData.dosage_per_day || 1, productData.form)}</div>
             <div class="text-xs text-slate-500">täglich</div>
           </div>
           
           <!-- Vorrat -->
           <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-3 border border-blue-200">
             <div class="text-xs text-blue-600 font-medium mb-1">Vorrat</div>
-            <div class="text-sm font-bold text-blue-800">${Math.floor((product.quantity || 30) / (product.dosage_per_day || 1))}</div>
+            <div class="text-sm font-bold text-blue-800">${Math.floor((productData.quantity || 30) / (productData.dosage_per_day || 1))}</div>
             <div class="text-xs text-blue-500">Tage</div>
           </div>
         </div>
@@ -450,20 +513,20 @@ class FastDemoApp {
         <div class="grid grid-cols-2 gap-3 mb-4">
           <div class="text-center bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl p-3 border border-slate-200">
             <div class="text-xs text-slate-600 font-medium">Einmalig</div>
-            <div class="text-lg font-bold text-slate-800">€${(product.purchase_price || product.monthly_cost * 2 || 19.90).toFixed(2)}</div>
+            <div class="text-lg font-bold text-slate-800">€${(productData.purchase_price || productData.monthly_cost * 2 || 19.90).toFixed(2)}</div>
           </div>
           <div class="text-center bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl p-3 border border-emerald-200">
             <div class="text-xs text-emerald-600 font-medium">Monatlich</div>
-            <div class="text-lg font-bold text-emerald-700">€${(product.monthly_cost || 11.94).toFixed(2)}</div>
+            <div class="text-lg font-bold text-emerald-700">€${(productData.monthly_cost || 11.94).toFixed(2)}</div>
           </div>
         </div>
         
         <!-- Action Buttons for Edit/Delete -->
         <div class="flex gap-2">
-          <button onclick="window.demoApp && window.demoApp.editProduct(${product.id})" class="flex-1 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white font-bold py-3 px-4 rounded-xl transition-all duration-300 transform hover:scale-105 hover:shadow-lg focus:ring-4 focus:ring-blue-200 focus:outline-none text-sm">
+          <button onclick="window.demoApp && window.demoApp.editProduct(${productData.id})" class="flex-1 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white font-bold py-3 px-4 rounded-xl transition-all duration-300 transform hover:scale-105 hover:shadow-lg focus:ring-4 focus:ring-blue-200 focus:outline-none text-sm">
             <i class="fas fa-edit mr-2"></i>Bearbeiten
           </button>
-          <button onclick="window.demoApp && window.demoApp.deleteProduct(${product.id})" class="bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 text-white font-bold py-3 px-2 rounded-xl transition-all duration-300 transform hover:scale-105 hover:shadow-lg focus:ring-4 focus:ring-red-200 focus:outline-none text-sm">
+          <button onclick="window.demoApp && window.demoApp.deleteProduct(${productData.id})" class="bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 text-white font-bold py-3 px-2 rounded-xl transition-all duration-300 transform hover:scale-105 hover:shadow-lg focus:ring-4 focus:ring-red-200 focus:outline-none text-sm">
             <i class="fas fa-trash"></i>
           </button>
         </div>
@@ -476,7 +539,7 @@ class FastDemoApp {
 
   getProductIntakeTime(product) {
     // Logic für Einnahmezeit basierend auf Produkttyp
-    const name = product.name.toLowerCase()
+    const name = (product.name || '').toLowerCase()
     if (name.includes('vitamin d') || name.includes('magnesium')) return 'Zum Frühstück'
     if (name.includes('b12') || name.includes('vitamin c')) return 'Zum Frühstück'
     if (name.includes('omega') || name.includes('kreatin')) return 'Am Abend'
@@ -489,6 +552,36 @@ class FastDemoApp {
       case 'Zum Frühstück': return 'bg-gradient-to-r from-yellow-100 to-orange-100 text-orange-700 border border-orange-200'
       case 'Am Abend': return 'bg-gradient-to-r from-purple-100 to-indigo-100 text-indigo-700 border border-indigo-200'
       default: return 'bg-gradient-to-r from-green-100 to-emerald-100 text-emerald-700 border border-emerald-200'
+    }
+  }
+
+  normalizeProductData(product) {
+    // Normalisiert Produktdaten aus verschiedenen Quellen (DB vs Demo)
+    return {
+      id: product.id,
+      name: product.name,
+      brand: product.brand,
+      form: product.form || 'Kapsel',
+      category: product.category,
+      
+      // Preise - unterstützt verschiedene Strukturen
+      monthly_cost: product.monthly_cost || 11.94,
+      purchase_price: product.purchase_price || (product.monthly_cost * 2) || 19.90,
+      
+      // Dosierung und Menge
+      dosage_per_day: product.dosage_per_day || 1,
+      quantity: product.quantity || product.servings_per_package || 30,
+      
+      // Status und Bilder
+      recommended: product.recommended || false,
+      product_image: product.product_image || null,
+      
+      // Nährstoff-Information falls vorhanden
+      main_nutrients: product.main_nutrients || [],
+      
+      // Beschreibungen
+      description: product.description || '',
+      benefits: product.benefits || []
     }
   }
 
