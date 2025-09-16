@@ -623,13 +623,339 @@ class FastDemoApp {
     return form + 'e'
   }
 
-  // Modal-Funktionen (vereinfacht aber funktional)
+  // Modal-Funktionen (vollständig wiederhergestellt)
   showAddProductModal() {
-    this.showQuickNotification('Produkt hinzufügen - Feature aktiviert!', 'info')
+    console.log('[Fast Demo] Zeige Add Product Modal')
+    this.closeAllModals()
+
+    const modal = document.createElement('div')
+    modal.className = 'modal-overlay'
+    modal.style.cssText = `
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.5); display: flex;
+      align-items: center; justify-content: center;
+      z-index: 9999; padding: 16px;
+    `
+    
+    modal.innerHTML = `
+      <div class="modal-container" style="background: white; border-radius: 8px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); width: 100%; max-width: 38rem; max-height: 95vh; overflow-y: auto;">
+        <div class="p-4 sm:p-6">
+          <div class="flex justify-between items-start mb-4">
+            <h2 class="text-lg sm:text-xl font-bold text-gray-900">
+              <i class="fas fa-plus mr-2 text-green-600"></i>
+              Produkt hinzufügen
+            </h2>
+            <button class="close-modal p-2 text-gray-400 hover:text-gray-600 touch-target">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+          
+          <!-- Schritt 1: Wirkstoffsuche -->
+          <div id="step-nutrient-search" class="step-container">
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+              <h3 class="font-semibold text-blue-900 mb-3 flex items-center">
+                <i class="fas fa-search mr-2"></i>
+                Wirkstoff suchen
+              </h3>
+              
+              <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Nach Wirkstoff suchen</label>
+                <div class="relative">
+                  <input type="text" id="nutrient-search" placeholder="z.B. D3, Cobalamin, Magnesium..." class="w-full px-4 py-3 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 shadow-sm">
+                  <i class="fas fa-search absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                </div>
+                <p class="text-xs text-gray-500 mt-1">Beginnen Sie zu tippen, um Wirkstoffe zu finden</p>
+              </div>
+              
+              <!-- Suchergebnisse -->
+              <div id="nutrient-search-results" class="space-y-2 hidden">
+                <!-- Wird dynamisch gefüllt -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Schritt 2: Dosierung festlegen -->
+          <div id="step-dosage-selection" class="step-container hidden">
+            <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+              <h3 class="font-semibold text-green-900 mb-3 flex items-center">
+                <i class="fas fa-calculator mr-2"></i>
+                Dosierung für <span id="dosage-nutrient-name" class="font-bold">Vitamin D3</span> festlegen
+              </h3>
+              
+              <!-- DGE und Studien-Empfehlungen -->
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <div class="text-sm font-medium text-blue-800 mb-1">DGE-Empfehlung</div>
+                  <div class="text-lg font-bold text-blue-600" id="dge-recommendation">800IE</div>
+                  <button type="button" id="use-dge-dosage" class="mt-2 w-full bg-blue-600 text-white px-3 py-2 rounded text-sm hover:bg-blue-700 transition-colors">
+                    DGE verwenden
+                  </button>
+                </div>
+                
+                <div id="study-recommendation-card" class="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                  <div class="text-sm font-medium text-purple-800 mb-1">Studien-Empfehlung</div>
+                  <div class="text-lg font-bold text-purple-600" id="study-recommendation">2000IE</div>
+                  <button type="button" id="use-study-dosage" class="mt-2 w-full bg-purple-600 text-white px-3 py-2 rounded text-sm hover:bg-purple-700 transition-colors">
+                    Studien-Dosierung
+                  </button>
+                </div>
+              </div>
+              
+              <!-- Eigene Dosierung eingeben -->
+              <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  Gewünschte Tagesdosis <span id="dosage-unit" class="text-green-600">(IE)</span>
+                </label>
+                <input type="number" id="custom-dosage" step="1" min="1" value="800" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 shadow-sm" placeholder="800">
+                <p class="text-xs text-gray-500 mt-1">Geben Sie Ihre gewünschte tägliche Menge ein</p>
+              </div>
+              
+              <!-- Sicherheitshinweise -->
+              <div id="dosage-safety" class="p-3 rounded-lg border border-yellow-200 bg-yellow-50 mb-4">
+                <div class="flex items-start">
+                  <i class="fas fa-exclamation-triangle mr-2 mt-0.5 text-yellow-600"></i>
+                  <div class="text-sm">
+                    <div class="font-medium mb-1 text-yellow-800">Innerhalb DGE-Empfehlung</div>
+                    <div class="text-yellow-700">Diese Dosierung entspricht 100% der DGE-Empfehlung.</div>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Stack-Auswahl -->
+              <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Stack auswählen</label>
+                <select id="supplement-stack" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 bg-white shadow-sm">
+                  ${this.stacks.map(stack => `<option value="${stack.id}">${stack.name}</option>`).join('')}
+                </select>
+                <p class="text-xs text-gray-500 mt-1">Produkt wird diesem Stack hinzugefügt</p>
+              </div>
+              
+              <!-- Notizen -->
+              <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Notizen (optional)</label>
+                <textarea id="personal-notes" rows="3" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 shadow-sm" placeholder="Persönliche Notizen zu diesem Supplement..."></textarea>
+              </div>
+            </div>
+            
+            <div class="flex justify-between items-center">
+              <button id="back-to-nutrient-search" class="text-blue-600 hover:text-blue-800 transition-colors text-sm">
+                <i class="fas fa-arrow-left mr-1"></i>Zurück zur Suche
+              </button>
+              <button id="continue-to-products" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors">
+                Weiter zu Produkten <i class="fas fa-arrow-right ml-1"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `
+    
+    document.body.appendChild(modal)
+    this.setupAddProductModalHandlers(modal)
   }
 
   showCreateStackModal() {
-    this.showQuickNotification('Stack erstellen - Feature aktiviert!', 'info')
+    console.log('[Fast Demo] Zeige Create Stack Modal')
+    this.closeAllModals()
+
+    const modal = document.createElement('div')
+    modal.className = 'modal-overlay'
+    modal.style.cssText = `
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.5); display: flex;
+      align-items: center; justify-content: center;
+      z-index: 9999; padding: 16px;
+    `
+    
+    modal.innerHTML = `
+      <div class="modal-container" style="background: white; border-radius: 8px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); width: 100%; max-width: 32rem; max-height: 95vh; overflow-y: auto;">
+        <div class="p-4 sm:p-6">
+          <div class="flex justify-between items-start mb-4">
+            <h2 class="text-lg sm:text-xl font-bold text-gray-900">
+              <i class="fas fa-magic mr-2 text-purple-600"></i>
+              Stack erstellen
+            </h2>
+            <button class="close-modal p-2 text-gray-400 hover:text-gray-600 touch-target">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+          
+          <form id="create-stack-form" class="space-y-6">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Stack-Name</label>
+              <input type="text" id="stack-name" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 shadow-sm" placeholder="z.B. Mein Morgen-Stack" required>
+            </div>
+            
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Beschreibung</label>
+              <textarea id="stack-description" rows="3" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 shadow-sm" placeholder="Beschreibung des Stacks..."></textarea>
+            </div>
+            
+            <div class="flex justify-end space-x-3">
+              <button type="button" class="close-modal px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors">
+                Abbrechen
+              </button>
+              <button type="submit" class="bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition-colors">
+                <i class="fas fa-plus mr-2"></i>Stack erstellen
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    `
+    
+    document.body.appendChild(modal)
+    this.setupCreateStackModalHandlers(modal)
+  }
+
+  closeAllModals() {
+    document.querySelectorAll('.modal-overlay').forEach(modal => modal.remove())
+  }
+
+  setupAddProductModalHandlers(modal) {
+    // Close modal handlers
+    modal.querySelector('.close-modal').addEventListener('click', () => modal.remove())
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.remove()
+    })
+
+    // Nutrient search functionality
+    const searchInput = modal.querySelector('#nutrient-search')
+    const searchResults = modal.querySelector('#nutrient-search-results')
+    
+    searchInput.addEventListener('input', (e) => {
+      const searchTerm = e.target.value.toLowerCase().trim()
+      
+      if (searchTerm.length >= 2) {
+        // Simulate nutrient search results
+        const nutrients = [
+          { id: 1, name: 'Vitamin D3', unit: 'IE', dge: 800, study: 2000, description: 'Wichtig für Knochen und Immunsystem' },
+          { id: 2, name: 'Vitamin B12', unit: 'µg', dge: 4, study: 250, description: 'Essentiell für Nervensystem und Blutbildung' },
+          { id: 3, name: 'Magnesium', unit: 'mg', dge: 400, study: 600, description: 'Unterstützt Muskeln und Energiestoffwechsel' },
+          { id: 4, name: 'Omega-3', unit: 'mg', dge: 250, study: 1000, description: 'Wichtig für Herz und Gehirn' }
+        ]
+        
+        const matches = nutrients.filter(n => 
+          n.name.toLowerCase().includes(searchTerm) ||
+          searchTerm.includes('d3') && n.name.includes('D3') ||
+          searchTerm.includes('b12') && n.name.includes('B12')
+        )
+        
+        if (matches.length > 0) {
+          searchResults.innerHTML = matches.map(nutrient => `
+            <div class="nutrient-result p-3 border border-gray-200 rounded-lg cursor-pointer hover:bg-blue-50 hover:border-blue-300 transition-colors" data-nutrient-id="${nutrient.id}">
+              <div class="flex justify-between items-center">
+                <div>
+                  <div class="font-medium text-gray-900">${nutrient.name}</div>
+                  <div class="text-sm text-gray-600">Vitamine • DGE: ${nutrient.dge}${nutrient.unit}</div>
+                </div>
+                <div class="flex items-center text-green-600">
+                  <i class="fas fa-star text-sm mr-1"></i>
+                  <span class="text-xs font-medium">Hauptwirkstoff</span>
+                </div>
+              </div>
+            </div>
+          `).join('')
+          
+          searchResults.classList.remove('hidden')
+          
+          // Handle nutrient selection
+          searchResults.querySelectorAll('.nutrient-result').forEach(result => {
+            result.addEventListener('click', (e) => {
+              const nutrientId = e.currentTarget.dataset.nutrientId
+              const selectedNutrient = matches.find(n => n.id == nutrientId)
+              this.selectNutrient(modal, selectedNutrient)
+            })
+          })
+        } else {
+          searchResults.innerHTML = '<div class="text-gray-500 text-center py-4">Keine Wirkstoffe gefunden</div>'
+          searchResults.classList.remove('hidden')
+        }
+      } else {
+        searchResults.classList.add('hidden')
+      }
+    })
+
+    // Dosage buttons
+    modal.querySelector('#use-dge-dosage').addEventListener('click', () => {
+      modal.querySelector('#custom-dosage').value = '800'
+    })
+    
+    modal.querySelector('#use-study-dosage').addEventListener('click', () => {
+      modal.querySelector('#custom-dosage').value = '2000'
+    })
+
+    // Continue to products button
+    modal.querySelector('#continue-to-products').addEventListener('click', () => {
+      this.showQuickNotification('Produktsuche wird geladen...', 'info')
+      setTimeout(() => modal.remove(), 1000)
+    })
+  }
+
+  selectNutrient(modal, nutrient) {
+    // Update dosage step with selected nutrient
+    modal.querySelector('#dosage-nutrient-name').textContent = nutrient.name
+    modal.querySelector('#dge-recommendation').textContent = `${nutrient.dge}${nutrient.unit}`
+    modal.querySelector('#study-recommendation').textContent = `${nutrient.study}${nutrient.unit}`
+    modal.querySelector('#dosage-unit').textContent = `(${nutrient.unit})`
+    modal.querySelector('#custom-dosage').value = nutrient.dge
+    
+    // Hide search step, show dosage step
+    modal.querySelector('#step-nutrient-search').classList.add('hidden')
+    modal.querySelector('#step-dosage-selection').classList.remove('hidden')
+    
+    // Back button
+    modal.querySelector('#back-to-nutrient-search').addEventListener('click', () => {
+      modal.querySelector('#step-dosage-selection').classList.add('hidden')
+      modal.querySelector('#step-nutrient-search').classList.remove('hidden')
+    })
+  }
+
+  setupCreateStackModalHandlers(modal) {
+    // Close modal handlers
+    modal.querySelectorAll('.close-modal').forEach(btn => {
+      btn.addEventListener('click', () => modal.remove())
+    })
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.remove()
+    })
+
+    // Form submission
+    const form = modal.querySelector('#create-stack-form')
+    form.addEventListener('submit', (e) => {
+      e.preventDefault()
+      
+      const name = modal.querySelector('#stack-name').value.trim()
+      const description = modal.querySelector('#stack-description').value.trim()
+      
+      if (!name) {
+        this.showQuickNotification('Bitte geben Sie einen Stack-Namen ein', 'error')
+        return
+      }
+      
+      // Create new stack
+      const newStack = {
+        id: 'stack-' + Date.now(),
+        name: name,
+        description: description || 'Benutzerdefinierter Stack',
+        products: []
+      }
+      
+      this.stacks.push(newStack)
+      this.currentStackId = newStack.id
+      
+      // Update session storage for demo mode
+      if (!this.isDashboardMode) {
+        sessionStorage.setItem('supplement_demo_stacks', JSON.stringify(this.stacks))
+      }
+      
+      // Update UI
+      this.updateStackSelector()
+      this.scheduleRender('create-stack')
+      
+      this.showQuickNotification(`Stack "${name}" erfolgreich erstellt!`, 'success')
+      modal.remove()
+    })
   }
 
   editProduct(productId) {
