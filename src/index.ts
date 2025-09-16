@@ -1634,27 +1634,36 @@ app.get('/demo', (c) => {
                 
                 // Smart Loader übernimmt die Initialisierung
                 // Falls Smart Loader nicht verfügbar, Fallback
-                if (!window.smartLoader) {
-                    console.log('Fallback: Direct FastDemoApp initialization');
-                    try {
-                        window.demoApp = new FastDemoApp();
-                        const loadTime = Math.round(performance.now() - loadStart);
-                        console.log('FastDemoApp loaded in ' + loadTime + 'ms');
-                    } catch (error) {
-                        console.error('FastDemoApp initialization failed:', error);
-                        // Weitere Fallback zur alten Version
-                        import('/static/demo-modal.js').then(() => {
-                            window.demoApp = new SupplementDemoApp();
-                        }).catch(err => {
-                            console.error('All demo apps failed:', err);
-                            document.getElementById('demo-stack-grid').innerHTML = 
-                                '<div class="col-span-full text-center py-8 text-red-600">' +
-                                '<i class="fas fa-exclamation-triangle text-2xl mb-2"></i>' +
-                                '<p>Demo konnte nicht geladen werden</p>' +
-                                '<p class="text-sm">Bitte laden Sie die Seite neu</p></div>';
-                        });
+                // Smart initialization check
+                setTimeout(() => {
+                    if (!window.demoApp && !window.fastDemoApp && window.initializeFastDemoApp) {
+                        console.log('Manual FastDemoApp initialization');
+                        try {
+                            if (window.initializeFastDemoApp()) {
+                                const loadTime = Math.round(performance.now() - loadStart);
+                                console.log('FastDemoApp loaded in ' + loadTime + 'ms');
+                            }
+                        } catch (error) {
+                            console.error('FastDemoApp initialization failed:', error);
+                            // Fallback zur alten Version
+                            import('/static/demo-modal.js').then(() => {
+                                if (!window.demoApp) {
+                                    window.demoApp = new SupplementDemoApp();
+                                }
+                            }).catch(err => {
+                                console.error('All demo apps failed:', err);
+                                const grid = document.getElementById('demo-stack-grid');
+                                if (grid) {
+                                    grid.innerHTML = 
+                                        '<div class="col-span-full text-center py-8 text-red-600">' +
+                                        '<i class="fas fa-exclamation-triangle text-2xl mb-2"></i>' +
+                                        '<p>Demo konnte nicht geladen werden</p>' +
+                                        '<p class="text-sm">Bitte laden Sie die Seite neu</p></div>';
+                                }
+                            });
+                        }
                     }
-                }
+                }, 100);
                 
                 // Setup optimierte Demo-Events
                 setupOptimizedDemoEvents();
@@ -1732,10 +1741,11 @@ app.get('/demo', (c) => {
                         
                         if (confirm('Möchten Sie den Stack "' + selectedStackName + '" wirklich löschen?')) {
                             try {
-                                if (window.demoApp && typeof window.demoApp.deleteStack === 'function') {
-                                    await window.demoApp.deleteStack(selectedStackId);
+                                const app = window.fastDemoApp || window.demoApp;
+                                if (app && typeof app.handleDeleteStack === 'function') {
+                                    await app.handleDeleteStack();
                                 } else {
-                                    console.error('demoApp not found or deleteStack method not available');
+                                    console.error('Demo app not found or handleDeleteStack method not available');
                                     alert('Fehler: Stack-Löschfunktion nicht verfügbar');
                                 }
                             } catch (error) {

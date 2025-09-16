@@ -691,17 +691,16 @@ window.FastDemoApp = FastDemoApp
 // Globale Instanz für onclick-Handler
 let fastDemoAppInstance = null
 
-// Auto-initialize wenn die Seite geladen wird
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => {
-    if (window.location.pathname.includes('demo')) {
-      fastDemoAppInstance = new FastDemoApp()
-      window.fastDemoApp = fastDemoAppInstance
-    }
-  })
-} else {
-  if (window.location.pathname.includes('demo')) {
+// Smart initialization - avoid duplicates
+function initializeFastDemoApp() {
+  if (!fastDemoAppInstance && !window.fastDemoApp && !window.demoApp) {
     fastDemoAppInstance = new FastDemoApp()
     window.fastDemoApp = fastDemoAppInstance
+    window.demoApp = fastDemoAppInstance // Backward compatibility
+    return true
   }
+  return false
 }
+
+// Export initialization function for external use
+window.initializeFastDemoApp = initializeFastDemoApp
