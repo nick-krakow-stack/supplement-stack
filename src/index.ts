@@ -1624,6 +1624,12 @@ app.get('/demo', (c) => {
         <!-- Performance-optimiertes Laden -->
         <script src="/static/performance-core.js"></script>
         <script src="/static/performance-monitor.js"></script>
+        <!-- Modular Architecture Components (load before demo-fast.js) -->
+        <script src="/static/supplement-ui-components.js"></script>
+        <script src="/static/supplement-functions.js"></script>
+        <script src="/static/supplement-demo.js"></script>
+        <script src="/static/supplement-production.js"></script>
+        <!-- Demo Implementation (uses modular components) -->
         <script src="/static/demo-fast.js"></script>
         <script src="/static/smart-loader.js"></script>
         <script>
@@ -2130,6 +2136,12 @@ app.get('/dashboard', (c) => {
         <!-- Performance-optimiertes Dashboard-Loading -->
         <script src="/static/performance-core.js"></script>
         <script src="/static/performance-monitor.js"></script>
+        <!-- Modular Architecture Components (load before demo-fast.js) -->
+        <script src="/static/supplement-ui-components.js"></script>
+        <script src="/static/supplement-functions.js"></script>
+        <script src="/static/supplement-demo.js"></script>
+        <script src="/static/supplement-production.js"></script>
+        <!-- Dashboard Implementation (uses modular components) -->
         <script src="/static/demo-fast.js"></script>
         <script src="/static/smart-loader.js"></script>
         <script>
