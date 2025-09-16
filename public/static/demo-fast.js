@@ -1,5 +1,6 @@
 // Fast Demo App - Optimierte Version der Demo-Funktionalität
 // Fokussiert auf Geschwindigkeit und minimale Ressourcennutzung
+// Nutzt neue modulare Architektur mit geteilten Komponenten
 
 class FastDemoApp {
   constructor() {
@@ -15,6 +16,12 @@ class FastDemoApp {
     
     // Mode Detection
     this.isDashboardMode = this.detectDashboardMode()
+    
+    // Check if modular components are available
+    if (!window.supplementFunctions || !window.supplementUI) {
+      console.error('[Fast Demo] Modular components not loaded. Please include supplement-functions.js and supplement-ui-components.js')
+      return
+    }
     
     this.init()
   }
@@ -145,29 +152,24 @@ class FastDemoApp {
 
   async loadDashboardStacks() {
     try {
-      // Authentifizierung prüfen
+      // Use shared functions for authentication and loading
       const authToken = localStorage.getItem('auth_token')
       if (!authToken) {
-        console.log('[Dashboard] No auth token, redirecting...')
+        console.log('[Fast Dashboard] No auth token, redirecting...')
         window.location.href = '/auth'
         return
       }
 
-      // Lade sowohl User-Stacks als auch verfügbare Produkte parallel
+      // Load data using shared functions
       const [stacks, availableProducts] = await Promise.all([
-        window.performanceCore.fetchWithCache('/api/protected/stacks', {
-          headers: { 'Authorization': `Bearer ${authToken}` },
-          bypassCache: true // User-Stacks immer frisch laden
-        }),
-        window.performanceCore.fetchWithCache('/api/available-products', {
-          cacheTTL: 600000 // 10 Minuten Cache für verfügbare Produkte
-        })
+        window.supplementFunctions.loadUserStacks(),
+        window.supplementFunctions.loadAvailableProducts(this.cacheTimeout)
       ])
       
       this.stacks = stacks || []
       this.availableProducts = availableProducts || []
       
-      console.log('[Dashboard] Loaded', this.stacks.length, 'user stacks and', this.availableProducts.length, 'available products')
+      console.log('[Fast Dashboard] Loaded', this.stacks.length, 'user stacks and', this.availableProducts.length, 'available products')
 
       // Wenn keine Stacks vorhanden, Default-Stack erstellen
       if (this.stacks.length === 0) {
@@ -175,7 +177,7 @@ class FastDemoApp {
       }
 
     } catch (error) {
-      console.error('[Dashboard] Error loading stacks:', error)
+      console.error('[Fast Dashboard] Error loading stacks:', error)
       
       // Bei Auth-Fehler zur Login-Seite
       if (error.message?.includes('401') || error.message?.includes('Unauthorized')) {
@@ -184,11 +186,11 @@ class FastDemoApp {
         return
       }
       
-      // Fallback: Lade verfügbare Produkte und erstelle Default-Stack
+      // Use shared fallback functions
       try {
-        this.availableProducts = await window.performanceCore.fetchWithCache('/api/available-products')
+        this.availableProducts = await window.supplementFunctions.loadAvailableProducts()
       } catch (e) {
-        this.availableProducts = this.getMinimalProducts()
+        this.availableProducts = window.supplementFunctions.getMinimalProducts()
       }
       
       this.stacks = [{
@@ -202,91 +204,56 @@ class FastDemoApp {
 
   async loadDemoStacks() {
     try {
-      console.log('[Demo] Loading stacks from database (same as backend)...')
+      console.log('[Fast Demo] Loading stacks using modular functions...')
       
-      // Demo verwendet dieselben verfügbaren Produkte aus der Datenbank
-      this.availableProducts = await window.performanceCore.fetchWithCache('/api/available-products', {
-        cacheTTL: 600000 // 10 Minuten Cache für Demo-Produkte
-      })
+      // Use shared function to load available products
+      this.availableProducts = await window.supplementFunctions.loadAvailableProducts(this.cacheTimeout)
       
-      console.log('[Demo] Loaded', this.availableProducts.length, 'products from database')
+      console.log('[Fast Demo] Loaded', this.availableProducts.length, 'products from database')
       
-      // Demo-Stacks basieren auf echten DB-Produkten, aber werden lokal verwaltet
-      const sessionData = sessionStorage.getItem('supplement_demo_stacks')
-      if (sessionData) {
-        this.stacks = JSON.parse(sessionData)
-        console.log('[Demo] Using session-stored stacks')
+      // Use shared function to load demo stacks from session
+      const sessionStacks = window.supplementFunctions.loadDemoStacksFromSession()
+      if (sessionStacks && sessionStacks.length > 0) {
+        this.stacks = sessionStacks
+        console.log('[Fast Demo] Using session-stored stacks')
       } else {
-        // Erstelle Demo-Stacks basierend auf echten DB-Produkten
-        this.stacks = this.createDemoStacksFromDB()
-        sessionStorage.setItem('supplement_demo_stacks', JSON.stringify(this.stacks))
-        console.log('[Demo] Created demo stacks from DB products')
+        // Use shared function to create demo stacks from DB
+        this.stacks = window.supplementFunctions.createDemoStacksFromDB(this.availableProducts)
+        window.supplementFunctions.saveDemoStacksToSession(this.stacks)
+        console.log('[Fast Demo] Created demo stacks from DB products')
       }
       
       // Cache für Performance
-      window.performanceCore.setCache('demo_stacks', this.stacks)
+      if (window.performanceCore) {
+        window.performanceCore.setCache('demo_stacks', this.stacks)
+      }
       
     } catch (error) {
-      console.error('[Demo] Error loading from database, using fallback:', error)
+      console.error('[Fast Demo] Error loading from database, using fallback:', error)
       
-      // Fallback zu statischen Demo-Daten
-      this.stacks = this.getDefaultStacks()
-      this.availableProducts = this.getMinimalProducts()
+      // Use shared fallback functions
+      this.stacks = window.supplementFunctions.getDefaultStacks()
+      this.availableProducts = window.supplementFunctions.getMinimalProducts()
     }
   }
 
-  createDemoStacksFromDB() {
-    // Erstelle Demo-Stacks basierend auf echten Produkten aus der DB
-    if (!this.availableProducts || this.availableProducts.length === 0) {
-      return this.getDefaultStacks() // Fallback
-    }
-
-    // Filtere Produkte nach Kategorien für Demo-Stacks
-    const vitamins = this.availableProducts.filter(p => 
-      p.category === 'Vitamine' || p.name.toLowerCase().includes('vitamin')
-    ).slice(0, 3)
-    
-    const minerals = this.availableProducts.filter(p => 
-      p.category === 'Mineralstoffe' || p.name.toLowerCase().includes('magnesium') || p.name.toLowerCase().includes('zink')
-    ).slice(0, 2)
-    
-    const others = this.availableProducts.filter(p => 
-      p.category === 'Fettsäuren' || p.name.toLowerCase().includes('omega') || p.name.toLowerCase().includes('kreatin')
-    ).slice(0, 2)
-
-    return [
-      {
-        id: 'demo-basis',
-        name: 'Basis Gesundheit',
-        description: 'Grundlegende Nährstoffe für den täglichen Bedarf (aus DB)',
-        products: vitamins.length > 0 ? vitamins : this.getDefaultStacks()[0].products
-      },
-      {
-        id: 'demo-advanced', 
-        name: 'Erweiterte Versorgung',
-        description: 'Optimierte Mineralstoff- und Omega-3-Versorgung (aus DB)',
-        products: [...minerals, ...others].length > 0 ? [...minerals, ...others] : this.getDefaultStacks()[1].products
-      }
-    ]
-  }
+  // Removed - now using shared function window.supplementFunctions.createDemoStacksFromDB()
 
   async createDefaultUserStack() {
     try {
-      const authToken = localStorage.getItem('auth_token')
-      const response = await axios.post('/api/protected/stacks', {
+      // Use shared function to create user stack
+      const newStack = await window.supplementFunctions.createUserStack({
         name: 'Mein Stack',
-        description: 'Ihr persönlicher Supplement-Stack',
-        products: []
-      }, {
-        headers: { 'Authorization': `Bearer ${authToken}` }
+        description: 'Ihr persönlicher Supplement-Stack'
       })
 
-      if (response.data && response.data.stack) {
-        this.stacks = [response.data.stack]
-        console.log('[Dashboard] Created default user stack')
+      if (newStack) {
+        newStack.products = []
+        this.stacks = [newStack]
+        console.log('[Fast Dashboard] Created default user stack')
       }
     } catch (error) {
-      console.error('[Dashboard] Error creating default stack:', error)
+      console.error('[Fast Dashboard] Error creating default stack:', error)
     }
   }
 
@@ -461,8 +428,13 @@ class FastDemoApp {
   }
 
   doRenderStack(stackGrid, products, currentStack) {
-    // Optimierte HTML-Generation mit Template-String-Caching
-    const productHTML = products.map(product => this.renderProductCard(product)).join('')
+    // Use shared UI components for consistent rendering
+    const productHTML = products.map(product => 
+      window.supplementUI.renderProductCard(product, { 
+        editAllowed: this.isDashboardMode, 
+        deleteAllowed: true 
+      })
+    ).join('')
     
     stackGrid.innerHTML = productHTML || 
       '<div class="col-span-full text-center py-8 text-gray-500">Keine Produkte im Stack</div>'
@@ -470,13 +442,8 @@ class FastDemoApp {
     console.log(`[Fast Demo] Rendered stack "${currentStack.name}" with ${products.length} products`)
   }
 
-  renderProductCard(product) {
-    // Vollständiges Design-Template - funktioniert für DB- und Demo-Produkte
-    const intakeTime = this.getProductIntakeTime(product)
-    const labelColor = this.getIntakeTimeLabelColor(intakeTime)
-    
-    // Unterstütze sowohl DB-Produktstruktur als auch Demo-Produktstruktur
-    const productData = this.normalizeProductData(product)
+  // Removed - now using shared function window.supplementUI.renderProductCard()
+  // The old renderProductCard method has been replaced by the shared component
     
     return `
       <div class="bg-white border-0 rounded-2xl p-5 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 relative overflow-hidden">
@@ -625,17 +592,11 @@ class FastDemoApp {
 
   // Modal-Funktionen (vollständig wiederhergestellt)
   showAddProductModal() {
-    console.log('[Fast Demo] Zeige Add Product Modal')
-    this.closeAllModals()
+    console.log('[Fast Demo] Zeige Add Product Modal using shared components')
+    window.supplementUI.closeAllModals()
 
-    const modal = document.createElement('div')
-    modal.className = 'modal-overlay'
-    modal.style.cssText = `
-      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0, 0, 0, 0.5); display: flex;
-      align-items: center; justify-content: center;
-      z-index: 9999; padding: 16px;
-    `
+    const modalHTML = window.supplementUI.createAddProductModal(this.stacks, !this.isDashboardMode)Mode)
+    const modal = window.supplementUI.createModalOverlay(modalHTML)
     
     modal.innerHTML = `
       <div class="modal-container" style="background: white; border-radius: 8px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); width: 100%; max-width: 38rem; max-height: 95vh; overflow-y: auto;">
@@ -755,25 +716,14 @@ class FastDemoApp {
   }
 
   showCreateStackModal() {
-    console.log('[Fast Demo] Zeige Create Stack Modal')
-    this.closeAllModals()
+    console.log('[Fast Demo] Zeige Create Stack Modal using shared components')
+    window.supplementUI.closeAllModals()
 
-    const modal = document.createElement('div')
-    modal.className = 'modal-overlay'
-    modal.style.cssText = `
-      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0, 0, 0, 0.5); display: flex;
-      align-items: center; justify-content: center;
-      z-index: 9999; padding: 16px;
-    `
+    const modalHTML = window.supplementUI.createCreateStackModal()
+    const modal = window.supplementUI.createModalOverlay(modalHTML)
     
-    modal.innerHTML = `
-      <div class="modal-container" style="background: white; border-radius: 8px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); width: 100%; max-width: 32rem; max-height: 95vh; overflow-y: auto;">
-        <div class="p-4 sm:p-6">
-          <div class="flex justify-between items-start mb-4">
-            <h2 class="text-lg sm:text-xl font-bold text-gray-900">
-              <i class="fas fa-magic mr-2 text-purple-600"></i>
-              Stack erstellen
+    document.body.appendChild(modal)
+    this.setupCreateStackModalHandlers(modal)
             </h2>
             <button class="close-modal p-2 text-gray-400 hover:text-gray-600 touch-target">
               <i class="fas fa-times"></i>
@@ -959,28 +909,93 @@ class FastDemoApp {
   }
 
   editProduct(productId) {
-    this.showQuickNotification(`Produkt ${productId} bearbeiten - Feature aktiviert!`, 'info')
+    // Delegate to appropriate mode-specific implementation
+    if (this.isDashboardMode) {
+      // Use production app for full edit functionality
+      if (window.productionApp) {
+        window.productionApp.editProduct(productId)
+      } else {
+        this.showQuickNotification('Vollversion wird geladen...', 'info')
+      }
+    } else {
+      // Use demo app for limited edit functionality
+      if (window.demoApp) {
+        window.demoApp.editProduct(productId)
+      } else {
+        // Show demo limitation
+        const currentStack = this.stacks.find(s => s.id === this.currentStackId)
+        const product = currentStack?.products?.find(p => p.id == productId)
+        
+        if (product && window.supplementUI) {
+          const modalHTML = window.supplementUI.createEditProductModal(product, true) // true = demo mode
+          const modal = window.supplementUI.createModalOverlay(modalHTML)
+          document.body.appendChild(modal)
+          
+          // Setup basic demo handlers
+          modal.querySelectorAll('.close-modal').forEach(btn => {
+            btn.addEventListener('click', () => modal.remove())
+          })
+          
+          const upgradeBtn = modal.querySelector('#upgrade-to-full')
+          if (upgradeBtn) {
+            upgradeBtn.addEventListener('click', () => {
+              modal.remove()
+              if (confirm('Zur kostenlosen Registrierung wechseln?')) {
+                window.location.href = '/auth'
+              }
+            })
+          }
+        } else {
+          this.showQuickNotification('Bearbeitung nur in der Vollversion verfügbar', 'info')
+        }
+      }
+    }
   }
 
   deleteProduct(productId) {
+    // Delegate to appropriate mode-specific implementation
+    if (this.isDashboardMode) {
+      // Use production app for database deletion
+      if (window.productionApp) {
+        window.productionApp.deleteProduct(productId)
+      } else {
+        // Fallback to basic deletion for dashboard mode
+        this.deleteProductLocal(productId)
+      }
+    } else {
+      // Use demo app for local deletion
+      if (window.demoApp) {
+        window.demoApp.deleteProduct(productId)
+      } else {
+        // Fallback to basic deletion for demo mode
+        this.deleteProductLocal(productId)
+      }
+    }
+  }
+
+  deleteProductLocal(productId) {
     if (confirm('Produkt wirklich aus dem Stack entfernen?')) {
-      // Entferne Produkt aus aktuellen Stack
       const currentStack = this.stacks.find(s => s.id === this.currentStackId)
       if (currentStack && currentStack.products) {
         const originalLength = currentStack.products.length
-        currentStack.products = currentStack.products.filter(p => p.id != productId) // Use != for type coercion
+        currentStack.products = currentStack.products.filter(p => p.id != productId)
         
         if (currentStack.products.length < originalLength) {
-          // Update caches only if product was actually removed
+          // Update storage based on mode
           if (!this.isDashboardMode) {
-            window.performanceCore.setCache('demo_stacks', this.stacks)
-            sessionStorage.setItem('supplement_demo_stacks', JSON.stringify(this.stacks))
+            // Demo mode: update session storage
+            if (window.supplementFunctions) {
+              window.supplementFunctions.saveDemoStacksToSession(this.stacks)
+            } else {
+              sessionStorage.setItem('supplement_demo_stacks', JSON.stringify(this.stacks))
+            }
+            if (window.performanceCore) {
+              window.performanceCore.setCache('demo_stacks', this.stacks)
+            }
           }
           
-          // Update stack selector to reflect new product count
+          // Update UI
           this.updateStackSelector()
-          
-          // Re-render
           this.scheduleRender('delete-product')
           this.showQuickNotification('Produkt entfernt!', 'success')
         } else {
