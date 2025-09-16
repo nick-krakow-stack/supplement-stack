@@ -13,7 +13,14 @@ class FastDemoApp {
     this.renderDebounceTime = 150
     this.cacheTimeout = 300000 // 5 Minuten
     
+    // Mode Detection
+    this.isDashboardMode = this.detectDashboardMode()
+    
     this.init()
+  }
+
+  detectDashboardMode() {
+    return window.location.pathname === '/dashboard'
   }
 
   async init() {
@@ -103,6 +110,67 @@ class FastDemoApp {
   }
 
   async loadDataFast() {
+    if (this.isDashboardMode) {
+      console.log('[Fast App] Loading dashboard data (user stacks)...')
+      await this.loadDashboardStacks()
+    } else {
+      console.log('[Fast App] Loading demo data...')
+      await this.loadDemoStacks()
+    }
+    
+    // Stack-Selector sofort füllen
+    this.updateStackSelector()
+    
+    // Ersten Stack setzen wenn keiner ausgewählt
+    if (!this.currentStackId && this.stacks.length > 0) {
+      this.currentStackId = this.stacks[0].id
+    }
+  }
+
+  async loadDashboardStacks() {
+    try {
+      // Authentifizierung prüfen
+      const authToken = localStorage.getItem('auth_token')
+      if (!authToken) {
+        console.log('[Dashboard] No auth token, redirecting...')
+        window.location.href = '/auth'
+        return
+      }
+
+      // API-Call für User-Stacks
+      const stacks = await window.performanceCore.fetchWithCache('/api/protected/stacks', {
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      })
+      
+      this.stacks = stacks || []
+      console.log('[Dashboard] Loaded', this.stacks.length, 'user stacks')
+
+      // Wenn keine Stacks vorhanden, Default-Stack erstellen
+      if (this.stacks.length === 0) {
+        await this.createDefaultUserStack()
+      }
+
+    } catch (error) {
+      console.error('[Dashboard] Error loading stacks:', error)
+      
+      // Bei Auth-Fehler zur Login-Seite
+      if (error.message?.includes('401') || error.message?.includes('Unauthorized')) {
+        localStorage.removeItem('auth_token')
+        window.location.href = '/auth'
+        return
+      }
+      
+      // Fallback: Default-Stack erstellen
+      this.stacks = [{
+        id: 'user-default',
+        name: 'Mein Stack',
+        description: 'Ihr persönlicher Supplement-Stack',
+        products: []
+      }]
+    }
+  }
+
+  async loadDemoStacks() {
     // Prüfe Cache zuerst
     const cachedStacks = window.performanceCore.getCache('demo_stacks')
     if (cachedStacks) {
@@ -124,13 +192,25 @@ class FastDemoApp {
 
     // Verfügbare Produkte minimal laden
     this.availableProducts = this.getMinimalProducts()
-    
-    // Stack-Selector sofort füllen
-    this.updateStackSelector()
-    
-    // Ersten Stack setzen wenn keiner ausgewählt
-    if (!this.currentStackId && this.stacks.length > 0) {
-      this.currentStackId = this.stacks[0].id
+  }
+
+  async createDefaultUserStack() {
+    try {
+      const authToken = localStorage.getItem('auth_token')
+      const response = await axios.post('/api/protected/stacks', {
+        name: 'Mein Stack',
+        description: 'Ihr persönlicher Supplement-Stack',
+        products: []
+      }, {
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      })
+
+      if (response.data && response.data.stack) {
+        this.stacks = [response.data.stack]
+        console.log('[Dashboard] Created default user stack')
+      }
+    } catch (error) {
+      console.error('[Dashboard] Error creating default stack:', error)
     }
   }
 
@@ -141,19 +221,85 @@ class FastDemoApp {
         name: 'Basis Gesundheit',
         description: 'Grundlegende Nährstoffe für den täglichen Bedarf',
         products: [
-          { id: 1, name: 'Vitamin D3 4000 IU', brand: 'Sunday Natural', monthly_cost: 11.94 },
-          { id: 2, name: 'B12 Methylcobalamin', brand: 'InnoNature', monthly_cost: 12.45 },
-          { id: 3, name: 'Vitamin C 1000mg', brand: 'Pure Encapsulations', monthly_cost: 18.90 }
+          { 
+            id: 1, 
+            name: 'Vitamin D3 4000 IU', 
+            brand: 'Sunday Natural', 
+            form: 'Kapsel',
+            monthly_cost: 11.94,
+            purchase_price: 19.90,
+            quantity: 50,
+            dosage_per_day: 1,
+            recommended: true,
+            product_image: 'https://images.unsplash.com/photo-1550572017-edd951aa8f72?w=400&h=400&fit=crop&crop=center'
+          },
+          { 
+            id: 2, 
+            name: 'B12 Methylcobalamin', 
+            brand: 'InnoNature', 
+            form: 'Tropfen',
+            monthly_cost: 12.45,
+            purchase_price: 24.90,
+            quantity: 60,
+            dosage_per_day: 1,
+            recommended: false,
+            product_image: 'https://images.unsplash.com/photo-1559181567-c3190ca9959b?w=400&h=400&fit=crop&crop=center'
+          },
+          { 
+            id: 3, 
+            name: 'Vitamin C 1000mg', 
+            brand: 'Pure Encapsulations', 
+            form: 'Kapsel',
+            monthly_cost: 18.90,
+            purchase_price: 32.90,
+            quantity: 60,
+            dosage_per_day: 1,
+            recommended: false,
+            product_image: 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=400&h=400&fit=crop&crop=center'
+          }
         ]
       },
       {
         id: 'demo-sport',
-        name: 'Sport & Energie',
+        name: 'Sport & Energie', 
         description: 'Optimiert für aktive Menschen und Sportler',
         products: [
-          { id: 4, name: 'Magnesiumcitrat 400mg', brand: 'Qidosha', monthly_cost: 15.50 },
-          { id: 5, name: 'Kreatin Monohydrat', brand: 'Olimp', monthly_cost: 19.90 },
-          { id: 6, name: 'Omega-3 EPA/DHA', brand: 'Norsan', monthly_cost: 24.90 }
+          { 
+            id: 4, 
+            name: 'Magnesiumcitrat 400mg', 
+            brand: 'Qidosha', 
+            form: 'Kapsel',
+            monthly_cost: 15.50,
+            purchase_price: 22.90,
+            quantity: 30,
+            dosage_per_day: 2,
+            recommended: true,
+            product_image: 'https://images.unsplash.com/photo-1471864190281-a93a3070b6de?w=400&h=400&fit=crop&crop=center'
+          },
+          { 
+            id: 5, 
+            name: 'Kreatin Monohydrat', 
+            brand: 'Olimp', 
+            form: 'Kapsel',
+            monthly_cost: 19.90,
+            purchase_price: 29.90,
+            quantity: 120,
+            dosage_per_day: 4,
+            recommended: false,
+            product_image: 'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=400&h=400&fit=crop&crop=center'
+          },
+          { 
+            id: 6, 
+            name: 'Omega-3 EPA/DHA', 
+            brand: 'Norsan', 
+            form: 'Kapsel',
+            monthly_cost: 24.90,
+            purchase_price: 39.90,
+            quantity: 60,
+            dosage_per_day: 2,
+            recommended: true,
+            product_image: 'https://images.unsplash.com/photo-1559662780-33af019fd570?w=400&h=400&fit=crop&crop=center'
+          }
         ]
       }
     ]
@@ -240,26 +386,156 @@ class FastDemoApp {
   }
 
   renderProductCard(product) {
-    // Cached Template für bessere Performance
+    // Vollständiges Design-Template wie im ursprünglichen System
+    const intakeTime = this.getProductIntakeTime(product)
+    const labelColor = this.getIntakeTimeLabelColor(intakeTime)
+    
     return `
-      <div class="bg-white rounded-lg p-4 shadow-md hover:shadow-lg transition-shadow">
-        <div class="flex justify-between items-start mb-2">
-          <h3 class="font-semibold text-sm">${product.name}</h3>
-          <input type="checkbox" checked class="w-4 h-4 text-blue-600">
+      <div class="bg-white border-0 rounded-2xl p-5 shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 relative overflow-hidden">
+        <!-- Gradient Overlay für Premium-Look -->
+        <div class="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-400 via-teal-500 to-blue-500"></div>
+        
+        <!-- Checkbox mit modernem Design -->
+        <div class="flex justify-between items-start mb-4">
+          <div class="flex items-center space-x-2">
+            <!-- Premium Badge falls empfohlen -->
+            ${product.recommended ? `
+              <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-purple-100 to-pink-100 text-purple-800 border border-purple-200">
+                <i class="fas fa-star text-purple-500 mr-1"></i>Top
+              </span>
+            ` : ''}
+          </div>
+          <input type="checkbox" class="product-checkbox w-5 h-5 text-emerald-600 rounded-md focus:ring-emerald-500 focus:ring-2" data-product-id="${product.id}" checked>
         </div>
-        <p class="text-xs text-gray-600 mb-2">${product.brand}</p>
-        <p class="text-sm font-medium text-green-600">${product.monthly_cost}€/Monat</p>
+        
+        <!-- Kompaktes Produktbild und Info -->
+        <div class="flex items-center mb-4 space-x-3">
+          ${product.product_image ? `
+            <div class="w-14 h-14 flex-shrink-0 rounded-xl overflow-hidden bg-gradient-to-br from-slate-50 to-slate-100 border border-slate-200 shadow-sm">
+              <img src="${product.product_image}" alt="${product.name}" class="w-full h-full object-cover">
+            </div>
+          ` : `
+            <div class="w-14 h-14 flex-shrink-0 rounded-xl bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200 flex items-center justify-center shadow-sm">
+              <i class="fas fa-pills text-emerald-500 text-lg"></i>
+            </div>
+          `}
+          
+          <div class="flex-1 min-w-0">
+            <h3 class="font-bold text-slate-800 text-sm mb-1 truncate">${product.name}</h3>
+            <p class="text-xs text-slate-500 mb-2 font-medium">${product.brand}</p>
+            <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold ${labelColor} shadow-sm">
+              <i class="fas fa-clock mr-1"></i>${intakeTime}
+            </span>
+          </div>
+        </div>
+        
+        <!-- Kompakte Info-Grid -->
+        <div class="grid grid-cols-2 gap-3 mb-4">
+          <!-- Dosierung -->
+          <div class="bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl p-3 border border-slate-200">
+            <div class="text-xs text-slate-600 font-medium mb-1">Dosierung</div>
+            <div class="text-sm font-bold text-slate-800">${product.dosage_per_day || 1} ${this.getPluralForm(product.dosage_per_day || 1, product.form)}</div>
+            <div class="text-xs text-slate-500">täglich</div>
+          </div>
+          
+          <!-- Vorrat -->
+          <div class="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-3 border border-blue-200">
+            <div class="text-xs text-blue-600 font-medium mb-1">Vorrat</div>
+            <div class="text-sm font-bold text-blue-800">${Math.floor((product.quantity || 30) / (product.dosage_per_day || 1))}</div>
+            <div class="text-xs text-blue-500">Tage</div>
+          </div>
+        </div>
+        
+        <!-- Preise mit modernem Design -->
+        <div class="grid grid-cols-2 gap-3 mb-4">
+          <div class="text-center bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl p-3 border border-slate-200">
+            <div class="text-xs text-slate-600 font-medium">Einmalig</div>
+            <div class="text-lg font-bold text-slate-800">€${(product.purchase_price || product.monthly_cost * 2 || 19.90).toFixed(2)}</div>
+          </div>
+          <div class="text-center bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl p-3 border border-emerald-200">
+            <div class="text-xs text-emerald-600 font-medium">Monatlich</div>
+            <div class="text-lg font-bold text-emerald-700">€${(product.monthly_cost || 11.94).toFixed(2)}</div>
+          </div>
+        </div>
+        
+        <!-- Action Buttons for Edit/Delete -->
+        <div class="flex gap-2">
+          <button onclick="window.demoApp && window.demoApp.editProduct(${product.id})" class="flex-1 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white font-bold py-3 px-4 rounded-xl transition-all duration-300 transform hover:scale-105 hover:shadow-lg focus:ring-4 focus:ring-blue-200 focus:outline-none text-sm">
+            <i class="fas fa-edit mr-2"></i>Bearbeiten
+          </button>
+          <button onclick="window.demoApp && window.demoApp.deleteProduct(${product.id})" class="bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 text-white font-bold py-3 px-2 rounded-xl transition-all duration-300 transform hover:scale-105 hover:shadow-lg focus:ring-4 focus:ring-red-200 focus:outline-none text-sm">
+            <i class="fas fa-trash"></i>
+          </button>
+        </div>
+        
+        <!-- Hover-Effekt Shine -->
+        <div class="absolute inset-0 bg-gradient-to-r from-transparent via-white to-transparent opacity-0 hover:opacity-20 transition-opacity duration-500 pointer-events-none transform -skew-x-12 -translate-x-full hover:translate-x-full"></div>
       </div>
     `
   }
 
-  // Einfache Modal-Funktionen
+  getProductIntakeTime(product) {
+    // Logic für Einnahmezeit basierend auf Produkttyp
+    const name = product.name.toLowerCase()
+    if (name.includes('vitamin d') || name.includes('magnesium')) return 'Zum Frühstück'
+    if (name.includes('b12') || name.includes('vitamin c')) return 'Zum Frühstück'
+    if (name.includes('omega') || name.includes('kreatin')) return 'Am Abend'
+    return 'Zum Frühstück'
+  }
+
+  getIntakeTimeLabelColor(intakeTime) {
+    // Farb-Schema für verschiedene Einnahmezeiten
+    switch (intakeTime) {
+      case 'Zum Frühstück': return 'bg-gradient-to-r from-yellow-100 to-orange-100 text-orange-700 border border-orange-200'
+      case 'Am Abend': return 'bg-gradient-to-r from-purple-100 to-indigo-100 text-indigo-700 border border-indigo-200'
+      default: return 'bg-gradient-to-r from-green-100 to-emerald-100 text-emerald-700 border border-emerald-200'
+    }
+  }
+
+  getPluralForm(count, form) {
+    // Deutsche Pluralformen
+    if (count === 1) {
+      return form || 'Stück'
+    }
+    
+    const formLower = (form || 'Stück').toLowerCase()
+    if (formLower.includes('kapsel')) return 'Kapseln'
+    if (formLower.includes('tablette')) return 'Tabletten'
+    if (formLower.includes('tropfen')) return 'Tropfen'
+    return form + 'e'
+  }
+
+  // Modal-Funktionen (vereinfacht aber funktional)
   showAddProductModal() {
     this.showQuickNotification('Produkt hinzufügen - Feature aktiviert!', 'info')
   }
 
   showCreateStackModal() {
     this.showQuickNotification('Stack erstellen - Feature aktiviert!', 'info')
+  }
+
+  editProduct(productId) {
+    this.showQuickNotification(`Produkt ${productId} bearbeiten - Feature aktiviert!`, 'info')
+  }
+
+  deleteProduct(productId) {
+    if (confirm('Produkt wirklich aus dem Stack entfernen?')) {
+      // Entferne Produkt aus aktuellen Stack
+      const currentStack = this.stacks.find(s => s.id === this.currentStackId)
+      if (currentStack && currentStack.products) {
+        currentStack.products = currentStack.products.filter(p => p.id !== productId)
+        
+        // Update caches
+        if (!this.isDashboardMode) {
+          window.performanceCore.setCache('demo_stacks', this.stacks)
+          sessionStorage.setItem('supplement_demo_stacks', JSON.stringify(this.stacks))
+        }
+        
+        // Re-render
+        this.scheduleRender('delete-product')
+        this.showQuickNotification('Produkt entfernt!', 'success')
+      }
+    }
   }
 
   handleDeleteStack() {
