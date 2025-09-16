@@ -118,13 +118,13 @@ class FastDemoApp {
       await this.loadDemoStacks()
     }
     
-    // Stack-Selector sofort füllen
-    this.updateStackSelector()
-    
     // Ersten Stack setzen wenn keiner ausgewählt
     if (!this.currentStackId && this.stacks.length > 0) {
       this.currentStackId = this.stacks[0].id
     }
+    
+    // Stack-Selector sofort füllen (nach currentStackId setzen)
+    this.updateStackSelector()
   }
 
   async loadDashboardStacks() {
@@ -388,6 +388,11 @@ class FastDemoApp {
     
     selector.innerHTML = '<option value="">Stack auswählen...</option>' + options
     
+    // Ensure the current stack is selected in the dropdown
+    if (this.currentStackId) {
+      selector.value = this.currentStackId
+    }
+    
     // Update delete button state
     this.updateDeleteButtonState()
   }
@@ -406,9 +411,13 @@ class FastDemoApp {
   }
 
   scheduleRender(reason) {
+    // Aggressive debouncing to prevent multiple rapid renders
     window.performanceCore.debounceRender(
       `demo-render-${reason}`, 
-      () => this.renderStackFast(), 
+      () => {
+        // Use requestAnimationFrame for smooth rendering
+        requestAnimationFrame(() => this.renderStackFast())
+      }, 
       this.renderDebounceTime
     )
   }
@@ -523,10 +532,10 @@ class FastDemoApp {
         
         <!-- Action Buttons for Edit/Delete -->
         <div class="flex gap-2">
-          <button onclick="window.demoApp && window.demoApp.editProduct(${productData.id})" class="flex-1 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white font-bold py-3 px-4 rounded-xl transition-all duration-300 transform hover:scale-105 hover:shadow-lg focus:ring-4 focus:ring-blue-200 focus:outline-none text-sm">
+          <button onclick="window.fastDemoApp && window.fastDemoApp.editProduct('${productData.id}')" class="flex-1 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white font-bold py-3 px-4 rounded-xl transition-all duration-300 transform hover:scale-105 hover:shadow-lg focus:ring-4 focus:ring-blue-200 focus:outline-none text-sm">
             <i class="fas fa-edit mr-2"></i>Bearbeiten
           </button>
-          <button onclick="window.demoApp && window.demoApp.deleteProduct(${productData.id})" class="bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 text-white font-bold py-3 px-2 rounded-xl transition-all duration-300 transform hover:scale-105 hover:shadow-lg focus:ring-4 focus:ring-red-200 focus:outline-none text-sm">
+          <button onclick="window.fastDemoApp && window.fastDemoApp.deleteProduct('${productData.id}')" class="bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 text-white font-bold py-3 px-2 rounded-xl transition-all duration-300 transform hover:scale-105 hover:shadow-lg focus:ring-4 focus:ring-red-200 focus:outline-none text-sm">
             <i class="fas fa-trash"></i>
           </button>
         </div>
@@ -616,17 +625,25 @@ class FastDemoApp {
       // Entferne Produkt aus aktuellen Stack
       const currentStack = this.stacks.find(s => s.id === this.currentStackId)
       if (currentStack && currentStack.products) {
-        currentStack.products = currentStack.products.filter(p => p.id !== productId)
+        const originalLength = currentStack.products.length
+        currentStack.products = currentStack.products.filter(p => p.id != productId) // Use != for type coercion
         
-        // Update caches
-        if (!this.isDashboardMode) {
-          window.performanceCore.setCache('demo_stacks', this.stacks)
-          sessionStorage.setItem('supplement_demo_stacks', JSON.stringify(this.stacks))
+        if (currentStack.products.length < originalLength) {
+          // Update caches only if product was actually removed
+          if (!this.isDashboardMode) {
+            window.performanceCore.setCache('demo_stacks', this.stacks)
+            sessionStorage.setItem('supplement_demo_stacks', JSON.stringify(this.stacks))
+          }
+          
+          // Update stack selector to reflect new product count
+          this.updateStackSelector()
+          
+          // Re-render
+          this.scheduleRender('delete-product')
+          this.showQuickNotification('Produkt entfernt!', 'success')
+        } else {
+          this.showQuickNotification('Produkt nicht gefunden!', 'error')
         }
-        
-        // Re-render
-        this.scheduleRender('delete-product')
-        this.showQuickNotification('Produkt entfernt!', 'success')
       }
     }
   }
@@ -670,3 +687,21 @@ class FastDemoApp {
 
 // Export für globale Verwendung
 window.FastDemoApp = FastDemoApp
+
+// Globale Instanz für onclick-Handler
+let fastDemoAppInstance = null
+
+// Auto-initialize wenn die Seite geladen wird
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => {
+    if (window.location.pathname.includes('demo')) {
+      fastDemoAppInstance = new FastDemoApp()
+      window.fastDemoApp = fastDemoAppInstance
+    }
+  })
+} else {
+  if (window.location.pathname.includes('demo')) {
+    fastDemoAppInstance = new FastDemoApp()
+    window.fastDemoApp = fastDemoAppInstance
+  }
+}
