@@ -98,6 +98,22 @@ class FastDemoApp {
         e.preventDefault()
         this.handleDeleteStack()
         break
+
+      case action === 'edit-product':
+        e.preventDefault()
+        const editProductId = target.dataset.productId
+        if (editProductId) {
+          this.editProduct(editProductId)
+        }
+        break
+
+      case action === 'delete-product':
+        e.preventDefault()
+        const deleteProductId = target.dataset.productId
+        if (deleteProductId) {
+          this.deleteProduct(deleteProductId)
+        }
+        break
     }
   }
 
@@ -532,10 +548,10 @@ class FastDemoApp {
         
         <!-- Action Buttons for Edit/Delete -->
         <div class="flex gap-2">
-          <button onclick="window.fastDemoApp && window.fastDemoApp.editProduct('${productData.id}')" class="flex-1 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white font-bold py-3 px-4 rounded-xl transition-all duration-300 transform hover:scale-105 hover:shadow-lg focus:ring-4 focus:ring-blue-200 focus:outline-none text-sm">
+          <button data-action="edit-product" data-product-id="${productData.id}" class="flex-1 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white font-bold py-3 px-4 rounded-xl transition-all duration-300 transform hover:scale-105 hover:shadow-lg focus:ring-4 focus:ring-blue-200 focus:outline-none text-sm">
             <i class="fas fa-edit mr-2"></i>Bearbeiten
           </button>
-          <button onclick="window.fastDemoApp && window.fastDemoApp.deleteProduct('${productData.id}')" class="bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 text-white font-bold py-3 px-2 rounded-xl transition-all duration-300 transform hover:scale-105 hover:shadow-lg focus:ring-4 focus:ring-red-200 focus:outline-none text-sm">
+          <button data-action="delete-product" data-product-id="${productData.id}" class="bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 text-white font-bold py-3 px-2 rounded-xl transition-all duration-300 transform hover:scale-105 hover:shadow-lg focus:ring-4 focus:ring-red-200 focus:outline-none text-sm">
             <i class="fas fa-trash"></i>
           </button>
         </div>
