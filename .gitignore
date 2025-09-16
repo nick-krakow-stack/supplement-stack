@@ -45,3 +45,8 @@ Thumbs.db
 
 # Temporary files
 /tmp/
+
+# Cloudflare sensitive configuration
+.cloudflare-config
+cloudflare-secrets.txt
+.cf-credentials

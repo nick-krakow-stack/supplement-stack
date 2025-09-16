@@ -1621,32 +1621,58 @@ app.get('/demo', (c) => {
         </footer>
 
         <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
-        <script src="/static/demo-modal.js"></script>
+        <!-- Performance-optimiertes Laden -->
+        <script src="/static/performance-core.js"></script>
+        <script src="/static/performance-monitor.js"></script>
+        <script src="/static/demo-fast.js"></script>
+        <script src="/static/smart-loader.js"></script>
         <script>
-            // Initialize demo app when page loads
+            // Performance-optimierte Demo-Initialisierung
             document.addEventListener('DOMContentLoaded', function() {
-                console.log('Demo page loaded, initializing SupplementDemoApp...');
-                try {
-                    window.demoApp = new SupplementDemoApp();
-                    console.log('SupplementDemoApp initialized successfully');
-                    
-                    // Setup demo-specific event listeners
-                    setupDemoEvents();
-                } catch (error) {
-                    console.error('Failed to initialize SupplementDemoApp:', error);
-                    document.getElementById('demo-stack-grid').innerHTML = '<div class="col-span-full text-center py-8 text-red-600"><i class="fas fa-exclamation-triangle text-2xl mb-2"></i><p>Demo konnte nicht geladen werden</p><p class="text-sm">Bitte laden Sie die Seite neu</p></div>';
+                console.log('Fast Demo Loading...');
+                const loadStart = performance.now();
+                
+                // Smart Loader übernimmt die Initialisierung
+                // Falls Smart Loader nicht verfügbar, Fallback
+                if (!window.smartLoader) {
+                    console.log('Fallback: Direct FastDemoApp initialization');
+                    try {
+                        window.demoApp = new FastDemoApp();
+                        const loadTime = Math.round(performance.now() - loadStart);
+                        console.log('FastDemoApp loaded in ' + loadTime + 'ms');
+                    } catch (error) {
+                        console.error('FastDemoApp initialization failed:', error);
+                        // Weitere Fallback zur alten Version
+                        import('/static/demo-modal.js').then(() => {
+                            window.demoApp = new SupplementDemoApp();
+                        }).catch(err => {
+                            console.error('All demo apps failed:', err);
+                            document.getElementById('demo-stack-grid').innerHTML = 
+                                '<div class="col-span-full text-center py-8 text-red-600">' +
+                                '<i class="fas fa-exclamation-triangle text-2xl mb-2"></i>' +
+                                '<p>Demo konnte nicht geladen werden</p>' +
+                                '<p class="text-sm">Bitte laden Sie die Seite neu</p></div>';
+                        });
+                    }
                 }
+                
+                // Setup optimierte Demo-Events
+                setupOptimizedDemoEvents();
             });
             
-            function setupDemoEvents() {
-                // Function to check and enable/disable delete button based on current selection
+            function setupOptimizedDemoEvents() {
+                console.log('Setting up optimized demo events...');
+                
+                // Optimierte Delete-Button Logik mit Debouncing
                 function updateDeleteButtonState() {
-                    const stackSelector = document.getElementById('stack-selector');
-                    const deleteBtn = document.getElementById('demo-delete-stack-main');
-                    
-                    if (deleteBtn && stackSelector) {
-                        const stackId = stackSelector.value;
-                        console.log('[Demo Events] Updating delete button state - stackId:', stackId, 'button exists:', !!deleteBtn);
+                    if (window.performanceCore) {
+                        window.performanceCore.debounceRender('delete-btn-update', () => {
+                            const stackSelector = document.getElementById('stack-selector');
+                            const deleteBtn = document.getElementById('demo-delete-stack-main');
+                            
+                            if (deleteBtn && stackSelector) {
+                                const stackId = stackSelector.value;
+                                console.log('[Optimized Demo] Update delete button - stackId:', stackId);
                         
                         if (stackId) {
                             deleteBtn.disabled = false;
@@ -2091,48 +2117,70 @@ app.get('/dashboard', (c) => {
         </footer>
 
         <script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
-        <script src="/static/app.js"></script>
-        <script src="/static/demo-modal.js"></script>
+        <!-- Performance-optimiertes Dashboard-Loading -->
+        <script src="/static/performance-core.js"></script>
+        <script src="/static/performance-monitor.js"></script>
+        <script src="/static/demo-fast.js"></script>
+        <script src="/static/smart-loader.js"></script>
         <script>
-            // Initialize main app when page loads
+            // Performance-optimiertes Dashboard-Loading
             document.addEventListener('DOMContentLoaded', function() {
-                console.log('Dashboard page loaded, initializing SupplementApp...');
+                console.log('Fast Dashboard Loading...');
+                const loadStart = performance.now();
+                
                 try {
-                    // Initialize main app
-                    window.app = new SupplementApp();
-                    console.log('SupplementApp initialized successfully');
-                    
-                    // Initialize dashboard demo functionality (using unified demoApp instance)
-                    if (!window.demoApp) {
-                        window.demoApp = new SupplementDemoApp();
-                        console.log('Dashboard SupplementDemoApp initialized successfully');
-                    } else {
-                        console.log('Dashboard SupplementDemoApp already exists, reusing instance');
+                    // Smart Loader übernimmt die Dashboard-Initialisierung
+                    if (!window.smartLoader) {
+                        console.log('Fallback: Direct dashboard initialization');
+                        
+                        // Priorisiere FastDemoApp für bessere Performance
+                        if (window.FastDemoApp) {
+                            window.demoApp = new FastDemoApp();
+                            window.dashboardApp = window.demoApp;  // Backward compatibility
+                            console.log('FastDemoApp used for dashboard');
+                        } else {
+                            // Fallback zu klassischer App
+                            import('/static/app.js').then(() => {
+                                window.app = new SupplementApp();
+                                console.log('Classic SupplementApp fallback');
+                            });
+                            
+                            // Lade Demo-Funktionalität nach
+                            import('/static/demo-modal.js').then(() => {
+                                window.demoApp = new SupplementDemoApp();
+                                window.dashboardApp = window.demoApp;
+                                console.log('Dashboard Demo functionality loaded');
+                            });
+                        }
+                        
+                        const loadTime = Math.round(performance.now() - loadStart);
+                        console.log('Dashboard loaded in ' + loadTime + 'ms');
                     }
                     
-                    // Backward compatibility - keep dashboardApp reference
-                    window.dashboardApp = window.demoApp;
-                    
-                    // Setup dashboard-specific event listeners
-                    setupDashboardEvents();
+                    // Setup optimierte Dashboard-Events
+                    setupOptimizedDashboardEvents();
                     
                 } catch (error) {
                     console.error('Failed to initialize Dashboard:', error);
                     document.getElementById('dashboard-stack-grid').innerHTML = '<div class="text-center py-8 text-red-600 col-span-full"><i class="fas fa-exclamation-triangle text-2xl mb-2"></i><p>Dashboard konnte nicht geladen werden</p><p class="text-sm">Bitte laden Sie die Seite neu oder melden Sie sich erneut an</p></div>';
                 }
                 
-                function setupDashboardEvents() {
-                    // Add Product Button
+                function setupOptimizedDashboardEvents() {
+                    console.log('Setting up optimized dashboard events...');
+                    
+                    // Optimierte Event-Handler mit Performance-Verbesserungen
                     const addProductBtn = document.getElementById('add-product-main');
                     if (addProductBtn) {
                         addProductBtn.addEventListener('click', () => {
-                            // Use demoApp (unified app instance) instead of dashboardApp
-                            if (window.demoApp) {
-                                window.demoApp.showAddProductModal();
+                            // Performance-optimierter Zugriff
+                            const app = window.demoApp || window.dashboardApp;
+                            if (app && typeof app.showAddProductModal === 'function') {
+                                app.showAddProductModal();
                             } else {
-                                console.error('demoApp not found');
+                                console.warn('Add product modal not available, showing fallback');
+                                alert('Produkt hinzufügen - Feature wird geladen...');
                             }
-                        });
+                        }, { passive: true });
                     }
                     
                     // Create Stack Button
