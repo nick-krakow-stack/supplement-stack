@@ -12,6 +12,10 @@ class SupplementDemo {
     // Performance-Einstellungen
     this.renderDebounceTime = 150
     
+    // Demo-spezifische Einstellungen
+    this.isTestMode = true // Alle Funktionen funktionieren, aber resettet bei Neuladen
+    this.originalStacks = [] // Ur-Zustand für Reset
+    
     this.init()
   }
 
@@ -29,6 +33,9 @@ class SupplementDemo {
       console.log(`[Demo] Initialized in ${loadTime}ms`)
       
       window.supplementUI.showQuickNotification(`Demo geladen in ${loadTime}ms!`, 'success')
+      
+      // Zeige Demo-Info nach kurzer Verzögerung
+      setTimeout(() => this.showDemoInfo(), 2000)
       
     } catch (error) {
       console.error('[Demo] Initialization error:', error)
@@ -81,12 +88,12 @@ class SupplementDemo {
       case action === 'demo-create-stack-main':
       case action?.includes('create-stack'):
         e.preventDefault()
-        this.showCreateStackModal()
+        this.showCreateStackModal() // Direkt zur Funktion, kein Upgrade-Modal
         break
         
       case action?.includes('delete-stack'):
         e.preventDefault()
-        this.handleDeleteStack()
+        this.handleDeleteStack() // Direkt zur Funktion, kein Upgrade-Modal
         break
 
       case action === 'edit-product':
@@ -124,16 +131,24 @@ class SupplementDemo {
       
       console.log('[Demo] Loaded', this.availableProducts.length, 'products from database')
       
-      // Demo-Stacks basieren auf echten DB-Produkten, aber werden lokal verwaltet
-      const sessionStacks = window.supplementFunctions.loadDemoStacksFromSession()
+      // Demo-Stacks: Verwende IMMER den ursprünglichen Zustand (nicht localStorage!)
+      // Das sorgt dafür, dass nach Reload alles wieder im Ursprungszustand ist
+      this.originalStacks = window.supplementFunctions.createDemoStacksFromDB(this.availableProducts)
+      
+      // Prüfe ob es Session-Änderungen gibt (nur für aktuelle Session, nicht persistent)
+      const sessionStacks = this.loadSessionChanges()
       if (sessionStacks && sessionStacks.length > 0) {
         this.stacks = sessionStacks
-        console.log('[Demo] Using session-stored stacks')
+        console.log('[Demo] Using session-modified stacks (temporary changes - reset after reload)')
       } else {
-        // Erstelle Demo-Stacks basierend auf echten DB-Produkten
-        this.stacks = window.supplementFunctions.createDemoStacksFromDB(this.availableProducts)
-        window.supplementFunctions.saveDemoStacksToSession(this.stacks)
-        console.log('[Demo] Created demo stacks from DB products')
+        // Verwende ursprüngliche Stacks (Deep Copy für Isolation)
+        this.stacks = JSON.parse(JSON.stringify(this.originalStacks))
+        console.log('[Demo] Using original demo stacks (clean state)')
+        
+        // Zeige Info über Demo-Modus
+        setTimeout(() => {
+          window.supplementUI?.showQuickNotification('🎮 Demo-Modus: Alle Änderungen werden nach Neuladen zurückgesetzt', 'info', 4000)
+        }, 2000)
       }
       
       // Cache für Performance
@@ -145,7 +160,8 @@ class SupplementDemo {
       console.error('[Demo] Error loading from database, using fallback:', error)
       
       // Fallback zu statischen Demo-Daten
-      this.stacks = window.supplementFunctions.getDefaultStacks()
+      this.originalStacks = window.supplementFunctions.getDefaultStacks()
+      this.stacks = JSON.parse(JSON.stringify(this.originalStacks))
       this.availableProducts = window.supplementFunctions.getMinimalProducts()
     }
     
@@ -240,6 +256,124 @@ class SupplementDemo {
     console.log(`[Demo] Rendered stack "${currentStack.name}" with ${products.length} products`)
   }
 
+  // === SESSION MANAGEMENT ===
+
+  loadSessionChanges() {
+    try {
+      const sessionData = sessionStorage.getItem('supplement_demo_session_stacks')
+      return sessionData ? JSON.parse(sessionData) : null
+    } catch (error) {
+      console.error('[Demo] Error loading session changes:', error)
+      return null
+    }
+  }
+
+  saveSessionChanges() {
+    try {
+      sessionStorage.setItem('supplement_demo_session_stacks', JSON.stringify(this.stacks))
+      console.log('[Demo] Saved session changes (temporary until reload)')
+    } catch (error) {
+      console.error('[Demo] Error saving session changes:', error)
+    }
+  }
+
+  showUpgradeModal(actionName, callback = null) {
+    console.log('[Demo] Showing upgrade modal for:', actionName)
+    window.supplementUI.closeAllModals()
+
+    const modalHTML = `
+      <div class="bg-white rounded-2xl shadow-2xl max-w-lg mx-auto p-8 relative overflow-hidden">
+        <!-- Gradient Background -->
+        <div class="absolute inset-0 bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50"></div>
+        
+        <!-- Content -->
+        <div class="relative z-10">
+          <!-- Header -->
+          <div class="text-center mb-6">
+            <div class="w-16 h-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
+              <i class="fas fa-rocket text-white text-2xl"></i>
+            </div>
+            <h2 class="text-2xl font-bold text-gray-900 mb-2">Vollversion freischalten</h2>
+            <p class="text-gray-600">Nutzen Sie alle Funktionen kostenlos!</p>
+          </div>
+
+          <!-- Feature Info -->
+          <div class="bg-white/80 backdrop-blur-sm rounded-xl p-6 mb-6 border border-gray-100">
+            <div class="flex items-start space-x-3 mb-4">
+              <div class="w-8 h-8 bg-yellow-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                <i class="fas fa-info-circle text-yellow-600"></i>
+              </div>
+              <div>
+                <h3 class="font-semibold text-gray-900 mb-1">Demo-Modus aktiv</h3>
+                <p class="text-sm text-gray-600">Sie können alle Funktionen testen, aber Änderungen werden nach dem Neuladen zurückgesetzt.</p>
+              </div>
+            </div>
+            
+            <div class="bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-4 border border-green-100">
+              <h4 class="font-medium text-green-900 mb-2 flex items-center">
+                <i class="fas fa-crown text-yellow-500 mr-2"></i>
+                In der Vollversion verfügbar:
+              </h4>
+              <ul class="text-sm text-green-800 space-y-1">
+                <li class="flex items-center"><i class="fas fa-check w-4 text-green-600 mr-2"></i>Permanente Speicherung aller Daten</li>
+                <li class="flex items-center"><i class="fas fa-check w-4 text-green-600 mr-2"></i>Unbegrenzte Stacks und Produkte</li>
+                <li class="flex items-center"><i class="fas fa-check w-4 text-green-600 mr-2"></i>Erweiterte Analyse-Funktionen</li>
+                <li class="flex items-center"><i class="fas fa-check w-4 text-green-600 mr-2"></i>Export und Backup Ihrer Daten</li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="flex flex-col sm:flex-row gap-3">
+            ${callback ? `
+            <button id="demo-continue-anyway" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-medium py-3 px-6 rounded-xl transition-colors">
+              <i class="fas fa-play mr-2"></i>Demo fortsetzen
+            </button>
+            ` : ''}
+            <button id="upgrade-to-full" class="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-lg">
+              <i class="fas fa-rocket mr-2"></i>Kostenlos registrieren
+            </button>
+          </div>
+          
+          <!-- Close Button -->
+          <button class="close-modal absolute top-4 right-4 w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center text-gray-600 transition-colors">
+            <i class="fas fa-times text-sm"></i>
+          </button>
+        </div>
+      </div>
+    `
+
+    const modal = window.supplementUI.createModalOverlay(modalHTML)
+    document.body.appendChild(modal)
+
+    // Setup handlers
+    modal.querySelectorAll('.close-modal').forEach(btn => {
+      btn.addEventListener('click', () => modal.remove())
+    })
+    
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.remove()
+    })
+
+    // Upgrade button
+    const upgradeBtn = modal.querySelector('#upgrade-to-full')
+    if (upgradeBtn) {
+      upgradeBtn.addEventListener('click', () => {
+        modal.remove()
+        window.location.href = '/auth'
+      })
+    }
+
+    // Continue demo button (if callback provided)
+    const continueBtn = modal.querySelector('#demo-continue-anyway')
+    if (continueBtn && callback) {
+      continueBtn.addEventListener('click', () => {
+        modal.remove()
+        callback()
+      })
+    }
+  }
+
   // === MODAL FUNCTIONS ===
 
   showAddProductModal() {
@@ -314,10 +448,14 @@ class SupplementDemo {
       modal.querySelector('#custom-dosage').value = modal.querySelector('#study-recommendation').textContent.replace(/\D/g, '')
     })
 
-    // Continue button
+    // Continue button - erweitert für Demo-Produktauswahl
     modal.querySelector('#continue-to-products').addEventListener('click', () => {
-      window.supplementUI.showQuickNotification('Produktsuche wird geladen...', 'info')
-      setTimeout(() => modal.remove(), 1000)
+      const dosageAmount = parseInt(modal.querySelector('#custom-dosage').value) || 0
+      const selectedNutrientName = modal.querySelector('#dosage-nutrient-name').textContent
+      
+      // Zeige Produktauswahl für den gewählten Nährstoff
+      this.showProductSelection(selectedNutrientName, dosageAmount)
+      modal.remove()
     })
   }
 
@@ -340,8 +478,10 @@ class SupplementDemo {
     })
   }
 
+  // Entfernt - Upgrade-Modal für Stack erstellen nicht mehr nötig
+
   showCreateStackModal() {
-    console.log('[Demo] Showing Create Stack Modal')
+    console.log('[Demo] Showing Create Stack Modal (Demo Mode)')
     window.supplementUI.closeAllModals()
 
     const modalHTML = window.supplementUI.createCreateStackModal()
@@ -374,23 +514,24 @@ class SupplementDemo {
       }
       
       try {
-        // Create stack locally in demo mode
+        // Create stack locally in demo mode (session-only)
         const newStack = await window.supplementFunctions.createUserStack({
           name: name,
           description: description
         })
         
+        // Add to current stacks
         this.stacks.push(newStack)
         this.currentStackId = newStack.id
         
-        // Update session storage
-        window.supplementFunctions.saveDemoStacksToSession(this.stacks)
+        // Save to session (temporary until reload)
+        this.saveSessionChanges()
         
         // Update UI
         this.updateStackSelector()
         this.scheduleRender('create-stack')
         
-        window.supplementUI.showQuickNotification(`Stack "${name}" erfolgreich erstellt!`, 'success')
+        window.supplementUI.showQuickNotification(`Stack "${name}" erstellt! (Demo - wird nach Reload zurückgesetzt)`, 'success')
         modal.remove()
         
       } catch (error) {
@@ -446,8 +587,9 @@ class SupplementDemo {
         currentStack.products = currentStack.products.filter(p => p.id != productId)
         
         if (currentStack.products.length < originalLength) {
-          // Update session storage
-          window.supplementFunctions.saveDemoStacksToSession(this.stacks)
+          // Save to session (temporary until reload)
+          this.saveSessionChanges()
+          
           if (window.performanceCore) {
             window.performanceCore.setCache('demo_stacks', this.stacks)
           }
@@ -456,7 +598,7 @@ class SupplementDemo {
           this.updateStackSelector()
           this.scheduleRender('delete-product')
           
-          window.supplementUI.showQuickNotification('Produkt entfernt!', 'success')
+          window.supplementUI.showQuickNotification('Produkt entfernt! (Demo - wird nach Reload zurückgesetzt)', 'success')
         } else {
           window.supplementUI.showQuickNotification('Produkt nicht gefunden!', 'error')
         }
@@ -464,18 +606,21 @@ class SupplementDemo {
     }
   }
 
+  // Entfernt - Upgrade-Modal für Stack löschen nicht mehr nötig
+
   handleDeleteStack() {
     if (!this.currentStackId) return
     
     const stack = this.stacks.find(s => s.id === this.currentStackId)
     if (!stack) return
     
-    if (confirm(`Stack "${stack.name}" wirklich löschen?`)) {
+    if (confirm(`Stack "${stack.name}" wirklich löschen?\n\n💡 Demo-Modus: Wird nach Seitenneuladung wieder hergestellt.`)) {
       this.stacks = this.stacks.filter(s => s.id !== this.currentStackId)
       this.currentStackId = null
       
-      // Update session storage
-      window.supplementFunctions.saveDemoStacksToSession(this.stacks)
+      // Save to session (temporary until reload)
+      this.saveSessionChanges()
+      
       if (window.performanceCore) {
         window.performanceCore.setCache('demo_stacks', this.stacks)
       }
@@ -483,7 +628,225 @@ class SupplementDemo {
       this.updateStackSelector()
       this.scheduleRender('delete-stack')
       
-      window.supplementUI.showQuickNotification('Stack gelöscht!', 'success')
+      window.supplementUI.showQuickNotification('Stack gelöscht! (Demo - wird nach Reload zurückgesetzt)', 'success')
+    }
+  }
+
+  // === PRODUCT MANAGEMENT ===
+
+  async addProductToCurrentStack(product) {
+    if (!this.currentStackId) {
+      window.supplementUI.showQuickNotification('Bitte wählen Sie zuerst einen Stack aus', 'error')
+      return
+    }
+
+    try {
+      const currentStack = this.stacks.find(s => s.id === this.currentStackId)
+      if (currentStack) {
+        if (!currentStack.products) currentStack.products = []
+        
+        // Check if product already exists in stack
+        const existingProduct = currentStack.products.find(p => p.id === product.id)
+        if (existingProduct) {
+          window.supplementUI.showQuickNotification('Produkt bereits im Stack vorhanden', 'info')
+          return
+        }
+        
+        // Add product to stack
+        currentStack.products.push(product)
+        
+        // Save to session (temporary until reload)
+        this.saveSessionChanges()
+        
+        // Update UI
+        this.updateStackSelector()
+        this.scheduleRender('add-product')
+        
+        window.supplementUI.showQuickNotification(`${product.name} hinzugefügt! (Session-Demo)`, 'success')
+      }
+      
+    } catch (error) {
+      console.error('[Demo] Error adding product to stack:', error)
+      window.supplementUI.showQuickNotification('Fehler beim Hinzufügen des Produkts', 'error')
+    }
+  }
+
+  // Reset function (for testing purposes)
+  resetToOriginalState() {
+    console.log('[Demo] Resetting to original state...')
+    
+    // Clear session storage
+    sessionStorage.removeItem('supplement_demo_session_stacks')
+    
+    // Reset stacks to original
+    this.stacks = JSON.parse(JSON.stringify(this.originalStacks))
+    this.currentStackId = this.stacks.length > 0 ? this.stacks[0].id : null
+    
+    // Update UI
+    this.updateStackSelector()
+    this.scheduleRender('reset')
+    
+    window.supplementUI.showQuickNotification('Demo auf Ursprungszustand zurückgesetzt!', 'success')
+  }
+
+  showProductSelection(nutrientName, targetDosage) {
+    console.log('[Demo] Showing product selection for:', nutrientName, targetDosage)
+    
+    // Filter verfügbare Produkte nach dem gewählten Nährstoff
+    const matchingProducts = this.availableProducts.filter(product => {
+      const productName = product.name.toLowerCase()
+      const nutrientLower = nutrientName.toLowerCase()
+      
+      return productName.includes(nutrientLower) ||
+        (nutrientLower.includes('vitamin d') && productName.includes('vitamin d')) ||
+        (nutrientLower.includes('b12') && productName.includes('b12')) ||
+        (nutrientLower.includes('magnesium') && productName.includes('magnesium')) ||
+        (nutrientLower.includes('omega') && productName.includes('omega'))
+    })
+
+    if (matchingProducts.length === 0) {
+      window.supplementUI.showQuickNotification(`Keine Produkte für ${nutrientName} gefunden`, 'info')
+      return
+    }
+
+    const modalHTML = `
+      <div class="bg-white rounded-2xl shadow-2xl max-w-2xl mx-auto p-6 max-h-[90vh] overflow-y-auto">
+        <div class="flex justify-between items-center mb-6">
+          <div>
+            <h2 class="text-2xl font-bold text-gray-900">Produkt wählen</h2>
+            <p class="text-gray-600">Für ${nutrientName} (Ziel: ${targetDosage})</p>
+          </div>
+          <button class="close-modal w-8 h-8 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center">
+            <i class="fas fa-times text-gray-600"></i>
+          </button>
+        </div>
+
+        <div class="grid gap-4">
+          ${matchingProducts.map(product => `
+            <div class="product-option border border-gray-200 rounded-xl p-4 hover:border-blue-300 hover:bg-blue-50 transition-colors cursor-pointer" data-product-id="${product.id}">
+              <div class="flex justify-between items-start">
+                <div class="flex-1">
+                  <h3 class="font-semibold text-gray-900">${product.name}</h3>
+                  <p class="text-sm text-gray-600">${product.brand} • ${product.form}</p>
+                  <div class="mt-2 flex items-center space-x-4 text-sm">
+                    <span class="text-green-600 font-medium">€${product.monthly_cost}/Monat</span>
+                    ${product.recommended ? '<span class="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium">Empfohlen</span>' : ''}
+                  </div>
+                </div>
+                <button class="add-product-btn bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors" data-product-id="${product.id}">
+                  <i class="fas fa-plus mr-1"></i>Hinzufügen
+                </button>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `
+
+    const modal = window.supplementUI.createModalOverlay(modalHTML)
+    document.body.appendChild(modal)
+
+    // Setup handlers
+    modal.querySelector('.close-modal').addEventListener('click', () => modal.remove())
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.remove()
+    })
+
+    // Add product handlers
+    modal.querySelectorAll('.add-product-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation()
+        const productId = btn.dataset.productId
+        const product = matchingProducts.find(p => p.id == productId)
+        
+        if (product) {
+          await this.addProductToCurrentStack(product)
+          modal.remove()
+        }
+      })
+    })
+
+    // Click on product option also adds it
+    modal.querySelectorAll('.product-option').forEach(option => {
+      option.addEventListener('click', async (e) => {
+        if (e.target.closest('.add-product-btn')) return // Don't double-trigger
+        
+        const productId = option.dataset.productId
+        const product = matchingProducts.find(p => p.id == productId)
+        
+        if (product) {
+          await this.addProductToCurrentStack(product)
+          modal.remove()
+        }
+      })
+    })
+  }
+
+  showDemoInfo() {
+    // Nur anzeigen wenn noch keine Session-Änderungen vorhanden sind
+    const hasSessionChanges = sessionStorage.getItem('supplement_demo_session_stacks')
+    if (hasSessionChanges) return
+
+    // Check if demo info was already shown in this session
+    const infoShown = sessionStorage.getItem('demo_info_shown')
+    if (infoShown) return
+
+    const infoHTML = `
+      <div class="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4 mx-4 mb-4 shadow-sm">
+        <div class="flex items-start space-x-3">
+          <div class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+            <i class="fas fa-info-circle text-blue-600 text-sm"></i>
+          </div>
+          <div class="flex-1">
+            <h3 class="font-semibold text-blue-900 mb-1">🎮 Demo-Modus aktiv</h3>
+            <p class="text-blue-800 text-sm mb-2">
+              Sie können alle Funktionen vollständig testen! Alle Änderungen bleiben während Ihrer Session erhalten, 
+              werden aber nach dem Neuladen der Seite zurückgesetzt.
+            </p>
+            <div class="flex flex-wrap gap-2 text-xs mb-3">
+              <span class="bg-blue-100 text-blue-700 px-2 py-1 rounded">✅ Stacks erstellen & löschen</span>
+              <span class="bg-blue-100 text-blue-700 px-2 py-1 rounded">✅ Produkte hinzufügen & entfernen</span>
+              <span class="bg-blue-100 text-blue-700 px-2 py-1 rounded">🔄 Reset nach Reload</span>
+            </div>
+            <button class="demo-reset-btn bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1 rounded font-medium transition-colors">
+              <i class="fas fa-undo mr-1"></i>Demo zurücksetzen
+            </button>
+          </div>
+          <button class="demo-info-close text-blue-400 hover:text-blue-600 ml-2">
+            <i class="fas fa-times text-sm"></i>
+          </button>
+        </div>
+      </div>
+    `
+
+    // Insert info banner at the top of the page
+    const container = document.querySelector('.max-w-7xl.mx-auto.px-4')
+    if (container) {
+      const tempDiv = document.createElement('div')
+      tempDiv.innerHTML = infoHTML
+      const infoBanner = tempDiv.firstElementChild
+      
+      container.insertBefore(infoBanner, container.firstElementChild)
+
+      // Close button handler
+      infoBanner.querySelector('.demo-info-close').addEventListener('click', () => {
+        infoBanner.remove()
+        sessionStorage.setItem('demo_info_shown', 'true')
+      })
+
+      // Reset button handler
+      infoBanner.querySelector('.demo-reset-btn').addEventListener('click', () => {
+        this.resetToOriginalState()
+        infoBanner.remove()
+      })
+
+      // Auto-hide after 10 seconds
+      setTimeout(() => {
+        if (infoBanner.parentNode) {
+          infoBanner.remove()
+          sessionStorage.setItem('demo_info_shown', 'true')
+        }
+      }, 10000)
     }
   }
 }
