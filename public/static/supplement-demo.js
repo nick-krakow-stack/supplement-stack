@@ -453,9 +453,23 @@ class SupplementDemo {
       const dosageAmount = parseInt(modal.querySelector('#custom-dosage').value) || 0
       const selectedNutrientName = modal.querySelector('#dosage-nutrient-name').textContent
       
-      // Zeige Produktauswahl für den gewählten Nährstoff
-      this.showProductSelection(selectedNutrientName, dosageAmount)
+      if (!selectedNutrientName || selectedNutrientName.trim() === '') {
+        window.supplementUI.showQuickNotification('Bitte wählen Sie zuerst einen Wirkstoff aus', 'warning')
+        return
+      }
+      
+      console.log('[Demo] Switching to product selection for:', selectedNutrientName, dosageAmount)
+      
+      // Zeige Loading-Nachricht
+      window.supplementUI.showQuickNotification('Lade passende Produkte...', 'info')
+      
+      // Schließe das aktuelle Modal und öffne die Produktauswahl
       modal.remove()
+      
+      // Kurze Verzögerung für bessere UX
+      setTimeout(() => {
+        this.showProductSelection(selectedNutrientName, dosageAmount)
+      }, 300)
     })
   }
 
@@ -852,19 +866,36 @@ class SupplementDemo {
   // === PRODUKT-AUSWAHL FUNKTIONEN ===
 
   showProductSelection(nutrientName, dosageAmount) {
-    console.log('[Demo] Showing product selection for:', nutrientName, dosageAmount)
+    console.log('[Demo] Showing product selection for:', nutrientName, 'dosage:', dosageAmount)
+    console.log('[Demo] Available products:', this.availableProducts.length)
     
-    // Finde passende Produkte für den Nährstoff
-    const matchingProducts = this.availableProducts.filter(product => 
-      product.name.toLowerCase().includes(nutrientName.toLowerCase()) ||
-      (nutrientName.toLowerCase().includes('d3') && product.name.toLowerCase().includes('vitamin d')) ||
-      (nutrientName.toLowerCase().includes('b12') && product.name.toLowerCase().includes('b12')) ||
-      (nutrientName.toLowerCase().includes('vitamin c') && product.name.toLowerCase().includes('vitamin c')) ||
-      (nutrientName.toLowerCase().includes('magnesium') && product.name.toLowerCase().includes('magnesium'))
-    )
+    if (!this.availableProducts || this.availableProducts.length === 0) {
+      window.supplementUI.showQuickNotification('Keine Produkte verfügbar. Lade Daten...', 'error')
+      return
+    }
+    
+    // Finde passende Produkte für den Nährstoff (erweiterte Suche)
+    const nutrientLower = nutrientName.toLowerCase()
+    const matchingProducts = this.availableProducts.filter(product => {
+      const productNameLower = product.name.toLowerCase()
+      
+      return (
+        productNameLower.includes(nutrientLower) ||
+        (nutrientLower.includes('d3') && (productNameLower.includes('vitamin d') || productNameLower.includes('d3'))) ||
+        (nutrientLower.includes('vitamin d') && (productNameLower.includes('vitamin d') || productNameLower.includes('d3'))) ||
+        (nutrientLower.includes('b12') && productNameLower.includes('b12')) ||
+        (nutrientLower.includes('vitamin b12') && productNameLower.includes('b12')) ||
+        (nutrientLower.includes('vitamin c') && productNameLower.includes('vitamin c')) ||
+        (nutrientLower.includes('magnesium') && productNameLower.includes('magnesium')) ||
+        (nutrientLower.includes('omega') && productNameLower.includes('omega')) ||
+        (nutrientLower.includes('zink') && productNameLower.includes('zink'))
+      )
+    })
+
+    console.log('[Demo] Found matching products:', matchingProducts.length, 'for nutrient:', nutrientName)
 
     if (matchingProducts.length === 0) {
-      window.supplementUI.showQuickNotification(`Keine Produkte für ${nutrientName} gefunden. Wählen Sie aus allen verfügbaren Produkten.`, 'info')
+      window.supplementUI.showQuickNotification(`Keine spezifischen Produkte für ${nutrientName} gefunden. Zeige alle verfügbaren Produkte.`, 'info')
       this.showAllProductSelection()
       return
     }
@@ -874,10 +905,12 @@ class SupplementDemo {
   }
 
   showAllProductSelection() {
-    this.showProductSelectionModal(this.availableProducts, 'Alle Produkte', null)
+    console.log('[Demo] Showing all products selection:', this.availableProducts.length, 'products')
+    this.showProductSelectionModal(this.availableProducts, 'Alle verfügbaren Produkte', null)
   }
 
   showProductSelectionModal(products, nutrientName, dosageAmount) {
+    console.log('[Demo] Creating product selection modal with', products.length, 'products')
     window.supplementUI.closeAllModals()
 
     const modalHTML = `
