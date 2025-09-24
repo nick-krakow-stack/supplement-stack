@@ -849,6 +849,167 @@ class SupplementDemo {
       }, 10000)
     }
   }
+  // === PRODUKT-AUSWAHL FUNKTIONEN ===
+
+  showProductSelection(nutrientName, dosageAmount) {
+    console.log('[Demo] Showing product selection for:', nutrientName, dosageAmount)
+    
+    // Finde passende Produkte für den Nährstoff
+    const matchingProducts = this.availableProducts.filter(product => 
+      product.name.toLowerCase().includes(nutrientName.toLowerCase()) ||
+      (nutrientName.toLowerCase().includes('d3') && product.name.toLowerCase().includes('vitamin d')) ||
+      (nutrientName.toLowerCase().includes('b12') && product.name.toLowerCase().includes('b12')) ||
+      (nutrientName.toLowerCase().includes('vitamin c') && product.name.toLowerCase().includes('vitamin c')) ||
+      (nutrientName.toLowerCase().includes('magnesium') && product.name.toLowerCase().includes('magnesium'))
+    )
+
+    if (matchingProducts.length === 0) {
+      window.supplementUI.showQuickNotification(`Keine Produkte für ${nutrientName} gefunden. Wählen Sie aus allen verfügbaren Produkten.`, 'info')
+      this.showAllProductSelection()
+      return
+    }
+
+    // Zeige spezifische Produktauswahl
+    this.showProductSelectionModal(matchingProducts, nutrientName, dosageAmount)
+  }
+
+  showAllProductSelection() {
+    this.showProductSelectionModal(this.availableProducts, 'Alle Produkte', null)
+  }
+
+  showProductSelectionModal(products, nutrientName, dosageAmount) {
+    window.supplementUI.closeAllModals()
+
+    const modalHTML = `
+      <div class="bg-white rounded-2xl shadow-2xl max-w-4xl mx-auto p-6 max-h-[90vh] overflow-hidden flex flex-col">
+        <div class="flex justify-between items-center mb-6 pb-4 border-b">
+          <div>
+            <h2 class="text-2xl font-bold text-gray-900">Produkt auswählen</h2>
+            <p class="text-gray-600 mt-1">${nutrientName}${dosageAmount ? ` • ${dosageAmount} Einheiten` : ''}</p>
+          </div>
+          <button class="close-modal w-10 h-10 bg-gray-100 hover:bg-gray-200 rounded-full flex items-center justify-center text-gray-600 transition-colors">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+
+        <div class="flex-1 overflow-y-auto">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            ${products.map(product => `
+              <div class="product-option border border-gray-200 rounded-xl p-4 hover:border-blue-300 hover:bg-blue-50 cursor-pointer transition-all" data-product-id="${product.id}">
+                <div class="flex items-start justify-between mb-3">
+                  <div class="flex-1">
+                    <h3 class="font-semibold text-gray-900 mb-1">${product.name}</h3>
+                    <p class="text-sm text-gray-600">${product.brand || 'Unbekannt'}</p>
+                    <p class="text-xs text-gray-500 mt-1">${product.form || 'Kapsel'}</p>
+                  </div>
+                  <div class="text-right">
+                    <div class="text-lg font-bold text-green-600">€${(product.monthly_cost || 15.99).toFixed(2)}</div>
+                    <div class="text-xs text-gray-500">pro Monat</div>
+                  </div>
+                </div>
+                
+                <div class="bg-gray-50 rounded-lg p-3">
+                  <div class="flex justify-between text-sm">
+                    <span class="text-gray-600">Dosierung:</span>
+                    <span class="font-medium">${product.dosage_per_day || 1}x täglich</span>
+                  </div>
+                  <div class="flex justify-between text-sm mt-1">
+                    <span class="text-gray-600">Packung:</span>
+                    <span class="font-medium">${product.quantity || 30} Stück</span>
+                  </div>
+                </div>
+                
+                <div class="mt-3 flex justify-end">
+                  <button class="add-product-btn bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
+                    <i class="fas fa-plus mr-2"></i>Hinzufügen
+                  </button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+          
+          ${products.length === 0 ? `
+          <div class="text-center py-12 text-gray-500">
+            <i class="fas fa-search text-4xl mb-4"></i>
+            <p class="text-lg">Keine Produkte gefunden</p>
+            <p class="text-sm">Versuchen Sie einen anderen Suchbegriff</p>
+          </div>
+          ` : ''}
+        </div>
+
+        <div class="mt-6 pt-4 border-t text-center">
+          <p class="text-sm text-gray-600">
+            <i class="fas fa-info-circle mr-1"></i>
+            Demo-Modus: Änderungen werden nach Neuladen zurückgesetzt
+          </p>
+        </div>
+      </div>
+    `
+
+    const modal = window.supplementUI.createModalOverlay(modalHTML)
+    document.body.appendChild(modal)
+
+    // Setup handlers
+    modal.querySelector('.close-modal').addEventListener('click', () => modal.remove())
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.remove()
+    })
+
+    // Product selection handlers
+    modal.querySelectorAll('.product-option').forEach(option => {
+      option.addEventListener('click', (e) => {
+        if (!e.target.closest('.add-product-btn')) {
+          // Click on product card (not button) - highlight selection
+          modal.querySelectorAll('.product-option').forEach(opt => opt.classList.remove('ring-2', 'ring-blue-500'))
+          option.classList.add('ring-2', 'ring-blue-500')
+        }
+      })
+      
+      const addBtn = option.querySelector('.add-product-btn')
+      addBtn.addEventListener('click', (e) => {
+        e.stopPropagation()
+        const productId = option.dataset.productId
+        const selectedProduct = products.find(p => p.id == productId)
+        if (selectedProduct) {
+          this.addProductToCurrentStack(selectedProduct)
+          modal.remove()
+        }
+      })
+    })
+  }
+
+  addProductToCurrentStack(product) {
+    if (!this.currentStackId) {
+      window.supplementUI.showQuickNotification('Bitte wählen Sie zuerst einen Stack aus', 'error')
+      return
+    }
+
+    const currentStack = this.stacks.find(s => s.id === this.currentStackId)
+    if (!currentStack) {
+      window.supplementUI.showQuickNotification('Stack nicht gefunden', 'error')
+      return
+    }
+
+    // Prüfe ob Produkt bereits im Stack ist
+    const existingProduct = currentStack.products?.find(p => p.id == product.id)
+    if (existingProduct) {
+      window.supplementUI.showQuickNotification(`${product.name} ist bereits im Stack vorhanden`, 'warning')
+      return
+    }
+
+    // Füge Produkt hinzu
+    if (!currentStack.products) currentStack.products = []
+    currentStack.products.push({...product}) // Deep copy
+
+    // Save to session (temporary until reload)
+    this.saveSessionChanges()
+
+    // Update UI
+    this.updateStackSelector()
+    this.scheduleRender('add-product')
+
+    window.supplementUI.showQuickNotification(`${product.name} zum Stack hinzugefügt! (Demo - wird nach Reload zurückgesetzt)`, 'success')
+  }
 }
 
 // Smart initialization

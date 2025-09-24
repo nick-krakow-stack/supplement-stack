@@ -464,19 +464,45 @@ class SupplementUIComponents {
 
   // === NOTIFICATIONS ===
   
-  showQuickNotification(message, type = 'info') {
-    // Minimal notification ohne schweres DOM-Manipulation
+  showQuickNotification(message, type = 'info', duration = 2000) {
+    // Erweiterte notification mit anpassbarer Dauer
     const notification = document.createElement('div')
-    notification.className = `fixed top-4 right-4 z-50 p-3 rounded-lg shadow-lg text-sm ${
+    notification.className = `fixed top-4 right-4 z-50 p-4 rounded-xl shadow-xl text-sm font-medium max-w-sm transition-all duration-300 transform translate-x-full ${
       type === 'success' ? 'bg-green-500 text-white' :
       type === 'error' ? 'bg-red-500 text-white' :
+      type === 'warning' ? 'bg-yellow-500 text-white' :
       'bg-blue-500 text-white'
     }`
-    notification.textContent = message
+    
+    // Icon hinzufügen basierend auf Typ
+    const icon = type === 'success' ? 'fa-check-circle' :
+                 type === 'error' ? 'fa-exclamation-circle' :
+                 type === 'warning' ? 'fa-exclamation-triangle' :
+                 'fa-info-circle'
+    
+    notification.innerHTML = `
+      <div class="flex items-center space-x-2">
+        <i class="fas ${icon}"></i>
+        <span>${message}</span>
+      </div>
+    `
     
     document.body.appendChild(notification)
     
-    setTimeout(() => notification.remove(), 2000)
+    // Animate in
+    setTimeout(() => {
+      notification.classList.remove('translate-x-full')
+    }, 10)
+    
+    // Auto-remove with animation
+    setTimeout(() => {
+      notification.classList.add('translate-x-full', 'opacity-0')
+      setTimeout(() => {
+        if (notification.parentNode) {
+          notification.remove()
+        }
+      }, 300)
+    }, duration)
   }
 }
 
