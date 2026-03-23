@@ -1,0 +1,472 @@
+import { useEffect, useState, useCallback } from 'react';
+import { Link } from 'react-router-dom';
+import { Trash2, AlertTriangle, Plus, ChevronDown, ChevronUp, Check, X } from 'lucide-react';
+
+// ---- Local types ----
+interface StackProduct {
+  id: number;
+  name: string;
+  price: number;
+  brand?: string;
+}
+
+interface InteractionWarning {
+  id?: number;
+  ingredient_a_name?: string;
+  ingredient_b_name?: string;
+  ingredient_a?: string;
+  ingredient_b?: string;
+  type: 'danger' | 'caution' | string;
+  comment: string;
+}
+
+interface Stack {
+  id: number;
+  name: string;
+  products?: StackProduct[];
+  total_monthly?: number;
+  warnings?: InteractionWarning[];
+}
+
+function getToken(): string | null {
+  return localStorage.getItem('ss_token');
+}
+
+function authHeaders(): Record<string, string> {
+  const token = getToken();
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
+
+// ---- Warning badge ----
+function WarningBadge({ warning }: { warning: InteractionWarning }) {
+  const ingredientA = warning.ingredient_a_name ?? warning.ingredient_a ?? 'Unbekannt';
+  const ingredientB = warning.ingredient_b_name ?? warning.ingredient_b ?? 'Unbekannt';
+
+  const baseClass = 'flex items-start gap-2 rounded-lg px-3 py-2 text-sm';
+
+  if (warning.type === 'danger') {
+    return (
+      <div className={`${baseClass} bg-red-100 text-red-700`}>
+        <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
+        <span>
+          <span className="font-semibold">{ingredientA} + {ingredientB}:</span> {warning.comment}
+        </span>
+      </div>
+    );
+  }
+  if (warning.type === 'caution') {
+    return (
+      <div className={`${baseClass} bg-orange-100 text-orange-700`}>
+        <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
+        <span>
+          <span className="font-semibold">{ingredientA} + {ingredientB}:</span> {warning.comment}
+        </span>
+      </div>
+    );
+  }
+  return (
+    <div className={`${baseClass} bg-gray-100 text-gray-700`}>
+      <span>
+        <span className="font-semibold">{ingredientA} + {ingredientB}:</span> {warning.comment}
+      </span>
+    </div>
+  );
+}
+
+// ---- Stack card ----
+function StackCard({
+  stack,
+  onDeleted,
+  onRenamed,
+}: {
+  stack: Stack;
+  onDeleted: (id: number) => void;
+  onRenamed: (id: number, name: string) => void;
+}) {
+  const [editingName, setEditingName] = useState(false);
+  const [nameValue, setNameValue] = useState(stack.name);
+  const [savingName, setSavingName] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [removingProductId, setRemovingProductId] = useState<number | null>(null);
+  const [products, setProducts] = useState<StackProduct[]>(stack.products ?? []);
+  const [warnings, setWarnings] = useState<InteractionWarning[]>(stack.warnings ?? []);
+  const [loadingWarnings, setLoadingWarnings] = useState(false);
+  const [error, setError] = useState('');
+
+  // Fetch warnings on mount if not already provided
+  useEffect(() => {
+    if (stack.warnings !== undefined) return;
+    setLoadingWarnings(true);
+    fetch(`/api/stack-warnings/${stack.id}`, { headers: authHeaders() })
+      .then((r) => r.json())
+      .then((data) => {
+        setWarnings(data.warnings ?? data ?? []);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingWarnings(false));
+  }, [stack.id, stack.warnings]);
+
+  const saveName = async () => {
+    const trimmed = nameValue.trim();
+    if (!trimmed || trimmed === stack.name) {
+      setEditingName(false);
+      setNameValue(stack.name);
+      return;
+    }
+    setSavingName(true);
+    try {
+      const res = await fetch(`/api/stacks/${stack.id}`, {
+        method: 'PUT',
+        headers: authHeaders(),
+        body: JSON.stringify({ name: trimmed }),
+      });
+      if (res.ok) {
+        onRenamed(stack.id, trimmed);
+        setEditingName(false);
+      } else {
+        setError('Name konnte nicht gespeichert werden.');
+      }
+    } catch {
+      setError('Netzwerkfehler.');
+    } finally {
+      setSavingName(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!window.confirm(`Stack "${stack.name}" wirklich löschen?`)) return;
+    setDeleting(true);
+    try {
+      await fetch(`/api/stacks/${stack.id}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+      });
+      onDeleted(stack.id);
+    } catch {
+      setError('Löschen fehlgeschlagen.');
+      setDeleting(false);
+    }
+  };
+
+  const handleRemoveProduct = async (productId: number) => {
+    setRemovingProductId(productId);
+    try {
+      const res = await fetch(`/api/stacks/${stack.id}/products/${productId}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+      });
+      if (res.ok) {
+        setProducts((prev) => prev.filter((p) => p.id !== productId));
+      } else {
+        setError('Produkt konnte nicht entfernt werden.');
+      }
+    } catch {
+      setError('Netzwerkfehler.');
+    } finally {
+      setRemovingProductId(null);
+    }
+  };
+
+  const total = products.reduce((sum, p) => sum + (p.price ?? 0), 0);
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 flex flex-col gap-4">
+      {/* Header: name + delete */}
+      <div className="flex items-center justify-between gap-2">
+        {editingName ? (
+          <div className="flex items-center gap-2 flex-1">
+            <input
+              autoFocus
+              value={nameValue}
+              onChange={(e) => setNameValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') saveName();
+                if (e.key === 'Escape') {
+                  setEditingName(false);
+                  setNameValue(stack.name);
+                }
+              }}
+              className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-lg font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <button
+              onClick={saveName}
+              disabled={savingName}
+              className="p-1.5 rounded-lg text-green-600 hover:bg-green-50 transition-colors"
+              aria-label="Speichern"
+            >
+              <Check size={18} />
+            </button>
+            <button
+              onClick={() => { setEditingName(false); setNameValue(stack.name); }}
+              className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-50 transition-colors"
+              aria-label="Abbrechen"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        ) : (
+          <h2
+            className="text-lg font-semibold text-gray-900 cursor-pointer hover:text-blue-600 transition-colors"
+            title="Klicken zum Bearbeiten"
+            onClick={() => setEditingName(true)}
+          >
+            {stack.name}
+          </h2>
+        )}
+
+        <button
+          onClick={handleDelete}
+          disabled={deleting}
+          className="flex-shrink-0 p-2 rounded-lg text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
+          aria-label="Stack löschen"
+        >
+          <Trash2 size={18} />
+        </button>
+      </div>
+
+      {error && (
+        <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>
+      )}
+
+      {/* Products */}
+      <div className="flex flex-col gap-2">
+        {products.length === 0 ? (
+          <p className="text-sm text-gray-500 italic">Keine Produkte in diesem Stack.</p>
+        ) : (
+          products.map((product) => (
+            <div
+              key={product.id}
+              className="flex items-center justify-between gap-2 bg-gray-50 rounded-lg px-3 py-2"
+            >
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-gray-900 truncate">{product.name}</p>
+                {product.brand && (
+                  <p className="text-xs text-gray-500 truncate">{product.brand}</p>
+                )}
+              </div>
+              <div className="flex items-center gap-3 flex-shrink-0">
+                <span className="text-sm text-green-600 font-semibold">
+                  €{(product.price ?? 0).toFixed(2)}
+                </span>
+                <button
+                  onClick={() => handleRemoveProduct(product.id)}
+                  disabled={removingProductId === product.id}
+                  className="p-1 rounded text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                  aria-label={`${product.name} entfernen`}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Warnings */}
+      {loadingWarnings ? (
+        <p className="text-xs text-gray-400">Lade Warnungen...</p>
+      ) : warnings.length > 0 ? (
+        <div className="flex flex-col gap-2">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+            Interaktionswarnungen
+          </p>
+          {warnings.map((w, i) => (
+            <WarningBadge key={w.id ?? i} warning={w} />
+          ))}
+        </div>
+      ) : null}
+
+      {/* Footer total */}
+      <div className="border-t border-gray-100 pt-3 flex items-center justify-end">
+        <p className="text-green-600 font-bold">
+          Gesamt: €{total.toFixed(2)}/Monat
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ---- Main page ----
+export default function StacksPage() {
+  const token = getToken();
+  const [stacks, setStacks] = useState<Stack[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [newStackName, setNewStackName] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState('');
+
+  const loadStacks = useCallback(async () => {
+    if (!token) return;
+    setLoading(true);
+    setError('');
+    try {
+      const res = await fetch('/api/stacks', { headers: authHeaders() });
+      if (!res.ok) throw new Error('Fehler beim Laden der Stacks.');
+      const data = await res.json();
+      const stackList: Stack[] = data.stacks ?? data ?? [];
+
+      // Fetch details (products + warnings) for each stack
+      const detailed = await Promise.all(
+        stackList.map(async (s) => {
+          try {
+            const r = await fetch(`/api/stacks/${s.id}`, { headers: authHeaders() });
+            if (r.ok) {
+              const d = await r.json();
+              return {
+                ...s,
+                ...d,
+                products: d.products ?? d.items ?? [],
+              } as Stack;
+            }
+          } catch {}
+          return s;
+        })
+      );
+      setStacks(detailed);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Unbekannter Fehler.');
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    loadStacks();
+  }, [loadStacks]);
+
+  const handleCreate = async () => {
+    const name = newStackName.trim();
+    if (!name) {
+      setCreateError('Bitte einen Namen eingeben.');
+      return;
+    }
+    setCreating(true);
+    setCreateError('');
+    try {
+      const res = await fetch('/api/stacks', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ name, products: [] }),
+      });
+      if (!res.ok) throw new Error('Stack konnte nicht erstellt werden.');
+      const data = await res.json();
+      const newStack: Stack = { ...(data.stack ?? data), products: [], warnings: [] };
+      setStacks((prev) => [...prev, newStack]);
+      setNewStackName('');
+      setShowCreateForm(false);
+    } catch (e: unknown) {
+      setCreateError(e instanceof Error ? e.message : 'Fehler.');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleDeleted = (id: number) => {
+    setStacks((prev) => prev.filter((s) => s.id !== id));
+  };
+
+  const handleRenamed = (id: number, name: string) => {
+    setStacks((prev) => prev.map((s) => (s.id === id ? { ...s, name } : s)));
+  };
+
+  // Not logged in
+  if (!token) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4 text-center">
+        <h1 className="text-2xl font-bold text-gray-800">Bitte anmelden</h1>
+        <p className="text-gray-600">Du musst angemeldet sein, um deine Stacks zu sehen.</p>
+        <Link
+          to="/login"
+          className="bg-blue-500 text-white hover:bg-blue-600 px-5 py-2 rounded-lg font-medium transition-colors"
+        >
+          Zur Anmeldung
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      {/* Page header */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <h1 className="text-2xl font-bold text-gray-900">Meine Stacks</h1>
+        <button
+          onClick={() => setShowCreateForm((v) => !v)}
+          className="inline-flex items-center gap-2 bg-blue-500 text-white hover:bg-blue-600 px-4 py-2 rounded-lg font-medium transition-colors"
+        >
+          <Plus size={18} />
+          Neuen Stack erstellen
+          {showCreateForm ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </button>
+      </div>
+
+      {/* Create form */}
+      {showCreateForm && (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 flex flex-col gap-3">
+          <h2 className="font-semibold text-gray-800">Neuer Stack</h2>
+          <div className="flex gap-3">
+            <input
+              autoFocus
+              type="text"
+              placeholder="Stack-Name"
+              value={newStackName}
+              onChange={(e) => setNewStackName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleCreate(); }}
+              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <button
+              onClick={handleCreate}
+              disabled={creating}
+              className="bg-blue-500 text-white hover:bg-blue-600 px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-60"
+            >
+              {creating ? 'Erstelle...' : 'Erstellen'}
+            </button>
+          </div>
+          {createError && <p className="text-sm text-red-600">{createError}</p>}
+        </div>
+      )}
+
+      {/* Loading */}
+      {loading && (
+        <div className="flex items-center justify-center py-12">
+          <div className="animate-spin border-4 border-blue-500 border-t-transparent rounded-full w-8 h-8" />
+        </div>
+      )}
+
+      {/* Error */}
+      {error && !loading && (
+        <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3">
+          {error}
+        </div>
+      )}
+
+      {/* Empty state */}
+      {!loading && !error && stacks.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
+          <p className="text-gray-500 text-lg">
+            Noch keine Stacks. Suche nach Wirkstoffen, um Produkte hinzuzufügen.
+          </p>
+        </div>
+      )}
+
+      {/* Stack list */}
+      {!loading && stacks.length > 0 && (
+        <div className="flex flex-col gap-4">
+          {stacks.map((stack) => (
+            <StackCard
+              key={stack.id}
+              stack={stack}
+              onDeleted={handleDeleted}
+              onRenamed={handleRenamed}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

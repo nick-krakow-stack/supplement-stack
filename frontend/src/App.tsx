@@ -1,103 +1,60 @@
-import { useEffect, useState } from 'react';
+import { Routes, Route } from 'react-router-dom';
+import { AuthProvider } from './contexts/AuthContext';
+import Layout from './components/Layout';
+import ProtectedRoute from './components/ProtectedRoute';
 
-type Ingredient = { id: number; name: string; unit?: string; description?: string };
-type Product = { id: number; name: string; brand?: string; price: number; form?: string; visibility?: string };
+import SearchPage from './pages/SearchPage';
+import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
+import ProfilePage from './pages/ProfilePage';
+import StacksPage from './pages/StacksPage';
+import WishlistPage from './pages/WishlistPage';
+import AdminPage from './pages/AdminPage';
+import DemoPage from './pages/DemoPage';
 
-const API_BASE = '/api';
-
-function App() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [token, setToken] = useState('');
-  const [search, setSearch] = useState('Mag');
-  const [ingredients, setIngredients] = useState<Ingredient[]>([]);
-  const [products, setProducts] = useState<Product[]>([]);
-  const [message, setMessage] = useState('');
-
-  const fetchIngredients = async (query: string) => {
-    const res = await fetch(`${API_BASE}/ingredients/search?q=${encodeURIComponent(query)}`);
-    const data = await res.json();
-    setIngredients(data.ingredients || []);
-  };
-
-  const fetchProducts = async () => {
-    const res = await fetch(`${API_BASE}/products`);
-    const data = await res.json();
-    setProducts(data.products || []);
-  };
-
-  useEffect(() => {
-    fetchIngredients(search);
-    fetchProducts();
-  }, []);
-
-  const register = async () => {
-    const res = await fetch(`${API_BASE}/auth/register`, { method: 'POST', headers: { 'Content-Type': 'application/json'}, body: JSON.stringify({email, password})});
-    const data = await res.json();
-    if (res.ok) { setToken(data.token); setMessage('Registrierung erfolgreich'); } else { setMessage(JSON.stringify(data)); }
-  };
-
-  const login = async () => {
-    const res = await fetch(`${API_BASE}/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json'}, body: JSON.stringify({email, password})});
-    const data = await res.json();
-    if (res.ok) { setToken(data.token); setMessage('Login erfolgreich'); } else { setMessage(JSON.stringify(data)); }
-  };
-
-  const addIngredient = async () => {
-    const name = prompt('Wirkstoff-Name?')?.trim();
-    if (!name) return;
-    const res = await fetch(`${API_BASE}/ingredients`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`},
-      body: JSON.stringify({ name })
-    });
-    const data = await res.json();
-    setMessage(res.ok ? `Wirkstoff erstellt: ${data.id}` : `Fehler: ${JSON.stringify(data)}`);
-    fetchIngredients(search);
-  };
-
+export default function App() {
   return (
-    <div className="app">
-      <header>
-        <h1>Supplement Stack</h1>
-      </header>
-      <div className="grid">
-        <section className="card">
-          <h2>Auth</h2>
-          <input placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
-          <input placeholder="Passwort" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
-          <button onClick={register}>Register</button>
-          <button onClick={login}>Login</button>
-          <p>Token: {token ? '✔️ vorhanden' : 'keiner'}</p>
-        </section>
-
-        <section className="card">
-          <h2>Wirkstoffsuche</h2>
-          <div className="stack-row">
-            <input value={search} onChange={(e) => setSearch(e.target.value)} />
-            <button onClick={() => fetchIngredients(search)}>Suchen</button>
-          </div>
-          <ul>
-            {ingredients.map((ingredient) => (
-              <li key={ingredient.id}>{ingredient.name} {ingredient.unit ? `(${ingredient.unit})` : ''}</li>
-            ))}
-          </ul>
-          <button onClick={addIngredient}>Neuer Wirkstoff (Admin)</button>
-        </section>
-
-        <section className="card">
-          <h2>Produkte</h2>
-          <button onClick={fetchProducts}>Refresh</button>
-          <ul>
-            {products.map((prod) => (
-              <li key={prod.id}>{prod.name} ({prod.brand || 'Marke'}): €{prod.price.toFixed(2)} [{prod.visibility}]</li>
-            ))}
-          </ul>
-        </section>
-      </div>
-      <div className="footer">{message}</div>
-    </div>
+    <AuthProvider>
+      <Layout>
+        <Routes>
+          <Route path="/" element={<SearchPage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <ProfilePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/stacks"
+            element={
+              <ProtectedRoute>
+                <StacksPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/wishlist"
+            element={
+              <ProtectedRoute>
+                <WishlistPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/*"
+            element={
+              <ProtectedRoute adminOnly>
+                <AdminPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/demo" element={<DemoPage />} />
+        </Routes>
+      </Layout>
+    </AuthProvider>
   );
 }
-
-export default App;

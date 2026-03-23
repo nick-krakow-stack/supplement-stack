@@ -5,34 +5,87 @@
 @layer base {
   html {
     font-family: 'Inter', system-ui, sans-serif;
+    @apply bg-gray-50 text-gray-900;
+  }
+
+  input {
+    @apply w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+  }
+
+  button {
+    @apply px-4 py-2 rounded-lg font-medium transition-colors duration-200 bg-blue-500 text-white hover:bg-blue-600 cursor-pointer;
+  }
+
+  h1 {
+    @apply text-2xl font-bold;
+  }
+
+  h2 {
+    @apply text-lg font-semibold mb-3;
+  }
+
+  ul {
+    @apply mt-2 space-y-1;
+  }
+
+  li {
+    @apply text-sm text-gray-700 py-1 border-b border-gray-100 last:border-0;
   }
 }
 
 @layer components {
-  .btn {
-    @apply px-4 py-2 rounded-lg font-medium transition-colors duration-200;
+  .app {
+    @apply max-w-5xl mx-auto p-6;
   }
-  
-  .btn-primary {
-    @apply bg-primary-500 text-white hover:bg-primary-600;
+
+  header {
+    @apply mb-6 pb-4 border-b border-gray-200;
   }
-  
-  .btn-secondary {
-    @apply bg-gray-200 text-gray-800 hover:bg-gray-300;
+
+  .grid {
+    @apply grid grid-cols-1 md:grid-cols-3 gap-4;
   }
-  
+
   .card {
     @apply bg-white rounded-xl shadow-sm border border-gray-200 p-6;
   }
-  
-  .input {
-    @apply w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent;
+
+  .stack-row {
+    @apply flex gap-2 items-center;
   }
-  
+
+  .stack-row input {
+    @apply flex-1;
+  }
+
+  .stack-row button {
+    @apply flex-shrink-0;
+  }
+
+  .footer {
+    @apply mt-6 p-3 rounded-lg bg-blue-50 text-blue-700 text-sm min-h-[2.5rem];
+  }
+
+  .btn {
+    @apply px-4 py-2 rounded-lg font-medium transition-colors duration-200;
+  }
+
+  .btn-primary {
+    @apply bg-blue-500 text-white hover:bg-blue-600;
+  }
+
+  .btn-secondary {
+    @apply bg-gray-200 text-gray-800 hover:bg-gray-300;
+  }
+
+  .input {
+    @apply w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+  }
+
   .modal-overlay {
     @apply fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50;
   }
-  
+
   .modal-content {
     @apply bg-white rounded-xl max-w-md w-full max-h-[90vh] overflow-y-auto;
   }
