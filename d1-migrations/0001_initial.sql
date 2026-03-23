@@ -123,13 +123,11 @@ CREATE TABLE IF NOT EXISTS wishlist (
   FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
 );
 
--- Indexes for search performance
+-- Indexes (only on columns guaranteed to exist in this migration)
 CREATE INDEX IF NOT EXISTS idx_ingredients_name ON ingredients(name);
 CREATE INDEX IF NOT EXISTS idx_ingredient_synonyms_ingredient_id ON ingredient_synonyms(ingredient_id);
 CREATE INDEX IF NOT EXISTS idx_ingredient_synonyms_synonym ON ingredient_synonyms(synonym);
 CREATE INDEX IF NOT EXISTS idx_ingredient_forms_ingredient_id ON ingredient_forms(ingredient_id);
-CREATE INDEX IF NOT EXISTS idx_products_visibility ON products(visibility);
-CREATE INDEX IF NOT EXISTS idx_products_moderation_status ON products(moderation_status);
 CREATE INDEX IF NOT EXISTS idx_product_ingredients_product_id ON product_ingredients(product_id);
 CREATE INDEX IF NOT EXISTS idx_product_ingredients_ingredient_id ON product_ingredients(ingredient_id);
 CREATE INDEX IF NOT EXISTS idx_stacks_user_id ON stacks(user_id);
