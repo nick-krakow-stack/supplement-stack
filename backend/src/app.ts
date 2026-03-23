@@ -146,6 +146,18 @@ app.get('/api/ingredients/:id', (c) => {
   return c.json({ ingredient, synonyms, forms });
 });
 
+app.get('/api/ingredients/:id/products', (c: HonoContext) => {
+  const id = c.req.param('id');
+  const products = db.prepare(`
+    SELECT p.*, pi.quantity, pi.unit
+    FROM products p
+    JOIN product_ingredients pi ON pi.product_id = p.id
+    WHERE pi.ingredient_id = ? AND p.visibility = 'public'
+    ORDER BY pi.is_main DESC, p.name ASC
+  `).all(id);
+  return c.json({ products });
+});
+
 app.post('/api/ingredients', (c) => {
   const auth = ensureAuth(c); if (auth instanceof Response) return auth;
   const user = c.get('user');
