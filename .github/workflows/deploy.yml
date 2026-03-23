@@ -4,6 +4,9 @@ on:
   push:
     branches: [ main ]
   workflow_dispatch:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
 
 jobs:
   build-and-deploy:
@@ -47,7 +50,7 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          projectName: supplementstack
+          projectName: supplement-stack
           directory: frontend/dist
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
           
