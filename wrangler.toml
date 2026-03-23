@@ -1,0 +1,7 @@
+name = "supplement-stack-api"
+compatibility_date = "2024-09-23"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "supplementstack-production"
+database_id = "f1336769-9231-4cfa-a54b-91a261f07b08"
