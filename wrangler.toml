@@ -1,6 +1,9 @@
 name = "supplement-stack-api"
 compatibility_date = "2024-09-23"
 
+[vars]
+DEMO_SESSION_TTL_MINUTES = "1440"
+
 [[d1_databases]]
 binding = "DB"
 database_name = "supplementstack-production"
