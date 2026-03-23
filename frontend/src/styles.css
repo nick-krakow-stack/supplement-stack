@@ -42,10 +42,6 @@
     @apply mb-6 pb-4 border-b border-gray-200;
   }
 
-  .grid {
-    @apply grid grid-cols-1 md:grid-cols-3 gap-4;
-  }
-
   .card {
     @apply bg-white rounded-xl shadow-sm border border-gray-200 p-6;
   }
