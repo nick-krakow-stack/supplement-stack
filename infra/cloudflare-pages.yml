@@ -1,0 +1,6 @@
+name: supplementstack
+framework: vite
+build_command: npm run build
+output_directory: dist
+root_directory: frontend
+deployment_branch: rebuild-main
