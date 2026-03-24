@@ -3,7 +3,6 @@ import { handle } from 'hono/cloudflare-pages'
 import { cors } from 'hono/cors'
 import { sign, verify } from 'hono/jwt'
 import type { Context } from 'hono'
-import { z } from 'zod'
 
 type Env = {
   DB: D1Database
@@ -140,76 +139,6 @@ type DemoSessionRow = {
 
 type CountRow = { count: number }
 
-// ---------------------------------------------------------------------------
-// Zod schemas
-// ---------------------------------------------------------------------------
-
-const registerSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(8),
-  age: z.number().optional(),
-  gender: z.string().optional(),
-  weight: z.number().optional(),
-  diet: z.string().optional(),
-  goals: z.string().optional(),
-  guideline_source: z.string().optional(),
-})
-
-const loginSchema = z.object({ email: z.string().email(), password: z.string() })
-
-const updateProfileSchema = z.object({
-  age: z.number().optional(),
-  gender: z.string().optional(),
-  weight: z.number().optional(),
-  diet: z.string().optional(),
-  goals: z.string().optional(),
-  guideline_source: z.string().optional(),
-})
-
-const updateIngredientSchema = z.object({
-  name: z.string().optional(),
-  unit: z.string().optional(),
-  description: z.string().optional(),
-  hypo_symptoms: z.string().optional(),
-  hyper_symptoms: z.string().optional(),
-  external_url: z.string().optional(),
-})
-
-const synonymSchema = z.object({ synonym: z.string().min(1) })
-
-const formSchema = z.object({
-  name: z.string().min(1),
-  comment: z.string().optional(),
-  tags: z.string().optional(),
-  score: z.number().optional(),
-})
-
-const recommendationSchema = z.object({
-  ingredient_id: z.number(),
-  product_id: z.number(),
-  type: z.enum(['recommended', 'alternative']),
-})
-
-const updateProductSchema = z.object({
-  name: z.string().optional(),
-  brand: z.string().optional(),
-  form: z.string().optional(),
-  price: z.number().optional(),
-  shop_link: z.string().optional(),
-  image_url: z.string().optional(),
-})
-
-const productStatusSchema = z.object({
-  moderation_status: z.enum(['pending', 'approved', 'rejected']).optional(),
-  visibility: z.enum(['public', 'hidden']).optional(),
-})
-
-const updateStackSchema = z.object({
-  name: z.string().optional(),
-  product_ids: z.array(z.object({ id: z.number(), quantity: z.number().optional() })).optional(),
-})
-
-const wishlistSchema = z.object({ product_id: z.number() })
 
 // ---------------------------------------------------------------------------
 // Routes
@@ -218,9 +147,11 @@ const wishlistSchema = z.object({ product_id: z.number() })
 // POST /api/auth/register
 app.post('/api/auth/register', async (c) => {
   const body = await c.req.json()
-  const parsed = registerSchema.safeParse(body)
-  if (!parsed.success) return c.json({ error: parsed.error.format() }, 400)
-  const data = parsed.data
+  if (!body.email || typeof body.email !== 'string' || !body.email.includes('@'))
+    return c.json({ error: 'Valid email required' }, 400)
+  if (!body.password || typeof body.password !== 'string' || body.password.length < 8)
+    return c.json({ error: 'Password must be at least 8 characters' }, 400)
+  const data = body as { email: string; password: string; age?: number; gender?: string; weight?: number; diet?: string; goals?: string; guideline_source?: string }
 
   const existing = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(data.email).first<{ id: number }>()
   if (existing) return c.json({ error: 'E-Mail already exists' }, 409)
@@ -250,9 +181,9 @@ app.post('/api/auth/register', async (c) => {
 // POST /api/auth/login
 app.post('/api/auth/login', async (c) => {
   const body = await c.req.json()
-  const parsed = loginSchema.safeParse(body)
-  if (!parsed.success) return c.json({ error: parsed.error.format() }, 400)
-  const data = parsed.data
+  if (!body.email || typeof body.email !== 'string') return c.json({ error: 'Email required' }, 400)
+  if (!body.password || typeof body.password !== 'string') return c.json({ error: 'Password required' }, 400)
+  const data = body as { email: string; password: string }
 
   const user = await c.env.DB.prepare('SELECT * FROM users WHERE email = ?').bind(data.email).first<UserRow>()
   if (!user) return c.json({ error: 'Invalid credentials' }, 401)
@@ -297,9 +228,7 @@ app.put('/api/me', async (c) => {
   if (authErr) return authErr
   const user = c.get('user')
   const body = await c.req.json()
-  const parsed = updateProfileSchema.safeParse(body)
-  if (!parsed.success) return c.json({ error: parsed.error.format() }, 400)
-  const data = parsed.data
+  const data = body as { age?: number; gender?: string; weight?: number; diet?: string; goals?: string; guideline_source?: string }
   await c.env.DB.prepare(`
     UPDATE users SET
       age = COALESCE(?, age),
@@ -407,9 +336,7 @@ app.put('/api/ingredients/:id', async (c) => {
   const ingredient = await c.env.DB.prepare('SELECT id FROM ingredients WHERE id = ?').bind(id).first()
   if (!ingredient) return c.json({ error: 'Not found' }, 404)
   const body = await c.req.json()
-  const parsed = updateIngredientSchema.safeParse(body)
-  if (!parsed.success) return c.json({ error: parsed.error.format() }, 400)
-  const data = parsed.data
+  const data = body as { name?: string; unit?: string; description?: string; hypo_symptoms?: string; hyper_symptoms?: string; external_url?: string }
   await c.env.DB.prepare(`
     UPDATE ingredients SET
       name = COALESCE(?, name),
@@ -442,11 +369,11 @@ app.post('/api/ingredients/:id/synonyms', async (c) => {
   const ingredient = await c.env.DB.prepare('SELECT id FROM ingredients WHERE id = ?').bind(id).first()
   if (!ingredient) return c.json({ error: 'Not found' }, 404)
   const body = await c.req.json()
-  const parsed = synonymSchema.safeParse(body)
-  if (!parsed.success) return c.json({ error: parsed.error.format() }, 400)
+  if (!body.synonym || typeof body.synonym !== 'string' || body.synonym.trim().length === 0)
+    return c.json({ error: 'synonym is required' }, 400)
   const result = await c.env.DB.prepare(
     'INSERT INTO ingredient_synonyms (ingredient_id, synonym) VALUES (?, ?)'
-  ).bind(id, parsed.data.synonym).run()
+  ).bind(id, body.synonym).run()
   return c.json({ id: result.meta.last_row_id }, 201)
 })
 
@@ -476,9 +403,9 @@ app.post('/api/ingredients/:id/forms', async (c) => {
   const ingredient = await c.env.DB.prepare('SELECT id FROM ingredients WHERE id = ?').bind(id).first()
   if (!ingredient) return c.json({ error: 'Not found' }, 404)
   const body = await c.req.json()
-  const parsed = formSchema.safeParse(body)
-  if (!parsed.success) return c.json({ error: parsed.error.format() }, 400)
-  const data = parsed.data
+  if (!body.name || typeof body.name !== 'string' || body.name.trim().length === 0)
+    return c.json({ error: 'name is required' }, 400)
+  const data = body as { name: string; comment?: string; tags?: string; score?: number }
   const result = await c.env.DB.prepare(
     'INSERT INTO ingredient_forms (ingredient_id, name, comment, tags, score) VALUES (?, ?, ?, ?, ?)'
   ).bind(id, data.name, data.comment ?? null, data.tags ?? null, data.score ?? 0).run()
@@ -523,9 +450,9 @@ app.post('/api/recommendations', async (c) => {
   const admErr = requireAdmin(c)
   if (admErr) return admErr
   const body = await c.req.json()
-  const parsed = recommendationSchema.safeParse(body)
-  if (!parsed.success) return c.json({ error: parsed.error.format() }, 400)
-  const data = parsed.data
+  if (!body.ingredient_id || !body.product_id) return c.json({ error: 'ingredient_id and product_id are required' }, 400)
+  if (!['recommended', 'alternative'].includes(body.type as string)) return c.json({ error: 'type must be recommended or alternative' }, 400)
+  const data = body as { ingredient_id: number; product_id: number; type: string }
   const ingredient = await c.env.DB.prepare('SELECT id FROM ingredients WHERE id = ?').bind(data.ingredient_id).first()
   if (!ingredient) return c.json({ error: 'Ingredient not found' }, 404)
   const product = await c.env.DB.prepare('SELECT id FROM products WHERE id = ?').bind(data.product_id).first()
@@ -632,9 +559,7 @@ app.put('/api/products/:id', async (c) => {
   if (!product) return c.json({ error: 'Not found' }, 404)
   if (user.role !== 'admin') return c.json({ error: 'Forbidden' }, 403)
   const body = await c.req.json()
-  const parsed = updateProductSchema.safeParse(body)
-  if (!parsed.success) return c.json({ error: parsed.error.format() }, 400)
-  const data = parsed.data
+  const data = body as { name?: string; brand?: string; form?: string; price?: number; shop_link?: string; image_url?: string }
   await c.env.DB.prepare(`
     UPDATE products SET
       name = COALESCE(?, name),
@@ -667,9 +592,11 @@ app.put('/api/products/:id/status', async (c) => {
   const product = await c.env.DB.prepare('SELECT id FROM products WHERE id = ?').bind(id).first()
   if (!product) return c.json({ error: 'Not found' }, 404)
   const body = await c.req.json()
-  const parsed = productStatusSchema.safeParse(body)
-  if (!parsed.success) return c.json({ error: parsed.error.format() }, 400)
-  const data = parsed.data
+  if (body.moderation_status && !['pending', 'approved', 'rejected'].includes(body.moderation_status as string))
+    return c.json({ error: 'Invalid moderation_status' }, 400)
+  if (body.visibility && !['public', 'hidden'].includes(body.visibility as string))
+    return c.json({ error: 'Invalid visibility' }, 400)
+  const data = body as { moderation_status?: string; visibility?: string }
   await c.env.DB.prepare(`
     UPDATE products SET
       moderation_status = COALESCE(?, moderation_status),
@@ -773,9 +700,7 @@ app.put('/api/stacks/:id', async (c) => {
   if (!stack) return c.json({ error: 'Not found' }, 404)
   if (stack.user_id !== user.userId && user.role !== 'admin') return c.json({ error: 'Forbidden' }, 403)
   const body = await c.req.json()
-  const parsed = updateStackSchema.safeParse(body)
-  if (!parsed.success) return c.json({ error: parsed.error.format() }, 400)
-  const data = parsed.data
+  const data = body as { name?: string; product_ids?: Array<{ id: number; quantity?: number }> }
   if (data.name) {
     await c.env.DB.prepare('UPDATE stacks SET name = ? WHERE id = ?').bind(data.name, id).run()
   }
@@ -834,9 +759,8 @@ app.post('/api/wishlist', async (c) => {
   if (authErr) return authErr
   const user = c.get('user')
   const body = await c.req.json()
-  const parsed = wishlistSchema.safeParse(body)
-  if (!parsed.success) return c.json({ error: parsed.error.format() }, 400)
-  const { product_id } = parsed.data
+  if (!body.product_id || typeof body.product_id !== 'number') return c.json({ error: 'product_id is required' }, 400)
+  const { product_id } = body as { product_id: number }
   const product = await c.env.DB.prepare('SELECT id FROM products WHERE id = ?').bind(product_id).first()
   if (!product) return c.json({ error: 'Product not found' }, 404)
   try {
