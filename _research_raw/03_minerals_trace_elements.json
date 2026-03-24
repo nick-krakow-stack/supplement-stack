@@ -1,0 +1,1326 @@
+[
+  {
+    "name": "Magnesium",
+    "category": "mineral",
+    "unit": "mg",
+    "description": "Magnesium ist ein essenzielles Makromineral, das an über 300 enzymatischen Reaktionen im Körper beteiligt ist. Es spielt eine zentrale Rolle in der Energieproduktion (ATP-Synthese), der Proteinsynthese, der Muskelfunktion, der Nervenübertragung und der Regulierung des Blutzuckerspiegels. Magnesium ist zudem wichtig für die Knochen- und Zahnstruktur sowie für den Herzrhythmus. Ein Großteil der Bevölkerung nimmt laut Studien nicht ausreichend Magnesium über die Nahrung auf.",
+    "timing": "flexible",
+    "upper_limit": 250,
+    "upper_limit_unit": "mg",
+    "upper_limit_note": "Der UL von 250 mg/Tag gilt ausschließlich für supplementales Magnesium (EFSA/BfR). Magnesium aus der Nahrung unterliegt keinem festgelegten UL.",
+    "hypo_symptoms": "Muskelkrämpfe, Zittern, Schlafstörungen, Erschöpfung, Reizbarkeit, Herzrhythmusstörungen, Kopfschmerzen, Taubheitsgefühle, erhöhter Blutdruck, Verstopfung",
+    "hyper_symptoms": "Durchfall, Übelkeit, Erbrechen (hauptsächlich durch osmotischen Effekt bei Supplementen), bei sehr hohen Dosen: Blutdruckabfall, Muskelschwäche, Atemlähmung (nur bei i.v.-Gabe oder extremer Überdosierung)",
+    "external_url": "https://www.dge.de/wissenschaft/referenzwerte/magnesium/",
+    "synonyms": ["Mg", "Magnesiumsalz", "Magnesio", "Magnésium"],
+    "forms": [
+      {
+        "name": "Magnesiumcitrat",
+        "bioavailability": "high",
+        "timing": "morning",
+        "is_recommended": 1,
+        "score": 85,
+        "comment": "Sehr gut bioverfügbar und gut löslich in Wasser. Empfehlung: Morgens einnehmen, da Citrat die Verdauung anregen kann und bei empfindlichen Personen leicht abführend wirkt. Ideal für tagsüber zur Energie- und Muskelunterstützung."
+      },
+      {
+        "name": "Magnesiumbisglycinat",
+        "bioavailability": "very_high",
+        "timing": "evening",
+        "is_recommended": 1,
+        "score": 95,
+        "comment": "Die am besten verträgliche Form – als Chelat an Glycin gebunden. Kaum abführende Wirkung, sehr magenfreundlich. Empfehlung: Abends einnehmen, da Glycin beruhigend wirkt und die Schlafqualität fördern kann. Bestens für Personen mit empfindlichem Magen."
+      },
+      {
+        "name": "Magnesiumglycinat",
+        "bioavailability": "very_high",
+        "timing": "evening",
+        "is_recommended": 1,
+        "score": 93,
+        "comment": "Synonymbezeichnung für Magnesiumbisglycinat. Identische Eigenschaften: hohe Bioverfügbarkeit, sehr gute Magenverträglichkeit, beruhigender Effekt durch Glycin. Abendliche Einnahme empfohlen."
+      },
+      {
+        "name": "Magnesiummalat",
+        "bioavailability": "high",
+        "timing": "morning",
+        "is_recommended": 1,
+        "score": 80,
+        "comment": "Verbindung aus Magnesium und Äpfelsäure (Malat). Malat ist ein Zwischenprodukt des Citratzyklus und kann die Energieproduktion unterstützen. Gut geeignet für aktive Personen und bei Fibromyalgie diskutiert. Eher morgens oder tagsüber einzunehmen."
+      },
+      {
+        "name": "Magnesiumtaurat",
+        "bioavailability": "high",
+        "timing": "evening",
+        "is_recommended": 1,
+        "score": 82,
+        "comment": "Verbindung aus Magnesium und Taurin. Taurin wirkt kardioprotektiv und beruhigend auf das Nervensystem. Besonders interessant für Herzgesundheit und Stressreduktion. Abends oder nach dem Training einzunehmen."
+      },
+      {
+        "name": "Magnesium-L-Threonat",
+        "bioavailability": "high",
+        "timing": "evening",
+        "is_recommended": 1,
+        "score": 88,
+        "comment": "Einzige Form, die nachweislich die Blut-Hirn-Schranke überquert und den Magnesiumspiegel im Gehirn erhöht (Studienbasis: MIT, Ates et al. 2019). Eingesetzt für kognitive Funktion, Gedächtnis und neuroprotektive Effekte. Höchster Preis aller Magnesiumformen. Abends empfohlen."
+      },
+      {
+        "name": "Magnesiumoxid",
+        "bioavailability": "low",
+        "timing": "flexible",
+        "is_recommended": -1,
+        "score": 30,
+        "comment": "Sehr hoher Magnesiumgehalt pro Gramm (ca. 60 %), aber schlechte Bioverfügbarkeit (unter 4 % laut Studien). Wird im Körper kaum aufgenommen und wirkt hauptsächlich abführend. Nicht zur Supplementierung bei Magnesiummangel empfohlen. Günstig, aber ineffektiv."
+      },
+      {
+        "name": "Magnesiumsulfat",
+        "bioavailability": "medium",
+        "timing": "flexible",
+        "is_recommended": 0,
+        "score": 40,
+        "comment": "Bekannt als Bittersalz oder Epsom-Salz. Oral: stark abführende Wirkung, daher kaum zur oralen Supplementierung geeignet. Transdermale Anwendung (Bäder) ist populär, wissenschaftliche Evidenz für relevante Absorption durch die Haut ist jedoch begrenzt."
+      },
+      {
+        "name": "Magnesiumcarbonat",
+        "bioavailability": "low",
+        "timing": "with_meal",
+        "is_recommended": -1,
+        "score": 25,
+        "comment": "Mäßig bioverfügbar, wird durch Magensäure erst in lösliche Formen umgewandelt. Wirkt stark antazid und kann bei regelmäßiger Einnahme die Magensäure neutralisieren. Nicht empfohlen als primäre Magnesiumquelle. Am besten mit Mahlzeiten."
+      },
+      {
+        "name": "Magnesiumhydroxid",
+        "bioavailability": "low",
+        "timing": "flexible",
+        "is_recommended": -1,
+        "score": 20,
+        "comment": "Bekannt als Magnesia (z. B. Milk of Magnesia). Primär als Abführmittel und Antazidum eingesetzt, nicht zur Behebung eines Magnesiummangels geeignet. Geringe Bioverfügbarkeit für systemische Magnesiumversorgung."
+      }
+    ],
+    "dosage_guidelines": [
+      {
+        "source": "DGE",
+        "source_url": "https://www.dge.de/wissenschaft/referenzwerte/magnesium/",
+        "source_title": "DGE Referenzwerte für Magnesium",
+        "population": "adult_male",
+        "dose_min": 350,
+        "dose_max": 350,
+        "unit": "mg",
+        "frequency": "daily",
+        "timing": "flexible",
+        "notes": "Empfehlung der Deutschen Gesellschaft für Ernährung für Männer ab 25 Jahren",
+        "is_default": 1
+      },
+      {
+        "source": "DGE",
+        "source_url": "https://www.dge.de/wissenschaft/referenzwerte/magnesium/",
+        "source_title": "DGE Referenzwerte für Magnesium",
+        "population": "adult_female",
+        "dose_min": 300,
+        "dose_max": 300,
+        "unit": "mg",
+        "frequency": "daily",
+        "timing": "flexible",
+        "notes": "Empfehlung der DGE für Frauen ab 25 Jahren",
+        "is_default": 0
+      },
+      {
+        "source": "study",
+        "source_url": "https://doi.org/10.3390/nu7010201",
+        "source_title": "Subclinical Magnesium Deficiency: a principal driver of cardiovascular disease and a public health crisis (DiNicolantonio et al., Nutrients 2018)",
+        "population": "adult",
+        "dose_min": 300,
+        "dose_max": 400,
+        "unit": "mg",
+        "frequency": "daily",
+        "timing": "split",
+        "notes": "Geteilte Einnahme (morgens und abends) empfohlen zur besseren Absorption und Minimierung gastrointestinaler Nebenwirkungen",
+        "is_default": 0
+      },
+      {
+        "source": "study",
+        "source_url": "https://doi.org/10.1016/j.neuron.2010.09.031",
+        "source_title": "Enhancement of Learning and Memory by Elevating Brain Magnesium (Slutsky et al., Neuron 2010) – Basis für Mg-L-Threonat",
+        "population": "adult",
+        "dose_min": 1500,
+        "dose_max": 2000,
+        "unit": "mg",
+        "frequency": "daily",
+        "timing": "evening",
+        "notes": "Nur für Magnesium-L-Threonat: höhere Dosierung erforderlich aufgrund des geringeren elementaren Magnesiumanteils pro Kapsel. Entspricht ca. 144–200 mg elementarem Magnesium.",
+        "is_default": 0
+      }
+    ],
+    "interactions": [
+      {
+        "interacts_with": "Vitamin D",
+        "type": "synergy",
+        "severity": "medium",
+        "comment": "Magnesium ist essenziell für die Aktivierung von Vitamin D. Ohne ausreichend Magnesium kann Vitamin D nicht in seine aktive Form (Calcitriol) umgewandelt werden. Gleichzeitige Einnahme sinnvoll.",
+        "mechanism": "Magnesium-abhängige Enzyme aktivieren 25(OH)D zu 1,25(OH)2D (Calcitriol)"
+      },
+      {
+        "interacts_with": "Calcium",
+        "type": "competition",
+        "severity": "medium",
+        "comment": "Calcium und Magnesium konkurrieren um den gleichen Transportmechanismus im Darm. Verhältnis Ca:Mg sollte idealerweise 2:1 nicht überschreiten. Zeitlich getrennte Einnahme (mind. 2 Stunden Abstand) empfohlen.",
+        "mechanism": "Kompetitive Absorption über TRPM7-Kanäle und divalente Metalltransporter im Dünndarm"
+      },
+      {
+        "interacts_with": "Zink",
+        "type": "competition",
+        "severity": "low",
+        "comment": "Hochdosiertes Zink (>142 mg/Tag) kann die Magnesiumabsorption beeinträchtigen. Bei üblichen Supplementierungsdosen kein relevantes Problem.",
+        "mechanism": "Kompetition um divalente Metalltransporter (DMT1) bei sehr hohen Zinkdosen"
+      },
+      {
+        "interacts_with": "Antibiotika (Tetracycline, Fluorchinolone)",
+        "type": "inhibition",
+        "severity": "high",
+        "comment": "Magnesium kann die Absorption bestimmter Antibiotika erheblich reduzieren. Einnahme mind. 2 Stunden vor oder 4–6 Stunden nach dem Antibiotikum.",
+        "mechanism": "Chelat-Bildung zwischen Magnesiumionen und Antibiotika-Molekülen im GI-Trakt"
+      },
+      {
+        "interacts_with": "Protonenpumpenhemmer (PPI)",
+        "type": "inhibition",
+        "severity": "medium",
+        "comment": "Langfristige PPI-Einnahme (>1 Jahr) kann zu Hypomagnesiämie führen. Magnesiumspiegel sollte bei Langzeit-PPI-Therapie regelmäßig kontrolliert werden.",
+        "mechanism": "PPIs hemmen aktive Magnesiumabsorption im Dünndarm über TRPM6/7-Kanäle"
+      }
+    ]
+  },
+  {
+    "name": "Calcium",
+    "category": "mineral",
+    "unit": "mg",
+    "description": "Calcium ist das mengenmäßig häufigste Mineral im menschlichen Körper. Etwa 99 % sind in Knochen und Zähnen gespeichert. Das verbleibende 1 % erfüllt lebenswichtige Funktionen: Muskelkontraktion, Nervenübertragung, Blutgerinnung, Zellkommunikation und Enzymaktivität. Eine ausreichende Calciumversorgung in der Kindheit und im jungen Erwachsenenalter ist entscheidend für die Knochengesundheit und die Prävention von Osteoporose im Alter.",
+    "timing": "with_meal",
+    "upper_limit": 2500,
+    "upper_limit_unit": "mg",
+    "upper_limit_note": "UL gilt für Gesamtcalciumzufuhr (Nahrung + Supplements). EFSA: 2500 mg/Tag für Erwachsene.",
+    "hypo_symptoms": "Muskelkrämpfe, Tetanie, Taubheitsgefühle, Kribbeln in Händen und Füßen, Herzrhythmusstörungen, brüchige Knochen und Zähne, Osteoporose",
+    "hyper_symptoms": "Verstopfung, Übelkeit, Nierensteine (Calciumoxalat), Weichteilverkalkungen, eingeschränkte Nierenfunktion, Hypercalcämie (bei sehr hoher Zufuhr)",
+    "external_url": "https://www.dge.de/wissenschaft/referenzwerte/calcium/",
+    "synonyms": ["Ca", "Calciumsalz", "Kalk", "Kalzium"],
+    "forms": [
+      {
+        "name": "Calciumcitrat",
+        "bioavailability": "high",
+        "timing": "flexible",
+        "is_recommended": 1,
+        "score": 90,
+        "comment": "Beste Bioverfügbarkeit unter allen Calciumformen, besonders gut für Personen mit reduzierter Magensäureproduktion (ältere Menschen, PPI-Einnahme). Kann unabhängig von Mahlzeiten eingenommen werden."
+      },
+      {
+        "name": "Calciumcarbonat",
+        "bioavailability": "medium",
+        "timing": "with_meal",
+        "is_recommended": 0,
+        "score": 60,
+        "comment": "Günstigste und häufigste Calciumform. Benötigt Magensäure zur Auflösung – daher zwingend mit einer Mahlzeit einzunehmen. Bei Magensäuremangel oder PPI-Einnahme deutlich schlechtere Absorption. Kann Blähungen und Verstopfung verursachen."
+      },
+      {
+        "name": "Calciumgluconat",
+        "bioavailability": "medium",
+        "timing": "with_meal",
+        "is_recommended": 0,
+        "score": 55,
+        "comment": "Niedriger elementarer Calciumgehalt (ca. 9 %). Gut verträglich, aber es werden viele Kapseln/Tabletten benötigt. Wird oft in Brausetabletten verwendet."
+      },
+      {
+        "name": "Calciumlactat",
+        "bioavailability": "medium",
+        "timing": "flexible",
+        "is_recommended": 0,
+        "score": 60,
+        "comment": "Besser löslich als Carbonat, etwas unabhängiger von Magensäure. Gut verträglich, mittlerer elementarer Calciumgehalt (ca. 13 %)."
+      },
+      {
+        "name": "Hydroxyapatit (MCHC)",
+        "bioavailability": "high",
+        "timing": "with_meal",
+        "is_recommended": 1,
+        "score": 85,
+        "comment": "Mikrokristalliner Hydroxyapatit aus Knochenmark. Enthält neben Calcium auch Phosphor, Kollagen und Wachstumsfaktoren. Studien zeigen gute Wirkung auf Knochendichte. Natürliche, gut bioverfügbare Form."
+      }
+    ],
+    "dosage_guidelines": [
+      {
+        "source": "DGE",
+        "source_url": "https://www.dge.de/wissenschaft/referenzwerte/calcium/",
+        "source_title": "DGE Referenzwerte für Calcium",
+        "population": "adult",
+        "dose_min": 1000,
+        "dose_max": 1000,
+        "unit": "mg",
+        "frequency": "daily",
+        "timing": "with_meal",
+        "notes": "Inkl. Nahrungsquellen. Supplements nur bei unzureichender Nahrungszufuhr empfohlen. Einnahme aufteilen (max. 500 mg pro Einnahme) für bessere Absorption.",
+        "is_default": 1
+      },
+      {
+        "source": "study",
+        "source_url": "https://doi.org/10.1056/NEJMoa043220",
+        "source_title": "Calcium plus Vitamin D Supplementation and the Risk of Fractures (Jackson et al., NEJM 2006)",
+        "population": "adult_female",
+        "dose_min": 1000,
+        "dose_max": 1200,
+        "unit": "mg",
+        "frequency": "daily",
+        "timing": "with_meal",
+        "notes": "Kombination mit Vitamin D3 für optimale Knochengesundheit. Gesamtzufuhr (Nahrung + Supplement). Studie zeigte reduziertes Hüftfrakturrisiko bei postmenopausalen Frauen.",
+        "is_default": 0
+      }
+    ],
+    "interactions": [
+      {
+        "interacts_with": "Magnesium",
+        "type": "competition",
+        "severity": "medium",
+        "comment": "Kompetitive Absorption: Ca und Mg teilen die gleichen Transporter. Verhältnis Ca:Mg von 2:1 wird empfohlen. Zeitlich getrennte Einnahme optimiert die Absorption beider Mineralien.",
+        "mechanism": "TRPM7 und weitere divalente Metallionentransporter im Dünndarm"
+      },
+      {
+        "interacts_with": "Eisen",
+        "type": "inhibition",
+        "severity": "medium",
+        "comment": "Calcium hemmt die Eisenabsorption. Calcium-Supplements und Eisenpräparate nicht gleichzeitig einnehmen. Mind. 2 Stunden Abstand einhalten.",
+        "mechanism": "Calcium hemmt sowohl häm- als auch nicht-häm-Eisentransport im Duodenum"
+      },
+      {
+        "interacts_with": "Vitamin D",
+        "type": "synergy",
+        "severity": "medium",
+        "comment": "Vitamin D ist essenziell für die intestinale Calciumabsorption. Ohne ausreichend Vitamin D wird nur 10–15 % des Calciums aus der Nahrung aufgenommen (mit Vitamin D bis zu 40 %).",
+        "mechanism": "1,25(OH)2D3 induziert Calbindin-Synthese und stimuliert aktiven Ca-Transport im Duodenum"
+      },
+      {
+        "interacts_with": "Zink",
+        "type": "inhibition",
+        "severity": "low",
+        "comment": "Hohe Calciummengen können die Zinkabsorption beeinträchtigen. Zeitlich getrennte Einnahme empfohlen.",
+        "mechanism": "Kompetition um divalente Metalltransporter"
+      }
+    ]
+  },
+  {
+    "name": "Kalium",
+    "category": "mineral",
+    "unit": "mg",
+    "description": "Kalium ist das wichtigste intrazelluläre Kation des menschlichen Körpers. Es reguliert den Flüssigkeitshaushalt, das Säure-Basen-Gleichgewicht, die Nerven- und Muskelreizleitung sowie den Blutdruck. Kalium wirkt dem blutdruckerhöhenden Effekt von Natrium entgegen. Eine kaliumreiche Ernährung (viel Obst und Gemüse) ist mit reduziertem Schlaganfall- und Herzrisiko assoziiert.",
+    "timing": "with_meal",
+    "upper_limit": 3700,
+    "upper_limit_unit": "mg",
+    "upper_limit_note": "EFSA Adequate Intake (AI): 3500 mg/Tag. Kein formaler UL etabliert, da Nierenfunktion überschüssiges Kalium bei gesunden Personen ausscheidet. Bei Nierenerkrankungen strenge ärztliche Kontrolle erforderlich.",
+    "hypo_symptoms": "Muskelschwäche, Muskelkrämpfe, Herzrhythmusstörungen (Arrhythmien), Verstopfung, Müdigkeit, Kribbeln, erhöhter Blutdruck",
+    "hyper_symptoms": "Herzrhythmusstörungen (gefährlich!), Muskelschwäche, Lähmungen, Übelkeit – Hyperkaliämie bei Niereninsuffizienz lebensbedrohlich",
+    "external_url": "https://www.dge.de/wissenschaft/referenzwerte/kalium/",
+    "synonyms": ["K", "Potassium", "Kaliumsalz"],
+    "forms": [
+      {
+        "name": "Kaliumcitrat",
+        "bioavailability": "high",
+        "timing": "with_meal",
+        "is_recommended": 1,
+        "score": 88,
+        "comment": "Sehr gut verträgliche und lösliche Form. Hat zusätzlich alkalisierenden Effekt auf den Harn, was Nierensteinen (Calciumoxalat) vorbeugen kann. Bevorzugte Form bei Supplementierung. Mit Mahlzeiten einnehmen."
+      },
+      {
+        "name": "Kaliumchlorid",
+        "bioavailability": "high",
+        "timing": "with_meal",
+        "is_recommended": 0,
+        "score": 70,
+        "comment": "Gute Bioverfügbarkeit, häufig als Salzersatz verwendet. Kann in hohen Dosen Magenbeschwerden verursachen. Mit ausreichend Flüssigkeit und Mahlzeiten einnehmen."
+      },
+      {
+        "name": "Kaliumgluconat",
+        "bioavailability": "high",
+        "timing": "with_meal",
+        "is_recommended": 1,
+        "score": 80,
+        "comment": "Gut verträglich, milde Form. Häufig in Nahrungsergänzungsmitteln verwendete Standardform. Empfohlen bei leichtem Kaliummangel."
+      },
+      {
+        "name": "Kaliumbicarbonat",
+        "bioavailability": "high",
+        "timing": "with_meal",
+        "is_recommended": 0,
+        "score": 65,
+        "comment": "Alkalisierende Wirkung, kann Säure-Basen-Gleichgewicht positiv beeinflussen. Geeignet bei saurer Ernährung und erhöhter sportlicher Aktivität (Pufferkapazität)."
+      }
+    ],
+    "dosage_guidelines": [
+      {
+        "source": "DGE",
+        "source_url": "https://www.dge.de/wissenschaft/referenzwerte/kalium/",
+        "source_title": "DGE Referenzwerte für Kalium",
+        "population": "adult",
+        "dose_min": 4000,
+        "dose_max": 4000,
+        "unit": "mg",
+        "frequency": "daily",
+        "timing": "with_meal",
+        "notes": "Schätzwert für Erwachsene. Hauptsächlich über Nahrung (Obst, Gemüse, Hülsenfrüchte, Nüsse). Supplements in EU auf max. 1000 mg/Tagesdosis beschränkt.",
+        "is_default": 1
+      },
+      {
+        "source": "study",
+        "source_url": "https://doi.org/10.1136/bmj.e2934",
+        "source_title": "Effect of increased potassium intake on cardiovascular risk factors (Aburto et al., BMJ 2013)",
+        "population": "adult",
+        "dose_min": 3500,
+        "dose_max": 4700,
+        "unit": "mg",
+        "frequency": "daily",
+        "timing": "with_meal",
+        "notes": "Meta-Analyse: Erhöhte Kaliumzufuhr senkt systolischen Blutdruck um ca. 3,5 mmHg und Schlaganfallrisiko. Bevorzugt über Ernährung decken.",
+        "is_default": 0
+      }
+    ],
+    "interactions": [
+      {
+        "interacts_with": "Natrium",
+        "type": "antagonism",
+        "severity": "medium",
+        "comment": "Kalium und Natrium wirken entgegengesetzt auf den Blutdruck. Kaliumreiche Ernährung gleicht die blutdruckerhöhende Wirkung von Natrium aus. Optimales Verhältnis Na:K sollte unter 1 liegen.",
+        "mechanism": "Na/K-ATPase reguliert intrazelluläre Konzentrationen; Kalium fördert renale Natriumausscheidung"
+      },
+      {
+        "interacts_with": "Magnesium",
+        "type": "synergy",
+        "severity": "medium",
+        "comment": "Magnesiummangel kann Kaliummangel begünstigen, da Magnesium für die Na/K-ATPase und renale Kaliumretention notwendig ist. Bei Hypokaliämie immer auch Magnesiumstatus prüfen.",
+        "mechanism": "Magnesium aktiviert Na/K-ATPase und reguliert renal-tubuläre Kaliumsekretion"
+      },
+      {
+        "interacts_with": "ACE-Hemmer / Kaliumsparende Diuretika",
+        "type": "synergy",
+        "severity": "high",
+        "comment": "Medikamente wie ACE-Hemmer, ARBs oder kaliumsparende Diuretika (Spironolacton) erhöhen Kaliumspiegel. Zusätzliche Supplementierung kann zu gefährlicher Hyperkaliämie führen. Ärztliche Absprache zwingend erforderlich.",
+        "mechanism": "Summationseffekt auf renale Kaliumretention"
+      }
+    ]
+  },
+  {
+    "name": "Natrium",
+    "category": "mineral",
+    "unit": "mg",
+    "description": "Natrium ist das wichtigste extrazelluläre Kation und unentbehrlich für die Regulierung des Flüssigkeitshaushalts, des Blutdrucks, des Säure-Basen-Gleichgewichts und der Nerven- und Muskelreizleitung. In westlichen Ernährungsweisen ist eine Unterversorgung selten – die meisten Menschen konsumieren durch verarbeitete Lebensmittel und Kochsalz deutlich zu viel Natrium.",
+    "timing": "with_meal",
+    "upper_limit": 2300,
+    "upper_limit_unit": "mg",
+    "upper_limit_note": "WHO-Empfehlung: max. 2000 mg Natrium/Tag (entspricht ca. 5 g Kochsalz). DGE-Richtwert: max. 6 g Kochsalz/Tag (entspricht 2400 mg Na). Ein formaler UL ist nicht festgelegt, da Natrium nahrungsimmanent ist.",
+    "hypo_symptoms": "Übelkeit, Kopfschmerzen, Verwirrtheit, Krämpfe, Bewusstlosigkeit (Hyponatriämie – v. a. bei übermäßiger Wasseraufnahme bei Ausdauersport), Muskelschwäche",
+    "hyper_symptoms": "Bluthochdruck, erhöhtes Herzerkrankungs- und Schlaganfallrisiko, Wasserretention (Ödeme), erhöhte renale Calciumausscheidung (Knochenverlust)",
+    "external_url": "https://www.dge.de/wissenschaft/referenzwerte/natrium-chlorid-kalium/",
+    "synonyms": ["Na", "Sodium", "Kochsalz (NaCl)", "Natriumchlorid"],
+    "forms": [
+      {
+        "name": "Natriumchlorid",
+        "bioavailability": "very_high",
+        "timing": "with_meal",
+        "is_recommended": 0,
+        "score": 50,
+        "comment": "Kochsalz – wichtigste Natriumquelle. Bei Ausdauersportlern und starkem Schwitzen als Elektrolyt sinnvoll. Für die allgemeine Bevölkerung ist eine Supplementierung kaum erforderlich, da Natrium über die Ernährung ausreichend zugeführt wird."
+      },
+      {
+        "name": "Natriumcitrat",
+        "bioavailability": "very_high",
+        "timing": "pre_workout",
+        "is_recommended": 1,
+        "score": 75,
+        "comment": "Elektrolytform für Sportlergetränke. Wirkt als Puffer (alkalisierend) und kann die sportliche Ausdauerleistung verbessern. Magenfreundlicher als Natriumchlorid in Supplementen."
+      },
+      {
+        "name": "Natriumbicarbonat",
+        "bioavailability": "very_high",
+        "timing": "pre_workout",
+        "is_recommended": 0,
+        "score": 60,
+        "comment": "Backpulver-Komponente. Als Ergänzung im Ausdauersport diskutiert (Pufferkapazität bei Lactatakkumulation). Kann starke Magenprobleme verursachen."
+      }
+    ],
+    "dosage_guidelines": [
+      {
+        "source": "DGE",
+        "source_url": "https://www.dge.de/wissenschaft/referenzwerte/natrium-chlorid-kalium/",
+        "source_title": "DGE Referenzwerte für Natrium, Chlorid und Kalium",
+        "population": "adult",
+        "dose_min": 1500,
+        "dose_max": 2300,
+        "unit": "mg",
+        "frequency": "daily",
+        "timing": "with_meal",
+        "notes": "Mindestzufuhr: 1500 mg/Tag. Richtwert zur Reduzierung: max. 2300 mg/Tag. Durchschnittlicher Konsum in Deutschland liegt bei ca. 3400–4400 mg/Tag – deutlich zu hoch.",
+        "is_default": 1
+      }
+    ],
+    "interactions": [
+      {
+        "interacts_with": "Kalium",
+        "type": "antagonism",
+        "severity": "medium",
+        "comment": "Natrium und Kalium stehen in einem direkten Gleichgewichtsverhältnis. Zu viel Natrium erhöht den Blutdruck, ausreichend Kalium wirkt gegenregulatorisch. Eine ausgewogene Balance ist entscheidend für kardiovaskuläre Gesundheit.",
+        "mechanism": "Na/K-ATPase; renale Regulierung über Aldosteron"
+      },
+      {
+        "interacts_with": "Calcium",
+        "type": "antagonism",
+        "severity": "low",
+        "comment": "Hohe Natriumzufuhr erhöht die renale Calciumausscheidung und kann langfristig die Knochendichte beeinträchtigen.",
+        "mechanism": "Konkurrierende Reabsorption von Na und Ca im renalen Tubulus"
+      }
+    ]
+  },
+  {
+    "name": "Phosphor",
+    "category": "mineral",
+    "unit": "mg",
+    "description": "Phosphor ist nach Calcium das zweithäufigste Mineral im menschlichen Körper. Ca. 85 % befinden sich in Knochen und Zähnen (als Hydroxyapatit). Phosphor ist Bestandteil von DNA, RNA, Phospholipiden (Zellmembranen), ATP (Energieträger) und zahlreichen Enzymen. Ein Mangel ist in westlichen Ländern sehr selten, da Phosphor in nahezu allen Lebensmitteln vorkommt. Eher problematisch ist eine Überversorgung durch Phosphatzusätze in Fertigprodukten.",
+    "timing": "with_meal",
+    "upper_limit": 4000,
+    "upper_limit_unit": "mg",
+    "upper_limit_note": "EFSA UL: 4000 mg/Tag für Erwachsene (inklusive Nahrungsquellen). Ältere Menschen: 3000 mg/Tag empfohlen. Chronisch hohe Zufuhr (>4000 mg) kann Calciumstoffwechsel und Knochendichte negativ beeinflussen.",
+    "hypo_symptoms": "Muskelschwäche, Knochenschmerzen, Appetitlosigkeit, Verwirrtheit, erhöhte Infektanfälligkeit (selten, meist bei Malnutrition oder Nierenerkrankungen)",
+    "hyper_symptoms": "Hyperphosphatämie: Calciumablagerungen in Gefäßen und Weichteilen, erhöhtes kardiovaskuläres Risiko, Störung des Calciumspiegels (Hypokalzämie), Knochenabbau",
+    "external_url": "https://www.dge.de/wissenschaft/referenzwerte/phosphor/",
+    "synonyms": ["P", "Phosphat", "Phosphorus"],
+    "forms": [
+      {
+        "name": "Dicalciumphosphat",
+        "bioavailability": "medium",
+        "timing": "with_meal",
+        "is_recommended": 0,
+        "score": 55,
+        "comment": "Häufig als Trägerstoff in Supplements verwendet. Enthält sowohl Calcium als auch Phosphor. Für reine Phosphorversorgung nicht optimal."
+      },
+      {
+        "name": "Kaliumphosphat",
+        "bioavailability": "high",
+        "timing": "with_meal",
+        "is_recommended": 0,
+        "score": 65,
+        "comment": "Gut bioverfügbare Form, die gleichzeitig Kalium liefert. In medizinischen Anwendungen bei Hypophosphatämie eingesetzt."
+      },
+      {
+        "name": "Natriumphosphat",
+        "bioavailability": "high",
+        "timing": "with_meal",
+        "is_recommended": 0,
+        "score": 60,
+        "comment": "Gut löslich und bioverfügbar. Im Sport manchmal zur kurzfristigen Leistungssteigerung diskutiert (Phosphat-Loading). Als Lebensmittelzusatz (E339) weitverbreitet."
+      }
+    ],
+    "dosage_guidelines": [
+      {
+        "source": "DGE",
+        "source_url": "https://www.dge.de/wissenschaft/referenzwerte/phosphor/",
+        "source_title": "DGE Referenzwerte für Phosphor",
+        "population": "adult",
+        "dose_min": 700,
+        "dose_max": 700,
+        "unit": "mg",
+        "frequency": "daily",
+        "timing": "with_meal",
+        "notes": "Empfehlung DGE für Erwachsene. Da Phosphor in fast allen Lebensmitteln vorkommt, ist eine Supplementierung bei ausgewogener Ernährung praktisch nie notwendig.",
+        "is_default": 1
+      }
+    ],
+    "interactions": [
+      {
+        "interacts_with": "Calcium",
+        "type": "competition",
+        "severity": "medium",
+        "comment": "Ein ungünstiges Ca:P-Verhältnis (zu viel Phosphor, zu wenig Calcium) kann den Knochenabbau fördern. Das optimale Verhältnis Ca:P liegt bei ca. 1:1 bis 2:1.",
+        "mechanism": "Phosphat bindet Calcium und kann Calcitriol-Spiegel sowie Parathormon beeinflussen"
+      },
+      {
+        "interacts_with": "Vitamin D",
+        "type": "synergy",
+        "severity": "medium",
+        "comment": "Vitamin D reguliert die intestinale Phosphatresorption und die renale Phosphatausscheidung. Vitamin-D-Mangel kann zu Phosphatretention und -imbalancen führen.",
+        "mechanism": "1,25(OH)2D3 stimuliert NaPi-IIb-Transporter im Dünndarm"
+      },
+      {
+        "interacts_with": "Zink",
+        "type": "inhibition",
+        "severity": "low",
+        "comment": "Hohe Phosphatzufuhr kann die Zinkabsorption durch Bildung unlöslicher Zink-Phytat-Phosphat-Komplexe beeinträchtigen.",
+        "mechanism": "Bildung unlöslicher Chelatkomplexe im GI-Trakt"
+      }
+    ]
+  },
+  {
+    "name": "Zink",
+    "category": "trace_element",
+    "unit": "mg",
+    "description": "Zink ist ein essenzielles Spurenelement und Kofaktor von über 300 Enzymen. Es ist entscheidend für Immunfunktion, Wundheilung, Proteinsynthese, DNA-Synthese, Zellteilung und Wachstum. Zink spielt zudem eine wichtige Rolle für Haut, Haare, Nägel, Fortpflanzungsfunktion (Testosteron) und Sinneswahrnehmung (Geschmack, Geruch). Eine leichte Unterversorgung ist weltweit verbreitet.",
+    "timing": "with_meal",
+    "upper_limit": 40,
+    "upper_limit_unit": "mg",
+    "upper_limit_note": "EFSA/BfR UL: 40 mg/Tag für Erwachsene. Bei chronischer Einnahme >50 mg/Tag droht Kupfermangel durch kompetitive Absorption. Auf nüchternen Magen kann Zink Übelkeit und Magenreizung verursachen – stets mit Mahlzeit einnehmen.",
+    "hypo_symptoms": "Beeinträchtigte Immunfunktion, Haarausfall, verzögerte Wundheilung, verminderter Geschmacks- und Geruchssinn, Wachstumsstörungen bei Kindern, Akne, brüchige Nägel, Fertilitätsprobleme",
+    "hyper_symptoms": "Übelkeit, Erbrechen, Bauchschmerzen (akut bei hoher Einnahme auf nüchternen Magen), chronisch: Kupfermangel, Immunsuppression, HDL-Cholesterin-Senkung",
+    "external_url": "https://www.dge.de/wissenschaft/referenzwerte/zink/",
+    "synonyms": ["Zn", "Zinc", "Zinksalz"],
+    "forms": [
+      {
+        "name": "Zinkbisglycinat",
+        "bioavailability": "very_high",
+        "timing": "with_meal",
+        "is_recommended": 1,
+        "score": 95,
+        "comment": "Chelat-Form mit Glycin – beste Bioverfügbarkeit und hervorragende Magenverträglichkeit. Wenig bis keine Übelkeit. Bevorzugte Form für Supplementierung. Mit kleiner Mahlzeit einnehmen."
+      },
+      {
+        "name": "Zinkgluconat",
+        "bioavailability": "high",
+        "timing": "with_meal",
+        "is_recommended": 1,
+        "score": 78,
+        "comment": "Gut bioverfügbar, oft in Lutschtabletten gegen Erkältungen verwendet (klinische Studien vorhanden). Gute Verträglichkeit mit Mahlzeiten."
+      },
+      {
+        "name": "Zinkcitrat",
+        "bioavailability": "high",
+        "timing": "with_meal",
+        "is_recommended": 1,
+        "score": 80,
+        "comment": "Gute Bioverfügbarkeit, gut verträgliche Form. Oft in hochwertigen Multivitaminpräparaten verwendet."
+      },
+      {
+        "name": "Zinksulfat",
+        "bioavailability": "medium",
+        "timing": "with_meal",
+        "is_recommended": 0,
+        "score": 55,
+        "comment": "Günstig und gut untersucht, aber gastrointestinale Nebenwirkungen (Übelkeit, Magenreizung) häufiger als bei Chelatformen. Unbedingt mit Mahlzeit einnehmen."
+      },
+      {
+        "name": "Zinkoxid",
+        "bioavailability": "low",
+        "timing": "with_meal",
+        "is_recommended": -1,
+        "score": 25,
+        "comment": "Schlechte Bioverfügbarkeit oral. Häufig in günstigen Multivitaminpräparaten. Für eine effektive Zinkversorgung nicht empfohlen. Topisch in Zinksalben gebräuchlich."
+      },
+      {
+        "name": "Zinkacetat",
+        "bioavailability": "high",
+        "timing": "with_meal",
+        "is_recommended": 0,
+        "score": 72,
+        "comment": "Gute Bioverfügbarkeit, klinisch bei Erkältungen und Morbus Wilson eingesetzt. Verträglichkeit besser als Sulfat."
+      },
+      {
+        "name": "Zinkmonomethionin (OptiZinc)",
+        "bioavailability": "very_high",
+        "timing": "with_meal",
+        "is_recommended": 1,
+        "score": 88,
+        "comment": "Patentierte Verbindung aus Zink und L-Methionin. Sehr hohe Bioverfügbarkeit, exzellente Verträglichkeit. Gut für Personen mit Verdauungsproblemen. Mit Mahlzeit einnehmen."
+      }
+    ],
+    "dosage_guidelines": [
+      {
+        "source": "DGE",
+        "source_url": "https://www.dge.de/wissenschaft/referenzwerte/zink/",
+        "source_title": "DGE Referenzwerte für Zink",
+        "population": "adult_male",
+        "dose_min": 11,
+        "dose_max": 16,
+        "unit": "mg",
+        "frequency": "daily",
+        "timing": "with_meal",
+        "notes": "Je nach Phytatzufuhr (hoch bei veganer Ernährung: bis 16 mg). Mit Mahlzeiten für bessere Verträglichkeit.",
+        "is_default": 1
+      },
+      {
+        "source": "DGE",
+        "source_url": "https://www.dge.de/wissenschaft/referenzwerte/zink/",
+        "source_title": "DGE Referenzwerte für Zink",
+        "population": "adult_female",
+        "dose_min": 7,
+        "dose_max": 10,
+        "unit": "mg",
+        "frequency": "daily",
+        "timing": "with_meal",
+        "notes": "Je nach Phytatzufuhr. Veganerinnen/Vegetarierinnen eher am oberen Ende.",
+        "is_default": 0
+      },
+      {
+        "source": "study",
+        "source_url": "https://doi.org/10.1093/advances/nmaa043",
+        "source_title": "Zinc and Immune Function (Wessels et al., Advances in Nutrition 2017)",
+        "population": "adult",
+        "dose_min": 15,
+        "dose_max": 30,
+        "unit": "mg",
+        "frequency": "daily",
+        "timing": "with_meal",
+        "notes": "Bei klinischen Zeichen von Zinkmangel oder für Immunsupport. Nicht dauerhaft >40 mg/Tag ohne ärztliche Aufsicht. Kupfersubstitution bei Langzeiteinnahme >25 mg/Tag erwägen.",
+        "is_default": 0
+      }
+    ],
+    "interactions": [
+      {
+        "interacts_with": "Kupfer",
+        "type": "inhibition",
+        "severity": "high",
+        "comment": "Langfristige Zinkeinnahme >50 mg/Tag kann zu schwerem Kupfermangel führen (Metallothionein-Mechanismus). Bei dauerhafter Einnahme über 25–30 mg/Tag Kupfer (1–2 mg/Tag) gleichzeitig supplementieren. UL: 40 mg/Tag.",
+        "mechanism": "Zink induziert intestinales Metallothionein, das Kupfer bindet und dessen Resorption hemmt",
+        "source_url": "https://doi.org/10.1001/archneurol.2011.206"
+      },
+      {
+        "interacts_with": "Eisen",
+        "type": "competition",
+        "severity": "medium",
+        "comment": "Hohe Eisendosen können die Zinkabsorption hemmen und umgekehrt. Nicht gleichzeitig auf nüchternen Magen einnehmen. Mit Mahlzeiten zeitlich trennen.",
+        "mechanism": "Kompetition über DMT1 (Divalent Metal Transporter 1)"
+      },
+      {
+        "interacts_with": "Calcium",
+        "type": "inhibition",
+        "severity": "low",
+        "comment": "Hohe Calciumdosen können Zinkabsorption beeinträchtigen. Bei gleichzeitiger Einnahme 1–2 Stunden Abstand einhalten.",
+        "mechanism": "Kompetitive Absorption im Dünndarm"
+      },
+      {
+        "interacts_with": "Folsäure (hochdosiert)",
+        "type": "inhibition",
+        "severity": "low",
+        "comment": "Sehr hohe Folsäuredosen (>5 mg/Tag) können die Zinkabsorption reduzieren. Bei üblichen Supplementierungsdosen (400–800 µg) nicht relevant.",
+        "mechanism": "Folat kann unlösliche Zink-Folat-Komplexe im GI-Trakt bilden"
+      }
+    ]
+  },
+  {
+    "name": "Eisen",
+    "category": "trace_element",
+    "unit": "mg",
+    "description": "Eisen ist ein essenzielles Spurenelement für den Sauerstofftransport im Blut (Hämoglobin), die Sauerstoffspeicherung in Muskeln (Myoglobin), die Energieproduktion in Mitochondrien und die DNA-Synthese. Eisenmangel ist weltweit der häufigste Nährstoffmangel. Supplementierung sollte nur bei nachgewiesenem Mangel (Ferritin, Hämoglobin, Transferrinsättigung) erfolgen, da überschüssiges Eisen oxidativen Stress fördern kann.",
+    "timing": "fasting",
+    "upper_limit": 45,
+    "upper_limit_unit": "mg",
+    "upper_limit_note": "EFSA/BfR UL: 45 mg/Tag für Erwachsene (supplementales Eisen). Nur bei nachgewiesenem Mangel supplementieren. Regelmäßige Bluttests (Ferritin, CRP, Blutbild) empfohlen.",
+    "hypo_symptoms": "Erschöpfung, Blässe, Kurzatmigkeit, Schwindel, Konzentrationsprobleme, Kopfschmerzen, Kältegefühl, spröde Nägel (Koilonychie), Restless-Legs-Syndrom, Haarausfall",
+    "hyper_symptoms": "Übelkeit, Bauchschmerzen, Verstopfung, dunkler Stuhl (akut), chronische Überdosierung: Leberschäden, Herzschäden, erhöhtes Infektionsrisiko, oxidativer Stress",
+    "external_url": "https://www.dge.de/wissenschaft/referenzwerte/eisen/",
+    "synonyms": ["Fe", "Ferrum", "Eisensalz", "Iron"],
+    "forms": [
+      {
+        "name": "Eisenbisglycinat",
+        "bioavailability": "very_high",
+        "timing": "fasting",
+        "is_recommended": 1,
+        "score": 95,
+        "comment": "Chelat-Form – beste Bioverfügbarkeit und beste Magenverträglichkeit aller Eisenformen. Kaum Übelkeit oder Verstopfung. Bevorzugte Form bei empfindlichem Magen. Am besten auf nüchternen Magen oder mit Vitamin-C-Quelle einnehmen."
+      },
+      {
+        "name": "Eisenfumarat",
+        "bioavailability": "high",
+        "timing": "fasting",
+        "is_recommended": 0,
+        "score": 70,
+        "comment": "Gute Bioverfügbarkeit, günstiger als Bisglycinat. Häufig in gängigen Eisenpräparaten. Gastrointestinale Nebenwirkungen (Übelkeit, Verstopfung) häufiger als bei Chelat-Formen."
+      },
+      {
+        "name": "Eisensulfat",
+        "bioavailability": "high",
+        "timing": "fasting",
+        "is_recommended": 0,
+        "score": 60,
+        "comment": "Am häufigsten verwendete Eisenform in pharmakologischen Präparaten. Gute Bioverfügbarkeit, aber deutlich mehr gastrointestinale Nebenwirkungen (Übelkeit, Bauchschmerzen, Verstopfung, dunkler Stuhl). Einnahme nüchtern für beste Resorption."
+      },
+      {
+        "name": "Eisengluconat",
+        "bioavailability": "medium",
+        "timing": "fasting",
+        "is_recommended": 0,
+        "score": 55,
+        "comment": "Etwas besser verträglich als Sulfat, aber geringere Bioverfügbarkeit. Häufig in flüssigen Eisenpräparaten und bei Kindern eingesetzt."
+      },
+      {
+        "name": "Eisen(III)-Hydroxid-Polymaltose (IPC)",
+        "bioavailability": "medium",
+        "timing": "with_meal",
+        "is_recommended": 1,
+        "score": 75,
+        "comment": "Nicht-ionische Form – kann mit oder ohne Mahlzeiten eingenommen werden, da die Resorption nahrungsunabhängig reguliert wird. Sehr gute Verträglichkeit, kaum Verfärbungen der Zähne oder Übelkeit. Etwas langsamer wirkend. Gut für Kinder und empfindliche Personen."
+      }
+    ],
+    "dosage_guidelines": [
+      {
+        "source": "DGE",
+        "source_url": "https://www.dge.de/wissenschaft/referenzwerte/eisen/",
+        "source_title": "DGE Referenzwerte für Eisen",
+        "population": "adult_male",
+        "dose_min": 10,
+        "dose_max": 10,
+        "unit": "mg",
+        "frequency": "daily",
+        "timing": "with_meal",
+        "notes": "Empfehlungswert. Männer haben selten Eisenmangel außer bei bestimmten Erkrankungen. Supplementierung nur bei nachgewiesenem Mangel.",
+        "is_default": 1
+      },
+      {
+        "source": "DGE",
+        "source_url": "https://www.dge.de/wissenschaft/referenzwerte/eisen/",
+        "source_title": "DGE Referenzwerte für Eisen",
+        "population": "adult_female",
+        "dose_min": 15,
+        "dose_max": 15,
+        "unit": "mg",
+        "frequency": "daily",
+        "timing": "fasting",
+        "notes": "Erhöhter Bedarf durch Menstruation. Häufig wird bei Eisenmangelanämie 50–100 mg/Tag therapeutisch verordnet. Immer Ferritinwert und CRP prüfen.",
+        "is_default": 0
+      },
+      {
+        "source": "study",
+        "source_url": "https://doi.org/10.1182/blood-2016-07-727412",
+        "source_title": "Iron deficiency and supplementation: evidence-based review (Tolkien et al., Blood 2015)",
+        "population": "deficient",
+        "dose_min": 40,
+        "dose_max": 80,
+        "unit": "mg",
+        "frequency": "daily",
+        "timing": "fasting",
+        "notes": "Bei nachgewiesenem Eisenmangel: therapeutische Dosen unter ärztlicher Aufsicht. Wechseltägige Einnahme kann gastrointestinale Verträglichkeit verbessern (Hepcidin-Mechanismus).",
+        "is_default": 0
+      }
+    ],
+    "interactions": [
+      {
+        "interacts_with": "Vitamin C",
+        "type": "synergy",
+        "severity": "medium",
+        "comment": "Vitamin C (Ascorbinsäure) erhöht die Absorption von Nicht-Häm-Eisen erheblich (2–3-fach) durch Reduktion von Fe³⁺ zu Fe²⁺ und Bildung löslicher Chelate. Gleichzeitige Einnahme empfohlen.",
+        "mechanism": "Reduktion von Fe³⁺ zu besser löslichem Fe²⁺; Bildung von Ascorbat-Eisen-Chelaten verhindert Fällung im alkalischen Dünndarm"
+      },
+      {
+        "interacts_with": "Calcium",
+        "type": "inhibition",
+        "severity": "medium",
+        "comment": "Calcium (sowohl aus Milch als auch Supplements) hemmt die Eisenabsorption. Milch, Käse oder Calciumsupplements nicht gleichzeitig mit Eisen einnehmen. Mind. 2 Stunden Abstand.",
+        "mechanism": "Calcium hemmt sowohl häm- als auch nicht-häm-Eisen-Transport im Duodenum, vermutlich über gemeinsame Transportproteine"
+      },
+      {
+        "interacts_with": "Kaffee und Tee (Polyphenole, Tannine)",
+        "type": "inhibition",
+        "severity": "medium",
+        "comment": "Polyphenole aus Kaffee und Tee (insbesondere Tannine) hemmen die Eisenabsorption erheblich (bis zu 60–80 % Reduktion). Eisen mindestens 1 Stunde vor oder 2 Stunden nach dem Kaffee- oder Teekonsum einnehmen.",
+        "mechanism": "Tannine und Chlorogensäure bilden unlösliche Eisen-Polyphenol-Komplexe"
+      },
+      {
+        "interacts_with": "Zink",
+        "type": "competition",
+        "severity": "medium",
+        "comment": "Hochdosiertes Eisen hemmt die Zinkabsorption und umgekehrt. Nicht gleichzeitig auf nüchternen Magen. Mit Mahlzeiten zeitlich trennen.",
+        "mechanism": "Kompetition über DMT1-Transporter"
+      },
+      {
+        "interacts_with": "Antazida / PPI",
+        "type": "inhibition",
+        "severity": "medium",
+        "comment": "Antazida und Protonenpumpenhemmer erhöhen den pH im Magen, was die Eisenauflösung und -absorption vermindert. Eisen und Antazida zeitlich trennen (mind. 2 Stunden).",
+        "mechanism": "Fe²⁺-Absorption erfordert saures Milieu im Magen für optimale Löslichkeit"
+      }
+    ]
+  },
+  {
+    "name": "Selen",
+    "category": "trace_element",
+    "unit": "µg",
+    "description": "Selen ist ein essenzielles Spurenelement und integraler Bestandteil von Selenoproteinen (Glutathionperoxidasen, Thioredoxinreduktasen, Deiodasen). Es wirkt antioxidativ, schützt Zellen vor oxidativem Stress, unterstützt die Schilddrüsenfunktion (Jodstoffwechsel), das Immunsystem und die männliche Fertilität. Selen hat ein enges therapeutisches Fenster – der Bereich zwischen Mangel und Toxizität ist vergleichsweise klein. In Deutschland ist die Selenversorgung aufgrund selenarmer Böden oft grenzwertig.",
+    "timing": "with_meal",
+    "upper_limit": 300,
+    "upper_limit_unit": "µg",
+    "upper_limit_note": "BfR UL: 300 µg/Tag (Gesamtzufuhr). EFSA UL: 255 µg/Tag. Toxisch bei dauerhafter Überdosierung! Symptome bereits ab 400–900 µg/Tag möglich (Selenose). DGE-Referenzwert: 70 µg/Tag (Männer), 60 µg/Tag (Frauen).",
+    "hypo_symptoms": "Muskelschwäche, Herzmuskelerkrankung (Keshan-Krankheit), Schilddrüsenunterfunktion, geschwächtes Immunsystem, Fruchtbarkeitsprobleme, erhöhtes Krebsrisiko (epidemiologisch)",
+    "hyper_symptoms": "Selenose: Knoblauchartiger Atemgeruch, Haarausfall, brüchige Nägel, Übelkeit, Erbrechen, Nervenschäden, Müdigkeit, Hautveränderungen bei chronischer Überdosierung",
+    "external_url": "https://www.dge.de/wissenschaft/referenzwerte/selen/",
+    "synonyms": ["Se", "Selenium", "Selenverbindung"],
+    "forms": [
+      {
+        "name": "Selenomethionin",
+        "bioavailability": "very_high",
+        "timing": "with_meal",
+        "is_recommended": 1,
+        "score": 90,
+        "comment": "Organische Selenform, die wie Methionin in Körperproteine eingebaut wird. Höchste Bioverfügbarkeit (~90 %), bildet ein Selenspeicher-Reservoir im Körper. Bevorzugte Form für Langzeitsupplementierung. Mit Mahlzeiten einnehmen."
+      },
+      {
+        "name": "Selenhefe",
+        "bioavailability": "very_high",
+        "timing": "with_meal",
+        "is_recommended": 1,
+        "score": 85,
+        "comment": "Natürliche Form – Selen ist in Hefe hauptsächlich als Selenomethionin gebunden. Gut verträglich, hohe Bioverfügbarkeit. Geeignet für Personen, die natürliche Quellen bevorzugen."
+      },
+      {
+        "name": "Natriumselenit",
+        "bioavailability": "medium",
+        "timing": "with_meal",
+        "is_recommended": 0,
+        "score": 55,
+        "comment": "Anorganische Selenform. Geringere Bioverfügbarkeit als organische Formen, aber schneller verfügbar für Selenoenzyme. Nicht zusammen mit Vitamin C einnehmen (Bildung von elementarem Selen, das nicht resorbiert wird). Günstig und weit verbreitet in günstigen Präparaten."
+      }
+    ],
+    "dosage_guidelines": [
+      {
+        "source": "DGE",
+        "source_url": "https://www.dge.de/wissenschaft/referenzwerte/selen/",
+        "source_title": "DGE Referenzwerte für Selen",
+        "population": "adult_male",
+        "dose_min": 70,
+        "dose_max": 70,
+        "unit": "µg",
+        "frequency": "daily",
+        "timing": "with_meal",
+        "notes": "Referenzwert DGE für Männer. In Deutschland oft nicht aus der Nahrung allein gedeckt (selenarme Böden). Supplementierung mit 50–100 µg/Tag für Risikogruppen sinnvoll.",
+        "is_default": 1
+      },
+      {
+        "source": "DGE",
+        "source_url": "https://www.dge.de/wissenschaft/referenzwerte/selen/",
+        "source_title": "DGE Referenzwerte für Selen",
+        "population": "adult_female",
+        "dose_min": 60,
+        "dose_max": 60,
+        "unit": "µg",
+        "frequency": "daily",
+        "timing": "with_meal",
+        "notes": "Referenzwert DGE für Frauen. Bei Hashimoto-Thyreoiditis: 200 µg/Tag Selenomethionin in Studien untersucht (nur unter ärztlicher Aufsicht).",
+        "is_default": 0
+      },
+      {
+        "source": "study",
+        "source_url": "https://doi.org/10.1016/j.thyroid.2017.11.018",
+        "source_title": "Selenium Supplementation in Autoimmune Thyroid Diseases (Ventura et al., Thyroid 2017)",
+        "population": "adult",
+        "dose_min": 100,
+        "dose_max": 200,
+        "unit": "µg",
+        "frequency": "daily",
+        "timing": "with_meal",
+        "notes": "Bei Hashimoto-Thyreoiditis: 200 µg/Tag Selenomethionin kann TPO-Antikörper senken. Nur unter Schilddrüsenarzt-Kontrolle. UL beachten! Maximal 12 Wochen ohne Laborkontrolle.",
+        "is_default": 0
+      }
+    ],
+    "interactions": [
+      {
+        "interacts_with": "Jod",
+        "type": "synergy",
+        "severity": "medium",
+        "comment": "Selen und Jod arbeiten synergistisch in der Schilddrüse. Selenoproteine (Deiodasen) aktivieren Schilddrüsenhormone (T4 → T3). Bei Jodmangel können Selen-Supplements die Schilddrüsenfunktion beeinträchtigen. Beide sollten ausreichend vorhanden sein.",
+        "mechanism": "Selenabhängige Deiodasen (Typ I, II, III) konvertieren Thyroxin (T4) in aktives Triiodthyronin (T3)"
+      },
+      {
+        "interacts_with": "Vitamin C",
+        "type": "inhibition",
+        "severity": "medium",
+        "comment": "Vitamin C kann die Absorption von anorganischem Selen (Natriumselenit) durch Reduktion zu elementarem Selen hemmen. Kein Problem mit organischem Selenomethionin. Natriumselenit nicht gleichzeitig mit Vitamin-C-Präparaten einnehmen.",
+        "mechanism": "Ascorbat reduziert Selenit (Se⁴⁺) zu elementarem Selen (Se⁰), das im GI-Trakt nicht resorbiert wird"
+      },
+      {
+        "interacts_with": "Schwermetalle (Quecksilber, Cadmium)",
+        "type": "antagonism",
+        "severity": "medium",
+        "comment": "Selen bindet Schwermetalle und kann ihre Toxizität verringern. Gleichzeitig kann hohe Schwermetallbelastung den Selenstatus beeinträchtigen. In Fischreichen Diäten: Quecksilber-Selen-Bindung reduziert Selenverfügbarkeit.",
+        "mechanism": "Hochaffine Bindung von Hg²⁺, Cd²⁺ und anderen Schwermetallionen an Selenocystein-Reste in Selenoproteinen"
+      }
+    ]
+  },
+  {
+    "name": "Jod",
+    "category": "trace_element",
+    "unit": "µg",
+    "description": "Jod ist unverzichtbar für die Synthese der Schilddrüsenhormone Thyroxin (T4) und Triiodthyronin (T3), die Stoffwechsel, Wachstum, Entwicklung (besonders Gehirn) und Körpertemperatur regulieren. Deutschland gilt als Jodmangelgebiet, obwohl die Situation durch Jodsalz verbessert wurde. Kritisch: Bei bestehender Autoimmunthyreoiditis (Hashimoto) kann zu viel Jod die Erkrankung verschlimmern – ärztliche Abklärung vor Supplementierung ist essenziell.",
+    "timing": "with_meal",
+    "upper_limit": 600,
+    "upper_limit_unit": "µg",
+    "upper_limit_note": "EFSA UL: 600 µg/Tag für Erwachsene. BfR: Supplements sollten max. 100 µg Jod/Tag liefern. Bei Hashimoto-Thyreoiditis oder Schilddrüsenerkrankungen: Supplementierung nur unter ärztlicher Aufsicht!",
+    "hypo_symptoms": "Struma (Kropf), Schilddrüsenunterfunktion (Hypothyreose), Erschöpfung, Gewichtszunahme, Kältegefühl, Haarausfall, verlangsamter Herzschlag, Wachstumsstörungen, mentale Verlangsamung, bei Schwangeren: Kretinismus beim Kind",
+    "hyper_symptoms": "Hyperthyreose, Hashimoto-Exazerbation, Thyreoiditis, in seltenen Fällen: Strumaentwicklung durch Wolff-Chaikoff-Effekt, Schilddrüsenüberfunktion bei vorbestehendem Knotenstruma",
+    "external_url": "https://www.dge.de/wissenschaft/referenzwerte/jod/",
+    "synonyms": ["I", "Iodid", "Kaliumiodid", "Iodine", "Iod"],
+    "forms": [
+      {
+        "name": "Kaliumiodid",
+        "bioavailability": "very_high",
+        "timing": "with_meal",
+        "is_recommended": 1,
+        "score": 90,
+        "comment": "Standardform in Supplements und jodierten Lebensmitteln. Sehr gut bioverfügbar (nahezu 100 %), gut verträglich. Mit Mahlzeiten einnehmen für optimale Resorption."
+      },
+      {
+        "name": "Natriumiodid",
+        "bioavailability": "very_high",
+        "timing": "with_meal",
+        "is_recommended": 1,
+        "score": 85,
+        "comment": "Gleich gute Bioverfügbarkeit wie Kaliumiodid. Häufig in flüssigen Supplementen und Tropfenformulierungen eingesetzt."
+      },
+      {
+        "name": "Kelp / Meeresalgen-Jod",
+        "bioavailability": "medium",
+        "timing": "with_meal",
+        "is_recommended": -1,
+        "score": 30,
+        "comment": "Natürliche Jodquelle aus Meeresalgen, aber stark schwankende Jodkonzentration (kann von empfohlenem Wert stark abweichen). Risiko der Überdosierung und Kontaminationen (Schwermetalle, Arsen). Nicht empfohlen als kontrollierte Jodquelle."
+      }
+    ],
+    "dosage_guidelines": [
+      {
+        "source": "DGE",
+        "source_url": "https://www.dge.de/wissenschaft/referenzwerte/jod/",
+        "source_title": "DGE Referenzwerte für Jod",
+        "population": "adult",
+        "dose_min": 200,
+        "dose_max": 200,
+        "unit": "µg",
+        "frequency": "daily",
+        "timing": "with_meal",
+        "notes": "Empfehlung DGE für Erwachsene. Hauptquelle: jodiertes Speisesalz, Milchprodukte, Seefisch. Bei veganer Ernährung oft kritischer Nährstoff.",
+        "is_default": 1
+      },
+      {
+        "source": "study",
+        "source_url": "https://doi.org/10.3390/nu13010013",
+        "source_title": "Iodine Nutrition in Germany: Iodine Supply and Risk Groups (Johner et al., Nutrients 2021)",
+        "population": "pregnant",
+        "dose_min": 230,
+        "dose_max": 260,
+        "unit": "µg",
+        "frequency": "daily",
+        "timing": "with_meal",
+        "notes": "Erhöhter Bedarf in Schwangerschaft und Stillzeit (bis 260 µg). Vorgeburtliche Supplements sollten Jod enthalten. WICHTIG: Bei Hashimoto erst Schilddrüsenantikörper (TPO-AK, TG-AK) und TSH bestimmen.",
+        "is_default": 0
+      }
+    ],
+    "interactions": [
+      {
+        "interacts_with": "Selen",
+        "type": "synergy",
+        "severity": "medium",
+        "comment": "Selen ist für die enzymatische Aktivierung und Inaktivierung von Schilddrüsenhormonen essenziell. Jod und Selen sollten beide ausreichend vorhanden sein. Selen schützt zudem die Schilddrüse vor oxidativem Schaden durch H₂O₂ bei der Jodumsetzung.",
+        "mechanism": "Selenabhängige Deiodasen und Glutathionperoxidasen schützen Schilddrüsengewebe"
+      },
+      {
+        "interacts_with": "Goitrogene Lebensmittel (Rohkohl, Roher Brokkoli, Soja)",
+        "type": "inhibition",
+        "severity": "low",
+        "comment": "Glucosinolate in rohem Kreuzblütlergemüse und Isoflavone in Soja können die Schilddrüsenhormonproduktion hemmen. Beim Kochen weitgehend inaktiviert. Bei Hypothyreose oder Jodmangel: große Mengen an rohem Kohl oder Soja vermeiden.",
+        "mechanism": "Glucosinolat-Abbauprodukte (Thiocyanate, Goitrin) hemmen Jodaufnahme in die Schilddrüse (NIS-Transporter)"
+      },
+      {
+        "interacts_with": "Amiodarone (Herzmedikament)",
+        "type": "synergy",
+        "severity": "high",
+        "comment": "Amiodaron enthält hohe Jodmengen (~37 % Jod pro Gewicht) und kann zu erheblichen Schilddrüsenfunktionsstörungen führen. Keine Jod-Supplementierung bei Amiodaron-Therapie ohne Endokrinologen.",
+        "mechanism": "Exzessive Jodzufuhr durch Amiodaron hemmt (Wolff-Chaikoff) oder stimuliert (Jod-Basedow) die Schilddrüse"
+      }
+    ]
+  },
+  {
+    "name": "Kupfer",
+    "category": "trace_element",
+    "unit": "mg",
+    "description": "Kupfer ist ein essenzielles Spurenelement und Kofaktor zahlreicher Enzyme (Cuproenzyme): Ceruloplasmin (Eisenstoffwechsel), Superoxid-Dismutase (Antioxidans), Cytochrom-c-Oxidase (Energieproduktion), Tyrosinase (Melaninsynthese), Lysyloxidase (Bindegewebsstabilität). Kupfer ist wichtig für das Immunsystem, Knochen, Nerven, Eisenstoffwechsel und die Herzgesundheit. Echte Kupfermangelzustände sind selten, aber durch exzessive Zinksupplementierung induzierbar.",
+    "timing": "with_meal",
+    "upper_limit": 5,
+    "upper_limit_unit": "mg",
+    "upper_limit_note": "EFSA UL: 5 mg/Tag für Erwachsene. Kupfertoxizität möglich; genetische Kupferakkumulationserkrankungen (Morbus Wilson) kontroindizieren Supplementierung.",
+    "hypo_symptoms": "Anämie (mikrozytär), Neutropenie, Knochenschwäche (erhöhtes Frakturrisiko), neurologische Probleme (Myelopathie), Pigmentierungsverlust, Erschöpfung (bei Zinkmangel-induziertem Kupfermangel)",
+    "hyper_symptoms": "Übelkeit, Erbrechen, Bauchschmerzen, Leberschäden (bei genetischer Prädisposition), grünliche Verfärbung der Haut/Haare (selten), Morbus Wilson-Exazerbation",
+    "external_url": "https://www.dge.de/wissenschaft/referenzwerte/kupfer/",
+    "synonyms": ["Cu", "Cuprum", "Copper", "Kupfersalz"],
+    "forms": [
+      {
+        "name": "Kupferbisglycinat",
+        "bioavailability": "very_high",
+        "timing": "with_meal",
+        "is_recommended": 1,
+        "score": 92,
+        "comment": "Chelat-Form – beste Bioverfügbarkeit, sehr gut verträglich. Bevorzugte Form für Supplementierung. Empfohlen als Begleitsubstitution bei hochdosierter Zinksupplementierung (>25 mg Zink/Tag)."
+      },
+      {
+        "name": "Kupfergluconat",
+        "bioavailability": "high",
+        "timing": "with_meal",
+        "is_recommended": 1,
+        "score": 80,
+        "comment": "Gut bioverfügbar, häufig in Multivitaminpräparaten. Gut verträglich, kostengünstiger als Chelat-Formen."
+      },
+      {
+        "name": "Kupfersulfat",
+        "bioavailability": "medium",
+        "timing": "with_meal",
+        "is_recommended": 0,
+        "score": 50,
+        "comment": "Anorganische Form, mehr gastrointestinale Nebenwirkungen. Seltener in hochwertigen Supplements. Eher in günstigen Formulierungen."
+      }
+    ],
+    "dosage_guidelines": [
+      {
+        "source": "DGE",
+        "source_url": "https://www.dge.de/wissenschaft/referenzwerte/kupfer/",
+        "source_title": "DGE Referenzwerte für Kupfer",
+        "population": "adult",
+        "dose_min": 1.0,
+        "dose_max": 1.5,
+        "unit": "mg",
+        "frequency": "daily",
+        "timing": "with_meal",
+        "notes": "Schätzwert DGE für Erwachsene. Kupfer ist in Nüssen, Hülsenfrüchten, Vollkorn, Innereien reichlich enthalten. Supplementierung nur bei Mangel (z. B. durch Zinksupplementierung) erforderlich.",
+        "is_default": 1
+      },
+      {
+        "source": "study",
+        "source_url": "https://doi.org/10.1001/archneurol.2011.206",
+        "source_title": "Copper Deficiency Myelopathy Secondary to Excessive Zinc Supplementation (Nations et al., Archives of Neurology 2008)",
+        "population": "adult",
+        "dose_min": 1,
+        "dose_max": 2,
+        "unit": "mg",
+        "frequency": "daily",
+        "timing": "with_meal",
+        "notes": "Bei hochdosierter Zinksupplementierung (>25 mg/Tag) wird 1–2 mg Kupfer/Tag als Kosubstitution empfohlen, um zinkinduzierten Kupfermangel (Myelopathie) zu vermeiden.",
+        "is_default": 0
+      }
+    ],
+    "interactions": [
+      {
+        "interacts_with": "Zink",
+        "type": "antagonism",
+        "severity": "high",
+        "comment": "Klassischer Antagonismus: Hochdosiertes Zink (>50 mg/Tag) kann zu schwerem Kupfermangel führen. Bei dauerhafter Zinkeinnahme über 25 mg/Tag empfiehlt sich gleichzeitig 1–2 mg Kupfer. Umgekehrt: zu viel Kupfer kann Zink-Status beeinflussen.",
+        "mechanism": "Zink induziert intestinales Metallothionein, das Kupfer abfängt und dessen Absorption hemmt"
+      },
+      {
+        "interacts_with": "Vitamin C (hochdosiert)",
+        "type": "inhibition",
+        "severity": "low",
+        "comment": "Sehr hohe Vitamin-C-Dosen (>1500 mg/Tag) können die Kupferaufnahme leicht beeinträchtigen. Bei üblichen Supplementierungsdosen nicht relevant.",
+        "mechanism": "Ascorbat kann Kupfer reduzieren (Cu²⁺ → Cu⁺) und dadurch die Kupfer-abhängige Enzymaktivität beeinflussen"
+      }
+    ]
+  },
+  {
+    "name": "Mangan",
+    "category": "trace_element",
+    "unit": "mg",
+    "description": "Mangan ist ein essenzielles Spurenelement und Kofaktor der Mangan-Superoxiddismutase (antioxidatives Enzym in den Mitochondrien), der Arginase (Harnstoffzyklus), von Glykosidasen (Bindegewebe, Knorpel) und weiterer Enzyme des Kohlenhydrat- und Knochenstoffwechsels. Ein Mangelzustand ist bei ausgewogener Ernährung sehr selten. Überdosierung (vor allem durch Inhalation in industriellen Umgebungen) kann neurotoxisch sein.",
+    "timing": "with_meal",
+    "upper_limit": 11,
+    "upper_limit_unit": "mg",
+    "upper_limit_note": "EFSA UL: 11 mg/Tag für Erwachsene. Chronische orale Überversorgung ist beim Menschen selten – ein relevantes Risiko besteht hauptsächlich bei Inhalationsexposition (Schweißen, Bergbau) mit neurotoxischen Folgen (Manganismus).",
+    "hypo_symptoms": "Muskelschwäche, Knochenschwäche, beeinträchtigte Glukosetoleranz, abnormales Lipidprofil (selten – Mangel beim Menschen kaum nachgewiesen)",
+    "hyper_symptoms": "Neurotoxizität (Manganismus): Parkinson-ähnliche Symptome (Tremor, Steifheit), kognitive Beeinträchtigungen, psychiatrische Symptome (vor allem bei Inhalationsexposition)",
+    "external_url": "https://www.dge.de/wissenschaft/referenzwerte/mangan/",
+    "synonyms": ["Mn", "Manganese", "Mangansalz"],
+    "forms": [
+      {
+        "name": "Manganbisglycinat",
+        "bioavailability": "high",
+        "timing": "with_meal",
+        "is_recommended": 1,
+        "score": 85,
+        "comment": "Chelat-Form mit bester Bioverfügbarkeit und guter Verträglichkeit. Bevorzugte Form in hochwertigen Multivitaminpräparaten."
+      },
+      {
+        "name": "Mangancitrat",
+        "bioavailability": "medium",
+        "timing": "with_meal",
+        "is_recommended": 0,
+        "score": 65,
+        "comment": "Gute Löslichkeit, moderate Bioverfügbarkeit. Häufig in Knochenpräparaten kombiniert."
+      },
+      {
+        "name": "Mangansulfat",
+        "bioavailability": "medium",
+        "timing": "with_meal",
+        "is_recommended": 0,
+        "score": 55,
+        "comment": "Standardform in günstigen Präparaten. Ausreichend bioverfügbar für Standarddosierungen. Gastrointestinale Verträglichkeit schlechter als Chelat-Formen."
+      }
+    ],
+    "dosage_guidelines": [
+      {
+        "source": "DGE",
+        "source_url": "https://www.dge.de/wissenschaft/referenzwerte/mangan/",
+        "source_title": "DGE Referenzwerte für Mangan",
+        "population": "adult_male",
+        "dose_min": 2.0,
+        "dose_max": 5.0,
+        "unit": "mg",
+        "frequency": "daily",
+        "timing": "with_meal",
+        "notes": "Schätzwert DGE. Mangan ist in Vollkornprodukten, Hülsenfrüchten, Nüssen und Tee reichlich vorhanden. Supplementierung selten notwendig.",
+        "is_default": 1
+      }
+    ],
+    "interactions": [
+      {
+        "interacts_with": "Eisen",
+        "type": "competition",
+        "severity": "medium",
+        "comment": "Eisen und Mangan konkurrieren um den gleichen intestinalen Transporter (DMT1). Hohe Eisendosen können die Manganabsorption hemmen und umgekehrt. Zeitlich getrennte Einnahme empfohlen.",
+        "mechanism": "Konkurrenz über DMT1 (Divalent Metal Transporter 1) im Duodenum"
+      },
+      {
+        "interacts_with": "Calcium",
+        "type": "inhibition",
+        "severity": "low",
+        "comment": "Hohe Calciumzufuhr kann die Manganabsorption reduzieren. Bei Supplementierung von Knochenpräparaten (Ca + Mn) zeitlich trennen oder an die verminderte Bioverfügbarkeit denken.",
+        "mechanism": "Kompetitive Absorption über gemeinsame Transportmechanismen"
+      }
+    ]
+  },
+  {
+    "name": "Chrom",
+    "category": "trace_element",
+    "unit": "µg",
+    "description": "Chrom(III) ist ein essenzielles Spurenelement, das die Insulinwirkung verstärkt und am Kohlenhydrat-, Fett- und Proteinstoffwechsel beteiligt ist. Chrom erhöht die Insulinsensitivität der Zellen durch Interaktion mit dem Insulinrezeptor (Chromodulin-Mechanismus). Studien zeigen bescheidene Effekte auf Blutzucker und Insulinresistenz, besonders bei Diabetikern und bei Chrommangelzuständen. Die Wirkung auf sportliche Leistung oder Körperzusammensetzung bei Gesunden ist wissenschaftlich nicht eindeutig belegt.",
+    "timing": "with_meal",
+    "upper_limit": 250,
+    "upper_limit_unit": "µg",
+    "upper_limit_note": "EFSA: Kein formaler UL für Chrom(III) festgelegt, da keine Toxizität bei oraler Aufnahme aus Supplements belegt. BfR empfiehlt max. 250 µg/Tag als Vorsichtsmaßnahme. Chrom(VI) ist stark kanzerogen, kommt aber nicht in Lebensmittelsupplements vor.",
+    "hypo_symptoms": "Insulinresistenz, gestörte Glukosetoleranz, erhöhte Triglyzeride, Appetitsteigerung, Gewichtszunahme (selten, kaum klinisch dokumentierter Mangel)",
+    "hyper_symptoms": "Bei oraler Aufnahme von Cr(III) kaum Toxizität belegt. Theoretisch: Nierenschäden bei sehr hoher Zufuhr, mögliche DNA-Schäden bei sehr hohen Dosen (in vitro).",
+    "external_url": "https://www.dge.de/wissenschaft/referenzwerte/chrom/",
+    "synonyms": ["Cr", "Chromium", "Chrom-III", "Chrompicolinat"],
+    "forms": [
+      {
+        "name": "Chrompicolinat",
+        "bioavailability": "high",
+        "timing": "with_meal",
+        "is_recommended": 1,
+        "score": 80,
+        "comment": "Am häufigsten verwendete und gut untersuchte Chromform. Hohe Bioverfügbarkeit durch Picolinsäure-Komplexierung. Studien zur Insulinsensitivität und Blutzuckerstabilisierung. Mit Mahlzeiten einnehmen."
+      },
+      {
+        "name": "Chromnicotinat",
+        "bioavailability": "high",
+        "timing": "with_meal",
+        "is_recommended": 1,
+        "score": 75,
+        "comment": "Gut bioverfügbar, weniger untersucht als Picolinat. Enthält gleichzeitig Nicotinat (Niacinform). Gut verträglich."
+      },
+      {
+        "name": "Chromchlorid",
+        "bioavailability": "low",
+        "timing": "with_meal",
+        "is_recommended": -1,
+        "score": 25,
+        "comment": "Schlechte Bioverfügbarkeit (unter 1 %). Älteste und billigste Form. Für effektive Chromversorgung nicht geeignet."
+      }
+    ],
+    "dosage_guidelines": [
+      {
+        "source": "DGE",
+        "source_url": "https://www.dge.de/wissenschaft/referenzwerte/chrom/",
+        "source_title": "DGE Referenzwerte für Chrom",
+        "population": "adult",
+        "dose_min": 30,
+        "dose_max": 100,
+        "unit": "µg",
+        "frequency": "daily",
+        "timing": "with_meal",
+        "notes": "Schätzwert DGE für eine sichere und angemessene Zufuhr. Die meisten Menschen decken ihren Bedarf über die Nahrung (Vollkorn, Fleisch, Käse, Brokkoli, Nüsse).",
+        "is_default": 1
+      },
+      {
+        "source": "study",
+        "source_url": "https://doi.org/10.2337/diacare.27.11.2741",
+        "source_title": "Chromium Picolinate and Biotin Supplementation for the Treatment of Type 2 Diabetes (Albarracin et al., Diabetes Care 2008)",
+        "population": "adult",
+        "dose_min": 200,
+        "dose_max": 1000,
+        "unit": "µg",
+        "frequency": "daily",
+        "timing": "with_meal",
+        "notes": "Bei Typ-2-Diabetes oder Insulinresistenz: 200–1000 µg Chrompicolinat/Tag zeigte Verbesserungen der Blutzuckerkontrolle. Nur unter ärztlicher Begleitung bei bestehender Diabetes-Therapie.",
+        "is_default": 0
+      }
+    ],
+    "interactions": [
+      {
+        "interacts_with": "Insulin / Antidiabetika",
+        "type": "synergy",
+        "severity": "medium",
+        "comment": "Chrom kann die Insulinwirkung verstärken. Bei gleichzeitiger Einnahme von Insulin oder oralen Antidiabetika ist eine verstärkte Blutzuckersenkung möglich. Blutzucker regelmäßig überwachen und ggf. Medikamentendosis anpassen.",
+        "mechanism": "Chromodulin aktiviert Insulinrezeptor-Tyrosinkinase und potenziert Insulinsignalübertragung"
+      },
+      {
+        "interacts_with": "Antazida / Calciumcarbonat",
+        "type": "inhibition",
+        "severity": "low",
+        "comment": "Antazida können die Chromabsorption beeinträchtigen. Zeitlich trennen (mind. 2 Stunden).",
+        "mechanism": "Erhöhter pH im Magen reduziert Chromlöslichkeit und intestinale Absorption"
+      }
+    ]
+  },
+  {
+    "name": "Molybdän",
+    "category": "trace_element",
+    "unit": "µg",
+    "description": "Molybdän ist ein essenzielles Spurenelement und Kofaktor von vier menschlichen Enzymen: Xanthinoxidase (Harnsäuresynthese, Purinabbau), Aldehydoxidase (Detoxifikation), Sulfit-Oxidase (Entgiftung von schwefelhaltige Verbindungen – kritisch!) und Amidoxim-reduzierendes Komponent. Besonders die Sulfit-Oxidase ist lebenswichtig – ein genetischer Defekt führt zu schwerer neurologischer Erkrankung. Ein ernährungsbedingter Mangel ist in normalen Lebensverhältnissen extrem selten.",
+    "timing": "with_meal",
+    "upper_limit": 600,
+    "upper_limit_unit": "µg",
+    "upper_limit_note": "EFSA UL: 600 µg/Tag für Erwachsene. Chronisch hohe Zufuhr (>10 mg/Tag) kann Kupfermangel induzieren und Gichtanfälle auslösen (durch erhöhte Harnsäureproduktion via Xanthinoxidase).",
+    "hypo_symptoms": "Sehr selten: Sulfitüberempfindlichkeit (Kopfschmerzen, Übelkeit), erhöhte Xanthinausscheidung im Urin, Netzhautprobleme. Genetische Molybdän-Cofaktor-Defizienz: schwere neurologische Entwicklungsstörungen",
+    "hyper_symptoms": "Gichtartige Symptome (erhöhte Harnsäure), Kupfermangel bei sehr hoher Zufuhr, Wachstumshemmung (im Tierversuch bei extremen Dosen)",
+    "external_url": "https://www.dge.de/wissenschaft/referenzwerte/molybdaen/",
+    "synonyms": ["Mo", "Molybdenum", "Molybdänsalz"],
+    "forms": [
+      {
+        "name": "Natriummolybdat",
+        "bioavailability": "very_high",
+        "timing": "with_meal",
+        "is_recommended": 1,
+        "score": 85,
+        "comment": "Standardform in Supplements, sehr gut wasserlöslich und bioverfügbar. Gut verträglich bei empfohlenen Dosierungen. Häufig in Multivitaminpräparaten enthalten."
+      },
+      {
+        "name": "Ammoniummolybdat",
+        "bioavailability": "high",
+        "timing": "with_meal",
+        "is_recommended": 0,
+        "score": 65,
+        "comment": "Gut bioverfügbar, aber seltener in Supplements verwendet. Eher in industriellen/landwirtschaftlichen Anwendungen."
+      }
+    ],
+    "dosage_guidelines": [
+      {
+        "source": "DGE",
+        "source_url": "https://www.dge.de/wissenschaft/referenzwerte/molybdaen/",
+        "source_title": "DGE Referenzwerte für Molybdän",
+        "population": "adult",
+        "dose_min": 50,
+        "dose_max": 100,
+        "unit": "µg",
+        "frequency": "daily",
+        "timing": "with_meal",
+        "notes": "Schätzwert DGE. Molybdän ist in Hülsenfrüchten, Getreide, Nüssen und Innereien reichlich vorhanden. Ein ernährungsbedingter Mangel ist extrem selten. Supplementierung praktisch nie notwendig.",
+        "is_default": 1
+      }
+    ],
+    "interactions": [
+      {
+        "interacts_with": "Kupfer",
+        "type": "antagonism",
+        "severity": "medium",
+        "comment": "Sehr hohe Molybdänzufuhr kann die Kupferbioverfügbarkeit reduzieren (im Wiederkäuer gut belegt, beim Menschen bei extrem hoher Zufuhr). Bei normalen Supplement-Dosierungen nicht relevant.",
+        "mechanism": "Im GI-Trakt Bildung von Thiomolybdat-Kupfer-Komplexen, die Kupfer binden und dessen Resorption hemmen"
+      },
+      {
+        "interacts_with": "Sulfit (Lebensmittelzusatz E220–E228)",
+        "type": "synergy",
+        "severity": "low",
+        "comment": "Molybdän (als Kofaktor der Sulfit-Oxidase) ist notwendig für die Entgiftung von Sulfit. Ausreichende Molybdänversorgung schützt vor Sulfitüberempfindlichkeit.",
+        "mechanism": "Sulfit-Oxidase (Molybdoenzym) oxidiert toxisches Sulfit (SO₃²⁻) zu harmlosem Sulfat (SO₄²⁻)"
+      }
+    ]
+  }
+]
