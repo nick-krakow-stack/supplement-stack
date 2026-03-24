@@ -270,8 +270,21 @@ app.get('/api/ingredients/search', async (c) => {
     'SELECT i.* FROM ingredients i JOIN ingredient_synonyms s ON s.ingredient_id = i.id WHERE s.synonym LIKE ?'
   ).bind(`%${q}%`).all<IngredientRow>()
   const merged = [...byName, ...bySynonym]
-  const unique = Array.from(new Map(merged.map(i => [i.id, i])).values())
-  return c.json({ ingredients: unique })
+  const unique = Array.from(new Map(merged.map(i => [i.id, i])).values()).slice(0, 10)
+  if (unique.length === 0) return c.json({ ingredients: [] })
+  // Fetch synonyms for all matched ingredients in a single query
+  const ids = unique.map(i => i.id)
+  const placeholders = ids.map(() => '?').join(',')
+  const { results: allSynonyms } = await c.env.DB.prepare(
+    `SELECT ingredient_id, synonym FROM ingredient_synonyms WHERE ingredient_id IN (${placeholders})`
+  ).bind(...ids).all<{ ingredient_id: number; synonym: string }>()
+  const synMap: Record<number, Array<{ synonym: string }>> = {}
+  for (const s of allSynonyms) {
+    if (!synMap[s.ingredient_id]) synMap[s.ingredient_id] = []
+    synMap[s.ingredient_id].push({ synonym: s.synonym })
+  }
+  const ingredients = unique.map(i => ({ ...i, synonyms: synMap[i.id] ?? [] }))
+  return c.json({ ingredients })
 })
 
 // GET /api/ingredients/:id
