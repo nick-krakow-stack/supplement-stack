@@ -10,7 +10,7 @@ interface AuthContextValue {
   isAdmin: boolean;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string, extra?: { health_consent?: boolean }) => Promise<void>;
   logout: () => void;
 }
 
@@ -44,8 +44,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(newUser);
   };
 
-  const register = async (email: string, password: string): Promise<void> => {
-    const { token: newToken, user: newUser } = await authApi.register(email, password);
+  const register = async (email: string, password: string, extra?: { health_consent?: boolean }): Promise<void> => {
+    const { token: newToken, user: newUser } = await authApi.register(email, password, extra);
     localStorage.setItem(TOKEN_KEY, newToken);
     setToken(newToken);
     setUser(newUser);

@@ -3,9 +3,17 @@ compatibility_date = "2024-09-23"
 
 [vars]
 DEMO_SESSION_TTL_MINUTES = "1440"
+GOOGLE_CLIENT_ID = ""
+GOOGLE_CLIENT_SECRET = ""
+FRONTEND_URL = "https://supplementstack.pages.dev"
+CF_IMAGES_ACCOUNT_HASH = ""
 
 [[d1_databases]]
 binding = "DB"
 database_name = "supplementstack-production"
 database_id = "f1336769-9231-4cfa-a54b-91a261f07b08"
 migrations_dir = "./d1-migrations"
+
+[[r2_buckets]]
+binding = "PRODUCT_IMAGES"
+bucket_name = "supplement-stack-images"

@@ -17,6 +17,8 @@ interface AdminProduct {
   price: number;
   moderation_status?: string;
   visibility?: string;
+  image_url?: string;
+  is_affiliate?: number;
 }
 
 interface Ingredient {
@@ -57,7 +59,7 @@ function authHeaders(): Record<string, string> {
   };
 }
 
-type Tab = 'products' | 'ingredients' | 'interactions' | 'stats';
+type Tab = 'products' | 'ingredients' | 'interactions' | 'stats' | 'shop_domains' | 'rankings';
 
 // ---- Status badge ----
 function StatusBadge({ status }: { status?: string }) {
@@ -90,6 +92,36 @@ function ProductsTab() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState<number | null>(null);
+  const [imageUploading, setImageUploading] = useState<number | null>(null);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, product: AdminProduct) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Bild darf maximal 5 MB groß sein.');
+      return;
+    }
+    setImageUploading(product.id);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const token = localStorage.getItem('ss_token');
+      const res = await fetch(`/api/products/${product.id}/image`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      });
+      if (!res.ok) throw new Error('Upload fehlgeschlagen');
+      const data = await res.json() as { image_url: string };
+      setProducts((prev) =>
+        prev.map((p) => p.id === product.id ? { ...p, image_url: data.image_url } : p)
+      );
+    } catch {
+      alert('Bild-Upload fehlgeschlagen.');
+    } finally {
+      setImageUploading(null);
+    }
+  };
 
   useEffect(() => {
     fetch('/api/admin/products', { headers: authHeaders() })
@@ -104,7 +136,7 @@ function ProductsTab() {
 
   const updateProduct = async (
     id: number,
-    body: { moderation_status?: string; visibility?: string }
+    body: { moderation_status?: string; visibility?: string; is_affiliate?: number }
   ) => {
     setActionLoading(id);
     try {
@@ -122,6 +154,7 @@ function ProductsTab() {
                 ...p,
                 moderation_status: updated.moderation_status ?? body.moderation_status ?? p.moderation_status,
                 visibility: updated.visibility ?? body.visibility ?? p.visibility,
+                is_affiliate: updated.is_affiliate ?? body.is_affiliate ?? p.is_affiliate,
               }
             : p
         )
@@ -155,50 +188,84 @@ function ProductsTab() {
         {products.map((product) => (
           <div
             key={product.id}
-            className="bg-white rounded-xl border border-gray-200 p-4 flex flex-wrap items-center justify-between gap-3"
+            className="bg-white rounded-xl border border-gray-200 p-4 flex flex-col gap-3"
           >
-            <div className="min-w-0">
-              <p className="font-semibold text-gray-900 truncate">{product.name}</p>
-              {product.brand && (
-                <p className="text-sm text-gray-500">{product.brand}</p>
-              )}
-              <p className="text-sm text-green-600 font-bold">€{product.price.toFixed(2)}/Monat</p>
-              <div className="mt-1">
-                <StatusBadge status={product.moderation_status} />
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-semibold text-gray-900 truncate">{product.name}</p>
+                {product.brand && (
+                  <p className="text-sm text-gray-500">{product.brand}</p>
+                )}
+                <p className="text-sm text-green-600 font-bold">€{product.price.toFixed(2)}/Monat</p>
+                <div className="mt-1">
+                  <StatusBadge status={product.moderation_status} />
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() =>
+                    updateProduct(product.id, {
+                      moderation_status: 'approved',
+                      visibility: 'public',
+                    })
+                  }
+                  disabled={actionLoading === product.id}
+                  className="text-sm bg-green-100 text-green-700 hover:bg-green-200 px-3 py-1.5 rounded-lg font-medium transition-colors disabled:opacity-50"
+                >
+                  Freigeben
+                </button>
+                <button
+                  onClick={() =>
+                    updateProduct(product.id, {
+                      moderation_status: 'rejected',
+                      visibility: 'hidden',
+                    })
+                  }
+                  disabled={actionLoading === product.id}
+                  className="text-sm bg-red-100 text-red-700 hover:bg-red-200 px-3 py-1.5 rounded-lg font-medium transition-colors disabled:opacity-50"
+                >
+                  Ablehnen
+                </button>
+                <button
+                  onClick={() => updateProduct(product.id, { visibility: 'hidden' })}
+                  disabled={actionLoading === product.id}
+                  className="text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 px-3 py-1.5 rounded-lg font-medium transition-colors disabled:opacity-50"
+                >
+                  Verbergen
+                </button>
               </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() =>
-                  updateProduct(product.id, {
-                    moderation_status: 'approved',
-                    visibility: 'public',
-                  })
+
+            {/* Affiliate-Link toggle */}
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id={`is_affiliate_${product.id}`}
+                checked={!!product.is_affiliate}
+                onChange={(e) =>
+                  updateProduct(product.id, { is_affiliate: e.target.checked ? 1 : 0 })
                 }
-                disabled={actionLoading === product.id}
-                className="text-sm bg-green-100 text-green-700 hover:bg-green-200 px-3 py-1.5 rounded-lg font-medium transition-colors disabled:opacity-50"
-              >
-                Freigeben
-              </button>
-              <button
-                onClick={() =>
-                  updateProduct(product.id, {
-                    moderation_status: 'rejected',
-                    visibility: 'hidden',
-                  })
-                }
-                disabled={actionLoading === product.id}
-                className="text-sm bg-red-100 text-red-700 hover:bg-red-200 px-3 py-1.5 rounded-lg font-medium transition-colors disabled:opacity-50"
-              >
-                Ablehnen
-              </button>
-              <button
-                onClick={() => updateProduct(product.id, { visibility: 'hidden' })}
-                disabled={actionLoading === product.id}
-                className="text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 px-3 py-1.5 rounded-lg font-medium transition-colors disabled:opacity-50"
-              >
-                Verbergen
-              </button>
+              />
+              <label htmlFor={`is_affiliate_${product.id}`} className="text-sm font-medium text-gray-700">
+                Affiliate-Link
+              </label>
+            </div>
+
+            {/* Image upload */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Produktbild</label>
+              {product.image_url && (
+                <img src={product.image_url} alt="" className="w-16 h-16 object-cover rounded mb-2" />
+              )}
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => handleImageUpload(e, product)}
+                className="text-sm"
+              />
+              {imageUploading === product.id && (
+                <p className="text-xs text-gray-500 mt-1">Bild wird hochgeladen...</p>
+              )}
             </div>
           </div>
         ))}
@@ -880,6 +947,8 @@ const TAB_LABELS: Array<{ key: Tab; label: string }> = [
   { key: 'ingredients', label: 'Wirkstoffe' },
   { key: 'interactions', label: 'Interaktionen' },
   { key: 'stats', label: 'Statistiken' },
+  { key: 'shop_domains', label: 'Shop-Domains' },
+  { key: 'rankings', label: 'Rankings' },
 ];
 
 export default function AdminPage() {
@@ -931,6 +1000,183 @@ export default function AdminPage() {
       {activeTab === 'ingredients' && <IngredientsTab />}
       {activeTab === 'interactions' && <InteractionsTab />}
       {activeTab === 'stats' && <StatsTab />}
+      {activeTab === 'shop_domains' && <ShopDomainsPanel />}
+      {activeTab === 'rankings' && <RankingsPanel />}
+    </div>
+  );
+}
+
+// ---- Shop Domains Panel ----
+function ShopDomainsPanel() {
+  const [shops, setShops] = useState<{ id: number; domain: string; display_name: string }[]>([]);
+  const [newDomain, setNewDomain] = useState('');
+  const [newName, setNewName] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/admin/shop-domains', { headers: authHeaders() });
+      const data = await res.json() as { shops: { id: number; domain: string; display_name: string }[] };
+      setShops(data.shops ?? []);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const addShop = async () => {
+    if (!newDomain.trim() || !newName.trim()) return;
+    await fetch('/api/admin/shop-domains', {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ domain: newDomain.trim(), display_name: newName.trim() }),
+    });
+    setNewDomain('');
+    setNewName('');
+    load();
+  };
+
+  const deleteShop = async (id: number) => {
+    await fetch(`/api/admin/shop-domains/${id}`, { method: 'DELETE', headers: authHeaders() });
+    load();
+  };
+
+  if (loading) return <p className="text-gray-500 py-8 text-center">Lade...</p>;
+
+  return (
+    <div className="space-y-4">
+      <h2 className="text-lg font-semibold">Shop-Domains</h2>
+      <p className="text-sm text-gray-500">
+        Ordne Shop-URLs einem Anzeigenamen zu. Wird für Kaufen-Buttons verwendet.
+      </p>
+      <div className="flex gap-2">
+        <input
+          value={newDomain}
+          onChange={e => setNewDomain(e.target.value)}
+          placeholder="amazon.de"
+          className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <input
+          value={newName}
+          onChange={e => setNewName(e.target.value)}
+          placeholder="Amazon"
+          className="w-36 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <button
+          onClick={addShop}
+          className="inline-flex items-center gap-1.5 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
+        >
+          <Plus size={14} /> Hinzufügen
+        </button>
+      </div>
+      <table className="w-full text-sm border-collapse">
+        <thead>
+          <tr className="border-b text-left text-gray-500 text-xs uppercase tracking-wide">
+            <th className="py-2 pr-4 font-medium">Domain</th>
+            <th className="py-2 pr-4 font-medium">Anzeigename</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {shops.map(s => (
+            <tr key={s.id} className="border-b hover:bg-gray-50">
+              <td className="py-2 pr-4 font-mono text-xs text-gray-600">{s.domain}</td>
+              <td className="py-2 pr-4 font-medium">{s.display_name}</td>
+              <td className="py-2 text-right">
+                <button
+                  onClick={() => deleteShop(s.id)}
+                  className="text-red-500 hover:text-red-700 text-xs"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </td>
+            </tr>
+          ))}
+          {shops.length === 0 && (
+            <tr>
+              <td colSpan={3} className="py-6 text-center text-gray-400 text-sm">
+                Keine Domains hinterlegt.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ---- Rankings Panel ----
+function RankingsPanel() {
+  const [rankings, setRankings] = useState<{
+    id: number;
+    product_id: number;
+    product_name: string;
+    rank_score: number;
+    notes?: string;
+  }[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/admin/product-rankings', { headers: authHeaders() });
+      const data = await res.json() as { rankings: typeof rankings };
+      setRankings(data.rankings ?? []);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const updateRank = async (productId: number, score: number) => {
+    await fetch(`/api/admin/product-rankings/${productId}`, {
+      method: 'PUT',
+      headers: authHeaders(),
+      body: JSON.stringify({ rank_score: score }),
+    });
+  };
+
+  if (loading) return <p className="text-gray-500 py-8 text-center">Lade...</p>;
+
+  return (
+    <div className="space-y-4">
+      <h2 className="text-lg font-semibold">Produkt-Rankings</h2>
+      <p className="text-sm text-gray-500">
+        Höherer Score = weiter oben in Empfehlungslisten. Änderungen werden beim Verlassen des Feldes gespeichert.
+      </p>
+      <table className="w-full text-sm border-collapse">
+        <thead>
+          <tr className="border-b text-left text-gray-500 text-xs uppercase tracking-wide">
+            <th className="py-2 pr-4 font-medium">Produkt</th>
+            <th className="py-2 pr-4 font-medium">Score</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rankings.map(r => (
+            <tr key={r.id} className="border-b hover:bg-gray-50">
+              <td className="py-2 pr-4 font-medium">{r.product_name}</td>
+              <td className="py-2 pr-4">
+                <input
+                  type="number"
+                  defaultValue={r.rank_score}
+                  className="w-20 border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  onBlur={e => updateRank(r.product_id, Number(e.target.value))}
+                />
+              </td>
+            </tr>
+          ))}
+          {rankings.length === 0 && (
+            <tr>
+              <td colSpan={2} className="py-6 text-center text-gray-400 text-sm">
+                Noch keine Rankings vergeben.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
     </div>
   );
 }

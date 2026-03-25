@@ -11,6 +11,7 @@ export default function RegisterPage() {
   const [age, setAge] = useState('');
   const [gender, setGender] = useState('');
   const [guidelineSource, setGuidelineSource] = useState('');
+  const [healthConsent, setHealthConsent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -19,7 +20,7 @@ export default function RegisterPage() {
     setError(null);
     setSubmitting(true);
     try {
-      await register(email, password);
+      await register(email, password, { health_consent: healthConsent });
       navigate('/');
     } catch (err: unknown) {
       const msg =
@@ -122,13 +123,29 @@ export default function RegisterPage() {
             </div>
           </div>
 
+          <div className="border-t border-gray-100 pt-4">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={healthConsent}
+                onChange={(e) => setHealthConsent(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span className="text-sm text-gray-700">
+                Ich stimme der Verarbeitung meiner Gesundheitsdaten (Alter, Geschlecht, Raucherstatus)
+                zur Berechnung personalisierter Dosierungsempfehlungen zu.{' '}
+                <span className="text-xs text-gray-500">(DSGVO Art. 9 – erforderlich)</span>
+              </span>
+            </label>
+          </div>
+
           {error && (
             <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
               {error}
             </p>
           )}
 
-          <button type="submit" disabled={submitting} className="w-full mt-2">
+          <button type="submit" disabled={!healthConsent || submitting} className="w-full mt-2">
             {submitting ? 'Registrieren...' : 'Konto erstellen'}
           </button>
         </form>

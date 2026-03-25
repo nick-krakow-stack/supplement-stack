@@ -11,6 +11,7 @@ export default function ProfilePage() {
   const [diet, setDiet] = useState('');
   const [goals, setGoals] = useState('');
   const [guidelineSource, setGuidelineSource] = useState('');
+  const [isSmoker, setIsSmoker] = useState<boolean>(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -23,6 +24,7 @@ export default function ProfilePage() {
       setDiet(user.diet ?? '');
       setGoals(user.goals ?? '');
       setGuidelineSource(user.guideline_source ?? '');
+      setIsSmoker(user.is_smoker === 1);
     }
   }, [user]);
 
@@ -39,6 +41,7 @@ export default function ProfilePage() {
         diet: diet || undefined,
         goals: goals || undefined,
         guideline_source: guidelineSource || undefined,
+        is_smoker: isSmoker ? 1 : 0,
       });
       setSuccess(true);
     } catch (err: unknown) {
@@ -156,6 +159,37 @@ export default function ProfilePage() {
               <option value="Studien">Studien</option>
               <option value="Influencer">Influencer</option>
             </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Raucherstatus
+            </label>
+            <div className="flex gap-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="smoker"
+                  checked={!isSmoker}
+                  onChange={() => setIsSmoker(false)}
+                  className="text-blue-600"
+                />
+                <span className="text-sm text-gray-700">Nichtraucher</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="smoker"
+                  checked={isSmoker}
+                  onChange={() => setIsSmoker(true)}
+                  className="text-blue-600"
+                />
+                <span className="text-sm text-gray-700">Raucher</span>
+              </label>
+            </div>
+            <p className="text-xs text-gray-400 mt-1">
+              Wird für Sicherheitshinweise verwendet (z. B. Beta-Carotin bei Rauchern).
+            </p>
           </div>
 
           {error && (

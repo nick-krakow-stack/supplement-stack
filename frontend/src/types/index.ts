@@ -7,6 +7,9 @@ export interface User {
   diet?: string;
   goals?: string;
   guideline_source?: string;
+  is_smoker?: number;        // 0 or 1
+  health_consent?: number;   // 0 or 1
+  health_consent_at?: string;
   role: 'user' | 'admin';
 }
 
@@ -59,6 +62,14 @@ export interface Product {
   moderation_status: string;
   visibility: string;
   ingredients?: ProductIngredient[];
+  is_affiliate?: number;         // 0 or 1
+  image_r2_key?: string;
+  discontinued_at?: string;
+  replacement_id?: number;
+  serving_size?: number;
+  serving_unit?: string;
+  servings_per_container?: number;
+  container_count?: number;
 }
 
 export interface StackItem {

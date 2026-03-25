@@ -9,13 +9,13 @@ interface AuthResponse {
 export async function register(
   email: string,
   password: string,
-  profile?: Partial<Pick<User, 'age' | 'gender' | 'guideline_source'>>
+  extra?: { health_consent?: boolean } & Partial<Pick<User, 'age' | 'gender' | 'guideline_source'>>
 ): Promise<AuthResponse> {
   // Backend returns only { token } on register — fetch profile separately
   const res = await apiClient.post<{ token: string }>('/auth/register', {
     email,
     password,
-    ...profile,
+    ...extra,
   });
   const token = res.data.token;
   // Temporarily set token so getMe() works

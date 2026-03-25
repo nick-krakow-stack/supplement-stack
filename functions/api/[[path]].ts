@@ -8,6 +8,11 @@ type Env = {
   DB: D1Database
   JWT_SECRET: string
   DEMO_SESSION_TTL_MINUTES: string
+  GOOGLE_CLIENT_ID: string
+  GOOGLE_CLIENT_SECRET: string
+  FRONTEND_URL: string
+  CF_IMAGES_ACCOUNT_HASH: string
+  PRODUCT_IMAGES: R2Bucket
 }
 type Variables = { user: { userId: number; email: string; role: string } }
 type AppContext = { Bindings: Env; Variables: Variables }
@@ -79,6 +84,11 @@ type UserRow = {
   guideline_source: string | null
   role: string
   created_at: string
+  google_id: string | null
+  is_smoker: number
+  health_consent: number
+  health_consent_at: string | null
+  deleted_at: string | null
 }
 
 type IngredientRow = {
@@ -103,6 +113,14 @@ type ProductRow = {
   moderation_status: string
   visibility: string
   created_at: string
+  is_affiliate: number
+  image_r2_key: string | null
+  discontinued_at: string | null
+  replacement_id: number | null
+  serving_size: number | null
+  serving_unit: string | null
+  servings_per_container: number | null
+  container_count: number
 }
 
 type StackRow = {
@@ -151,6 +169,8 @@ app.post('/api/auth/register', async (c) => {
     return c.json({ error: 'Valid email required' }, 400)
   if (!body.password || typeof body.password !== 'string' || body.password.length < 8)
     return c.json({ error: 'Password must be at least 8 characters' }, 400)
+  if (!body.health_consent)
+    return c.json({ error: 'Gesundheits-Einwilligung erforderlich (DSGVO Art. 9)' }, 400)
   const data = body as { email: string; password: string; age?: number; gender?: string; weight?: number; diet?: string; goals?: string; guideline_source?: string }
 
   const existing = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(data.email).first<{ id: number }>()
@@ -158,7 +178,7 @@ app.post('/api/auth/register', async (c) => {
 
   const password_hash = await hashPassword(data.password)
   const result = await c.env.DB.prepare(
-    `INSERT INTO users (email, password_hash, age, gender, weight, diet, goals, guideline_source) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO users (email, password_hash, age, gender, weight, diet, goals, guideline_source, health_consent, health_consent_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, datetime('now'))`
   ).bind(
     data.email,
     password_hash,
@@ -171,11 +191,36 @@ app.post('/api/auth/register', async (c) => {
   ).run()
 
   const userId = result.meta.last_row_id
+  await c.env.DB.prepare(
+    `INSERT INTO consent_log (user_id, consent_type, granted) VALUES (?, 'health_data', 1)`
+  ).bind(userId).run()
   const token = await sign(
     { userId, email: data.email, role: 'user', exp: Math.floor(Date.now() / 1000) + 7 * 24 * 3600 },
     c.env.JWT_SECRET,
   )
   return c.json({ token })
+})
+
+// GET /api/auth/google (stub — Phase 5)
+app.get('/api/auth/google', async (c) => {
+  if (!c.env.GOOGLE_CLIENT_ID) return c.json({ error: 'Google OAuth nicht konfiguriert' }, 501)
+  const redirectUri = `${c.env.FRONTEND_URL}/auth/callback`
+  const url = new URL('https://accounts.google.com/o/oauth2/v2/auth')
+  url.searchParams.set('client_id', c.env.GOOGLE_CLIENT_ID)
+  url.searchParams.set('redirect_uri', redirectUri)
+  url.searchParams.set('response_type', 'code')
+  url.searchParams.set('scope', 'openid email')
+  return Response.redirect(url.toString(), 302)
+})
+
+// GET /api/auth/google/callback (stub — Phase 5)
+app.get('/api/auth/google/callback', async (c) => {
+  return c.json({ error: 'Google OAuth callback noch nicht implementiert' }, 501)
+})
+
+// POST /api/auth/logout
+app.post('/api/auth/logout', async (_c) => {
+  return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } })
 })
 
 // POST /api/auth/login
@@ -217,7 +262,7 @@ app.get('/api/me', async (c) => {
   if (authErr) return authErr
   const user = c.get('user')
   const profile = await c.env.DB.prepare(
-    'SELECT id, email, age, gender, weight, diet, goals, guideline_source, role FROM users WHERE id = ?'
+    'SELECT id, email, age, gender, weight, diet, goals, guideline_source, is_smoker, health_consent, health_consent_at, role FROM users WHERE id = ?'
   ).bind(user.userId).first()
   return c.json({ profile })
 })
@@ -228,7 +273,7 @@ app.put('/api/me', async (c) => {
   if (authErr) return authErr
   const user = c.get('user')
   const body = await c.req.json()
-  const data = body as { age?: number; gender?: string; weight?: number; diet?: string; goals?: string; guideline_source?: string }
+  const data = body as { age?: number; gender?: string; weight?: number; diet?: string; goals?: string; guideline_source?: string; is_smoker?: number }
   await c.env.DB.prepare(`
     UPDATE users SET
       age = COALESCE(?, age),
@@ -236,7 +281,8 @@ app.put('/api/me', async (c) => {
       weight = COALESCE(?, weight),
       diet = COALESCE(?, diet),
       goals = COALESCE(?, goals),
-      guideline_source = COALESCE(?, guideline_source)
+      guideline_source = COALESCE(?, guideline_source),
+      is_smoker = COALESCE(?, is_smoker)
     WHERE id = ?
   `).bind(
     data.age ?? null,
@@ -245,10 +291,11 @@ app.put('/api/me', async (c) => {
     data.diet ?? null,
     data.goals ?? null,
     data.guideline_source ?? null,
+    data.is_smoker ?? null,
     user.userId,
   ).run()
   const updated = await c.env.DB.prepare(
-    'SELECT id, email, age, gender, weight, diet, goals, guideline_source, role FROM users WHERE id = ?'
+    'SELECT id, email, age, gender, weight, diet, goals, guideline_source, is_smoker, health_consent, health_consent_at, role FROM users WHERE id = ?'
   ).bind(user.userId).first()
   return c.json({ profile: updated })
 })
@@ -572,7 +619,7 @@ app.put('/api/products/:id', async (c) => {
   if (!product) return c.json({ error: 'Not found' }, 404)
   if (user.role !== 'admin') return c.json({ error: 'Forbidden' }, 403)
   const body = await c.req.json()
-  const data = body as { name?: string; brand?: string; form?: string; price?: number; shop_link?: string; image_url?: string }
+  const data = body as { name?: string; brand?: string; form?: string; price?: number; shop_link?: string; image_url?: string; image_r2_key?: string; is_affiliate?: number; discontinued_at?: string; replacement_id?: number; serving_size?: number; serving_unit?: string; servings_per_container?: number; container_count?: number }
   await c.env.DB.prepare(`
     UPDATE products SET
       name = COALESCE(?, name),
@@ -580,7 +627,14 @@ app.put('/api/products/:id', async (c) => {
       form = COALESCE(?, form),
       price = COALESCE(?, price),
       shop_link = COALESCE(?, shop_link),
-      image_url = COALESCE(?, image_url)
+      image_url = COALESCE(?, image_url),
+      image_r2_key = COALESCE(?, image_r2_key),
+      is_affiliate = COALESCE(?, is_affiliate),
+      discontinued_at = COALESCE(?, discontinued_at),
+      serving_size = COALESCE(?, serving_size),
+      serving_unit = COALESCE(?, serving_unit),
+      servings_per_container = COALESCE(?, servings_per_container),
+      container_count = COALESCE(?, container_count)
     WHERE id = ?
   `).bind(
     data.name ?? null,
@@ -589,10 +643,46 @@ app.put('/api/products/:id', async (c) => {
     data.price ?? null,
     data.shop_link ?? null,
     data.image_url ?? null,
+    data.image_r2_key ?? null,
+    data.is_affiliate ?? null,
+    data.discontinued_at ?? null,
+    data.serving_size ?? null,
+    data.serving_unit ?? null,
+    data.servings_per_container ?? null,
+    data.container_count ?? null,
     id,
   ).run()
   const updated = await c.env.DB.prepare('SELECT * FROM products WHERE id = ?').bind(id).first()
   return c.json({ product: updated })
+})
+
+// POST /api/products/:id/image (admin only)
+app.post('/api/products/:id/image', async (c) => {
+  const authErr = await ensureAuth(c)
+  if (authErr) return authErr
+  const admErr = requireAdmin(c)
+  if (admErr) return admErr
+  const id = c.req.param('id')
+  const product = await c.env.DB.prepare('SELECT id FROM products WHERE id = ?').bind(id).first()
+  if (!product) return c.json({ error: 'Not found' }, 404)
+  const formData = await c.req.formData()
+  const file = formData.get('file') as File | null
+  if (!file) return c.json({ error: 'file field required' }, 400)
+  if (file.size > 5 * 1024 * 1024) return c.json({ error: 'Max 5 MB' }, 413)
+  const ext = file.name.split('.').pop()?.toLowerCase() || 'webp'
+  const r2Key = `products/${id}/${crypto.randomUUID()}.${ext}`
+  const buffer = await file.arrayBuffer()
+  await c.env.PRODUCT_IMAGES.put(r2Key, buffer, {
+    httpMetadata: { contentType: file.type || 'image/webp' },
+  })
+  const accountHash = c.env.CF_IMAGES_ACCOUNT_HASH
+  const imageUrl = accountHash
+    ? `https://imagedelivery.net/${accountHash}/${r2Key}/public`
+    : `https://pub-supplement-stack-images.r2.dev/${r2Key}`
+  await c.env.DB.prepare(
+    'UPDATE products SET image_url = ?, image_r2_key = ? WHERE id = ?'
+  ).bind(imageUrl, r2Key, id).run()
+  return c.json({ image_url: imageUrl })
 })
 
 // PUT /api/products/:id/status (admin only)
@@ -873,6 +963,87 @@ app.get('/api/admin/stats', async (c) => {
     stacks: stacksRow?.count ?? 0,
     pending_products: pendingRow?.count ?? 0,
   })
+})
+
+// GET /api/shop-domains/resolve?url=... (public)
+app.get('/api/shop-domains/resolve', async (c) => {
+  const url = c.req.query('url') || ''
+  if (!url) return c.json({ shop_name: null, button_text: 'Jetzt kaufen' })
+  const { results: shops } = await c.env.DB.prepare('SELECT domain, display_name FROM shop_domains').all<{ domain: string; display_name: string }>()
+  const match = shops.find(s => url.toLowerCase().includes(s.domain.toLowerCase()))
+  if (!match) return c.json({ shop_name: null, button_text: 'Jetzt kaufen' })
+  return c.json({ shop_name: match.display_name, button_text: `Bei ${match.display_name} kaufen` })
+})
+
+// GET /api/admin/shop-domains (admin only)
+app.get('/api/admin/shop-domains', async (c) => {
+  const authErr = await ensureAuth(c)
+  if (authErr) return authErr
+  const admErr = requireAdmin(c)
+  if (admErr) return admErr
+  const { results: shops } = await c.env.DB.prepare(
+    'SELECT * FROM shop_domains ORDER BY display_name ASC'
+  ).all()
+  return c.json({ shops })
+})
+
+// POST /api/admin/shop-domains (admin only)
+app.post('/api/admin/shop-domains', async (c) => {
+  const authErr = await ensureAuth(c)
+  if (authErr) return authErr
+  const admErr = requireAdmin(c)
+  if (admErr) return admErr
+  const body = await c.req.json()
+  if (!body.domain || !body.display_name) return c.json({ error: 'domain und display_name erforderlich' }, 400)
+  const result = await c.env.DB.prepare(
+    'INSERT INTO shop_domains (domain, display_name) VALUES (?, ?)'
+  ).bind(String(body.domain).trim(), String(body.display_name).trim()).run()
+  return c.json({ id: result.meta.last_row_id }, 201)
+})
+
+// DELETE /api/admin/shop-domains/:id (admin only)
+app.delete('/api/admin/shop-domains/:id', async (c) => {
+  const authErr = await ensureAuth(c)
+  if (authErr) return authErr
+  const admErr = requireAdmin(c)
+  if (admErr) return admErr
+  await c.env.DB.prepare('DELETE FROM shop_domains WHERE id = ?').bind(c.req.param('id')).run()
+  return c.json({ ok: true })
+})
+
+// GET /api/admin/product-rankings (admin only)
+app.get('/api/admin/product-rankings', async (c) => {
+  const authErr = await ensureAuth(c)
+  if (authErr) return authErr
+  const admErr = requireAdmin(c)
+  if (admErr) return admErr
+  const { results: rankings } = await c.env.DB.prepare(`
+    SELECT pr.*, p.name as product_name
+    FROM product_rankings pr
+    JOIN products p ON p.id = pr.product_id
+    ORDER BY pr.rank_score DESC
+  `).all()
+  return c.json({ rankings })
+})
+
+// PUT /api/admin/product-rankings/:productId (admin only)
+app.put('/api/admin/product-rankings/:productId', async (c) => {
+  const authErr = await ensureAuth(c)
+  if (authErr) return authErr
+  const admErr = requireAdmin(c)
+  if (admErr) return admErr
+  const productId = c.req.param('productId')
+  const body = await c.req.json()
+  if (body.rank_score === undefined) return c.json({ error: 'rank_score erforderlich' }, 400)
+  await c.env.DB.prepare(`
+    INSERT INTO product_rankings (product_id, rank_score, notes, ranked_at)
+    VALUES (?, ?, ?, datetime('now'))
+    ON CONFLICT(product_id) DO UPDATE SET
+      rank_score = excluded.rank_score,
+      notes = COALESCE(excluded.notes, product_rankings.notes),
+      ranked_at = datetime('now')
+  `).bind(productId, body.rank_score, body.notes ?? null).run()
+  return c.json({ ok: true })
 })
 
 // POST /api/demo/sessions

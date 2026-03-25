@@ -9,6 +9,8 @@ interface ProductCardProduct {
   image_url?: string;
   visibility?: string;
   moderation_status?: string;
+  is_affiliate?: number;
+  discontinued_at?: string;
 }
 
 interface ProductCardProps {
@@ -30,6 +32,12 @@ export default function ProductCard({
 }: ProductCardProps) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex flex-col gap-3 hover:shadow-md transition-shadow">
+      {product.discontinued_at && (
+        <div className="bg-gray-100 border border-gray-300 rounded-lg px-3 py-2 mb-3 text-sm text-gray-600 flex items-center gap-2">
+          <span>⚠️</span>
+          <span>Dieses Produkt ist eingestellt.</span>
+        </div>
+      )}
       <div className="flex gap-3">
         {/* Product image */}
         <div className="flex-shrink-0 w-[60px] h-[60px] rounded-lg bg-gray-100 overflow-hidden flex items-center justify-center">
@@ -83,6 +91,11 @@ export default function ProductCard({
             >
               <ShoppingBag size={14} />
               Bei Amazon kaufen
+              {product.is_affiliate === 1 && (
+                <span className="ml-1 text-xs bg-amber-100 text-amber-700 border border-amber-300 rounded px-1 py-0 align-middle">
+                  Werbelink
+                </span>
+              )}
             </a>
           )}
           {showWishlistButton && onAddToWishlist && (
