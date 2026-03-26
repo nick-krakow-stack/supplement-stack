@@ -79,10 +79,10 @@ type UserRow = {
   age: number | null
   gender: string | null
   weight: number | null
-  diet: string | null
-  goals: string | null
+  diet_type: string | null
+  personal_goals: string | null
   guideline_source: string | null
-  role: string
+  role: string | null
   created_at: string
   google_id: string | null
   is_smoker: number
@@ -178,7 +178,7 @@ app.post('/api/auth/register', async (c) => {
 
   const password_hash = await hashPassword(data.password)
   const result = await c.env.DB.prepare(
-    `INSERT INTO users (email, password_hash, age, gender, weight, diet, goals, guideline_source, health_consent, health_consent_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, datetime('now'))`
+    `INSERT INTO users (email, password_hash, age, gender, weight, diet_type, personal_goals, guideline_source, health_consent, health_consent_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, datetime('now'))`
   ).bind(
     data.email,
     password_hash,
@@ -237,7 +237,7 @@ app.post('/api/auth/login', async (c) => {
   if (!valid) return c.json({ error: 'Invalid credentials' }, 401)
 
   const token = await sign(
-    { userId: user.id, email: user.email, role: user.role, exp: Math.floor(Date.now() / 1000) + 7 * 24 * 3600 },
+    { userId: user.id, email: user.email, role: user.role ?? 'user', exp: Math.floor(Date.now() / 1000) + 7 * 24 * 3600 },
     c.env.JWT_SECRET,
   )
   return c.json({
@@ -248,10 +248,10 @@ app.post('/api/auth/login', async (c) => {
       age: user.age,
       gender: user.gender,
       weight: user.weight,
-      diet: user.diet,
-      goals: user.goals,
+      diet: user.diet_type,
+      goals: user.personal_goals,
       guideline_source: user.guideline_source,
-      role: user.role,
+      role: user.role ?? 'user',
     },
   })
 })
@@ -261,9 +261,16 @@ app.get('/api/me', async (c) => {
   const authErr = await ensureAuth(c)
   if (authErr) return authErr
   const user = c.get('user')
-  const profile = await c.env.DB.prepare(
-    'SELECT id, email, age, gender, weight, diet, goals, guideline_source, is_smoker, health_consent, health_consent_at, role FROM users WHERE id = ?'
-  ).bind(user.userId).first()
+  const row = await c.env.DB.prepare(
+    'SELECT id, email, age, gender, weight, diet_type, personal_goals, guideline_source, is_smoker, health_consent, health_consent_at, role FROM users WHERE id = ?'
+  ).bind(user.userId).first<UserRow>()
+  if (!row) return c.json({ error: 'User not found' }, 404)
+  const profile = {
+    id: row.id, email: row.email, age: row.age, gender: row.gender, weight: row.weight,
+    diet: row.diet_type, goals: row.personal_goals, guideline_source: row.guideline_source,
+    is_smoker: row.is_smoker, health_consent: row.health_consent, health_consent_at: row.health_consent_at,
+    role: row.role ?? 'user',
+  }
   return c.json({ profile })
 })
 
@@ -279,8 +286,8 @@ app.put('/api/me', async (c) => {
       age = COALESCE(?, age),
       gender = COALESCE(?, gender),
       weight = COALESCE(?, weight),
-      diet = COALESCE(?, diet),
-      goals = COALESCE(?, goals),
+      diet_type = COALESCE(?, diet_type),
+      personal_goals = COALESCE(?, personal_goals),
       guideline_source = COALESCE(?, guideline_source),
       is_smoker = COALESCE(?, is_smoker)
     WHERE id = ?
@@ -295,9 +302,15 @@ app.put('/api/me', async (c) => {
     user.userId,
   ).run()
   const updated = await c.env.DB.prepare(
-    'SELECT id, email, age, gender, weight, diet, goals, guideline_source, is_smoker, health_consent, health_consent_at, role FROM users WHERE id = ?'
-  ).bind(user.userId).first()
-  return c.json({ profile: updated })
+    'SELECT id, email, age, gender, weight, diet_type, personal_goals, guideline_source, is_smoker, health_consent, health_consent_at, role FROM users WHERE id = ?'
+  ).bind(user.userId).first<UserRow>()
+  if (!updated) return c.json({ error: 'User not found' }, 404)
+  return c.json({ profile: {
+    id: updated.id, email: updated.email, age: updated.age, gender: updated.gender, weight: updated.weight,
+    diet: updated.diet_type, goals: updated.personal_goals, guideline_source: updated.guideline_source,
+    is_smoker: updated.is_smoker, health_consent: updated.health_consent, health_consent_at: updated.health_consent_at,
+    role: updated.role ?? 'user',
+  }})
 })
 
 // GET /api/ingredients

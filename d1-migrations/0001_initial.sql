@@ -7,10 +7,9 @@ CREATE TABLE IF NOT EXISTS users (
   age INTEGER,
   gender TEXT,
   weight REAL,
-  diet TEXT,
-  goals TEXT,
+  diet_type TEXT,
+  personal_goals TEXT,
   guideline_source TEXT,
-  role TEXT NOT NULL DEFAULT 'user',
   created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
