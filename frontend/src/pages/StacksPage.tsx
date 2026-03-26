@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Trash2, AlertTriangle, Plus, ChevronDown, ChevronUp, Check, X } from 'lucide-react';
+import ProductCard from '../components/ProductCard';
+import { ShopDomain } from '../types/local';
 
 // ---- Local types ----
 interface StackProduct {
@@ -8,6 +10,10 @@ interface StackProduct {
   name: string;
   price: number;
   brand?: string;
+  shop_link?: string;
+  is_affiliate?: number;
+  image_url?: string;
+  discontinued_at?: string;
 }
 
 interface InteractionWarning {
@@ -81,10 +87,12 @@ function StackCard({
   stack,
   onDeleted,
   onRenamed,
+  shopDomains,
 }: {
   stack: Stack;
   onDeleted: (id: number) => void;
   onRenamed: (id: number, name: string) => void;
+  shopDomains: ShopDomain[];
 }) {
   const [editingName, setEditingName] = useState(false);
   const [nameValue, setNameValue] = useState(stack.name);
@@ -95,6 +103,7 @@ function StackCard({
   const [warnings, setWarnings] = useState<InteractionWarning[]>(stack.warnings ?? []);
   const [loadingWarnings, setLoadingWarnings] = useState(false);
   const [error, setError] = useState('');
+  const [selectedProductIds, setSelectedProductIds] = useState<Set<number>>(new Set());
 
   // Fetch warnings on mount if not already provided
   useEffect(() => {
@@ -171,9 +180,13 @@ function StackCard({
   };
 
   const total = products.reduce((sum, p) => sum + (p.price ?? 0), 0);
+  const selectedTotal = products
+    .filter((p) => selectedProductIds.has(p.id))
+    .reduce((sum, p) => sum + (p.price ?? 0), 0);
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 flex flex-col gap-4">
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
+      <div className="p-5 flex flex-col gap-4">
       {/* Header: name + delete */}
       <div className="flex items-center justify-between gap-2">
         {editingName ? (
@@ -208,13 +221,26 @@ function StackCard({
             </button>
           </div>
         ) : (
-          <h2
-            className="text-lg font-semibold text-gray-900 cursor-pointer hover:text-blue-600 transition-colors"
-            title="Klicken zum Bearbeiten"
-            onClick={() => setEditingName(true)}
-          >
-            {stack.name}
-          </h2>
+          <div className="flex items-center gap-3 min-w-0">
+            <h2
+              className="text-lg font-semibold text-gray-900 cursor-pointer hover:text-blue-600 transition-colors"
+              title="Klicken zum Bearbeiten"
+              onClick={() => setEditingName(true)}
+            >
+              {stack.name}
+            </h2>
+            {products.length > 0 && (
+              <button
+                onClick={() => {
+                  if (selectedProductIds.size === products.length) setSelectedProductIds(new Set());
+                  else setSelectedProductIds(new Set(products.map((p) => p.id)));
+                }}
+                className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+              >
+                {selectedProductIds.size === products.length ? 'Keine' : 'Alle'}
+              </button>
+            )}
+          </div>
         )}
 
         <button
@@ -232,25 +258,35 @@ function StackCard({
       )}
 
       {/* Products */}
-      <div className="flex flex-col gap-2">
-        {products.length === 0 ? (
-          <p className="text-sm text-gray-500 italic">Keine Produkte in diesem Stack.</p>
-        ) : (
-          products.map((product) => (
-            <div
-              key={product.id}
-              className="flex items-center justify-between gap-2 bg-gray-50 rounded-lg px-3 py-2"
-            >
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">{product.name}</p>
-                {product.brand && (
-                  <p className="text-xs text-gray-500 truncate">{product.brand}</p>
-                )}
+      {products.length === 0 ? (
+        <p className="text-sm text-gray-500 italic">Keine Produkte in diesem Stack.</p>
+      ) : (
+        <div style={{ columnCount: 2, columnGap: '12px' }}>
+          {products.map((product) => (
+            <div key={product.id} style={{ breakInside: 'avoid', marginBottom: '12px' }}>
+              <div className="relative">
+                <div className="absolute top-2 left-2 z-10">
+                  <input
+                    type="checkbox"
+                    checked={selectedProductIds.has(product.id)}
+                    onChange={() =>
+                      setSelectedProductIds((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(product.id)) next.delete(product.id);
+                        else next.add(product.id);
+                        return next;
+                      })
+                    }
+                    className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer"
+                  />
+                </div>
+                <ProductCard
+                  product={product}
+                  shopDomains={shopDomains}
+                  showWishlistButton={false}
+                />
               </div>
-              <div className="flex items-center gap-3 flex-shrink-0">
-                <span className="text-sm text-green-600 font-semibold">
-                  €{(product.price ?? 0).toFixed(2)}
-                </span>
+              <div className="flex justify-end mt-1">
                 <button
                   onClick={() => handleRemoveProduct(product.id)}
                   disabled={removingProductId === product.id}
@@ -261,9 +297,9 @@ function StackCard({
                 </button>
               </div>
             </div>
-          ))
-        )}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* Warnings */}
       {loadingWarnings ? (
@@ -285,6 +321,19 @@ function StackCard({
           Gesamt: €{total.toFixed(2)}/Monat
         </p>
       </div>
+      </div>
+
+      {/* Selected products footer */}
+      {selectedProductIds.size > 0 && (
+        <div className="border-t border-blue-100 bg-blue-50 rounded-b-xl px-4 py-3 flex items-center justify-between">
+          <span className="text-sm text-blue-700 font-medium">
+            {selectedProductIds.size} ausgewählt
+          </span>
+          <span className="text-sm font-bold text-blue-900">
+            €{selectedTotal.toFixed(2)}/Monat
+          </span>
+        </div>
+      )}
     </div>
   );
 }
@@ -299,6 +348,7 @@ export default function StacksPage() {
   const [newStackName, setNewStackName] = useState('');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
+  const [shopDomains, setShopDomains] = useState<ShopDomain[]>([]);
 
   const loadStacks = useCallback(async () => {
     if (!token) return;
@@ -338,6 +388,13 @@ export default function StacksPage() {
   useEffect(() => {
     loadStacks();
   }, [loadStacks]);
+
+  useEffect(() => {
+    fetch('/api/shop-domains')
+      .then((r) => r.json())
+      .then((data) => setShopDomains(data.shops ?? []))
+      .catch(() => {});
+  }, []);
 
   const handleCreate = async () => {
     const name = newStackName.trim();
@@ -463,6 +520,7 @@ export default function StacksPage() {
               stack={stack}
               onDeleted={handleDeleted}
               onRenamed={handleRenamed}
+              shopDomains={shopDomains}
             />
           ))}
         </div>

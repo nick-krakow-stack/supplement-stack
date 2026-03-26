@@ -3,13 +3,25 @@ import { ChevronLeft, X, Plus, ShoppingCart } from 'lucide-react';
 import ModalWrapper from './ModalWrapper';
 import type { Ingredient, Product, Stack } from '../../types/local';
 
+interface ManualDose {
+  value: number;
+  unit: string;
+}
+
 interface Modal3DosageProps {
   product: Product;
   ingredient: Ingredient;
   onClose: () => void;
   onBack: () => void;
-  onAddToStack: (stackId: number | null, product: Product, portions: number) => void;
+  onAddToStack: (
+    stackId: number | null,
+    product: Product,
+    portions: number,
+    daysSupply: number,
+    monthlyPrice: number,
+  ) => void;
   token: string | null;
+  recommendedDose?: ManualDose;
 }
 
 const MIN_PORTIONS = 0.5;
@@ -23,6 +35,7 @@ export default function Modal3Dosage({
   onBack,
   onAddToStack,
   token,
+  recommendedDose,
 }: Modal3DosageProps) {
   const [portions, setPortions] = useState(1);
   const [stacks, setStacks] = useState<Stack[]>([]);
@@ -72,10 +85,45 @@ export default function Modal3Dosage({
     };
   }, [token]);
 
-  const dailyCost = (product.price / 30) * portions;
-  const monthlyCost = product.price;
-
+  // ── Serving-size math ──
   const mainIng = product.ingredients?.find((i) => i.ingredient_id === ingredient.id);
+
+  const totalServings =
+    (product.servings_per_container ?? 30) * (product.container_count ?? 1);
+
+  // How much of the ingredient is delivered per serving
+  const ingPerServing: number =
+    mainIng?.quantity != null
+      ? mainIng.quantity
+      : (product.serving_size ?? 1);
+
+  // Target dose per day (from manual dose passed from Modal1 or ingredient qty)
+  const targetDosePerDay: number =
+    recommendedDose?.value ?? ingPerServing;
+
+  // Servings needed per day to hit target dose × portions
+  const servingsNeededPerDay: number =
+    ingPerServing > 0
+      ? (portions * targetDosePerDay) / ingPerServing
+      : portions;
+
+  const daysSupply: number =
+    totalServings / Math.max(servingsNeededPerDay, 0.001);
+
+  // If product has proper serving data, use the calculated monthly price
+  const hasServingData =
+    product.servings_per_container != null || product.serving_size != null;
+
+  const monthlyPrice: number = hasServingData
+    ? (product.price / daysSupply) * 30
+    : product.price;
+
+  const dailyCost: number = monthlyPrice / 30;
+
+  const showSupplyNote = hasServingData && (daysSupply < 25 || daysSupply > 35);
+
+  // Unit display for "1 portion = X"
+  const portionUnit = mainIng?.unit ?? ingredient.unit ?? '';
 
   const handlePortionsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseFloat(e.target.value);
@@ -89,7 +137,7 @@ export default function Modal3Dosage({
 
     if (!token) {
       // Demo mode: add without stack
-      onAddToStack(null, product, portions);
+      onAddToStack(null, product, portions, daysSupply, monthlyPrice);
       onClose();
       return;
     }
@@ -100,7 +148,6 @@ export default function Modal3Dosage({
       let stackId: number | null = null;
 
       if (selectedStackId === 'new') {
-        // Create new stack first
         const name = newStackName.trim();
         if (!name) {
           setSubmitError('Bitte einen Stack-Namen eingeben.');
@@ -128,7 +175,7 @@ export default function Modal3Dosage({
         stackId = selectedStackId;
       }
 
-      onAddToStack(stackId, product, portions);
+      onAddToStack(stackId, product, portions, daysSupply, monthlyPrice);
       onClose();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
@@ -184,7 +231,8 @@ export default function Modal3Dosage({
               <p className="text-xs text-gray-500">{product.brand}</p>
             )}
             <p className="text-sm font-semibold text-blue-700 mt-0.5">
-              €{product.price.toFixed(2)}<span className="text-xs text-gray-400 font-normal"> / Monat</span>
+              €{product.price.toFixed(2)}
+              <span className="text-xs text-gray-400 font-normal"> / Packung</span>
             </p>
           </div>
         </div>
@@ -195,19 +243,26 @@ export default function Modal3Dosage({
             Wirkstoff
           </p>
           <p className="text-sm font-semibold text-blue-900">{ingredient.name}</p>
-          {mainIng && mainIng.quantity != null && (
+          {ingPerServing > 0 && portionUnit && (
             <p className="text-xs text-blue-700 mt-0.5">
-              {mainIng.quantity} {mainIng.unit ?? ingredient.unit ?? ''} pro Portion
+              1 Portion = {ingPerServing} {portionUnit}
+            </p>
+          )}
+          {recommendedDose && (
+            <p className="text-xs text-blue-600 mt-0.5">
+              Zieldosis: {recommendedDose.value} {recommendedDose.unit}/Tag
             </p>
           )}
         </div>
 
-        {/* Price calculation */}
+        {/* Dosage slider + cost calculation */}
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">
             Dosierung
           </p>
-          <div className="flex items-center gap-3 mb-3">
+
+          {/* Portions input */}
+          <div className="flex items-center gap-3 mb-4">
             <label htmlFor="portions" className="text-sm text-gray-700 whitespace-nowrap">
               Portionen pro Tag
             </label>
@@ -223,6 +278,7 @@ export default function Modal3Dosage({
             />
           </div>
 
+          {/* Stats grid */}
           <div className="grid grid-cols-2 gap-3">
             <div className="p-3 bg-gray-50 rounded-lg border border-gray-100">
               <p className="text-xs text-gray-500">Kosten pro Tag</p>
@@ -231,12 +287,35 @@ export default function Modal3Dosage({
               </p>
             </div>
             <div className="p-3 bg-gray-50 rounded-lg border border-gray-100">
-              <p className="text-xs text-gray-500">Kosten pro Monat</p>
+              <p className="text-xs text-gray-500">Kosten/Monat</p>
               <p className="text-lg font-bold text-gray-900 mt-0.5">
-                €{monthlyCost.toFixed(2)}
+                €{monthlyPrice.toFixed(2)}
               </p>
             </div>
+            {hasServingData && (
+              <>
+                <div className="p-3 bg-gray-50 rounded-lg border border-gray-100">
+                  <p className="text-xs text-gray-500">Vorrat</p>
+                  <p className="text-lg font-bold text-gray-900 mt-0.5">
+                    {Math.round(daysSupply)} Tage
+                  </p>
+                </div>
+                <div className="p-3 bg-gray-50 rounded-lg border border-gray-100">
+                  <p className="text-xs text-gray-500">Portionen/Tag</p>
+                  <p className="text-lg font-bold text-gray-900 mt-0.5">
+                    {portions}×
+                  </p>
+                </div>
+              </>
+            )}
           </div>
+
+          {/* Supply note */}
+          {showSupplyNote && (
+            <p className="mt-2 text-xs text-gray-400">
+              ≠ 30 Tage Vorrat (tatsächlich {Math.round(daysSupply)} Tage)
+            </p>
+          )}
         </div>
 
         {/* Stack assignment */}

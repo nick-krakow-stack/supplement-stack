@@ -1,6 +1,4 @@
-// Local types for the ingredient search feature
-// These are defined here so each component can import from one place,
-// but remain independent of any shared types that may not be merged yet.
+// Local types for the ingredient search + stack features
 
 export interface IngredientSynonym {
   synonym: string;
@@ -9,6 +7,24 @@ export interface IngredientSynonym {
 export interface IngredientForm {
   name: string;
   comment?: string;
+  bioavailability?: string;
+  is_recommended?: number;
+}
+
+export interface DosageGuideline {
+  id: number;
+  ingredient_id: number;
+  source: 'DGE' | 'EFSA' | 'NIH' | 'study' | 'practice';
+  source_title?: string;
+  source_url?: string;
+  population: string;
+  dose_min?: number;
+  dose_max?: number;
+  unit?: string;
+  frequency?: string;
+  timing?: string;
+  notes?: string;
+  is_default: number;
 }
 
 export interface Ingredient {
@@ -28,6 +44,7 @@ export interface ProductIngredient {
   ingredient_name?: string;
   quantity?: number;
   unit?: string;
+  is_main?: number;
 }
 
 export interface Product {
@@ -36,14 +53,27 @@ export interface Product {
   brand?: string;
   price: number;
   image_url?: string;
+  shop_link?: string;
   form?: string;
   visibility?: string;
+  is_affiliate?: number;
+  discontinued_at?: string;
+  serving_size?: number;
+  serving_unit?: string;
+  servings_per_container?: number;
+  container_count?: number;
   ingredients?: ProductIngredient[];
 }
 
 export interface Recommendation {
   product_id: number;
   type: 'recommended' | 'alternative';
+}
+
+export interface ShopDomain {
+  id: number;
+  domain: string;
+  display_name: string;
 }
 
 export interface Stack {
@@ -54,4 +84,6 @@ export interface Stack {
 export interface StackItem {
   product: Product;
   portions: number;
+  daysSupply?: number;
+  monthlyPrice?: number;
 }

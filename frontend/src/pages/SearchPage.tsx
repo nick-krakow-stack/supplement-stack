@@ -8,6 +8,11 @@ import type { Ingredient, Product, StackItem } from '../types/local';
 
 type ActiveModal = 'ingredient' | 'products' | 'dosage' | null;
 
+interface ManualDose {
+  value: number;
+  unit: string;
+}
+
 const POPULAR_INGREDIENTS: Array<{ id: number; name: string }> = [
   { id: -1, name: 'Magnesium' },
   { id: -2, name: 'Vitamin D' },
@@ -26,6 +31,7 @@ export default function SearchPage() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [activeModal, setActiveModal] = useState<ActiveModal>(null);
   const [stackItems, setStackItems] = useState<StackItem[]>([]);
+  const [manualDose, setManualDose] = useState<ManualDose | undefined>(undefined);
 
   const token = getToken();
 
@@ -59,7 +65,8 @@ export default function SearchPage() {
   );
 
   // Modal 1 → 2
-  const handleShowProducts = useCallback(() => {
+  const handleShowProducts = useCallback((dose?: ManualDose) => {
+    setManualDose(dose);
     setActiveModal('products');
   }, []);
 
@@ -71,15 +78,21 @@ export default function SearchPage() {
 
   // Modal 3: add to stack
   const handleAddToStack = useCallback(
-    (_stackId: number | null, product: Product, portions: number) => {
+    (
+      _stackId: number | null,
+      product: Product,
+      portions: number,
+      daysSupply: number,
+      monthlyPrice: number,
+    ) => {
       setStackItems((prev) => {
         const idx = prev.findIndex((item) => item.product.id === product.id);
         if (idx >= 0) {
           const updated = [...prev];
-          updated[idx] = { product, portions };
+          updated[idx] = { product, portions, daysSupply, monthlyPrice };
           return updated;
         }
-        return [...prev, { product, portions }];
+        return [...prev, { product, portions, daysSupply, monthlyPrice }];
       });
     },
     [],
@@ -101,7 +114,10 @@ export default function SearchPage() {
     setActiveModal('products');
   }, []);
 
-  const totalMonthly = stackItems.reduce((sum, item) => sum + item.product.price, 0);
+  const totalMonthly = stackItems.reduce(
+    (sum, item) => sum + (item.monthlyPrice ?? item.product.price),
+    0,
+  );
 
   return (
     <div className="min-h-screen bg-gray-50 pb-28">
@@ -158,7 +174,7 @@ export default function SearchPage() {
                       {item.product.name}
                     </p>
                     <p className="text-xs text-gray-500">
-                      {item.portions}× täglich · €{item.product.price.toFixed(2)}/Mo.
+                      {item.portions}× täglich · €{(item.monthlyPrice ?? item.product.price).toFixed(2)}/Mo.
                     </p>
                   </div>
                   <button
@@ -202,6 +218,7 @@ export default function SearchPage() {
           onBack={goBackToProducts}
           onAddToStack={handleAddToStack}
           token={token}
+          recommendedDose={manualDose}
         />
       )}
 

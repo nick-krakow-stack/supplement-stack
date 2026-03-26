@@ -1,4 +1,5 @@
 import { Heart, Package, ShoppingBag } from 'lucide-react';
+import { ShopDomain } from '../types/local';
 
 interface ProductCardProduct {
   id: number;
@@ -20,6 +21,7 @@ interface ProductCardProps {
   recommendationType?: 'recommended' | 'alternative' | null;
   showWishlistButton?: boolean;
   showSelectButton?: boolean;
+  shopDomains?: ShopDomain[];
 }
 
 export default function ProductCard({
@@ -29,7 +31,13 @@ export default function ProductCard({
   recommendationType,
   showWishlistButton = false,
   showSelectButton = false,
+  shopDomains,
 }: ProductCardProps) {
+  const matchedShop = shopDomains?.find(
+    (s) => product.shop_link?.toLowerCase().includes(s.domain.toLowerCase())
+  );
+  const buttonText = matchedShop ? `Bei ${matchedShop.display_name} kaufen` : 'Jetzt kaufen';
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex flex-col gap-3 hover:shadow-md transition-shadow">
       {product.discontinued_at && (
@@ -90,7 +98,7 @@ export default function ProductCard({
               className="inline-flex items-center gap-1.5 text-sm bg-gray-200 text-gray-700 hover:bg-gray-300 px-3 py-1.5 rounded-lg font-medium transition-colors"
             >
               <ShoppingBag size={14} />
-              Bei Amazon kaufen
+              {buttonText}
               {product.is_affiliate === 1 && (
                 <span className="ml-1 text-xs bg-amber-100 text-amber-700 border border-amber-300 rounded px-1 py-0 align-middle">
                   Werbelink

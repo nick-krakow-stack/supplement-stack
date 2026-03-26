@@ -361,6 +361,15 @@ app.get('/api/ingredients/:id', async (c) => {
   return c.json({ ingredient, synonyms, forms })
 })
 
+// GET /api/ingredients/:id/dosage-guidelines
+app.get('/api/ingredients/:id/dosage-guidelines', async (c) => {
+  const id = c.req.param('id')
+  const { results: guidelines } = await c.env.DB.prepare(
+    'SELECT * FROM dosage_guidelines WHERE ingredient_id = ? ORDER BY is_default DESC, source ASC'
+  ).bind(id).all()
+  return c.json({ guidelines })
+})
+
 // GET /api/ingredients/:id/products
 app.get('/api/ingredients/:id/products', async (c) => {
   const id = c.req.param('id')
@@ -988,6 +997,14 @@ app.get('/api/shop-domains/resolve', async (c) => {
   return c.json({ shop_name: match.display_name, button_text: `Bei ${match.display_name} kaufen` })
 })
 
+// GET /api/shop-domains (public — for client-side URL matching)
+app.get('/api/shop-domains', async (c) => {
+  const { results: shops } = await c.env.DB.prepare(
+    'SELECT id, domain, display_name FROM shop_domains ORDER BY display_name ASC'
+  ).all()
+  return c.json({ shops })
+})
+
 // GET /api/admin/shop-domains (admin only)
 app.get('/api/admin/shop-domains', async (c) => {
   const authErr = await ensureAuth(c)
@@ -1021,6 +1038,104 @@ app.delete('/api/admin/shop-domains/:id', async (c) => {
   const admErr = requireAdmin(c)
   if (admErr) return admErr
   await c.env.DB.prepare('DELETE FROM shop_domains WHERE id = ?').bind(c.req.param('id')).run()
+  return c.json({ ok: true })
+})
+
+// GET /api/user-products (authenticated)
+app.get('/api/user-products', async (c) => {
+  const authErr = await ensureAuth(c)
+  if (authErr) return authErr
+  const user = c.get('user')
+  const { results } = await c.env.DB.prepare(
+    'SELECT * FROM user_products WHERE user_id = ? ORDER BY created_at DESC'
+  ).bind(user.userId).all()
+  return c.json({ products: results })
+})
+
+// POST /api/user-products (authenticated)
+app.post('/api/user-products', async (c) => {
+  const authErr = await ensureAuth(c)
+  if (authErr) return authErr
+  const user = c.get('user')
+  const body = await c.req.json()
+  if (!body.name || typeof body.name !== 'string') return c.json({ error: 'name erforderlich' }, 400)
+  const data = body as {
+    name: string; brand?: string; form?: string; price?: number; shop_link?: string;
+    serving_size?: number; serving_unit?: string; servings_per_container?: number;
+    container_count?: number; is_affiliate?: number; notes?: string;
+  }
+  const result = await c.env.DB.prepare(`
+    INSERT INTO user_products (user_id, name, brand, form, price, shop_link, serving_size, serving_unit, servings_per_container, container_count, is_affiliate, notes)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    user.userId,
+    data.name,
+    data.brand ?? null,
+    data.form ?? null,
+    data.price ?? 0,
+    data.shop_link ?? null,
+    data.serving_size ?? null,
+    data.serving_unit ?? null,
+    data.servings_per_container ?? null,
+    data.container_count ?? 1,
+    data.is_affiliate ?? 0,
+    data.notes ?? null,
+  ).run()
+  return c.json({ id: result.meta.last_row_id }, 201)
+})
+
+// PUT /api/user-products/:id (authenticated, own product only)
+app.put('/api/user-products/:id', async (c) => {
+  const authErr = await ensureAuth(c)
+  if (authErr) return authErr
+  const user = c.get('user')
+  const id = c.req.param('id')
+  const existing = await c.env.DB.prepare(
+    'SELECT id FROM user_products WHERE id = ? AND user_id = ?'
+  ).bind(id, user.userId).first()
+  if (!existing) return c.json({ error: 'Not found' }, 404)
+  const body = await c.req.json()
+  const data = body as {
+    name?: string; brand?: string; form?: string; price?: number; shop_link?: string;
+    serving_size?: number; serving_unit?: string; servings_per_container?: number;
+    container_count?: number; is_affiliate?: number; notes?: string;
+  }
+  await c.env.DB.prepare(`
+    UPDATE user_products SET
+      name = COALESCE(?, name),
+      brand = COALESCE(?, brand),
+      form = COALESCE(?, form),
+      price = COALESCE(?, price),
+      shop_link = COALESCE(?, shop_link),
+      serving_size = COALESCE(?, serving_size),
+      serving_unit = COALESCE(?, serving_unit),
+      servings_per_container = COALESCE(?, servings_per_container),
+      container_count = COALESCE(?, container_count),
+      is_affiliate = COALESCE(?, is_affiliate),
+      notes = COALESCE(?, notes)
+    WHERE id = ? AND user_id = ?
+  `).bind(
+    data.name ?? null, data.brand ?? null, data.form ?? null, data.price ?? null,
+    data.shop_link ?? null, data.serving_size ?? null, data.serving_unit ?? null,
+    data.servings_per_container ?? null, data.container_count ?? null,
+    data.is_affiliate ?? null, data.notes ?? null,
+    id, user.userId,
+  ).run()
+  const updated = await c.env.DB.prepare('SELECT * FROM user_products WHERE id = ?').bind(id).first()
+  return c.json({ product: updated })
+})
+
+// DELETE /api/user-products/:id (authenticated, own product only)
+app.delete('/api/user-products/:id', async (c) => {
+  const authErr = await ensureAuth(c)
+  if (authErr) return authErr
+  const user = c.get('user')
+  const id = c.req.param('id')
+  const existing = await c.env.DB.prepare(
+    'SELECT id FROM user_products WHERE id = ? AND user_id = ?'
+  ).bind(id, user.userId).first()
+  if (!existing) return c.json({ error: 'Not found' }, 404)
+  await c.env.DB.prepare('DELETE FROM user_products WHERE id = ?').bind(id).run()
   return c.json({ ok: true })
 })
 
