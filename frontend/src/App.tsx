@@ -11,6 +11,7 @@ import StacksPage from './pages/StacksPage';
 import WishlistPage from './pages/WishlistPage';
 import AdminPage from './pages/AdminPage';
 import DemoPage from './pages/DemoPage';
+import MyProductsPage from './pages/MyProductsPage';
 
 export default function App() {
   return (
@@ -53,6 +54,14 @@ export default function App() {
             }
           />
           <Route path="/demo" element={<DemoPage />} />
+          <Route
+            path="/my-products"
+            element={
+              <ProtectedRoute>
+                <MyProductsPage />
+              </ProtectedRoute>
+            }
+          />
         </Routes>
       </Layout>
     </AuthProvider>

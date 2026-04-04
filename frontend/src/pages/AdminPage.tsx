@@ -19,6 +19,26 @@ interface AdminProduct {
   visibility?: string;
   image_url?: string;
   is_affiliate?: number;
+  shop_link?: string;
+}
+
+interface AdminUserProduct {
+  id: number;
+  user_id: number;
+  user_email?: string;
+  name: string;
+  brand?: string;
+  form?: string;
+  price: number;
+  shop_link?: string;
+  serving_size?: number;
+  serving_unit?: string;
+  servings_per_container?: number;
+  container_count?: number;
+  is_affiliate?: number;
+  notes?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  created_at: string;
 }
 
 interface Ingredient {
@@ -59,7 +79,7 @@ function authHeaders(): Record<string, string> {
   };
 }
 
-type Tab = 'products' | 'ingredients' | 'interactions' | 'stats' | 'shop_domains' | 'rankings';
+type Tab = 'products' | 'ingredients' | 'interactions' | 'stats' | 'shop_domains' | 'rankings' | 'user_products';
 
 // ---- Status badge ----
 function StatusBadge({ status }: { status?: string }) {
@@ -93,6 +113,7 @@ function ProductsTab() {
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState<number | null>(null);
   const [imageUploading, setImageUploading] = useState<number | null>(null);
+  const [filterNoAffiliate, setFilterNoAffiliate] = useState(false);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, product: AdminProduct) => {
     const file = e.target.files?.[0];
@@ -174,6 +195,10 @@ function ProductsTab() {
     );
   }
 
+  const visibleProducts = filterNoAffiliate
+    ? products.filter((p) => p.shop_link && !p.is_affiliate)
+    : products;
+
   return (
     <div className="flex flex-col gap-4">
       {error && (
@@ -181,11 +206,27 @@ function ProductsTab() {
           {error}
         </div>
       )}
-      {products.length === 0 && !error && (
+      {/* Affiliate filter */}
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => setFilterNoAffiliate((v) => !v)}
+          className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
+            filterNoAffiliate
+              ? 'bg-amber-100 text-amber-700'
+              : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+          }`}
+        >
+          Ohne Affiliate-Tag
+        </button>
+        {filterNoAffiliate && (
+          <span className="text-xs text-gray-400">{visibleProducts.length} Produkt(e) mit Shop-Link aber ohne Affiliate-Tag</span>
+        )}
+      </div>
+      {visibleProducts.length === 0 && !error && (
         <p className="text-gray-500">Keine Produkte vorhanden.</p>
       )}
       <div className="flex flex-col gap-3">
-        {products.map((product) => (
+        {visibleProducts.map((product) => (
           <div
             key={product.id}
             className="bg-white rounded-xl border border-gray-200 p-4 flex flex-col gap-3"
@@ -949,6 +990,7 @@ const TAB_LABELS: Array<{ key: Tab; label: string }> = [
   { key: 'stats', label: 'Statistiken' },
   { key: 'shop_domains', label: 'Shop-Domains' },
   { key: 'rankings', label: 'Rankings' },
+  { key: 'user_products', label: 'Nutzer-Produkte' },
 ];
 
 export default function AdminPage() {
@@ -1002,6 +1044,7 @@ export default function AdminPage() {
       {activeTab === 'stats' && <StatsTab />}
       {activeTab === 'shop_domains' && <ShopDomainsPanel />}
       {activeTab === 'rankings' && <RankingsPanel />}
+      {activeTab === 'user_products' && <UserProductsTab />}
     </div>
   );
 }
@@ -1177,6 +1220,137 @@ function RankingsPanel() {
           )}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+// ---- User Products Panel ----
+function UserProductsTab() {
+  const [products, setProducts] = useState<AdminUserProduct[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState<'pending' | 'approved' | 'rejected'>('pending');
+  const [actionId, setActionId] = useState<number | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/admin/user-products?status=${statusFilter}`, { headers: authHeaders() });
+      const data = await res.json() as { products: AdminUserProduct[] };
+      setProducts(data.products ?? []);
+    } catch {}
+    finally { setLoading(false); }
+  }, [statusFilter]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleApprove = async (id: number) => {
+    setActionId(id);
+    await fetch(`/api/admin/user-products/${id}/approve`, { method: 'PUT', headers: authHeaders() });
+    setProducts((prev) => prev.filter((p) => p.id !== id));
+    setActionId(null);
+  };
+
+  const handleReject = async (id: number) => {
+    setActionId(id);
+    await fetch(`/api/admin/user-products/${id}/reject`, { method: 'PUT', headers: authHeaders() });
+    setProducts((prev) => prev.filter((p) => p.id !== id));
+    setActionId(null);
+  };
+
+  const handleDelete = async (id: number) => {
+    if (!window.confirm('Produkt wirklich löschen?')) return;
+    setActionId(id);
+    await fetch(`/api/admin/user-products/${id}`, { method: 'DELETE', headers: authHeaders() });
+    setProducts((prev) => prev.filter((p) => p.id !== id));
+    setActionId(null);
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Status filter pills */}
+      <div className="flex gap-2">
+        {(['pending', 'approved', 'rejected'] as const).map((s) => (
+          <button
+            key={s}
+            onClick={() => setStatusFilter(s)}
+            className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
+              statusFilter === s ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+            }`}
+          >
+            {s === 'pending' ? 'Ausstehend' : s === 'approved' ? 'Freigegeben' : 'Abgelehnt'}
+          </button>
+        ))}
+      </div>
+
+      {loading && <p className="text-sm text-gray-400">Laden…</p>}
+
+      {!loading && products.length === 0 && (
+        <p className="text-sm text-gray-500 py-4 text-center">Keine Produkte in diesem Status.</p>
+      )}
+
+      {!loading && products.length > 0 && (
+        <ul className="space-y-3">
+          {products.map((p) => (
+            <li key={p.id} className="p-4 bg-white border border-gray-200 rounded-xl flex flex-col gap-2">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="font-semibold text-gray-900 text-sm">{p.name}</p>
+                  {p.brand && <p className="text-xs text-gray-500">{p.brand}</p>}
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    von {p.user_email ?? `user_id=${p.user_id}`} · €{p.price.toFixed(2)}
+                    {p.shop_link && (
+                      <> · <a href={p.shop_link} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Link</a></>
+                    )}
+                  </p>
+                  {p.serving_size && (
+                    <p className="text-xs text-gray-400">
+                      {p.serving_size}{p.serving_unit} · {p.servings_per_container ?? '?'} Portionen · {p.container_count ?? 1} Packung(en)
+                    </p>
+                  )}
+                  {p.notes && <p className="text-xs text-gray-500 italic mt-1">{p.notes}</p>}
+                </div>
+                {p.is_affiliate ? (
+                  <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full flex-shrink-0">Affiliate</span>
+                ) : null}
+              </div>
+              {statusFilter === 'pending' && (
+                <div className="flex gap-2 mt-1">
+                  <button
+                    onClick={() => handleApprove(p.id)}
+                    disabled={actionId === p.id}
+                    className="flex-1 px-3 py-1.5 text-xs font-medium bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    Freigeben
+                  </button>
+                  <button
+                    onClick={() => handleReject(p.id)}
+                    disabled={actionId === p.id}
+                    className="flex-1 px-3 py-1.5 text-xs font-medium bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    Ablehnen
+                  </button>
+                  <button
+                    onClick={() => handleDelete(p.id)}
+                    disabled={actionId === p.id}
+                    className="px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    Löschen
+                  </button>
+                </div>
+              )}
+              {statusFilter !== 'pending' && (
+                <button
+                  onClick={() => handleDelete(p.id)}
+                  disabled={actionId === p.id}
+                  className="self-start px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  Löschen
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

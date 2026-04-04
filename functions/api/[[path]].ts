@@ -68,6 +68,12 @@ function requireAdmin(c: Context<AppContext>): Response | null {
   return null
 }
 
+async function ensureAdmin(c: Context<AppContext>): Promise<Response | null> {
+  const authErr = await ensureAuth(c)
+  if (authErr) return authErr
+  return requireAdmin(c)
+}
+
 // ---------------------------------------------------------------------------
 // Row types
 // ---------------------------------------------------------------------------
@@ -1171,6 +1177,52 @@ app.put('/api/admin/product-rankings/:productId', async (c) => {
       notes = COALESCE(excluded.notes, product_rankings.notes),
       ranked_at = datetime('now')
   `).bind(productId, body.rank_score, body.notes ?? null).run()
+  return c.json({ ok: true })
+})
+
+// GET /api/admin/user-products?status=pending (admin)
+app.get('/api/admin/user-products', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+  const status = c.req.query('status') ?? 'pending'
+  const { results } = await c.env.DB.prepare(`
+    SELECT up.*, u.email as user_email
+    FROM user_products up
+    LEFT JOIN users u ON up.user_id = u.id
+    WHERE up.status = ?
+    ORDER BY up.created_at DESC
+  `).bind(status).all()
+  return c.json({ products: results })
+})
+
+// PUT /api/admin/user-products/:id/approve (admin)
+app.put('/api/admin/user-products/:id/approve', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+  const id = c.req.param('id')
+  await c.env.DB.prepare(`
+    UPDATE user_products SET status = 'approved', approved_at = datetime('now') WHERE id = ?
+  `).bind(id).run()
+  return c.json({ ok: true })
+})
+
+// PUT /api/admin/user-products/:id/reject (admin)
+app.put('/api/admin/user-products/:id/reject', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+  const id = c.req.param('id')
+  await c.env.DB.prepare(`
+    UPDATE user_products SET status = 'rejected' WHERE id = ?
+  `).bind(id).run()
+  return c.json({ ok: true })
+})
+
+// DELETE /api/admin/user-products/:id (admin)
+app.delete('/api/admin/user-products/:id', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+  const id = c.req.param('id')
+  await c.env.DB.prepare('DELETE FROM user_products WHERE id = ?').bind(id).run()
   return c.json({ ok: true })
 })
 

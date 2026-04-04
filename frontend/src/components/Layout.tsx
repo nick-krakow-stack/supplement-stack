@@ -40,6 +40,15 @@ export default function Layout({ children }: LayoutProps) {
       >
         Wunschliste
       </Link>
+      {user && (
+        <Link
+          to="/my-products"
+          className="text-gray-700 hover:text-blue-600 font-medium transition-colors"
+          onClick={() => setMobileOpen(false)}
+        >
+          Eigene Produkte
+        </Link>
+      )}
       <Link
         to="/demo"
         className="text-gray-700 hover:text-blue-600 font-medium transition-colors"

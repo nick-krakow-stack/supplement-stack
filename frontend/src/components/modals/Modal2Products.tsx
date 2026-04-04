@@ -18,6 +18,22 @@ interface ProductWithRec {
   recType: RecommendationType;
 }
 
+interface UserProduct {
+  id: number;
+  name: string;
+  brand?: string;
+  form?: string;
+  price: number;
+  shop_link?: string;
+  image_url?: string;
+  serving_size?: number;
+  serving_unit?: string;
+  servings_per_container?: number;
+  container_count?: number;
+  is_affiliate?: number;
+  notes?: string;
+}
+
 const PLACEHOLDER_IMAGE =
   'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 60 60"%3E%3Crect width="60" height="60" fill="%23f3f4f6"/%3E%3Ctext x="50%25" y="54%25" dominant-baseline="middle" text-anchor="middle" font-size="24" fill="%239ca3af"%3E💊%3C/text%3E%3C/svg%3E';
 
@@ -48,6 +64,7 @@ export default function Modal2Products({
   onSelect,
 }: Modal2ProductsProps) {
   const [items, setItems] = useState<ProductWithRec[]>([]);
+  const [userProducts, setUserProducts] = useState<UserProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -58,12 +75,31 @@ export default function Modal2Products({
       setLoading(true);
       setError(null);
 
+      const token = localStorage.getItem('ss_token');
+
       try {
-        // Fetch recommendations and all products in parallel
-        const [recRes, prodRes] = await Promise.all([
+        // Fetch recommendations, all products, and (if logged in) user products in parallel
+        const userProductPromise = token
+          ? fetch('/api/user-products', {
+              headers: { Authorization: `Bearer ${token}` },
+            }).catch(() => null)
+          : Promise.resolve(null);
+
+        const [recRes, prodRes, userProdRes] = await Promise.all([
           fetch(`/api/recommendations?ingredient_id=${ingredientId}`),
           fetch(`/api/products`),
+          userProductPromise,
         ]);
+
+        // Silently load user products — failure is non-fatal
+        if (!cancelled && userProdRes && userProdRes.ok) {
+          try {
+            const userProdData = await userProdRes.json();
+            setUserProducts(userProdData.products ?? userProdData.user_products ?? []);
+          } catch {
+            // silently ignore parse errors
+          }
+        }
 
         if (!recRes.ok && recRes.status !== 404) {
           throw new Error(`Empfehlungen: HTTP ${recRes.status}`);
@@ -182,8 +218,8 @@ export default function Modal2Products({
         </div>
       )}
 
-      {/* Empty state */}
-      {!loading && !error && items.length === 0 && (
+      {/* Empty state — only when there are also no user products */}
+      {!loading && !error && items.length === 0 && userProducts.length === 0 && (
         <div className="py-12 text-center">
           <ShoppingCart size={40} className="mx-auto text-gray-300 mb-3" />
           <p className="text-gray-500 text-sm">
@@ -192,69 +228,154 @@ export default function Modal2Products({
         </div>
       )}
 
-      {/* Product list */}
-      {!loading && !error && items.length > 0 && (
-        <ul className="space-y-3">
-          {items.map(({ product, recType }) => {
-            const mainIng = product.ingredients?.find(
-              (i) => i.ingredient_id === ingredientId,
-            );
+      {!loading && !error && (
+        <>
+          {/* User products section */}
+          {userProducts.length > 0 && (
+            <div className="mb-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">
+                Meine Produkte
+              </p>
+              <ul className="space-y-3">
+                {userProducts.map((userProd) => {
+                  const asProduct: Product = {
+                    id: userProd.id,
+                    name: userProd.name,
+                    brand: userProd.brand,
+                    price: userProd.price,
+                    shop_link: userProd.shop_link,
+                    image_url: userProd.image_url,
+                    form: userProd.form,
+                    serving_size: userProd.serving_size,
+                    serving_unit: userProd.serving_unit,
+                    servings_per_container: userProd.servings_per_container,
+                    container_count: userProd.container_count,
+                    is_affiliate: userProd.is_affiliate,
+                  };
 
-            return (
-              <li
-                key={product.id}
-                className="flex items-start gap-3 p-3 border border-gray-200 rounded-xl hover:border-blue-200 hover:bg-blue-50/30 transition-colors"
-              >
-                {/* Image */}
-                <img
-                  src={product.image_url || PLACEHOLDER_IMAGE}
-                  alt={product.name}
-                  width={60}
-                  height={60}
-                  className="w-[60px] h-[60px] rounded-lg object-cover flex-shrink-0 bg-gray-100"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src = PLACEHOLDER_IMAGE;
-                  }}
-                />
+                  return (
+                    <li
+                      key={`user-${userProd.id}`}
+                      className="flex items-start gap-3 p-3 border border-gray-200 rounded-xl hover:border-purple-200 hover:bg-purple-50/30 transition-colors"
+                    >
+                      {/* Image */}
+                      <img
+                        src={userProd.image_url || PLACEHOLDER_IMAGE}
+                        alt={userProd.name}
+                        width={60}
+                        height={60}
+                        className="w-[60px] h-[60px] rounded-lg object-cover flex-shrink-0 bg-gray-100"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = PLACEHOLDER_IMAGE;
+                        }}
+                      />
 
-                {/* Info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-gray-900 truncate">
-                        {product.name}
-                      </p>
-                      {product.brand && (
-                        <p className="text-xs text-gray-500">{product.brand}</p>
-                      )}
-                    </div>
-                    <BadgeRec type={recType} />
-                  </div>
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-gray-900 truncate">
+                              {userProd.name}
+                            </p>
+                            {userProd.brand && (
+                              <p className="text-xs text-gray-500">{userProd.brand}</p>
+                            )}
+                          </div>
+                          <span className="inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded-full bg-purple-100 text-purple-700 flex-shrink-0">
+                            Eigenes
+                          </span>
+                        </div>
 
-                  <div className="mt-1.5 flex items-center gap-3">
-                    <span className="text-sm font-bold text-gray-900">
-                      €{product.price.toFixed(2)}
-                    </span>
-                    {mainIng && (
-                      <span className="text-xs text-gray-500">
-                        {mainIng.quantity != null
-                          ? `${mainIng.quantity}${mainIng.unit ?? ''} pro Portion`
-                          : mainIng.ingredient_name ?? ingredientName}
-                      </span>
-                    )}
-                  </div>
+                        <div className="mt-1.5 flex items-center gap-3">
+                          <span className="text-sm font-bold text-gray-900">
+                            €{userProd.price.toFixed(2)}
+                          </span>
+                        </div>
 
-                  <button
-                    onClick={() => onSelect(product)}
-                    className="mt-2 px-3 py-1.5 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                        <button
+                          onClick={() => onSelect(asProduct)}
+                          className="mt-2 px-3 py-1.5 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                        >
+                          Auswählen
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+
+              {/* Divider between user products and global products */}
+              {items.length > 0 && (
+                <hr className="mt-4 border-gray-200" />
+              )}
+            </div>
+          )}
+
+          {/* Global product list */}
+          {items.length > 0 && (
+            <ul className="space-y-3">
+              {items.map(({ product, recType }) => {
+                const mainIng = product.ingredients?.find(
+                  (i) => i.ingredient_id === ingredientId,
+                );
+
+                return (
+                  <li
+                    key={product.id}
+                    className="flex items-start gap-3 p-3 border border-gray-200 rounded-xl hover:border-blue-200 hover:bg-blue-50/30 transition-colors"
                   >
-                    Auswählen
-                  </button>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+                    {/* Image */}
+                    <img
+                      src={product.image_url || PLACEHOLDER_IMAGE}
+                      alt={product.name}
+                      width={60}
+                      height={60}
+                      className="w-[60px] h-[60px] rounded-lg object-cover flex-shrink-0 bg-gray-100"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = PLACEHOLDER_IMAGE;
+                      }}
+                    />
+
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-gray-900 truncate">
+                            {product.name}
+                          </p>
+                          {product.brand && (
+                            <p className="text-xs text-gray-500">{product.brand}</p>
+                          )}
+                        </div>
+                        <BadgeRec type={recType} />
+                      </div>
+
+                      <div className="mt-1.5 flex items-center gap-3">
+                        <span className="text-sm font-bold text-gray-900">
+                          €{product.price.toFixed(2)}
+                        </span>
+                        {mainIng && (
+                          <span className="text-xs text-gray-500">
+                            {mainIng.quantity != null
+                              ? `${mainIng.quantity}${mainIng.unit ?? ''} pro Portion`
+                              : mainIng.ingredient_name ?? ingredientName}
+                          </span>
+                        )}
+                      </div>
+
+                      <button
+                        onClick={() => onSelect(product)}
+                        className="mt-2 px-3 py-1.5 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                      >
+                        Auswählen
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </>
       )}
     </ModalWrapper>
   );
