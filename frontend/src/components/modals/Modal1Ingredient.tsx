@@ -39,6 +39,23 @@ function formatFrequency(gl: DosageGuideline): string {
   return parts.join(' · ');
 }
 
+// Merge guidelines with the same dose range + unit into one card
+function deduplicateByDose(guidelines: DosageGuideline[]): DosageGuideline[] {
+  const seen = new Map<string, DosageGuideline>();
+  for (const gl of guidelines) {
+    const key = `${gl.population ?? ''}|${gl.dose_min ?? ''}|${gl.dose_max ?? ''}|${gl.unit ?? ''}`;
+    if (seen.has(key)) {
+      const ex = seen.get(key)!;
+      const notes = [ex.notes, gl.notes].filter(Boolean).join(' / ') || undefined;
+      const title = [ex.source_title, gl.source_title].filter(Boolean).join(' + ') || undefined;
+      seen.set(key, { ...ex, notes, source_title: title });
+    } else {
+      seen.set(key, { ...gl });
+    }
+  }
+  return Array.from(seen.values());
+}
+
 export default function Modal1Ingredient({
   ingredient: initialIngredient,
   onClose,
@@ -154,8 +171,19 @@ export default function Modal1Ingredient({
   // Unique sources from guidelines
   const availableSources = Array.from(new Set(guidelines.map((g) => g.source)));
 
-  // Guidelines for the selected source
-  const sourceGuidelines = guidelines.filter((g) => g.source === selectedSource);
+  // Guidelines for the selected source, deduplicated by dose range
+  const sourceGuidelines = deduplicateByDose(
+    guidelines.filter((g) => g.source === selectedSource)
+  );
+
+  // Click on a guideline card → auto-fill the manual dose input
+  const handleGuidelineClick = (gl: DosageGuideline) => {
+    const val = gl.dose_max ?? gl.dose_min;
+    if (val != null) {
+      setManualValue(String(val));
+      setManualUnit(gl.unit ?? '');
+    }
+  };
 
   // Manual dose state
   const parsedManualValue = parseFloat(manualValue);
@@ -265,15 +293,26 @@ export default function Modal1Ingredient({
                     {sourceGuidelines.length > 0 && (
                       <div className="space-y-3">
                         {sourceGuidelines.map((gl) => (
-                          <div key={gl.id} className="p-3 bg-gray-50 rounded-xl border border-gray-100">
+                          <button
+                            key={gl.id}
+                            type="button"
+                            onClick={() => handleGuidelineClick(gl)}
+                            className="w-full text-left p-3 bg-gray-50 rounded-xl border border-gray-100 hover:border-blue-300 hover:bg-blue-50/50 active:bg-blue-100 transition-colors group"
+                            title="Klicken um Dosis zu übernehmen"
+                          >
                             {/* Population label */}
                             {gl.population && (
                               <p className="text-xs text-gray-400 mb-1">{gl.population}</p>
                             )}
-                            {/* Dose range */}
-                            <p className="text-2xl font-bold text-gray-900">
-                              {formatDoseRange(gl)}
-                            </p>
+                            {/* Dose range + hint */}
+                            <div className="flex items-baseline justify-between gap-2">
+                              <p className="text-2xl font-bold text-gray-900">
+                                {formatDoseRange(gl)}
+                              </p>
+                              <span className="text-xs text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                                Übernehmen ↓
+                              </span>
+                            </div>
                             {/* Frequency / timing */}
                             {formatFrequency(gl) && (
                               <p className="text-sm text-gray-500 mt-0.5">{formatFrequency(gl)}</p>
@@ -288,13 +327,14 @@ export default function Modal1Ingredient({
                                 href={gl.source_url}
                                 target="_blank"
                                 rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
                                 className="inline-flex items-center gap-1 mt-1.5 text-xs text-blue-600 hover:text-blue-800 transition-colors"
                               >
                                 {gl.source_title ?? 'Quelle'}
                                 <ExternalLink size={11} />
                               </a>
                             )}
-                          </div>
+                          </button>
                         ))}
                       </div>
                     )}

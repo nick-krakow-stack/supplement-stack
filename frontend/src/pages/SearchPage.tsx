@@ -207,6 +207,7 @@ export default function SearchPage() {
           onClose={closeModal}
           onBack={goBackToIngredient}
           onSelect={handleProductSelect}
+          recommendedDose={manualDose}
         />
       )}
 

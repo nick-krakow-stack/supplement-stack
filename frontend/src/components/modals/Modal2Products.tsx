@@ -56,12 +56,25 @@ function BadgeRec({ type }: { type: RecommendationType }) {
   return null;
 }
 
+// Calculate how many servings/day based on dose and ingredient quantity per serving
+function calcServingsPerDay(
+  dose: { value: number; unit: string },
+  qty: number,
+  unit: string
+): number | null {
+  if (qty <= 0) return null;
+  const normalize = (s: string) => s.toLowerCase().replace(/\s/g, '');
+  if (normalize(dose.unit) !== normalize(unit)) return null;
+  return Math.ceil(dose.value / qty);
+}
+
 export default function Modal2Products({
   ingredientId,
   ingredientName,
   onClose,
   onBack,
   onSelect,
+  recommendedDose,
 }: Modal2ProductsProps) {
   const [items, setItems] = useState<ProductWithRec[]>([]);
   const [userProducts, setUserProducts] = useState<UserProduct[]>([]);
@@ -87,7 +100,7 @@ export default function Modal2Products({
 
         const [recRes, prodRes, userProdRes] = await Promise.all([
           fetch(`/api/recommendations?ingredient_id=${ingredientId}`),
-          fetch(`/api/products`),
+          fetch(`/api/ingredients/${ingredientId}/products`),
           userProductPromise,
         ]);
 
@@ -114,45 +127,26 @@ export default function Modal2Products({
         const recommendations: Recommendation[] = recData.recommendations ?? [];
         const allProducts: Product[] = prodData.products ?? [];
 
-        // Build a map for quick lookup
+        // Build recommendation map
         const recMap = new Map<number, RecommendationType>();
         recommendations.forEach((r) => {
           recMap.set(r.product_id, r.type === 'recommended' ? 'recommended' : 'alternative');
         });
 
-        // Filter products that contain this ingredient
-        const filtered = allProducts.filter((p) => {
-          if (!p.ingredients || p.ingredients.length === 0) return false;
-          return p.ingredients.some((ing) => ing.ingredient_id === ingredientId);
-        });
+        // Sort: main-ingredient products first, then by recommendation status
+        const recOrder: Record<RecommendationType, number> = { recommended: 0, alternative: 1, other: 2 };
 
-        // If no ingredient filtering works (API may not include ingredient list in list view),
-        // show all rec products for this ingredient + rest
-        const recProductIds = new Set(recommendations.map((r) => r.product_id));
-
-        // Determine which products to show
-        let toShow: Product[];
-        if (filtered.length > 0) {
-          toShow = filtered;
-        } else {
-          // Fall back: show rec'd products plus all products (the API may not embed ingredients in list)
-          const recProducts = allProducts.filter((p) => recProductIds.has(p.id));
-          toShow = recProducts.length > 0 ? recProducts : allProducts;
-        }
-
-        // Sort: recommended first, then alternatives, then others
-        const withRec: ProductWithRec[] = toShow.map((p) => ({
+        const withRec: ProductWithRec[] = allProducts.map((p) => ({
           product: p,
           recType: recMap.get(p.id) ?? 'other',
         }));
 
-        const order: Record<RecommendationType, number> = {
-          recommended: 0,
-          alternative: 1,
-          other: 2,
-        };
-
-        withRec.sort((a, b) => order[a.recType] - order[b.recType]);
+        withRec.sort((a, b) => {
+          const aMain = (a.product.ingredients?.find(i => i.ingredient_id === ingredientId)?.is_main ?? 0) as number;
+          const bMain = (b.product.ingredients?.find(i => i.ingredient_id === ingredientId)?.is_main ?? 0) as number;
+          if (bMain !== aMain) return bMain - aMain; // main ingredients first
+          return recOrder[a.recType] - recOrder[b.recType];
+        });
 
         setItems(withRec);
       } catch (err) {
@@ -350,17 +344,23 @@ export default function Modal2Products({
                         <BadgeRec type={recType} />
                       </div>
 
-                      <div className="mt-1.5 flex items-center gap-3">
+                      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
                         <span className="text-sm font-bold text-gray-900">
                           €{product.price.toFixed(2)}
                         </span>
-                        {mainIng && (
+                        {mainIng?.quantity != null && (
                           <span className="text-xs text-gray-500">
-                            {mainIng.quantity != null
-                              ? `${mainIng.quantity}${mainIng.unit ?? ''} pro Portion`
-                              : mainIng.ingredient_name ?? ingredientName}
+                            {mainIng.quantity}{mainIng.unit ?? ''} pro Portion
                           </span>
                         )}
+                        {mainIng?.quantity != null && mainIng.unit && recommendedDose && (() => {
+                          const s = calcServingsPerDay(recommendedDose, mainIng.quantity!, mainIng.unit!);
+                          return s != null ? (
+                            <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
+                              ca. {s}×/Tag
+                            </span>
+                          ) : null;
+                        })()}
                       </div>
 
                       <button
