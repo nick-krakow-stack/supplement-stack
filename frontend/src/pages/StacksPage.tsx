@@ -301,10 +301,10 @@ function StackCard({
 
       {/* Warnings */}
       {loadingWarnings ? (
-        <p className="text-xs text-gray-400">Lade Warnungen...</p>
+        <p className="text-xs text-gray-500">Lade Warnungen...</p>
       ) : warnings.length > 0 ? (
         <div className="flex flex-col gap-2">
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">
             Interaktionswarnungen
           </p>
           {warnings.map((w, i) => (
@@ -433,7 +433,7 @@ export default function StacksPage() {
   if (!token) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4 text-center">
-        <h1 className="text-2xl font-bold text-gray-800">Bitte anmelden</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Bitte anmelden</h1>
         <p className="text-gray-600">Du musst angemeldet sein, um deine Stacks zu sehen.</p>
         <Link
           to="/login"
@@ -464,7 +464,7 @@ export default function StacksPage() {
         {/* Create form */}
         {showCreateForm && (
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col gap-3">
-            <h2 className="font-semibold text-gray-800">Neuer Stack</h2>
+            <h2 className="font-semibold text-gray-900">Neuer Stack</h2>
             <div className="flex gap-3">
               <input
                 autoFocus

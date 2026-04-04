@@ -190,7 +190,7 @@ function ProductsTab() {
   if (loading) {
     return (
       <div className="flex justify-center py-10">
-        <div className="animate-spin border-4 border-blue-500 border-t-transparent rounded-full w-8 h-8" />
+        <div className="animate-spin border-4 border-indigo-500 border-t-transparent rounded-full w-8 h-8" />
       </div>
     );
   }
@@ -202,7 +202,7 @@ function ProductsTab() {
   return (
     <div className="flex flex-col gap-4">
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">
+        <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm">
           {error}
         </div>
       )}
@@ -219,7 +219,7 @@ function ProductsTab() {
           Ohne Affiliate-Tag
         </button>
         {filterNoAffiliate && (
-          <span className="text-xs text-gray-400">{visibleProducts.length} Produkt(e) mit Shop-Link aber ohne Affiliate-Tag</span>
+          <span className="text-xs text-gray-500">{visibleProducts.length} Produkt(e) mit Shop-Link aber ohne Affiliate-Tag</span>
         )}
       </div>
       {visibleProducts.length === 0 && !error && (
@@ -229,7 +229,7 @@ function ProductsTab() {
         {visibleProducts.map((product) => (
           <div
             key={product.id}
-            className="bg-white rounded-xl border border-gray-200 p-4 flex flex-col gap-3"
+            className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-col gap-3"
           >
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0">
@@ -251,7 +251,7 @@ function ProductsTab() {
                     })
                   }
                   disabled={actionLoading === product.id}
-                  className="text-sm bg-green-100 text-green-700 hover:bg-green-200 px-3 py-1.5 rounded-lg font-medium transition-colors disabled:opacity-50"
+                  className="text-sm bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white px-3 py-1.5 rounded-xl font-medium transition-all shadow-sm disabled:opacity-50"
                 >
                   Freigeben
                 </button>
@@ -263,14 +263,14 @@ function ProductsTab() {
                     })
                   }
                   disabled={actionLoading === product.id}
-                  className="text-sm bg-red-100 text-red-700 hover:bg-red-200 px-3 py-1.5 rounded-lg font-medium transition-colors disabled:opacity-50"
+                  className="text-sm bg-red-500 hover:bg-red-600 text-white px-3 py-1.5 rounded-xl font-medium transition-colors disabled:opacity-50"
                 >
                   Ablehnen
                 </button>
                 <button
                   onClick={() => updateProduct(product.id, { visibility: 'hidden' })}
                   disabled={actionLoading === product.id}
-                  className="text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 px-3 py-1.5 rounded-lg font-medium transition-colors disabled:opacity-50"
+                  className="text-sm bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-xl font-medium transition-colors disabled:opacity-50"
                 >
                   Verbergen
                 </button>
@@ -507,7 +507,7 @@ function IngredientsTab() {
   if (loading) {
     return (
       <div className="flex justify-center py-10">
-        <div className="animate-spin border-4 border-blue-500 border-t-transparent rounded-full w-8 h-8" />
+        <div className="animate-spin border-4 border-indigo-500 border-t-transparent rounded-full w-8 h-8" />
       </div>
     );
   }
@@ -515,52 +515,52 @@ function IngredientsTab() {
   return (
     <div className="flex flex-col gap-6">
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">
+        <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm">
           {error}
         </div>
       )}
 
       {/* Create new ingredient */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5 flex flex-col gap-3">
-        <h3 className="font-semibold text-gray-800">Neuer Wirkstoff</h3>
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col gap-3">
+        <h3 className="font-semibold text-gray-900">Neuer Wirkstoff</h3>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <input
             placeholder="Name *"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
           />
           <input
             placeholder="Einheit (z.B. mg)"
             value={newUnit}
             onChange={(e) => setNewUnit(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
           />
           <input
             placeholder="Beschreibung"
             value={newDesc}
             onChange={(e) => setNewDesc(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
           />
         </div>
         {createError && <p className="text-sm text-red-600">{createError}</p>}
         <button
           onClick={handleCreate}
           disabled={creating}
-          className="self-start bg-blue-500 text-white hover:bg-blue-600 px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
+          className="self-start bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold px-4 py-2 rounded-xl text-sm transition-all shadow-sm disabled:opacity-60"
         >
           {creating ? 'Erstelle...' : 'Erstellen'}
         </button>
       </div>
 
       {/* Recommendation form */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5 flex flex-col gap-3">
-        <h3 className="font-semibold text-gray-800">Empfehlung hinzufügen</h3>
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col gap-3">
+        <h3 className="font-semibold text-gray-900">Empfehlung hinzufügen</h3>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <select
             value={recIngredientId}
             onChange={(e) => setRecIngredientId(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
           >
             <option value="">Wirkstoff wählen</option>
             {allIngredients.map((i) => (
@@ -570,7 +570,7 @@ function IngredientsTab() {
           <select
             value={recProductId}
             onChange={(e) => setRecProductId(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
           >
             <option value="">Produkt wählen</option>
             {allProducts.map((p) => (
@@ -580,18 +580,18 @@ function IngredientsTab() {
           <select
             value={recType}
             onChange={(e) => setRecType(e.target.value as 'empfohlen' | 'alternative')}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
           >
             <option value="empfohlen">Empfohlen</option>
             <option value="alternative">Alternative</option>
           </select>
         </div>
         {recError && <p className="text-sm text-red-600">{recError}</p>}
-        {recSuccess && <p className="text-sm text-green-600">{recSuccess}</p>}
+        {recSuccess && <p className="text-sm text-emerald-600">{recSuccess}</p>}
         <button
           onClick={handleAddRecommendation}
           disabled={recSaving}
-          className="self-start bg-blue-500 text-white hover:bg-blue-600 px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
+          className="self-start bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold px-4 py-2 rounded-xl text-sm transition-all shadow-sm disabled:opacity-60"
         >
           {recSaving ? 'Speichere...' : 'Empfehlung speichern'}
         </button>
@@ -600,7 +600,7 @@ function IngredientsTab() {
       {/* Ingredient list */}
       <div className="flex flex-col gap-3">
         {ingredients.map((ingredient) => (
-          <div key={ingredient.id} className="bg-white rounded-xl border border-gray-200 p-4 flex flex-col gap-3">
+          <div key={ingredient.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-col gap-3">
             {!ingredient.editing ? (
               <div className="flex items-center justify-between gap-2">
                 <div>
@@ -614,7 +614,7 @@ function IngredientsTab() {
                 </div>
                 <button
                   onClick={() => startEdit(ingredient)}
-                  className="text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 px-3 py-1.5 rounded-lg font-medium transition-colors"
+                  className="text-sm bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-xl font-medium transition-colors"
                 >
                   Bearbeiten
                 </button>
@@ -626,32 +626,32 @@ function IngredientsTab() {
                     value={ingredient.editName ?? ''}
                     onChange={(e) => setField(ingredient.id, { editName: e.target.value })}
                     placeholder="Name"
-                    className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="border border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
                   />
                   <input
                     value={ingredient.editUnit ?? ''}
                     onChange={(e) => setField(ingredient.id, { editUnit: e.target.value })}
                     placeholder="Einheit"
-                    className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="border border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
                   />
                   <input
                     value={ingredient.editDesc ?? ''}
                     onChange={(e) => setField(ingredient.id, { editDesc: e.target.value })}
                     placeholder="Beschreibung"
-                    className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="border border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
                   />
                 </div>
 
                 <div className="flex gap-2">
                   <button
                     onClick={() => saveEdit(ingredient)}
-                    className="text-sm bg-green-500 text-white hover:bg-green-600 px-3 py-1.5 rounded-lg font-medium transition-colors"
+                    className="text-sm bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white font-semibold px-3 py-1.5 rounded-xl transition-all shadow-sm"
                   >
                     Speichern
                   </button>
                   <button
                     onClick={() => setField(ingredient.id, { editing: false })}
-                    className="text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 px-3 py-1.5 rounded-lg font-medium transition-colors"
+                    className="text-sm bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-xl font-medium transition-colors"
                   >
                     Abbrechen
                   </button>
@@ -665,11 +665,11 @@ function IngredientsTab() {
                       value={ingredient.newSynonym ?? ''}
                       onChange={(e) => setField(ingredient.id, { newSynonym: e.target.value })}
                       placeholder="Synonym"
-                      className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
                     />
                     <button
                       onClick={() => addSynonym(ingredient)}
-                      className="p-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                      className="p-1.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white rounded-xl transition-all shadow-sm"
                       aria-label="Synonym hinzufügen"
                     >
                       <Plus size={16} />
@@ -685,17 +685,17 @@ function IngredientsTab() {
                       value={ingredient.newFormName ?? ''}
                       onChange={(e) => setField(ingredient.id, { newFormName: e.target.value })}
                       placeholder="Name der Form"
-                      className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
                     />
                     <input
                       value={ingredient.newFormComment ?? ''}
                       onChange={(e) => setField(ingredient.id, { newFormComment: e.target.value })}
                       placeholder="Kommentar"
-                      className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="flex-1 border border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
                     />
                     <button
                       onClick={() => addForm(ingredient)}
-                      className="p-1.5 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+                      className="p-1.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white rounded-xl transition-all shadow-sm"
                       aria-label="Form hinzufügen"
                     >
                       <Plus size={16} />
@@ -803,7 +803,7 @@ function InteractionsTab() {
   if (loading) {
     return (
       <div className="flex justify-center py-10">
-        <div className="animate-spin border-4 border-blue-500 border-t-transparent rounded-full w-8 h-8" />
+        <div className="animate-spin border-4 border-indigo-500 border-t-transparent rounded-full w-8 h-8" />
       </div>
     );
   }
@@ -811,19 +811,19 @@ function InteractionsTab() {
   return (
     <div className="flex flex-col gap-6">
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">
+        <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm">
           {error}
         </div>
       )}
 
       {/* Create form */}
-      <div className="bg-white rounded-xl border border-gray-200 p-5 flex flex-col gap-3">
-        <h3 className="font-semibold text-gray-800">Neue Interaktion</h3>
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col gap-3">
+        <h3 className="font-semibold text-gray-900">Neue Interaktion</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <select
             value={formA}
             onChange={(e) => setFormA(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
           >
             <option value="">Wirkstoff A wählen</option>
             {ingredients.map((i) => (
@@ -833,7 +833,7 @@ function InteractionsTab() {
           <select
             value={formB}
             onChange={(e) => setFormB(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
           >
             <option value="">Wirkstoff B wählen</option>
             {ingredients.map((i) => (
@@ -845,7 +845,7 @@ function InteractionsTab() {
           <select
             value={formType}
             onChange={(e) => setFormType(e.target.value as 'danger' | 'caution')}
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
           >
             <option value="caution">Vorsicht (caution)</option>
             <option value="danger">Gefährlich (danger)</option>
@@ -854,14 +854,14 @@ function InteractionsTab() {
             value={formComment}
             onChange={(e) => setFormComment(e.target.value)}
             placeholder="Kommentar / Beschreibung"
-            className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
           />
         </div>
         {createError && <p className="text-sm text-red-600">{createError}</p>}
         <button
           onClick={handleCreate}
           disabled={creating}
-          className="self-start bg-blue-500 text-white hover:bg-blue-600 px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-60"
+          className="self-start bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold px-4 py-2 rounded-xl text-sm transition-all shadow-sm disabled:opacity-60"
         >
           {creating ? 'Erstelle...' : 'Interaktion erstellen'}
         </button>
@@ -883,7 +883,7 @@ function InteractionsTab() {
           return (
             <div
               key={interaction.id}
-              className="flex items-start justify-between gap-3 bg-white rounded-xl border border-gray-200 px-4 py-3"
+              className="flex items-start justify-between gap-3 bg-white rounded-2xl border border-gray-100 shadow-sm px-4 py-3"
             >
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-gray-900">
@@ -940,7 +940,7 @@ function StatsTab() {
   if (loading) {
     return (
       <div className="flex justify-center py-10">
-        <div className="animate-spin border-4 border-blue-500 border-t-transparent rounded-full w-8 h-8" />
+        <div className="animate-spin border-4 border-indigo-500 border-t-transparent rounded-full w-8 h-8" />
       </div>
     );
   }
@@ -956,7 +956,7 @@ function StatsTab() {
   if (!stats) return null;
 
   const cards: Array<{ label: string; key: keyof AdminStats; icon: React.ReactNode; color: string }> = [
-    { label: 'Nutzer', key: 'users', icon: <Settings size={24} />, color: 'text-blue-500' },
+    { label: 'Nutzer', key: 'users', icon: <Settings size={24} />, color: 'text-indigo-500' },
     { label: 'Wirkstoffe', key: 'ingredients', icon: <BarChart3 size={24} />, color: 'text-green-500' },
     { label: 'Produkte (gesamt)', key: 'products_total', icon: <CheckCircle size={24} />, color: 'text-purple-500' },
     { label: 'Produkte (ausstehend)', key: 'products_pending', icon: <AlertTriangle size={24} />, color: 'text-yellow-500' },
@@ -966,7 +966,7 @@ function StatsTab() {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
       {cards.map(({ label, key, icon, color }) => (
-        <div key={key} className="bg-white rounded-xl border border-gray-200 p-5 flex items-center gap-4 shadow-sm">
+        <div key={key} className="bg-white rounded-2xl border border-gray-100 p-5 flex items-center gap-4 shadow-sm">
           <div className={color}>{icon}</div>
           <div>
             <p className="text-2xl font-bold text-gray-900">
@@ -1017,19 +1017,20 @@ export default function AdminPage() {
   }
 
   return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-indigo-50/30 p-4 md:p-6">
     <div className="flex flex-col gap-6">
       <h1 className="text-2xl font-bold text-gray-900">Admin-Panel</h1>
 
       {/* Tab bar */}
-      <div className="flex gap-1 bg-gray-100 rounded-xl p-1 flex-wrap">
+      <div className="flex gap-1 bg-white border border-gray-100 shadow-sm rounded-2xl p-1.5 flex-wrap">
         {TAB_LABELS.map(({ key, label }) => (
           <button
             key={key}
             onClick={() => setActiveTab(key)}
-            className={`flex-1 min-w-[100px] text-sm font-medium px-4 py-2 rounded-lg transition-colors ${
+            className={`flex-1 min-w-[100px] text-sm font-medium px-4 py-2 rounded-xl transition-all duration-200 ${
               activeTab === key
-                ? 'bg-white text-gray-900 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
+                ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-sm'
+                : 'bg-white border border-gray-200 text-gray-600 hover:text-indigo-600'
             }`}
           >
             {label}
@@ -1045,6 +1046,7 @@ export default function AdminPage() {
       {activeTab === 'shop_domains' && <ShopDomainsPanel />}
       {activeTab === 'rankings' && <RankingsPanel />}
       {activeTab === 'user_products' && <UserProductsTab />}
+    </div>
     </div>
   );
 }
@@ -1099,26 +1101,26 @@ function ShopDomainsPanel() {
           value={newDomain}
           onChange={e => setNewDomain(e.target.value)}
           placeholder="amazon.de"
-          className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
         />
         <input
           value={newName}
           onChange={e => setNewName(e.target.value)}
           placeholder="Amazon"
-          className="w-36 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-36 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
         />
         <button
           onClick={addShop}
-          className="inline-flex items-center gap-1.5 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700"
+          className="inline-flex items-center gap-1.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold px-4 py-2 rounded-xl text-sm transition-all shadow-sm"
         >
           <Plus size={14} /> Hinzufügen
         </button>
       </div>
       <table className="w-full text-sm border-collapse">
         <thead>
-          <tr className="border-b text-left text-gray-500 text-xs uppercase tracking-wide">
-            <th className="py-2 pr-4 font-medium">Domain</th>
-            <th className="py-2 pr-4 font-medium">Anzeigename</th>
+          <tr className="border-b text-left text-gray-500 text-xs uppercase tracking-widest font-semibold">
+            <th className="py-2 pr-4">Domain</th>
+            <th className="py-2 pr-4">Anzeigename</th>
             <th></th>
           </tr>
         </thead>
@@ -1139,7 +1141,7 @@ function ShopDomainsPanel() {
           ))}
           {shops.length === 0 && (
             <tr>
-              <td colSpan={3} className="py-6 text-center text-gray-400 text-sm">
+              <td colSpan={3} className="py-6 text-center text-gray-500 text-sm">
                 Keine Domains hinterlegt.
               </td>
             </tr>
@@ -1192,9 +1194,9 @@ function RankingsPanel() {
       </p>
       <table className="w-full text-sm border-collapse">
         <thead>
-          <tr className="border-b text-left text-gray-500 text-xs uppercase tracking-wide">
-            <th className="py-2 pr-4 font-medium">Produkt</th>
-            <th className="py-2 pr-4 font-medium">Score</th>
+          <tr className="border-b text-left text-gray-500 text-xs uppercase tracking-widest font-semibold">
+            <th className="py-2 pr-4">Produkt</th>
+            <th className="py-2 pr-4">Score</th>
           </tr>
         </thead>
         <tbody>
@@ -1205,7 +1207,7 @@ function RankingsPanel() {
                 <input
                   type="number"
                   defaultValue={r.rank_score}
-                  className="w-20 border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-20 border border-gray-200 rounded-xl px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
                   onBlur={e => updateRank(r.product_id, Number(e.target.value))}
                 />
               </td>
@@ -1213,7 +1215,7 @@ function RankingsPanel() {
           ))}
           {rankings.length === 0 && (
             <tr>
-              <td colSpan={2} className="py-6 text-center text-gray-400 text-sm">
+              <td colSpan={2} className="py-6 text-center text-gray-500 text-sm">
                 Noch keine Rankings vergeben.
               </td>
             </tr>
@@ -1273,8 +1275,8 @@ function UserProductsTab() {
           <button
             key={s}
             onClick={() => setStatusFilter(s)}
-            className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
-              statusFilter === s ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+            className={`px-3 py-1.5 text-xs font-medium rounded-full transition-all ${
+              statusFilter === s ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-600 hover:text-indigo-600'
             }`}
           >
             {s === 'pending' ? 'Ausstehend' : s === 'approved' ? 'Freigegeben' : 'Abgelehnt'}
@@ -1282,7 +1284,7 @@ function UserProductsTab() {
         ))}
       </div>
 
-      {loading && <p className="text-sm text-gray-400">Laden…</p>}
+      {loading && <p className="text-sm text-gray-500">Laden…</p>}
 
       {!loading && products.length === 0 && (
         <p className="text-sm text-gray-500 py-4 text-center">Keine Produkte in diesem Status.</p>
@@ -1291,19 +1293,19 @@ function UserProductsTab() {
       {!loading && products.length > 0 && (
         <ul className="space-y-3">
           {products.map((p) => (
-            <li key={p.id} className="p-4 bg-white border border-gray-200 rounded-xl flex flex-col gap-2">
+            <li key={p.id} className="p-4 bg-white border border-gray-100 shadow-sm rounded-2xl flex flex-col gap-2">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="font-semibold text-gray-900 text-sm">{p.name}</p>
                   {p.brand && <p className="text-xs text-gray-500">{p.brand}</p>}
-                  <p className="text-xs text-gray-400 mt-0.5">
+                  <p className="text-xs text-gray-500 mt-0.5">
                     von {p.user_email ?? `user_id=${p.user_id}`} · €{p.price.toFixed(2)}
                     {p.shop_link && (
-                      <> · <a href={p.shop_link} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">Link</a></>
+                      <> · <a href={p.shop_link} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">Link</a></>
                     )}
                   </p>
                   {p.serving_size && (
-                    <p className="text-xs text-gray-400">
+                    <p className="text-xs text-gray-500">
                       {p.serving_size}{p.serving_unit} · {p.servings_per_container ?? '?'} Portionen · {p.container_count ?? 1} Packung(en)
                     </p>
                   )}
@@ -1318,21 +1320,21 @@ function UserProductsTab() {
                   <button
                     onClick={() => handleApprove(p.id)}
                     disabled={actionId === p.id}
-                    className="flex-1 px-3 py-1.5 text-xs font-medium bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors disabled:opacity-50"
+                    className="flex-1 px-3 py-1.5 text-xs font-semibold bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white rounded-xl transition-all shadow-sm disabled:opacity-50"
                   >
                     Freigeben
                   </button>
                   <button
                     onClick={() => handleReject(p.id)}
                     disabled={actionId === p.id}
-                    className="flex-1 px-3 py-1.5 text-xs font-medium bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-colors disabled:opacity-50"
+                    className="flex-1 px-3 py-1.5 text-xs font-semibold bg-red-500 hover:bg-red-600 text-white rounded-xl transition-colors disabled:opacity-50"
                   >
                     Ablehnen
                   </button>
                   <button
                     onClick={() => handleDelete(p.id)}
                     disabled={actionId === p.id}
-                    className="px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                    className="px-3 py-1.5 text-xs font-medium text-red-600 border border-red-200 hover:bg-red-50 rounded-xl transition-colors disabled:opacity-50"
                   >
                     Löschen
                   </button>
@@ -1342,7 +1344,7 @@ function UserProductsTab() {
                 <button
                   onClick={() => handleDelete(p.id)}
                   disabled={actionId === p.id}
-                  className="self-start px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                  className="self-start px-3 py-1.5 text-xs font-medium text-red-600 border border-red-200 hover:bg-red-50 rounded-xl transition-colors disabled:opacity-50"
                 >
                   Löschen
                 </button>

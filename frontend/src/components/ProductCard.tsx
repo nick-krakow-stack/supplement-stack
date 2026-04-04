@@ -67,7 +67,7 @@ export default function ProductCard({
           <div className="min-w-0">
             <p className="text-sm font-semibold text-gray-900 leading-tight truncate">{product.name}</p>
             {product.brand && (
-              <p className="text-xs text-gray-400 mt-0.5 truncate">{product.brand}</p>
+              <p className="text-xs text-gray-500 mt-0.5 truncate">{product.brand}</p>
             )}
           </div>
           {recommendationType && (

@@ -35,7 +35,7 @@ function SkeletonRow() {
 // ---- Form badge ----
 function FormBadge({ form }: { form: string }) {
   return (
-    <span className="inline-block bg-blue-50 text-blue-700 text-xs font-medium px-2 py-0.5 rounded-full">
+    <span className="inline-block bg-indigo-50 text-indigo-700 text-xs font-medium px-2 py-0.5 rounded-full">
       {form}
     </span>
   );
@@ -78,7 +78,7 @@ function ProductRow({
       </div>
 
       {/* Price */}
-      <span className="text-green-600 font-semibold text-sm whitespace-nowrap">
+      <span className="text-emerald-600 font-semibold text-sm whitespace-nowrap">
         €{Number(product.price).toFixed(2)}/Mo.
       </span>
 
@@ -86,7 +86,7 @@ function ProductRow({
       <div className="flex items-center gap-1 flex-shrink-0">
         <button
           onClick={() => onEdit(product)}
-          className="p-2 rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+          className="p-2 rounded-lg text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
           aria-label={`${product.name} bearbeiten`}
           title="Bearbeiten"
         >
@@ -187,11 +187,11 @@ export default function MyProductsPage() {
   if (!token) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4 text-center">
-        <h1 className="text-2xl font-bold text-gray-800">Bitte anmelden</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Bitte anmelden</h1>
         <p className="text-gray-600">Du musst angemeldet sein, um eigene Produkte zu verwalten.</p>
         <Link
           to="/login"
-          className="bg-blue-500 text-white hover:bg-blue-600 px-5 py-2 rounded-lg font-medium transition-colors"
+          className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold px-5 py-2 rounded-xl transition-all duration-200 shadow-sm"
         >
           Zur Anmeldung
         </Link>
@@ -200,13 +200,14 @@ export default function MyProductsPage() {
   }
 
   return (
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-indigo-50/30 p-4 md:p-6">
     <div className="flex flex-col gap-6">
       {/* Page header */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <h1 className="text-2xl font-bold text-gray-900">Eigene Produkte</h1>
         <button
           onClick={handleOpenCreate}
-          className="inline-flex items-center gap-2 bg-blue-500 text-white hover:bg-blue-600 px-4 py-2 rounded-lg font-medium transition-colors"
+          className="inline-flex items-center gap-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold px-4 py-2 rounded-xl transition-all duration-200 shadow-sm"
         >
           <Plus size={18} />
           Neues Produkt erstellen
@@ -214,20 +215,20 @@ export default function MyProductsPage() {
       </div>
 
       {/* Info banner */}
-      <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 text-blue-700 rounded-lg px-4 py-3 text-sm">
+      <div className="flex items-start gap-2 bg-indigo-50 border border-indigo-100 text-indigo-700 rounded-xl px-4 py-3 text-sm">
         <Info size={16} className="flex-shrink-0 mt-0.5" />
         <span>Eigene Produkte sind nur für dich sichtbar.</span>
       </div>
 
       {/* Error */}
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">
+        <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm">
           {error}
         </div>
       )}
 
       {/* Product list card */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
         {/* Loading skeleton */}
         {loading && (
           <div className="divide-y divide-gray-100">
@@ -245,7 +246,7 @@ export default function MyProductsPage() {
             </p>
             <button
               onClick={handleOpenCreate}
-              className="inline-flex items-center gap-2 text-blue-500 hover:text-blue-700 font-medium text-sm transition-colors"
+              className="inline-flex items-center gap-2 text-indigo-600 hover:text-indigo-800 font-medium text-sm transition-colors"
             >
               <Plus size={16} />
               Produkt erstellen
@@ -277,6 +278,7 @@ export default function MyProductsPage() {
           initialProduct={editingProduct}
         />
       )}
+    </div>
     </div>
   );
 }

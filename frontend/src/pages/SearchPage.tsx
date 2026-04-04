@@ -142,7 +142,7 @@ export default function SearchPage() {
 
         {/* Popular ingredient chips */}
         <div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-3">
             Beliebte Wirkstoffe
           </p>
           <div className="flex flex-wrap gap-2">
@@ -161,7 +161,7 @@ export default function SearchPage() {
         {/* Stack items summary (inline view, above footer) */}
         {stackItems.length > 0 && (
           <div>
-            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-3">
               Mein Stack ({stackItems.length})
             </p>
             <div className="space-y-2">
@@ -175,7 +175,7 @@ export default function SearchPage() {
                       {item.product.name}
                     </p>
                     <div className="flex items-center gap-2 mt-1">
-                      <p className="text-xs text-gray-400">
+                      <p className="text-xs text-gray-500">
                         {item.portions}× täglich
                       </p>
                       <span className="inline-flex items-center px-2.5 py-1 bg-gradient-to-r from-emerald-500 to-green-600 text-white text-xs font-bold rounded-full">

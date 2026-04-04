@@ -229,23 +229,23 @@ export default function Modal3Dosage({
             <div className="flex-1 min-w-0">
               <p className="text-sm font-bold text-gray-900 truncate">{product.name}</p>
               {product.brand && (
-                <p className="text-xs text-gray-400">{product.brand}</p>
+                <p className="text-xs text-gray-500">{product.brand}</p>
               )}
               <p className="text-sm font-semibold text-emerald-600 mt-0.5">
                 €{product.price.toFixed(2)}
-                <span className="text-xs text-gray-400 font-normal"> / Packung</span>
+                <span className="text-xs text-gray-500 font-normal"> / Packung</span>
               </p>
             </div>
           </div>
 
           {/* Ingredient info merged into the card */}
           <div className="mt-3 pt-3 border-t border-indigo-100/60">
-            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-1">
               Wirkstoff
             </p>
             <p className="text-sm font-semibold text-gray-900">{ingredient.name}</p>
             {ingPerServing > 0 && portionUnit && (
-              <p className="text-xs text-gray-400 mt-0.5">
+              <p className="text-xs text-gray-500 mt-0.5">
                 1 Portion = {ingPerServing} {portionUnit}
               </p>
             )}
@@ -261,7 +261,7 @@ export default function Modal3Dosage({
 
         {/* Dosage slider + cost calculation */}
         <div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-3">
             Dosierung
           </p>
 
@@ -301,13 +301,13 @@ export default function Modal3Dosage({
           {/* Stats grid */}
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-white rounded-xl p-3 text-center border border-gray-100 shadow-sm">
-              <p className="text-xs text-gray-400 mt-0.5">Kosten pro Tag</p>
+              <p className="text-xs text-gray-500 mt-0.5">Kosten pro Tag</p>
               <p className="text-xl font-bold text-emerald-600">
                 €{dailyCost.toFixed(2)}
               </p>
             </div>
             <div className="bg-white rounded-xl p-3 text-center border border-gray-100 shadow-sm">
-              <p className="text-xs text-gray-400 mt-0.5">Kosten/Monat</p>
+              <p className="text-xs text-gray-500 mt-0.5">Kosten/Monat</p>
               <p className="text-xl font-bold text-emerald-600">
                 €{monthlyPrice.toFixed(2)}
               </p>
@@ -315,13 +315,13 @@ export default function Modal3Dosage({
             {hasServingData && (
               <>
                 <div className="bg-white rounded-xl p-3 text-center border border-gray-100 shadow-sm">
-                  <p className="text-xs text-gray-400 mt-0.5">Vorrat</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Vorrat</p>
                   <p className="text-xl font-bold text-gray-900">
                     {Math.round(daysSupply)} Tage
                   </p>
                 </div>
                 <div className="bg-white rounded-xl p-3 text-center border border-gray-100 shadow-sm">
-                  <p className="text-xs text-gray-400 mt-0.5">Portionen/Tag</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Portionen/Tag</p>
                   <p className="text-xl font-bold text-gray-900">
                     {portions}×
                   </p>
@@ -332,7 +332,7 @@ export default function Modal3Dosage({
 
           {/* Supply note */}
           {showSupplyNote && (
-            <p className="mt-2 text-xs text-gray-400">
+            <p className="mt-2 text-xs text-gray-500">
               ≠ 30 Tage Vorrat (tatsächlich {Math.round(daysSupply)} Tage)
             </p>
           )}
@@ -340,7 +340,7 @@ export default function Modal3Dosage({
 
         {/* Stack assignment */}
         <div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-3">
             Stack-Zuweisung
           </p>
 
@@ -357,7 +357,7 @@ export default function Modal3Dosage({
               </a>
             </div>
           ) : stacksLoading ? (
-            <div className="flex items-center gap-2 text-gray-400 text-sm">
+            <div className="flex items-center gap-2 text-gray-500 text-sm">
               <div className="w-4 h-4 border-2 border-gray-300 border-t-indigo-500 rounded-full animate-spin" />
               Stacks werden geladen…
             </div>

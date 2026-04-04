@@ -20,11 +20,11 @@ export default function Layout({ children }: LayoutProps) {
   const navLinks = (
     <>
       <Link
-        to="/"
+        to="/search"
         className="text-sm font-medium text-gray-500 hover:text-indigo-600 transition-colors"
         onClick={() => setMobileOpen(false)}
       >
-        Suche
+        Suchen
       </Link>
       <Link
         to="/stacks"

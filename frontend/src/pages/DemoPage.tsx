@@ -259,7 +259,7 @@ function StackView({
     return (
       <div className="flex flex-col items-center justify-center py-12 gap-2 text-center border-2 border-dashed border-gray-200 rounded-xl">
         <Package size={32} className="text-gray-300" />
-        <p className="text-gray-400 text-sm">Noch leer — suche nach einem Wirkstoff und füge Produkte hinzu.</p>
+        <p className="text-gray-500 text-sm">Noch leer — suche nach einem Wirkstoff und füge Produkte hinzu.</p>
       </div>
     );
   }
@@ -437,7 +437,7 @@ export default function DemoPage() {
 
           {/* Search bar */}
           <div>
-            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-500 mb-2">
               Wirkstoff zum Stack hinzufügen
             </p>
             <SearchBar
@@ -450,7 +450,7 @@ export default function DemoPage() {
           {activeStack && (
             <div className="flex flex-col gap-3">
               <div className="flex items-center justify-between">
-                <h2 className="text-base font-semibold text-gray-800">{activeStack.name}</h2>
+                <h2 className="text-base font-semibold text-gray-900">{activeStack.name}</h2>
                 {activeStack.products.length > 0 && (
                   <button
                     onClick={() => setState((prev) => ({

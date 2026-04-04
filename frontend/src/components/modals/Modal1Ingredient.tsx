@@ -22,8 +22,13 @@ const SOURCE_LABELS: Record<string, string> = {
   practice: 'Praxis',
 };
 
+function normalizeUnitToGerman(unit: string): string {
+  if (!unit) return unit;
+  return unit.replace(/\bIU\b/gi, 'IE').replace(/\biu\b/g, 'IE');
+}
+
 function formatDoseRange(gl: DosageGuideline): string {
-  const unit = gl.unit ?? '';
+  const unit = normalizeUnitToGerman(gl.unit ?? '');
   if (gl.dose_min != null && gl.dose_max != null && gl.dose_min !== gl.dose_max) {
     return `${gl.dose_min}–${gl.dose_max} ${unit}`;
   }
@@ -39,16 +44,22 @@ function formatFrequency(gl: DosageGuideline): string {
   return parts.join(' · ');
 }
 
-// Merge guidelines with the same dose range + unit into one card
+// Merge guidelines with the same dose range + unit into one card.
+// Uses normalized unit in the key so "800 IU" and "800 IU" always deduplicate.
+// Also merges source, source_title and notes across all sources globally.
 function deduplicateByDose(guidelines: DosageGuideline[]): DosageGuideline[] {
   const seen = new Map<string, DosageGuideline>();
   for (const gl of guidelines) {
-    const key = `${gl.population ?? ''}|${gl.dose_min ?? ''}|${gl.dose_max ?? ''}|${gl.unit ?? ''}`;
+    const normalizedUnit = normalizeUnitToGerman(gl.unit ?? '');
+    const key = `${gl.population ?? ''}|${gl.dose_min ?? ''}|${gl.dose_max ?? ''}|${normalizedUnit}`;
     if (seen.has(key)) {
       const ex = seen.get(key)!;
       const notes = [ex.notes, gl.notes].filter(Boolean).join(' / ') || undefined;
       const title = [ex.source_title, gl.source_title].filter(Boolean).join(' + ') || undefined;
-      seen.set(key, { ...ex, notes, source_title: title });
+      const source = ex.source !== gl.source
+        ? (`${ex.source} + ${gl.source}` as DosageGuideline['source'])
+        : ex.source;
+      seen.set(key, { ...ex, notes, source_title: title, source });
     } else {
       seen.set(key, { ...gl });
     }
@@ -171,10 +182,11 @@ export default function Modal1Ingredient({
   // Unique sources from guidelines
   const availableSources = Array.from(new Set(guidelines.map((g) => g.source)));
 
-  // Guidelines for the selected source, deduplicated by dose range
-  const sourceGuidelines = deduplicateByDose(
-    guidelines.filter((g) => g.source === selectedSource)
-  );
+  // Deduplicate globally across all sources first, then filter for the selected tab.
+  // This ensures a dose that appears under multiple sources is shown only once
+  // (in the tab of whichever source won the merge, i.e. the first occurrence).
+  const globallyDeduped = deduplicateByDose(guidelines);
+  const sourceGuidelines = globallyDeduped.filter((g) => g.source === selectedSource);
 
   // Click on a guideline card → auto-fill the manual dose input
   const handleGuidelineClick = (gl: DosageGuideline) => {
@@ -220,7 +232,7 @@ export default function Modal1Ingredient({
         <div>
           <h2 className="text-2xl font-bold text-gray-900 leading-tight">{ingredient.name}</h2>
           {ingredient.unit && (
-            <p className="text-sm text-gray-400 mt-0.5">Einheit: {ingredient.unit}</p>
+            <p className="text-sm text-gray-400 mt-0.5">Einheit: {normalizeUnitToGerman(ingredient.unit)}</p>
           )}
           {/* Synonyms inline under title */}
           {ingredient.synonyms && ingredient.synonyms.length > 0 && (
@@ -486,7 +498,7 @@ export default function Modal1Ingredient({
         >
           {hasManualDose && (
             <span className="text-xs bg-white/20 px-2 py-0.5 rounded-lg text-white/90 font-normal mr-1">
-              {parsedManualValue} {manualUnit}
+              {parsedManualValue} {normalizeUnitToGerman(manualUnit)}
             </span>
           )}
           Produkte anzeigen
