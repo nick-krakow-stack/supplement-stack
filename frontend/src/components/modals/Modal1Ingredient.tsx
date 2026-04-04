@@ -206,7 +206,7 @@ export default function Modal1Ingredient({
     <button
       type="button"
       onClick={() => toggleSection(sectionKey)}
-      className="flex items-center justify-between w-full py-2 text-xs font-semibold uppercase tracking-wider text-gray-500 cursor-pointer hover:text-gray-700"
+      className="flex items-center justify-between w-full py-3 text-xs font-semibold uppercase tracking-widest text-gray-400 cursor-pointer hover:text-indigo-600 transition-colors border-b border-gray-50"
     >
       <span>{label}</span>
       {openSections[sectionKey] ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -218,20 +218,20 @@ export default function Modal1Ingredient({
       {/* Header */}
       <div className="flex items-start justify-between mb-5">
         <div>
-          <h2 className="text-xl font-bold text-gray-900 leading-tight">{ingredient.name}</h2>
+          <h2 className="text-2xl font-bold text-gray-900 leading-tight">{ingredient.name}</h2>
           {ingredient.unit && (
-            <p className="text-sm text-gray-500 mt-1">Einheit: {ingredient.unit}</p>
+            <p className="text-sm text-gray-400 mt-0.5">Einheit: {ingredient.unit}</p>
           )}
           {/* Synonyms inline under title */}
           {ingredient.synonyms && ingredient.synonyms.length > 0 && (
-            <p className="text-xs text-gray-400 mt-0.5">
+            <p className="text-xs text-gray-400 mt-1">
               {ingredient.synonyms.map((s) => s.synonym).join(' · ')}
             </p>
           )}
         </div>
         <button
           onClick={onClose}
-          className="ml-3 flex-shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+          className="ml-3 flex-shrink-0 p-2 rounded-xl text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
           aria-label="Schließen"
         >
           <X size={20} />
@@ -241,7 +241,7 @@ export default function Modal1Ingredient({
       {/* Loading state */}
       {loading && (
         <div className="flex items-center justify-center py-10">
-          <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mr-3" />
+          <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mr-3" />
           <span className="text-gray-500 text-sm">Laden…</span>
         </div>
       )}
@@ -264,7 +264,7 @@ export default function Modal1Ingredient({
               <div className="pb-4 space-y-3">
                 {guidelinesLoading ? (
                   <div className="flex items-center gap-2 text-gray-400 text-sm py-2">
-                    <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
+                    <div className="w-4 h-4 border-2 border-gray-300 border-t-indigo-500 rounded-full animate-spin" />
                     Leitlinien werden geladen…
                   </div>
                 ) : guidelines.length === 0 ? (
@@ -278,9 +278,9 @@ export default function Modal1Ingredient({
                           key={src}
                           type="button"
                           onClick={() => setSelectedSource(src)}
-                          className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
+                          className={`px-3 py-1.5 text-xs font-semibold rounded-full transition-colors ${
                             selectedSource === src
-                              ? 'bg-blue-100 text-blue-700'
+                              ? 'bg-indigo-100 text-indigo-700'
                               : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                           }`}
                         >
@@ -297,7 +297,7 @@ export default function Modal1Ingredient({
                             key={gl.id}
                             type="button"
                             onClick={() => handleGuidelineClick(gl)}
-                            className="w-full text-left p-3 bg-gray-50 rounded-xl border border-gray-100 hover:border-blue-300 hover:bg-blue-50/50 active:bg-blue-100 transition-colors group"
+                            className="w-full text-left p-4 bg-gradient-to-br from-gray-50 to-white rounded-2xl border border-gray-100 hover:border-indigo-200 hover:from-indigo-50/40 hover:to-white active:from-indigo-100/50 transition-all duration-200 group shadow-sm"
                             title="Klicken um Dosis zu übernehmen"
                           >
                             {/* Population label */}
@@ -306,10 +306,10 @@ export default function Modal1Ingredient({
                             )}
                             {/* Dose range + hint */}
                             <div className="flex items-baseline justify-between gap-2">
-                              <p className="text-2xl font-bold text-gray-900">
+                              <p className="text-3xl font-bold text-gray-900">
                                 {formatDoseRange(gl)}
                               </p>
-                              <span className="text-xs text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                              <span className="text-xs text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
                                 Übernehmen ↓
                               </span>
                             </div>
@@ -328,7 +328,7 @@ export default function Modal1Ingredient({
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 onClick={(e) => e.stopPropagation()}
-                                className="inline-flex items-center gap-1 mt-1.5 text-xs text-blue-600 hover:text-blue-800 transition-colors"
+                                className="inline-flex items-center gap-1 mt-1.5 text-xs text-indigo-600 hover:text-indigo-800 transition-colors"
                               >
                                 {gl.source_title ?? 'Quelle'}
                                 <ExternalLink size={11} />
@@ -343,10 +343,10 @@ export default function Modal1Ingredient({
 
                 {/* Manual dose input */}
                 <div className="pt-1">
-                  <p className="text-xs text-gray-400 mb-1.5">
+                  <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">
                     Eigene Dosis eingeben
                     {hasManualDose && (
-                      <span className="ml-2 px-1.5 py-0.5 bg-amber-100 text-amber-700 text-xs font-medium rounded">
+                      <span className="bg-gradient-to-r from-amber-400 to-orange-400 text-white text-xs font-semibold px-2 py-0.5 rounded-full ml-2">
                         Manuell
                       </span>
                     )}
@@ -359,14 +359,14 @@ export default function Modal1Ingredient({
                       placeholder="Menge"
                       value={manualValue}
                       onChange={(e) => setManualValue(e.target.value)}
-                      className="w-28 px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-center"
+                      className="w-28 px-3 py-1.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent text-center"
                     />
                     <input
                       type="text"
                       placeholder="Einheit (z.B. mg)"
                       value={manualUnit}
                       onChange={(e) => setManualUnit(e.target.value)}
-                      className="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="flex-1 px-3 py-1.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
                     />
                   </div>
                 </div>
@@ -386,7 +386,7 @@ export default function Modal1Ingredient({
                       href={ingredient.external_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 mt-2 text-sm text-blue-600 hover:text-blue-800 transition-colors"
+                      className="inline-flex items-center gap-1.5 mt-2 text-sm text-indigo-600 hover:text-indigo-800 transition-colors"
                     >
                       Mehr erfahren
                       <ExternalLink size={14} />
@@ -434,7 +434,7 @@ export default function Modal1Ingredient({
                 <div className="pb-4 space-y-3">
                   {ingredient.hypo_symptoms && (
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-1">
+                      <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">
                         Mangel
                       </p>
                       <p className="text-sm text-gray-700 leading-relaxed">{ingredient.hypo_symptoms}</p>
@@ -444,7 +444,7 @@ export default function Modal1Ingredient({
                     <div>
                       <div className="flex items-center gap-1.5 mb-1">
                         <AlertTriangle size={13} className="text-amber-500" />
-                        <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+                        <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
                           Überdosierung
                         </p>
                       </div>
@@ -470,10 +470,10 @@ export default function Modal1Ingredient({
                   key={prod.id}
                   type="button"
                   onClick={handleShowProducts}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-gray-50 border border-gray-200 rounded-full hover:bg-gray-100 transition-colors text-gray-700"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-white border border-gray-200 rounded-full hover:border-indigo-300 hover:bg-indigo-50 transition-colors text-gray-700 shadow-sm"
                 >
                   <span className="max-w-[120px] truncate">{prod.name}</span>
-                  <span className="text-gray-400 font-normal">€{prod.price.toFixed(2)}</span>
+                  <span className="text-emerald-600 font-semibold">€{prod.price.toFixed(2)}</span>
                 </button>
               ))}
             </div>
@@ -482,10 +482,10 @@ export default function Modal1Ingredient({
 
         <button
           onClick={handleShowProducts}
-          className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold rounded-xl transition-colors"
+          className="w-full bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold rounded-xl px-5 py-3 transition-all duration-200 shadow-sm flex items-center justify-center gap-2"
         >
           {hasManualDose && (
-            <span className="text-xs bg-white/20 px-1.5 py-0.5 rounded text-white font-normal mr-1">
+            <span className="text-xs bg-white/20 px-2 py-0.5 rounded-lg text-white/90 font-normal mr-1">
               {parsedManualValue} {manualUnit}
             </span>
           )}

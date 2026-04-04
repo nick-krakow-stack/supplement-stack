@@ -192,7 +192,7 @@ export default function Modal3Dosage({
         <div className="flex items-center gap-2">
           <button
             onClick={onBack}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+            className="p-2 rounded-xl text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
             aria-label="Zurück"
           >
             <ChevronLeft size={20} />
@@ -203,7 +203,7 @@ export default function Modal3Dosage({
         </div>
         <button
           onClick={onClose}
-          className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+          className="p-2 rounded-xl text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
           aria-label="Schließen"
         >
           <X size={20} />
@@ -211,98 +211,118 @@ export default function Modal3Dosage({
       </div>
 
       <div className="space-y-5">
-        {/* Product header card */}
-        <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl border border-gray-200">
-          {product.image_url && (
-            <img
-              src={product.image_url}
-              alt={product.name}
-              width={52}
-              height={52}
-              className="w-[52px] h-[52px] rounded-lg object-cover bg-white"
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = 'none';
-              }}
-            />
-          )}
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-gray-900 truncate">{product.name}</p>
-            {product.brand && (
-              <p className="text-xs text-gray-500">{product.brand}</p>
+        {/* Product info section */}
+        <div className="bg-gradient-to-br from-indigo-50 to-purple-50/40 rounded-2xl p-4 border border-indigo-100/50 mb-4">
+          <div className="flex items-start gap-3">
+            {product.image_url && (
+              <img
+                src={product.image_url}
+                alt={product.name}
+                width={52}
+                height={52}
+                className="w-[52px] h-[52px] rounded-xl object-cover bg-white flex-shrink-0"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = 'none';
+                }}
+              />
             )}
-            <p className="text-sm font-semibold text-blue-700 mt-0.5">
-              €{product.price.toFixed(2)}
-              <span className="text-xs text-gray-400 font-normal"> / Packung</span>
-            </p>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-gray-900 truncate">{product.name}</p>
+              {product.brand && (
+                <p className="text-xs text-gray-400">{product.brand}</p>
+              )}
+              <p className="text-sm font-semibold text-emerald-600 mt-0.5">
+                €{product.price.toFixed(2)}
+                <span className="text-xs text-gray-400 font-normal"> / Packung</span>
+              </p>
+            </div>
           </div>
-        </div>
 
-        {/* Ingredient info */}
-        <div className="p-3 bg-blue-50 rounded-xl">
-          <p className="text-xs font-semibold uppercase tracking-wider text-blue-400 mb-1">
-            Wirkstoff
-          </p>
-          <p className="text-sm font-semibold text-blue-900">{ingredient.name}</p>
-          {ingPerServing > 0 && portionUnit && (
-            <p className="text-xs text-blue-700 mt-0.5">
-              1 Portion = {ingPerServing} {portionUnit}
+          {/* Ingredient info merged into the card */}
+          <div className="mt-3 pt-3 border-t border-indigo-100/60">
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">
+              Wirkstoff
             </p>
-          )}
-          {recommendedDose && (
-            <p className="text-xs text-blue-600 mt-0.5">
-              Zieldosis: {recommendedDose.value} {recommendedDose.unit}/Tag
-            </p>
-          )}
+            <p className="text-sm font-semibold text-gray-900">{ingredient.name}</p>
+            {ingPerServing > 0 && portionUnit && (
+              <p className="text-xs text-gray-400 mt-0.5">
+                1 Portion = {ingPerServing} {portionUnit}
+              </p>
+            )}
+            {recommendedDose && (
+              <p className="mt-1">
+                <span className="text-xs text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full font-medium">
+                  Zieldosis: {recommendedDose.value} {recommendedDose.unit}/Tag
+                </span>
+              </p>
+            )}
+          </div>
         </div>
 
         {/* Dosage slider + cost calculation */}
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">
             Dosierung
           </p>
 
-          {/* Portions input */}
+          {/* Portions counter */}
           <div className="flex items-center gap-3 mb-4">
             <label htmlFor="portions" className="text-sm text-gray-700 whitespace-nowrap">
               Portionen pro Tag
             </label>
-            <input
-              id="portions"
-              type="number"
-              min={MIN_PORTIONS}
-              max={MAX_PORTIONS}
-              step={PORTIONS_STEP}
-              value={portions}
-              onChange={handlePortionsChange}
-              className="w-24 px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-center"
-            />
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPortions((p) => Math.max(MIN_PORTIONS, parseFloat((p - PORTIONS_STEP).toFixed(1))))}
+                className="w-9 h-9 rounded-xl bg-gray-100 hover:bg-indigo-100 hover:text-indigo-700 font-bold text-gray-700 transition-colors flex items-center justify-center"
+              >
+                −
+              </button>
+              <input
+                id="portions"
+                type="number"
+                min={MIN_PORTIONS}
+                max={MAX_PORTIONS}
+                step={PORTIONS_STEP}
+                value={portions}
+                onChange={handlePortionsChange}
+                className="text-xl font-bold text-gray-900 w-12 text-center border-0 bg-transparent focus:outline-none focus:ring-0"
+              />
+              <button
+                type="button"
+                onClick={() => setPortions((p) => Math.min(MAX_PORTIONS, parseFloat((p + PORTIONS_STEP).toFixed(1))))}
+                className="w-9 h-9 rounded-xl bg-gray-100 hover:bg-indigo-100 hover:text-indigo-700 font-bold text-gray-700 transition-colors flex items-center justify-center"
+              >
+                +
+              </button>
+            </div>
           </div>
 
           {/* Stats grid */}
           <div className="grid grid-cols-2 gap-3">
-            <div className="p-3 bg-gray-50 rounded-lg border border-gray-100">
-              <p className="text-xs text-gray-500">Kosten pro Tag</p>
-              <p className="text-lg font-bold text-gray-900 mt-0.5">
+            <div className="bg-white rounded-xl p-3 text-center border border-gray-100 shadow-sm">
+              <p className="text-xs text-gray-400 mt-0.5">Kosten pro Tag</p>
+              <p className="text-xl font-bold text-emerald-600">
                 €{dailyCost.toFixed(2)}
               </p>
             </div>
-            <div className="p-3 bg-gray-50 rounded-lg border border-gray-100">
-              <p className="text-xs text-gray-500">Kosten/Monat</p>
-              <p className="text-lg font-bold text-gray-900 mt-0.5">
+            <div className="bg-white rounded-xl p-3 text-center border border-gray-100 shadow-sm">
+              <p className="text-xs text-gray-400 mt-0.5">Kosten/Monat</p>
+              <p className="text-xl font-bold text-emerald-600">
                 €{monthlyPrice.toFixed(2)}
               </p>
             </div>
             {hasServingData && (
               <>
-                <div className="p-3 bg-gray-50 rounded-lg border border-gray-100">
-                  <p className="text-xs text-gray-500">Vorrat</p>
-                  <p className="text-lg font-bold text-gray-900 mt-0.5">
+                <div className="bg-white rounded-xl p-3 text-center border border-gray-100 shadow-sm">
+                  <p className="text-xs text-gray-400 mt-0.5">Vorrat</p>
+                  <p className="text-xl font-bold text-gray-900">
                     {Math.round(daysSupply)} Tage
                   </p>
                 </div>
-                <div className="p-3 bg-gray-50 rounded-lg border border-gray-100">
-                  <p className="text-xs text-gray-500">Portionen/Tag</p>
-                  <p className="text-lg font-bold text-gray-900 mt-0.5">
+                <div className="bg-white rounded-xl p-3 text-center border border-gray-100 shadow-sm">
+                  <p className="text-xs text-gray-400 mt-0.5">Portionen/Tag</p>
+                  <p className="text-xl font-bold text-gray-900">
                     {portions}×
                   </p>
                 </div>
@@ -320,7 +340,7 @@ export default function Modal3Dosage({
 
         {/* Stack assignment */}
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">
             Stack-Zuweisung
           </p>
 
@@ -338,7 +358,7 @@ export default function Modal3Dosage({
             </div>
           ) : stacksLoading ? (
             <div className="flex items-center gap-2 text-gray-400 text-sm">
-              <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin" />
+              <div className="w-4 h-4 border-2 border-gray-300 border-t-indigo-500 rounded-full animate-spin" />
               Stacks werden geladen…
             </div>
           ) : stacksError ? (
@@ -351,7 +371,7 @@ export default function Modal3Dosage({
                   const val = e.target.value;
                   setSelectedStackId(val === 'new' ? 'new' : parseInt(val, 10));
                 }}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent bg-white"
               >
                 {stacks.length === 0 && (
                   <option value="" disabled>
@@ -374,7 +394,7 @@ export default function Modal3Dosage({
                     placeholder="Stack-Name eingeben…"
                     value={newStackName}
                     onChange={(e) => setNewStackName(e.target.value)}
-                    className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
                   />
                 </div>
               )}
@@ -402,7 +422,7 @@ export default function Modal3Dosage({
           <button
             onClick={handleAddToStack}
             disabled={submitting}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-orange-500 hover:bg-orange-600 active:bg-orange-700 rounded-xl transition-colors disabled:opacity-60"
+            className="flex-1 w-full bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold rounded-xl px-5 py-3 transition-all duration-200 shadow-sm flex items-center justify-center gap-2 disabled:opacity-60"
           >
             <ShoppingCart size={16} />
             In Demo-Stack
@@ -411,7 +431,7 @@ export default function Modal3Dosage({
           <button
             onClick={handleAddToStack}
             disabled={submitting || (selectedStackId === 'new' && !newStackName.trim())}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 active:bg-blue-800 rounded-xl transition-colors disabled:opacity-60"
+            className="flex-1 w-full bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold rounded-xl px-5 py-3 transition-all duration-200 shadow-sm flex items-center justify-center gap-2 disabled:opacity-60"
           >
             {submitting ? (
               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />

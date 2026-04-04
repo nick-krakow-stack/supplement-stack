@@ -51,11 +51,9 @@ function WarningBadge({ warning }: { warning: InteractionWarning }) {
   const ingredientA = warning.ingredient_a_name ?? warning.ingredient_a ?? 'Unbekannt';
   const ingredientB = warning.ingredient_b_name ?? warning.ingredient_b ?? 'Unbekannt';
 
-  const baseClass = 'flex items-start gap-2 rounded-lg px-3 py-2 text-sm';
-
   if (warning.type === 'danger') {
     return (
-      <div className={`${baseClass} bg-red-100 text-red-700`}>
+      <div className="flex items-start gap-2 rounded-xl px-4 py-3 bg-red-50 text-red-700 text-sm border border-red-100">
         <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
         <span>
           <span className="font-semibold">{ingredientA} + {ingredientB}:</span> {warning.comment}
@@ -65,7 +63,7 @@ function WarningBadge({ warning }: { warning: InteractionWarning }) {
   }
   if (warning.type === 'caution') {
     return (
-      <div className={`${baseClass} bg-orange-100 text-orange-700`}>
+      <div className="flex items-start gap-2 rounded-xl px-4 py-3 bg-amber-50 text-amber-700 text-sm border border-amber-100">
         <AlertTriangle size={16} className="flex-shrink-0 mt-0.5" />
         <span>
           <span className="font-semibold">{ingredientA} + {ingredientB}:</span> {warning.comment}
@@ -74,7 +72,7 @@ function WarningBadge({ warning }: { warning: InteractionWarning }) {
     );
   }
   return (
-    <div className={`${baseClass} bg-gray-100 text-gray-700`}>
+    <div className="flex items-start gap-2 rounded-xl px-4 py-3 bg-gray-50 text-gray-700 text-sm border border-gray-200">
       <span>
         <span className="font-semibold">{ingredientA} + {ingredientB}:</span> {warning.comment}
       </span>
@@ -185,7 +183,7 @@ function StackCard({
     .reduce((sum, p) => sum + (p.price ?? 0), 0);
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm flex flex-col">
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
       <div className="p-5 flex flex-col gap-4">
       {/* Header: name + delete */}
       <div className="flex items-center justify-between gap-2">
@@ -202,19 +200,19 @@ function StackCard({
                   setNameValue(stack.name);
                 }
               }}
-              className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-lg font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-1 border border-gray-200 rounded-xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent text-sm"
             />
             <button
               onClick={saveName}
               disabled={savingName}
-              className="p-1.5 rounded-lg text-green-600 hover:bg-green-50 transition-colors"
+              className="p-1.5 rounded-xl text-green-600 hover:bg-green-50 transition-colors"
               aria-label="Speichern"
             >
               <Check size={18} />
             </button>
             <button
               onClick={() => { setEditingName(false); setNameValue(stack.name); }}
-              className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-50 transition-colors"
+              className="p-1.5 rounded-xl text-gray-500 hover:bg-gray-50 transition-colors"
               aria-label="Abbrechen"
             >
               <X size={18} />
@@ -223,7 +221,7 @@ function StackCard({
         ) : (
           <div className="flex items-center gap-3 min-w-0">
             <h2
-              className="text-lg font-semibold text-gray-900 cursor-pointer hover:text-blue-600 transition-colors"
+              className="text-lg font-bold text-gray-900 cursor-pointer hover:text-indigo-600 transition-colors"
               title="Klicken zum Bearbeiten"
               onClick={() => setEditingName(true)}
             >
@@ -235,7 +233,7 @@ function StackCard({
                   if (selectedProductIds.size === products.length) setSelectedProductIds(new Set());
                   else setSelectedProductIds(new Set(products.map((p) => p.id)));
                 }}
-                className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                className="text-xs font-medium text-indigo-600 hover:text-indigo-800 transition-colors"
               >
                 {selectedProductIds.size === products.length ? 'Keine' : 'Alle'}
               </button>
@@ -246,7 +244,7 @@ function StackCard({
         <button
           onClick={handleDelete}
           disabled={deleting}
-          className="flex-shrink-0 p-2 rounded-lg text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
+          className="flex-shrink-0 p-2 rounded-xl text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
           aria-label="Stack löschen"
         >
           <Trash2 size={18} />
@@ -254,7 +252,7 @@ function StackCard({
       </div>
 
       {error && (
-        <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>
+        <p className="text-sm text-red-600 bg-red-50 rounded-xl px-3 py-2">{error}</p>
       )}
 
       {/* Products */}
@@ -277,7 +275,7 @@ function StackCard({
                         return next;
                       })
                     }
-                    className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer"
+                    className="w-4 h-4 rounded border-gray-300 text-indigo-600 cursor-pointer"
                   />
                 </div>
                 <ProductCard
@@ -290,7 +288,7 @@ function StackCard({
                 <button
                   onClick={() => handleRemoveProduct(product.id)}
                   disabled={removingProductId === product.id}
-                  className="p-1 rounded text-red-400 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                  className="p-1 rounded-lg text-red-300 hover:text-red-500 hover:bg-red-50 transition-colors disabled:opacity-50"
                   aria-label={`${product.name} entfernen`}
                 >
                   <Trash2 size={14} />
@@ -306,7 +304,7 @@ function StackCard({
         <p className="text-xs text-gray-400">Lade Warnungen...</p>
       ) : warnings.length > 0 ? (
         <div className="flex flex-col gap-2">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
             Interaktionswarnungen
           </p>
           {warnings.map((w, i) => (
@@ -316,8 +314,8 @@ function StackCard({
       ) : null}
 
       {/* Footer total */}
-      <div className="border-t border-gray-100 pt-3 flex items-center justify-end">
-        <p className="text-green-600 font-bold">
+      <div className="border-t border-gray-50 pt-3 flex items-center justify-end">
+        <p className="text-emerald-600 font-bold text-sm">
           Gesamt: €{total.toFixed(2)}/Monat
         </p>
       </div>
@@ -325,11 +323,11 @@ function StackCard({
 
       {/* Selected products footer */}
       {selectedProductIds.size > 0 && (
-        <div className="border-t border-blue-100 bg-blue-50 rounded-b-xl px-4 py-3 flex items-center justify-between">
-          <span className="text-sm text-blue-700 font-medium">
+        <div className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-b-2xl px-5 py-3 flex items-center justify-between">
+          <span className="text-white font-semibold text-sm">
             {selectedProductIds.size} ausgewählt
           </span>
-          <span className="text-sm font-bold text-blue-900">
+          <span className="text-white font-bold">
             €{selectedTotal.toFixed(2)}/Monat
           </span>
         </div>
@@ -439,7 +437,7 @@ export default function StacksPage() {
         <p className="text-gray-600">Du musst angemeldet sein, um deine Stacks zu sehen.</p>
         <Link
           to="/login"
-          className="bg-blue-500 text-white hover:bg-blue-600 px-5 py-2 rounded-lg font-medium transition-colors"
+          className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold rounded-xl transition-all duration-200 shadow-sm px-5 py-2"
         >
           Zur Anmeldung
         </Link>
@@ -448,83 +446,85 @@ export default function StacksPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      {/* Page header */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
-        <h1 className="text-2xl font-bold text-gray-900">Meine Stacks</h1>
-        <button
-          onClick={() => setShowCreateForm((v) => !v)}
-          className="inline-flex items-center gap-2 bg-blue-500 text-white hover:bg-blue-600 px-4 py-2 rounded-lg font-medium transition-colors"
-        >
-          <Plus size={18} />
-          Neuen Stack erstellen
-          {showCreateForm ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-        </button>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-indigo-50/30 p-4 md:p-6">
+      <div className="flex flex-col gap-6">
+        {/* Page header */}
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <h1 className="text-2xl font-bold text-gray-900">Meine Stacks</h1>
+          <button
+            onClick={() => setShowCreateForm((v) => !v)}
+            className="inline-flex items-center gap-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold rounded-xl transition-all duration-200 shadow-sm px-4 py-2"
+          >
+            <Plus size={18} />
+            Neuen Stack erstellen
+            {showCreateForm ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </button>
+        </div>
 
-      {/* Create form */}
-      {showCreateForm && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 flex flex-col gap-3">
-          <h2 className="font-semibold text-gray-800">Neuer Stack</h2>
-          <div className="flex gap-3">
-            <input
-              autoFocus
-              type="text"
-              placeholder="Stack-Name"
-              value={newStackName}
-              onChange={(e) => setNewStackName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') handleCreate(); }}
-              className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <button
-              onClick={handleCreate}
-              disabled={creating}
-              className="bg-blue-500 text-white hover:bg-blue-600 px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-60"
-            >
-              {creating ? 'Erstelle...' : 'Erstellen'}
-            </button>
+        {/* Create form */}
+        {showCreateForm && (
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col gap-3">
+            <h2 className="font-semibold text-gray-800">Neuer Stack</h2>
+            <div className="flex gap-3">
+              <input
+                autoFocus
+                type="text"
+                placeholder="Stack-Name"
+                value={newStackName}
+                onChange={(e) => setNewStackName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleCreate(); }}
+                className="flex-1 border border-gray-200 rounded-xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent text-sm"
+              />
+              <button
+                onClick={handleCreate}
+                disabled={creating}
+                className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold rounded-xl transition-all duration-200 shadow-sm px-4 py-2 disabled:opacity-60"
+              >
+                {creating ? 'Erstelle...' : 'Erstellen'}
+              </button>
+            </div>
+            {createError && <p className="text-sm text-red-500">{createError}</p>}
           </div>
-          {createError && <p className="text-sm text-red-600">{createError}</p>}
-        </div>
-      )}
+        )}
 
-      {/* Loading */}
-      {loading && (
-        <div className="flex items-center justify-center py-12">
-          <div className="animate-spin border-4 border-blue-500 border-t-transparent rounded-full w-8 h-8" />
-        </div>
-      )}
+        {/* Loading */}
+        {loading && (
+          <div className="flex items-center justify-center py-12">
+            <div className="animate-spin border-4 border-indigo-500 border-t-transparent rounded-full w-8 h-8" />
+          </div>
+        )}
 
-      {/* Error */}
-      {error && !loading && (
-        <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3">
-          {error}
-        </div>
-      )}
+        {/* Error */}
+        {error && !loading && (
+          <div className="bg-red-50 border border-red-100 text-red-700 rounded-xl px-4 py-3">
+            {error}
+          </div>
+        )}
 
-      {/* Empty state */}
-      {!loading && !error && stacks.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
-          <p className="text-gray-500 text-lg">
-            Noch keine Stacks. Suche nach Wirkstoffen, um Produkte hinzuzufügen.
-          </p>
-        </div>
-      )}
+        {/* Empty state */}
+        {!loading && !error && stacks.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
+            <p className="text-gray-500 text-lg">
+              Noch keine Stacks. Suche nach Wirkstoffen, um Produkte hinzuzufügen.
+            </p>
+          </div>
+        )}
 
-      {/* Stack list */}
-      {!loading && stacks.length > 0 && (
-        <div className="flex flex-col gap-4">
-          {stacks.map((stack) => (
-            <StackCard
-              key={stack.id}
-              stack={stack}
-              onDeleted={handleDeleted}
-              onRenamed={handleRenamed}
-              shopDomains={shopDomains}
-            />
-          ))}
-        </div>
-      )}
+        {/* Stack list */}
+        {!loading && stacks.length > 0 && (
+          <div className="flex flex-col gap-4">
+            {stacks.map((stack) => (
+              <StackCard
+                key={stack.id}
+                stack={stack}
+                onDeleted={handleDeleted}
+                onRenamed={handleRenamed}
+                shopDomains={shopDomains}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

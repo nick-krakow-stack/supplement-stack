@@ -127,7 +127,7 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
 
   const labelClass = 'block text-sm font-medium text-gray-700 mb-1';
   const inputClass =
-    'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500';
+    'w-full border border-gray-200 rounded-xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent text-sm';
 
   return (
     <ModalWrapper onClose={onClose} title={isEdit ? 'Produkt bearbeiten' : 'Neues Produkt erstellen'}>
@@ -266,7 +266,7 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
             type="checkbox"
             checked={isAffiliate}
             onChange={(e) => setIsAffiliate(e.target.checked)}
-            className="w-4 h-4 rounded border-gray-300 text-blue-600 cursor-pointer"
+            className="w-4 h-4 rounded border-gray-300 text-indigo-600 cursor-pointer"
           />
           <label htmlFor="is_affiliate" className="text-sm text-gray-700 cursor-pointer">
             Affiliate-Link
@@ -287,7 +287,7 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
 
         {/* Error */}
         {error && (
-          <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>
+          <p className="text-sm text-red-600 bg-red-50 rounded-xl px-3 py-2">{error}</p>
         )}
 
         {/* Actions */}
@@ -295,14 +295,14 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-lg text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors"
+            className="px-4 py-2 border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 font-medium rounded-xl transition-colors text-sm"
           >
             Abbrechen
           </button>
           <button
             type="submit"
             disabled={submitting}
-            className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-blue-500 hover:bg-blue-600 transition-colors disabled:opacity-60"
+            className="px-4 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold rounded-xl transition-all shadow-sm disabled:opacity-60 text-sm"
           >
             {submitting ? 'Speichere...' : isEdit ? 'Speichern' : 'Erstellen'}
           </button>

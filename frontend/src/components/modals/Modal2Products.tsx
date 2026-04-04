@@ -40,7 +40,7 @@ const PLACEHOLDER_IMAGE =
 function BadgeRec({ type }: { type: RecommendationType }) {
   if (type === 'recommended') {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full bg-green-100 text-green-700">
+      <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-full bg-gradient-to-r from-emerald-400 to-green-500 text-white">
         <Star size={10} />
         Empfohlen
       </span>
@@ -48,7 +48,7 @@ function BadgeRec({ type }: { type: RecommendationType }) {
   }
   if (type === 'alternative') {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full bg-blue-100 text-blue-700">
+      <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-indigo-100 text-indigo-700">
         Alternative
       </span>
     );
@@ -172,19 +172,19 @@ export default function Modal2Products({
         <div className="flex items-center gap-2">
           <button
             onClick={onBack}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+            className="p-2 rounded-xl text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
             aria-label="Zurück"
           >
             <ChevronLeft size={20} />
           </button>
           <div>
             <h2 className="text-lg font-bold text-gray-900 leading-tight">Produkte</h2>
-            <p className="text-xs text-gray-500">{ingredientName}</p>
+            <p className="text-xs text-gray-400 mt-0.5">{ingredientName}</p>
           </div>
         </div>
         <button
           onClick={onClose}
-          className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+          className="p-2 rounded-xl text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
           aria-label="Schließen"
         >
           <X size={20} />
@@ -194,7 +194,7 @@ export default function Modal2Products({
       {/* Loading */}
       {loading && (
         <div className="flex items-center justify-center py-12">
-          <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mr-3" />
+          <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mr-3" />
           <span className="text-gray-500 text-sm">Produkte werden geladen…</span>
         </div>
       )}
@@ -215,8 +215,8 @@ export default function Modal2Products({
       {/* Empty state — only when there are also no user products */}
       {!loading && !error && items.length === 0 && userProducts.length === 0 && (
         <div className="py-12 text-center">
-          <ShoppingCart size={40} className="mx-auto text-gray-300 mb-3" />
-          <p className="text-gray-500 text-sm">
+          <ShoppingCart size={40} className="mx-auto text-gray-200 mb-3" />
+          <p className="text-gray-400 text-sm">
             Keine Produkte für diesen Wirkstoff gefunden.
           </p>
         </div>
@@ -227,7 +227,7 @@ export default function Modal2Products({
           {/* User products section */}
           {userProducts.length > 0 && (
             <div className="mb-4">
-              <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">
+              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3 mt-1">
                 Meine Produkte
               </p>
               <ul className="space-y-3">
@@ -250,7 +250,7 @@ export default function Modal2Products({
                   return (
                     <li
                       key={`user-${userProd.id}`}
-                      className="flex items-start gap-3 p-3 border border-gray-200 rounded-xl hover:border-purple-200 hover:bg-purple-50/30 transition-colors"
+                      className="flex items-start gap-4 p-4 bg-white border border-gray-100 rounded-2xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
                     >
                       {/* Image */}
                       <img
@@ -258,7 +258,7 @@ export default function Modal2Products({
                         alt={userProd.name}
                         width={60}
                         height={60}
-                        className="w-[60px] h-[60px] rounded-lg object-cover flex-shrink-0 bg-gray-100"
+                        className="w-16 h-16 rounded-xl object-cover flex-shrink-0 bg-gray-100 border border-gray-100"
                         onError={(e) => {
                           (e.target as HTMLImageElement).src = PLACEHOLDER_IMAGE;
                         }}
@@ -272,23 +272,23 @@ export default function Modal2Products({
                               {userProd.name}
                             </p>
                             {userProd.brand && (
-                              <p className="text-xs text-gray-500">{userProd.brand}</p>
+                              <p className="text-xs text-gray-400">{userProd.brand}</p>
                             )}
                           </div>
-                          <span className="inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded-full bg-purple-100 text-purple-700 flex-shrink-0">
+                          <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-purple-100 text-purple-700 flex-shrink-0">
                             Eigenes
                           </span>
                         </div>
 
                         <div className="mt-1.5 flex items-center gap-3">
-                          <span className="text-sm font-bold text-gray-900">
+                          <span className="inline-flex items-center px-2.5 py-1 bg-gradient-to-r from-emerald-500 to-green-600 text-white text-xs font-bold rounded-full">
                             €{userProd.price.toFixed(2)}
                           </span>
                         </div>
 
                         <button
                           onClick={() => onSelect(asProduct)}
-                          className="mt-2 px-3 py-1.5 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                          className="mt-2 w-full px-4 py-2 text-sm font-semibold bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl hover:from-indigo-600 hover:to-purple-700 transition-all"
                         >
                           Auswählen
                         </button>
@@ -316,7 +316,7 @@ export default function Modal2Products({
                 return (
                   <li
                     key={product.id}
-                    className="flex items-start gap-3 p-3 border border-gray-200 rounded-xl hover:border-blue-200 hover:bg-blue-50/30 transition-colors"
+                    className="flex items-start gap-4 p-4 bg-white border border-gray-100 rounded-2xl shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
                   >
                     {/* Image */}
                     <img
@@ -324,7 +324,7 @@ export default function Modal2Products({
                       alt={product.name}
                       width={60}
                       height={60}
-                      className="w-[60px] h-[60px] rounded-lg object-cover flex-shrink-0 bg-gray-100"
+                      className="w-16 h-16 rounded-xl object-cover flex-shrink-0 bg-gray-100 border border-gray-100"
                       onError={(e) => {
                         (e.target as HTMLImageElement).src = PLACEHOLDER_IMAGE;
                       }}
@@ -338,25 +338,25 @@ export default function Modal2Products({
                             {product.name}
                           </p>
                           {product.brand && (
-                            <p className="text-xs text-gray-500">{product.brand}</p>
+                            <p className="text-xs text-gray-400">{product.brand}</p>
                           )}
                         </div>
                         <BadgeRec type={recType} />
                       </div>
 
                       <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
-                        <span className="text-sm font-bold text-gray-900">
+                        <span className="inline-flex items-center px-2.5 py-1 bg-gradient-to-r from-emerald-500 to-green-600 text-white text-xs font-bold rounded-full">
                           €{product.price.toFixed(2)}
                         </span>
                         {mainIng?.quantity != null && (
-                          <span className="text-xs text-gray-500">
+                          <span className="text-xs text-gray-400">
                             {mainIng.quantity}{mainIng.unit ?? ''} pro Portion
                           </span>
                         )}
                         {mainIng?.quantity != null && mainIng.unit && recommendedDose && (() => {
                           const s = calcServingsPerDay(recommendedDose, mainIng.quantity!, mainIng.unit!);
                           return s != null ? (
-                            <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
+                            <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
                               ca. {s}×/Tag
                             </span>
                           ) : null;
@@ -365,7 +365,7 @@ export default function Modal2Products({
 
                       <button
                         onClick={() => onSelect(product)}
-                        className="mt-2 px-3 py-1.5 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
+                        className="mt-2 w-full px-4 py-2 text-sm font-semibold bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl hover:from-indigo-600 hover:to-purple-700 transition-all"
                       >
                         Auswählen
                       </button>

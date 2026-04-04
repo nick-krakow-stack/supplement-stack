@@ -120,19 +120,20 @@ export default function SearchPage() {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-28">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-indigo-50/30 pb-32">
       {/* Page header */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-30">
+      <div className="bg-white/95 backdrop-blur-md border-b border-gray-100 sticky top-0 z-30 shadow-sm">
         <div className="max-w-2xl mx-auto px-4 py-4">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">Wirkstoff suchen</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Wirkstoff suchen</h1>
+          <p className="text-sm text-gray-500 mb-4">Finde die richtigen Supplements für dich</p>
           <SearchBar onSelect={handleIngredientSelect} />
         </div>
       </div>
 
       {/* Main content */}
-      <div className="max-w-2xl mx-auto px-4 py-6">
+      <div className="max-w-2xl mx-auto px-4 py-6 space-y-6">
         {/* Hint text */}
-        <p className="text-sm text-gray-500 mb-5">
+        <p className="text-sm text-gray-500">
           Suche nach einem Wirkstoff, z.B.{' '}
           <span className="italic">„Magnesium"</span>,{' '}
           <span className="italic">„Vitamin B12"</span>,{' '}
@@ -141,7 +142,7 @@ export default function SearchPage() {
 
         {/* Popular ingredient chips */}
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">
+          <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">
             Beliebte Wirkstoffe
           </p>
           <div className="flex flex-wrap gap-2">
@@ -149,7 +150,7 @@ export default function SearchPage() {
               <button
                 key={ing.id}
                 onClick={() => handlePopularChipClick(ing.name)}
-                className="px-4 py-2 text-sm font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-full transition-colors"
+                className="px-4 py-2 text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 rounded-full transition-colors"
               >
                 {ing.name}
               </button>
@@ -159,27 +160,32 @@ export default function SearchPage() {
 
         {/* Stack items summary (inline view, above footer) */}
         {stackItems.length > 0 && (
-          <div className="mt-8">
-            <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-3">
               Mein Stack ({stackItems.length})
             </p>
             <div className="space-y-2">
               {stackItems.map((item) => (
                 <div
                   key={item.product.id}
-                  className="flex items-center justify-between p-3 bg-white rounded-xl border border-gray-200"
+                  className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex items-center justify-between hover:-translate-y-0.5 hover:shadow-md transition-all duration-200"
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-gray-900 truncate">
+                    <p className="text-base font-semibold text-gray-900 truncate">
                       {item.product.name}
                     </p>
-                    <p className="text-xs text-gray-500">
-                      {item.portions}× täglich · €{(item.monthlyPrice ?? item.product.price).toFixed(2)}/Mo.
-                    </p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <p className="text-xs text-gray-400">
+                        {item.portions}× täglich
+                      </p>
+                      <span className="inline-flex items-center px-2.5 py-1 bg-gradient-to-r from-emerald-500 to-green-600 text-white text-xs font-bold rounded-full">
+                        €{(item.monthlyPrice ?? item.product.price).toFixed(2)}/Mo.
+                      </span>
+                    </div>
                   </div>
                   <button
                     onClick={() => handleRemoveStackItem(item.product.id)}
-                    className="ml-3 p-1.5 text-gray-400 hover:text-red-500 transition-colors flex-shrink-0"
+                    className="ml-3 p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
                     aria-label="Entfernen"
                   >
                     <X size={16} />
@@ -225,26 +231,26 @@ export default function SearchPage() {
 
       {/* Fixed footer bar — only visible when stack has items */}
       {stackItems.length > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 shadow-lg">
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-lg border-t border-gray-100 shadow-lg">
           <div className="max-w-2xl mx-auto px-4 py-3">
             {/* Summary row */}
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2 flex-wrap">
-                <ShoppingCart size={16} className="text-blue-600 flex-shrink-0" />
+                <ShoppingCart size={16} className="text-indigo-600 flex-shrink-0" />
                 <span className="text-sm font-semibold text-gray-900">
                   {stackItems.length}{' '}
                   {stackItems.length === 1 ? 'Produkt' : 'Produkte'} ausgewählt
                 </span>
                 <span className="text-sm text-gray-500">
                   | Gesamt:{' '}
-                  <span className="font-bold text-gray-900">
+                  <span className="inline-flex items-center px-2.5 py-1 bg-gradient-to-r from-emerald-500 to-green-600 text-white text-xs font-bold rounded-full ml-1">
                     €{totalMonthly.toFixed(2)}/Monat
                   </span>
                 </span>
               </div>
               <button
                 onClick={() => setStackItems([])}
-                className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 transition-colors font-medium flex-shrink-0 ml-2"
+                className="flex items-center gap-1 text-xs text-red-500 hover:bg-red-50 rounded-lg px-2 py-1 transition-colors font-medium flex-shrink-0 ml-2"
               >
                 <Trash2 size={13} />
                 Alle entfernen
@@ -256,12 +262,12 @@ export default function SearchPage() {
               {stackItems.map((item) => (
                 <span
                   key={item.product.id}
-                  className="inline-flex items-center gap-1 pl-2.5 pr-1 py-1 text-xs font-medium bg-blue-50 text-blue-800 border border-blue-200 rounded-full"
+                  className="inline-flex items-center gap-1 pl-2.5 pr-1 py-1 text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-full"
                 >
                   <span className="max-w-[100px] truncate">{item.product.name}</span>
                   <button
                     onClick={() => handleRemoveStackItem(item.product.id)}
-                    className="flex-shrink-0 ml-0.5 text-blue-500 hover:text-blue-800 transition-colors"
+                    className="flex-shrink-0 ml-0.5 text-indigo-400 hover:text-indigo-700 transition-colors"
                     aria-label={`${item.product.name} entfernen`}
                   >
                     <X size={12} />

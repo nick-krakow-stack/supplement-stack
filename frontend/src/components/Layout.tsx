@@ -21,21 +21,21 @@ export default function Layout({ children }: LayoutProps) {
     <>
       <Link
         to="/"
-        className="text-gray-700 hover:text-blue-600 font-medium transition-colors"
+        className="text-sm font-medium text-gray-500 hover:text-indigo-600 transition-colors"
         onClick={() => setMobileOpen(false)}
       >
         Suche
       </Link>
       <Link
         to="/stacks"
-        className="text-gray-700 hover:text-blue-600 font-medium transition-colors"
+        className="text-sm font-medium text-gray-500 hover:text-indigo-600 transition-colors"
         onClick={() => setMobileOpen(false)}
       >
         Meine Stacks
       </Link>
       <Link
         to="/wishlist"
-        className="text-gray-700 hover:text-blue-600 font-medium transition-colors"
+        className="text-sm font-medium text-gray-500 hover:text-indigo-600 transition-colors"
         onClick={() => setMobileOpen(false)}
       >
         Wunschliste
@@ -43,7 +43,7 @@ export default function Layout({ children }: LayoutProps) {
       {user && (
         <Link
           to="/my-products"
-          className="text-gray-700 hover:text-blue-600 font-medium transition-colors"
+          className="text-sm font-medium text-gray-500 hover:text-indigo-600 transition-colors"
           onClick={() => setMobileOpen(false)}
         >
           Eigene Produkte
@@ -51,7 +51,7 @@ export default function Layout({ children }: LayoutProps) {
       )}
       <Link
         to="/demo"
-        className="text-gray-700 hover:text-blue-600 font-medium transition-colors"
+        className="text-sm font-medium text-gray-500 hover:text-indigo-600 transition-colors"
         onClick={() => setMobileOpen(false)}
       >
         Demo
@@ -59,7 +59,7 @@ export default function Layout({ children }: LayoutProps) {
       {isAdmin && (
         <Link
           to="/admin"
-          className="text-orange-500 hover:text-orange-600 font-medium transition-colors"
+          className="text-sm font-medium text-orange-500 hover:text-orange-600 transition-colors"
           onClick={() => setMobileOpen(false)}
         >
           Admin
@@ -72,14 +72,14 @@ export default function Layout({ children }: LayoutProps) {
     <>
       <Link
         to="/profile"
-        className="text-sm text-gray-600 hover:text-blue-600 transition-colors"
+        className="text-sm text-gray-500 hover:text-indigo-600 transition-colors"
         onClick={() => setMobileOpen(false)}
       >
         {user.email}
       </Link>
       <button
         onClick={() => { handleLogout(); setMobileOpen(false); }}
-        className="text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 px-3 py-1.5 rounded-lg"
+        className="text-sm border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 font-medium rounded-xl px-4 py-2 transition-colors"
       >
         Abmelden
       </button>
@@ -88,14 +88,14 @@ export default function Layout({ children }: LayoutProps) {
     <>
       <Link
         to="/login"
-        className="text-sm text-gray-700 hover:text-blue-600 font-medium transition-colors"
+        className="text-sm font-medium text-gray-500 hover:text-indigo-600 transition-colors"
         onClick={() => setMobileOpen(false)}
       >
         Anmelden
       </Link>
       <Link
         to="/register"
-        className="text-sm bg-blue-500 text-white hover:bg-blue-600 px-3 py-1.5 rounded-lg font-medium transition-colors"
+        className="text-sm bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold rounded-xl px-5 py-2.5 transition-all duration-200 shadow-sm"
         onClick={() => setMobileOpen(false)}
       >
         Registrieren
@@ -105,11 +105,14 @@ export default function Layout({ children }: LayoutProps) {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white border-b border-gray-200 shadow-sm">
+      <nav className="bg-white/95 backdrop-blur-md border-b border-gray-100 shadow-sm sticky top-0 z-40">
         <div className="max-w-6xl mx-auto px-4">
           <div className="flex items-center justify-between h-16">
             {/* Logo */}
-            <Link to="/" className="text-xl font-bold text-blue-600 hover:text-blue-700 transition-colors">
+            <Link
+              to="/"
+              className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent font-bold text-lg"
+            >
               Supplement Stack
             </Link>
 
@@ -125,7 +128,7 @@ export default function Layout({ children }: LayoutProps) {
 
             {/* Mobile hamburger */}
             <button
-              className="md:hidden bg-transparent text-gray-700 hover:text-blue-600 p-1"
+              className="md:hidden bg-transparent text-gray-500 hover:text-indigo-600 p-1 transition-colors"
               onClick={() => setMobileOpen((o) => !o)}
               aria-label="Menü öffnen"
             >
@@ -136,7 +139,7 @@ export default function Layout({ children }: LayoutProps) {
 
         {/* Mobile menu */}
         {mobileOpen && (
-          <div className="md:hidden border-t border-gray-100 px-4 py-4 flex flex-col gap-4">
+          <div className="md:hidden border-t border-gray-100 px-4 py-4 flex flex-col gap-4 bg-white shadow-lg rounded-b-2xl">
             {navLinks}
             <div className="border-t border-gray-100 pt-4 flex flex-col gap-3">
               {authLinks}
