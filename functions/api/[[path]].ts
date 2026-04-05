@@ -802,7 +802,7 @@ app.get('/api/stacks/:id', async (c) => {
   const stack = await c.env.DB.prepare('SELECT * FROM stacks WHERE id = ?').bind(c.req.param('id')).first<StackRow>()
   if (!stack) return c.json({ error: 'Not found' }, 404)
   const { results: items } = await c.env.DB.prepare(
-    'SELECT si.*, p.name as product_name, p.price as product_price FROM stack_items si JOIN products p ON p.id = si.product_id WHERE si.stack_id = ?'
+    'SELECT p.id, p.name, p.brand, p.price, p.image_url, p.shop_link, p.is_affiliate, p.discontinued_at, p.serving_size, p.serving_unit, p.servings_per_container, p.container_count FROM stack_items si JOIN products p ON p.id = si.product_id WHERE si.stack_id = ?'
   ).bind(stack.id).all<StackItemRow>()
   const total = items.reduce((sum, i) => sum + (i.product_price * i.quantity), 0)
   return c.json({ stack, items, total })
@@ -845,7 +845,7 @@ app.put('/api/stacks/:id', async (c) => {
   }
   const updated = await c.env.DB.prepare('SELECT * FROM stacks WHERE id = ?').bind(id).first()
   const { results: items } = await c.env.DB.prepare(
-    'SELECT si.*, p.name as product_name, p.price as product_price FROM stack_items si JOIN products p ON p.id = si.product_id WHERE si.stack_id = ?'
+    'SELECT p.id, p.name, p.brand, p.price, p.image_url, p.shop_link, p.is_affiliate, p.discontinued_at, p.serving_size, p.serving_unit, p.servings_per_container, p.container_count FROM stack_items si JOIN products p ON p.id = si.product_id WHERE si.stack_id = ?'
   ).bind(id).all()
   return c.json({ stack: updated, items })
 })
@@ -1067,12 +1067,12 @@ app.post('/api/user-products', async (c) => {
   if (!body.name || typeof body.name !== 'string') return c.json({ error: 'name erforderlich' }, 400)
   const data = body as {
     name: string; brand?: string; form?: string; price?: number; shop_link?: string;
-    serving_size?: number; serving_unit?: string; servings_per_container?: number;
+    image_url?: string; serving_size?: number; serving_unit?: string; servings_per_container?: number;
     container_count?: number; is_affiliate?: number; notes?: string;
   }
   const result = await c.env.DB.prepare(`
-    INSERT INTO user_products (user_id, name, brand, form, price, shop_link, serving_size, serving_unit, servings_per_container, container_count, is_affiliate, notes)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO user_products (user_id, name, brand, form, price, shop_link, image_url, serving_size, serving_unit, servings_per_container, container_count, is_affiliate, notes)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     user.userId,
     data.name,
@@ -1080,6 +1080,7 @@ app.post('/api/user-products', async (c) => {
     data.form ?? null,
     data.price ?? 0,
     data.shop_link ?? null,
+    data.image_url ?? null,
     data.serving_size ?? null,
     data.serving_unit ?? null,
     data.servings_per_container ?? null,
@@ -1103,7 +1104,7 @@ app.put('/api/user-products/:id', async (c) => {
   const body = await c.req.json()
   const data = body as {
     name?: string; brand?: string; form?: string; price?: number; shop_link?: string;
-    serving_size?: number; serving_unit?: string; servings_per_container?: number;
+    image_url?: string; serving_size?: number; serving_unit?: string; servings_per_container?: number;
     container_count?: number; is_affiliate?: number; notes?: string;
   }
   await c.env.DB.prepare(`
@@ -1113,6 +1114,7 @@ app.put('/api/user-products/:id', async (c) => {
       form = COALESCE(?, form),
       price = COALESCE(?, price),
       shop_link = COALESCE(?, shop_link),
+      image_url = ?,
       serving_size = COALESCE(?, serving_size),
       serving_unit = COALESCE(?, serving_unit),
       servings_per_container = COALESCE(?, servings_per_container),
@@ -1122,7 +1124,8 @@ app.put('/api/user-products/:id', async (c) => {
     WHERE id = ? AND user_id = ?
   `).bind(
     data.name ?? null, data.brand ?? null, data.form ?? null, data.price ?? null,
-    data.shop_link ?? null, data.serving_size ?? null, data.serving_unit ?? null,
+    data.shop_link ?? null, data.image_url ?? null,
+    data.serving_size ?? null, data.serving_unit ?? null,
     data.servings_per_container ?? null, data.container_count ?? null,
     data.is_affiliate ?? null, data.notes ?? null,
     id, user.userId,

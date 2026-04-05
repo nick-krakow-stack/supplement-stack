@@ -14,6 +14,13 @@ interface StackProduct {
   is_affiliate?: number;
   image_url?: string;
   discontinued_at?: string;
+  servings_per_container?: number;
+  container_count?: number;
+}
+
+function calcMonthlyPrice(price: number, spc?: number, cc?: number): number | null {
+  const total = (spc ?? 0) * (cc ?? 1);
+  return total > 0 ? (price / total) * 30 : null;
 }
 
 interface InteractionWarning {
@@ -177,10 +184,24 @@ function StackCard({
     }
   };
 
-  const total = products.reduce((sum, p) => sum + (p.price ?? 0), 0);
-  const selectedTotal = products
+  const totalOnce = products.reduce((sum, p) => sum + (p.price ?? 0), 0);
+  const totalMonthly = products.reduce((sum, p) => {
+    const m = calcMonthlyPrice(p.price, p.servings_per_container, p.container_count);
+    return sum + (m ?? p.price ?? 0);
+  }, 0);
+  const hasAnyMonthlyData = products.some(
+    (p) => (p.servings_per_container ?? 0) > 0
+  );
+
+  const selectedTotalOnce = products
     .filter((p) => selectedProductIds.has(p.id))
     .reduce((sum, p) => sum + (p.price ?? 0), 0);
+  const selectedTotalMonthly = products
+    .filter((p) => selectedProductIds.has(p.id))
+    .reduce((sum, p) => {
+      const m = calcMonthlyPrice(p.price, p.servings_per_container, p.container_count);
+      return sum + (m ?? p.price ?? 0);
+    }, 0);
 
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
@@ -314,22 +335,35 @@ function StackCard({
       ) : null}
 
       {/* Footer total */}
-      <div className="border-t border-gray-50 pt-3 flex items-center justify-end">
-        <p className="text-emerald-600 font-bold text-sm">
-          Gesamt: €{total.toFixed(2)}/Monat
-        </p>
+      <div className="border-t border-gray-50 pt-3 flex items-center justify-between flex-wrap gap-2">
+        <div className="flex flex-col items-start">
+          <span className="text-xs text-gray-400">Einmalpreis</span>
+          <span className="text-gray-700 font-bold text-sm">€{totalOnce.toFixed(2)}</span>
+        </div>
+        {hasAnyMonthlyData && (
+          <div className="flex flex-col items-end">
+            <span className="text-xs text-gray-400">Monatlich (≈)</span>
+            <span className="text-emerald-600 font-bold text-sm">€{totalMonthly.toFixed(2)}/Mo.</span>
+          </div>
+        )}
+        {!hasAnyMonthlyData && (
+          <span className="text-emerald-600 font-bold text-sm">€{totalOnce.toFixed(2)}/Monat</span>
+        )}
       </div>
       </div>
 
       {/* Selected products footer */}
       {selectedProductIds.size > 0 && (
-        <div className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-b-2xl px-5 py-3 flex items-center justify-between">
+        <div className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-b-2xl px-5 py-3 flex items-center justify-between gap-3">
           <span className="text-white font-semibold text-sm">
             {selectedProductIds.size} ausgewählt
           </span>
-          <span className="text-white font-bold">
-            €{selectedTotal.toFixed(2)}/Monat
-          </span>
+          <div className="flex items-center gap-3 text-right">
+            <div className="text-xs opacity-80">
+              <div>€{selectedTotalOnce.toFixed(2)} einmalig</div>
+              {hasAnyMonthlyData && <div>≈ €{selectedTotalMonthly.toFixed(2)}/Mo.</div>}
+            </div>
+          </div>
         </div>
       )}
     </div>

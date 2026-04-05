@@ -12,6 +12,8 @@ interface ProductCardProduct {
   moderation_status?: string;
   is_affiliate?: number;
   discontinued_at?: string;
+  servings_per_container?: number;
+  container_count?: number;
 }
 
 interface ProductCardProps {
@@ -23,6 +25,19 @@ interface ProductCardProps {
   showSelectButton?: boolean;
   shopDomains?: ShopDomain[];
 }
+
+/** Calculate monthly cost from one-time purchase price + serving data. */
+function calcMonthlyPrice(price: number, servingsPerContainer?: number, containerCount?: number): number | null {
+  const total = (servingsPerContainer ?? 0) * (containerCount ?? 1);
+  if (total <= 0) return null;
+  return (price / total) * 30;
+}
+
+const PLACEHOLDER = (
+  <div className="h-28 bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center text-4xl select-none">
+    💊
+  </div>
+);
 
 export default function ProductCard({
   product,
@@ -38,6 +53,12 @@ export default function ProductCard({
   );
   const buttonText = matchedShop ? `Bei ${matchedShop.display_name} kaufen` : 'Jetzt kaufen';
 
+  const monthlyPrice = calcMonthlyPrice(
+    product.price,
+    product.servings_per_container,
+    product.container_count,
+  );
+
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm hover:-translate-y-0.5 hover:shadow-md transition-all duration-200 overflow-hidden flex flex-col">
       {/* Product image / placeholder */}
@@ -46,11 +67,12 @@ export default function ProductCard({
           src={product.image_url}
           alt={product.name}
           className="w-full h-32 object-cover"
+          onError={(e) => {
+            (e.target as HTMLImageElement).style.display = 'none';
+          }}
         />
       ) : (
-        <div className="h-28 bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center text-4xl">
-          💊
-        </div>
+        PLACEHOLDER
       )}
 
       {/* Discontinued banner */}
@@ -83,11 +105,16 @@ export default function ProductCard({
           )}
         </div>
 
-        {/* Price badge */}
-        <div>
+        {/* Price badges */}
+        <div className="flex flex-wrap gap-1.5">
           <span className="inline-flex items-center px-2.5 py-1 bg-gradient-to-r from-emerald-500 to-green-600 text-white text-xs font-bold rounded-full">
-            €{product.price.toFixed(2)}/Monat
+            €{product.price.toFixed(2)}/Packung
           </span>
+          {monthlyPrice != null && (
+            <span className="inline-flex items-center px-2.5 py-1 bg-indigo-50 text-indigo-700 text-xs font-semibold rounded-full border border-indigo-100">
+              ≈ €{monthlyPrice.toFixed(2)}/Mo.
+            </span>
+          )}
         </div>
 
         {/* Buttons */}

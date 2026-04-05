@@ -56,6 +56,12 @@ function BadgeRec({ type }: { type: RecommendationType }) {
   return null;
 }
 
+// Calculate monthly price from one-time price + serving data
+function calcMonthlyPrice(price: number, servingsPerContainer?: number, containerCount?: number): number | null {
+  const total = (servingsPerContainer ?? 0) * (containerCount ?? 1);
+  return total > 0 ? (price / total) * 30 : null;
+}
+
 // Calculate how many servings/day based on dose and ingredient quantity per serving
 function calcServingsPerDay(
   dose: { value: number; unit: string },
@@ -280,10 +286,18 @@ export default function Modal2Products({
                           </span>
                         </div>
 
-                        <div className="mt-1.5 flex items-center gap-3">
+                        <div className="mt-1.5 flex flex-wrap items-center gap-2">
                           <span className="inline-flex items-center px-2.5 py-1 bg-gradient-to-r from-emerald-500 to-green-600 text-white text-xs font-bold rounded-full">
-                            €{userProd.price.toFixed(2)}
+                            €{userProd.price.toFixed(2)}/Packung
                           </span>
+                          {(() => {
+                            const mp = calcMonthlyPrice(userProd.price, userProd.servings_per_container, userProd.container_count);
+                            return mp != null ? (
+                              <span className="inline-flex items-center px-2.5 py-1 bg-indigo-50 text-indigo-700 text-xs font-semibold rounded-full border border-indigo-100">
+                                ≈ €{mp.toFixed(2)}/Mo.
+                              </span>
+                            ) : null;
+                          })()}
                         </div>
 
                         <button
@@ -344,10 +358,18 @@ export default function Modal2Products({
                         <BadgeRec type={recType} />
                       </div>
 
-                      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
                         <span className="inline-flex items-center px-2.5 py-1 bg-gradient-to-r from-emerald-500 to-green-600 text-white text-xs font-bold rounded-full">
-                          €{product.price.toFixed(2)}
+                          €{product.price.toFixed(2)}/Packung
                         </span>
+                        {(() => {
+                          const mp = calcMonthlyPrice(product.price, product.servings_per_container, product.container_count);
+                          return mp != null ? (
+                            <span className="inline-flex items-center px-2.5 py-1 bg-indigo-50 text-indigo-700 text-xs font-semibold rounded-full border border-indigo-100">
+                              ≈ €{mp.toFixed(2)}/Mo.
+                            </span>
+                          ) : null;
+                        })()}
                         {mainIng?.quantity != null && (
                           <span className="text-xs text-gray-400">
                             {mainIng.quantity}{mainIng.unit ?? ''} pro Portion
