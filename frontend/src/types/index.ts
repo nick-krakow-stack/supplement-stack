@@ -70,6 +70,13 @@ export interface Product {
   serving_unit?: string;
   servings_per_container?: number;
   container_count?: number;
+  timing?: string;
+  dosage_text?: string;
+  effect_summary?: string;
+  warning_title?: string;
+  warning_message?: string;
+  warning_type?: string;
+  alternative_note?: string;
 }
 
 export interface StackItem {

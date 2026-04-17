@@ -1,4 +1,5 @@
-// Local types for the ingredient search + stack features
+// Local types for the ingredient search + stack Modal-Flow
+// DB/Admin types live in types/index.ts — import from there for backend-facing code
 
 export interface IngredientSynonym {
   synonym: string;
@@ -53,15 +54,26 @@ export interface Product {
   brand?: string;
   price: number;
   image_url?: string;
+  image_r2_key?: string;
   shop_link?: string;
   form?: string;
   visibility?: string;
+  /** Absent on user-products / lightweight API responses */
+  moderation_status?: string;
   is_affiliate?: number;
   discontinued_at?: string;
+  replacement_id?: number;
   serving_size?: number;
   serving_unit?: string;
   servings_per_container?: number;
   container_count?: number;
+  timing?: string;
+  dosage_text?: string;
+  effect_summary?: string;
+  warning_title?: string;
+  warning_message?: string;
+  warning_type?: string;
+  alternative_note?: string;
   ingredients?: ProductIngredient[];
 }
 
@@ -81,7 +93,11 @@ export interface Stack {
   name: string;
 }
 
-export interface StackItem {
+/**
+ * UI-only stack item used in the Modal-Flow (SearchPage / DemoPage).
+ * Renamed from StackItem to avoid collision with the DB type in types/index.ts.
+ */
+export interface LocalStackItem {
   product: Product;
   portions: number;
   daysSupply?: number;

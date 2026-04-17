@@ -1,10 +1,13 @@
 import { useState, useCallback } from 'react';
-import { X, ShoppingCart, Trash2 } from 'lucide-react';
+import { X, ShoppingCart, Trash2, LogIn, AlertTriangle } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import SearchBar from '../components/SearchBar';
 import Modal1Ingredient from '../components/modals/Modal1Ingredient';
 import Modal2Products from '../components/modals/Modal2Products';
 import Modal3Dosage from '../components/modals/Modal3Dosage';
-import type { Ingredient, Product, StackItem } from '../types/local';
+import { apiClient } from '../api/client';
+import type { Ingredient, Product, LocalStackItem } from '../types/local';
+import type { Stack } from '../types/index';
 
 type ActiveModal = 'ingredient' | 'products' | 'dosage' | null;
 
@@ -26,12 +29,38 @@ function getToken(): string | null {
   return localStorage.getItem('ss_token');
 }
 
+async function saveProductToStack(productId: number): Promise<number> {
+  // Fetch existing stacks
+  const res = await apiClient.get<{ stacks: Stack[] }>('/stacks');
+  const stacks: Stack[] = res.data.stacks ?? [];
+
+  let stackId: number;
+  if (stacks.length > 0) {
+    stackId = stacks[0].id;
+  } else {
+    // No stack yet — create one
+    const created = await apiClient.post<Stack>('/stacks', { name: 'Mein Stack' });
+    stackId = created.data.id;
+  }
+
+  await apiClient.post(`/stacks/${stackId}/products/${productId}`, { quantity: 1 });
+  return stackId;
+}
+
+interface StackWarning {
+  id: number;
+  type: string | null;
+  comment: string | null;
+}
+
 export default function SearchPage() {
   const [selectedIngredient, setSelectedIngredient] = useState<Ingredient | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [activeModal, setActiveModal] = useState<ActiveModal>(null);
-  const [stackItems, setStackItems] = useState<StackItem[]>([]);
+  const [stackItems, setStackItems] = useState<LocalStackItem[]>([]);
   const [manualDose, setManualDose] = useState<ManualDose | undefined>(undefined);
+  const [currentStackId, setCurrentStackId] = useState<number | null>(null);
+  const [warnings, setWarnings] = useState<StackWarning[]>([]);
 
   const token = getToken();
 
@@ -85,6 +114,7 @@ export default function SearchPage() {
       daysSupply: number,
       monthlyPrice: number,
     ) => {
+      // Update local state immediately (no breaking change)
       setStackItems((prev) => {
         const idx = prev.findIndex((item) => item.product.id === product.id);
         if (idx >= 0) {
@@ -94,12 +124,31 @@ export default function SearchPage() {
         }
         return [...prev, { product, portions, daysSupply, monthlyPrice }];
       });
+
+      // Persist to DB if user is logged in
+      if (getToken()) {
+        saveProductToStack(product.id)
+          .then((sid) => {
+            setCurrentStackId(sid);
+            return apiClient.get<{ warnings: StackWarning[] }>(`/stack-warnings/${sid}`);
+          })
+          .then((res) => {
+            setWarnings(res.data.warnings ?? []);
+          })
+          .catch((err: unknown) => {
+            console.error('[SearchPage] saveProductToStack/warnings failed:', err);
+          });
+      }
     },
     [],
   );
 
   const handleRemoveStackItem = useCallback((productId: number) => {
     setStackItems((prev) => prev.filter((item) => item.product.id !== productId));
+  }, []);
+
+  const handleAddToWishlist = useCallback(async (productId: number): Promise<void> => {
+    await apiClient.post('/wishlist', { product_id: productId });
   }, []);
 
   const closeModal = useCallback(() => {
@@ -193,6 +242,44 @@ export default function SearchPage() {
                 </div>
               ))}
             </div>
+
+            {/* Login hint — only shown to unauthenticated users */}
+            {!token && (
+              <div className="mt-3 flex items-center gap-2 px-4 py-3 bg-indigo-50 border border-indigo-100 rounded-xl text-sm text-indigo-700">
+                <LogIn size={15} className="flex-shrink-0" />
+                <span>
+                  Melde dich an um deinen Stack zu speichern.{' '}
+                  <Link to="/login" className="font-semibold underline underline-offset-2 hover:text-indigo-900">
+                    Jetzt anmelden
+                  </Link>
+                </span>
+              </div>
+            )}
+
+            {/* Stack interaction warnings — only for logged-in users with a saved stack */}
+            {token && currentStackId !== null && warnings.length > 0 && (
+              <div className="mt-3 space-y-2">
+                {warnings.map((w) => {
+                  const isDanger = w.type === 'danger' || w.type === 'warning';
+                  return (
+                    <div
+                      key={w.id}
+                      className={`flex items-start gap-3 px-4 py-3 rounded-xl border text-sm ${
+                        isDanger
+                          ? 'bg-red-50 border-red-200 text-red-800'
+                          : 'bg-yellow-50 border-yellow-200 text-yellow-800'
+                      }`}
+                    >
+                      <AlertTriangle
+                        size={16}
+                        className={`flex-shrink-0 mt-0.5 ${isDanger ? 'text-red-500' : 'text-yellow-500'}`}
+                      />
+                      <span>{w.comment ?? 'Mögliche Wechselwirkung zwischen zwei Wirkstoffen in deinem Stack.'}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -213,6 +300,7 @@ export default function SearchPage() {
           onClose={closeModal}
           onBack={goBackToIngredient}
           onSelect={handleProductSelect}
+          onAddToWishlist={token ? handleAddToWishlist : undefined}
           recommendedDose={manualDose}
         />
       )}
@@ -249,7 +337,7 @@ export default function SearchPage() {
                 </span>
               </div>
               <button
-                onClick={() => setStackItems([])}
+                onClick={() => { setStackItems([]); setWarnings([]); setCurrentStackId(null); }}
                 className="flex items-center gap-1 text-xs text-red-500 hover:bg-red-50 rounded-lg px-2 py-1 transition-colors font-medium flex-shrink-0 ml-2"
               >
                 <Trash2 size={13} />

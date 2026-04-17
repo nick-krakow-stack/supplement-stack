@@ -1,11 +1,15 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Menu, X } from 'lucide-react';
+import { Leaf, Menu, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import LegalDisclaimer from './LegalDisclaimer';
 
 interface LayoutProps {
   children: React.ReactNode;
 }
+
+const navLinkClass =
+  'text-sm font-extrabold tracking-wide text-slate-500 transition-colors hover:text-blue-700';
 
 export default function Layout({ children }: LayoutProps) {
   const { user, isAdmin, logout } = useAuth();
@@ -17,50 +21,32 @@ export default function Layout({ children }: LayoutProps) {
     navigate('/login');
   };
 
+  const closeMobile = () => setMobileOpen(false);
+
   const navLinks = (
     <>
-      <Link
-        to="/search"
-        className="text-sm font-medium text-gray-500 hover:text-indigo-600 transition-colors"
-        onClick={() => setMobileOpen(false)}
-      >
+      <Link to="/search" className={navLinkClass} onClick={closeMobile}>
         Suchen
       </Link>
-      <Link
-        to="/stacks"
-        className="text-sm font-medium text-gray-500 hover:text-indigo-600 transition-colors"
-        onClick={() => setMobileOpen(false)}
-      >
+      <Link to="/stacks" className={navLinkClass} onClick={closeMobile}>
         Meine Stacks
       </Link>
-      <Link
-        to="/wishlist"
-        className="text-sm font-medium text-gray-500 hover:text-indigo-600 transition-colors"
-        onClick={() => setMobileOpen(false)}
-      >
+      <Link to="/wishlist" className={navLinkClass} onClick={closeMobile}>
         Wunschliste
       </Link>
       {user && (
-        <Link
-          to="/my-products"
-          className="text-sm font-medium text-gray-500 hover:text-indigo-600 transition-colors"
-          onClick={() => setMobileOpen(false)}
-        >
+        <Link to="/my-products" className={navLinkClass} onClick={closeMobile}>
           Eigene Produkte
         </Link>
       )}
-      <Link
-        to="/demo"
-        className="text-sm font-medium text-gray-500 hover:text-indigo-600 transition-colors"
-        onClick={() => setMobileOpen(false)}
-      >
+      <Link to="/demo" className={navLinkClass} onClick={closeMobile}>
         Demo
       </Link>
       {isAdmin && (
         <Link
           to="/admin"
-          className="text-sm font-medium text-orange-500 hover:text-orange-600 transition-colors"
-          onClick={() => setMobileOpen(false)}
+          className="text-sm font-extrabold tracking-wide text-amber-600 transition-colors hover:text-amber-700"
+          onClick={closeMobile}
         >
           Admin
         </Link>
@@ -72,14 +58,17 @@ export default function Layout({ children }: LayoutProps) {
     <>
       <Link
         to="/profile"
-        className="text-sm text-gray-500 hover:text-indigo-600 transition-colors"
-        onClick={() => setMobileOpen(false)}
+        className="text-sm font-bold text-slate-500 transition-colors hover:text-blue-700"
+        onClick={closeMobile}
       >
         {user.email}
       </Link>
       <button
-        onClick={() => { handleLogout(); setMobileOpen(false); }}
-        className="text-sm border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 font-medium rounded-xl px-4 py-2 transition-colors"
+        onClick={() => {
+          handleLogout();
+          closeMobile();
+        }}
+        className="border border-slate-200 bg-white px-4 py-2 text-sm font-extrabold text-slate-700 hover:bg-slate-50"
       >
         Abmelden
       </button>
@@ -88,15 +77,15 @@ export default function Layout({ children }: LayoutProps) {
     <>
       <Link
         to="/login"
-        className="text-sm font-medium text-gray-500 hover:text-indigo-600 transition-colors"
-        onClick={() => setMobileOpen(false)}
+        className="text-sm font-extrabold text-slate-500 transition-colors hover:text-blue-700"
+        onClick={closeMobile}
       >
         Anmelden
       </Link>
       <Link
         to="/register"
-        className="text-sm bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold rounded-xl px-5 py-2.5 transition-all duration-200 shadow-sm"
-        onClick={() => setMobileOpen(false)}
+        className="rounded-2xl bg-gradient-to-r from-blue-600 to-violet-600 px-5 py-2.5 text-sm font-black text-white shadow-lg shadow-blue-500/20 transition-all hover:from-blue-700 hover:to-violet-700"
+        onClick={closeMobile}
       >
         Registrieren
       </Link>
@@ -104,32 +93,29 @@ export default function Layout({ children }: LayoutProps) {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white/95 backdrop-blur-md border-b border-gray-100 shadow-sm sticky top-0 z-40">
-        <div className="max-w-6xl mx-auto px-4">
-          <div className="flex items-center justify-between h-16">
-            {/* Logo */}
+    <div className="min-h-screen bg-transparent">
+      <nav className="sticky top-0 z-50 border-b border-slate-200/70 bg-white/90 shadow-[0_8px_30px_rgba(15,23,42,0.05)] backdrop-blur-xl">
+        <div className="mx-auto max-w-[1280px] px-4 sm:px-6 lg:px-8">
+          <div className="flex h-16 items-center justify-between">
             <Link
               to="/"
-              className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent font-bold text-lg"
+              className="inline-flex items-center gap-2 text-xl font-black tracking-wide text-slate-900"
+              onClick={closeMobile}
             >
-              Supplement Stack
+              <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-100 to-blue-100 text-emerald-700">
+                <Leaf size={19} />
+              </span>
+              <span className="bg-gradient-to-r from-blue-700 to-violet-700 bg-clip-text text-transparent">
+                Supplement Stack
+              </span>
             </Link>
 
-            {/* Desktop nav links */}
-            <div className="hidden md:flex items-center gap-6">
-              {navLinks}
-            </div>
+            <div className="hidden items-center gap-7 md:flex">{navLinks}</div>
+            <div className="hidden items-center gap-4 md:flex">{authLinks}</div>
 
-            {/* Desktop auth */}
-            <div className="hidden md:flex items-center gap-3">
-              {authLinks}
-            </div>
-
-            {/* Mobile hamburger */}
             <button
-              className="md:hidden bg-transparent text-gray-500 hover:text-indigo-600 p-1 transition-colors"
-              onClick={() => setMobileOpen((o) => !o)}
+              className="bg-transparent p-1 text-slate-500 transition-colors hover:text-blue-700 md:hidden"
+              onClick={() => setMobileOpen((open) => !open)}
               aria-label="Menü öffnen"
             >
               {mobileOpen ? <X size={24} /> : <Menu size={24} />}
@@ -137,20 +123,22 @@ export default function Layout({ children }: LayoutProps) {
           </div>
         </div>
 
-        {/* Mobile menu */}
         {mobileOpen && (
-          <div className="md:hidden border-t border-gray-100 px-4 py-4 flex flex-col gap-4 bg-white shadow-lg rounded-b-2xl">
+          <div className="flex flex-col gap-4 rounded-b-2xl border-t border-slate-100 bg-white px-4 py-4 shadow-lg md:hidden">
             {navLinks}
-            <div className="border-t border-gray-100 pt-4 flex flex-col gap-3">
+            <div className="flex flex-col gap-3 border-t border-slate-100 pt-4">
               {authLinks}
             </div>
           </div>
         )}
       </nav>
 
-      <main className="max-w-6xl mx-auto px-4 py-6">
-        {children}
-      </main>
+      <main className="mx-auto max-w-[1280px] px-4 py-6 sm:px-6 lg:px-8">{children}</main>
+
+      <footer className="mx-auto max-w-[1280px] px-4 pb-6 pt-2 sm:px-6 lg:px-8 space-y-1">
+        <LegalDisclaimer variant="affiliate" />
+        <LegalDisclaimer variant="health" />
+      </footer>
     </div>
   );
 }

@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Trash2, ShoppingBag, Package } from 'lucide-react';
+import { Trash2, Heart, Search } from 'lucide-react';
+import { apiClient } from '../api/client';
+import ProductCard from '../components/ProductCard';
+import { ShopDomain } from '../types/local';
 
 // ---- Local types ----
 interface WishlistProduct {
@@ -24,76 +27,26 @@ function authHeaders(): Record<string, string> {
   };
 }
 
-// ---- Product card row for wishlist ----
-function WishlistCard({
-  product,
-  onRemove,
-  removing,
-}: {
-  product: WishlistProduct;
-  onRemove: (id: number) => void;
-  removing: boolean;
-}) {
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 flex gap-4 hover:shadow-md transition-shadow">
-      {/* Image */}
-      <div className="flex-shrink-0 w-[60px] h-[60px] rounded-lg bg-gray-100 overflow-hidden flex items-center justify-center">
-        {product.image_url ? (
-          <img
-            src={product.image_url}
-            alt={product.name}
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <Package size={28} className="text-gray-400" />
-        )}
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 min-w-0 flex flex-col gap-2">
-        <div>
-          <p className="font-semibold text-gray-900 truncate">{product.name}</p>
-          {product.brand && (
-            <p className="text-sm text-gray-500 truncate">{product.brand}</p>
-          )}
-          <p className="text-green-600 font-bold text-sm mt-0.5">
-            €{product.price.toFixed(2)}/Monat
-          </p>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          {product.shop_link && (
-            <a
-              href={product.shop_link}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-sm bg-gray-200 text-gray-700 hover:bg-gray-300 px-3 py-1.5 rounded-lg font-medium transition-colors"
-            >
-              <ShoppingBag size={14} />
-              Bei Amazon kaufen
-            </a>
-          )}
-          <button
-            onClick={() => onRemove(product.id)}
-            disabled={removing}
-            className="inline-flex items-center gap-1.5 text-sm border border-red-200 text-red-600 hover:bg-red-50 px-3 py-1.5 rounded-lg font-medium transition-colors disabled:opacity-50"
-          >
-            <Trash2 size={14} />
-            Entfernen
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ---- Main page ----
 export default function WishlistPage() {
   const token = getToken();
   const [products, setProducts] = useState<WishlistProduct[]>([]);
+  const [shopDomains, setShopDomains] = useState<ShopDomain[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [removingId, setRemovingId] = useState<number | null>(null);
+
+  // Load shop domains (public endpoint, no token needed)
+  useEffect(() => {
+    apiClient
+      .get<ShopDomain[]>('/shop-domains')
+      .then((res) => {
+        setShopDomains(res.data ?? []);
+      })
+      .catch(() => {
+        // Graceful fallback: leave shopDomains empty, ProductCard handles it
+      });
+  }, []);
 
   useEffect(() => {
     if (!token) {
@@ -137,11 +90,14 @@ export default function WishlistPage() {
   if (!token) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4 text-center">
-        <h1 className="text-2xl font-bold text-gray-800">Bitte anmelden</h1>
-        <p className="text-gray-600">Du musst angemeldet sein, um deine Wunschliste zu sehen.</p>
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-50">
+          <Heart size={32} className="text-indigo-400" />
+        </div>
+        <h1 className="text-2xl font-black tracking-tight text-slate-950">Bitte anmelden</h1>
+        <p className="text-slate-500 font-semibold">Du musst angemeldet sein, um deine Wunschliste zu sehen.</p>
         <Link
           to="/login"
-          className="bg-blue-500 text-white hover:bg-blue-600 px-5 py-2 rounded-lg font-medium transition-colors"
+          className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-5 py-2.5 font-semibold text-white shadow-sm transition hover:opacity-90"
         >
           Zur Anmeldung
         </Link>
@@ -151,31 +107,40 @@ export default function WishlistPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-bold text-gray-900">Wunschliste</h1>
+      <h1 className="text-2xl font-black tracking-tight text-slate-950">Wunschliste</h1>
 
       {/* Loading */}
       {loading && (
         <div className="flex items-center justify-center py-12">
-          <div className="animate-spin border-4 border-blue-500 border-t-transparent rounded-full w-8 h-8" />
+          <div className="animate-spin border-4 border-indigo-500 border-t-transparent rounded-full w-8 h-8" />
         </div>
       )}
 
       {/* Error */}
       {error && !loading && (
-        <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3">
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
           {error}
         </div>
       )}
 
       {/* Empty state */}
       {!loading && !error && products.length === 0 && (
-        <div className="flex flex-col items-center justify-center py-16 text-center gap-3">
-          <p className="text-gray-500 text-lg">Deine Wunschliste ist leer.</p>
+        <div className="flex flex-col items-center justify-center py-16 text-center gap-4">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100">
+            <Heart size={32} className="text-slate-400" />
+          </div>
+          <div className="flex flex-col gap-1">
+            <p className="text-base font-black text-slate-700">Deine Wunschliste ist leer</p>
+            <p className="text-sm font-semibold text-slate-500">
+              Speichere Produkte aus der Suche, um sie hier wiederzufinden.
+            </p>
+          </div>
           <Link
             to="/"
-            className="text-blue-500 hover:text-blue-600 font-medium transition-colors"
+            className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2 font-semibold text-white shadow-sm transition hover:opacity-90"
           >
-            Wirkstoffe suchen →
+            <Search size={15} />
+            Wirkstoffe suchen
           </Link>
         </div>
       )}
@@ -184,12 +149,22 @@ export default function WishlistPage() {
       {!loading && products.length > 0 && (
         <div className="flex flex-col gap-4">
           {products.map((product) => (
-            <WishlistCard
-              key={product.id}
-              product={product}
-              onRemove={handleRemove}
-              removing={removingId === product.id}
-            />
+            <div key={product.id} className="relative">
+              <ProductCard
+                product={product}
+                shopDomains={shopDomains}
+              />
+              <div className="mt-2 flex justify-end">
+                <button
+                  onClick={() => handleRemove(product.id)}
+                  disabled={removingId === product.id}
+                  className="inline-flex items-center gap-1.5 text-sm rounded-xl border border-red-200 text-red-600 hover:bg-red-50 px-3 py-1.5 font-semibold transition-colors disabled:opacity-50"
+                >
+                  <Trash2 size={14} />
+                  Entfernen
+                </button>
+              </div>
+            </div>
           ))}
         </div>
       )}

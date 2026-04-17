@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { updateMe } from '../api/auth';
 
 export default function ProfilePage() {
-  const { user } = useAuth();
+  const { user, refreshUser } = useAuth();
 
   const [age, setAge] = useState('');
   const [gender, setGender] = useState('');
@@ -43,6 +43,7 @@ export default function ProfilePage() {
         guideline_source: guidelineSource || undefined,
         is_smoker: isSmoker ? 1 : 0,
       });
+      await refreshUser();
       setSuccess(true);
     } catch (err: unknown) {
       const msg =
@@ -58,13 +59,13 @@ export default function ProfilePage() {
     <div className="max-w-lg">
       <h1 className="mb-6">Mein Profil</h1>
 
-      <div className="card mb-4">
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-4">
         <p className="text-sm text-gray-500 mb-1">E-Mail-Adresse</p>
         <p className="font-medium text-gray-900">{user?.email}</p>
         <p className="text-xs text-gray-400 mt-1">Rolle: {user?.role}</p>
       </div>
 
-      <div className="card">
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
         <h2>Profil bearbeiten</h2>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -108,7 +109,7 @@ export default function ProfilePage() {
               id="gender"
               value={gender}
               onChange={(e) => setGender(e.target.value)}
-              className="input"
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 bg-white"
             >
               <option value="">Keine Angabe</option>
               <option value="männlich">Männlich</option>
@@ -140,7 +141,7 @@ export default function ProfilePage() {
               onChange={(e) => setGoals(e.target.value)}
               rows={3}
               placeholder="z. B. Energie steigern, Immunsystem stärken"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 bg-white resize-none"
             />
           </div>
 
@@ -152,7 +153,7 @@ export default function ProfilePage() {
               id="guideline_source"
               value={guidelineSource}
               onChange={(e) => setGuidelineSource(e.target.value)}
-              className="input"
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 bg-white"
             >
               <option value="">Keine Angabe</option>
               <option value="DGE">DGE</option>

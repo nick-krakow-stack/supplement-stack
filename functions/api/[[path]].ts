@@ -12,7 +12,7 @@ type Env = {
   GOOGLE_CLIENT_SECRET: string
   FRONTEND_URL: string
   CF_IMAGES_ACCOUNT_HASH: string
-  PRODUCT_IMAGES: R2Bucket
+  PRODUCT_IMAGES?: R2Bucket
 }
 type Variables = { user: { userId: number; email: string; role: string } }
 type AppContext = { Bindings: Env; Variables: Variables }
@@ -54,7 +54,7 @@ async function ensureAuth(c: Context<AppContext>): Promise<Response | null> {
   const header = c.req.header('Authorization')
   if (!header?.startsWith('Bearer ')) return c.json({ error: 'Unauthorized' }, 401) as never
   try {
-    const payload = await verify(header.slice(7), c.env.JWT_SECRET) as Variables['user']
+    const payload = await verify(header.slice(7), c.env.JWT_SECRET, 'HS256') as Variables['user']
     c.set('user', payload)
     return null
   } catch {
@@ -127,6 +127,13 @@ type ProductRow = {
   serving_unit: string | null
   servings_per_container: number | null
   container_count: number
+  timing: string | null
+  dosage_text: string | null
+  effect_summary: string | null
+  warning_title: string | null
+  warning_message: string | null
+  warning_type: string | null
+  alternative_note: string | null
 }
 
 type StackRow = {
@@ -516,19 +523,27 @@ app.delete('/api/ingredients/:id/forms/:formId', async (c) => {
   return c.json({ ok: true })
 })
 
-// GET /api/recommendations?ingredient_id=x
+// GET /api/recommendations?ingredient_id=x (public)
 app.get('/api/recommendations', async (c) => {
-  const ingredientId = c.req.query('ingredient_id')
-  if (!ingredientId) return c.json({ error: 'ingredient_id query param required' }, 400)
-  const { results: recommendations } = await c.env.DB.prepare(`
-    SELECT r.*, p.name as product_name, p.brand as product_brand, p.price as product_price,
-           p.shop_link as product_shop_link, p.image_url as product_image_url,
-           p.moderation_status, p.visibility
-    FROM recommendations r
-    JOIN products p ON p.id = r.product_id
-    WHERE r.ingredient_id = ?
-  `).bind(ingredientId).all()
-  return c.json({ recommendations })
+  const ingredientIdParam = c.req.query('ingredient_id')
+  if (!ingredientIdParam) return c.json({ error: 'ingredient_id query param required' }, 400)
+  const ingredientId = Number(ingredientIdParam)
+  if (!Number.isInteger(ingredientId) || ingredientId <= 0)
+    return c.json({ error: 'ingredient_id must be a positive integer' }, 400)
+  try {
+    const { results: recommendations } = await c.env.DB.prepare(`
+      SELECT r.product_id, r.type
+      FROM recommendations r
+      JOIN products p ON p.id = r.product_id
+      WHERE r.ingredient_id = ?
+        AND p.moderation_status = 'approved'
+        AND p.visibility = 'public'
+      ORDER BY CASE r.type WHEN 'recommended' THEN 0 ELSE 1 END ASC
+    `).bind(ingredientId).all<{ product_id: number; type: string }>()
+    return c.json({ recommendations })
+  } catch {
+    return c.json({ error: 'Failed to fetch recommendations' }, 500)
+  }
 })
 
 // POST /api/recommendations (admin only)
@@ -647,7 +662,13 @@ app.put('/api/products/:id', async (c) => {
   if (!product) return c.json({ error: 'Not found' }, 404)
   if (user.role !== 'admin') return c.json({ error: 'Forbidden' }, 403)
   const body = await c.req.json()
-  const data = body as { name?: string; brand?: string; form?: string; price?: number; shop_link?: string; image_url?: string; image_r2_key?: string; is_affiliate?: number; discontinued_at?: string; replacement_id?: number; serving_size?: number; serving_unit?: string; servings_per_container?: number; container_count?: number }
+  const data = body as {
+    name?: string; brand?: string; form?: string; price?: number; shop_link?: string; image_url?: string;
+    image_r2_key?: string; is_affiliate?: number; discontinued_at?: string; replacement_id?: number;
+    serving_size?: number; serving_unit?: string; servings_per_container?: number; container_count?: number;
+    timing?: string; dosage_text?: string; effect_summary?: string; warning_title?: string;
+    warning_message?: string; warning_type?: string; alternative_note?: string;
+  }
   await c.env.DB.prepare(`
     UPDATE products SET
       name = COALESCE(?, name),
@@ -662,7 +683,14 @@ app.put('/api/products/:id', async (c) => {
       serving_size = COALESCE(?, serving_size),
       serving_unit = COALESCE(?, serving_unit),
       servings_per_container = COALESCE(?, servings_per_container),
-      container_count = COALESCE(?, container_count)
+      container_count = COALESCE(?, container_count),
+      timing = COALESCE(?, timing),
+      dosage_text = COALESCE(?, dosage_text),
+      effect_summary = COALESCE(?, effect_summary),
+      warning_title = COALESCE(?, warning_title),
+      warning_message = COALESCE(?, warning_message),
+      warning_type = COALESCE(?, warning_type),
+      alternative_note = COALESCE(?, alternative_note)
     WHERE id = ?
   `).bind(
     data.name ?? null,
@@ -678,6 +706,13 @@ app.put('/api/products/:id', async (c) => {
     data.serving_unit ?? null,
     data.servings_per_container ?? null,
     data.container_count ?? null,
+    data.timing ?? null,
+    data.dosage_text ?? null,
+    data.effect_summary ?? null,
+    data.warning_title ?? null,
+    data.warning_message ?? null,
+    data.warning_type ?? null,
+    data.alternative_note ?? null,
     id,
   ).run()
   const updated = await c.env.DB.prepare('SELECT * FROM products WHERE id = ?').bind(id).first()
@@ -693,6 +728,7 @@ app.post('/api/products/:id/image', async (c) => {
   const id = c.req.param('id')
   const product = await c.env.DB.prepare('SELECT id FROM products WHERE id = ?').bind(id).first()
   if (!product) return c.json({ error: 'Not found' }, 404)
+  if (!c.env.PRODUCT_IMAGES) return c.json({ error: 'Product image storage is not configured' }, 501)
   const formData = await c.req.formData()
   const file = formData.get('file') as File | null
   if (!file) return c.json({ error: 'file field required' }, 400)
@@ -791,19 +827,30 @@ app.post('/api/stacks', async (c) => {
 
   for (const item of items) {
     await c.env.DB.prepare(
-      'INSERT INTO stack_items (stack_id, product_id, quantity) VALUES (?, ?, ?)'
-    ).bind(stackId, item.id, item.quantity || 1).run()
+      'INSERT INTO stack_items (stack_id, product_id, quantity, dosage_text, timing) VALUES (?, ?, ?, ?, ?)'
+    ).bind(stackId, item.id, item.quantity || 1, item.dosage_text ?? null, item.timing ?? null).run()
   }
   return c.json({ id: stackId, name: data.name })
 })
 
 // GET /api/stacks/:id
 app.get('/api/stacks/:id', async (c) => {
+  const authErr = await ensureAuth(c)
+  if (authErr) return authErr
+  const user = c.get('user')
   const stack = await c.env.DB.prepare('SELECT * FROM stacks WHERE id = ?').bind(c.req.param('id')).first<StackRow>()
   if (!stack) return c.json({ error: 'Not found' }, 404)
-  const { results: items } = await c.env.DB.prepare(
-    'SELECT p.id, p.name, p.brand, p.price, p.image_url, p.shop_link, p.is_affiliate, p.discontinued_at, p.serving_size, p.serving_unit, p.servings_per_container, p.container_count FROM stack_items si JOIN products p ON p.id = si.product_id WHERE si.stack_id = ?'
-  ).bind(stack.id).all<StackItemRow>()
+  if (stack.user_id !== user.userId && user.role !== 'admin') return c.json({ error: 'Forbidden' }, 403)
+  const { results: items } = await c.env.DB.prepare(`
+    SELECT p.id, p.name, p.brand, p.price, p.price as product_price, p.image_url, p.shop_link, p.is_affiliate,
+           p.discontinued_at, p.serving_size, p.serving_unit, p.servings_per_container,
+           p.container_count, COALESCE(si.timing, p.timing) AS timing, COALESCE(si.dosage_text, p.dosage_text) AS dosage_text,
+           p.effect_summary, p.warning_title,
+           p.warning_message, p.warning_type, p.alternative_note, si.quantity
+    FROM stack_items si
+    JOIN products p ON p.id = si.product_id
+    WHERE si.stack_id = ?
+  `).bind(stack.id).all<StackItemRow>()
   const total = items.reduce((sum, i) => sum + (i.product_price * i.quantity), 0)
   return c.json({ stack, items, total })
 })
@@ -831,7 +878,7 @@ app.put('/api/stacks/:id', async (c) => {
   if (!stack) return c.json({ error: 'Not found' }, 404)
   if (stack.user_id !== user.userId && user.role !== 'admin') return c.json({ error: 'Forbidden' }, 403)
   const body = await c.req.json()
-  const data = body as { name?: string; product_ids?: Array<{ id: number; quantity?: number }> }
+  const data = body as { name?: string; product_ids?: Array<{ id: number; quantity?: number; dosage_text?: string; timing?: string }> }
   if (data.name) {
     await c.env.DB.prepare('UPDATE stacks SET name = ? WHERE id = ?').bind(data.name, id).run()
   }
@@ -839,14 +886,21 @@ app.put('/api/stacks/:id', async (c) => {
     await c.env.DB.prepare('DELETE FROM stack_items WHERE stack_id = ?').bind(id).run()
     for (const item of data.product_ids) {
       await c.env.DB.prepare(
-        'INSERT INTO stack_items (stack_id, product_id, quantity) VALUES (?, ?, ?)'
-      ).bind(id, item.id, item.quantity || 1).run()
+        'INSERT INTO stack_items (stack_id, product_id, quantity, dosage_text, timing) VALUES (?, ?, ?, ?, ?)'
+      ).bind(id, item.id, item.quantity || 1, item.dosage_text ?? null, item.timing ?? null).run()
     }
   }
   const updated = await c.env.DB.prepare('SELECT * FROM stacks WHERE id = ?').bind(id).first()
-  const { results: items } = await c.env.DB.prepare(
-    'SELECT p.id, p.name, p.brand, p.price, p.image_url, p.shop_link, p.is_affiliate, p.discontinued_at, p.serving_size, p.serving_unit, p.servings_per_container, p.container_count FROM stack_items si JOIN products p ON p.id = si.product_id WHERE si.stack_id = ?'
-  ).bind(id).all()
+  const { results: items } = await c.env.DB.prepare(`
+    SELECT p.id, p.name, p.brand, p.price, p.price as product_price, p.image_url, p.shop_link, p.is_affiliate,
+           p.discontinued_at, p.serving_size, p.serving_unit, p.servings_per_container,
+           p.container_count, COALESCE(si.timing, p.timing) AS timing, COALESCE(si.dosage_text, p.dosage_text) AS dosage_text,
+           p.effect_summary, p.warning_title,
+           p.warning_message, p.warning_type, p.alternative_note, si.quantity
+    FROM stack_items si
+    JOIN products p ON p.id = si.product_id
+    WHERE si.stack_id = ?
+  `).bind(id).all()
   return c.json({ stack: updated, items })
 })
 
