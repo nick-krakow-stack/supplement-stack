@@ -20,6 +20,13 @@ interface AdminProduct {
   image_url?: string;
   is_affiliate?: number;
   shop_link?: string;
+  timing?: string;
+  dosage_text?: string;
+  effect_summary?: string;
+  warning_title?: string;
+  warning_message?: string;
+  warning_type?: string;
+  alternative_note?: string;
 }
 
 interface AdminUserProduct {
@@ -66,6 +73,18 @@ interface AdminStats {
   stacks?: number;
   [key: string]: number | undefined;
 }
+
+type ProductDetailPatch = Pick<
+  AdminProduct,
+  | 'timing'
+  | 'dosage_text'
+  | 'effect_summary'
+  | 'warning_title'
+  | 'warning_message'
+  | 'warning_type'
+  | 'alternative_note'
+  | 'is_affiliate'
+>;
 
 function getToken(): string | null {
   return localStorage.getItem('ss_token');
@@ -167,7 +186,8 @@ function ProductsTab() {
         body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error('Aktion fehlgeschlagen.');
-      const updated = await res.json();
+      const data = await res.json();
+      const updated = data.product ?? data;
       setProducts((prev) =>
         prev.map((p) =>
           p.id === id
@@ -179,6 +199,48 @@ function ProductsTab() {
               }
             : p
         )
+      );
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Fehler.');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const updateProductField = (
+    id: number,
+    field: keyof ProductDetailPatch,
+    value: string | number
+  ) => {
+    setProducts((prev) =>
+      prev.map((product) => (product.id === id ? { ...product, [field]: value } : product))
+    );
+  };
+
+  const saveProductDetails = async (product: AdminProduct) => {
+    setActionLoading(product.id);
+    setError('');
+    try {
+      const body: ProductDetailPatch = {
+        timing: product.timing?.trim() ?? '',
+        dosage_text: product.dosage_text?.trim() ?? '',
+        effect_summary: product.effect_summary?.trim() ?? '',
+        warning_title: product.warning_title?.trim() ?? '',
+        warning_message: product.warning_message?.trim() ?? '',
+        warning_type: product.warning_type?.trim() ?? '',
+        alternative_note: product.alternative_note?.trim() ?? '',
+        is_affiliate: product.is_affiliate ? 1 : 0,
+      };
+      const res = await fetch(`/api/products/${product.id}`, {
+        method: 'PUT',
+        headers: authHeaders(),
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) throw new Error('Produktdetails konnten nicht gespeichert werden.');
+      const data = await res.json();
+      const updated = data.product ?? data;
+      setProducts((prev) =>
+        prev.map((p) => (p.id === product.id ? { ...p, ...updated } : p))
       );
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Fehler.');
@@ -284,12 +346,79 @@ function ProductsTab() {
                 id={`is_affiliate_${product.id}`}
                 checked={!!product.is_affiliate}
                 onChange={(e) =>
-                  updateProduct(product.id, { is_affiliate: e.target.checked ? 1 : 0 })
+                  updateProductField(product.id, 'is_affiliate', e.target.checked ? 1 : 0)
                 }
               />
               <label htmlFor={`is_affiliate_${product.id}`} className="text-sm font-medium text-gray-700">
                 Affiliate-Link
               </label>
+            </div>
+
+            {/* Product card metadata */}
+            <div className="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-3">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">Karteninfos</p>
+                  <p className="text-xs text-gray-500">
+                    Diese Angaben erscheinen direkt auf den Produktkarten.
+                  </p>
+                </div>
+                <button
+                  onClick={() => saveProductDetails(product)}
+                  disabled={actionLoading === product.id}
+                  className="text-sm bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-xl font-medium transition-colors disabled:opacity-50"
+                >
+                  Speichern
+                </button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <input
+                  value={product.timing ?? ''}
+                  onChange={(e) => updateProductField(product.id, 'timing', e.target.value)}
+                  placeholder="Timing, z.B. Zum Frühstück"
+                  className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                />
+                <input
+                  value={product.dosage_text ?? ''}
+                  onChange={(e) => updateProductField(product.id, 'dosage_text', e.target.value)}
+                  placeholder="Dosierung, z.B. 2 Kapseln täglich (888mg)"
+                  className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                />
+                <input
+                  value={product.effect_summary ?? ''}
+                  onChange={(e) => updateProductField(product.id, 'effect_summary', e.target.value)}
+                  placeholder="Wirkung, z.B. Muskel- & Nervenfunktion"
+                  className="md:col-span-2 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                />
+                <input
+                  value={product.warning_title ?? ''}
+                  onChange={(e) => updateProductField(product.id, 'warning_title', e.target.value)}
+                  placeholder="Hinweis-Titel"
+                  className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                />
+                <select
+                  value={product.warning_type ?? 'caution'}
+                  onChange={(e) => updateProductField(product.id, 'warning_type', e.target.value)}
+                  className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                >
+                  <option value="caution">Warnung: Vorsicht</option>
+                  <option value="danger">Warnung: Kritisch</option>
+                  <option value="info">Hinweis: Info</option>
+                </select>
+                <textarea
+                  value={product.warning_message ?? ''}
+                  onChange={(e) => updateProductField(product.id, 'warning_message', e.target.value)}
+                  placeholder="Hinweistext, z.B. nicht direkt mit Kaffee kombinieren..."
+                  rows={2}
+                  className="md:col-span-2 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                />
+                <input
+                  value={product.alternative_note ?? ''}
+                  onChange={(e) => updateProductField(product.id, 'alternative_note', e.target.value)}
+                  placeholder="Alternativprodukt-Hinweis"
+                  className="md:col-span-2 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                />
+              </div>
             </div>
 
             {/* Image upload */}

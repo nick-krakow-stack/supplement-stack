@@ -138,7 +138,7 @@ export default function SearchBar({ onSelect, placeholder = 'Wirkstoff suchen…
           aria-autocomplete="list"
           aria-expanded={open}
           aria-activedescendant={activeIndex >= 0 ? `suggestion-${activeIndex}` : undefined}
-          className="w-full pl-11 pr-10 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-shadow shadow-sm text-base"
+          className="w-full rounded-2xl border border-slate-200 bg-white py-4 pl-12 pr-10 text-lg font-semibold text-slate-900 shadow-[0_14px_32px_rgba(15,23,42,0.07)] placeholder:text-slate-400 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100"
         />
         {loading && (
           <div className="absolute right-10 flex items-center">
@@ -148,7 +148,7 @@ export default function SearchBar({ onSelect, placeholder = 'Wirkstoff suchen…
         {query && !loading && (
           <button
             onClick={clearInput}
-            className="absolute right-3 p-1 text-gray-400 hover:text-gray-600 transition-colors"
+            className="absolute right-3 bg-transparent p-1 text-slate-400 transition-colors hover:text-slate-600"
             aria-label="Eingabe löschen"
           >
             <X size={16} />
@@ -165,7 +165,7 @@ export default function SearchBar({ onSelect, placeholder = 'Wirkstoff suchen…
       {open && results.length > 0 && (
         <ul
           role="listbox"
-          className="absolute z-40 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden"
+          className="absolute z-40 mt-2 w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
         >
           {results.map((ingredient, index) => (
             <li
@@ -182,8 +182,8 @@ export default function SearchBar({ onSelect, placeholder = 'Wirkstoff suchen…
               className={`flex flex-col px-4 py-3 cursor-pointer transition-colors ${
                 index === activeIndex
                   ? 'bg-blue-50 text-blue-900'
-                  : 'text-gray-900 hover:bg-gray-50'
-              } ${index > 0 ? 'border-t border-gray-100' : ''}`}
+                  : 'text-slate-900 hover:bg-slate-50'
+              } ${index > 0 ? 'border-t border-slate-100' : ''}`}
             >
               <span className="font-medium text-sm">{ingredient.name}</span>
               {ingredient.synonyms && ingredient.synonyms.length > 0 && (

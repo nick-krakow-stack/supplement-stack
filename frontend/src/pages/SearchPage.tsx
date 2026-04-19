@@ -30,7 +30,6 @@ function getToken(): string | null {
 }
 
 async function saveProductToStack(productId: number): Promise<number> {
-  // Fetch existing stacks
   const res = await apiClient.get<{ stacks: Stack[] }>('/stacks');
   const stacks: Stack[] = res.data.stacks ?? [];
 
@@ -38,12 +37,17 @@ async function saveProductToStack(productId: number): Promise<number> {
   if (stacks.length > 0) {
     stackId = stacks[0].id;
   } else {
-    // No stack yet — create one
-    const created = await apiClient.post<Stack>('/stacks', { name: 'Mein Stack' });
+    const created = await apiClient.post<{ id: number; name: string }>('/stacks', { name: 'Mein Stack' });
     stackId = created.data.id;
   }
 
-  await apiClient.post(`/stacks/${stackId}/products/${productId}`, { quantity: 1 });
+  const stackRes = await apiClient.get<{ items: Array<{ id: number; quantity: number }> }>(`/stacks/${stackId}`);
+  const currentItems = (stackRes.data.items ?? []).map((item) => ({ id: item.id, quantity: item.quantity ?? 1 }));
+  if (!currentItems.some((item) => item.id === productId)) {
+    currentItems.push({ id: productId, quantity: 1 });
+  }
+
+  await apiClient.put(`/stacks/${stackId}`, { product_ids: currentItems });
   return stackId;
 }
 

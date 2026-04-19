@@ -19,7 +19,7 @@ type AppContext = { Bindings: Env; Variables: Variables }
 
 const app = new Hono<AppContext>()
 
-app.use('*', cors())
+app.use('*', cors({ origin: ['https://supplementstack.pages.dev', 'http://localhost:5173'] }))
 
 // ---------------------------------------------------------------------------
 // Password helpers (Web Crypto PBKDF2)
@@ -582,7 +582,7 @@ app.delete('/api/recommendations/:id', async (c) => {
 // GET /api/products
 app.get('/api/products', async (c) => {
   const { results: products } = await c.env.DB.prepare(
-    `SELECT * FROM products WHERE visibility = 'public' OR visibility = 'hidden'`
+    `SELECT * FROM products WHERE visibility = 'public' AND moderation_status = 'approved'`
   ).all<ProductRow>()
   return c.json({ products })
 })

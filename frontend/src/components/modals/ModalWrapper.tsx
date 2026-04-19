@@ -5,9 +5,17 @@ interface ModalWrapperProps {
   onClose: () => void;
   children: React.ReactNode;
   title?: string;
+  size?: 'md' | 'lg';
+  padded?: boolean;
 }
 
-export default function ModalWrapper({ onClose, children, title }: ModalWrapperProps) {
+export default function ModalWrapper({
+  onClose,
+  children,
+  title,
+  size = 'md',
+  padded = true,
+}: ModalWrapperProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -30,10 +38,14 @@ export default function ModalWrapper({ onClose, children, title }: ModalWrapperP
   return (
     <div
       ref={overlayRef}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/55 px-0 backdrop-blur-sm sm:items-center sm:px-4"
       onClick={handleOverlayClick}
     >
-      <div className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto bg-white rounded-xl shadow-2xl p-6">
+      <div
+        className={`relative w-full max-h-[92vh] overflow-y-auto bg-white shadow-[0_35px_90px_rgba(15,23,42,0.35)] ${
+          size === 'lg' ? 'sm:max-w-4xl' : 'sm:max-w-lg'
+        } ${padded ? 'p-6' : 'p-0'} rounded-t-[1.75rem] sm:rounded-[1.75rem]`}
+      >
         {title && (
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold text-gray-900">{title}</h2>

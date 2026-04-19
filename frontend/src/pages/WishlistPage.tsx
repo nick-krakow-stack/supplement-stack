@@ -59,7 +59,7 @@ export default function WishlistPage() {
         return r.json();
       })
       .then((data) => {
-        setProducts(data.products ?? data.items ?? data ?? []);
+        setProducts(data.wishlist ?? []);
       })
       .catch((e: unknown) => {
         setError(e instanceof Error ? e.message : 'Fehler beim Laden.');
