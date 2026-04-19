@@ -215,7 +215,7 @@ async function sendPasswordResetEmail(
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: 'Supplement Stack <onboarding@resend.dev>',
+      from: 'Supplement Stack <stack@dragoncity.eu>',
       to: toEmail,
       subject: 'Passwort zurücksetzen',
       html: `
