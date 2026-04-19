@@ -206,9 +206,9 @@ async function sendPasswordResetEmail(
   frontendUrl: string,
   toEmail: string,
   resetToken: string
-): Promise<void> {
+): Promise<{ ok: true } | { ok: false; error: string }> {
   const resetUrl = `${frontendUrl}/reset-password?token=${resetToken}`
-  await fetch('https://api.resend.com/emails', {
+  const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${resendApiKey}`,
@@ -227,6 +227,11 @@ async function sendPasswordResetEmail(
       `,
     }),
   })
+  if (!res.ok) {
+    const body = await res.text()
+    return { ok: false, error: `Resend ${res.status}: ${body}` }
+  }
+  return { ok: true }
 }
 
 // ---------------------------------------------------------------------------
@@ -302,26 +307,30 @@ app.post('/api/auth/logout', async (_c) => {
 app.post('/api/auth/forgot-password', async (c) => {
   const body = await c.req.json()
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
-  const successResponse = c.json({ message: 'Falls ein Account mit dieser E-Mail existiert, wurde ein Link verschickt.' })
+  const ok = () => c.json({ message: 'Falls ein Account mit dieser E-Mail existiert, wurde ein Link verschickt.' })
 
-  if (!email || !email.includes('@')) return successResponse
+  if (!email || !email.includes('@')) return ok()
 
   const user = await c.env.DB.prepare('SELECT id, email FROM users WHERE email = ?').bind(email).first<{ id: number; email: string }>()
-  if (!user) return successResponse
+  if (!user) return ok()
 
   const token = (crypto.randomUUID() + crypto.randomUUID()).replace(/-/g, '')
-  const expiresAt = Date.now() + 3600000 // 1 hour in ms
+  const expiresAt = Date.now() + 3600000
 
   await c.env.DB.prepare(
     'UPDATE users SET reset_token = ?, reset_token_expires_at = ? WHERE id = ?'
   ).bind(token, expiresAt, user.id).run()
 
-  if (c.env.RESEND_API_KEY) {
-    const frontendUrl = c.env.FRONTEND_URL ?? 'https://supplementstack.pages.dev'
-    await sendPasswordResetEmail(c.env.RESEND_API_KEY, frontendUrl, user.email, token)
+  const apiKey = c.env.RESEND_API_KEY
+  if (!apiKey) return ok()
+
+  const frontendUrl = c.env.FRONTEND_URL ?? 'https://supplementstack.pages.dev'
+  const result = await sendPasswordResetEmail(apiKey, frontendUrl, user.email, token)
+  if (!result.ok) {
+    return c.json({ error: 'E-Mail konnte nicht gesendet werden.', debug: result.error }, 500)
   }
 
-  return successResponse
+  return ok()
 })
 
 // POST /api/auth/reset-password
