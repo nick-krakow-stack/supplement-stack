@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Trash2, Heart, Search } from 'lucide-react';
 import { apiClient } from '../api/client';
+import { useAuth } from '../contexts/AuthContext';
 import ProductCard from '../components/ProductCard';
 import { ShopDomain } from '../types/local';
 
@@ -15,21 +16,9 @@ interface WishlistProduct {
   image_url?: string;
 }
 
-function getToken(): string | null {
-  return localStorage.getItem('ss_token');
-}
-
-function authHeaders(): Record<string, string> {
-  const token = getToken();
-  return {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-}
-
 // ---- Main page ----
 export default function WishlistPage() {
-  const token = getToken();
+  const { user } = useAuth();
   const [products, setProducts] = useState<WishlistProduct[]>([]);
   const [shopDomains, setShopDomains] = useState<ShopDomain[]>([]);
   const [loading, setLoading] = useState(true);
@@ -49,45 +38,35 @@ export default function WishlistPage() {
   }, []);
 
   useEffect(() => {
-    if (!token) {
+    if (!user) {
       setLoading(false);
       return;
     }
-    fetch('/api/wishlist', { headers: authHeaders() })
-      .then((r) => {
-        if (!r.ok) throw new Error('Wunschliste konnte nicht geladen werden.');
-        return r.json();
-      })
-      .then((data) => {
-        setProducts(data.wishlist ?? []);
+    apiClient
+      .get<{ wishlist: WishlistProduct[] }>('/wishlist')
+      .then((res) => {
+        setProducts(res.data.wishlist ?? []);
       })
       .catch((e: unknown) => {
         setError(e instanceof Error ? e.message : 'Fehler beim Laden.');
       })
       .finally(() => setLoading(false));
-  }, [token]);
+  }, [user]);
 
   const handleRemove = async (productId: number) => {
     setRemovingId(productId);
     try {
-      const res = await fetch(`/api/wishlist/${productId}`, {
-        method: 'DELETE',
-        headers: authHeaders(),
-      });
-      if (res.ok) {
-        setProducts((prev) => prev.filter((p) => p.id !== productId));
-      } else {
-        setError('Produkt konnte nicht entfernt werden.');
-      }
+      await apiClient.delete(`/wishlist/${productId}`);
+      setProducts((prev) => prev.filter((p) => p.id !== productId));
     } catch {
-      setError('Netzwerkfehler.');
+      setError('Produkt konnte nicht entfernt werden.');
     } finally {
       setRemovingId(null);
     }
   };
 
   // Not logged in
-  if (!token) {
+  if (!user) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4 text-center">
         <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-50">

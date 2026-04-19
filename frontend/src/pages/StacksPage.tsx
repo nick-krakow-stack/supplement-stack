@@ -1,5 +1,5 @@
 import { useAuth } from '../contexts/AuthContext';
-import { StackWorkspace } from './DemoPage';
+import { StackWorkspace } from '../components/StackWorkspace';
 
 export default function StacksPage() {
   const { token } = useAuth();

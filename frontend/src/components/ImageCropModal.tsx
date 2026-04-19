@@ -1,16 +1,20 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
-import { Upload, ZoomIn, ZoomOut, Check, X, RotateCcw } from 'lucide-react';
+import { Upload, ZoomIn, ZoomOut, Check, X, RotateCcw, Loader } from 'lucide-react';
 
 const CANVAS_SIZE = 272; // viewport circle diameter (px)
 const OUTPUT_SIZE = 200; // output image size (px)
 
 interface ImageCropModalProps {
-  onCrop: (dataUrl: string) => void;
+  onCrop?: (dataUrl: string) => void;
   onClose: () => void;
   currentImageUrl?: string;
+  /** When provided, the cropped image is uploaded to POST /api/products/:productId/image */
+  productId?: number;
+  /** Called with the stored image_url after a successful upload */
+  onSuccess?: (imageUrl: string) => void;
 }
 
-export default function ImageCropModal({ onCrop, onClose, currentImageUrl }: ImageCropModalProps) {
+export default function ImageCropModal({ onCrop, onClose, currentImageUrl, productId, onSuccess }: ImageCropModalProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [scale, setScale] = useState(1);
@@ -19,6 +23,8 @@ export default function ImageCropModal({ onCrop, onClose, currentImageUrl }: Ima
   const dragStart = useRef({ x: 0, y: 0 });
   const [isDragOver, setIsDragOver] = useState(false);
   const [, forceUpdate] = useState(0);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   // ── load image from File ──
   const loadFile = useCallback((file: File) => {
@@ -108,7 +114,7 @@ export default function ImageCropModal({ onCrop, onClose, currentImageUrl }: Ima
   const resetPos = () => { setOffset({ x: 0, y: 0 }); };
 
   // ── crop output ──
-  const handleCrop = () => {
+  const handleCrop = async () => {
     if (!image) return;
     const out = document.createElement('canvas');
     out.width = OUTPUT_SIZE;
@@ -128,7 +134,43 @@ export default function ImageCropModal({ onCrop, onClose, currentImageUrl }: Ima
     ctx.drawImage(image, drawX, drawY, drawW, drawH);
     ctx.restore();
 
-    onCrop(out.toDataURL('image/jpeg', 0.88));
+    const dataUrl = out.toDataURL('image/jpeg', 0.88);
+
+    // If productId + onSuccess provided, upload directly to backend
+    if (productId !== undefined && onSuccess) {
+      setUploading(true);
+      setUploadError(null);
+      try {
+        const blob = await new Promise<Blob>((resolve, reject) => {
+          out.toBlob((b) => { if (b) resolve(b); else reject(new Error('Canvas toBlob failed')); }, 'image/jpeg', 0.88);
+        });
+        const formData = new FormData();
+        formData.append('image', blob, 'product.jpg');
+        const token = localStorage.getItem('ss_token');
+        const res = await fetch(`/api/products/${productId}/image`, {
+          method: 'POST',
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          body: formData,
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({})) as { error?: string };
+          throw new Error(errData.error ?? `Upload fehlgeschlagen (${res.status})`);
+        }
+        const data = await res.json() as { image_url: string };
+        onSuccess(data.image_url);
+        onClose();
+      } catch (e) {
+        setUploadError(e instanceof Error ? e.message : 'Upload fehlgeschlagen');
+      } finally {
+        setUploading(false);
+      }
+      return;
+    }
+
+    // Fallback: pass dataUrl to parent via onCrop callback
+    if (onCrop) {
+      onCrop(dataUrl);
+    }
   };
 
   // ── drag-and-drop ──
@@ -265,12 +307,18 @@ export default function ImageCropModal({ onCrop, onClose, currentImageUrl }: Ima
           </>
         )}
 
+        {/* ── Upload error ── */}
+        {uploadError && (
+          <p className="text-xs text-red-600 text-center">{uploadError}</p>
+        )}
+
         {/* ── Actions ── */}
         <div className="flex justify-end gap-2">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 font-medium rounded-xl text-sm transition-colors"
+            disabled={uploading}
+            className="px-4 py-2 border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 font-medium rounded-xl text-sm transition-colors disabled:opacity-50"
           >
             Abbrechen
           </button>
@@ -278,10 +326,20 @@ export default function ImageCropModal({ onCrop, onClose, currentImageUrl }: Ima
             <button
               type="button"
               onClick={handleCrop}
-              className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold rounded-xl text-sm flex items-center gap-1.5 transition-all shadow-sm"
+              disabled={uploading}
+              className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold rounded-xl text-sm flex items-center gap-1.5 transition-all shadow-sm disabled:opacity-60"
             >
-              <Check size={14} />
-              Zuschneiden
+              {uploading ? (
+                <>
+                  <Loader size={14} className="animate-spin" />
+                  Hochladen…
+                </>
+              ) : (
+                <>
+                  <Check size={14} />
+                  {productId !== undefined ? 'Zuschneiden & Hochladen' : 'Zuschneiden'}
+                </>
+              )}
             </button>
           )}
         </div>

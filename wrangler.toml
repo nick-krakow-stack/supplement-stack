@@ -17,3 +17,7 @@ migrations_dir = "./d1-migrations"
 [[r2_buckets]]
 binding = "PRODUCT_IMAGES"
 bucket_name = "supplement-stack-images"
+
+[[kv_namespaces]]
+binding = "RATE_LIMITER"
+id = "66ebb216d13b49c491499045886a7574"

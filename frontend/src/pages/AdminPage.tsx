@@ -8,6 +8,7 @@ import {
   Trash2,
   Plus,
 } from 'lucide-react';
+import ImageCropModal from '../components/ImageCropModal';
 
 // ---- Local types ----
 interface AdminProduct {
@@ -131,36 +132,14 @@ function ProductsTab() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState<number | null>(null);
-  const [imageUploading, setImageUploading] = useState<number | null>(null);
   const [filterNoAffiliate, setFilterNoAffiliate] = useState(false);
+  const [cropModalProductId, setCropModalProductId] = useState<number | null>(null);
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, product: AdminProduct) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      alert('Bild darf maximal 5 MB groß sein.');
-      return;
-    }
-    setImageUploading(product.id);
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const token = localStorage.getItem('ss_token');
-      const res = await fetch(`/api/products/${product.id}/image`, {
-        method: 'POST',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-        body: formData,
-      });
-      if (!res.ok) throw new Error('Upload fehlgeschlagen');
-      const data = await res.json() as { image_url: string };
-      setProducts((prev) =>
-        prev.map((p) => p.id === product.id ? { ...p, image_url: data.image_url } : p)
-      );
-    } catch {
-      alert('Bild-Upload fehlgeschlagen.');
-    } finally {
-      setImageUploading(null);
-    }
+  const handleImageUploadSuccess = (productId: number, imageUrl: string) => {
+    setProducts((prev) =>
+      prev.map((p) => p.id === productId ? { ...p, image_url: imageUrl } : p)
+    );
+    setCropModalProductId(null);
   };
 
   useEffect(() => {
@@ -287,6 +266,15 @@ function ProductsTab() {
       {visibleProducts.length === 0 && !error && (
         <p className="text-gray-500">Keine Produkte vorhanden.</p>
       )}
+      {cropModalProductId !== null && (
+        <ImageCropModal
+          productId={cropModalProductId}
+          currentImageUrl={products.find((p) => p.id === cropModalProductId)?.image_url}
+          onSuccess={(imageUrl) => handleImageUploadSuccess(cropModalProductId, imageUrl)}
+          onClose={() => setCropModalProductId(null)}
+        />
+      )}
+
       <div className="flex flex-col gap-3">
         {visibleProducts.map((product) => (
           <div
@@ -427,15 +415,13 @@ function ProductsTab() {
               {product.image_url && (
                 <img src={product.image_url} alt="" className="w-16 h-16 object-cover rounded mb-2" />
               )}
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => handleImageUpload(e, product)}
-                className="text-sm"
-              />
-              {imageUploading === product.id && (
-                <p className="text-xs text-gray-500 mt-1">Bild wird hochgeladen...</p>
-              )}
+              <button
+                type="button"
+                onClick={() => setCropModalProductId(product.id)}
+                className="text-sm bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 px-3 py-1.5 rounded-xl font-medium transition-colors"
+              >
+                {product.image_url ? 'Bild ersetzen' : 'Bild hochladen'}
+              </button>
             </div>
           </div>
         ))}

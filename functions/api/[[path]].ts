@@ -13,6 +13,7 @@ type Env = {
   FRONTEND_URL: string
   CF_IMAGES_ACCOUNT_HASH: string
   PRODUCT_IMAGES?: R2Bucket
+  RATE_LIMITER?: KVNamespace
 }
 type Variables = { user: { userId: number; email: string; role: string } }
 type AppContext = { Bindings: Env; Variables: Variables }
@@ -172,11 +173,39 @@ type CountRow = { count: number }
 
 
 // ---------------------------------------------------------------------------
+// Rate limiting (KV-backed, fixed window)
+// ---------------------------------------------------------------------------
+
+async function checkRateLimit(
+  kv: KVNamespace | undefined,
+  key: string,
+  limit: number,
+  windowSeconds: number
+): Promise<boolean> {
+  if (!kv) return true // KV nicht konfiguriert → kein Limiting
+
+  const now = Math.floor(Date.now() / 1000)
+  const windowKey = `ratelimit:${key}:${Math.floor(now / windowSeconds)}`
+
+  const current = await kv.get(windowKey)
+  const count = current ? parseInt(current, 10) : 0
+
+  if (count >= limit) return false
+
+  await kv.put(windowKey, String(count + 1), { expirationTtl: windowSeconds * 2 })
+  return true
+}
+
+// ---------------------------------------------------------------------------
 // Routes
 // ---------------------------------------------------------------------------
 
 // POST /api/auth/register
 app.post('/api/auth/register', async (c) => {
+  const ip = c.req.header('CF-Connecting-IP') ?? c.req.header('X-Forwarded-For') ?? 'unknown'
+  const allowed = await checkRateLimit(c.env.RATE_LIMITER, `register:${ip}`, 5, 15 * 60)
+  if (!allowed) return c.json({ error: 'Zu viele Versuche. Bitte warte kurz.' }, 429)
+
   const body = await c.req.json()
   if (!body.email || typeof body.email !== 'string' || !body.email.includes('@'))
     return c.json({ error: 'Valid email required' }, 400)
@@ -238,6 +267,10 @@ app.post('/api/auth/logout', async (_c) => {
 
 // POST /api/auth/login
 app.post('/api/auth/login', async (c) => {
+  const ip = c.req.header('CF-Connecting-IP') ?? c.req.header('X-Forwarded-For') ?? 'unknown'
+  const allowed = await checkRateLimit(c.env.RATE_LIMITER, `login:${ip}`, 10, 15 * 60)
+  if (!allowed) return c.json({ error: 'Zu viele Versuche. Bitte warte kurz.' }, 429)
+
   const body = await c.req.json()
   if (!body.email || typeof body.email !== 'string') return c.json({ error: 'Email required' }, 400)
   if (!body.password || typeof body.password !== 'string') return c.json({ error: 'Password required' }, 400)
@@ -730,23 +763,43 @@ app.post('/api/products/:id/image', async (c) => {
   if (!product) return c.json({ error: 'Not found' }, 404)
   if (!c.env.PRODUCT_IMAGES) return c.json({ error: 'Product image storage is not configured' }, 501)
   const formData = await c.req.formData()
-  const file = formData.get('file') as File | null
-  if (!file) return c.json({ error: 'file field required' }, 400)
+  // Accept both 'image' (new) and 'file' (legacy) field names
+  const file = (formData.get('image') ?? formData.get('file')) as File | null
+  if (!file) return c.json({ error: 'image field required' }, 400)
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/webp']
+  if (!allowedTypes.includes(file.type)) return c.json({ error: 'Only JPEG, PNG or WebP images are allowed' }, 415)
   if (file.size > 5 * 1024 * 1024) return c.json({ error: 'Max 5 MB' }, 413)
-  const ext = file.name.split('.').pop()?.toLowerCase() || 'webp'
-  const r2Key = `products/${id}/${crypto.randomUUID()}.${ext}`
+  const extMap: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }
+  const ext = extMap[file.type] ?? 'jpg'
+  const filename = `${crypto.randomUUID()}.${ext}`
+  const r2Key = `products/${id}/${filename}`
   const buffer = await file.arrayBuffer()
   await c.env.PRODUCT_IMAGES.put(r2Key, buffer, {
-    httpMetadata: { contentType: file.type || 'image/webp' },
+    httpMetadata: { contentType: file.type },
   })
-  const accountHash = c.env.CF_IMAGES_ACCOUNT_HASH
-  const imageUrl = accountHash
-    ? `https://imagedelivery.net/${accountHash}/${r2Key}/public`
-    : `https://pub-supplement-stack-images.r2.dev/${r2Key}`
+  const imageUrl = `/api/r2/products/${id}/${filename}`
   await c.env.DB.prepare(
     'UPDATE products SET image_url = ?, image_r2_key = ? WHERE id = ?'
   ).bind(imageUrl, r2Key, id).run()
   return c.json({ image_url: imageUrl })
+})
+
+// GET /api/r2/products/:productId/:filename (public — R2 proxy)
+app.get('/api/r2/products/:productId/:filename', async (c) => {
+  if (!c.env.PRODUCT_IMAGES) return c.json({ error: 'Image storage not configured' }, 501)
+  const productId = c.req.param('productId')
+  const filename = c.req.param('filename')
+  const r2Key = `products/${productId}/${filename}`
+  const object = await c.env.PRODUCT_IMAGES.get(r2Key)
+  if (!object) return c.json({ error: 'Not found' }, 404)
+  const contentType = object.httpMetadata?.contentType ?? 'application/octet-stream'
+  const body = await object.arrayBuffer()
+  return new Response(body, {
+    headers: {
+      'Content-Type': contentType,
+      'Cache-Control': 'public, max-age=31536000, immutable',
+    },
+  })
 })
 
 // PUT /api/products/:id/status (admin only)
