@@ -14,6 +14,7 @@ type Env = {
   CF_IMAGES_ACCOUNT_HASH: string
   PRODUCT_IMAGES?: R2Bucket
   RATE_LIMITER?: KVNamespace
+  RESEND_API_KEY?: string
 }
 type Variables = { user: { userId: number; email: string; role: string } }
 type AppContext = { Bindings: Env; Variables: Variables }
@@ -197,6 +198,38 @@ async function checkRateLimit(
 }
 
 // ---------------------------------------------------------------------------
+// Email helpers
+// ---------------------------------------------------------------------------
+
+async function sendPasswordResetEmail(
+  resendApiKey: string,
+  frontendUrl: string,
+  toEmail: string,
+  resetToken: string
+): Promise<void> {
+  const resetUrl = `${frontendUrl}/reset-password?token=${resetToken}`
+  await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${resendApiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: 'Supplement Stack <onboarding@resend.dev>',
+      to: toEmail,
+      subject: 'Passwort zurücksetzen',
+      html: `
+        <p>Hallo,</p>
+        <p>du hast eine Passwort-Zurücksetzen-Anfrage gestellt.</p>
+        <p><a href="${resetUrl}" style="background:#4f46e5;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;">Passwort zurücksetzen</a></p>
+        <p>Oder kopiere diesen Link: ${resetUrl}</p>
+        <p>Der Link ist 1 Stunde gültig. Falls du keine Anfrage gestellt hast, ignoriere diese Mail.</p>
+      `,
+    }),
+  })
+}
+
+// ---------------------------------------------------------------------------
 // Routes
 // ---------------------------------------------------------------------------
 
@@ -263,6 +296,57 @@ app.get('/api/auth/google/callback', async (c) => {
 // POST /api/auth/logout
 app.post('/api/auth/logout', async (_c) => {
   return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+})
+
+// POST /api/auth/forgot-password
+app.post('/api/auth/forgot-password', async (c) => {
+  const body = await c.req.json()
+  const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
+  const successResponse = c.json({ message: 'Falls ein Account mit dieser E-Mail existiert, wurde ein Link verschickt.' })
+
+  if (!email || !email.includes('@')) return successResponse
+
+  const user = await c.env.DB.prepare('SELECT id, email FROM users WHERE email = ?').bind(email).first<{ id: number; email: string }>()
+  if (!user) return successResponse
+
+  const token = (crypto.randomUUID() + crypto.randomUUID()).replace(/-/g, '')
+  const expiresAt = Date.now() + 3600000 // 1 hour in ms
+
+  await c.env.DB.prepare(
+    'UPDATE users SET reset_token = ?, reset_token_expires_at = ? WHERE id = ?'
+  ).bind(token, expiresAt, user.id).run()
+
+  if (c.env.RESEND_API_KEY) {
+    const frontendUrl = c.env.FRONTEND_URL ?? 'https://supplementstack.pages.dev'
+    await sendPasswordResetEmail(c.env.RESEND_API_KEY, frontendUrl, user.email, token)
+  }
+
+  return successResponse
+})
+
+// POST /api/auth/reset-password
+app.post('/api/auth/reset-password', async (c) => {
+  const body = await c.req.json()
+  const token = typeof body.token === 'string' ? body.token.trim() : ''
+  const password = typeof body.password === 'string' ? body.password : ''
+
+  if (!token) return c.json({ error: 'Ungültiger oder abgelaufener Link.' }, 400)
+  if (!password || password.length < 8) return c.json({ error: 'Passwort muss mindestens 8 Zeichen lang sein.' }, 400)
+
+  const user = await c.env.DB.prepare(
+    'SELECT id, reset_token_expires_at FROM users WHERE reset_token = ?'
+  ).bind(token).first<{ id: number; reset_token_expires_at: number | null }>()
+
+  if (!user || !user.reset_token_expires_at || user.reset_token_expires_at < Date.now()) {
+    return c.json({ error: 'Ungültiger oder abgelaufener Link.' }, 400)
+  }
+
+  const password_hash = await hashPassword(password)
+  await c.env.DB.prepare(
+    'UPDATE users SET password_hash = ?, reset_token = NULL, reset_token_expires_at = NULL WHERE id = ?'
+  ).bind(password_hash, user.id).run()
+
+  return c.json({ message: 'Passwort erfolgreich geändert.' })
 })
 
 // POST /api/auth/login

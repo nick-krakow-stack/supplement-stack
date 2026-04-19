@@ -13,6 +13,8 @@ import WishlistPage from './pages/WishlistPage';
 import AdminPage from './pages/AdminPage';
 import DemoPage from './pages/DemoPage';
 import MyProductsPage from './pages/MyProductsPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 
 function NotFoundPage() {
   return (
@@ -76,6 +78,8 @@ export default function App() {
             }
           />
           <Route path="/demo" element={<DemoPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route
             path="/my-products"
             element={
