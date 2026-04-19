@@ -126,8 +126,8 @@ function getFallbackWarning(product: ProductCardProduct): ProductWarning | null 
 function ProductImage({ product }: { product: ProductCardProduct }) {
   if (!product.image_url) {
     return (
-      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-100 to-indigo-100 shadow-inner">
-        <Package size={24} className="text-slate-400" />
+      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-100 to-indigo-100 ring-2 ring-indigo-200">
+        <Package size={24} className="text-indigo-400" />
       </div>
     );
   }
@@ -136,7 +136,7 @@ function ProductImage({ product }: { product: ProductCardProduct }) {
     <img
       src={product.image_url}
       alt={product.name}
-      className="h-16 w-16 shrink-0 rounded-full bg-white object-cover shadow-lg ring-4 ring-white"
+      className="h-16 w-16 shrink-0 rounded-full bg-white object-cover ring-2 ring-indigo-200"
       onError={(e) => {
         (e.currentTarget as HTMLImageElement).style.display = 'none';
       }}
@@ -178,10 +178,12 @@ export default function ProductCard({
 
   return (
     <article
-      className={`group relative overflow-hidden rounded-[1.15rem] border bg-white/95 shadow-[0_12px_28px_rgba(15,23,42,0.08)] backdrop-blur transition-all duration-200 ${
-        selected
+      className={`group relative flex flex-col overflow-hidden rounded-2xl border bg-white shadow-md transition-shadow duration-200 ${
+        cardWarning?.type === 'danger'
+          ? 'border-l-4 border-red-400 bg-red-50'
+          : selected
           ? 'border-blue-400 ring-2 ring-blue-200'
-          : 'border-slate-200/80 hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-[0_18px_38px_rgba(15,23,42,0.12)]'
+          : 'border-slate-100 hover:shadow-lg'
       }`}
     >
       {(onToggleSelected || onSelect) && (
@@ -199,117 +201,137 @@ export default function ProductCard({
         </button>
       )}
 
-      <div className={`p-4 ${compact ? 'space-y-2.5' : 'space-y-3'}`}>
+      <div className={`flex flex-1 flex-col p-4 ${compact ? 'gap-2.5' : 'gap-3'}`}>
+
+        {/* Header: Image + Name + Brand + Badges */}
         <div className="flex items-start gap-3 pr-8">
           <ProductImage product={product} />
           <div className="min-w-0 flex-1 pt-1">
             {brand && (
-              <p className="mb-0.5 truncate text-[0.65rem] font-black uppercase tracking-[0.18em] text-slate-400">
+              <p className="mb-0.5 truncate text-xs font-semibold uppercase tracking-wide text-slate-400">
                 {brand}
               </p>
             )}
-            <h3 className="break-words text-base font-black leading-tight tracking-tight text-slate-900">
+            <h3 className="break-words text-base font-bold leading-tight text-slate-900">
               {name}
             </h3>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
-              <span className="whitespace-nowrap rounded-full bg-amber-500 px-2.5 py-1 text-[0.72rem] font-black text-white shadow-sm">
-                {getTiming(product)}
-              </span>
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              {product.form && (
+                <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-700">
+                  {product.form}
+                </span>
+              )}
               {recommendationType && (
-                <span className={`rounded-full px-3 py-1 text-xs font-bold ${
+                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
                   recommendationType === 'recommended'
-                    ? 'bg-emerald-100 text-emerald-700'
-                    : 'bg-indigo-100 text-indigo-700'
+                    ? 'bg-emerald-50 text-emerald-700'
+                    : 'bg-indigo-50 text-indigo-700'
                 }`}>
                   {recommendationType === 'recommended' ? 'Empfohlen' : 'Alternative'}
                 </span>
               )}
+              <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                {getTiming(product)}
+              </span>
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-4 text-slate-600">
+        {/* Info Grid: Dosierung + Reicht für */}
+        <div className="grid grid-cols-2 gap-3">
           <div>
-            <p className="text-xs font-black text-slate-700">Dosierung:</p>
-            <p className="mt-1 text-sm leading-relaxed text-slate-600">{getDose(product)}</p>
+            <p className="text-xs font-semibold text-slate-500">Dosierung</p>
+            <p className="mt-0.5 text-sm leading-relaxed text-slate-700">{getDose(product)}</p>
           </div>
           <div>
-            <p className="text-xs font-black text-slate-700">Reicht für:</p>
-            <p className="mt-1 text-sm leading-relaxed text-slate-600">
+            <p className="text-xs font-semibold text-slate-500">Reicht für</p>
+            <p className="mt-0.5 text-sm leading-relaxed text-slate-700">
               {daysSupply ? `${daysSupply} Tage` : 'Nach Verbrauch'}
             </p>
           </div>
         </div>
 
+        {/* Wirkung (non-compact only) */}
         {!compact && (
           <div>
-            <p className="text-xs font-black text-slate-700">Wirkung:</p>
-            <p className="mt-1.5 text-sm leading-relaxed text-slate-600">{getEffect(product)}</p>
+            <p className="text-xs font-semibold text-slate-500">Wirkung</p>
+            <p className="mt-0.5 text-sm leading-relaxed text-slate-700">{getEffect(product)}</p>
           </div>
         )}
 
+        {/* Interaction Warning */}
         {cardWarning && (
-          <div className={`rounded-2xl border-l-4 p-4 ${
+          <div className={`rounded-xl border-l-4 p-3 ${
             cardWarning.type === 'danger'
-              ? 'border-red-500 bg-red-50 text-red-600'
+              ? 'border-red-400 bg-red-50 text-red-700'
               : cardWarning.type === 'info'
-              ? 'border-blue-500 bg-blue-50 text-blue-700'
-              : 'border-amber-500 bg-amber-50 text-amber-700'
+              ? 'border-blue-400 bg-blue-50 text-blue-700'
+              : 'border-amber-400 bg-amber-50 text-amber-700'
           }`}>
             <div className="flex items-start gap-2">
-              <AlertTriangle size={17} className="mt-0.5 flex-shrink-0" />
+              <AlertTriangle size={15} className="mt-0.5 shrink-0" />
               <div>
-                {cardWarning.title && <p className="font-black">{cardWarning.title}</p>}
-                <p className="mt-1 text-sm leading-relaxed">{cardWarning.message}</p>
+                {cardWarning.title && (
+                  <p className="text-sm font-semibold">{cardWarning.title}</p>
+                )}
+                <p className="mt-0.5 text-xs leading-relaxed">{cardWarning.message}</p>
               </div>
             </div>
           </div>
         )}
 
+        {/* Discontinued Banner */}
         {product.discontinued_at && (
-          <div className="flex items-center gap-2 rounded-2xl bg-slate-100 px-4 py-3 text-sm text-slate-600">
-            <RefreshCcw size={16} />
+          <div className="flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-xs text-slate-500">
+            <RefreshCcw size={14} className="shrink-0" />
             Dieses Produkt ist eingestellt. Alternative waehlen empfohlen.
           </div>
         )}
 
+        {/* Alternative Note */}
         {product.alternative_note && (
-          <div className="rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm leading-relaxed text-indigo-700">
-            <span className="font-black">Alternative:</span> {product.alternative_note}
+          <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-3 py-2.5 text-xs leading-relaxed text-indigo-700">
+            <span className="font-semibold">Alternative:</span> {product.alternative_note}
           </div>
         )}
 
+        {/* Spacer to push price+button to bottom */}
+        <div className="flex-1" />
+
+        {/* Price Row */}
         <div className="border-t border-slate-100 pt-3">
           <div className="flex items-end justify-between gap-4">
             <div>
-              <p className="text-xs text-slate-500">Einmalkosten</p>
+              <p className="text-xs text-slate-400">Einmalkosten</p>
               <p className="text-xl font-black tracking-tight text-slate-900">{formatCurrency(price)}</p>
             </div>
             <div className="text-right">
-              <p className="text-xs text-slate-500">Pro Monat</p>
-              <span className="inline-flex rounded-full bg-emerald-600 px-3.5 py-1.5 text-sm font-black text-white">
-                {formatCurrency(monthlyPrice)}
-              </span>
+              <p className="text-xs text-slate-400">Pro Monat</p>
+              <p className="text-sm font-semibold text-slate-500">{formatCurrency(monthlyPrice)}</p>
             </div>
           </div>
         </div>
 
+        {/* Action Buttons */}
         <div className="flex gap-2">
           {product.shop_link && (
             <a
               href={product.shop_link}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-blue-600/20 transition-colors hover:bg-blue-700"
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm shadow-blue-600/20 transition-opacity hover:opacity-90"
             >
-              <ExternalLink size={17} />
+              <ExternalLink size={16} />
               {buttonText}
+              {!!product.is_affiliate && (
+                <span className="ml-1 text-xs font-semibold text-blue-200">*</span>
+              )}
             </a>
           )}
           {showSelectButton && onSelect && (
             <button
               onClick={onSelect}
-              className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50"
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50"
             >
               Alternative
             </button>
@@ -317,12 +339,20 @@ export default function ProductCard({
           {showWishlistButton && onAddToWishlist && (
             <button
               onClick={onAddToWishlist}
-              className="rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm font-black text-rose-600 hover:bg-rose-100"
+              className="rounded-xl border border-rose-100 bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-600 transition-colors hover:bg-rose-100"
             >
               Merken
             </button>
           )}
         </div>
+
+        {/* Affiliate footnote */}
+        {!!product.is_affiliate && (
+          <p className="text-center text-xs text-amber-600">
+            * Affiliate-Link
+          </p>
+        )}
+
       </div>
     </article>
   );
