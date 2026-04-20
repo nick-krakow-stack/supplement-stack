@@ -51,6 +51,17 @@ export default function App() {
           }
         />
 
+        {/* Stacks / Demo — bypass standard Layout (own standalone header) */}
+        <Route
+          path="/stacks"
+          element={
+            <ProtectedRoute>
+              <StacksPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="/demo" element={<DemoPage />} />
+
         {/* All other routes use the normal Layout */}
         <Route
           path="*"
@@ -70,14 +81,6 @@ export default function App() {
                   }
                 />
                 <Route
-                  path="/stacks"
-                  element={
-                    <ProtectedRoute>
-                      <StacksPage />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
                   path="/wishlist"
                   element={
                     <ProtectedRoute>
@@ -85,7 +88,6 @@ export default function App() {
                     </ProtectedRoute>
                   }
                 />
-                <Route path="/demo" element={<DemoPage />} />
                 <Route path="/forgot-password" element={<ForgotPasswordPage />} />
                 <Route path="/reset-password" element={<ResetPasswordPage />} />
                 <Route

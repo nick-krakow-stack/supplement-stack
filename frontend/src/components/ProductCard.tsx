@@ -88,11 +88,11 @@ function getTimingKey(timing?: string): TimingKey {
 }
 
 const TIMING_STYLES: Record<TimingKey, { cls: string; label: string }> = {
-  morning: { cls: 'bg-amber-50 text-amber-700 border border-amber-200',   label: 'Zum Frühstück' },
-  evening: { cls: 'bg-violet-50 text-violet-700 border border-violet-200', label: 'Zum Abendessen' },
-  noon:    { cls: 'bg-emerald-50 text-emerald-700 border border-emerald-200', label: 'Mittags' },
-  trial:   { cls: 'bg-red-50 text-red-600 border border-red-200 border-dashed', label: 'Zum Probieren' },
-  anytime: { cls: 'bg-sky-50 text-sky-700 border border-sky-200',          label: 'Jederzeit' },
+  morning: { cls: 'bg-[#fef3c7] text-[#d97706]', label: 'Zum Frühstück' },
+  evening: { cls: 'bg-[#ede9fe] text-[#7c3aed]', label: 'Zum Abendessen' },
+  noon:    { cls: 'bg-[#dcfce7] text-[#16a34a]', label: 'Mittags' },
+  trial:   { cls: 'bg-[#fee2e2] text-[#dc2626] border border-dashed border-[#fca5a5]', label: 'Zum Probieren' },
+  anytime: { cls: 'bg-[#e0f2fe] text-[#0284c7]', label: 'Jederzeit' },
 };
 
 type CategoryKey = 'vitamin' | 'mineral' | 'omega' | 'protein' | 'default';
@@ -151,10 +151,15 @@ export default function ProductCard({
   return (
     <article
       onClick={onToggleSelected}
-      style={{ boxShadow: selected ? '0 4px 20px rgba(99,102,241,0.2)' : '0 2px 12px rgba(99,102,241,0.08), 0 1px 3px rgba(0,0,0,0.04)' }}
-      className={`relative flex flex-col bg-white rounded-2xl p-3.5 cursor-pointer transition-all duration-150 border-2 hover:-translate-y-px ${
-        selected ? 'border-indigo-500' : 'border-transparent'
-      }`}
+      style={{
+        borderRadius: '14px',
+        padding: '14px',
+        border: `2px solid ${selected ? '#6366f1' : 'transparent'}`,
+        boxShadow: selected
+          ? '0 4px 20px rgba(99,102,241,0.2)'
+          : '0 2px 12px rgba(99,102,241,0.08), 0 1px 3px rgba(0,0,0,0.04)',
+      }}
+      className="ss-product-card relative flex flex-col bg-white cursor-pointer transition-all duration-150 hover:-translate-y-px"
     >
       {/* Checkbox */}
       {(onToggleSelected ?? onSelect) && (
@@ -170,17 +175,20 @@ export default function ProductCard({
       )}
 
       {/* Card top */}
-      <div className="flex items-start gap-3 mb-3">
+      <div className="flex items-start gap-[11px] mb-3">
         {/* Image / emoji */}
         {product.image_url ? (
           <img
             src={product.image_url}
             alt={name}
-            className="w-[52px] h-[52px] shrink-0 rounded-[10px] border border-slate-200 bg-slate-50 object-cover"
+            className="w-[52px] h-[52px] shrink-0 rounded-[10px] border border-[#e5e7eb] bg-[#f3f4f6] object-cover"
             onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
           />
         ) : (
-          <div className="w-[52px] h-[52px] shrink-0 rounded-[10px] border border-slate-200 bg-slate-50 flex items-center justify-center text-2xl select-none">
+          <div
+            className="w-[52px] h-[52px] shrink-0 rounded-[10px] border border-[#e5e7eb] bg-[#f3f4f6] flex items-center justify-center select-none"
+            style={{ fontSize: '22px' }}
+          >
             {emoji}
           </div>
         )}
@@ -284,14 +292,17 @@ export default function ProductCard({
       </div>
 
       {/* Actions */}
-      <div className="flex gap-2">
+      <div className="flex gap-[7px]">
         {product.shop_link && (
           <a
             href={product.shop_link}
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="flex-1 inline-flex items-center justify-center gap-1.5 bg-blue-500 hover:bg-blue-600 text-white rounded-[10px] py-2 text-[12.5px] font-bold transition-colors"
+            className="flex-1 inline-flex items-center justify-center gap-1.5 text-white rounded-[10px] py-[9px] text-[12.5px] font-bold transition-colors"
+            style={{ background: '#3b82f6' }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = '#2563eb')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = '#3b82f6')}
           >
             <ExternalLink size={13} />
             {buttonText}
@@ -300,7 +311,11 @@ export default function ProductCard({
         {onDelete && (
           <button
             onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            className="w-[38px] h-[38px] shrink-0 flex items-center justify-center bg-red-50 border-[1.5px] border-red-200 text-red-600 rounded-[10px] hover:bg-red-100 transition-colors"
+            aria-label="Produkt entfernen"
+            className="w-[38px] h-[38px] shrink-0 flex items-center justify-center rounded-[10px] transition-colors"
+            style={{ background: '#fee2e2', border: '1.5px solid #fca5a5', color: '#dc2626' }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = '#fecaca'; e.currentTarget.style.borderColor = '#f87171'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.borderColor = '#fca5a5'; }}
           >
             <Trash2 size={15} />
           </button>

@@ -1,25 +1,21 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useState, useCallback, useMemo } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
   Calculator,
-  ChevronDown,
-  ChevronUp,
-  FlaskConical,
   Info,
-  Layers,
-  Mail,
   Package,
-  Pencil,
   Plus,
   Search,
-  Trash2,
   X,
 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 import SearchBar from './SearchBar';
 import ProductCard from './ProductCard';
+import StacksHeader, { type StacksHeaderVariant } from './StacksHeader';
+import EditStackModal from './EditStackModal';
 import type { DosageGuideline, Ingredient, ShopDomain } from '../types/local';
 
 // ---------------------------------------------------------------------------
@@ -49,12 +45,14 @@ export interface DemoProduct {
   warning_message?: string;
   warning_type?: string;
   alternative_note?: string;
+  ingredient_category?: string;
 }
 
 export interface DemoStack {
   id: string;
   name: string;
   products: DemoProduct[];
+  description?: string;
 }
 
 interface DemoState {
@@ -68,11 +66,13 @@ export interface StackWorkspaceProps {
 }
 
 // ---------------------------------------------------------------------------
-// Shared stack workspace helpers
+// Helpers
 // ---------------------------------------------------------------------------
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
-const DEMO_NOTICE = 'Diese Funktion ist nur in der kostenlosen Vollversion verfügbar. Registriere dich, damit deine Änderungen dauerhaft gespeichert werden.';
+const DEMO_NOTICE =
+  'Diese Funktion ist nur in der kostenlosen Vollversion verfügbar. Registriere dich, damit deine Änderungen dauerhaft gespeichert werden.';
+const DESC_STORAGE_KEY = 'ss_stack_descriptions';
 
 function apiPath(path: string): string {
   return `${API_BASE_URL}${path}`;
@@ -98,12 +98,38 @@ function demoRestrictedNotice() {
   window.alert(DEMO_NOTICE);
 }
 
-function mapStackDetail(stack: { id: number | string; name: string }, detail?: Record<string, unknown>): DemoStack {
+function mapStackDetail(
+  stack: { id: number | string; name: string },
+  detail?: Record<string, unknown>,
+): DemoStack {
+  const products = (detail?.products ?? detail?.items ?? []) as DemoProduct[];
   return {
     id: String(stack.id),
     name: (detail?.stack as { name?: string } | undefined)?.name ?? stack.name,
-    products: ((detail?.products ?? detail?.items ?? []) as DemoProduct[]),
+    products,
   };
+}
+
+function loadDescriptions(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(DESC_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed: unknown = JSON.parse(raw);
+    return (parsed && typeof parsed === 'object' ? (parsed as Record<string, string>) : {});
+  } catch {
+    return {};
+  }
+}
+
+function saveDescription(stackId: string, description: string) {
+  try {
+    const next = loadDescriptions();
+    if (description) next[stackId] = description;
+    else delete next[stackId];
+    localStorage.setItem(DESC_STORAGE_KEY, JSON.stringify(next));
+  } catch {
+    // ignore storage errors
+  }
 }
 
 interface ManualDose {
@@ -132,7 +158,41 @@ function formatEuro(value: number): string {
 }
 
 // ---------------------------------------------------------------------------
-// AddProductModal
+// Category classification (client-side)
+// ---------------------------------------------------------------------------
+
+type CategoryKey = 'general' | 'detox' | 'sports' | 'cognition';
+
+interface CategoryMeta {
+  label: string;
+  cls: string;
+  order: number;
+}
+
+const CATEGORY_META: Record<CategoryKey, CategoryMeta> = {
+  general:   { label: 'Allgemeine Versorgung', cls: 'cat-general', order: 1 },
+  detox:     { label: 'Entgiftung', cls: 'cat-detox', order: 2 },
+  sports:    { label: 'Sport', cls: 'cat-sports', order: 3 },
+  cognition: { label: 'Kognition', cls: 'cat-cognition', order: 4 },
+};
+
+const CATEGORY_ICONS: Record<CategoryKey, string> = {
+  general: '🧬',
+  detox: '🌿',
+  sports: '🏃',
+  cognition: '🧠',
+};
+
+function categorize(product: DemoProduct): CategoryKey {
+  const hay = `${product.ingredient_category ?? ''} ${product.form ?? ''} ${product.name ?? ''} ${product.effect_summary ?? ''}`.toLowerCase();
+  if (/(chlorella|spirulina|detox|entgiftung|zeolith|mariendistel|leber|gluta|ala)/i.test(hay)) return 'detox';
+  if (/(creatin|kreatin|bcaa|protein|whey|beta-alanin|citrullin|arginin|pump|pre-workout|preworkout)/i.test(hay)) return 'sports';
+  if (/(ashwagandha|rhodiola|ginkgo|nootrop|kogniti|fokus|gehirn|l-theanin|bacopa)/i.test(hay)) return 'cognition';
+  return 'general';
+}
+
+// ---------------------------------------------------------------------------
+// AddProductModal (unchanged styling from original — 3-step flow preserved)
 // ---------------------------------------------------------------------------
 
 function AddProductModal({
@@ -158,7 +218,10 @@ function AddProductModal({
   const [error, setError] = useState('');
 
   const dgeGuideline = guidelines.find((gl) => gl.source === 'DGE' || gl.is_default) ?? guidelines[0];
-  const studyGuideline = guidelines.find((gl) => gl.source === 'study') ?? guidelines.find((gl) => gl.id !== dgeGuideline?.id);
+  const studyGuideline =
+    guidelines.find((gl) => gl.source === 'study') ??
+    guidelines.find((gl) => gl.id !== dgeGuideline?.id);
+
   const chooseIngredient = (selected: Ingredient) => {
     setIngredient(selected);
     setStep('dosage');
@@ -172,9 +235,9 @@ function AddProductModal({
         return response.json();
       })
       .then((data) => {
-        const loadedGuidelines: DosageGuideline[] = data.guidelines ?? [];
-        setGuidelines(loadedGuidelines);
-        const defaultDose = primaryDose(loadedGuidelines.find((gl) => gl.is_default) ?? loadedGuidelines[0]);
+        const loaded: DosageGuideline[] = data.guidelines ?? [];
+        setGuidelines(loaded);
+        const defaultDose = primaryDose(loaded.find((gl) => gl.is_default) ?? loaded[0]);
         setDose(defaultDose ?? { value: 1, unit: normalizeUnitToGerman(selected.unit) || 'Portion' });
       })
       .catch(() => {
@@ -199,7 +262,7 @@ function AddProductModal({
   };
 
   const addProduct = async (product: DemoProduct) => {
-    const enhancedProduct: DemoProduct = {
+    const enhanced: DemoProduct = {
       ...product,
       dosage_text: product.dosage_text || `${dose.value || 1} ${dose.unit || 'Portion'} täglich`,
       timing: product.timing || 'Zum Frühstück',
@@ -207,7 +270,7 @@ function AddProductModal({
     setSavingProductId(product.id);
     setError('');
     try {
-      await onAdd(enhancedProduct, targetStackId);
+      await onAdd(enhanced, targetStackId);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Produkt konnte nicht gespeichert werden.');
@@ -216,9 +279,12 @@ function AddProductModal({
     }
   };
 
-  const dosePercent = dgeGuideline && dose.value
-    ? Math.round((dose.value / (dgeGuideline.dose_max ?? dgeGuideline.dose_min ?? dose.value)) * 100)
-    : null;
+  const dosePercent =
+    dgeGuideline && dose.value
+      ? Math.round(
+          (dose.value / (dgeGuideline.dose_max ?? dgeGuideline.dose_min ?? dose.value)) * 100,
+        )
+      : null;
   const modalWidthClass = step === 'products' ? 'max-w-xl' : 'max-w-3xl';
 
   return (
@@ -250,10 +316,7 @@ function AddProductModal({
               <h3 className="text-xl font-black sm:text-2xl">Wirkstoff suchen</h3>
             </div>
             <p className="mb-3 text-base font-black text-slate-700">Nach Wirkstoff suchen</p>
-            <SearchBar
-              onSelect={chooseIngredient}
-              placeholder="z.B. D3, Cobalamin, Magnesium..."
-            />
+            <SearchBar onSelect={chooseIngredient} placeholder="z.B. D3, Cobalamin, Magnesium..." />
             <p className="mt-3 text-sm font-semibold text-slate-500">
               Beginnen Sie zu tippen, um Wirkstoffe zu finden.
             </p>
@@ -286,7 +349,8 @@ function AddProductModal({
                   >
                     <p className="text-base font-black text-blue-700">DGE-Empfehlung</p>
                     <p className="mt-2 text-2xl font-black text-blue-600">
-                      {primaryDose(dgeGuideline)?.value ?? dose.value}{primaryDose(dgeGuideline)?.unit ?? dose.unit}
+                      {primaryDose(dgeGuideline)?.value ?? dose.value}
+                      {primaryDose(dgeGuideline)?.unit ?? dose.unit}
                     </p>
                     <span className="mt-4 flex justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-black text-white">
                       DGE verwenden
@@ -302,7 +366,8 @@ function AddProductModal({
                   >
                     <p className="text-base font-black text-violet-700">Studien-Empfehlung</p>
                     <p className="mt-2 text-2xl font-black text-violet-600">
-                      {primaryDose(studyGuideline)?.value ?? Math.max(dose.value * 2, dose.value)}{primaryDose(studyGuideline)?.unit ?? dose.unit}
+                      {primaryDose(studyGuideline)?.value ?? Math.max(dose.value * 2, dose.value)}
+                      {primaryDose(studyGuideline)?.unit ?? dose.unit}
                     </p>
                     <span className="mt-4 flex justify-center rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-black text-white">
                       Studien-Dosierung
@@ -387,7 +452,9 @@ function AddProductModal({
               )}
               {error && <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
               {!productsLoading && products.length === 0 && !error && (
-                <p className="py-10 text-center text-sm font-semibold text-slate-500">Keine Produkte für diesen Wirkstoff gefunden.</p>
+                <p className="py-10 text-center text-sm font-semibold text-slate-500">
+                  Keine Produkte für diesen Wirkstoff gefunden.
+                </p>
               )}
               <div className="grid gap-4">
                 {products.map((product) => (
@@ -395,23 +462,33 @@ function AddProductModal({
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <h4 className="text-xl font-black text-slate-950">{product.name}</h4>
-                        {product.brand && <p className="mt-1 text-base font-semibold text-slate-500">{product.brand}</p>}
-                        {product.form && <p className="mt-2 text-sm font-semibold text-slate-400">{product.form}</p>}
+                        {product.brand && (
+                          <p className="mt-1 text-base font-semibold text-slate-500">{product.brand}</p>
+                        )}
+                        {product.form && (
+                          <p className="mt-2 text-sm font-semibold text-slate-400">{product.form}</p>
+                        )}
                       </div>
                       <div className="shrink-0 text-right">
-                        <p className="text-xl font-black text-emerald-600">€{formatEuro(productMonthlyPrice(product))}</p>
+                        <p className="text-xl font-black text-emerald-600">
+                          €{formatEuro(productMonthlyPrice(product))}
+                        </p>
                         <p className="text-xs font-semibold text-slate-500">pro Monat</p>
                       </div>
                     </div>
                     <div className="mt-4 grid grid-cols-2 gap-3 rounded-2xl bg-slate-50 p-4">
                       <div>
                         <p className="text-sm font-semibold text-slate-500">Dosierung:</p>
-                        <p className="mt-1 text-base font-black text-slate-950">{product.dosage_text || `${dose.value || 1} ${dose.unit || 'Portion'}`}</p>
+                        <p className="mt-1 text-base font-black text-slate-950">
+                          {product.dosage_text || `${dose.value || 1} ${dose.unit || 'Portion'}`}
+                        </p>
                       </div>
                       <div>
                         <p className="text-sm font-semibold text-slate-500">Packung:</p>
                         <p className="mt-1 text-base font-black text-slate-950">
-                          {product.servings_per_container ? `${product.servings_per_container} Stück` : 'Nach Verbrauch'}
+                          {product.servings_per_container
+                            ? `${product.servings_per_container} Stück`
+                            : 'Nach Verbrauch'}
                         </p>
                       </div>
                     </div>
@@ -422,7 +499,9 @@ function AddProductModal({
                       </div>
                       <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3">
                         <p className="text-xs font-semibold text-emerald-700">Pro Monat</p>
-                        <p className="mt-1 text-lg font-black text-emerald-700">€{formatEuro(productMonthlyPrice(product))}</p>
+                        <p className="mt-1 text-lg font-black text-emerald-700">
+                          €{formatEuro(productMonthlyPrice(product))}
+                        </p>
                       </div>
                     </div>
                     <button
@@ -458,297 +537,92 @@ function AddProductModal({
 }
 
 // ---------------------------------------------------------------------------
-// Stack tabs
+// Icons used in toolbar
 // ---------------------------------------------------------------------------
 
-export function StackTabs({
-  stacks,
-  activeId,
-  onSwitch,
-  onCreate,
-  onDelete,
-  onRename,
-}: {
-  stacks: DemoStack[];
-  activeId: string;
-  onSwitch: (id: string) => void;
-  onCreate: () => void;
-  onDelete: (id: string) => void;
-  onRename: (id: string, name: string) => void;
-}) {
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const startEdit = (stack: DemoStack) => {
-    setEditingId(stack.id);
-    setEditValue(stack.name);
-    setTimeout(() => inputRef.current?.focus(), 50);
-  };
-
-  const commitEdit = () => {
-    if (editingId && editValue.trim()) {
-      onRename(editingId, editValue.trim());
-    }
-    setEditingId(null);
-  };
-
+function IconPlus() {
   return (
-    <div className="flex gap-2 overflow-x-auto rounded-2xl border border-slate-200 bg-white/80 p-2 shadow-sm">
-      {stacks.map((stack) => (
-        <div
-          key={stack.id}
-          className={`flex-shrink-0 flex items-center gap-1 transition-all cursor-pointer ${
-            stack.id === activeId
-              ? 'bg-gradient-to-r from-blue-600 to-violet-600 text-white rounded-xl px-4 py-2 text-sm font-black shadow-sm whitespace-nowrap'
-              : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50 rounded-xl px-4 py-2 text-sm font-bold transition-colors whitespace-nowrap'
-          }`}
-        >
-          {editingId === stack.id ? (
-            <input
-              ref={inputRef}
-              value={editValue}
-              onChange={(e) => setEditValue(e.target.value)}
-              onBlur={commitEdit}
-              onKeyDown={(e) => { if (e.key === 'Enter') commitEdit(); if (e.key === 'Escape') setEditingId(null); }}
-              className="w-44 bg-white/90 text-sm font-bold outline-none placeholder-white/60"
-            />
-          ) : (
-            <span
-              className="max-w-[180px] truncate text-sm font-black"
-              onClick={() => stack.id === activeId ? startEdit(stack) : onSwitch(stack.id)}
-              title={stack.id === activeId ? 'Klicken zum Umbenennen' : stack.name}
-            >
-              {stack.name}
-            </span>
-          )}
-          {stacks.length > 1 && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onDelete(stack.id); }}
-              className={`ml-0.5 rounded-full p-0.5 transition-colors ${stack.id === activeId ? 'hover:bg-white/20 text-white/70' : 'hover:bg-gray-200 text-gray-400'}`}
-              aria-label={`Stack "${stack.name}" löschen`}
-            >
-              <X size={12} />
-            </button>
-          )}
-        </div>
-      ))}
-      <button
-        onClick={onCreate}
-        className="flex-shrink-0 flex items-center gap-1 rounded-xl border-2 border-dashed border-slate-200 bg-white px-4 py-2 text-sm font-black text-slate-400 transition-colors hover:border-blue-300 hover:text-blue-600"
-        aria-label="Neuen Stack erstellen"
-      >
-        <Plus size={14} />
-        Neu
-      </button>
-    </div>
+    <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+      <path d="M6.5 1.5v10M1.5 6.5h10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+function IconStackPlus() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+      <rect x="1.5" y="1.5" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M4.5 6.5h4M6.5 4.5v4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+function IconPencil() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+      <path d="M9 2L11 4L4.5 10.5L2 11L2.5 8.5L9 2Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+      <path d="M8 3L10 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+function IconMail() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+      <path d="M2 3.5h9M2 6.5h9M2 9.5h5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+function IconTrash() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+      <polyline points="1.5,3.5 13.5,3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M5 3.5V2.5h5v1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M3 3.5l.8 9.5h7.4L12 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M6 6.5v4M9 6.5v4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  );
+}
+function IconInfoCircle() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 15 15" fill="none" style={{ flexShrink: 0, marginTop: 1 }}>
+      <circle cx="7.5" cy="7.5" r="6.5" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M7.5 5v4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <circle cx="7.5" cy="11" r="0.7" fill="currentColor" />
+    </svg>
+  );
+}
+function IconChevron() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+      <polyline points="2,4 6,8 10,4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Active stack view
+// StackWorkspace main
 // ---------------------------------------------------------------------------
 
-function StackView({
-  stack,
-  shopDomains,
-  onRemove,
-}: {
-  stack: DemoStack;
-  shopDomains: ShopDomain[];
-  onRemove: (productId: number) => void;
-}) {
-  const [showAll, setShowAll] = useState(false);
-  const [selectedProductIds, setSelectedProductIds] = useState<Set<number>>(new Set());
-  const PREVIEW_COUNT = 4;
-  const visibleProducts = showAll ? stack.products : stack.products.slice(0, PREVIEW_COUNT);
-  const hasMore = stack.products.length > PREVIEW_COUNT;
-  const selectedProducts = stack.products.filter((product) => selectedProductIds.has(product.id));
-  const totalOnce = selectedProducts.reduce((sum, product) => sum + (product.price ?? 0), 0);
-  const totalMonthly = selectedProducts.reduce((sum, product) => {
-    const totalServings = (product.servings_per_container ?? 0) * (product.container_count ?? 1);
-    return sum + (totalServings > 0 ? (product.price / totalServings) * 30 : product.price);
-  }, 0);
-
-  useEffect(() => {
-    setSelectedProductIds(new Set());
-  }, [stack.id]);
-
-  useEffect(() => {
-    setSelectedProductIds((prev) => new Set([...prev].filter((id) => stack.products.some((product) => product.id === id))));
-  }, [stack.products]);
-
-  if (stack.products.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center py-12 gap-2 text-center border-2 border-dashed border-gray-200 rounded-xl">
-        <Package size={32} className="text-gray-300" />
-        <p className="text-gray-500 text-sm">Noch leer — suche nach einem Wirkstoff und füge Produkte hinzu.</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex flex-col gap-5 pb-28">
-      {/* Masonry grid */}
-      <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {visibleProducts.map((product) => (
-          <div key={product.id} className="relative">
-            {/* Remove button overlay */}
-            <button
-              onClick={() => onRemove(product.id)}
-              className="absolute -right-1 -top-1 z-20 flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white/95 p-0 text-slate-400 shadow-sm transition-colors hover:text-red-500"
-              aria-label={`${product.name} entfernen`}
-            >
-              <Trash2 size={12} />
-            </button>
-            <ProductCard
-              product={product}
-              shopDomains={shopDomains}
-              selected={selectedProductIds.has(product.id)}
-              onToggleSelected={() =>
-                setSelectedProductIds((prev) => {
-                  const next = new Set(prev);
-                  if (next.has(product.id)) next.delete(product.id);
-                  else next.add(product.id);
-                  return next;
-                })
-              }
-              showWishlistButton={false}
-              showSelectButton={false}
-            />
-          </div>
-        ))}
-      </div>
-
-      {/* Show more/less */}
-      {hasMore && (
-        <button
-          onClick={() => setShowAll((v) => !v)}
-          className="flex items-center justify-center gap-1.5 text-sm text-indigo-500 hover:text-indigo-700 hover:bg-indigo-50 rounded-xl px-4 py-1.5 transition-colors"
-        >
-          {showAll ? <><ChevronUp size={14} /> Weniger anzeigen</> : <><ChevronDown size={14} /> {stack.products.length - PREVIEW_COUNT} weitere anzeigen</>}
-        </button>
-      )}
-
-      {/* Selection footer */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-blue-200 bg-white/95 px-4 py-4 shadow-[0_-16px_40px_rgba(15,23,42,0.10)] backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="text-lg font-black text-slate-900">Gewählte Supplements</p>
-            <p className="text-sm text-slate-500">
-              {selectedProductIds.size} von {stack.products.length} ausgewählt
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-5">
-            <div className="text-right">
-              <p className="text-sm text-slate-500">Einmalkosten</p>
-              <p className="text-2xl font-black text-blue-600">{totalOnce.toFixed(2)} €</p>
-            </div>
-            <div className="text-right">
-              <p className="text-sm text-slate-500">Pro Monat</p>
-              <p className="text-2xl font-black text-emerald-600">{totalMonthly.toFixed(2)} €</p>
-            </div>
-            <button
-              onClick={() => {
-                if (selectedProductIds.size === stack.products.length) setSelectedProductIds(new Set());
-                else setSelectedProductIds(new Set(stack.products.map((product) => product.id)));
-              }}
-              className="rounded-xl bg-violet-600 px-8 py-3 text-sm font-black text-white shadow-lg shadow-violet-600/20 hover:bg-violet-700"
-            >
-              {selectedProductIds.size === stack.products.length ? 'Alle abwählen' : 'Alle auswählen'}
-            </button>
-          </div>
-        </div>
-      </div>
-
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// StackNameEditor — inline rename widget for the stack header
-// ---------------------------------------------------------------------------
-
-function StackNameEditor({
-  name,
-  onRename,
-}: {
-  name: string;
-  onRename: (newName: string) => void;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState(name);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  // Keep value in sync when name changes externally (e.g. after save)
-  useEffect(() => {
-    if (!editing) setValue(name);
-  }, [name, editing]);
-
-  const startEdit = () => {
-    setValue(name);
-    setEditing(true);
-    setTimeout(() => inputRef.current?.focus(), 30);
-  };
-
-  const commit = () => {
-    const trimmed = value.trim();
-    if (trimmed && trimmed !== name) {
-      onRename(trimmed);
-    }
-    setEditing(false);
-  };
-
-  if (editing) {
-    return (
-      <input
-        ref={inputRef}
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') commit();
-          if (e.key === 'Escape') setEditing(false);
-        }}
-        className="rounded-lg border border-blue-300 bg-white px-3 py-1.5 text-3xl font-black tracking-tight text-slate-950 outline-none ring-4 ring-blue-100 focus:border-blue-500"
-        style={{ minWidth: '12rem' }}
-        aria-label="Stack umbenennen"
-      />
-    );
-  }
-
-  return (
-    <div className="flex items-center gap-2">
-      <h2 className="mb-0 text-3xl font-black tracking-tight text-slate-950">{name}</h2>
-      <button
-        type="button"
-        onClick={startEdit}
-        className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
-        aria-label={`Stack "${name}" umbenennen`}
-      >
-        <Pencil size={16} />
-      </button>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// StackWorkspace — main exported component
-// ---------------------------------------------------------------------------
+const HEADER_VARIANT: StacksHeaderVariant = 'warm';
 
 export function StackWorkspace({ mode = 'demo', token = null }: StackWorkspaceProps) {
   const [state, setState] = useState<DemoState>(createDefaultState);
+  const [descriptions, setDescriptions] = useState<Record<string, string>>(() => loadDescriptions());
   const [addModalOpen, setAddModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
   const [shopDomains, setShopDomains] = useState<ShopDomain[]>([]);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(mode === 'authenticated');
   const [error, setError] = useState('');
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
 
-  // Fetch shop domains once
+  const isDemo = mode === 'demo';
+
+  // Fetch shop domains
   useEffect(() => {
     fetch(apiPath('/shop-domains'))
-      .then((r) => r.ok ? r.json() : { shops: [] })
+      .then((r) => (r.ok ? r.json() : { shops: [] }))
       .then((data) => setShopDomains(data.shops ?? []))
-      .catch(() => { /* non-critical */ });
+      .catch(() => { /* ignore */ });
   }, []);
 
   const loadAuthenticatedStacks = useCallback(async () => {
@@ -772,15 +646,19 @@ export function StackWorkspace({ mode = 'demo', token = null }: StackWorkspacePr
         setState({ stacks: [mapStackDetail(createdStack)], activeStackId: String(createdStack.id) });
         return;
       }
-      const detailed = await Promise.all(stackList.map(async (stack) => {
-        const detailRes = await fetch(apiPath(`/stacks/${stack.id}`), { headers: authHeaders(token) });
-        if (!detailRes.ok) return mapStackDetail(stack);
-        const detail = await detailRes.json();
-        return mapStackDetail(stack, detail);
-      }));
+      const detailed = await Promise.all(
+        stackList.map(async (stack) => {
+          const detailRes = await fetch(apiPath(`/stacks/${stack.id}`), {
+            headers: authHeaders(token),
+          });
+          if (!detailRes.ok) return mapStackDetail(stack);
+          const detail = await detailRes.json();
+          return mapStackDetail(stack, detail);
+        }),
+      );
       setState((prev) => ({
         stacks: detailed,
-        activeStackId: detailed.some((stack) => stack.id === prev.activeStackId)
+        activeStackId: detailed.some((s) => s.id === prev.activeStackId)
           ? prev.activeStackId
           : detailed[0].id,
       }));
@@ -799,38 +677,55 @@ export function StackWorkspace({ mode = 'demo', token = null }: StackWorkspacePr
 
     const fresh = createDefaultState();
     fetch(apiPath('/demo/products'))
-      .then((res) => res.ok ? res.json() : { products: [] })
+      .then((res) => (res.ok ? res.json() : { products: [] }))
       .then((data) => {
-        const products = ((data.products ?? []) as DemoProduct[]).slice(0, 3);
-        setState({ stacks: [{ ...fresh.stacks[0], products }], activeStackId: fresh.activeStackId });
+        const products = ((data.products ?? []) as DemoProduct[]).slice(0, 6);
+        setState({
+          stacks: [{ ...fresh.stacks[0], products }],
+          activeStackId: fresh.activeStackId,
+        });
       })
       .catch(() => setState(fresh));
   }, [loadAuthenticatedStacks, mode]);
 
   const activeStack = state.stacks.find((s) => s.id === state.activeStackId) ?? state.stacks[0];
-  const isDemo = mode === 'demo';
 
-  const persistStackProducts = useCallback(async (stackId: string, products: DemoProduct[], name?: string) => {
-    if (mode !== 'authenticated' || !token) return;
-    const payload: {
-      name?: string;
-      product_ids: Array<{ id: number; quantity: number; dosage_text?: string; timing?: string }>;
-    } = {
-      ...(name ? { name } : {}),
-      product_ids: products.map((product) => ({
-        id: product.id,
-        quantity: product.quantity ?? 1,
-        dosage_text: product.dosage_text,
-        timing: product.timing,
-      })),
-    };
-    const res = await fetch(apiPath(`/stacks/${stackId}`), {
-      method: 'PUT',
-      headers: authHeaders(token),
-      body: JSON.stringify(payload),
+  // Reset selection when active stack changes
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [state.activeStackId]);
+
+  // Keep selection in sync if products change
+  useEffect(() => {
+    if (!activeStack) return;
+    setSelectedIds((prev) => {
+      const valid = new Set([...prev].filter((id) => activeStack.products.some((p) => p.id === id)));
+      if (valid.size === prev.size) return prev;
+      return valid;
     });
-    if (!res.ok) throw new Error('Stack konnte nicht gespeichert werden.');
-  }, [mode, token]);
+  }, [activeStack]);
+
+  const persistStackProducts = useCallback(
+    async (stackId: string, products: DemoProduct[], name?: string) => {
+      if (mode !== 'authenticated' || !token) return;
+      const payload = {
+        ...(name ? { name } : {}),
+        product_ids: products.map((product) => ({
+          id: product.id,
+          quantity: product.quantity ?? 1,
+          dosage_text: product.dosage_text,
+          timing: product.timing,
+        })),
+      };
+      const res = await fetch(apiPath(`/stacks/${stackId}`), {
+        method: 'PUT',
+        headers: authHeaders(token),
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error('Stack konnte nicht gespeichert werden.');
+    },
+    [mode, token],
+  );
 
   // ---- Stack management ----
 
@@ -864,264 +759,420 @@ export function StackWorkspace({ mode = 'demo', token = null }: StackWorkspacePr
     }));
   }, [mode, state.stacks.length, token]);
 
-  const handleSwitchStack = useCallback((id: string) => {
-    setState((prev) => ({ ...prev, activeStackId: id }));
-  }, []);
-
-  const handleDeleteStack = useCallback(async (id: string) => {
-    if (state.stacks.length <= 1) {
-      if (isDemo) {
-        demoRestrictedNotice();
-      } else {
-        setError('Der letzte Stack kann nicht geloescht werden.');
-      }
-      return;
-    }
-    if (mode === 'authenticated' && token) {
-      try {
-        const res = await fetch(apiPath(`/stacks/${id}`), {
-          method: 'DELETE',
-          headers: authHeaders(token),
-        });
-        if (!res.ok) throw new Error('Stack konnte nicht geloescht werden.');
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Stack konnte nicht geloescht werden.');
+  const handleDeleteStack = useCallback(
+    async (id: string) => {
+      if (state.stacks.length <= 1) {
+        if (isDemo) demoRestrictedNotice();
+        else setError('Der letzte Stack kann nicht gelöscht werden.');
         return;
       }
-    }
-    setState((prev) => {
-      const remaining = prev.stacks.filter((s) => s.id !== id);
-      const newActive = prev.activeStackId === id
-        ? remaining[remaining.length - 1].id
-        : prev.activeStackId;
-      return { stacks: remaining, activeStackId: newActive };
-    });
-  }, [isDemo, mode, state.stacks.length, token]);
-
-  const handleRenameStack = useCallback(async (id: string, name: string) => {
-    const stack = state.stacks.find((s) => s.id === id);
-    if (!stack) return;
-    if (mode === 'authenticated' && token) {
-      try {
-        await persistStackProducts(id, stack.products, name);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Name konnte nicht gespeichert werden.');
-        return;
+      const stack = state.stacks.find((s) => s.id === id);
+      if (!stack) return;
+      if (!window.confirm(`Stack "${stack.name}" wirklich löschen?`)) return;
+      if (mode === 'authenticated' && token) {
+        try {
+          const res = await fetch(apiPath(`/stacks/${id}`), {
+            method: 'DELETE',
+            headers: authHeaders(token),
+          });
+          if (!res.ok) throw new Error('Stack konnte nicht gelöscht werden.');
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Stack konnte nicht gelöscht werden.');
+          return;
+        }
       }
-    }
-    setState((prev) => ({
-      ...prev,
-      stacks: prev.stacks.map((s) => s.id === id ? { ...s, name } : s),
-    }));
-  }, [mode, persistStackProducts, state.stacks, token]);
+      setState((prev) => {
+        const remaining = prev.stacks.filter((s) => s.id !== id);
+        const newActive =
+          prev.activeStackId === id ? remaining[remaining.length - 1].id : prev.activeStackId;
+        return { stacks: remaining, activeStackId: newActive };
+      });
+      // Clean up description
+      setDescriptions((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        saveDescription(id, '');
+        return next;
+      });
+    },
+    [isDemo, mode, state.stacks, token],
+  );
+
+  const handleSaveStackMeta = useCallback(
+    async (newName: string, newDescription: string) => {
+      if (!activeStack) return;
+      const prevName = activeStack.name;
+      if (mode === 'authenticated' && token && newName !== prevName) {
+        await persistStackProducts(activeStack.id, activeStack.products, newName);
+      }
+      setState((prev) => ({
+        ...prev,
+        stacks: prev.stacks.map((s) => (s.id === activeStack.id ? { ...s, name: newName } : s)),
+      }));
+      setDescriptions((prev) => {
+        const next = { ...prev, [activeStack.id]: newDescription };
+        saveDescription(activeStack.id, newDescription);
+        return next;
+      });
+      setEditModalOpen(false);
+    },
+    [activeStack, mode, persistStackProducts, token],
+  );
 
   // ---- Product management ----
 
-  const handleAddProduct = useCallback(async (product: DemoProduct, stackId?: string) => {
-    const targetStackId = stackId ?? state.activeStackId;
-    const targetStack = state.stacks.find((s) => s.id === targetStackId);
-    if (!targetStack || targetStack.products.some((p) => p.id === product.id)) return;
-    const nextProducts = [...targetStack.products, product];
-    if (mode === 'authenticated' && token) {
-      try {
-        await persistStackProducts(targetStackId, nextProducts);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Produkt konnte nicht gespeichert werden.');
-        void loadAuthenticatedStacks();
-        throw err;
+  const handleAddProduct = useCallback(
+    async (product: DemoProduct, stackId?: string) => {
+      const targetStackId = stackId ?? state.activeStackId;
+      const targetStack = state.stacks.find((s) => s.id === targetStackId);
+      if (!targetStack || targetStack.products.some((p) => p.id === product.id)) return;
+      const nextProducts = [...targetStack.products, product];
+      if (mode === 'authenticated' && token) {
+        try {
+          await persistStackProducts(targetStackId, nextProducts);
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Produkt konnte nicht gespeichert werden.');
+          void loadAuthenticatedStacks();
+          throw err;
+        }
       }
-    }
-    setState((prev) => ({
-      ...prev,
-      stacks: prev.stacks.map((s) =>
-        s.id === targetStackId
-          ? { ...s, products: nextProducts }
-          : s
-      ),
-    }));
-  }, [loadAuthenticatedStacks, mode, persistStackProducts, state.activeStackId, state.stacks, token]);
+      setState((prev) => ({
+        ...prev,
+        stacks: prev.stacks.map((s) =>
+          s.id === targetStackId ? { ...s, products: nextProducts } : s,
+        ),
+      }));
+    },
+    [loadAuthenticatedStacks, mode, persistStackProducts, state.activeStackId, state.stacks, token],
+  );
 
-  const handleRemoveProduct = useCallback(async (productId: number) => {
-    const targetStack = activeStack;
-    if (!targetStack) return;
-    const nextProducts = targetStack.products.filter((p) => p.id !== productId);
-    if (mode === 'authenticated' && token) {
-      try {
-        await persistStackProducts(targetStack.id, nextProducts);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Produkt konnte nicht entfernt werden.');
-        void loadAuthenticatedStacks();
-        throw err;
+  const handleRemoveProduct = useCallback(
+    async (productId: number) => {
+      if (!activeStack) return;
+      const nextProducts = activeStack.products.filter((p) => p.id !== productId);
+      if (mode === 'authenticated' && token) {
+        try {
+          await persistStackProducts(activeStack.id, nextProducts);
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Produkt konnte nicht entfernt werden.');
+          void loadAuthenticatedStacks();
+          return;
+        }
       }
-    }
-    setState((prev) => ({
-      ...prev,
-      stacks: prev.stacks.map((s) =>
-        s.id === prev.activeStackId
-          ? { ...s, products: nextProducts }
-          : s
-      ),
-    }));
-  }, [activeStack, loadAuthenticatedStacks, mode, persistStackProducts, token]);
+      setState((prev) => ({
+        ...prev,
+        stacks: prev.stacks.map((s) =>
+          s.id === prev.activeStackId ? { ...s, products: nextProducts } : s,
+        ),
+      }));
+    },
+    [activeStack, loadAuthenticatedStacks, mode, persistStackProducts, token],
+  );
 
-  // ---- Reset ----
+  // ---- Selection / totals ----
 
-  const handleReset = () => {
-    if (!window.confirm('Demo zurücksetzen? Alle Stacks und Produkte werden gelöscht.')) return;
-    const fresh = createDefaultState();
-    setState(fresh);
+  const toggleSelected = (id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
 
+  const selectedProducts = useMemo(
+    () => (activeStack?.products.filter((p) => selectedIds.has(p.id)) ?? []),
+    [activeStack, selectedIds],
+  );
+  const totalOnce = selectedProducts.reduce((sum, p) => sum + (p.price ?? 0), 0);
+  const totalMonthly = selectedProducts.reduce((sum, p) => sum + productMonthlyPrice(p), 0);
+  const productsCount = activeStack?.products.length ?? 0;
+  const allSelected = productsCount > 0 && selectedIds.size === productsCount;
+
+  const handleSelectAll = () => {
+    if (!activeStack) return;
+    setSelectedIds((prev) =>
+      prev.size === activeStack.products.length
+        ? new Set()
+        : new Set(activeStack.products.map((p) => p.id)),
+    );
+  };
+
+  // ---- Category grouping ----
+
+  const groupedProducts = useMemo(() => {
+    if (!activeStack) return [] as Array<[CategoryKey, DemoProduct[]]>;
+    const groups = new Map<CategoryKey, DemoProduct[]>();
+    for (const p of activeStack.products) {
+      const cat = categorize(p);
+      if (!groups.has(cat)) groups.set(cat, []);
+      groups.get(cat)!.push(p);
+    }
+    return [...groups.entries()].sort((a, b) => CATEGORY_META[a[0]].order - CATEGORY_META[b[0]].order);
+  }, [activeStack]);
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
+
+  const activeDescription = activeStack ? descriptions[activeStack.id] ?? '' : '';
+
+  const rightSlot = isDemo ? (
+    <>
+      <span className="header-email">Demo-Modus — nicht angemeldet</span>
+      <Link
+        to="/register"
+        className="btn-logout"
+        style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
+      >
+        Registrieren
+      </Link>
+    </>
+  ) : (
+    <>
+      <span className="header-email">{user?.email ?? ''}</span>
+      <button className="btn-logout" onClick={handleLogout}>
+        Abmelden
+      </button>
+    </>
+  );
+
   return (
-    <div className="min-h-screen">
-      <div className="flex flex-col gap-8 pb-10">
-        <div className="text-center">
-          <div className="inline-flex items-center justify-center gap-4">
-            <FlaskConical size={42} className="text-blue-600" />
-            <h1 className="text-4xl font-black tracking-tight text-slate-950 md:text-5xl">
-              {isDemo ? 'Demo - Supplement Stack' : 'Meine Supplement Stacks'}
-            </h1>
-          </div>
-          <p className="mt-3 text-xl font-semibold text-slate-500">
+    <>
+      <StacksHeader
+        variant={HEADER_VARIANT}
+        title={isDemo ? 'Demo – Supplement Stack' : 'Meine Supplement Stacks'}
+        subtitle={
+          isDemo
+            ? 'Teste die komplette Oberfläche. Änderungen werden nach dem Neuladen zurückgesetzt.'
+            : 'Verwalte deine Supplements dauerhaft mit derselben Oberfläche wie in der Demo.'
+        }
+        rightSlot={rightSlot}
+      />
+
+      <main className="ss-page">
+        <div className={`info-banner${isDemo ? ' info-banner-demo' : ''}`}>
+          <IconInfoCircle />
+          <strong>{isDemo ? 'Interaktive Demo:' : 'Gespeicherte Verwaltung:'}</strong>
+          &nbsp;
+          <span>
             {isDemo
-              ? 'Teste den kompletten Ablauf mit einem Demo-Stack.'
-              : 'Verwalte deine Supplements dauerhaft mit derselben Oberflaeche wie in der Demo.'}
-          </p>
-          <div className={`mx-auto mt-6 flex max-w-4xl items-start justify-center gap-3 rounded-xl border px-6 py-4 ${
-            isDemo ? 'border-blue-200 bg-blue-50 text-blue-900' : 'border-emerald-200 bg-emerald-50 text-emerald-900'
-          }`}>
-            <Info size={18} className="mt-1 flex-shrink-0" />
-            <p className="text-sm font-semibold leading-relaxed">
-              {isDemo ? (
-                <>
-                  <span className="font-black">Interaktive Demo:</span> Produkt-Auswahl, Dosierung und Kostenrechnung sind nutzbar.
-                  Nach dem Neuladen startet wieder der Demo-Stack; echte Datenbank-Aenderungen sind der Vollversion vorbehalten.
-                </>
-              ) : (
-                <>
-                  <span className="font-black">Gespeicherte Verwaltung:</span> Diese Ansicht nutzt dieselbe Oberflaeche wie die Demo
-                  und speichert Aenderungen dauerhaft in deinem Account.
-                </>
-              )}
+              ? 'Alles nutzbar — nach dem Neuladen startet wieder der Demo-Stack. Registriere dich, um Änderungen dauerhaft zu speichern.'
+              : 'Diese Ansicht nutzt dieselbe Oberfläche wie die Demo und speichert Änderungen dauerhaft in deinem Account.'}
+          </span>
+        </div>
+
+        {error && (
+          <div
+            style={{
+              marginBottom: 20,
+              padding: '10px 16px',
+              borderRadius: 10,
+              background: '#fef2f2',
+              border: '1px solid #fecaca',
+              color: '#b91c1c',
+              fontSize: 13,
+              fontWeight: 600,
+            }}
+          >
+            {error}
+          </div>
+        )}
+
+        <div className="ss-toolbar">
+          <div className="stack-select-wrap">
+            <select
+              className="stack-select"
+              value={state.activeStackId}
+              onChange={(e) =>
+                setState((prev) => ({ ...prev, activeStackId: e.target.value }))
+              }
+            >
+              {state.stacks.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name} ({s.products.length} Produkte)
+                </option>
+              ))}
+            </select>
+            <span className="stack-select-arrow">
+              <IconChevron />
+            </span>
+          </div>
+
+          <button className="ss-btn ss-btn-green" onClick={() => setAddModalOpen(true)}>
+            <IconPlus />
+            Produkt hinzufügen
+          </button>
+
+          <button className="ss-btn ss-btn-indigo" onClick={() => void handleCreateStack()}>
+            <IconStackPlus />
+            Stack erstellen
+          </button>
+
+          <button
+            className="ss-btn ss-btn-outline"
+            onClick={() => setEditModalOpen(true)}
+            disabled={!activeStack}
+          >
+            <IconPencil />
+            Stack bearbeiten
+          </button>
+
+          <button
+            className="ss-btn ss-btn-outline"
+            onClick={() =>
+              isDemo
+                ? demoRestrictedNotice()
+                : window.alert('Stack-Mailversand folgt im nächsten Release.')
+            }
+          >
+            <IconMail />
+            Stack mailen
+          </button>
+
+          <button
+            className="ss-btn ss-btn-red-soft"
+            onClick={() => void handleDeleteStack(state.activeStackId)}
+          >
+            <IconTrash />
+            Stack löschen
+          </button>
+        </div>
+
+        {activeDescription && (
+          <div
+            style={{
+              marginBottom: 20,
+              padding: '10px 16px',
+              background: '#f5f3ff',
+              border: '1px solid #ddd6fe',
+              borderRadius: 10,
+              fontSize: 13,
+              color: '#5b21b6',
+              fontWeight: 500,
+            }}
+          >
+            {activeDescription}
+          </div>
+        )}
+
+        <div className="ss-section-title">
+          <span>🚀</span>
+          <span>Supplement Übersicht</span>
+        </div>
+
+        {loading && (
+          <div style={{ padding: 40, textAlign: 'center' }}>
+            <div
+              className="animate-spin"
+              style={{
+                display: 'inline-block',
+                width: 36,
+                height: 36,
+                border: '4px solid #c7d2fe',
+                borderTopColor: '#6366f1',
+                borderRadius: '50%',
+              }}
+            />
+          </div>
+        )}
+
+        {!loading && productsCount === 0 && (
+          <div
+            style={{
+              padding: '48px 24px',
+              textAlign: 'center',
+              borderRadius: 14,
+              border: '2px dashed #e0e4f0',
+              background: '#fff',
+              color: '#6b7280',
+            }}
+          >
+            <Package size={32} style={{ margin: '0 auto 10px', color: '#c7d2fe' }} />
+            <p style={{ fontSize: 14, fontWeight: 600 }}>
+              Noch leer — klicke auf „Produkt hinzufügen", um zu starten.
             </p>
           </div>
-        </div>
+        )}
 
-        <div className="flex flex-col gap-6">
-          {loading && (
-            <div className="flex items-center justify-center rounded-2xl bg-white p-10 shadow-sm">
-              <div className="h-9 w-9 animate-spin rounded-full border-4 border-blue-500 border-t-transparent" />
-            </div>
-          )}
-
-          {error && (
-            <div className="rounded-2xl border border-red-100 bg-red-50 px-5 py-4 text-sm font-bold text-red-700">
-              {error}
-            </div>
-          )}
-
-          <div className="rounded-2xl bg-white p-5 shadow-[0_16px_40px_rgba(15,23,42,0.08)]">
-            <label className="mb-3 block text-sm font-black text-slate-700">Stack auswählen:</label>
-            <div className="grid gap-3 lg:grid-cols-[1fr_auto_auto_auto_auto]">
-              <select
-                value={state.activeStackId}
-                onChange={(event) => handleSwitchStack(event.target.value)}
-                className="w-full rounded-lg border border-blue-300 bg-white px-4 py-3 text-base font-semibold text-slate-950 focus:border-blue-500 focus:outline-none focus:ring-4 focus:ring-blue-100"
-              >
-                {state.stacks.map((stack) => (
-                  <option key={stack.id} value={stack.id}>
-                    {stack.name} ({stack.products.length} Produkte)
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={() => setAddModalOpen(true)}
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-emerald-600/20 hover:bg-emerald-700"
-              >
-                <Plus size={18} />
-                Produkt hinzufügen
-              </button>
-              <button
-                onClick={() => void handleCreateStack()}
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-violet-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-violet-600/20 hover:bg-violet-700"
-              >
-                <Plus size={18} />
-                Stack erstellen
-              </button>
-              <button
-                onClick={isDemo ? demoRestrictedNotice : () => window.alert('Mail-Versand bauen wir als naechsten Vollversions-Schritt ein.')}
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-5 py-3 text-sm font-black text-white shadow-lg shadow-slate-900/10 hover:bg-slate-800"
-              >
-                <Mail size={17} />
-                Stack mailen
-              </button>
-              <button
-                onClick={() => void handleDeleteStack(state.activeStackId)}
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-red-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-red-600/20 hover:bg-red-700"
-              >
-                <Trash2 size={17} />
-                Stack löschen
-              </button>
-            </div>
-          </div>
-
-          {/* Active stack */}
-          {activeStack && (
-            <section className="rounded-2xl bg-white p-5 shadow-[0_16px_40px_rgba(15,23,42,0.08)] sm:p-7">
-              <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
-                    <Layers size={24} />
-                  </span>
-                  {isDemo ? (
-                    <h2 className="mb-0 text-3xl font-black tracking-tight text-slate-950">
-                      Ihr Demo Stack
-                    </h2>
-                  ) : (
-                    <StackNameEditor
-                      name={activeStack.name}
-                      onRename={(newName) => void handleRenameStack(activeStack.id, newName)}
-                    />
-                  )}
-                </div>
-                <span className="inline-flex items-center gap-2 rounded-full bg-blue-100 px-4 py-2 text-sm font-black text-blue-700">
-                  <Package size={17} />
-                  {activeStack.products.length} Produkte im Stack
+        {groupedProducts.map(([cat, items]) => {
+          const meta = CATEGORY_META[cat];
+          return (
+            <div key={cat} className="category-group">
+              <div className="category-header">
+                <span className={`category-label ${meta.cls}`}>
+                  <span>{CATEGORY_ICONS[cat]}</span>
+                  <span>{meta.label}</span>
                 </span>
               </div>
-              <StackView
-                stack={activeStack}
-                shopDomains={shopDomains}
-                onRemove={handleRemoveProduct}
-              />
-            </section>
-          )}
+              <div className="masonry-grid">
+                {items.map((p) => (
+                  <div key={p.id} className="masonry-item">
+                    <ProductCard
+                      product={p}
+                      shopDomains={shopDomains}
+                      selected={selectedIds.has(p.id)}
+                      onToggleSelected={() => toggleSelected(p.id)}
+                      onDelete={() => void handleRemoveProduct(p.id)}
+                      showWishlistButton={false}
+                      showSelectButton={false}
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </main>
 
-          {/* Register CTA (bottom) */}
-          {isDemo && (
-          <div className="rounded-2xl border border-blue-100 bg-gradient-to-r from-blue-50 to-violet-50 p-8 text-center shadow-sm">
-            <p className="text-2xl font-black text-slate-950">Gefällt Ihnen die Demo?</p>
-            <p className="mt-2 text-slate-600">Registrieren Sie sich, um Ihre Stacks dauerhaft zu speichern.</p>
-            <Link
-              to="/register"
-              className="mt-5 inline-flex items-center gap-2 rounded-xl bg-blue-600 px-8 py-3 text-base font-black text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700"
-            >
-              Kostenlos registrieren
-            </Link>
+      {/* Bottom bar */}
+      <div className="bottom-bar">
+        <div>
+          <div className="bb-title">Gewählte Supplements</div>
+          <div className="bb-sub">
+            {selectedIds.size} von {productsCount} ausgewählt
           </div>
-          )}
         </div>
-
-        {addModalOpen && (
-          <AddProductModal
-            stacks={state.stacks}
-            activeStackId={state.activeStackId}
-            onAdd={handleAddProduct}
-            onClose={() => setAddModalOpen(false)}
-          />
-        )}
+        <div className="bb-prices">
+          <div className="bb-price-block">
+            <div className="bb-price-label">Einmalkosten</div>
+            <div className="bb-price-value">{formatEuro(totalOnce)} €</div>
+          </div>
+          <div className="bb-divider" />
+          <div className="bb-price-block">
+            <div className="bb-price-label">Pro Monat</div>
+            <div className="bb-price-value">{formatEuro(totalMonthly)} €</div>
+          </div>
+          <button
+            className="btn-select-all"
+            onClick={handleSelectAll}
+            disabled={productsCount === 0}
+            style={productsCount === 0 ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
+          >
+            {allSelected ? 'Auswahl aufheben' : 'Alle auswählen'}
+          </button>
+        </div>
       </div>
-    </div>
+
+      {addModalOpen && (
+        <AddProductModal
+          stacks={state.stacks}
+          activeStackId={state.activeStackId}
+          onAdd={handleAddProduct}
+          onClose={() => setAddModalOpen(false)}
+        />
+      )}
+
+      {editModalOpen && activeStack && (
+        <EditStackModal
+          initialName={activeStack.name}
+          initialDescription={activeDescription}
+          onSave={(n, d) => handleSaveStackMeta(n, d)}
+          onClose={() => setEditModalOpen(false)}
+        />
+      )}
+    </>
   );
 }
 
