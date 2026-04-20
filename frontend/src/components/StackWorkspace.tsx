@@ -12,6 +12,7 @@ import {
   Layers,
   Mail,
   Package,
+  Pencil,
   Plus,
   Search,
   Trash2,
@@ -589,7 +590,7 @@ function StackView({
   return (
     <div className="flex flex-col gap-5 pb-28">
       {/* Masonry grid */}
-      <div className="grid grid-cols-1 items-start gap-5 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+      <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2 lg:grid-cols-3">
         {visibleProducts.map((product) => (
           <div key={product.id} className="relative">
             {/* Remove button overlay */}
@@ -660,6 +661,73 @@ function StackView({
         </div>
       </div>
 
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// StackNameEditor — inline rename widget for the stack header
+// ---------------------------------------------------------------------------
+
+function StackNameEditor({
+  name,
+  onRename,
+}: {
+  name: string;
+  onRename: (newName: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(name);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Keep value in sync when name changes externally (e.g. after save)
+  useEffect(() => {
+    if (!editing) setValue(name);
+  }, [name, editing]);
+
+  const startEdit = () => {
+    setValue(name);
+    setEditing(true);
+    setTimeout(() => inputRef.current?.focus(), 30);
+  };
+
+  const commit = () => {
+    const trimmed = value.trim();
+    if (trimmed && trimmed !== name) {
+      onRename(trimmed);
+    }
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') commit();
+          if (e.key === 'Escape') setEditing(false);
+        }}
+        className="rounded-lg border border-blue-300 bg-white px-3 py-1.5 text-3xl font-black tracking-tight text-slate-950 outline-none ring-4 ring-blue-100 focus:border-blue-500"
+        style={{ minWidth: '12rem' }}
+        aria-label="Stack umbenennen"
+      />
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <h2 className="mb-0 text-3xl font-black tracking-tight text-slate-950">{name}</h2>
+      <button
+        type="button"
+        onClick={startEdit}
+        className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+        aria-label={`Stack "${name}" umbenennen`}
+      >
+        <Pencil size={16} />
+      </button>
     </div>
   );
 }
@@ -1005,9 +1073,16 @@ export function StackWorkspace({ mode = 'demo', token = null }: StackWorkspacePr
                   <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
                     <Layers size={24} />
                   </span>
-                  <h2 className="mb-0 text-3xl font-black tracking-tight text-slate-950">
-                    {isDemo ? 'Ihr Demo Stack' : activeStack.name}
-                  </h2>
+                  {isDemo ? (
+                    <h2 className="mb-0 text-3xl font-black tracking-tight text-slate-950">
+                      Ihr Demo Stack
+                    </h2>
+                  ) : (
+                    <StackNameEditor
+                      name={activeStack.name}
+                      onRename={(newName) => void handleRenameStack(activeStack.id, newName)}
+                    />
+                  )}
                 </div>
                 <span className="inline-flex items-center gap-2 rounded-full bg-blue-100 px-4 py-2 text-sm font-black text-blue-700">
                   <Package size={17} />

@@ -1,5 +1,5 @@
-import { AlertTriangle, Check, ExternalLink, Package, RefreshCcw } from 'lucide-react';
-import { ShopDomain } from '../types/local';
+import { AlertTriangle, ExternalLink, RefreshCcw } from 'lucide-react';
+import type { ShopDomain } from '../types/local';
 
 interface ProductCardProduct {
   id: number;
@@ -29,6 +29,7 @@ interface ProductCardProduct {
   warning_message?: string;
   warning_type?: string;
   alternative_note?: string;
+  ingredient_category?: string;
 }
 
 interface ProductWarning {
@@ -58,50 +59,115 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
-function calcMonthlyPrice(price: number, servingsPerContainer?: number, containerCount?: number): number | null {
+function calcMonthlyPrice(
+  price: number,
+  servingsPerContainer?: number,
+  containerCount?: number,
+): number | null {
   const total = (servingsPerContainer ?? 0) * (containerCount ?? 1);
   if (total <= 0) return null;
   return (price / total) * 30;
 }
 
-function getDaysSupply(servingsPerContainer?: number, containerCount?: number, portionsPerDay = 1): number | null {
+function getDaysSupply(
+  servingsPerContainer?: number,
+  containerCount?: number,
+  portionsPerDay = 1,
+): number | null {
   const total = (servingsPerContainer ?? 0) * (containerCount ?? 1);
   if (total <= 0) return null;
   return Math.round(total / Math.max(portionsPerDay, 0.001));
 }
 
-function getTiming(product: ProductCardProduct): string {
-  if (product.timing) return product.timing;
-  const text = `${product.name} ${product.form ?? ''}`.toLowerCase();
-  if (text.includes('b12')) return 'Morgens nuechtern';
-  if (text.includes('jod')) return 'Nach dem Aufstehen';
-  if (text.includes('carnitin')) return 'Morgens oder vor dem Training';
-  if (text.includes('creatin') || text.includes('kreatin')) return 'Morgens & Abends';
-  return 'Zum Frühstück';
-}
-
-function getEffect(product: ProductCardProduct): string {
-  if (product.effect_summary) return product.effect_summary;
-  const text = `${product.name} ${product.form ?? ''}`.toLowerCase();
-  if (text.includes('magnesium')) return 'Muskel- & Nervenfunktion, Entspannung';
-  if (text.includes('b12')) return 'Energie, Nerven, Blutbildung, DNA-Synthese';
-  if (text.includes('jod')) return 'Schilddruese, Hormone, Stoffwechsel';
-  if (text.includes('q10')) return 'Zellenergie, Herzfunktion, antioxidativer Schutz';
-  if (text.includes('creatin') || text.includes('kreatin')) return 'Explosivkraft, ATP-Resynthese, Regeneration';
-  if (text.includes('kollagen')) return 'Haut, Haare, Gelenke, Bindegewebe';
-  if (text.includes('grapefruit')) return 'Antimikrobiell, antiviral, Darmreinigung';
-  return product.form ? `${product.form} Supplement` : 'Allgemeine Versorgung';
-}
-
 function getDose(product: ProductCardProduct): string {
   if (product.dosage_text) return product.dosage_text;
   if (product.quantity && product.unit) {
-    return `1 Portion taeglich (${product.quantity}${product.unit})`;
+    return `${product.quantity} ${product.unit}`;
   }
   if (product.serving_size && product.serving_unit) {
-    return `1 Portion taeglich (${product.serving_size}${product.serving_unit})`;
+    return `${product.serving_size} ${product.serving_unit}`;
   }
   return 'Nach Empfehlung';
+}
+
+type CategoryKey = 'vitamin' | 'mineral' | 'omega' | 'default';
+
+function getCategory(product: ProductCardProduct): CategoryKey {
+  const hay = `${product.ingredient_category ?? ''} ${product.form ?? ''} ${product.name}`.toLowerCase();
+  if (hay.includes('vitamin')) return 'vitamin';
+  if (
+    hay.includes('mineral') ||
+    hay.includes('magnesium') ||
+    hay.includes('zink') ||
+    hay.includes('zinc') ||
+    hay.includes('eisen') ||
+    hay.includes('kalzium') ||
+    hay.includes('calcium') ||
+    hay.includes('selen') ||
+    hay.includes('jod') ||
+    hay.includes('iodine')
+  )
+    return 'mineral';
+  if (
+    hay.includes('omega') ||
+    hay.includes('fischöl') ||
+    hay.includes('fischoel') ||
+    hay.includes('fish oil') ||
+    hay.includes('dha') ||
+    hay.includes('epa')
+  )
+    return 'omega';
+  return 'default';
+}
+
+const CATEGORY_BORDER: Record<CategoryKey, string> = {
+  vitamin: 'border-l-4 border-l-amber-400',
+  mineral: 'border-l-4 border-l-emerald-400',
+  omega: 'border-l-4 border-l-blue-400',
+  default: 'border-l-4 border-l-indigo-400',
+};
+
+const CATEGORY_INITIALS_BG: Record<CategoryKey, string> = {
+  vitamin: 'bg-amber-100 text-amber-700',
+  mineral: 'bg-emerald-100 text-emerald-700',
+  omega: 'bg-blue-100 text-blue-700',
+  default: 'bg-indigo-100 text-indigo-700',
+};
+
+function ProductImage({
+  product,
+  category,
+}: {
+  product: ProductCardProduct;
+  category: CategoryKey;
+}) {
+  const initials = (product.product_name ?? product.name)
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? '')
+    .join('');
+
+  if (!product.image_url) {
+    return (
+      <div
+        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ring-2 ring-slate-100 text-sm font-bold ${CATEGORY_INITIALS_BG[category]}`}
+      >
+        {initials}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={product.image_url}
+      alt={product.product_name ?? product.name}
+      className="h-12 w-12 shrink-0 rounded-full bg-white object-cover ring-2 ring-slate-100"
+      onError={(e) => {
+        (e.currentTarget as HTMLImageElement).style.display = 'none';
+      }}
+    />
+  );
 }
 
 function getFallbackWarning(product: ProductCardProduct): ProductWarning | null {
@@ -110,38 +176,17 @@ function getFallbackWarning(product: ProductCardProduct): ProductWarning | null 
     return {
       type: 'caution',
       title: 'Nicht mit Kaffee direkt danach',
-      message: 'Kaffee-Polyphenole koennen die B12-Absorption beeintraechtigen. Mindestens 1 h Abstand einhalten.',
+      message: 'Kaffee-Polyphenole können die B12-Absorption beeinträchtigen. Mindestens 1 h Abstand.',
     };
   }
   if (text.includes('jod')) {
     return {
       type: 'danger',
       title: 'Nicht mit Fluor, Brom, Chlorella oder Zeolith',
-      message: 'Halogene konkurrieren um Schilddruesenrezeptoren. Chlorella/Zeolith koennen Jod binden.',
+      message: 'Halogene konkurrieren um Schilddrüsenrezeptoren.',
     };
   }
   return null;
-}
-
-function ProductImage({ product }: { product: ProductCardProduct }) {
-  if (!product.image_url) {
-    return (
-      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-slate-100 to-indigo-100 ring-2 ring-indigo-200">
-        <Package size={24} className="text-indigo-400" />
-      </div>
-    );
-  }
-
-  return (
-    <img
-      src={product.image_url}
-      alt={product.name}
-      className="h-16 w-16 shrink-0 rounded-full bg-white object-cover ring-2 ring-indigo-200"
-      onError={(e) => {
-        (e.currentTarget as HTMLImageElement).style.display = 'none';
-      }}
-    />
-  );
 }
 
 export default function ProductCard({
@@ -155,18 +200,24 @@ export default function ProductCard({
   shopDomains,
   selected = false,
   warning,
-  compact = false,
 }: ProductCardProps) {
   const price = product.product_price ?? product.price;
   const brand = product.product_brand ?? product.brand;
   const name = product.product_name ?? product.name;
-  const matchedShop = shopDomains?.find(
-    (s) => product.shop_link?.toLowerCase().includes(s.domain.toLowerCase())
+  const category = getCategory(product);
+
+  const matchedShop = shopDomains?.find((s) =>
+    product.shop_link?.toLowerCase().includes(s.domain.toLowerCase()),
   );
-  const shopName = matchedShop?.display_name ?? (product.shop_link?.toLowerCase().includes('amazon') ? 'Amazon' : null);
+  const shopName =
+    matchedShop?.display_name ??
+    (product.shop_link?.toLowerCase().includes('amazon') ? 'Amazon' : null);
   const buttonText = shopName ? `Bei ${shopName} kaufen` : 'Jetzt kaufen';
-  const monthlyPrice = calcMonthlyPrice(price, product.servings_per_container, product.container_count) ?? price;
+
+  const monthlyPrice =
+    calcMonthlyPrice(price, product.servings_per_container, product.container_count) ?? price;
   const daysSupply = getDaysSupply(product.servings_per_container, product.container_count);
+
   const productWarning = product.warning_message
     ? {
         title: product.warning_title,
@@ -176,183 +227,160 @@ export default function ProductCard({
     : null;
   const cardWarning = warning ?? productWarning ?? getFallbackWarning(product);
 
+  const borderClass = CATEGORY_BORDER[category];
+
   return (
     <article
-      className={`group relative flex flex-col overflow-hidden rounded-2xl border bg-white shadow-md transition-shadow duration-200 ${
-        cardWarning?.type === 'danger'
-          ? 'border-l-4 border-red-400 bg-red-50'
-          : selected
-          ? 'border-blue-400 ring-2 ring-blue-200'
-          : 'border-slate-100 hover:shadow-lg'
+      className={`relative flex flex-col overflow-hidden rounded-xl border border-slate-100 bg-white shadow-sm transition-shadow duration-200 hover:shadow-md ${borderClass} ${
+        selected ? 'ring-2 ring-blue-200' : ''
       }`}
     >
-      {(onToggleSelected || onSelect) && (
+      {/* Affiliate badge */}
+      {!!product.is_affiliate && (
+        <span className="absolute right-2 top-2 z-10 rounded-full bg-amber-100 px-1.5 text-xs font-semibold text-amber-700">
+          A
+        </span>
+      )}
+
+      {/* Select checkbox */}
+      {(onToggleSelected ?? onSelect) && (
         <button
           type="button"
           onClick={onToggleSelected ?? onSelect}
-          className={`absolute right-4 top-4 z-10 flex h-6 w-6 items-center justify-center rounded-md border-2 p-0 transition-colors ${
+          className={`absolute left-2 top-2 z-10 flex h-5 w-5 items-center justify-center rounded border-2 transition-colors ${
             selected
               ? 'border-blue-500 bg-blue-500 text-white'
               : 'border-slate-300 bg-white/80 text-transparent hover:border-blue-400'
           }`}
           aria-label={selected ? `${name} abwählen` : `${name} auswählen`}
         >
-          <Check size={16} />
+          {selected && (
+            <svg viewBox="0 0 10 8" className="h-2.5 w-2.5 fill-current" aria-hidden="true">
+              <path d="M1 4l3 3 5-6" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          )}
         </button>
       )}
 
-      <div className={`flex flex-1 flex-col p-4 ${compact ? 'gap-2.5' : 'gap-3'}`}>
-
-        {/* Header: Image + Name + Brand + Badges */}
-        <div className="flex items-start gap-3 pr-8">
-          <ProductImage product={product} />
-          <div className="min-w-0 flex-1 pt-1">
-            {brand && (
-              <p className="mb-0.5 truncate text-xs font-semibold uppercase tracking-wide text-slate-400">
-                {brand}
-              </p>
-            )}
-            <h3 className="break-words text-base font-bold leading-tight text-slate-900">
-              {name}
-            </h3>
-            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+      <div className="flex flex-1 flex-col gap-2.5 p-4">
+        {/* Header: image + name + brand + form badge */}
+        <div className="flex items-center gap-3 pr-6">
+          <ProductImage product={product} category={category} />
+          <div className="min-w-0 flex-1">
+            <h3 className="truncate text-sm font-bold leading-tight text-slate-900">{name}</h3>
+            <div className="mt-0.5 flex flex-wrap items-center gap-1">
+              {brand && (
+                <span className="text-xs text-slate-500">{brand}</span>
+              )}
+              {brand && product.form && (
+                <span className="text-xs text-slate-300">·</span>
+              )}
               {product.form && (
-                <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-700">
+                <span className="rounded-full bg-indigo-50 px-1.5 py-0.5 text-xs font-semibold text-indigo-700">
                   {product.form}
                 </span>
               )}
               {recommendationType && (
-                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                  recommendationType === 'recommended'
-                    ? 'bg-emerald-50 text-emerald-700'
-                    : 'bg-indigo-50 text-indigo-700'
-                }`}>
+                <span
+                  className={`rounded-full px-1.5 py-0.5 text-xs font-semibold ${
+                    recommendationType === 'recommended'
+                      ? 'bg-emerald-50 text-emerald-700'
+                      : 'bg-indigo-50 text-indigo-700'
+                  }`}
+                >
                   {recommendationType === 'recommended' ? 'Empfohlen' : 'Alternative'}
                 </span>
               )}
-              <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">
-                {getTiming(product)}
-              </span>
             </div>
           </div>
         </div>
 
-        {/* Info Grid: Dosierung + Reicht für */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <p className="text-xs font-semibold text-slate-500">Dosierung</p>
-            <p className="mt-0.5 text-sm leading-relaxed text-slate-700">{getDose(product)}</p>
-          </div>
-          <div>
-            <p className="text-xs font-semibold text-slate-500">Reicht für</p>
-            <p className="mt-0.5 text-sm leading-relaxed text-slate-700">
-              {daysSupply ? `${daysSupply} Tage` : 'Nach Verbrauch'}
-            </p>
-          </div>
-        </div>
+        {/* Dosierung row */}
+        <p className="text-xs text-slate-500">
+          <span className="font-semibold">Dosierung:</span>{' '}
+          {getDose(product)}
+          {daysSupply ? ` · ${daysSupply} Kaps` : ''}
+        </p>
 
-        {/* Wirkung (non-compact only) */}
-        {!compact && (
-          <div>
-            <p className="text-xs font-semibold text-slate-500">Wirkung</p>
-            <p className="mt-0.5 text-sm leading-relaxed text-slate-700">{getEffect(product)}</p>
-          </div>
-        )}
-
-        {/* Interaction Warning */}
-        {cardWarning && (
-          <div className={`rounded-xl border-l-4 p-3 ${
-            cardWarning.type === 'danger'
-              ? 'border-red-400 bg-red-50 text-red-700'
-              : cardWarning.type === 'info'
-              ? 'border-blue-400 bg-blue-50 text-blue-700'
-              : 'border-amber-400 bg-amber-50 text-amber-700'
-          }`}>
-            <div className="flex items-start gap-2">
-              <AlertTriangle size={15} className="mt-0.5 shrink-0" />
-              <div>
-                {cardWarning.title && (
-                  <p className="text-sm font-semibold">{cardWarning.title}</p>
-                )}
-                <p className="mt-0.5 text-xs leading-relaxed">{cardWarning.message}</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Discontinued Banner */}
+        {/* Discontinued banner */}
         {product.discontinued_at && (
-          <div className="flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-xs text-slate-500">
-            <RefreshCcw size={14} className="shrink-0" />
-            Dieses Produkt ist eingestellt. Alternative waehlen empfohlen.
+          <div className="flex items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs text-slate-500">
+            <RefreshCcw size={12} className="shrink-0" />
+            Eingestellt — Alternative wählen
           </div>
         )}
 
-        {/* Alternative Note */}
+        {/* Alternative note */}
         {product.alternative_note && (
-          <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-3 py-2.5 text-xs leading-relaxed text-indigo-700">
+          <div className="rounded-lg border border-indigo-100 bg-indigo-50 px-2.5 py-1.5 text-xs leading-relaxed text-indigo-700">
             <span className="font-semibold">Alternative:</span> {product.alternative_note}
           </div>
         )}
 
-        {/* Spacer to push price+button to bottom */}
+        {/* Spacer */}
         <div className="flex-1" />
 
-        {/* Price Row */}
-        <div className="border-t border-slate-100 pt-3">
-          <div className="flex items-end justify-between gap-4">
-            <div>
-              <p className="text-xs text-slate-400">Einmalkosten</p>
-              <p className="text-xl font-black tracking-tight text-slate-900">{formatCurrency(price)}</p>
-            </div>
-            <div className="text-right">
-              <p className="text-xs text-slate-400">Pro Monat</p>
-              <p className="text-sm font-semibold text-slate-500">{formatCurrency(monthlyPrice)}</p>
-            </div>
-          </div>
+        {/* Price row */}
+        <div className="flex items-end gap-3">
+          <span className="text-base font-bold text-slate-900">{formatCurrency(price)}</span>
+          <span className="text-xs text-slate-400">{formatCurrency(monthlyPrice)}/Mt</span>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex gap-2">
-          {product.shop_link && (
-            <a
-              href={product.shop_link}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-blue-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm shadow-blue-600/20 transition-opacity hover:opacity-90"
-            >
-              <ExternalLink size={16} />
-              {buttonText}
-              {!!product.is_affiliate && (
-                <span className="ml-1 text-xs font-semibold text-blue-200">*</span>
-              )}
-            </a>
-          )}
-          {showSelectButton && onSelect && (
-            <button
-              onClick={onSelect}
-              className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition-colors hover:bg-slate-50"
-            >
-              Alternative
-            </button>
-          )}
-          {showWishlistButton && onAddToWishlist && (
-            <button
-              onClick={onAddToWishlist}
-              className="rounded-xl border border-rose-100 bg-rose-50 px-4 py-2.5 text-sm font-semibold text-rose-600 transition-colors hover:bg-rose-100"
-            >
-              Merken
-            </button>
-          )}
-        </div>
-
-        {/* Affiliate footnote */}
-        {!!product.is_affiliate && (
-          <p className="text-center text-xs text-amber-600">
-            * Affiliate-Link
-          </p>
+        {/* Buy button */}
+        {product.shop_link && (
+          <a
+            href={product.shop_link}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
+          >
+            <ExternalLink size={14} />
+            {buttonText}
+          </a>
         )}
 
+        {/* Secondary actions */}
+        {(showSelectButton || showWishlistButton) && (
+          <div className="flex gap-2">
+            {showSelectButton && onSelect && (
+              <button
+                onClick={onSelect}
+                className="flex-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50"
+              >
+                Alternative
+              </button>
+            )}
+            {showWishlistButton && onAddToWishlist && (
+              <button
+                onClick={onAddToWishlist}
+                className="flex-1 rounded-lg border border-rose-100 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-600 transition-colors hover:bg-rose-100"
+              >
+                Merken
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Interaction warning */}
+        {cardWarning && (
+          <div
+            className={`flex items-start gap-1.5 rounded-lg px-2.5 py-1.5 text-xs ${
+              cardWarning.type === 'danger'
+                ? 'bg-red-50 text-red-700'
+                : cardWarning.type === 'info'
+                ? 'bg-blue-50 text-blue-700'
+                : 'bg-amber-50 text-amber-700'
+            }`}
+          >
+            <AlertTriangle size={12} className="mt-0.5 shrink-0" />
+            <span className="leading-relaxed">
+              {cardWarning.title && (
+                <strong className="mr-1">{cardWarning.title}:</strong>
+              )}
+              {cardWarning.message}
+            </span>
+          </div>
+        )}
       </div>
     </article>
   );

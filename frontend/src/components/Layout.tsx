@@ -39,9 +39,11 @@ export default function Layout({ children }: LayoutProps) {
           Eigene Produkte
         </Link>
       )}
-      <Link to="/demo" className={navLinkClass} onClick={closeMobile}>
-        Demo
-      </Link>
+      {!user && (
+        <Link to="/demo" className={navLinkClass} onClick={closeMobile}>
+          Demo
+        </Link>
+      )}
       {isAdmin && (
         <Link
           to="/admin"

@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import {
   Search,
   Star,
@@ -18,7 +19,7 @@ import {
 // ---------------------------------------------------------------------------
 // Hero Section
 // ---------------------------------------------------------------------------
-function HeroSection() {
+function HeroSection({ isLoggedIn }: { isLoggedIn: boolean }) {
   return (
     <section className="relative overflow-hidden bg-gradient-to-br from-slate-50 to-indigo-50/40 pt-16 pb-20 md:pt-24 md:pb-28">
       {/* Background decoration */}
@@ -29,10 +30,12 @@ function HeroSection() {
 
       <div className="relative max-w-4xl mx-auto px-6 text-center">
         {/* Badge */}
-        <div className="inline-flex items-center gap-2 bg-white border border-indigo-100 rounded-full px-4 py-1.5 mb-8 shadow-sm">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-          <span className="text-sm font-medium text-indigo-700">Demo verfügbar – keine Registrierung nötig</span>
-        </div>
+        {!isLoggedIn && (
+          <div className="inline-flex items-center gap-2 bg-white border border-indigo-100 rounded-full px-4 py-1.5 mb-8 shadow-sm">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-sm font-medium text-indigo-700">Demo verfügbar – keine Registrierung nötig</span>
+          </div>
+        )}
 
         {/* Headline */}
         <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 leading-tight tracking-tight mb-6">
@@ -54,20 +57,33 @@ function HeroSection() {
 
         {/* CTAs */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-14">
-          <Link
-            to="/demo"
-            className="inline-flex items-center gap-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold rounded-2xl px-8 py-4 text-base shadow-lg hover:shadow-xl transition-all duration-200 w-full sm:w-auto justify-center"
-          >
-            <Zap size={18} />
-            Demo starten
-          </Link>
-          <Link
-            to="/register"
-            className="inline-flex items-center gap-2 border-2 border-indigo-200 bg-white hover:bg-indigo-50 text-indigo-700 font-semibold rounded-2xl px-8 py-4 text-base transition-all duration-200 w-full sm:w-auto justify-center"
-          >
-            Kostenlos registrieren
-            <ArrowRight size={18} />
-          </Link>
+          {!isLoggedIn && (
+            <Link
+              to="/demo"
+              className="inline-flex items-center gap-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold rounded-2xl px-8 py-4 text-base shadow-lg hover:shadow-xl transition-all duration-200 w-full sm:w-auto justify-center"
+            >
+              <Zap size={18} />
+              Demo starten
+            </Link>
+          )}
+          {!isLoggedIn && (
+            <Link
+              to="/register"
+              className="inline-flex items-center gap-2 border-2 border-indigo-200 bg-white hover:bg-indigo-50 text-indigo-700 font-semibold rounded-2xl px-8 py-4 text-base transition-all duration-200 w-full sm:w-auto justify-center"
+            >
+              Kostenlos registrieren
+              <ArrowRight size={18} />
+            </Link>
+          )}
+          {isLoggedIn && (
+            <Link
+              to="/search"
+              className="inline-flex items-center gap-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold rounded-2xl px-8 py-4 text-base shadow-lg hover:shadow-xl transition-all duration-200 w-full sm:w-auto justify-center"
+            >
+              <Zap size={18} />
+              Wirkstoff suchen
+            </Link>
+          )}
         </div>
 
         {/* Feature chips */}
@@ -294,7 +310,9 @@ function TrustSection() {
 // ---------------------------------------------------------------------------
 // Demo CTA Section
 // ---------------------------------------------------------------------------
-function DemoCtaSection() {
+function DemoCtaSection({ isLoggedIn }: { isLoggedIn: boolean }) {
+  if (isLoggedIn) return null;
+
   return (
     <section className="py-16 md:py-20">
       <div className="max-w-4xl mx-auto px-6">
@@ -333,7 +351,9 @@ function DemoCtaSection() {
 // ---------------------------------------------------------------------------
 // Final Register CTA
 // ---------------------------------------------------------------------------
-function RegisterCtaSection() {
+function RegisterCtaSection({ isLoggedIn }: { isLoggedIn: boolean }) {
+  if (isLoggedIn) return null;
+
   return (
     <section className="py-16 md:py-20 bg-gradient-to-br from-slate-50 to-indigo-50/30">
       <div className="max-w-4xl mx-auto px-6 text-center">
@@ -377,14 +397,17 @@ function RegisterCtaSection() {
 // Page
 // ---------------------------------------------------------------------------
 export default function LandingPage() {
+  const { user } = useAuth();
+  const isLoggedIn = user !== null;
+
   return (
     <div className="overflow-x-hidden">
-      <HeroSection />
+      <HeroSection isLoggedIn={isLoggedIn} />
       <HowItWorksSection />
       <FeaturesSection />
       <TrustSection />
-      <DemoCtaSection />
-      <RegisterCtaSection />
+      <DemoCtaSection isLoggedIn={isLoggedIn} />
+      <RegisterCtaSection isLoggedIn={isLoggedIn} />
     </div>
   );
 }

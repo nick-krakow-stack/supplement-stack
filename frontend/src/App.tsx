@@ -1,6 +1,7 @@
 import { Routes, Route, Link } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import Layout from './components/Layout';
+import AdminLayout from './components/AdminLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 
 import LandingPage from './pages/LandingPage';
@@ -39,58 +40,68 @@ function NotFoundPage() {
 export default function App() {
   return (
     <AuthProvider>
-      <Layout>
-        <Routes>
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/search" element={<SearchPage />} />
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-          <Route
-            path="/profile"
-            element={
-              <ProtectedRoute>
-                <ProfilePage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/stacks"
-            element={
-              <ProtectedRoute>
-                <StacksPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/wishlist"
-            element={
-              <ProtectedRoute>
-                <WishlistPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin/*"
-            element={
-              <ProtectedRoute adminOnly>
-                <AdminPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route path="/demo" element={<DemoPage />} />
-          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-          <Route path="/reset-password" element={<ResetPasswordPage />} />
-          <Route
-            path="/my-products"
-            element={
-              <ProtectedRoute>
-                <MyProductsPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route path="*" element={<NotFoundPage />} />
-        </Routes>
-      </Layout>
+      <Routes>
+        {/* Admin — completely separate layout, no normal navbar/footer */}
+        <Route
+          path="/admin"
+          element={
+            <AdminLayout>
+              <AdminPage />
+            </AdminLayout>
+          }
+        />
+
+        {/* All other routes use the normal Layout */}
+        <Route
+          path="*"
+          element={
+            <Layout>
+              <Routes>
+                <Route path="/" element={<LandingPage />} />
+                <Route path="/search" element={<SearchPage />} />
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/register" element={<RegisterPage />} />
+                <Route
+                  path="/profile"
+                  element={
+                    <ProtectedRoute>
+                      <ProfilePage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/stacks"
+                  element={
+                    <ProtectedRoute>
+                      <StacksPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/wishlist"
+                  element={
+                    <ProtectedRoute>
+                      <WishlistPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route path="/demo" element={<DemoPage />} />
+                <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                <Route path="/reset-password" element={<ResetPasswordPage />} />
+                <Route
+                  path="/my-products"
+                  element={
+                    <ProtectedRoute>
+                      <MyProductsPage />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route path="*" element={<NotFoundPage />} />
+              </Routes>
+            </Layout>
+          }
+        />
+      </Routes>
     </AuthProvider>
   );
 }

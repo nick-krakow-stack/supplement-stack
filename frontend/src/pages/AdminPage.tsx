@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import {
   CheckCircle,
   XCircle,
@@ -1098,62 +1099,12 @@ function StatsTab() {
 // ============================================================
 // Main Admin Page
 // ============================================================
-const TAB_LABELS: Array<{ key: Tab; label: string }> = [
-  { key: 'products', label: 'Produkte' },
-  { key: 'ingredients', label: 'Wirkstoffe' },
-  { key: 'interactions', label: 'Interaktionen' },
-  { key: 'stats', label: 'Statistiken' },
-  { key: 'shop_domains', label: 'Shop-Domains' },
-  { key: 'rankings', label: 'Rankings' },
-  { key: 'user_products', label: 'Nutzer-Produkte' },
-];
-
 export default function AdminPage() {
-  const [activeTab, setActiveTab] = useState<Tab>('products');
-
-  // Check admin access via localStorage
-  const isAdmin = (() => {
-    try {
-      const user = JSON.parse(localStorage.getItem('ss_user') || '{}');
-      return user.role === 'admin';
-    } catch {
-      return false;
-    }
-  })();
-
-  if (!isAdmin) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4 text-center">
-        <XCircle size={48} className="text-red-400" />
-        <h1 className="text-2xl font-bold text-red-600">Kein Zugriff</h1>
-        <p className="text-gray-600">Du hast keine Berechtigung, diese Seite aufzurufen.</p>
-      </div>
-    );
-  }
+  const location = useLocation();
+  const activeTab = (new URLSearchParams(location.search).get('tab') ?? 'stats') as Tab;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-indigo-50/30 p-4 md:p-6">
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-bold text-gray-900">Admin-Panel</h1>
-
-      {/* Tab bar */}
-      <div className="flex gap-1 bg-white border border-gray-100 shadow-sm rounded-2xl p-1.5 flex-wrap">
-        {TAB_LABELS.map(({ key, label }) => (
-          <button
-            key={key}
-            onClick={() => setActiveTab(key)}
-            className={`flex-1 min-w-[100px] text-sm font-medium px-4 py-2 rounded-xl transition-all duration-200 ${
-              activeTab === key
-                ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-sm'
-                : 'bg-white border border-gray-200 text-gray-600 hover:text-indigo-600'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {/* Tab content */}
       {activeTab === 'products' && <ProductsTab />}
       {activeTab === 'ingredients' && <IngredientsTab />}
       {activeTab === 'interactions' && <InteractionsTab />}
@@ -1161,7 +1112,6 @@ export default function AdminPage() {
       {activeTab === 'shop_domains' && <ShopDomainsPanel />}
       {activeTab === 'rankings' && <RankingsPanel />}
       {activeTab === 'user_products' && <UserProductsTab />}
-    </div>
     </div>
   );
 }
