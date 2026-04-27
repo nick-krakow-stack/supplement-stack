@@ -238,10 +238,10 @@ function AddProductModal({
         const loaded: DosageGuideline[] = data.guidelines ?? [];
         setGuidelines(loaded);
         const defaultDose = primaryDose(loaded.find((gl) => gl.is_default) ?? loaded[0]);
-        setDose(defaultDose ?? { value: 1, unit: normalizeUnitToGerman(selected.unit) || 'Portion' });
+        setDose(defaultDose ?? { value: 0, unit: normalizeUnitToGerman(selected.unit) || '' });
       })
       .catch(() => {
-        setDose({ value: 1, unit: normalizeUnitToGerman(selected.unit) || 'Portion' });
+        setDose({ value: 0, unit: normalizeUnitToGerman(selected.unit) || '' });
       })
       .finally(() => setGuidelinesLoading(false));
   };
@@ -339,40 +339,58 @@ function AddProductModal({
                 </div>
               ) : (
                 <div className="grid gap-4 md:grid-cols-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const nextDose = primaryDose(dgeGuideline);
-                      if (nextDose) setDose(nextDose);
-                    }}
-                    className="rounded-2xl border border-blue-200 bg-white/80 p-4 text-left transition hover:border-blue-400 hover:bg-blue-50"
-                  >
-                    <p className="text-base font-black text-blue-700">DGE-Empfehlung</p>
-                    <p className="mt-2 text-2xl font-black text-blue-600">
-                      {primaryDose(dgeGuideline)?.value ?? dose.value}
-                      {primaryDose(dgeGuideline)?.unit ?? dose.unit}
-                    </p>
-                    <span className="mt-4 flex justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-black text-white">
-                      DGE verwenden
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const nextDose = primaryDose(studyGuideline);
-                      if (nextDose) setDose(nextDose);
-                    }}
-                    className="rounded-2xl border border-violet-200 bg-white/80 p-4 text-left transition hover:border-violet-400 hover:bg-violet-50"
-                  >
-                    <p className="text-base font-black text-violet-700">Studien-Empfehlung</p>
-                    <p className="mt-2 text-2xl font-black text-violet-600">
-                      {primaryDose(studyGuideline)?.value ?? Math.max(dose.value * 2, dose.value)}
-                      {primaryDose(studyGuideline)?.unit ?? dose.unit}
-                    </p>
-                    <span className="mt-4 flex justify-center rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-black text-white">
-                      Studien-Dosierung
-                    </span>
-                  </button>
+                  {primaryDose(dgeGuideline) ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextDose = primaryDose(dgeGuideline);
+                        if (nextDose) setDose(nextDose);
+                      }}
+                      className="rounded-2xl border border-blue-200 bg-white/80 p-4 text-left transition hover:border-blue-400 hover:bg-blue-50"
+                    >
+                      <p className="text-base font-black text-blue-700">DGE-Empfehlung</p>
+                      <p className="mt-2 text-2xl font-black text-blue-600">
+                        {primaryDose(dgeGuideline)!.value}
+                        {primaryDose(dgeGuideline)!.unit}
+                      </p>
+                      <span className="mt-4 flex justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-black text-white">
+                        DGE verwenden
+                      </span>
+                    </button>
+                  ) : (
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left cursor-default">
+                      <p className="text-base font-black text-slate-500">DGE-Empfehlung</p>
+                      <p className="mt-2 text-sm font-semibold text-slate-400">
+                        Keine offizielle Empfehlung verfügbar
+                      </p>
+                    </div>
+                  )}
+                  {primaryDose(studyGuideline) ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextDose = primaryDose(studyGuideline);
+                        if (nextDose) setDose(nextDose);
+                      }}
+                      className="rounded-2xl border border-violet-200 bg-white/80 p-4 text-left transition hover:border-violet-400 hover:bg-violet-50"
+                    >
+                      <p className="text-base font-black text-violet-700">Studien-Empfehlung</p>
+                      <p className="mt-2 text-2xl font-black text-violet-600">
+                        {primaryDose(studyGuideline)!.value}
+                        {primaryDose(studyGuideline)!.unit}
+                      </p>
+                      <span className="mt-4 flex justify-center rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-black text-white">
+                        Studien-Dosierung
+                      </span>
+                    </button>
+                  ) : (
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left cursor-default">
+                      <p className="text-base font-black text-slate-500">Studien-Empfehlung</p>
+                      <p className="mt-2 text-sm font-semibold text-slate-400">
+                        Keine Studiendaten hinterlegt
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
 
