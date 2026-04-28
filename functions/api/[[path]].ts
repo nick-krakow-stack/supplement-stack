@@ -49,6 +49,28 @@ async function verifyPassword(password: string, stored: string): Promise<boolean
 }
 
 // ---------------------------------------------------------------------------
+// Reset-token helpers (Web Crypto SHA-256)
+// DB column `reset_token` stores the SHA-256 hex-hash of the raw token.
+// The raw token is only ever sent in the reset-mail link — never stored.
+// ---------------------------------------------------------------------------
+
+/** Generate a cryptographically random raw token (Base64URL, 32 bytes). */
+function generateRawResetToken(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(32))
+  // Base64URL encode
+  const base64 = btoa(String.fromCharCode(...bytes))
+  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
+}
+
+/** SHA-256 hex-hash of a token string (for DB storage / lookup). */
+async function hashResetToken(rawToken: string): Promise<string> {
+  const encoder = new TextEncoder()
+  const data = encoder.encode(rawToken)
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+  return [...new Uint8Array(hashBuffer)].map(b => b.toString(16).padStart(2, '0')).join('')
+}
+
+// ---------------------------------------------------------------------------
 // Auth helpers
 // ---------------------------------------------------------------------------
 
@@ -314,18 +336,21 @@ app.post('/api/auth/forgot-password', async (c) => {
   const user = await c.env.DB.prepare('SELECT id, email FROM users WHERE email = ?').bind(email).first<{ id: number; email: string }>()
   if (!user) return ok()
 
-  const token = (crypto.randomUUID() + crypto.randomUUID()).replace(/-/g, '')
+  // Generate raw token (sent in mail) + SHA-256 hash (stored in DB)
+  const rawToken = generateRawResetToken()
+  const tokenHash = await hashResetToken(rawToken)
   const expiresAt = Date.now() + 3600000
 
   await c.env.DB.prepare(
+    // stored as SHA-256 hash — raw token only travels in the reset-mail link
     'UPDATE users SET reset_token = ?, reset_token_expires_at = ? WHERE id = ?'
-  ).bind(token, expiresAt, user.id).run()
+  ).bind(tokenHash, expiresAt, user.id).run()
 
   const apiKey = c.env.RESEND_API_KEY
   if (!apiKey) return ok()
 
   const frontendUrl = c.env.FRONTEND_URL ?? 'https://supplementstack.pages.dev'
-  const result = await sendPasswordResetEmail(apiKey, frontendUrl, user.email, token)
+  const result = await sendPasswordResetEmail(apiKey, frontendUrl, user.email, rawToken)
   if (!result.ok) {
     return c.json({ error: 'E-Mail konnte nicht gesendet werden.', debug: result.error }, 500)
   }
@@ -336,15 +361,18 @@ app.post('/api/auth/forgot-password', async (c) => {
 // POST /api/auth/reset-password
 app.post('/api/auth/reset-password', async (c) => {
   const body = await c.req.json()
-  const token = typeof body.token === 'string' ? body.token.trim() : ''
+  const rawToken = typeof body.token === 'string' ? body.token.trim() : ''
   const password = typeof body.password === 'string' ? body.password : ''
 
-  if (!token) return c.json({ error: 'Ungültiger oder abgelaufener Link.' }, 400)
+  if (!rawToken) return c.json({ error: 'Ungültiger oder abgelaufener Link.' }, 400)
   if (!password || password.length < 8) return c.json({ error: 'Passwort muss mindestens 8 Zeichen lang sein.' }, 400)
+
+  // Hash the incoming raw token to compare against the stored SHA-256 hash
+  const tokenHash = await hashResetToken(rawToken)
 
   const user = await c.env.DB.prepare(
     'SELECT id, reset_token_expires_at FROM users WHERE reset_token = ?'
-  ).bind(token).first<{ id: number; reset_token_expires_at: number | null }>()
+  ).bind(tokenHash).first<{ id: number; reset_token_expires_at: number | null }>()
 
   if (!user || !user.reset_token_expires_at || user.reset_token_expires_at < Date.now()) {
     return c.json({ error: 'Ungültiger oder abgelaufener Link.' }, 400)
