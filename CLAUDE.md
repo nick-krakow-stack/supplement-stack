@@ -44,6 +44,36 @@ Wenn Nick eine Aufgabe stellt:
 
 ---
 
+## 🌍 Mehrsprachigkeit (i18n-Strategie)
+
+**Beschluss (2026-04-28):** Separate Translations-Tabellen statt Suffix-Spalten.
+
+Aktuell ist die Plattform DE-only. Das Datenmodell wird ab Phase B aber i18n-ready geplant: Pro übersetzbarer Entity gibt es eine `*_translations`-Tabelle.
+
+**Schema-Pattern:**
+```sql
+CREATE TABLE ingredient_translations (
+  ingredient_id INTEGER NOT NULL REFERENCES ingredients(id) ON DELETE CASCADE,
+  language      TEXT    NOT NULL,        -- 'de', 'en', 'fr', ...
+  name          TEXT    NOT NULL,
+  description   TEXT,
+  hypo_symptoms TEXT,
+  hyper_symptoms TEXT,
+  PRIMARY KEY (ingredient_id, language)
+);
+```
+
+Analog: `recommendation_translations`, `blog_translations`, `verified_profile_translations`.
+
+**Begründung:** Admin kann Translations getrennt bearbeiten (eigener Tab im CMS). Neue Sprachen ohne Schema-Change möglich. Bei Suffix-Spalten (`name_de`, `name_en`) wäre jede neue Sprache eine ALTER-TABLE-Migration — bei späterer EN/AT/CH-Expansion nicht skalierbar.
+
+**Umsetzung:**
+- Phase B: alle DE-Inhalte landen in `*_translations` mit `language='de'`
+- Phase D: Admin-CMS bekommt „Translations"-Tab
+- Post-Launch: weitere Sprachen freischalten ohne Schema-Change
+
+---
+
 ## 📁 Bestehende Codebasis (nicht neu erfinden)
 
 Das Projekt existiert bereits. Vor jeder Implementierung den bestehenden Code analysieren.
