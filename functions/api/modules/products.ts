@@ -13,7 +13,7 @@
 
 import { Hono } from 'hono'
 import type { AppContext, ProductRow } from '../lib/types'
-import { ensureAuth, requireAdmin } from '../lib/helpers'
+import { ensureAuth, requireAdmin, logAdminAction } from '../lib/helpers'
 
 const products = new Hono<AppContext>()
 
@@ -154,6 +154,12 @@ products.put('/:id', async (c) => {
     id,
   ).run()
   const updated = await c.env.DB.prepare('SELECT * FROM products WHERE id = ?').bind(id).first()
+  await logAdminAction(c, {
+    action: 'update_product',
+    entity_type: 'product',
+    entity_id: Number(id),
+    changes: data,
+  })
   return c.json({ product: updated })
 })
 
@@ -186,6 +192,12 @@ products.post('/:id/image', async (c) => {
   await c.env.DB.prepare(
     'UPDATE products SET image_url = ?, image_r2_key = ? WHERE id = ?'
   ).bind(imageUrl, r2Key, id).run()
+  await logAdminAction(c, {
+    action: 'upload_product_image',
+    entity_type: 'product',
+    entity_id: Number(id),
+    changes: { image_url: imageUrl, r2_key: r2Key },
+  })
   return c.json({ image_url: imageUrl })
 })
 
@@ -211,6 +223,12 @@ products.put('/:id/status', async (c) => {
     WHERE id = ?
   `).bind(data.moderation_status ?? null, data.visibility ?? null, id).run()
   const updated = await c.env.DB.prepare('SELECT * FROM products WHERE id = ?').bind(id).first()
+  await logAdminAction(c, {
+    action: 'update_product_status',
+    entity_type: 'product',
+    entity_id: Number(id),
+    changes: { moderation_status: data.moderation_status ?? null, visibility: data.visibility ?? null },
+  })
   return c.json({ product: updated })
 })
 

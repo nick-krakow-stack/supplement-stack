@@ -105,6 +105,52 @@ export async function checkRateLimit(
 }
 
 // ---------------------------------------------------------------------------
+// Admin audit logging
+// ---------------------------------------------------------------------------
+
+export async function logAdminAction(
+  c: Context<AppContext>,
+  params: {
+    action: string
+    entity_type: string
+    entity_id?: number | null
+    changes?: unknown
+    reason?: string | null
+  }
+): Promise<void> {
+  try {
+    const user = c.get('user')
+    const userId = user?.userId ?? null
+    const ipAddress =
+      c.req.header('CF-Connecting-IP') ??
+      c.req.header('X-Forwarded-For') ??
+      null
+    const userAgent = c.req.header('User-Agent') ?? null
+    const changesJson =
+      params.changes !== undefined && params.changes !== null
+        ? JSON.stringify(params.changes)
+        : null
+    await c.env.DB.prepare(
+      `INSERT INTO admin_audit_log (user_id, action, entity_type, entity_id, changes, reason, ip_address, user_agent)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    )
+      .bind(
+        userId,
+        params.action,
+        params.entity_type,
+        params.entity_id ?? null,
+        changesJson,
+        params.reason ?? null,
+        ipAddress,
+        userAgent,
+      )
+      .run()
+  } catch (err) {
+    console.error('[logAdminAction] Failed to write audit log:', err)
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Email helpers
 // ---------------------------------------------------------------------------
 

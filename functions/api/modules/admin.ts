@@ -23,7 +23,7 @@
 
 import { Hono } from 'hono'
 import type { AppContext, CountRow, ProductRow, InteractionRow } from '../lib/types'
-import { ensureAuth, requireAdmin, ensureAdmin } from '../lib/helpers'
+import { ensureAuth, requireAdmin, ensureAdmin, logAdminAction } from '../lib/helpers'
 
 const admin = new Hono<AppContext>()
 
@@ -84,6 +84,12 @@ admin.post('/shop-domains', async (c) => {
   const result = await c.env.DB.prepare(
     'INSERT INTO shop_domains (domain, display_name) VALUES (?, ?)'
   ).bind(String(body.domain).trim(), String(body.display_name).trim()).run()
+  await logAdminAction(c, {
+    action: 'create_shop_domain',
+    entity_type: 'shop_domain',
+    entity_id: result.meta.last_row_id as number,
+    changes: body,
+  })
   return c.json({ id: result.meta.last_row_id }, 201)
 })
 
@@ -93,7 +99,13 @@ admin.delete('/shop-domains/:id', async (c) => {
   if (authErr) return authErr
   const admErr = requireAdmin(c)
   if (admErr) return admErr
-  await c.env.DB.prepare('DELETE FROM shop_domains WHERE id = ?').bind(c.req.param('id')).run()
+  const id = c.req.param('id')
+  await c.env.DB.prepare('DELETE FROM shop_domains WHERE id = ?').bind(id).run()
+  await logAdminAction(c, {
+    action: 'delete_shop_domain',
+    entity_type: 'shop_domain',
+    entity_id: Number(id),
+  })
   return c.json({ ok: true })
 })
 
@@ -129,6 +141,12 @@ admin.put('/product-rankings/:productId', async (c) => {
       notes = COALESCE(excluded.notes, product_rankings.notes),
       ranked_at = datetime('now')
   `).bind(productId, body.rank_score, body.notes ?? null).run()
+  await logAdminAction(c, {
+    action: 'upsert_product_ranking',
+    entity_type: 'product_ranking',
+    entity_id: Number(productId),
+    changes: { rank_score: body.rank_score, notes: body.notes ?? null },
+  })
   return c.json({ ok: true })
 })
 
@@ -155,6 +173,11 @@ admin.put('/user-products/:id/approve', async (c) => {
   await c.env.DB.prepare(`
     UPDATE user_products SET status = 'approved', approved_at = datetime('now') WHERE id = ?
   `).bind(id).run()
+  await logAdminAction(c, {
+    action: 'approve_user_product',
+    entity_type: 'user_product',
+    entity_id: Number(id),
+  })
   return c.json({ ok: true })
 })
 
@@ -166,6 +189,11 @@ admin.put('/user-products/:id/reject', async (c) => {
   await c.env.DB.prepare(`
     UPDATE user_products SET status = 'rejected' WHERE id = ?
   `).bind(id).run()
+  await logAdminAction(c, {
+    action: 'reject_user_product',
+    entity_type: 'user_product',
+    entity_id: Number(id),
+  })
   return c.json({ ok: true })
 })
 
@@ -175,6 +203,11 @@ admin.delete('/user-products/:id', async (c) => {
   if (authErr) return authErr
   const id = c.req.param('id')
   await c.env.DB.prepare('DELETE FROM user_products WHERE id = ?').bind(id).run()
+  await logAdminAction(c, {
+    action: 'delete_user_product',
+    entity_type: 'user_product',
+    entity_id: Number(id),
+  })
   return c.json({ ok: true })
 })
 
@@ -237,7 +270,7 @@ interactionsApp.post('/', async (c) => {
     return c.json({ error: 'Invalid JSON' }, 400)
   }
   if (!data.ingredient_a_id || !data.ingredient_b_id) return c.json({ error: 'Missing fields' }, 400)
-  await c.env.DB.prepare(
+  const interactionResult = await c.env.DB.prepare(
     'INSERT OR REPLACE INTO interactions (ingredient_a_id, ingredient_b_id, type, comment) VALUES (?, ?, ?, ?)'
   ).bind(
     data.ingredient_a_id,
@@ -245,6 +278,12 @@ interactionsApp.post('/', async (c) => {
     (data.type as string) || 'avoid',
     (data.comment as string) || null,
   ).run()
+  await logAdminAction(c, {
+    action: 'upsert_interaction',
+    entity_type: 'interaction',
+    entity_id: interactionResult.meta.last_row_id as number ?? null,
+    changes: data,
+  })
   return c.json({ ok: true })
 })
 
@@ -258,5 +297,10 @@ interactionsApp.delete('/:id', async (c) => {
   const interaction = await c.env.DB.prepare('SELECT id FROM interactions WHERE id = ?').bind(id).first<InteractionRow>()
   if (!interaction) return c.json({ error: 'Not found' }, 404)
   await c.env.DB.prepare('DELETE FROM interactions WHERE id = ?').bind(id).run()
+  await logAdminAction(c, {
+    action: 'delete_interaction',
+    entity_type: 'interaction',
+    entity_id: Number(id),
+  })
   return c.json({ ok: true })
 })

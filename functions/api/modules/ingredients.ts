@@ -21,7 +21,7 @@
 
 import { Hono } from 'hono'
 import type { AppContext, IngredientRow } from '../lib/types'
-import { ensureAuth, requireAdmin } from '../lib/helpers'
+import { ensureAuth, requireAdmin, logAdminAction } from '../lib/helpers'
 
 const ingredients = new Hono<AppContext>()
 
@@ -442,6 +442,12 @@ ingredients.post('/', async (c) => {
     (body.hyper_symptoms as string) || null,
     (body.external_url as string) || null,
   ).run()
+  await logAdminAction(c, {
+    action: 'create_ingredient',
+    entity_type: 'ingredient',
+    entity_id: result.meta.last_row_id as number,
+    changes: body,
+  })
   return c.json({ id: result.meta.last_row_id })
 })
 
@@ -475,6 +481,12 @@ ingredients.put('/:id', async (c) => {
     id,
   ).run()
   const updated = await c.env.DB.prepare('SELECT * FROM ingredients WHERE id = ?').bind(id).first()
+  await logAdminAction(c, {
+    action: 'update_ingredient',
+    entity_type: 'ingredient',
+    entity_id: Number(id),
+    changes: data,
+  })
   return c.json({ ingredient: updated })
 })
 
@@ -493,6 +505,12 @@ ingredients.post('/:id/synonyms', async (c) => {
   const result = await c.env.DB.prepare(
     'INSERT INTO ingredient_synonyms (ingredient_id, synonym) VALUES (?, ?)'
   ).bind(id, body.synonym).run()
+  await logAdminAction(c, {
+    action: 'create_ingredient_synonym',
+    entity_type: 'ingredient_synonym',
+    entity_id: result.meta.last_row_id as number,
+    changes: { ingredient_id: Number(id), synonym: body.synonym },
+  })
   return c.json({ id: result.meta.last_row_id }, 201)
 })
 
@@ -509,6 +527,12 @@ ingredients.delete('/:id/synonyms/:synId', async (c) => {
   ).bind(synId, id).first()
   if (!syn) return c.json({ error: 'Not found' }, 404)
   await c.env.DB.prepare('DELETE FROM ingredient_synonyms WHERE id = ?').bind(synId).run()
+  await logAdminAction(c, {
+    action: 'delete_ingredient_synonym',
+    entity_type: 'ingredient_synonym',
+    entity_id: Number(synId),
+    changes: { ingredient_id: Number(id) },
+  })
   return c.json({ ok: true })
 })
 
@@ -528,6 +552,12 @@ ingredients.post('/:id/forms', async (c) => {
   const result = await c.env.DB.prepare(
     'INSERT INTO ingredient_forms (ingredient_id, name, comment, tags, score) VALUES (?, ?, ?, ?, ?)'
   ).bind(id, data.name, data.comment ?? null, data.tags ?? null, data.score ?? 0).run()
+  await logAdminAction(c, {
+    action: 'create_ingredient_form',
+    entity_type: 'ingredient_form',
+    entity_id: result.meta.last_row_id as number,
+    changes: { ingredient_id: Number(id), ...data },
+  })
   return c.json({ id: result.meta.last_row_id }, 201)
 })
 
@@ -544,6 +574,12 @@ ingredients.delete('/:id/forms/:formId', async (c) => {
   ).bind(formId, id).first()
   if (!form) return c.json({ error: 'Not found' }, 404)
   await c.env.DB.prepare('DELETE FROM ingredient_forms WHERE id = ?').bind(formId).run()
+  await logAdminAction(c, {
+    action: 'delete_ingredient_form',
+    entity_type: 'ingredient_form',
+    entity_id: Number(formId),
+    changes: { ingredient_id: Number(id) },
+  })
   return c.json({ ok: true })
 })
 
@@ -595,6 +631,12 @@ recommendationsApp.post('/', async (c) => {
   const result = await c.env.DB.prepare(
     'INSERT INTO recommendations (ingredient_id, product_id, type) VALUES (?, ?, ?)'
   ).bind(data.ingredient_id, data.product_id, data.type).run()
+  await logAdminAction(c, {
+    action: 'create_recommendation',
+    entity_type: 'recommendation',
+    entity_id: result.meta.last_row_id as number,
+    changes: data,
+  })
   return c.json({ id: result.meta.last_row_id }, 201)
 })
 
@@ -608,5 +650,10 @@ recommendationsApp.delete('/:id', async (c) => {
   const rec = await c.env.DB.prepare('SELECT id FROM recommendations WHERE id = ?').bind(id).first()
   if (!rec) return c.json({ error: 'Not found' }, 404)
   await c.env.DB.prepare('DELETE FROM recommendations WHERE id = ?').bind(id).run()
+  await logAdminAction(c, {
+    action: 'delete_recommendation',
+    entity_type: 'recommendation',
+    entity_id: Number(id),
+  })
   return c.json({ ok: true })
 })
