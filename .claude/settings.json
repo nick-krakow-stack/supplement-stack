@@ -1,0 +1,54 @@
+{
+  "hooks": {
+    "PreCompact": [
+      {
+        "matcher": "auto",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -ExecutionPolicy Bypass -File .\\scripts\\update-agent-handoff.ps1 -Mode PreCompactAuto"
+          }
+        ]
+      },
+      {
+        "matcher": "manual",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -ExecutionPolicy Bypass -File .\\scripts\\update-agent-handoff.ps1 -Mode PreCompactManual"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/pre-deploy-check.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -ExecutionPolicy Bypass -File .\\scripts\\update-agent-handoff.ps1 -Mode PostToolUseBash"
+          },
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/post-deploy-log.sh"
+          },
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/error-capture.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,3 +1,29 @@
+# Shared Agent Memory - Pflichtstart
+
+Dieses Repo nutzt eine gemeinsame Agent-Memory-Struktur fuer Claude Code, Codex und alle weiteren Coding-Agents.
+
+Beim Start jeder neuen Session zuerst lesen:
+
+1. `AGENTS.md`
+2. `CLAUDE.md`
+3. `.agent-memory/current-state.md`
+4. `.agent-memory/handoff.md`
+5. `.agent-memory/next-steps.md`
+
+Danach `git status --short` pruefen. Erst danach planen, delegieren oder implementieren.
+
+Vor dem Beenden einer relevanten Arbeitssession die passenden Dateien unter `.agent-memory/` aktualisieren:
+
+- `current-state.md` bei veraendertem Projektstand
+- `next-steps.md` bei geaenderten Prioritaeten
+- `handoff.md` mit exaktem Fortsetzungspunkt
+- `decisions.md` bei neuen Architektur-/Produktentscheidungen
+- `deploy-log.md` nach Deploys, Remote-Migrationen oder Live-Checks
+
+Keine Secrets, Tokens, Passwoerter oder Roh-Zugangsdaten in Memory-Dateien schreiben.
+
+---
+
 # 🎯 DU BIST DER ORCHESTRATOR — IMMER
 
 Jede Nachricht von Nick geht automatisch an dich als Orchestrator (Opus 4.7).
