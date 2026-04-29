@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell -ExecutionPolicy Bypass -File .\\scripts\\update-agent-handoff.ps1 -Mode PreCompactAuto"
+            "command": "powershell -ExecutionPolicy Bypass -File ./scripts/update-agent-handoff.ps1 -Mode PreCompactAuto"
           }
         ]
       },
@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell -ExecutionPolicy Bypass -File .\\scripts\\update-agent-handoff.ps1 -Mode PreCompactManual"
+            "command": "powershell -ExecutionPolicy Bypass -File ./scripts/update-agent-handoff.ps1 -Mode PreCompactManual"
           }
         ]
       }
@@ -37,7 +37,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell -ExecutionPolicy Bypass -File .\\scripts\\update-agent-handoff.ps1 -Mode PostToolUseBash"
+            "command": "powershell -ExecutionPolicy Bypass -File ./scripts/update-agent-handoff.ps1 -Mode PostToolUseBash"
           },
           {
             "type": "command",

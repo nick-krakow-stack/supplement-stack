@@ -1,40 +1,34 @@
 ﻿# Handoff
 
-Last updated: 2026-04-29 18:30:53 +02:00
-Update mode: ManualTest
+Last updated: 2026-04-29 20:14:16 +02:00
+Update mode: PostToolUseBash
 
 ## Latest Notes
 
-Shared agent workflow now includes automatic handoff snapshots via Claude Code hooks and documented local secret locations.
-Codex Orchestrator rule and shared Sub-Agent definitions were added to `AGENTS.md`; `.agent-memory/decisions.md` now records the Orchestrator/Sub-Agent operating model.
+Automatic handoff snapshot written by scripts/update-agent-handoff.ps1.
 
 ## Git Snapshot
 
 - Branch: main
-- Last commit: 9a5f523 DB: Phase B abgeschlossen — Migrations 0028–0035, dosage_guidelines→dose_recommendations migriert
+- Last commit: dd58ba2 Feature: Add dose recommendations API
 
 ## Working Tree
 
 ~~~text
+M .agent-memory/current-state.md
+M .agent-memory/deploy-log.md
+M .agent-memory/handoff.md
 M .claude/SESSION.md
-M .gitignore
-M CLAUDE.md
-?? .agent-memory/
+M .claude/settings.json
 ?? .claude/commands/
-?? .claude/hooks/error-capture.sh
-?? .claude/hooks/post-deploy-log.sh
-?? .claude/memory.md
-?? .claude/settings.json
-?? AGENTS.md
 ?? _research_raw/01_fat_soluble_vitamins.json
 ?? _research_raw/02_b_vitamins_vitamin_c.json
 ?? docs/cloudflare-accounts.md
 ?? docs/codex-working-context.md
 ?? frontend/package-lock.json
-?? functions/api/lib/
-?? functions/api/modules/
 ?? functions/package-lock.json
-?? scripts/
+?? scripts/setup-local-dev.ps1
+?? scripts/use-supplementstack-cloudflare.example.ps1
 ~~~
 
 ## Current State Summary
@@ -56,14 +50,14 @@ M CLAUDE.md
 - `docs/implementation-status.md`
 - parts of `.claude/SESSION.md`
 ## Current Phase
-Phase B is complete. Phase C is starting.
+Phase B is complete. Phase C backend refactor is in progress.
+Phase C Priority 1 (Hono module split) and Priority 2 (public dose recommendations API) are committed and deployed.
+Phase C Priority 3 (admin audit logging) and Priority 4 (server-side unit conversion) are still open.
+- `dd58ba2` - Feature: Add dose recommendations API (`GET /api/ingredients/:id/recommendations` from `dose_recommendations`).
+- `b1fd347` - Refactor: Split Pages API into Hono modules (`functions/api/[[path]].ts` is now a composer; modules under `functions/api/modules/*`, helpers under `functions/api/lib/*`).
+- `2ca9382` - Ops: Shared agent memory and auto-handoff workflow (`AGENTS.md`, `.agent-memory/*`, `scripts/update-agent-handoff.ps1`, `.claude/settings.json`, `.claude/memory.md` as pointer).
 - `9a5f523` - DB: Phase B abgeschlossen, migrations 0028-0035, `dosage_guidelines` migrated to `dose_recommendations`.
 - `0026`: `populations` lookup with 5 seed rows.
-- `0027`: `dose_recommendations`.
-- `0028`: `verified_profiles`.
-- `0029`: `admin_audit_log`.
-- `0030`: translation tables.
-- `0031`: `blog_posts`.
 
 ## Next Planned Work
 
