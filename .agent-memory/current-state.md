@@ -35,11 +35,12 @@ Treat these as historical or possibly stale unless verified against code:
 
 Phase B is complete. Phase C backend refactor is in progress.
 
-Phase C Priority 1 (Hono module split) and Priority 2 (public dose recommendations API) are committed and deployed.
-Phase C Priority 3 (admin audit logging) and Priority 4 (server-side unit conversion) are still open.
+Phase C Priority 1 (Hono module split), Priority 2 (public dose recommendations API), and Priority 3 (admin audit logging) are committed and deployed.
+Phase C Priority 4 (server-side unit conversion) is still open.
 
 Last relevant commits on `main` (all pushed to `origin/main`):
 
+- `4482a5f` - Feature: Admin Audit Logging — alle Mutationen in admin_audit_log.
 - `dd58ba2` - Feature: Add dose recommendations API (`GET /api/ingredients/:id/recommendations` from `dose_recommendations`).
 - `b1fd347` - Refactor: Split Pages API into Hono modules (`functions/api/[[path]].ts` is now a composer; modules under `functions/api/modules/*`, helpers under `functions/api/lib/*`).
 - `2ca9382` - Ops: Shared agent memory and auto-handoff workflow (`AGENTS.md`, `.agent-memory/*`, `scripts/update-agent-handoff.ps1`, `.claude/settings.json`, `.claude/memory.md` as pointer).

@@ -40,14 +40,9 @@ Expected behavior:
 - Include automatic upper-limit warnings when available.
 - Validate `verified_profile_id` in backend code because the column has no FK constraint.
 
-## Priority 3: Admin Audit Logging
+## Priority 3: Admin Audit Logging — DONE (commit 4482a5f, deployed 2026-04-29)
 
-Wire all Admin mutations to `admin_audit_log`.
-
-Expected behavior:
-
-- Log user id, action, entity type, entity id, before/after payload where reasonable, and timestamp.
-- Use a shared helper or middleware so future Admin endpoints do not forget logging.
+`logAdminAction()` helper added to `functions/api/lib/helpers.ts`. 16 mutations across admin.ts, products.ts, and ingredients.ts are now wired.
 
 ## Priority 4: Server-Side Unit Conversion
 

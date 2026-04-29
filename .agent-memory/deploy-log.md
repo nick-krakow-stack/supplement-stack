@@ -15,6 +15,15 @@ Latest relevant commits:
 
 ## Phase C Deploys
 
+### 2026-04-29 - Cloudflare Pages: admin audit logging
+
+- Commit: `4482a5f` - Feature: Admin Audit Logging — alle Mutationen in admin_audit_log.
+- New `logAdminAction()` helper in `functions/api/lib/helpers.ts`; 16 mutation endpoints in admin.ts, products.ts, ingredients.ts now write to `admin_audit_log`.
+- Build: `npx tsc -p tsconfig.json` from `functions/` passed; `npm run build` from `frontend/` passed; `functions/api` copied into `frontend/dist/functions/api` before deploy.
+- Command: `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://f8f1e2ef.supplementstack.pages.dev`
+- HTTP status check: not verified (no admin JWT available in this session).
+
 ### 2026-04-29 - Cloudflare Pages: dose recommendations API
 
 - Commit: `dd58ba2` - Feature: Add dose recommendations API.
