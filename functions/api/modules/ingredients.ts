@@ -4,6 +4,7 @@
 //   GET /           — list all
 //   GET /search     — search by name/synonym
 //   GET /:id        — single ingredient + synonyms + forms
+//   GET /:id/recommendations
 //   GET /:id/dosage-guidelines
 //   GET /:id/products
 //   POST /          — create (admin)
@@ -23,6 +24,122 @@ import type { AppContext, IngredientRow } from '../lib/types'
 import { ensureAuth, requireAdmin } from '../lib/helpers'
 
 const ingredients = new Hono<AppContext>()
+
+type DoseRecommendationQueryRow = {
+  id: number
+  ingredient_id: number
+  population_id: number
+  population_slug: string | null
+  population_name_de: string | null
+  population_description: string | null
+  population_priority: number | null
+  source_type: string
+  source_label: string
+  translated_source_label: string | null
+  source_url: string | null
+  dose_min: number | null
+  dose_max: number
+  unit: string
+  per_kg_body_weight: number | null
+  per_kg_cap: number | null
+  timing: string | null
+  translated_timing: string | null
+  context_note: string | null
+  translated_context_note: string | null
+  sex_filter: string | null
+  is_athlete: number
+  purpose: string
+  is_default: number
+  relevance_score: number
+  category_name: string | null
+  verified_profile_id: number | null
+  verified_profile_slug: string | null
+  verified_profile_name: string | null
+  verified_profile_credentials: string | null
+  translated_verified_profile_credentials: string | null
+  verified_profile_url: string | null
+  verified_profile_avatar_url: string | null
+  verified_profile_bio: string | null
+  translated_verified_profile_bio: string | null
+  verified_profile_is_verified: number | null
+  published_at: number | null
+  verified_at: number | null
+  review_due_at: number | null
+  created_at: number
+  updated_at: number
+  upper_limit: number | null
+  upper_limit_unit: string | null
+}
+
+type IngredientLimitRow = {
+  id: number
+  upper_limit: number | null
+  upper_limit_unit: string | null
+}
+
+function parsePositiveInteger(value: string): number | null {
+  if (!/^\d+$/.test(value)) return null
+  const parsed = Number(value)
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null
+}
+
+function normalizeComparableUnit(unit: string | null): string | null {
+  if (!unit) return null
+  const normalized = unit.trim().toLowerCase().replace(/\u03bc/g, '\u00b5')
+  if (normalized === 'ug' || normalized === 'mcg') return '\u00b5g'
+  return normalized
+}
+
+function getUpperLimitStatus(
+  doseMax: number,
+  doseUnit: string,
+  perKgBodyWeight: number | null,
+  upperLimit: number | null,
+  upperLimitUnit: string | null
+): {
+  upper_limit_exceeded: boolean
+  upper_limit_warning: 'exceeded' | 'near_upper_limit' | null
+  upper_limit_ratio: number | null
+  upper_limit_comparison_available: boolean
+} {
+  const doseUnitNormalized = normalizeComparableUnit(doseUnit)
+  const limitUnitNormalized = normalizeComparableUnit(upperLimitUnit)
+
+  if (
+    perKgBodyWeight !== null ||
+    !Number.isFinite(doseMax) ||
+    doseMax <= 0 ||
+    upperLimit === null ||
+    upperLimit <= 0 ||
+    doseUnitNormalized === null ||
+    limitUnitNormalized === null ||
+    doseUnitNormalized !== limitUnitNormalized
+  ) {
+    return {
+      upper_limit_exceeded: false,
+      upper_limit_warning: null,
+      upper_limit_ratio: null,
+      upper_limit_comparison_available: false,
+    }
+  }
+
+  const ratio = doseMax / upperLimit
+  const roundedRatio = Math.round(ratio * 1000) / 1000
+  if (ratio > 1) {
+    return {
+      upper_limit_exceeded: true,
+      upper_limit_warning: 'exceeded',
+      upper_limit_ratio: roundedRatio,
+      upper_limit_comparison_available: true,
+    }
+  }
+  return {
+    upper_limit_exceeded: false,
+    upper_limit_warning: ratio >= 0.9 ? 'near_upper_limit' : null,
+    upper_limit_ratio: roundedRatio,
+    upper_limit_comparison_available: true,
+  }
+}
 
 // GET /api/ingredients
 ingredients.get('/', async (c) => {
@@ -72,6 +189,179 @@ ingredients.get('/:id', async (c) => {
   return c.json({ ingredient, synonyms, forms })
 })
 
+// GET /api/ingredients/:id/recommendations
+ingredients.get('/:id/recommendations', async (c) => {
+  const ingredientId = parsePositiveInteger(c.req.param('id'))
+  if (ingredientId === null) return c.json({ error: 'id must be a positive integer' }, 400)
+
+  const language = (c.req.query('language') || 'de').trim().toLowerCase()
+
+  try {
+    const ingredient = await c.env.DB.prepare(
+      'SELECT id, upper_limit, upper_limit_unit FROM ingredients WHERE id = ?'
+    ).bind(ingredientId).first<IngredientLimitRow>()
+    if (!ingredient) return c.json({ error: 'Not found' }, 404)
+
+    const { results: rows } = await c.env.DB.prepare(`
+      SELECT
+        dr.id,
+        dr.ingredient_id,
+        dr.population_id,
+        p.slug AS population_slug,
+        p.name_de AS population_name_de,
+        p.description AS population_description,
+        p.priority AS population_priority,
+        dr.source_type,
+        dr.source_label,
+        drt.source_label AS translated_source_label,
+        dr.source_url,
+        dr.dose_min,
+        dr.dose_max,
+        dr.unit,
+        dr.per_kg_body_weight,
+        dr.per_kg_cap,
+        dr.timing,
+        drt.timing AS translated_timing,
+        dr.context_note,
+        drt.context_note AS translated_context_note,
+        dr.sex_filter,
+        dr.is_athlete,
+        dr.purpose,
+        dr.is_default,
+        dr.relevance_score,
+        dr.category_name,
+        dr.verified_profile_id,
+        vp.slug AS verified_profile_slug,
+        vp.name AS verified_profile_name,
+        vp.credentials AS verified_profile_credentials,
+        vpt.credentials AS translated_verified_profile_credentials,
+        vp.profile_url AS verified_profile_url,
+        vp.avatar_url AS verified_profile_avatar_url,
+        vp.bio AS verified_profile_bio,
+        vpt.bio AS translated_verified_profile_bio,
+        vp.is_verified AS verified_profile_is_verified,
+        dr.published_at,
+        dr.verified_at,
+        dr.review_due_at,
+        dr.created_at,
+        dr.updated_at,
+        i.upper_limit,
+        i.upper_limit_unit
+      FROM dose_recommendations dr
+      JOIN ingredients i ON i.id = dr.ingredient_id
+      JOIN populations p ON p.id = dr.population_id
+      LEFT JOIN verified_profiles vp ON vp.id = dr.verified_profile_id
+      LEFT JOIN dose_recommendation_translations drt
+        ON drt.dose_recommendation_id = dr.id AND drt.language = ?
+      LEFT JOIN verified_profile_translations vpt
+        ON vpt.verified_profile_id = vp.id AND vpt.language = ?
+      WHERE dr.ingredient_id = ?
+        AND dr.is_active = 1
+        AND dr.source_type <> 'user_private'
+        AND (dr.source_type <> 'user_public' OR dr.is_public = 1)
+      ORDER BY
+        dr.relevance_score DESC,
+        CASE dr.source_type
+          WHEN 'official' THEN 0
+          WHEN 'study' THEN 1
+          WHEN 'profile' THEN 2
+          WHEN 'user_public' THEN 3
+          ELSE 4
+        END ASC,
+        COALESCE(dr.published_at, dr.verified_at, dr.updated_at, dr.created_at) DESC,
+        dr.id ASC
+    `).bind(language, language, ingredientId).all<DoseRecommendationQueryRow>()
+
+    const recommendations = rows.map((row) => {
+      const upperLimitStatus = getUpperLimitStatus(
+        row.dose_max,
+        row.unit,
+        row.per_kg_body_weight,
+        row.upper_limit,
+        row.upper_limit_unit
+      )
+
+      return {
+        id: row.id,
+        ingredient_id: row.ingredient_id,
+        source: {
+          type: row.source_type,
+          label: row.translated_source_label ?? row.source_label,
+          original_label: row.source_label,
+          url: row.source_url,
+        },
+        dose: {
+          min: row.dose_min,
+          max: row.dose_max,
+          unit: row.unit,
+          per_kg_body_weight: row.per_kg_body_weight,
+          per_kg_cap: row.per_kg_cap,
+        },
+        population: {
+          id: row.population_id,
+          slug: row.population_slug,
+          name_de: row.population_name_de,
+          description: row.population_description,
+          priority: row.population_priority,
+        },
+        targeting: {
+          sex_filter: row.sex_filter,
+          is_athlete: row.is_athlete === 1,
+          purpose: row.purpose,
+        },
+        context: {
+          timing: row.translated_timing ?? row.timing,
+          original_timing: row.timing,
+          note: row.translated_context_note ?? row.context_note,
+          original_note: row.context_note,
+        },
+        verified_profile: row.verified_profile_id === null ? null : row.verified_profile_is_verified === 1 ? {
+          id: row.verified_profile_id,
+          slug: row.verified_profile_slug,
+          name: row.verified_profile_name,
+          credentials: row.translated_verified_profile_credentials ?? row.verified_profile_credentials,
+          original_credentials: row.verified_profile_credentials,
+          profile_url: row.verified_profile_url,
+          avatar_url: row.verified_profile_avatar_url,
+          bio: row.translated_verified_profile_bio ?? row.verified_profile_bio,
+          original_bio: row.verified_profile_bio,
+          is_verified: true,
+          missing: false,
+        } : {
+          is_verified: false,
+          missing: row.verified_profile_is_verified === null,
+        },
+        upper_limit: {
+          value: row.upper_limit,
+          unit: row.upper_limit_unit,
+          ...upperLimitStatus,
+        },
+        metadata: {
+          is_default: row.is_default === 1,
+          relevance_score: row.relevance_score,
+          category_name: row.category_name,
+          published_at: row.published_at,
+          verified_at: row.verified_at,
+          review_due_at: row.review_due_at,
+          created_at: row.created_at,
+          updated_at: row.updated_at,
+        },
+      }
+    })
+
+    return c.json({
+      recommendations,
+      metadata: {
+        ingredient_id: ingredient.id,
+        language,
+        count: recommendations.length,
+      },
+    })
+  } catch {
+    return c.json({ error: 'Failed to fetch dose recommendations' }, 500)
+  }
+})
+
 // GET /api/ingredients/:id/dosage-guidelines
 ingredients.get('/:id/dosage-guidelines', async (c) => {
   const id = c.req.param('id')
@@ -107,7 +397,10 @@ ingredients.get('/:id/dosage-guidelines', async (c) => {
         context_note AS notes,
         is_default
       FROM dose_recommendations
-      WHERE ingredient_id = ? AND is_active = 1
+      WHERE ingredient_id = ?
+        AND is_active = 1
+        AND source_type <> 'user_private'
+        AND (source_type <> 'user_public' OR is_public = 1)
       ORDER BY is_default DESC, source ASC, relevance_score DESC, id ASC
     `
   ).bind(id).all()
