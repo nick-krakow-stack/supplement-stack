@@ -421,7 +421,7 @@ ingredients.get('/:id/dosage-guidelines', async (c) => {
 ingredients.get('/:id/products', async (c) => {
   const id = c.req.param('id')
   const { results: products } = await c.env.DB.prepare(`
-    SELECT p.*, pi.quantity, pi.unit
+    SELECT p.*, pi.quantity, pi.unit, pi.is_main
     FROM products p
     JOIN product_ingredients pi ON pi.product_id = p.id
     WHERE pi.ingredient_id = ? AND p.visibility = 'public'

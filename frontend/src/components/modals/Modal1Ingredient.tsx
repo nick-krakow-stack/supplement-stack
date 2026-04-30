@@ -44,9 +44,8 @@ function formatFrequency(gl: DosageGuideline): string {
   return parts.join(' · ');
 }
 
-// Merge guidelines with the same dose range + unit into one card.
-// Uses normalized unit in the key so "800 IU" and "800 IU" always deduplicate.
-// Also merges source, source_title and notes across all sources globally.
+// Merge guidelines with the same dose range + unit into one card within a source tab.
+// Uses normalized unit in the key so "800 IU" and "800 IE" deduplicate.
 function deduplicateByDose(guidelines: DosageGuideline[]): DosageGuideline[] {
   const seen = new Map<string, DosageGuideline>();
   for (const gl of guidelines) {
@@ -56,10 +55,7 @@ function deduplicateByDose(guidelines: DosageGuideline[]): DosageGuideline[] {
       const ex = seen.get(key)!;
       const notes = [ex.notes, gl.notes].filter(Boolean).join(' / ') || undefined;
       const title = [ex.source_title, gl.source_title].filter(Boolean).join(' + ') || undefined;
-      const source = ex.source !== gl.source
-        ? (`${ex.source} + ${gl.source}` as DosageGuideline['source'])
-        : ex.source;
-      seen.set(key, { ...ex, notes, source_title: title, source });
+      seen.set(key, { ...ex, notes, source_title: title });
     } else {
       seen.set(key, { ...gl });
     }
@@ -143,6 +139,8 @@ export default function Modal1Ingredient({
           if (defaultGl) {
             setSelectedSource(defaultGl.source);
             setManualUnit(defaultGl.unit ?? '');
+          } else {
+            setSelectedSource(null);
           }
         }
       })
@@ -182,11 +180,12 @@ export default function Modal1Ingredient({
   // Unique sources from guidelines
   const availableSources = Array.from(new Set(guidelines.map((g) => g.source)));
 
-  // Deduplicate globally across all sources first, then filter for the selected tab.
-  // This ensures a dose that appears under multiple sources is shown only once
-  // (in the tab of whichever source won the merge, i.e. the first occurrence).
-  const globallyDeduped = deduplicateByDose(guidelines);
-  const sourceGuidelines = globallyDeduped.filter((g) => g.source === selectedSource);
+  // Filter to the selected source first, then deduplicate only within that tab.
+  // Cross-source merges create combined source strings like "DGE + EFSA", which
+  // no longer match any tab exactly and would hide otherwise valid cards.
+  const sourceGuidelines = selectedSource
+    ? deduplicateByDose(guidelines.filter((g) => g.source === selectedSource))
+    : [];
 
   // Click on a guideline card → auto-fill the manual dose input
   const handleGuidelineClick = (gl: DosageGuideline) => {

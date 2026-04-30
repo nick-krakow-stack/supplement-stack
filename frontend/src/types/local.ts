@@ -67,6 +67,12 @@ export interface Product {
   serving_unit?: string;
   servings_per_container?: number;
   container_count?: number;
+  /** Present on lightweight product-by-ingredient responses. */
+  ingredient_id?: number;
+  ingredient_name?: string;
+  quantity?: number;
+  unit?: string;
+  is_main?: number;
   timing?: string;
   dosage_text?: string;
   effect_summary?: string;

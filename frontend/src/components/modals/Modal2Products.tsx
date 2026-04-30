@@ -63,15 +63,57 @@ function calcMonthlyPrice(price: number, servingsPerContainer?: number, containe
   return total > 0 ? (price / total) * 30 : null;
 }
 
+function normalizeComparableUnit(unit: string): string {
+  const normalized = unit.toLowerCase().replace(/[\s.]/g, '');
+  return normalized === 'ie' || normalized === 'iu' ? 'iu' : normalized;
+}
+
 function calcServingsPerDay(
   dose: { value: number; unit: string },
   qty: number,
   unit: string,
 ): number | null {
   if (qty <= 0) return null;
-  const normalize = (s: string) => s.toLowerCase().replace(/\s/g, '');
-  if (normalize(dose.unit) !== normalize(unit)) return null;
+  if (normalizeComparableUnit(dose.unit) !== normalizeComparableUnit(unit)) return null;
   return Math.ceil(dose.value / qty);
+}
+
+function normalizeProductForIngredient(product: Product, ingredientId: number): Product {
+  if (product.quantity == null && product.unit == null && product.is_main == null) return product;
+
+  const ingredients = product.ingredients ?? [];
+  const matchingIndex = ingredients.findIndex((ingredient) => ingredient.ingredient_id === ingredientId);
+  const flatIsMain = product.is_main ?? 0;
+
+  if (matchingIndex >= 0) {
+    return {
+      ...product,
+      ingredients: ingredients.map((ingredient, index) => (
+        index === matchingIndex
+          ? {
+              ...ingredient,
+              quantity: ingredient.quantity ?? product.quantity,
+              unit: ingredient.unit ?? product.unit,
+              is_main: ingredient.is_main ?? flatIsMain,
+            }
+          : ingredient
+      )),
+    };
+  }
+
+  return {
+    ...product,
+    ingredients: [
+      ...ingredients,
+      {
+        ingredient_id: product.ingredient_id ?? ingredientId,
+        ingredient_name: product.ingredient_name,
+        quantity: product.quantity,
+        unit: product.unit,
+        is_main: flatIsMain,
+      },
+    ],
+  };
 }
 
 function ProductImage({ src, name }: { src?: string; name: string }) {
@@ -207,6 +249,7 @@ export default function Modal2Products({
   const [userProducts, setUserProducts] = useState<UserProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [recommendationWarning, setRecommendationWarning] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -214,6 +257,7 @@ export default function Modal2Products({
     const fetchAll = async () => {
       setLoading(true);
       setError(null);
+      setRecommendationWarning(false);
 
       const token = localStorage.getItem('ss_token');
 
@@ -224,12 +268,13 @@ export default function Modal2Products({
             }).catch(() => null)
           : Promise.resolve(null);
 
-        const [recRes, prodRes, userProdRes] = await Promise.all([
+        const [recResult, prodResult, userProdResult] = await Promise.allSettled([
           fetch(`/api/recommendations?ingredient_id=${ingredientId}`),
           fetch(`/api/ingredients/${ingredientId}/products`),
           userProductPromise,
         ]);
 
+        const userProdRes = userProdResult.status === 'fulfilled' ? userProdResult.value : null;
         if (!cancelled && userProdRes && userProdRes.ok) {
           try {
             const userProdData = await userProdRes.json();
@@ -239,19 +284,45 @@ export default function Modal2Products({
           }
         }
 
-        if (!recRes.ok && recRes.status !== 404) throw new Error(`Empfehlungen: HTTP ${recRes.status}`);
-        if (!prodRes.ok) throw new Error(`Produkte: HTTP ${prodRes.status}`);
+        if (prodResult.status === 'rejected') {
+          throw prodResult.reason;
+        }
 
-        const recData = recRes.ok ? await recRes.json() : { recommendations: [] };
+        const prodRes = prodResult.value;
+        if (!prodRes.ok) throw new Error(`Produkte: HTTP ${prodRes.status}`);
         const prodData = await prodRes.json();
+
+        let recData: { recommendations?: Recommendation[] } = { recommendations: [] };
+        let recWarning = false;
+        if (recResult.status === 'fulfilled' && recResult.value.ok) {
+          try {
+            recData = await recResult.value.json();
+          } catch (err) {
+            recWarning = true;
+            console.warn('Recommendations response could not be parsed:', err);
+          }
+        } else if (recResult.status === 'fulfilled') {
+          recWarning = true;
+          console.warn(`Recommendations fetch failed: HTTP ${recResult.value.status}`);
+        } else if (recResult.status === 'rejected') {
+          recWarning = true;
+          console.warn('Recommendations fetch failed:', recResult.reason);
+        }
 
         if (cancelled) return;
 
         const recommendations: Recommendation[] = recData.recommendations ?? [];
-        const allProducts: Product[] = prodData.products ?? [];
+        const allProducts: Product[] = (prodData.products ?? []).map((product: Product) => (
+          normalizeProductForIngredient(product, ingredientId)
+        ));
         const recMap = new Map<number, RecommendationType>();
         recommendations.forEach((recommendation) => {
-          recMap.set(recommendation.product_id, recommendation.type === 'recommended' ? 'recommended' : 'alternative');
+          if (typeof recommendation.product_id === 'number') {
+            recMap.set(
+              recommendation.product_id,
+              recommendation.type === 'recommended' ? 'recommended' : 'alternative',
+            );
+          }
         });
 
         const recOrder: Record<RecommendationType, number> = { recommended: 0, alternative: 1, other: 2 };
@@ -268,6 +339,7 @@ export default function Modal2Products({
         });
 
         setItems(withRec);
+        setRecommendationWarning(recWarning);
       } catch (err) {
         if (!cancelled) {
           setError('Produkte konnten nicht geladen werden.');
@@ -346,6 +418,12 @@ export default function Modal2Products({
 
         {!loading && !error && (
           <div className="space-y-6">
+            {recommendationWarning && items.length > 0 && (
+              <p className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-2 text-xs font-semibold text-amber-700">
+                Hinweis: Produkt-Badges konnten nicht geladen werden.
+              </p>
+            )}
+
             {userProducts.length > 0 && (
               <section>
                 <p className="mb-3 text-xs font-black uppercase tracking-[0.2em] text-slate-400">
