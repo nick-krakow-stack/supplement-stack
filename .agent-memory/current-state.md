@@ -1,6 +1,6 @@
 # Current State
 
-Last updated: 2026-04-29
+Last updated: 2026-04-30
 
 ## Project
 
@@ -35,11 +35,14 @@ Treat these as historical or possibly stale unless verified against code:
 
 Phase B is complete. Phase C backend refactor is in progress.
 
-Phase C Priority 1 (Hono module split), Priority 2 (public dose recommendations API), and Priority 3 (admin audit logging) are committed and deployed.
-Phase C Priority 4 (server-side unit conversion) is still open.
+Phase C Priority 1 (Hono module split), Priority 2 (public dose recommendations API), Priority 3 (admin audit logging), and Priority 4 (server-side unit conversion) are committed and deployed.
+Phase C tech-debt sweep complete (commit b866c3d).
+Phase C is complete.
 
 Last relevant commits on `main` (all pushed to `origin/main`):
 
+- `b866c3d` - Refactor + Ops: Tech-Debt-Cleanup nach Phase C (normalizeComparableUnit removed, IngredientRow extended, pages_build_output_dir added, next-steps reorganized).
+- `11440f5` - Feature: Server-side Unit-Konvertierung — IU/µg/mg/g für Upper-Limit-Vergleich.
 - `4482a5f` - Feature: Admin Audit Logging — alle Mutationen in admin_audit_log.
 - `dd58ba2` - Feature: Add dose recommendations API (`GET /api/ingredients/:id/recommendations` from `dose_recommendations`).
 - `b1fd347` - Refactor: Split Pages API into Hono modules (`functions/api/[[path]].ts` is now a composer; modules under `functions/api/modules/*`, helpers under `functions/api/lib/*`).

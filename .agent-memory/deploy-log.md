@@ -1,6 +1,6 @@
 # Deploy Log
 
-Last updated: 2026-04-29
+Last updated: 2026-04-30
 
 ## Latest Known Production State
 
@@ -13,7 +13,30 @@ Latest relevant commits:
 - `b1fd347` - Refactor: Split Pages API into Hono modules.
 - `9a5f523` - DB: Phase B complete (migrations 0028-0035).
 
+## Phase C — Tech-Debt Cleanup
+
+### 2026-04-30 - Cloudflare Pages: Tech-Debt-Cleanup nach Phase C
+
+- Commit: `b866c3d` - Refactor + Ops: Tech-Debt-Cleanup nach Phase C.
+- Items: normalizeComparableUnit removed (replaced by normalizeUnit from lib/units.ts); IngredientRow extended with upper_limit/upper_limit_unit/preferred_unit; pages_build_output_dir added to wrangler.toml; next-steps.md reorganized.
+- Build: `npx tsc -p tsconfig.json` from `functions/` passed (no errors); `npm run build` from `frontend/` passed (1.45s, 0 errors).
+- Command: `npx wrangler pages deploy frontend/dist --project-name supplementstack` (with CF env vars loaded).
+- Preview URL: `https://c0f45f5b.supplementstack.pages.dev`
+- pages_build_output_dir warning: no "config ignored" warning appeared in deploy output — resolved.
+- Smoke test: build and deploy verified; endpoint functional check skipped (no admin JWT in session).
+
 ## Phase C Deploys
+
+### 2026-04-30 - Cloudflare Pages: server-side unit conversion
+
+- Commit: `11440f5` - Feature: Server-side Unit-Konvertierung — IU/µg/mg/g für Upper-Limit-Vergleich.
+- New `functions/api/lib/units.ts`: `normalizeUnit()`, `convertAmount()` with IU↔µg/mg/g support for Vitamin D, A, E; pure mass conversion µg↔mg↔g generic.
+- Integrated into `GET /api/ingredients/:id/recommendations`: cross-unit upper-limit comparison now attempted; `amount_converted_to_upper_limit_unit` field added to response when conversion was performed.
+- Build: `npx tsc -p tsconfig.json` from `functions/` passed (no errors); `npm run build` from `frontend/` passed (1.43s, 0 errors).
+- Command: `npx wrangler pages deploy frontend/dist --project-name supplementstack` (with CF env vars loaded).
+- Preview URL: `https://292a8010.supplementstack.pages.dev`
+- HTTP status check: not verified (no admin JWT in this session).
+- Smoke test: skipped (no local D1 with mixed-unit rows available).
 
 ### 2026-04-29 - Cloudflare Pages: admin audit logging
 
