@@ -22,6 +22,7 @@
 import { Hono } from 'hono'
 import type { AppContext, IngredientRow } from '../lib/types'
 import { ensureAuth, requireAdmin, logAdminAction } from '../lib/helpers'
+import { convertAmount } from '../lib/units'
 
 const ingredients = new Hono<AppContext>()
 
@@ -73,6 +74,7 @@ type DoseRecommendationQueryRow = {
 
 type IngredientLimitRow = {
   id: number
+  name: string
   upper_limit: number | null
   upper_limit_unit: string | null
 }
@@ -95,42 +97,61 @@ function getUpperLimitStatus(
   doseUnit: string,
   perKgBodyWeight: number | null,
   upperLimit: number | null,
-  upperLimitUnit: string | null
+  upperLimitUnit: string | null,
+  ingredientHint?: { name?: string | null }
 ): {
   upper_limit_exceeded: boolean
   upper_limit_warning: 'exceeded' | 'near_upper_limit' | null
   upper_limit_ratio: number | null
   upper_limit_comparison_available: boolean
+  amount_converted_to_upper_limit_unit: number | null
 } {
-  const doseUnitNormalized = normalizeComparableUnit(doseUnit)
-  const limitUnitNormalized = normalizeComparableUnit(upperLimitUnit)
+  const unavailable = {
+    upper_limit_exceeded: false,
+    upper_limit_warning: null as null,
+    upper_limit_ratio: null,
+    upper_limit_comparison_available: false,
+    amount_converted_to_upper_limit_unit: null,
+  }
 
   if (
     perKgBodyWeight !== null ||
     !Number.isFinite(doseMax) ||
     doseMax <= 0 ||
     upperLimit === null ||
-    upperLimit <= 0 ||
-    doseUnitNormalized === null ||
-    limitUnitNormalized === null ||
-    doseUnitNormalized !== limitUnitNormalized
+    upperLimit <= 0
   ) {
-    return {
-      upper_limit_exceeded: false,
-      upper_limit_warning: null,
-      upper_limit_ratio: null,
-      upper_limit_comparison_available: false,
-    }
+    return unavailable
   }
 
-  const ratio = doseMax / upperLimit
+  const doseUnitNormalized = normalizeComparableUnit(doseUnit)
+  const limitUnitNormalized = normalizeComparableUnit(upperLimitUnit)
+  if (doseUnitNormalized === null || limitUnitNormalized === null) return unavailable
+
+  // Determine the effective dose amount in upper-limit units for comparison.
+  let effectiveDose: number
+  let convertedAmount: number | null = null
+
+  if (doseUnitNormalized === limitUnitNormalized) {
+    effectiveDose = doseMax
+  } else {
+    // Attempt cross-unit conversion
+    const converted = convertAmount(doseMax, doseUnit, upperLimitUnit!, ingredientHint)
+    if (converted === null || !Number.isFinite(converted) || converted <= 0) return unavailable
+    effectiveDose = converted
+    convertedAmount = Math.round(converted * 1_000_000) / 1_000_000
+  }
+
+  const ratio = effectiveDose / upperLimit
   const roundedRatio = Math.round(ratio * 1000) / 1000
+
   if (ratio > 1) {
     return {
       upper_limit_exceeded: true,
       upper_limit_warning: 'exceeded',
       upper_limit_ratio: roundedRatio,
       upper_limit_comparison_available: true,
+      amount_converted_to_upper_limit_unit: convertedAmount,
     }
   }
   return {
@@ -138,6 +159,7 @@ function getUpperLimitStatus(
     upper_limit_warning: ratio >= 0.9 ? 'near_upper_limit' : null,
     upper_limit_ratio: roundedRatio,
     upper_limit_comparison_available: true,
+    amount_converted_to_upper_limit_unit: convertedAmount,
   }
 }
 
@@ -198,7 +220,7 @@ ingredients.get('/:id/recommendations', async (c) => {
 
   try {
     const ingredient = await c.env.DB.prepare(
-      'SELECT id, upper_limit, upper_limit_unit FROM ingredients WHERE id = ?'
+      'SELECT id, name, upper_limit, upper_limit_unit FROM ingredients WHERE id = ?'
     ).bind(ingredientId).first<IngredientLimitRow>()
     if (!ingredient) return c.json({ error: 'Not found' }, 404)
 
@@ -278,7 +300,8 @@ ingredients.get('/:id/recommendations', async (c) => {
         row.unit,
         row.per_kg_body_weight,
         row.upper_limit,
-        row.upper_limit_unit
+        row.upper_limit_unit,
+        { name: ingredient.name }
       )
 
       return {
