@@ -79,9 +79,10 @@ export default function SearchPage() {
   const handlePopularChipClick = useCallback(
     async (name: string) => {
       try {
-        const res = await fetch(`/api/ingredients/search?q=${encodeURIComponent(name)}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
+        const res = await apiClient.get<{ ingredients?: Ingredient[] }>('/ingredients/search', {
+          params: { q: name },
+        });
+        const data = res.data;
         const ingredients: Ingredient[] = data.ingredients ?? [];
         // Find exact or first match
         const match =

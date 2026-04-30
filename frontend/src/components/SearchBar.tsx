@@ -7,6 +7,12 @@ interface SearchBarProps {
   placeholder?: string;
 }
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+
+function apiPath(path: string): string {
+  return `${API_BASE_URL}${path}`;
+}
+
 function useDebounce<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState<T>(value);
   useEffect(() => {
@@ -43,7 +49,7 @@ export default function SearchBar({ onSelect, placeholder = 'Wirkstoff suchen…
     setLoading(true);
     setError(null);
 
-    fetch(`/api/ingredients/search?q=${encodeURIComponent(debouncedQuery.trim())}`, {
+    fetch(apiPath(`/ingredients/search?q=${encodeURIComponent(debouncedQuery.trim())}`), {
       signal: controller.signal,
     })
       .then((res) => {
