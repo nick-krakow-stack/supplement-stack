@@ -1,62 +1,28 @@
 # Next Steps
 
-Last updated: 2026-04-29
+Last updated: 2026-04-30
 
-## Priority 1: Phase C Backend Refactor
+## Phase D — Next Phase (scope to be defined by Nick)
 
-Goal: split the monolithic Hono app in `functions/api/[[path]].ts` into maintainable modules under `functions/api/modules/` and shared helpers under `functions/api/lib/`.
+Phase C is fully complete. Phase D has not been formally scoped yet.
+Nick to decide which of the following candidates to prioritize:
 
-Important:
-
-- Confirm whether the existing untracked module files are complete, partial, or generated drafts.
-- Mount modules from the entry point only after checking route parity.
-- Keep Cloudflare Worker constraints: Web APIs only, no Node runtime assumptions, no filesystem dependencies.
-
-## Priority 0: Commit Shared Agent Workflow
-
-Before substantial Phase C implementation, commit the shared agent workflow files so Claude Code and Codex both start from the same versioned contract:
-
-- `AGENTS.md`
-- `.agent-memory/*`
-- `.claude/memory.md`
-- `.claude/settings.json`
-- `scripts/update-agent-handoff.ps1`
-- `.gitignore`
-- `CLAUDE.md`
-
-## Priority 2: New Dose Recommendations API
-
-Add a new public endpoint based on `dose_recommendations`:
-
-```text
-GET /api/ingredients/:id/recommendations
-```
-
-Expected behavior:
-
-- Read from `dose_recommendations`, not the legacy `recommendations` table.
-- Include relevant population/profile/source metadata.
-- Sort by relevance, evidence quality, and year.
-- Include automatic upper-limit warnings when available.
-- Validate `verified_profile_id` in backend code because the column has no FK constraint.
-
-## Priority 3: Admin Audit Logging — DONE (commit 4482a5f, deployed 2026-04-29)
-
-`logAdminAction()` helper added to `functions/api/lib/helpers.ts`. 16 mutations across admin.ts, products.ts, and ingredients.ts are now wired.
-
-## Priority 4: Server-Side Unit Conversion
-
-Implement server-side unit conversion for supplement dose comparisons.
-
-Known needs:
-
-- mg to g and g to mg.
-- IU to micrograms where ingredient-specific conversion factors are known.
-- ingredient-specific rules for vitamins and other compounds where simple mass conversion is not enough.
-
-## Later / Do Not Mix Into Phase C
-
-- Rename old `recommendations` table to `product_recommendations` in a separate task.
-- Expand admin CMS for translations.
+- Rename old `recommendations` table to `product_recommendations` (isolated migration, no logic change).
+- Expand admin CMS with translations tab (see i18n plan in CLAUDE.md — `*_translations` tables are ready).
 - First manual run of GitHub Actions D1 backup workflow to verify token scopes.
-- Root documentation cleanup after Phase C stabilizes.
+- Root documentation cleanup now that Phase C is stable.
+
+---
+
+## Completed (Phase C)
+
+All Phase C items are merged to `main` and deployed to Cloudflare Pages.
+
+| Priority | Item | Commit | Status |
+|---|---|---|---|
+| 0 | Shared agent workflow (AGENTS.md, .agent-memory/*, .claude/settings.json, scripts/update-agent-handoff.ps1) | `2ca9382` | Done |
+| 1 | Hono module split — entry point is now composer, modules under `functions/api/modules/*`, helpers under `functions/api/lib/*` | `b1fd347` | Done |
+| 2 | New dose recommendations API (`GET /api/ingredients/:id/recommendations` from `dose_recommendations`) | `dd58ba2` | Done |
+| 3 | Admin audit logging — `logAdminAction()` in `lib/helpers.ts`, 16 mutations wired | `4482a5f` | Done |
+| 4 | Server-side unit conversion — `lib/units.ts` with `normalizeUnit()` + `convertAmount()`, IU coverage for D/A/E | `11440f5` | Done |
+| — | Tech-debt cleanup: deduplicate normalizeComparableUnit, extend IngredientRow, add pages_build_output_dir, reorganize next-steps | *(this commit)* | Done |

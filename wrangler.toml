@@ -1,5 +1,6 @@
 name = "supplement-stack-api"
 compatibility_date = "2024-09-23"
+pages_build_output_dir = "frontend/dist"
 
 [vars]
 DEMO_SESSION_TTL_MINUTES = "1440"

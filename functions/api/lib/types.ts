@@ -50,6 +50,9 @@ export type IngredientRow = {
   hyper_symptoms: string | null
   external_url: string | null
   created_at: string
+  upper_limit: number | null
+  upper_limit_unit: string | null
+  preferred_unit: string | null
 }
 
 export type ProductRow = {

@@ -22,7 +22,7 @@
 import { Hono } from 'hono'
 import type { AppContext, IngredientRow } from '../lib/types'
 import { ensureAuth, requireAdmin, logAdminAction } from '../lib/helpers'
-import { convertAmount } from '../lib/units'
+import { convertAmount, normalizeUnit } from '../lib/units'
 
 const ingredients = new Hono<AppContext>()
 
@@ -72,24 +72,11 @@ type DoseRecommendationQueryRow = {
   upper_limit_unit: string | null
 }
 
-type IngredientLimitRow = {
-  id: number
-  name: string
-  upper_limit: number | null
-  upper_limit_unit: string | null
-}
 
 function parsePositiveInteger(value: string): number | null {
   if (!/^\d+$/.test(value)) return null
   const parsed = Number(value)
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null
-}
-
-function normalizeComparableUnit(unit: string | null): string | null {
-  if (!unit) return null
-  const normalized = unit.trim().toLowerCase().replace(/\u03bc/g, '\u00b5')
-  if (normalized === 'ug' || normalized === 'mcg') return '\u00b5g'
-  return normalized
 }
 
 function getUpperLimitStatus(
@@ -124,8 +111,8 @@ function getUpperLimitStatus(
     return unavailable
   }
 
-  const doseUnitNormalized = normalizeComparableUnit(doseUnit)
-  const limitUnitNormalized = normalizeComparableUnit(upperLimitUnit)
+  const doseUnitNormalized = normalizeUnit(doseUnit)
+  const limitUnitNormalized = upperLimitUnit !== null ? normalizeUnit(upperLimitUnit) : null
   if (doseUnitNormalized === null || limitUnitNormalized === null) return unavailable
 
   // Determine the effective dose amount in upper-limit units for comparison.
@@ -221,7 +208,7 @@ ingredients.get('/:id/recommendations', async (c) => {
   try {
     const ingredient = await c.env.DB.prepare(
       'SELECT id, name, upper_limit, upper_limit_unit FROM ingredients WHERE id = ?'
-    ).bind(ingredientId).first<IngredientLimitRow>()
+    ).bind(ingredientId).first<IngredientRow>()
     if (!ingredient) return c.json({ error: 'Not found' }, 404)
 
     const { results: rows } = await c.env.DB.prepare(`
