@@ -1,22 +1,18 @@
 # Handoff
 
-Last updated: 2026-05-01 23:07:30 +02:00
-Update mode: Manual Ops-Worker deploy handoff
+Last updated: 2026-05-01
+Update mode: Manual Dev-Worker affiliate disclosure handoff
 
 ## Latest Notes
 
-Ops-Worker committed and deployed the Preview search API-base fix.
+Dev-Worker made a local, uncommitted frontend affiliate disclosure cleanup.
 
-- Root cause: preview bundle could embed `https://supplementstack.pages.dev/api` from `frontend/.env.local`, causing preview pages to call production API cross-origin. Production CORS does not allow arbitrary preview origins, so SearchBar surfaced `Suche fehlgeschlagen. Bitte erneut versuchen.`.
-- Implemented `frontend/src/api/base.ts` as centralized API-base logic.
-- Production builds now use same-origin `/api` by default and ignore `VITE_API_BASE_URL`.
-- Vite dev on local browser hosts (`localhost`, `127.0.0.1`, `::1`) can still use `VITE_API_BASE_URL`; otherwise it falls back to `/api`.
-- `frontend/src/api/client.ts`, `frontend/src/components/SearchBar.tsx`, and `frontend/src/components/StackWorkspace.tsx` now share the helper.
-- Fix commit: `b5dba6e` - Fix: Use same-origin API in deployed frontend.
-- Validation passed: `npm run build` in `frontend/`; `npx tsc -p tsconfig.json` in `functions/`.
-- Deploy prep passed: `frontend/dist/functions/api/[[path]].ts` was present before deploy.
-- Deployed preview: `https://8582e2f6.supplementstack.pages.dev`.
-- Smoke checks passed: preview root HTTP 200; `/api/ingredients/search?q=d3` HTTP 200 and response contained Vitamin D3; downloaded preview JS bundle did not contain `supplementstack.pages.dev/api`.
+- Removed the visible `Affiliate` badge from `frontend/src/components/ProductCard.tsx`.
+- Kept product shop link / buy button behavior unchanged.
+- Updated `frontend/src/components/LegalDisclaimer.tsx` affiliate variant to a general footnote: links can be affiliate links, commission may be earned, recommendations remain independent.
+- Admin/editing surfaces were not changed; `is_affiliate` remains visible/editable in admin and user product forms.
+- Validation passed: `npm run build` in `frontend/`.
+- No commit and no deploy were performed.
 
 ## Git Snapshot
 
@@ -26,13 +22,13 @@ Ops-Worker committed and deployed the Preview search API-base fix.
 
 ## Working Tree
 
-Expected remaining uncommitted/untracked files are memory/docs/local-helper artifacts and should not be assumed disposable.
+Expected remaining uncommitted/untracked files are memory/docs/local-helper artifacts plus this local affiliate disclosure cleanup. Do not assume untracked files are disposable.
 
 ~~~text
 M .agent-memory/current-state.md
-M .agent-memory/deploy-log.md
 M .agent-memory/handoff.md
-M .agent-memory/next-steps.md
+M frontend/src/components/LegalDisclaimer.tsx
+M frontend/src/components/ProductCard.tsx
 ?? .claude/commands/
 ?? _research_raw/01_fat_soluble_vitamins.json
 ?? _research_raw/02_b_vitamins_vitamin_c.json

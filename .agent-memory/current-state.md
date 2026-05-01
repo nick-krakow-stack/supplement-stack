@@ -55,6 +55,16 @@ Last relevant commits on `main`:
 - `2ca9382` - Ops: Shared agent memory and auto-handoff workflow (`AGENTS.md`, `.agent-memory/*`, `scripts/update-agent-handoff.ps1`, `.claude/settings.json`, `.claude/memory.md` as pointer).
 - `9a5f523` - DB: Phase B abgeschlossen, migrations 0028-0035, `dosage_guidelines` migrated to `dose_recommendations`.
 
+## Latest Local Work
+
+Uncommitted frontend affiliate disclosure cleanup is in progress locally:
+
+- `frontend/src/components/ProductCard.tsx` no longer renders the visible `Affiliate` badge in product cards.
+- `frontend/src/components/LegalDisclaimer.tsx` now uses a general affiliate footnote: some links may be affiliate links, commission may be earned, recommendations remain independent.
+- Shop link / buy button behavior was left unchanged.
+- Admin and edit surfaces were intentionally not changed; `is_affiliate` remains visible/editable there.
+- Validation passed: `npm run build` in `frontend/`.
+
 ## Phase B Result
 
 Production D1 migrations 0026-0035 are considered live according to the previous memory:

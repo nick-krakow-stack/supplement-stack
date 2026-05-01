@@ -284,11 +284,6 @@ export default function ProductCard({
             {formatEur(monthlyPrice)}/Mo
           </span>
         )}
-        {!!product.is_affiliate && (
-          <span className="bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full text-[10px] font-bold">
-            Affiliate
-          </span>
-        )}
       </div>
 
       {/* Actions */}
