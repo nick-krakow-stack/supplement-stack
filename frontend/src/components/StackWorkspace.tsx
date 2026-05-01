@@ -12,6 +12,7 @@ import {
   X,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { apiPath } from '../api/base';
 import SearchBar from './SearchBar';
 import ProductCard from './ProductCard';
 import StacksHeader, { type StacksHeaderVariant } from './StacksHeader';
@@ -69,14 +70,9 @@ export interface StackWorkspaceProps {
 // Helpers
 // ---------------------------------------------------------------------------
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
 const DEMO_NOTICE =
   'Diese Funktion ist nur in der kostenlosen Vollversion verfügbar. Registriere dich, damit deine Änderungen dauerhaft gespeichert werden.';
 const DESC_STORAGE_KEY = 'ss_stack_descriptions';
-
-function apiPath(path: string): string {
-  return `${API_BASE_URL}${path}`;
-}
 
 function newStackId(): string {
   return `stack_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;

@@ -1,16 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Search, X } from 'lucide-react';
+import { apiPath } from '../api/base';
 import type { Ingredient } from '../types/local';
 
 interface SearchBarProps {
   onSelect: (ingredient: Ingredient) => void;
   placeholder?: string;
-}
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
-
-function apiPath(path: string): string {
-  return `${API_BASE_URL}${path}`;
 }
 
 function useDebounce<T>(value: T, delay: number): T {
