@@ -41,9 +41,11 @@ Phase C is complete.
 Demo product loading fix is committed and deployed to Cloudflare Pages preview.
 D3 recommendations / product modal loading fix is committed and deployed to Cloudflare Pages preview.
 Preview search API-base fix is committed and deployed to Cloudflare Pages preview: production builds use same-origin `/api` by default, while Vite dev on localhost can still use `VITE_API_BASE_URL`.
+Affiliate disclosure cleanup is committed and deployed to Cloudflare Pages preview: product cards no longer show the visible Affiliate badge; the general affiliate disclosure lives in the footer disclaimer.
 
 Last relevant commits on `main`:
 
+- `965d4e4` - Fix: Move affiliate disclosure to footer (removed visible product-card Affiliate badge; generalized footer affiliate note).
 - `b5dba6e` - Fix: Use same-origin API in deployed frontend (central API base helper, same-origin `/api` for production builds, local dev override only on localhost).
 - `2f4248b` - Fix: Restore demo product loading (`GET /api/demo/products`, frontend API-base consistency for SearchBar/SearchPage).
 - `9107e2e` - Fix: Stabilize dosage and product modal data loading (source-tab dosage dedupe, resilient product modal recommendation loading, flat product ingredient metadata, product `is_main` from ingredient join).
@@ -55,15 +57,18 @@ Last relevant commits on `main`:
 - `2ca9382` - Ops: Shared agent memory and auto-handoff workflow (`AGENTS.md`, `.agent-memory/*`, `scripts/update-agent-handoff.ps1`, `.claude/settings.json`, `.claude/memory.md` as pointer).
 - `9a5f523` - DB: Phase B abgeschlossen, migrations 0028-0035, `dosage_guidelines` migrated to `dose_recommendations`.
 
-## Latest Local Work
+## Latest Deployed Work
 
-Uncommitted frontend affiliate disclosure cleanup is in progress locally:
+Frontend affiliate disclosure cleanup is committed and deployed to Cloudflare Pages preview:
 
 - `frontend/src/components/ProductCard.tsx` no longer renders the visible `Affiliate` badge in product cards.
 - `frontend/src/components/LegalDisclaimer.tsx` now uses a general affiliate footnote: some links may be affiliate links, commission may be earned, recommendations remain independent.
 - Shop link / buy button behavior was left unchanged.
 - Admin and edit surfaces were intentionally not changed; `is_affiliate` remains visible/editable there.
 - Validation passed: `npm run build` in `frontend/`.
+- Deploy prep passed: `frontend/dist/functions/api/[[path]].ts` was present before deploy.
+- Deployed preview: `https://b4e4ea90.supplementstack.pages.dev`.
+- Smoke checks passed: preview root HTTP 200; downloaded preview JS no longer contains the old ProductCard Affiliate badge class/text, while allowed affiliate strings remain in footer/admin/edit surfaces.
 
 ## Phase B Result
 

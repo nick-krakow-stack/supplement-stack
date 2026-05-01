@@ -9,15 +9,30 @@ Phase C backend refactor + new dose recommendations API are deployed to Cloudfla
 Demo product loading fix is deployed to Cloudflare Pages preview.
 D3 recommendations / product modal data loading fix is deployed to Cloudflare Pages preview.
 Preview search API-base fix is deployed to Cloudflare Pages preview.
+Affiliate disclosure cleanup is deployed to Cloudflare Pages preview.
 
 Latest relevant commits:
 
+- `965d4e4` - Fix: Move affiliate disclosure to footer.
 - `b5dba6e` - Fix: Use same-origin API in deployed frontend.
 - `2f4248b` - Fix: Restore demo product loading.
 - `9107e2e` - Fix: Stabilize dosage and product modal data loading.
 - `dd58ba2` - Feature: Add dose recommendations API.
 - `b1fd347` - Refactor: Split Pages API into Hono modules.
 - `9a5f523` - DB: Phase B complete (migrations 0028-0035).
+
+## Affiliate Disclosure Cleanup
+
+### 2026-05-01 - Cloudflare Pages: affiliate disclosure moved to footer
+
+- Commit: `965d4e4` - Fix: Move affiliate disclosure to footer.
+- Scope: `frontend/src/components/ProductCard.tsx`, `frontend/src/components/LegalDisclaimer.tsx`.
+- Build: `npm run build` from `frontend/` passed.
+- Deploy prep: `frontend/dist/functions/api/[[path]].ts` verified present before deploy.
+- Command: `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://b4e4ea90.supplementstack.pages.dev`
+- Smoke checks: preview root returned HTTP 200; preview JS `/assets/index-DgGBIJBD.js` returned HTTP 200.
+- Bundle check: downloaded preview JS and verified the old ProductCard Affiliate badge class was absent. Remaining `Affiliate` strings are expected in footer/legal copy, landing copy, and admin/user-edit surfaces.
 
 ## Preview Search API-Base Fix
 
