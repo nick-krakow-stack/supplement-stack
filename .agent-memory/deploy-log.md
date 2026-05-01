@@ -1,17 +1,62 @@
 # Deploy Log
 
-Last updated: 2026-04-30
+Last updated: 2026-05-01
 
 ## Latest Known Production State
 
 Phase B database migrations 0026-0035 are live in production D1.
 Phase C backend refactor + new dose recommendations API are deployed to Cloudflare Pages.
+Demo product loading fix is deployed to Cloudflare Pages preview.
+D3 recommendations / product modal data loading fix is deployed to Cloudflare Pages preview.
+Preview search API-base fix is deployed to Cloudflare Pages preview.
 
 Latest relevant commits:
 
+- `b5dba6e` - Fix: Use same-origin API in deployed frontend.
+- `2f4248b` - Fix: Restore demo product loading.
+- `9107e2e` - Fix: Stabilize dosage and product modal data loading.
 - `dd58ba2` - Feature: Add dose recommendations API.
 - `b1fd347` - Refactor: Split Pages API into Hono modules.
 - `9a5f523` - DB: Phase B complete (migrations 0028-0035).
+
+## Preview Search API-Base Fix
+
+### 2026-05-01 - Cloudflare Pages: same-origin API in deployed frontend
+
+- Commit: `b5dba6e` - Fix: Use same-origin API in deployed frontend.
+- Scope: `frontend/src/api/base.ts`, `frontend/src/api/client.ts`, `frontend/src/components/SearchBar.tsx`, `frontend/src/components/StackWorkspace.tsx`.
+- Build: `npm run build` from `frontend/` passed; `npx tsc -p tsconfig.json` from `functions/` passed.
+- Deploy prep: `frontend/dist/functions/api/[[path]].ts` verified present before deploy.
+- Command: `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://8582e2f6.supplementstack.pages.dev`
+- Smoke checks: preview root returned HTTP 200; `GET /api/ingredients/search?q=d3` returned HTTP 200 and contained Vitamin D3.
+- Bundle check: downloaded `/assets/index-BXEivzLW.js` from the preview and verified it does not contain `supplementstack.pages.dev/api`.
+
+## Demo Product Loading Fix
+
+### 2026-04-30 - Cloudflare Pages: demo product loading
+
+- Commit: `2f4248b` - Fix: Restore demo product loading.
+- Scope: `functions/api/modules/demo.ts`, `frontend/src/components/SearchBar.tsx`, `frontend/src/pages/SearchPage.tsx`.
+- Build: `npx tsc -p tsconfig.json` from `functions/` passed; `npm run build` from `frontend/` passed.
+- Deploy prep: `frontend/dist/functions/api/[[path]].ts` verified present before deploy.
+- Command: `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://aa546170.supplementstack.pages.dev`
+- Smoke checks: preview root returned `HTTP/1.1 200 OK`; `GET /api/demo/products` returned `HTTP/1.1 200 OK` with 18 products.
+- Open risk: no browser/manual demo UI QA was run in this session.
+
+## Modal Data Loading Fix
+
+### 2026-04-30 - Cloudflare Pages: D3 recommendations / product modal loading
+
+- Commit: `9107e2e` - Fix: Stabilize dosage and product modal data loading.
+- Scope: `Modal1Ingredient.tsx`, `Modal2Products.tsx`, `frontend/src/types/local.ts`, `functions/api/modules/ingredients.ts`.
+- Build: `npx tsc -p tsconfig.json` from `functions/` passed; `npm run build` from `frontend/` passed.
+- Deploy prep: `frontend/dist/functions/api/[[path]].ts` verified present before deploy.
+- Command: `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://bc37a09d.supplementstack.pages.dev`
+- HTTP status check on preview URL: `HTTP/1.1 200 OK`.
+- Open risk: no browser/manual modal QA was run in this session.
 
 ## Phase C — Tech-Debt Cleanup
 
@@ -76,4 +121,3 @@ Latest relevant commits:
 - Consider adding `pages_build_output_dir = "frontend/dist"` to `wrangler.toml` in a separate scoped task so Pages deploys consume config directly.
 
 When a future agent deploys or applies migrations, append the exact date, commit, command summary, and verification result here.
-

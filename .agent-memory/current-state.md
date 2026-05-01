@@ -1,6 +1,6 @@
 # Current State
 
-Last updated: 2026-04-30
+Last updated: 2026-05-01
 
 ## Project
 
@@ -38,9 +38,15 @@ Phase B is complete. Phase C backend refactor is in progress.
 Phase C Priority 1 (Hono module split), Priority 2 (public dose recommendations API), Priority 3 (admin audit logging), and Priority 4 (server-side unit conversion) are committed and deployed.
 Phase C tech-debt sweep complete (commit b866c3d).
 Phase C is complete.
+Demo product loading fix is committed and deployed to Cloudflare Pages preview.
+D3 recommendations / product modal loading fix is committed and deployed to Cloudflare Pages preview.
+Preview search API-base fix is committed and deployed to Cloudflare Pages preview: production builds use same-origin `/api` by default, while Vite dev on localhost can still use `VITE_API_BASE_URL`.
 
-Last relevant commits on `main` (all pushed to `origin/main`):
+Last relevant commits on `main`:
 
+- `b5dba6e` - Fix: Use same-origin API in deployed frontend (central API base helper, same-origin `/api` for production builds, local dev override only on localhost).
+- `2f4248b` - Fix: Restore demo product loading (`GET /api/demo/products`, frontend API-base consistency for SearchBar/SearchPage).
+- `9107e2e` - Fix: Stabilize dosage and product modal data loading (source-tab dosage dedupe, resilient product modal recommendation loading, flat product ingredient metadata, product `is_main` from ingredient join).
 - `b866c3d` - Refactor + Ops: Tech-Debt-Cleanup nach Phase C (normalizeComparableUnit removed, IngredientRow extended, pages_build_output_dir added, next-steps reorganized).
 - `11440f5` - Feature: Server-side Unit-Konvertierung — IU/µg/mg/g für Upper-Limit-Vergleich.
 - `4482a5f` - Feature: Admin Audit Logging — alle Mutationen in admin_audit_log.
@@ -67,6 +73,7 @@ Production D1 migrations 0026-0035 are considered live according to the previous
 ## Current Code Shape
 
 - Frontend routes and pages are already present: landing, demo, search, stacks, wishlist, admin, auth, profile, user products, forgot/reset password.
+- Frontend API base is centralized in `frontend/src/api/base.ts`: production builds use same-origin `/api`; only Vite dev on localhost/127.0.0.1/::1 may use `VITE_API_BASE_URL`.
 - `functions/api/[[path]].ts` is now a Hono composition root with CORS setup and `app.route(...)` mounts for auth/me, ingredients/recommendations, products/r2, admin/shop-domains/interactions, stacks/stack-warnings, wishlist, user-products, and demo.
 - Business logic has moved out of the entry point into modules under `functions/api/modules/*`.
 - `functions/api/modules/user-products.ts` and `functions/api/modules/demo.ts` were added from the previous monolith behavior.
