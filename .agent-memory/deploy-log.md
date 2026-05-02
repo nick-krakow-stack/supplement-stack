@@ -14,11 +14,18 @@ Phase D product recommendations rename and admin translations MVP are committed,
 remote-migrated, and deployed to Cloudflare Pages preview.
 Admin translations expansion is committed and deployed to Cloudflare Pages
 preview.
+Production custom domain `supplementstack.de` is live and has received the same
+recent deploys as the Cloudflare Pages subdomain. Public SEO indexing remains
+intentionally disabled/gated.
+UX add-product modal focus polish is committed and deployed to Cloudflare Pages.
 GitHub Actions D1 backup has run successfully both manually and automatically;
 token scopes are verified.
 
 Latest relevant commits:
 
+- `078fc31` - UX: Auto-focus search field in 'Produkt hinzufuegen' modal (Demo + Stack-Workspace).
+- `e8f2bbc` - UX: Auto-focus name field when opening 'Produkt hinzufuegen' modal.
+- `cebd31a` - Memory: Production domain live, reorganize next-steps.
 - `49ed83e` - Feature: Expand admin translation management.
 - `862ed57` - Feature: Phase D product recommendations and translations.
 - `965d4e4` - Fix: Move affiliate disclosure to footer.
@@ -28,6 +35,25 @@ Latest relevant commits:
 - `dd58ba2` - Feature: Add dose recommendations API.
 - `b1fd347` - Refactor: Split Pages API into Hono modules.
 - `9a5f523` - DB: Phase B complete (migrations 0028-0035).
+
+## UX Usability Polish
+
+### 2026-05-02 13:28:28 - Cloudflare Pages: add-product search focus
+
+- Commit: `078fc31` - UX: Auto-focus search field in 'Produkt hinzufuegen'
+  modal (Demo + Stack-Workspace).
+- Scope: `frontend/src/components/SearchBar.tsx`,
+  `frontend/src/components/StackWorkspace.tsx`.
+- Status from `.claude/SESSION.md`: deployed successfully.
+- Preview URL: not recorded in `.claude/SESSION.md`; do not invent one.
+
+### 2026-05-02 13:22:20 - Cloudflare Pages: user product name focus
+
+- Commit: `e8f2bbc` - UX: Auto-focus name field when opening 'Produkt
+  hinzufuegen' modal.
+- Scope: `frontend/src/components/modals/UserProductForm.tsx`.
+- Status from `.claude/SESSION.md`: deployed successfully.
+- Preview URL: not recorded in `.claude/SESSION.md`; do not invent one.
 
 ## Phase D Product Recommendations And Translations
 

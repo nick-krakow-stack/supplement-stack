@@ -40,7 +40,8 @@ Phase B is complete. Phase C is complete. Phase D bundle is committed,
 remote-migrated, and deployed to Cloudflare Pages preview.
 
 Production custom domain `supplementstack.de` is live in parallel to the
-Cloudflare Pages preview URLs. Public SEO indexing is intentionally deferred
+Cloudflare Pages preview URLs. All recent deploys have been published to both
+the subdomain and live domain. Public SEO indexing is intentionally deferred
 until legal/compliance is cleared.
 
 Phase C Priority 1 (Hono module split), Priority 2 (public dose recommendations API), Priority 3 (admin audit logging), and Priority 4 (server-side unit conversion) are committed and deployed.
@@ -57,9 +58,23 @@ Root documentation cleanup is committed: README, DEPLOYMENT, implementation stat
 D1 backup workflow is verified: GitHub Actions D1 backup has run successfully both manually and automatically, and token scopes are confirmed. Backup verification is no longer an open next step.
 CI has been refreshed for the Cloudflare line. Local lint/test/build are green. Frontend test tooling now tolerates an empty suite via Vitest `--passWithNoTests`, while still running and failing real tests normally.
 Worktree cleanup is committed in `216e2df`: `_research_raw/01_fat_soluble_vitamins.json` and `_research_raw/02_b_vitamins_vitamin_c.json` are tracked as migration 0006 source material, and local `.claude/commands/` files are ignored without deleting them.
+Memory update `cebd31a` recorded the production custom-domain state. The domain
+itself is no longer a promotion/verification next step; only SEO/indexing stays
+gated.
+Recent UX polish from Claude is committed and deployed: `e8f2bbc` auto-focuses
+the name field when opening the user product add modal, and `078fc31`
+auto-focuses the product search field in the add-product modal for Demo and
+Stack Workspace flows.
+Planning constraint: launch remains DE-only, but i18n/localization must be
+planned as locale + country + guideline-set support, not text translation only.
+German/DGE/D-A-CH is the DE default; other countries need configurable rule and
+source sets, e.g. USA must not inherit DGE/D-A-CH by default.
 
 Last relevant commits on `main`:
 
+- `078fc31` - UX: Auto-focus search field in 'Produkt hinzufuegen' modal (Demo + Stack-Workspace).
+- `e8f2bbc` - UX: Auto-focus name field when opening 'Produkt hinzufuegen' modal.
+- `cebd31a` - Memory: Production domain live, reorganize next-steps (superseded by current usability-first next steps and i18n planning constraint).
 - `216e2df` - Ops: Track research sources and ignore local Claude commands.
 - `f3fa88c` - Memory: Record admin translations expansion deploy.
 - `49ed83e` - Feature: Expand admin translation management (admin translation GET/PUT routes and UI for Ingredients, Dose Recommendations, Verified Profiles, and Blog Posts).
@@ -78,6 +93,23 @@ Last relevant commits on `main`:
 
 ## Latest Deployed Work
 
+UX add-product modal focus polish is committed and deployed to Cloudflare Pages
+according to `.claude/SESSION.md`:
+
+- Commit: `e8f2bbc` - UX: Auto-focus name field when opening 'Produkt
+  hinzufuegen' modal.
+- File: `frontend/src/components/modals/UserProductForm.tsx`.
+- Deploy: Cloudflare Pages successful on 2026-05-02 13:22:20.
+- Commit: `078fc31` - UX: Auto-focus search field in 'Produkt hinzufuegen'
+  modal (Demo + Stack-Workspace).
+- Files: `frontend/src/components/SearchBar.tsx`,
+  `frontend/src/components/StackWorkspace.tsx`.
+- Deploy: Cloudflare Pages successful on 2026-05-02 13:28:28.
+- `.claude/SESSION.md` does not contain exact preview URLs for these two
+  deploys; do not invent them.
+
+## Previous Deployed Work
+
 Admin translations expansion is committed and deployed to Cloudflare Pages
 preview:
 
@@ -90,8 +122,6 @@ preview:
   `/api/admin/translations/verified-profiles`, and
   `/api/admin/translations/blog-posts` returned HTTP 401, not 404;
   `/api/ingredients/search?q=d3` returned HTTP 200.
-
-## Previous Deployed Work
 
 Phase D product recommendations and translations are committed, remote-migrated,
 and deployed to Cloudflare Pages preview:
