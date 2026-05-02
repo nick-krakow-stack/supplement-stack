@@ -200,6 +200,7 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
               className={inputClass}
               placeholder="z.B. Omega-3 Fischöl"
               required
+              autoFocus={!isEdit}
             />
           </div>
 
