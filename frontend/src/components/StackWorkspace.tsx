@@ -312,7 +312,7 @@ function AddProductModal({
               <h3 className="text-xl font-black sm:text-2xl">Wirkstoff suchen</h3>
             </div>
             <p className="mb-3 text-base font-black text-slate-700">Nach Wirkstoff suchen</p>
-            <SearchBar onSelect={chooseIngredient} placeholder="z.B. D3, Cobalamin, Magnesium..." />
+            <SearchBar onSelect={chooseIngredient} placeholder="z.B. D3, Cobalamin, Magnesium..." autoFocus />
             <p className="mt-3 text-sm font-semibold text-slate-500">
               Beginnen Sie zu tippen, um Wirkstoffe zu finden.
             </p>

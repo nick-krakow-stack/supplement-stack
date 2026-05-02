@@ -6,6 +6,7 @@ import type { Ingredient } from '../types/local';
 interface SearchBarProps {
   onSelect: (ingredient: Ingredient) => void;
   placeholder?: string;
+  autoFocus?: boolean;
 }
 
 function useDebounce<T>(value: T, delay: number): T {
@@ -17,7 +18,7 @@ function useDebounce<T>(value: T, delay: number): T {
   return debounced;
 }
 
-export default function SearchBar({ onSelect, placeholder = 'Wirkstoff suchen…' }: SearchBarProps) {
+export default function SearchBar({ onSelect, placeholder = 'Wirkstoff suchen…', autoFocus = false }: SearchBarProps) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Ingredient[]>([]);
   const [loading, setLoading] = useState(false);
@@ -139,6 +140,7 @@ export default function SearchBar({ onSelect, placeholder = 'Wirkstoff suchen…
           aria-autocomplete="list"
           aria-expanded={open}
           aria-activedescendant={activeIndex >= 0 ? `suggestion-${activeIndex}` : undefined}
+          autoFocus={autoFocus}
           className="w-full rounded-2xl border border-slate-200 bg-white py-4 pl-12 pr-10 text-lg font-semibold text-slate-900 shadow-[0_14px_32px_rgba(15,23,42,0.07)] placeholder:text-slate-400 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100"
         />
         {loading && (
