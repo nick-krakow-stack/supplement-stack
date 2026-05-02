@@ -192,6 +192,6 @@ Latest relevant commits:
 ## Follow-Up
 
 - D1 backup workflow has run successfully both manually and automatically. Token scopes verified.
-- Consider adding `pages_build_output_dir = "frontend/dist"` to `wrangler.toml` in a separate scoped task so Pages deploys consume config directly.
+- `pages_build_output_dir = "frontend/dist"` is already present in `wrangler.toml`; no deploy-log follow-up remains for that warning.
 
 When a future agent deploys or applies migrations, append the exact date, commit, command summary, and verification result here.

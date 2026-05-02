@@ -2,97 +2,70 @@
 
 Last updated: 2026-05-02
 
-## Completed And Deployed
+## Current Baseline
 
-- Phase D bundle:
-  - Committed as `862ed57` - Feature: Phase D product recommendations and translations.
-  - Remote D1 migration `0036_rename_recommendations_to_product_recommendations.sql` is applied on `supplementstack-production`.
-  - Migration 0036 keeps a temporary `recommendations` compatibility view plus `INSTEAD OF INSERT` and `INSTEAD OF DELETE` triggers for old live code during the deploy window.
-  - Admin translations MVP for `ingredient_translations` is deployed.
-  - Root docs and implementation status are refreshed for the Cloudflare line and committed.
-  - CI is refreshed for the Cloudflare line and committed.
-  - Local checks are green: frontend lint, frontend test, frontend build, and functions TypeScript compile.
-  - Preview deploy: `https://66a9ee27.supplementstack.pages.dev`.
-  - Smoke checks passed for root, product recommendation API, dose recommendation API, D3 search, product 1, and admin translations auth routing.
-  - GitHub Actions D1 backup has run successfully both manually and automatically; token scopes are verified.
+Phase C is complete. The integrated Phase D rollout is complete:
 
-- Frontend test tooling CI guard:
-  - `frontend/package.json` test script now runs `vitest --passWithNoTests`.
-  - `.github/workflows/ci.yml` frontend job calls `npm run test --if-present -- --run`, so the workflow inherits `--passWithNoTests` while no test files exist.
-  - Check passed: `npm run test --if-present -- --run` in `frontend/` exits 0 when no test files exist.
+- Product recommendations rename and temporary compatibility layer are deployed.
+- Admin translations MVP and expansion are committed and deployed to Cloudflare Pages preview.
+- D1 backup verification is complete: GitHub Actions backup has run manually and automatically, and token scopes are verified.
+- Worktree cleanup is complete in `216e2df`: tracked research source files 01/02 are committed and local `.claude/commands/` files are ignored.
+- `wrangler.toml` already contains `pages_build_output_dir = "frontend/dist"`.
 
-- Admin translations MVP for `ingredient_translations`:
-  - `GET /api/admin/translations/ingredients?language=de&q=&limit=50&offset=0`
-  - `PUT /api/admin/translations/ingredients/:ingredientId/:language`
-  - Admin `translations` tab with language selector, search, editable fields, save/loading/error/saved states, and explicit MVP note.
-  - Checks passed: `npm run build` in `frontend/`; `npx tsc -p tsconfig.json` in `functions/`.
-  - Public i18n playback remains out of scope.
+D1 backup is done and is not a next step.
 
-- Admin translations expansion:
-  - Committed as `49ed83e` - Feature: Expand admin translation management.
-  - Deployed preview: `https://14cf1dba.supplementstack.pages.dev`.
-  - No D1 migration was needed.
-  - Admin translation management now covers Ingredients, Dose Recommendations,
-    Verified Profiles, and Blog Posts.
-  - Preview smoke checks passed: `/` HTTP 200; unauthenticated
-    `/api/admin/translations/ingredients`,
-    `/api/admin/translations/dose-recommendations`,
-    `/api/admin/translations/verified-profiles`, and
-    `/api/admin/translations/blog-posts` HTTP 401, not 404;
-    `/api/ingredients/search?q=d3` HTTP 200.
+## Go-Live / Production Readiness
 
-## Completed Locally
+Priority 1 - Production deploy and live-domain verification:
 
-- Admin translations have been extended beyond Ingredients:
-  - `GET /api/admin/translations/dose-recommendations?language=de&q=&limit=50&offset=0`
-  - `PUT /api/admin/translations/dose-recommendations/:doseRecommendationId/:language`
-  - `GET /api/admin/translations/verified-profiles?language=de&q=&limit=50&offset=0`
-  - `PUT /api/admin/translations/verified-profiles/:verifiedProfileId/:language`
-  - `GET /api/admin/translations/blog-posts?language=de&q=&limit=50&offset=0`
-  - `PUT /api/admin/translations/blog-posts/:blogPostId/:language`
-- `frontend/src/pages/admin/TranslationsTab.tsx` now has an entity selector for
-  Ingredients, Dose Recommendations, Verified Profiles, and Blog Posts.
-- Public i18n playback remains unchanged.
-- D1 backup is verified and must not be treated as open work.
-- Checks passed locally:
-  - `npm run lint --if-present` in `frontend/`
-  - `npm run test --if-present -- --run` in `frontend/`
-  - `npm run build` in `frontend/`
-  - `npx tsc -p tsconfig.json` in `functions/`
+- Confirm the current preview build that should become production.
+- Verify whether the production/custom domain points at the intended Cloudflare Pages deployment.
+- Promote or redeploy the approved build to production.
+- Smoke test production/custom domain: root page, D3 search, dose recommendation API, product modal/product detail, admin translation routes returning 401 unauthenticated.
 
-## Phase D - Next Required Actions
+Priority 2 - Legal and compliance final review:
 
-Phase C and the integrated Phase D rollout are complete.
+- Review Impressum, Datenschutz, cookie handling/banner needs, health disclaimer, and affiliate disclosure.
+- Confirm German health-claim wording and affiliate labeling before public launch.
+- Do not start SEO indexing until legal/compliance is cleared.
 
-- Keep the temporary `recommendations` view/triggers until a later cleanup
-  migration after deployed code no longer needs old-table compatibility.
-- Consider a later cleanup migration that drops the compatibility
-  `recommendations` view and triggers once old previews are irrelevant.
-- Public i18n playback remains separate and was not changed.
+Priority 3 - Content and data QA:
 
-## Completed Locally (Docs/Ops)
+- Validate D3 and additional ingredient pages against source data and visible UI copy.
+- Check product data, product recommendations, affiliate/user link distinction, and dosage recommendation display.
+- Run an authenticated admin UI smoke test, including translation editing for Ingredients, Dose Recommendations, Verified Profiles, and Blog Posts.
 
-- Root documentation cleanup for the Cloudflare line is complete locally in
-  `README.md`, `DEPLOYMENT.md`, `docs/implementation-status.md`, and
-  `docs/agent-planner.md`.
-- `.github/workflows/ci.yml` has been refreshed for the Cloudflare line.
-- Backup workflow was checked against `wrangler.toml`; D1 database name matches
-  `supplementstack-production`.
-- GitHub Actions D1 backup workflow verification is complete: manual and
-  automatic runs succeeded, and token scopes are verified.
-- Secret-pattern review of the requested untracked docs/scripts/lockfiles found
-  placeholders and references only, not raw token values in the checked files;
-  those docs/scripts/lockfiles are now committed in `862ed57`.
+Priority 4 - Public i18n decision / playback:
 
-## Completed (Phase C)
+- Only needed if launch should be multilingual.
+- Admin translation management exists; public-facing translation playback is separate and was not changed.
+- Decide whether public pages remain DE-only for launch or need language selection/fallback behavior first.
 
-All Phase C items are merged to `main` and deployed to Cloudflare Pages.
+Priority 5 - Test coverage baseline:
 
-| Priority | Item | Commit | Status |
-|---|---|---|---|
-| 0 | Shared agent workflow (AGENTS.md, .agent-memory/*, .claude/settings.json, scripts/update-agent-handoff.ps1) | `2ca9382` | Done |
-| 1 | Hono module split - entry point is now composer, modules under `functions/api/modules/*`, helpers under `functions/api/lib/*` | `b1fd347` | Done |
-| 2 | New dose recommendations API (`GET /api/ingredients/:id/recommendations` from `dose_recommendations`) | `dd58ba2` | Done |
-| 3 | Admin audit logging - `logAdminAction()` in `lib/helpers.ts`, 16 mutations wired | `4482a5f` | Done |
-| 4 | Server-side unit conversion - `lib/units.ts` with `normalizeUnit()` + `convertAmount()`, IU coverage for D/A/E | `11440f5` | Done |
-| - | Tech-debt cleanup: deduplicate normalizeComparableUnit, extend IngredientRow, add pages_build_output_dir, reorganize next-steps | `b866c3d` | Done |
+- Vitest currently passes with `--passWithNoTests`.
+- Add targeted API and UI smoke/unit tests for the launch-critical paths instead of relying only on empty-suite success.
+- Suggested first coverage: API base behavior, D3 search, dose recommendations response shape, product modal recommendation loading, admin translations route auth/validation.
+
+Priority 6 - SEO and indexing readiness:
+
+- Prepare robots, sitemap, page metadata, canonical URLs, and OpenGraph/Twitter preview metadata.
+- Enable indexing only after secret rotation, production-domain verification, and legal/compliance approval.
+
+Priority 7 - Later compatibility cleanup:
+
+- Add a cleanup migration later to drop the temporary `recommendations` compatibility view and triggers after old previews/deploy windows are irrelevant.
+
+## Completed Reference
+
+- Phase C:
+  - `b1fd347` - Hono module split.
+  - `dd58ba2` - Public dose recommendations API.
+  - `4482a5f` - Admin audit logging.
+  - `11440f5` - Server-side unit conversion.
+  - `b866c3d` - Phase C tech-debt cleanup and `pages_build_output_dir`.
+- Phase D:
+  - `862ed57` - Product recommendations rename, admin translations MVP, Cloudflare-line docs/CI.
+  - `49ed83e` - Admin translations expansion.
+  - `f3fa88c` - Memory: Record admin translations expansion deploy.
+  - `216e2df` - Ops: Track research sources and ignore local Claude commands.

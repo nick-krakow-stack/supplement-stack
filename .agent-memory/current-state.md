@@ -52,10 +52,12 @@ Profiles, and Blog Posts is committed and deployed to Cloudflare Pages preview.
 Root documentation cleanup is committed: README, DEPLOYMENT, implementation status, and agent planner now describe the Cloudflare-native line and point old backend/SQLite references to legacy context.
 D1 backup workflow is verified: GitHub Actions D1 backup has run successfully both manually and automatically, and token scopes are confirmed. Backup verification is no longer an open next step.
 CI has been refreshed for the Cloudflare line. Local lint/test/build are green. Frontend test tooling now tolerates an empty suite via Vitest `--passWithNoTests`, while still running and failing real tests normally.
-Worktree cleanup is complete locally: `_research_raw/01_fat_soluble_vitamins.json` and `_research_raw/02_b_vitamins_vitamin_c.json` are tracked as migration 0006 source material, and local `.claude/commands/` files are ignored without deleting them.
+Worktree cleanup is committed in `216e2df`: `_research_raw/01_fat_soluble_vitamins.json` and `_research_raw/02_b_vitamins_vitamin_c.json` are tracked as migration 0006 source material, and local `.claude/commands/` files are ignored without deleting them.
 
 Last relevant commits on `main`:
 
+- `216e2df` - Ops: Track research sources and ignore local Claude commands.
+- `f3fa88c` - Memory: Record admin translations expansion deploy.
 - `49ed83e` - Feature: Expand admin translation management (admin translation GET/PUT routes and UI for Ingredients, Dose Recommendations, Verified Profiles, and Blog Posts).
 - `862ed57` - Feature: Phase D product recommendations and translations (migration 0036, admin translations MVP, Cloudflare-line CI/docs, lockfiles, local setup scripts).
 - `965d4e4` - Fix: Move affiliate disclosure to footer (removed visible product-card Affiliate badge; generalized footer affiliate note).
@@ -208,10 +210,10 @@ Production D1 migrations 0026-0035 are considered live according to the previous
 
 `functions/api/lib/*` and `functions/api/modules/*` are tracked.
 
-Remaining notable untracked or modified paths typically include:
+Remaining notable local paths typically include:
 
 - `.wrangler/`, `frontend/dist/`, `frontend/node_modules/`, `functions/node_modules/` (build/cache, gitignored or ignorable).
-- `_research_raw/*` (research source data - review before committing).
+- `_research_raw/*` may contain future research source data. Files 01/02/03 are already tracked; review any new research files before committing.
 - `.claude/SESSION.md`, `.claude/commands/` (legacy Claude session log, see `.claude/SESSION.md` header).
 - `frontend/dist/` may be present from the latest build/deploy prep and is not committed.
 - Phase D source files, docs, lockfiles, and generic setup scripts are committed in `862ed57`.
