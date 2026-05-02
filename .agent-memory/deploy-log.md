@@ -18,11 +18,14 @@ Production custom domain `supplementstack.de` is live and has received the same
 recent deploys as the Cloudflare Pages subdomain. Public SEO indexing remains
 intentionally disabled/gated.
 UX add-product modal focus polish is committed and deployed to Cloudflare Pages.
+Targeted User/Demo/Search/Stack UX fixes plus Admin UX fixes are committed and
+deployed to Cloudflare Pages preview and live custom domain.
 GitHub Actions D1 backup has run successfully both manually and automatically;
 token scopes are verified.
 
 Latest relevant commits:
 
+- `8fb5431` - UX: Improve stack and admin usability flows.
 - `078fc31` - UX: Auto-focus search field in 'Produkt hinzufuegen' modal (Demo + Stack-Workspace).
 - `e8f2bbc` - UX: Auto-focus name field when opening 'Produkt hinzufuegen' modal.
 - `cebd31a` - Memory: Production domain live, reorganize next-steps.
@@ -37,6 +40,38 @@ Latest relevant commits:
 - `9a5f523` - DB: Phase B complete (migrations 0028-0035).
 
 ## UX Usability Polish
+
+### 2026-05-02 - Cloudflare Pages: stack and admin usability flows
+
+- Commit: `8fb5431` - UX: Improve stack and admin usability flows.
+- Scope: User/Demo/Search/Stack UX fixes plus Admin UX fixes.
+- Local validation:
+  - `npm run lint --if-present` in `frontend/` passed.
+  - `npm run test --if-present -- --run` in `frontend/` passed with no tests
+    via `--passWithNoTests`.
+  - `npm run build` in `frontend/` passed.
+  - `npx tsc -p tsconfig.json` in `functions/` passed.
+  - `git diff --check` had no whitespace errors, only CRLF warnings.
+- Deploy prep: `npm run build` in `frontend/`; copied `functions` to
+  `frontend/dist/functions`; verified
+  `frontend/dist/functions/api/[[path]].ts` with `Test-Path -LiteralPath`.
+- Deploy command: `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://2b00223a.supplementstack.pages.dev`
+- Wrangler warning: uncommitted changes existed at deploy time. Expected:
+  memory files and `.claude/SESSION.md` were dirty while code commit `8fb5431`
+  was committed.
+- Smoke checks on preview:
+  - `/` returned HTTP 200 with JS asset `index-D8jGeaah.js`, CSS asset
+    `index-DWw_l_3p.css`, and `x-robots-tag: noindex`.
+  - `/api/ingredients/search?q=d3` returned HTTP 200 and contained Vitamin D3.
+  - `/api/admin/translations/ingredients` returned HTTP 401, not 404.
+  - `/api/ingredients/1/recommendations` returned HTTP 200 with 4 rows.
+- Smoke checks on live custom domain:
+  - `https://supplementstack.de/` returned HTTP 200 with the same JS/CSS asset
+    names as preview.
+  - `https://supplementstack.de/api/ingredients/search?q=d3` returned HTTP 200.
+  - `https://supplementstack.de/api/admin/translations/ingredients` returned
+    HTTP 401, not 404.
 
 ### 2026-05-02 13:28:28 - Cloudflare Pages: add-product search focus
 

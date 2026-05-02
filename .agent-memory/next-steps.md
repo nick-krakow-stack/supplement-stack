@@ -12,6 +12,8 @@ Phase C is complete. The integrated Phase D rollout is complete:
 - Worktree cleanup is complete in `216e2df`: tracked research source files 01/02 are committed and local `.claude/commands/` files are ignored.
 - `wrangler.toml` already contains `pages_build_output_dir = "frontend/dist"`.
 - Production custom domain `supplementstack.de` is live in parallel to Cloudflare Pages preview URLs. All recent deploys have been published to both the subdomain and live domain. Public SEO indexing is intentionally deferred until legal/compliance is cleared.
+- Targeted User/Demo/Search/Stack UX fixes plus Admin UX fixes are committed
+  and deployed in `8fb5431` (`UX: Improve stack and admin usability flows`).
 
 D1 backup is done and is not a next step. Production-domain promotion is done and is not a next step.
 
@@ -19,9 +21,15 @@ D1 backup is done and is not a next step. Production-domain promotion is done an
 
 Priority 1 - Usability QA and polish for logged-in user, demo, and admin:
 
+- Targeted user/demo/admin usability fixes are committed and deployed in
+  `8fb5431`. Preview/live smoke checks passed; browser-level QA remains open.
+- Admin TranslationsTab draft preservation and pagination remain explicit follow-up
+  work; they were intentionally not changed in the targeted admin usability pass.
 - Run the primary logged-in user flows end to end: register/login, search ingredient, open product modal, add product to stack, edit/remove stack items, wishlist, profile, and user product management.
 - Run the demo flows end to end without login, including ingredient search, product selection, add-to-stack, modal focus behavior, and empty/error states.
 - Run authenticated admin UI smoke tests, especially product management, dose recommendations, translation editing for Ingredients/Dose Recommendations/Verified Profiles/Blog Posts, affiliate/user link distinction, and moderation states.
+- Capture any additional UX polish findings from manual browser QA and decide
+  whether they are launch blockers or later polish.
 - Prioritize mobile ergonomics and obvious next actions for Kevin, Sabine, and Marco before expanding scope.
 
 Priority 2 - Legal and compliance final review (blocker for SEO indexing/public launch, not for live-domain availability):
@@ -74,5 +82,6 @@ Priority 6 - SEO and indexing readiness (gated by legal/compliance):
   - `f3fa88c` - Memory: Record admin translations expansion deploy.
   - `216e2df` - Ops: Track research sources and ignore local Claude commands.
 - UX polish:
+  - `8fb5431` - UX: Improve stack and admin usability flows.
   - `e8f2bbc` - UX: Auto-focus name field when opening 'Produkt hinzufuegen' modal.
   - `078fc31` - UX: Auto-focus search field in 'Produkt hinzufuegen' modal (Demo + Stack-Workspace).

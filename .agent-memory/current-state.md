@@ -61,17 +61,31 @@ Worktree cleanup is committed in `216e2df`: `_research_raw/01_fat_soluble_vitami
 Memory update `cebd31a` recorded the production custom-domain state. The domain
 itself is no longer a promotion/verification next step; only SEO/indexing stays
 gated.
-Recent UX polish from Claude is committed and deployed: `e8f2bbc` auto-focuses
-the name field when opening the user product add modal, and `078fc31`
-auto-focuses the product search field in the add-product modal for Demo and
-Stack Workspace flows.
+Recent UX work is committed and deployed. `e8f2bbc` auto-focuses the name
+field when opening the user product add modal, `078fc31` auto-focuses the
+product search field in the add-product modal for Demo and Stack Workspace
+flows, and `8fb5431` ships the targeted User/Demo/Search/Stack UX fixes plus
+the targeted Admin UX fixes.
 Planning constraint: launch remains DE-only, but i18n/localization must be
 planned as locale + country + guideline-set support, not text translation only.
 German/DGE/D-A-CH is the DE default; other countries need configurable rule and
 source sets, e.g. USA must not inherit DGE/D-A-CH by default.
 
+Targeted user/demo/admin usability fixes are committed and deployed in
+`8fb5431` (`UX: Improve stack and admin usability flows`) and verified on
+Cloudflare Pages preview plus the live custom domain. The fixes cover
+SearchPage stack persistence/removal behavior, auth redirects to `/stacks`,
+StackWorkspace duplicate/empty/mail states, SearchBar no-results behavior,
+Modal2 retry without full reload, Wishlist empty CTA routing, Modal3 temporary
+Demo copy, admin stats product-key fallbacks, direct Nick-affiliate toggle
+persistence with rollback on failure, clear Nick-affiliate vs shop/user-link
+labeling, admin-product loading for recommendation prep, user-product
+moderation error handling, 404s for no-row moderation actions, and small mobile
+touch improvements.
+
 Last relevant commits on `main`:
 
+- `8fb5431` - UX: Improve stack and admin usability flows.
 - `078fc31` - UX: Auto-focus search field in 'Produkt hinzufuegen' modal (Demo + Stack-Workspace).
 - `e8f2bbc` - UX: Auto-focus name field when opening 'Produkt hinzufuegen' modal.
 - `cebd31a` - Memory: Production domain live, reorganize next-steps (superseded by current usability-first next steps and i18n planning constraint).
@@ -93,20 +107,30 @@ Last relevant commits on `main`:
 
 ## Latest Deployed Work
 
-UX add-product modal focus polish is committed and deployed to Cloudflare Pages
-according to `.claude/SESSION.md`:
+Targeted User/Demo/Search/Stack UX fixes and Admin UX fixes are committed and
+deployed:
 
-- Commit: `e8f2bbc` - UX: Auto-focus name field when opening 'Produkt
-  hinzufuegen' modal.
-- File: `frontend/src/components/modals/UserProductForm.tsx`.
-- Deploy: Cloudflare Pages successful on 2026-05-02 13:22:20.
-- Commit: `078fc31` - UX: Auto-focus search field in 'Produkt hinzufuegen'
-  modal (Demo + Stack-Workspace).
-- Files: `frontend/src/components/SearchBar.tsx`,
-  `frontend/src/components/StackWorkspace.tsx`.
-- Deploy: Cloudflare Pages successful on 2026-05-02 13:28:28.
-- `.claude/SESSION.md` does not contain exact preview URLs for these two
-  deploys; do not invent them.
+- Commit: `8fb5431` - UX: Improve stack and admin usability flows.
+- Local checks passed: `npm run lint --if-present` in `frontend/`;
+  `npm run test --if-present -- --run` in `frontend/` with
+  `--passWithNoTests`; `npm run build` in `frontend/`;
+  `npx tsc -p tsconfig.json` in `functions/`; `git diff --check` without
+  whitespace errors, only CRLF warnings.
+- Deploy prep: `npm run build` in `frontend/`; functions copied to
+  `frontend/dist/functions`; `frontend/dist/functions/api/[[path]].ts`
+  verified with `Test-Path -LiteralPath`.
+- Deploy command: `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://2b00223a.supplementstack.pages.dev`
+- Smoke checks passed: preview root HTTP 200 with JS `index-D8jGeaah.js`, CSS
+  `index-DWw_l_3p.css`, and `x-robots-tag: noindex`; preview
+  `/api/ingredients/search?q=d3` HTTP 200 with Vitamin D3; preview
+  `/api/admin/translations/ingredients` HTTP 401, not 404; preview
+  `/api/ingredients/1/recommendations` HTTP 200 with 4 rows; live root
+  `https://supplementstack.de/` HTTP 200 with the same JS/CSS asset names; live
+  D3 search HTTP 200; live admin translations unauth HTTP 401, not 404.
+- Wrangler warned that uncommitted changes existed. That was expected because
+  memory files and `.claude/SESSION.md` were dirty while the code commit itself
+  was committed.
 
 ## Previous Deployed Work
 
@@ -229,7 +253,9 @@ Production D1 migrations 0026-0035 are considered live according to the previous
 - Business logic has moved out of the entry point into modules under `functions/api/modules/*`.
 - `functions/api/modules/user-products.ts` and `functions/api/modules/demo.ts` were added from the previous monolith behavior.
 - `GET /api/ingredients/:id/recommendations` now reads active public rows from `dose_recommendations`, joins `populations`, optionally joins `verified_profiles`, `dose_recommendation_translations`, and `verified_profile_translations`, and returns upper-limit comparison metadata.
-- Product-to-ingredient recommendation links are now implemented locally against `product_recommendations`; migration 0036 keeps a temporary `recommendations` view/triggers for deploy compatibility. The public `/api/recommendations` route name remains.
+- Product-to-ingredient recommendation links target `product_recommendations`;
+  migration 0036 keeps a temporary `recommendations` view/triggers for deploy
+  compatibility. The public `/api/recommendations` route name remains.
 
 ## Agent Workflow
 
