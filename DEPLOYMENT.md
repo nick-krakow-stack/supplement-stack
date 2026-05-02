@@ -1,103 +1,135 @@
-# Supplement Stack - Production Deployment
+# Supplement Stack Deployment
 
-🚀 **Status:** READY FOR DEPLOYMENT
+Status: Cloudflare-native line is active. Do not use the old SQLite/backend
+deployment notes for production-like work.
 
-## Deployment Info
-- **Frontend:** React + Vite + Tailwind CSS
-- **Backend API:** Hono TypeScript
-- **Database:** SQLite
-- **Hosting:** Cloudflare Pages + Workers
-- **Domain:** https://supplementstack.de
+## Runtime
 
-## Features Implemented
-✅ User Authentication (Email + Password)
-✅ Ingredient Management (CRUD, Synonyms, Forms)
-✅ Product Management (CRUD, Moderation)
-✅ Stack Creation (Combine Products, Calculate Costs)
-✅ Interaction Warnings (Ampel System)
-✅ Demo Mode (24h Sessions)
-✅ Admin Panel (Recommendations, Interactions)
-✅ Mobile Responsive Design
-✅ Modern UI (Tailwind CSS)
-✅ GitHub Actions CI/CD
-✅ Cloudflare Deployment
+- Frontend: React + Vite + TypeScript + Tailwind CSS
+- API: Cloudflare Pages Functions with Hono
+- Database: Cloudflare D1, database name `supplementstack-production`
+- Product images: Cloudflare R2 bucket `supplement-stack-images`
+- KV binding: `RATE_LIMITER`
+- Build output: `frontend/dist`
+- Cloudflare config: `wrangler.toml`
 
-## Quick Start (Local Development)
+## Cloudflare Bindings
 
-```bash
-# Backend
-cd backend
-npm install
-npm run dev
+`wrangler.toml` is the deployment source of truth for Cloudflare bindings:
 
-# Frontend (separate terminal)
+- D1 binding `DB`
+- D1 migrations directory `./d1-migrations`
+- R2 binding `PRODUCT_IMAGES`
+- KV binding `RATE_LIMITER`
+- Pages build output directory `frontend/dist`
+
+Do not duplicate raw secrets or token values in documentation. GitHub Actions
+and local shells should receive Cloudflare credentials from secret stores or
+local ignored scripts.
+
+## Local Setup
+
+```powershell
+.\scripts\setup-local-dev.ps1
+```
+
+For frontend development:
+
+```powershell
 cd frontend
-npm install
 npm run dev
 ```
 
-Open http://localhost:5173
+For project-specific Cloudflare commands, load the local ignored context first:
 
-## Production Deployment
-
-Push to `main` branch → GitHub Actions triggers → Cloudflare Pages deploys automatically
-
-## Environment Variables
-
-### Backend (.env)
-```
-PORT=4000
-JWT_SECRET=your-secret-key-here
-DEMO_SESSION_TTL_MINUTES=1440
-DB_FILE=./data/supplement-stack.db
+```powershell
+. .\scripts\use-supplementstack-cloudflare.local.ps1
+npx wrangler whoami
 ```
 
-### GitHub Secrets (Actions)
-- `CLOUDFLARE_API_TOKEN` ✅
-- `CLOUDFLARE_ACCOUNT_ID` ✅
-- `CLOUDFLARE_EMAIL` ✅
+Create the local file from `scripts/use-supplementstack-cloudflare.example.ps1`
+and fill it with local values outside Git.
 
-## Testing
+## Manual Wrangler Operations
+
+Apply remote D1 migrations:
+
+```powershell
+npx wrangler d1 migrations apply supplementstack-production --remote
+```
+
+Build and deploy Pages manually:
+
+```powershell
+cd frontend
+npm run build
+cd ..
+Copy-Item -Recurse -Force functions frontend/dist/functions
+npx wrangler pages deploy frontend/dist --project-name supplementstack
+```
+
+The deploy workflow performs the same broad sequence in CI.
+
+## GitHub Actions
+
+Active workflow files:
+
+- `.github/workflows/deploy.yml` - builds frontend, installs functions deps,
+  applies D1 migrations, copies `functions/` into `frontend/dist/`, deploys to
+  Cloudflare Pages.
+- `.github/workflows/d1-backup.yml` - scheduled and manual D1 export workflow.
+- `.github/workflows/ci.yml` - Cloudflare-line CI for frontend and Pages
+  Functions checks.
+
+Required GitHub repository secrets:
+
+- `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLARE_ACCOUNT_ID`
+
+The Cloudflare token must have the scopes required for Pages deploys, D1
+migrations/exports, R2/KV binding access as needed, and account/project reads.
+
+## D1 Backup Workflow
+
+`.github/workflows/d1-backup.yml` runs daily at 03:00 UTC and supports
+`workflow_dispatch`.
+
+It exports the configured production D1 database with:
 
 ```bash
-# Backend
-cd backend && npm test
-
-# Frontend
-cd frontend && npm test
+npx wrangler d1 export supplementstack-production --remote --output "$BACKUP_FILE"
 ```
 
-## API Endpoints
+Then it uploads the SQL export as a GitHub Actions artifact with 30-day
+retention.
 
-### Authentication
-- `POST /api/auth/register` - Register new user
-- `POST /api/auth/login` - Login user
-- `GET /api/me` - Get current user profile
+Manual web UI test:
 
-### Ingredients
-- `GET /api/ingredients` - List all ingredients
-- `GET /api/ingredients/search?q=keyword` - Search ingredients
-- `POST /api/ingredients` - Create ingredient (Admin only)
+1. Open the GitHub repository.
+2. Go to Actions.
+3. Select `D1 Daily Backup`.
+4. Choose `Run workflow` on `main`.
+5. Wait for the run to finish.
+6. Open the completed run and confirm the artifact named
+   `d1-backup-<run-id>-<date>.sql` exists.
+7. Inspect the log only for command success/failure, not for secret values.
 
-### Products
-- `GET /api/products` - List public products
-- `POST /api/products` - Create product
+CLI/API test requires GitHub CLI or an authenticated GitHub API request. Do not
+paste tokens into commands or docs.
 
-### Stacks
-- `POST /api/stacks` - Create stack
-- `GET /api/stacks/:id` - Get stack details
-- `GET /api/stack-warnings/:id` - Get interaction warnings
+## Verification Checklist
 
-### Demo
-- `POST /api/demo/sessions` - Create demo session
-- `GET /api/demo/sessions/:key` - Get demo session
-- `GET /api/demo/reset` - Reset expired sessions
+- `npm run build` succeeds in `frontend/`.
+- `frontend/dist/functions/api/[[path]].ts` exists before Pages deploy.
+- `npx wrangler d1 migrations list supplementstack-production --remote`
+  reflects the expected migration state.
+- Pages preview root returns HTTP 200.
+- API smoke checks use same-origin `/api` on deployed previews.
+- D1 backup workflow can be manually triggered and produces a retained
+  artifact.
 
-## Support
-For issues or feature requests, contact: [your-support-email]
+## Legacy Notes
 
----
-
-**Last Updated:** March 23, 2026
-**Version:** 1.0.0
-**Status:** 🟢 Production Ready
+Older docs may mention SQLite, a separate backend server, `infra/`, or
+`rebuild-main`. Treat those as historical unless verified against current code
+and migrations.

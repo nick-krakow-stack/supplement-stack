@@ -12,6 +12,8 @@
 //   PUT /user-products/:id/approve (admin)
 //   PUT /user-products/:id/reject  (admin)
 //   DELETE /user-products/:id      (admin)
+//   GET /translations/ingredients — ingredient translations list (admin)
+//   PUT /translations/ingredients/:ingredientId/:language — upsert ingredient translation (admin)
 // Plus public shop-domain routes (mounted at /api/shop-domains):
 //   GET /resolve?url=       — resolve shop name from URL (public)
 //   GET /                   — list shop domains (public)
@@ -26,6 +28,39 @@ import type { AppContext, CountRow, ProductRow, InteractionRow } from '../lib/ty
 import { ensureAuth, requireAdmin, ensureAdmin, logAdminAction } from '../lib/helpers'
 
 const admin = new Hono<AppContext>()
+
+type IngredientTranslationRow = {
+  ingredient_id: number
+  source_name: string
+  source_description: string | null
+  source_hypo_symptoms: string | null
+  source_hyper_symptoms: string | null
+  language: string
+  name: string | null
+  description: string | null
+  hypo_symptoms: string | null
+  hyper_symptoms: string | null
+  status: 'missing' | 'translated'
+}
+
+function normalizeTranslationLanguage(value: string | undefined): string | null {
+  if (!value) return null
+  const normalized = value.trim().toLowerCase().replace(/_/g, '-')
+  if (!/^[a-z]{2}(?:-[a-z]{2})?$/.test(normalized)) return null
+  return normalized
+}
+
+function parsePagination(value: string | undefined, fallback: number, max: number): number {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed < 0) return fallback
+  return Math.min(Math.floor(parsed), max)
+}
+
+function optionalText(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
 
 // GET /api/admin/products (admin only)
 admin.get('/products', async (c) => {
@@ -209,6 +244,128 @@ admin.delete('/user-products/:id', async (c) => {
     entity_id: Number(id),
   })
   return c.json({ ok: true })
+})
+
+// GET /api/admin/translations/ingredients?language=de&q=&limit=50&offset=0 (admin)
+admin.get('/translations/ingredients', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const language = normalizeTranslationLanguage(c.req.query('language') ?? 'de')
+  if (!language) return c.json({ error: 'Invalid language' }, 400)
+
+  const q = c.req.query('q')?.trim() ?? ''
+  const limit = parsePagination(c.req.query('limit'), 50, 100)
+  const offset = parsePagination(c.req.query('offset'), 0, 100000)
+  const like = `%${q}%`
+
+  const baseQuery = `
+    SELECT
+      i.id as ingredient_id,
+      i.name as source_name,
+      i.description as source_description,
+      i.hypo_symptoms as source_hypo_symptoms,
+      i.hyper_symptoms as source_hyper_symptoms,
+      ? as language,
+      t.name as name,
+      t.description as description,
+      t.hypo_symptoms as hypo_symptoms,
+      t.hyper_symptoms as hyper_symptoms,
+      CASE WHEN t.ingredient_id IS NULL THEN 'missing' ELSE 'translated' END as status
+    FROM ingredients i
+    LEFT JOIN ingredient_translations t
+      ON t.ingredient_id = i.id AND t.language = ?
+    WHERE (? = '' OR i.name LIKE ? OR COALESCE(t.name, '') LIKE ?)
+    ORDER BY
+      CASE WHEN t.ingredient_id IS NULL THEN 0 ELSE 1 END ASC,
+      i.name ASC
+    LIMIT ? OFFSET ?
+  `
+
+  const { results } = await c.env.DB.prepare(baseQuery)
+    .bind(language, language, q, like, like, limit, offset)
+    .all<IngredientTranslationRow>()
+
+  return c.json({ language, translations: results, limit, offset })
+})
+
+// PUT /api/admin/translations/ingredients/:ingredientId/:language (admin)
+admin.put('/translations/ingredients/:ingredientId/:language', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const ingredientId = Number(c.req.param('ingredientId'))
+  if (!Number.isInteger(ingredientId) || ingredientId <= 0) {
+    return c.json({ error: 'Invalid ingredient id' }, 400)
+  }
+
+  const language = normalizeTranslationLanguage(c.req.param('language'))
+  if (!language) return c.json({ error: 'Invalid language' }, 400)
+
+  const ingredient = await c.env.DB.prepare('SELECT id FROM ingredients WHERE id = ?')
+    .bind(ingredientId)
+    .first<{ id: number }>()
+  if (!ingredient) return c.json({ error: 'Ingredient not found' }, 404)
+
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const name = optionalText(body.name)
+  if (!name) return c.json({ error: 'name is required' }, 400)
+
+  const description = optionalText(body.description)
+  const hypoSymptoms = optionalText(body.hypo_symptoms)
+  const hyperSymptoms = optionalText(body.hyper_symptoms)
+
+  await c.env.DB.prepare(`
+    INSERT INTO ingredient_translations (
+      ingredient_id,
+      language,
+      name,
+      description,
+      hypo_symptoms,
+      hyper_symptoms
+    )
+    VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(ingredient_id, language) DO UPDATE SET
+      name = excluded.name,
+      description = excluded.description,
+      hypo_symptoms = excluded.hypo_symptoms,
+      hyper_symptoms = excluded.hyper_symptoms
+  `).bind(
+    ingredientId,
+    language,
+    name,
+    description,
+    hypoSymptoms,
+    hyperSymptoms,
+  ).run()
+
+  const translation = await c.env.DB.prepare(`
+    SELECT ingredient_id, language, name, description, hypo_symptoms, hyper_symptoms
+    FROM ingredient_translations
+    WHERE ingredient_id = ? AND language = ?
+  `).bind(ingredientId, language).first()
+
+  await logAdminAction(c, {
+    action: 'upsert_ingredient_translation',
+    entity_type: 'ingredient_translation',
+    entity_id: ingredientId,
+    changes: {
+      ingredient_id: ingredientId,
+      language,
+      name,
+      description,
+      hypo_symptoms: hypoSymptoms,
+      hyper_symptoms: hyperSymptoms,
+    },
+  })
+
+  return c.json({ translation })
 })
 
 export default admin

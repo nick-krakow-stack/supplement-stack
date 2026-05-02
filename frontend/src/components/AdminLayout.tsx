@@ -9,6 +9,7 @@ import {
   ShoppingBag,
   Trophy,
   UserCheck,
+  Languages,
   ChevronLeft,
   Menu,
   X,
@@ -21,7 +22,7 @@ interface AdminLayoutProps {
   children?: React.ReactNode;
 }
 
-type TabId = 'stats' | 'products' | 'ingredients' | 'interactions' | 'shop_domains' | 'rankings' | 'user_products';
+type TabId = 'stats' | 'products' | 'ingredients' | 'translations' | 'interactions' | 'shop_domains' | 'rankings' | 'user_products';
 
 interface NavItem {
   id: TabId;
@@ -33,6 +34,7 @@ const navItems: NavItem[] = [
   { id: 'stats', label: 'Statistiken', icon: <BarChart3 size={18} /> },
   { id: 'products', label: 'Produkte', icon: <Package size={18} /> },
   { id: 'ingredients', label: 'Zutaten', icon: <FlaskConical size={18} /> },
+  { id: 'translations', label: 'Translations', icon: <Languages size={18} /> },
   { id: 'interactions', label: 'Wechselwirkungen', icon: <AlertTriangle size={18} /> },
   { id: 'shop_domains', label: 'Shop-Domains', icon: <ShoppingBag size={18} /> },
   { id: 'rankings', label: 'Rankings', icon: <Trophy size={18} /> },
@@ -43,6 +45,7 @@ const TAB_LABELS: Record<TabId, string> = {
   stats: 'Statistiken',
   products: 'Produkte',
   ingredients: 'Zutaten',
+  translations: 'Translations',
   interactions: 'Wechselwirkungen',
   shop_domains: 'Shop-Domains',
   rankings: 'Rankings',

@@ -1,91 +1,104 @@
-# Supplement Stack – Implementierungsstatus
+# Supplement Stack Implementation Status
 
-Stand: 2026-03-23
+Stand: 2026-05-01
 
----
+This file is a snapshot. For the most current operational context, read:
 
-## Backend (Hono + SQLite)
+1. `AGENTS.md`
+2. `CLAUDE.md`
+3. `.agent-memory/current-state.md`
+4. `.agent-memory/handoff.md`
+5. `.agent-memory/next-steps.md`
 
-### ✅ Vollständig implementiert
-- DB-Schema: alle 11 Tabellen (users, ingredients, ingredient_synonyms, ingredient_forms, products, product_ingredients, stacks, stack_items, recommendations, interactions, demo_sessions)
-- Auth: Register, Login (JWT + Argon2id), GET /api/me
-- Ingredients: GET /api/ingredients, GET /api/ingredients/search (inkl. Synonyme), POST /api/ingredients (Admin)
-- Products: GET /api/products, POST /api/products (mit Main-Ingredient-Validierung + Duplikat-Check)
-- Stacks: POST /api/stacks, GET /api/stacks/:id, GET /api/stack-warnings/:id
-- Interactions: POST /api/interactions (Admin)
-- Demo: POST /api/demo/sessions, GET /api/demo/sessions/:key, GET /api/demo/reset
+When this file conflicts with code, migrations, or memory, use code and
+migrations first, then `.agent-memory/*`.
 
-### ❌ Fehlende Backend-Endpoints
-- `PUT /api/me` – Profil aktualisieren
-- `PUT /api/ingredients/:id` – Wirkstoff bearbeiten (Admin)
-- `POST /api/ingredients/:id/synonyms` – Synonym hinzufügen (Admin)
-- `DELETE /api/ingredients/:id/synonyms/:synId` – Synonym löschen (Admin)
-- `POST /api/ingredients/:id/forms` – Form hinzufügen (Admin)
-- `DELETE /api/ingredients/:id/forms/:formId` – Form löschen (Admin)
-- `GET /api/recommendations?ingredient_id=x` – Empfehlungen abrufen
-- `POST /api/recommendations` – Empfehlung setzen (Admin)
-- `DELETE /api/recommendations/:id` – Empfehlung löschen (Admin)
-- `GET /api/products/:id` – Produktdetails mit Wirkstoffen
-- `PUT /api/products/:id/status` – Moderation: Status/Sichtbarkeit (Admin)
-- `GET /api/stacks` – Alle Stacks des eingeloggten Nutzers
-- `DELETE /api/stacks/:id` – Stack löschen
-- `PUT /api/stacks/:id` – Stack umbenennen / Produkte ändern
-- `POST /api/wishlist` – Wunschliste hinzufügen
-- `GET /api/wishlist` – Wunschliste abrufen
-- `DELETE /api/wishlist/:id` – Aus Wunschliste entfernen
-- `GET /api/admin/products` – Alle Produkte inkl. pending (Admin)
-- `GET /api/admin/stats` – Statistiken (Admin)
-- `GET /api/interactions` – Alle Interaktionen abrufen
-- `DELETE /api/interactions/:id` – Interaktion löschen (Admin)
+## Current Phase
 
----
+- Phase B is complete.
+- Phase C is complete.
+- Phase D is in progress / being scoped.
 
-## Frontend (React + Vite + Tailwind)
+Phase C completed the Hono module split, public dose recommendations API,
+admin audit logging, server-side unit conversion, and follow-up tech-debt work.
 
-### ✅ Vollständig implementiert
-- Vite + React + TypeScript Setup
-- Tailwind CSS + PostCSS konfiguriert (tailwind.config.js erstellt)
-- GitHub Actions → Cloudflare Pages Deployment funktioniert
-- Minimales Test-UI: Login/Register, Wirkstoffsuche, Produktliste
+Current Phase D candidates include:
 
-### ❌ Fehlende Frontend-Bereiche (nahezu alles)
+- Rename the old product recommendation table to `product_recommendations`
+  without changing runtime behavior.
+- Expand the admin CMS with translations support.
+- Verify the GitHub Actions D1 backup workflow manually.
+- Keep root documentation aligned with the Cloudflare line.
 
-**Architektur:**
-- React Router mit Seiten/Routen
-- Modulare Komponentenstruktur (src/components/, src/pages/, src/hooks/, src/api/)
-- Zentraler API-Client (axios-basiert, JWT-Handling)
-- Globales State-Management (Auth-Context)
+## Active Architecture
 
-**Seiten & Features:**
-- Login- / Register-Seite (eigene Seiten, nicht Inline-Form)
-- Profil-Seite (Felder: Alter, Geschlecht, Gewicht, Ernährung, Ziele, Guideline-Quelle)
-- Wirkstoffsuche mit Autocomplete (inkl. Synonyme)
-  - Modal 1: Wirkstoffdetails (Infos, Formen, Warnungen, Empfehlungen)
-  - Modal 2: Produktliste für Wirkstoff (empfohlen + Alternativen)
-  - Modal 3: Dosierungsauswahl, Stack-Zuordnung, Preisberechnung
-- Produktkarten (Bild, Name, Wirkstoffe, Dosis, Preis/Monat, Kauf-Button, Warnungen)
-- Stack-Management-Seite (erstellen, umbenennen, Produkte verwalten, Interaktionswarnungen, Ampel)
-- Wunschliste-Seite
-- Demo-Modus / Playground (ohne Login, Banner, Session-Reset)
-- Admin-Panel:
-  - Produktmoderation (pending → approve/reject/hide)
-  - Wirkstoff-CRUD (inkl. Synonyme, Formen)
-  - Recommendations & Alternativen setzen
-  - Interaktionen pflegen
-  - Statistiken
-- Footer: aktuelle Auswahl + Gesamtkosten, „Alle auswählen/abwählen"
-- Responsive Design (Mobile + Desktop)
+Production-like development is Cloudflare-native:
 
----
+- Frontend: `frontend/src/*`
+- API: `functions/api/[[path]].ts`
+- API modules: `functions/api/modules/*`
+- API helpers: `functions/api/lib/*`
+- Database migrations: `d1-migrations/*`
+- Cloudflare bindings/config: `wrangler.toml`
 
-## Infrastruktur
+The older local backend/SQLite references in historical docs are not the active
+production line.
 
-### ✅ Implementiert
-- GitHub Actions CI (backend + frontend build/test)
-- GitHub Actions Deploy → Cloudflare Pages
-- PostCSS/Tailwind Build-Pipeline
+## Backend Status
 
-### ❌ Fehlt
-- Backend-Hosting (derzeit kein Server – nur statisches Frontend deployed)
-- Umgebungsvariablen für Production-Backend-URL im Frontend
-- Wishlist-Tabelle fehlt noch im DB-Schema
+Implemented on Cloudflare Pages Functions with Hono:
+
+- Auth and current-user endpoints
+- Ingredient search, ingredient products, and public dose recommendations
+- Product data, product images via R2-related routes, and metadata loading
+- Stack CRUD and stack warning flows
+- Wishlist routes
+- User product routes
+- Demo routes, including demo products
+- Admin routes for moderation and maintenance surfaces
+- Admin audit logging for mutations
+- Server-side unit conversion for recommendation/upper-limit comparisons
+
+The current dosage source is `dose_recommendations`. The older
+`recommendations` concept is product recommendation data, not dosage guidance.
+
+## Frontend Status
+
+Implemented in React/Vite:
+
+- Landing, demo, search, stacks, wishlist, admin, auth, profile, and user
+  product pages
+- Centralized API base handling in `frontend/src/api/base.ts`
+- Auth context and protected route logic
+- Product cards and modal flow for ingredient/product/dosage details
+- Legal disclaimer with general affiliate disclosure in the footer
+- Production builds use same-origin `/api`; local Vite dev may use
+  `VITE_API_BASE_URL`
+
+## Database Status
+
+D1 migrations live in `d1-migrations/`. Local migration files include:
+
+- `0026` populations lookup
+- `0027` dose recommendations
+- `0028` verified profiles
+- `0029` admin audit log
+- `0030` translation tables
+- `0031` blog posts
+- `0032` share links
+- `0033` API tokens
+- `0034` interactions and ingredient preferred unit changes
+- `0035` migration from legacy dosage guidelines to dose recommendations
+- `0036` rename of old recommendations to product recommendations, currently
+  part of the local Phase D workstream unless remote state confirms otherwise
+
+Confirm remote migration state with Wrangler before deployment decisions.
+
+## Infrastructure Status
+
+- Cloudflare Pages deploy is configured in `.github/workflows/deploy.yml`.
+- D1 daily backup is configured in `.github/workflows/d1-backup.yml`.
+- Cloudflare-line CI is configured in `.github/workflows/ci.yml`.
+- Cloudflare bindings are configured in `wrangler.toml`.
+- Local Cloudflare account selection should use a local ignored
+  `scripts/use-supplementstack-cloudflare.local.ps1`.

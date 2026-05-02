@@ -1,21 +1,76 @@
 # Handoff
 
 Last updated: 2026-05-01
-Update mode: Manual Ops-Worker affiliate disclosure deploy handoff
+Update mode: Manual Memory-Cleanup handoff
 
 ## Latest Notes
 
-Ops-Worker committed and deployed the frontend affiliate disclosure cleanup.
+Memory-Cleanup Worker corrected stale Phase D memory. No code changes, commit,
+remote migration, or deploy were performed.
 
-- Removed the visible `Affiliate` badge from `frontend/src/components/ProductCard.tsx`.
-- Kept product shop link / buy button behavior unchanged.
-- Updated `frontend/src/components/LegalDisclaimer.tsx` affiliate variant to a general footnote: links can be affiliate links, commission may be earned, recommendations remain independent.
-- Admin/editing surfaces were not changed; `is_affiliate` remains visible/editable in admin and user product forms.
-- Commit: `965d4e4` - Fix: Move affiliate disclosure to footer.
-- Validation passed: `npm run build` in `frontend/`.
-- Deploy prep passed: `frontend/dist/functions/api/[[path]].ts` was present before deploy.
-- Deployed preview: `https://b4e4ea90.supplementstack.pages.dev`.
-- Smoke checks passed: preview root HTTP 200; preview JS `/assets/index-DgGBIJBD.js` HTTP 200; old ProductCard Affiliate badge class was absent. Remaining `Affiliate` strings are from footer/legal copy, landing copy, and admin/user-edit surfaces.
+Current accurate Phase D status:
+
+- Integrated Phase D bundle is locally implemented and checked, but not
+  committed, remote-migrated, or deployed.
+- Product recommendations rename is local: migration
+  `d1-migrations/0036_rename_recommendations_to_product_recommendations.sql`
+  renames `recommendations` to `product_recommendations`.
+- Migration 0036 leaves a temporary `recommendations` compatibility view plus
+  `INSTEAD OF INSERT` and `INSTEAD OF DELETE` triggers for the deploy window.
+- Safe deploy runbook: apply remote D1 migration 0036 first, then deploy
+  Cloudflare Pages code.
+- Admin translations MVP for `ingredient_translations` is locally implemented.
+- `.github/workflows/ci.yml` has been updated for the Cloudflare line.
+- Local lint/test/build checks are green; Vitest uses `--passWithNoTests` while
+  no test files exist.
+- Backup workflow configuration was checked, but Web UI/API dispatch remains
+  externally open because local `gh`/GitHub token is unavailable.
+
+Previous Frontend-Test-Tooling note:
+
+Frontend-Test-Tooling Worker fixed the empty Vitest suite failure for CI.
+
+- Updated `frontend/package.json` test script from `vitest` to
+  `vitest --passWithNoTests`.
+- Verified local Vitest support: `vitest/0.34.6` help includes
+  `--passWithNoTests`.
+- Validation passed in `frontend/`: `npm run test --if-present -- --run`.
+- Result: Vitest still discovers/runs tests normally, but exits 0 when no
+  test files exist.
+- `.github/workflows/ci.yml` now belongs to the refreshed Cloudflare-line CI
+  diff and calls `npm run test --if-present -- --run`, inheriting the script
+  behavior.
+- No commit and no deploy were performed.
+
+Previous Docs-Fix note:
+
+Docs-Fix-Worker removed stale documentation claims that `.github/workflows/ci.yml`
+still contains old-backend assumptions.
+
+- Updated `DEPLOYMENT.md` to describe `ci.yml` as Cloudflare-line CI for
+  frontend and Pages Functions checks.
+- Updated `docs/implementation-status.md` to list Cloudflare-line CI as
+  configured and removed the stale CI follow-up.
+- Updated `.agent-memory/next-steps.md` to remove the stale CI review item and
+  record that `ci.yml` has been refreshed for the Cloudflare line.
+- Historical old backend/SQLite notes were left in place where they are clearly
+  marked as legacy/historical context.
+- No code changes, commit, deploy, or tests were performed by this worker.
+
+Previous Admin-Translations note:
+
+Dev-Worker Admin-Translations implemented the smallest useful admin CMS MVP for `ingredient_translations`.
+
+- Backend route lives in existing `functions/api/modules/admin.ts`.
+- Added `GET /api/admin/translations/ingredients?language=de&q=&limit=50&offset=0`.
+- Added `PUT /api/admin/translations/ingredients/:ingredientId/:language`.
+- GET uses LEFT JOIN on `ingredient_translations`, returns `missing`/`translated`, supports search and pagination.
+- PUT validates admin auth, ingredient existence, normalized language, required `name`, optional text fields, then upserts and writes admin audit action `upsert_ingredient_translation` with entity `ingredient_translation`.
+- Frontend navigation now has `translations`.
+- New component: `frontend/src/pages/admin/TranslationsTab.tsx`.
+- UX includes language select, search, cards, editable fields, explicit save, loading/error/saved states, and a notice that public i18n playback is separate.
+- Validation passed: `npm run build` in `frontend/`; `npx tsc -p tsconfig.json` in `functions/`.
+- No commit and no deploy were performed.
 
 ## Git Snapshot
 
@@ -25,19 +80,46 @@ Ops-Worker committed and deployed the frontend affiliate disclosure cleanup.
 
 ## Working Tree
 
-Expected remaining uncommitted/untracked files are docs/local-helper/research artifacts. Do not assume untracked files are disposable.
+Memory-Cleanup Worker intentionally changed:
 
 ~~~text
+M .agent-memory/current-state.md
+M .agent-memory/decisions.md
+M .agent-memory/handoff.md
+M .agent-memory/next-steps.md
+~~~
+
+Local Phase D bundle changes are present but were not edited by this worker:
+
+~~~text
+M .github/workflows/ci.yml
+M DEPLOYMENT.md
+M README.md
+M docs/agent-planner.md
+M docs/implementation-status.md
+M frontend/package.json
+M frontend/src/components/AdminLayout.tsx
+M frontend/src/components/StackWorkspace.tsx
+M frontend/src/pages/AdminPage.tsx
+M frontend/src/pages/LandingPage.tsx
+M frontend/src/pages/SearchPage.tsx
+M functions/api/modules/admin.ts
+M functions/api/modules/ingredients.ts
+M functions/api/modules/products.ts
 ?? .claude/commands/
 ?? _research_raw/01_fat_soluble_vitamins.json
 ?? _research_raw/02_b_vitamins_vitamin_c.json
+?? d1-migrations/0036_rename_recommendations_to_product_recommendations.sql
 ?? docs/cloudflare-accounts.md
 ?? docs/codex-working-context.md
 ?? frontend/package-lock.json
+?? frontend/src/pages/admin/
 ?? functions/package-lock.json
 ?? scripts/setup-local-dev.ps1
 ?? scripts/use-supplementstack-cloudflare.example.ps1
 ~~~
+
+Do not assume untracked files are disposable.
 
 ## Current State Summary
 
@@ -48,16 +130,21 @@ Expected remaining uncommitted/untracked files are docs/local-helper/research ar
 - KV: rate limiting / cache-related bindings.
 - Deployment: Wrangler CLI preferred, GitHub Actions as fallback.
 - Active source of truth: `functions/api/[[path]].ts`, `functions/api/modules/*`, `functions/api/lib/*`, `frontend/src/*`, `d1-migrations/*`, `wrangler.toml`.
-- Phase C is complete; Phase D has not been formally scoped yet.
+- Phase C is complete.
+- Phase D bundle is locally implemented and checked, but not committed,
+  remote-migrated, or deployed.
+- Product recommendation links use `product_recommendations` locally, with
+  migration 0036 providing temporary `recommendations` view/trigger
+  compatibility.
+- Admin translations MVP is locally implemented, validated, and ready for
+  review/commit/deploy when requested.
 
 ## Next Planned Work
 
-## Phase D - Next Phase (scope to be defined by Nick)
-
-- Rename old `recommendations` table to `product_recommendations` (isolated migration, no logic change).
-- Expand admin CMS with translations tab (see i18n plan in CLAUDE.md - `*_translations` tables are ready).
-- First manual run of GitHub Actions D1 backup workflow to verify token scopes.
-- Root documentation cleanup now that Phase C is stable.
+- Review and optionally commit the integrated Phase D bundle.
+- Before deploying Pages code, apply remote D1 migration 0036.
+- Public i18n playback remains separate and was not changed.
+- GitHub Actions D1 backup Web UI/API verification remains externally open.
 
 ## Required Startup For Next Agent
 
@@ -71,7 +158,6 @@ Expected remaining uncommitted/untracked files are docs/local-helper/research ar
 ## Constraints
 
 - Do not write secrets, tokens, passwords, or raw credential values into memory files.
-- Do not touch the old `recommendations` table during Phase C.
-- Use `dose_recommendations` for dosage recommendations.
+- Do not modify public i18n playback unless explicitly scoped.
 - Keep implementation compatible with Cloudflare Workers / Pages Functions.
 - Review untracked files before deleting or committing them.

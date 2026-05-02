@@ -1105,7 +1105,7 @@ export function StackWorkspace({ mode = 'demo', token = null }: StackWorkspacePr
           >
             <Package size={32} style={{ margin: '0 auto 10px', color: '#c7d2fe' }} />
             <p style={{ fontSize: 14, fontWeight: 600 }}>
-              Noch leer — klicke auf „Produkt hinzufügen", um zu starten.
+              Noch leer — klicke auf &bdquo;Produkt hinzufügen&ldquo;, um zu starten.
             </p>
           </div>
         )}

@@ -1,6 +1,6 @@
 # Decisions
 
-Last updated: 2026-04-29
+Last updated: 2026-05-01
 
 ## Shared Agent Memory
 
@@ -94,15 +94,28 @@ Rationale:
 - New languages do not require schema changes.
 - Admin editing can treat translations as first-class content.
 
-## Dose Recommendation Table Naming
+## Admin Translations MVP
 
-Decision: `dose_recommendations` is the new dosage/science recommendation table.
+Decision: the first admin translations surface only manages `ingredient_translations`.
+
+Operational rule:
+
+- Admin route prefix is `/api/admin/translations/ingredients`.
+- Public i18n playback remains separate and unchanged.
+- `dose_recommendation_translations`, `verified_profile_translations`, and `blog_translations` stay out of the MVP UI until explicitly scoped.
+
+## Recommendation Table Naming
+
+Decision: keep dosage/science recommendations and product-to-ingredient recommendation links in separate tables with explicit names.
 
 Important:
 
-- The old `recommendations` table is legacy product-to-ingredient mapping.
-- Do not repurpose or rename `recommendations` during Phase C.
-- A later separate task may rename it to `product_recommendations`.
+- `dose_recommendations` is the dosage/science recommendation table.
+- `product_recommendations` is the product-to-ingredient recommendation links table.
+- Migration 0036 renames the old `recommendations` table to `product_recommendations`.
+- The public `/api/recommendations` route name remains for compatibility.
+- Migration 0036 keeps a temporary `recommendations` view plus insert/delete triggers for deploy compatibility.
+- Deploy order for this rename: apply remote D1 migration 0036 first, then deploy Cloudflare Pages code.
 
 ## Verified Profile Constraint
 

@@ -189,9 +189,9 @@ export default function SearchPage() {
         {/* Hint text */}
         <p className="text-sm text-gray-500">
           Suche nach einem Wirkstoff, z.B.{' '}
-          <span className="italic">„Magnesium"</span>,{' '}
-          <span className="italic">„Vitamin B12"</span>,{' '}
-          <span className="italic">„Zink"</span>
+          <span className="italic">&bdquo;Magnesium&ldquo;</span>,{' '}
+          <span className="italic">&bdquo;Vitamin B12&ldquo;</span>,{' '}
+          <span className="italic">&bdquo;Zink&ldquo;</span>
         </p>
 
         {/* Popular ingredient chips */}

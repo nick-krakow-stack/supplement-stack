@@ -596,12 +596,12 @@ ingredients.delete('/:id/forms/:formId', async (c) => {
 export default ingredients
 
 // ---------------------------------------------------------------------------
-// Recommendations sub-app (mounted at /api/recommendations)
+// Product recommendations sub-app (mounted at /api/recommendations for compatibility)
 // ---------------------------------------------------------------------------
 
 export const recommendationsApp = new Hono<AppContext>()
 
-// GET /api/recommendations?ingredient_id=x (public)
+// GET /api/recommendations?ingredient_id=x (public product recommendations)
 recommendationsApp.get('/', async (c) => {
   const ingredientIdParam = c.req.query('ingredient_id')
   if (!ingredientIdParam) return c.json({ error: 'ingredient_id query param required' }, 400)
@@ -611,7 +611,7 @@ recommendationsApp.get('/', async (c) => {
   try {
     const { results: recommendations } = await c.env.DB.prepare(`
       SELECT r.product_id, r.type
-      FROM recommendations r
+      FROM product_recommendations r
       JOIN products p ON p.id = r.product_id
       WHERE r.ingredient_id = ?
         AND p.moderation_status = 'approved'
@@ -624,7 +624,7 @@ recommendationsApp.get('/', async (c) => {
   }
 })
 
-// POST /api/recommendations (admin only)
+// POST /api/recommendations (admin only, product recommendations)
 recommendationsApp.post('/', async (c) => {
   const authErr = await ensureAuth(c)
   if (authErr) return authErr
@@ -639,7 +639,7 @@ recommendationsApp.post('/', async (c) => {
   const product = await c.env.DB.prepare('SELECT id FROM products WHERE id = ?').bind(data.product_id).first()
   if (!product) return c.json({ error: 'Product not found' }, 404)
   const result = await c.env.DB.prepare(
-    'INSERT INTO recommendations (ingredient_id, product_id, type) VALUES (?, ?, ?)'
+    'INSERT INTO product_recommendations (ingredient_id, product_id, type) VALUES (?, ?, ?)'
   ).bind(data.ingredient_id, data.product_id, data.type).run()
   await logAdminAction(c, {
     action: 'create_recommendation',
@@ -650,16 +650,16 @@ recommendationsApp.post('/', async (c) => {
   return c.json({ id: result.meta.last_row_id }, 201)
 })
 
-// DELETE /api/recommendations/:id (admin only)
+// DELETE /api/recommendations/:id (admin only, product recommendations)
 recommendationsApp.delete('/:id', async (c) => {
   const authErr = await ensureAuth(c)
   if (authErr) return authErr
   const admErr = requireAdmin(c)
   if (admErr) return admErr
   const id = c.req.param('id')
-  const rec = await c.env.DB.prepare('SELECT id FROM recommendations WHERE id = ?').bind(id).first()
+  const rec = await c.env.DB.prepare('SELECT id FROM product_recommendations WHERE id = ?').bind(id).first()
   if (!rec) return c.json({ error: 'Not found' }, 404)
-  await c.env.DB.prepare('DELETE FROM recommendations WHERE id = ?').bind(id).run()
+  await c.env.DB.prepare('DELETE FROM product_recommendations WHERE id = ?').bind(id).run()
   await logAdminAction(c, {
     action: 'delete_recommendation',
     entity_type: 'recommendation',

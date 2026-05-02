@@ -38,7 +38,7 @@ products.get('/:id', async (c) => {
     WHERE pi.product_id = ?
   `).bind(id).all()
   const { results: recommendations } = await c.env.DB.prepare(
-    'SELECT r.* FROM recommendations r WHERE r.product_id = ?'
+    'SELECT r.* FROM product_recommendations r WHERE r.product_id = ?'
   ).bind(id).all()
   return c.json({ product, ingredients, recommendations })
 })

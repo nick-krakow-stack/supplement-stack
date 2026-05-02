@@ -10,6 +10,7 @@ import {
   Plus,
 } from 'lucide-react';
 import ImageCropModal from '../components/ImageCropModal';
+import TranslationsTab from './admin/TranslationsTab';
 
 // ---- Local types ----
 interface AdminProduct {
@@ -100,7 +101,7 @@ function authHeaders(): Record<string, string> {
   };
 }
 
-type Tab = 'products' | 'ingredients' | 'interactions' | 'stats' | 'shop_domains' | 'rankings' | 'user_products';
+type Tab = 'products' | 'ingredients' | 'translations' | 'interactions' | 'stats' | 'shop_domains' | 'rankings' | 'user_products';
 
 // ---- Status badge ----
 function StatusBadge({ status }: { status?: string }) {
@@ -1107,6 +1108,7 @@ export default function AdminPage() {
     <div className="flex flex-col gap-6">
       {activeTab === 'products' && <ProductsTab />}
       {activeTab === 'ingredients' && <IngredientsTab />}
+      {activeTab === 'translations' && <TranslationsTab />}
       {activeTab === 'interactions' && <InteractionsTab />}
       {activeTab === 'stats' && <StatsTab />}
       {activeTab === 'shop_domains' && <ShopDomainsPanel />}
@@ -1304,8 +1306,9 @@ function UserProductsTab() {
       const res = await fetch(`/api/admin/user-products?status=${statusFilter}`, { headers: authHeaders() });
       const data = await res.json() as { products: AdminUserProduct[] };
       setProducts(data.products ?? []);
-    } catch {}
-    finally { setLoading(false); }
+    } catch (err) {
+      console.error('Failed to load admin user products:', err);
+    } finally { setLoading(false); }
   }, [statusFilter]);
 
   useEffect(() => { load(); }, [load]);
