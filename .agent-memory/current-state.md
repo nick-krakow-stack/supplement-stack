@@ -39,6 +39,10 @@ unless verified against code.
 Phase B is complete. Phase C is complete. Phase D bundle is committed,
 remote-migrated, and deployed to Cloudflare Pages preview.
 
+Production custom domain `supplementstack.de` is live in parallel to the
+Cloudflare Pages preview URLs. Public SEO indexing is intentionally deferred
+until legal/compliance is cleared.
+
 Phase C Priority 1 (Hono module split), Priority 2 (public dose recommendations API), Priority 3 (admin audit logging), and Priority 4 (server-side unit conversion) are committed and deployed.
 Phase C tech-debt sweep complete (commit b866c3d).
 Phase C is complete.

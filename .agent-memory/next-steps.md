@@ -11,50 +11,39 @@ Phase C is complete. The integrated Phase D rollout is complete:
 - D1 backup verification is complete: GitHub Actions backup has run manually and automatically, and token scopes are verified.
 - Worktree cleanup is complete in `216e2df`: tracked research source files 01/02 are committed and local `.claude/commands/` files are ignored.
 - `wrangler.toml` already contains `pages_build_output_dir = "frontend/dist"`.
+- Production custom domain `supplementstack.de` is live in parallel to Cloudflare Pages preview URLs. Public SEO indexing is intentionally deferred until legal/compliance is cleared.
 
-D1 backup is done and is not a next step.
+D1 backup is done and is not a next step. Production-domain promotion is done and is not a next step.
 
 ## Go-Live / Production Readiness
 
-Priority 1 - Production deploy and live-domain verification:
-
-- Confirm the current preview build that should become production.
-- Verify whether the production/custom domain points at the intended Cloudflare Pages deployment.
-- Promote or redeploy the approved build to production.
-- Smoke test production/custom domain: root page, D3 search, dose recommendation API, product modal/product detail, admin translation routes returning 401 unauthenticated.
-
-Priority 2 - Legal and compliance final review:
+Priority 1 - Legal and compliance final review (blocker for SEO indexing):
 
 - Review Impressum, Datenschutz, cookie handling/banner needs, health disclaimer, and affiliate disclosure.
 - Confirm German health-claim wording and affiliate labeling before public launch.
 - Do not start SEO indexing until legal/compliance is cleared.
 
-Priority 3 - Content and data QA:
+Priority 2 - Content and data QA:
 
 - Validate D3 and additional ingredient pages against source data and visible UI copy.
 - Check product data, product recommendations, affiliate/user link distinction, and dosage recommendation display.
 - Run an authenticated admin UI smoke test, including translation editing for Ingredients, Dose Recommendations, Verified Profiles, and Blog Posts.
 
-Priority 4 - Public i18n decision / playback:
-
-- Only needed if launch should be multilingual.
-- Admin translation management exists; public-facing translation playback is separate and was not changed.
-- Decide whether public pages remain DE-only for launch or need language selection/fallback behavior first.
-
-Priority 5 - Test coverage baseline:
+Priority 3 - Test coverage baseline:
 
 - Vitest currently passes with `--passWithNoTests`.
 - Add targeted API and UI smoke/unit tests for the launch-critical paths instead of relying only on empty-suite success.
 - Suggested first coverage: API base behavior, D3 search, dose recommendations response shape, product modal recommendation loading, admin translations route auth/validation.
 
-Priority 6 - SEO and indexing readiness:
+Priority 4 - SEO and indexing readiness (gated by Priority 1):
 
 - Prepare robots, sitemap, page metadata, canonical URLs, and OpenGraph/Twitter preview metadata.
 - Enable indexing only after secret rotation, production-domain verification, and legal/compliance approval.
 
-Priority 7 - Later compatibility cleanup:
+## Deferred / Later
 
-- Add a cleanup migration later to drop the temporary `recommendations` compatibility view and triggers after old previews/deploy windows are irrelevant.
+- Public i18n decision / playback: launch is DE-only. Admin translation management exists; public-facing translation playback is separate and was not changed. Revisit when multilingual launch is on the table.
+- Compatibility cleanup migration: drop the temporary `recommendations` compatibility view and triggers after old previews/deploy windows are irrelevant.
 
 ## Completed Reference
 
