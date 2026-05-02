@@ -1,6 +1,6 @@
 # Deploy Log
 
-Last updated: 2026-05-01
+Last updated: 2026-05-02
 
 ## Latest Known Production State
 
@@ -10,9 +10,12 @@ Demo product loading fix is deployed to Cloudflare Pages preview.
 D3 recommendations / product modal data loading fix is deployed to Cloudflare Pages preview.
 Preview search API-base fix is deployed to Cloudflare Pages preview.
 Affiliate disclosure cleanup is deployed to Cloudflare Pages preview.
+Phase D product recommendations rename and admin translations MVP are committed,
+remote-migrated, and deployed to Cloudflare Pages preview.
 
 Latest relevant commits:
 
+- `862ed57` - Feature: Phase D product recommendations and translations.
 - `965d4e4` - Fix: Move affiliate disclosure to footer.
 - `b5dba6e` - Fix: Use same-origin API in deployed frontend.
 - `2f4248b` - Fix: Restore demo product loading.
@@ -20,6 +23,31 @@ Latest relevant commits:
 - `dd58ba2` - Feature: Add dose recommendations API.
 - `b1fd347` - Refactor: Split Pages API into Hono modules.
 - `9a5f523` - DB: Phase B complete (migrations 0028-0035).
+
+## Phase D Product Recommendations And Translations
+
+### 2026-05-02 - D1 + Cloudflare Pages: Phase D rollout
+
+- Commit: `862ed57` - Feature: Phase D product recommendations and translations.
+- Scope: product recommendation table rename, temporary compatibility
+  `recommendations` view/triggers, admin ingredient translations MVP, refreshed
+  Cloudflare-line docs/CI, npm lockfiles, and generic local setup scripts.
+- Local validation: `npm run lint --if-present`, `npm run test --if-present -- --run`, and `npm run build` passed in `frontend/`; `npx tsc -p tsconfig.json` passed in `functions/`.
+- Initial command: `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler d1 migrations apply supplementstack-production --remote`
+- Initial migration result: failed before 0036 because remote schema already had Phase B/C objects but `d1_migrations` ended at 0025; migration 0026 tried to seed existing `populations.slug` rows and hit a UNIQUE constraint.
+- Journal repair: verified Phase B/C objects were present remotely, then inserted `d1_migrations` rows for already-live migrations 0026-0035.
+- Migration result: reran Wrangler migration apply; `0036_rename_recommendations_to_product_recommendations.sql` applied successfully.
+- Remote schema verification: no pending migrations; `product_recommendations` is a table, `recommendations` is a view, `recommendations_insert` and `recommendations_delete` triggers exist, and both recommendation-link counts are 0.
+- Deploy prep: `npm run build` in `frontend/`; copied `functions` to `frontend/dist/functions`; verified `frontend/dist/functions/api/[[path]].ts` exists.
+- Deploy command: `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://66a9ee27.supplementstack.pages.dev`
+- Smoke checks on preview:
+  - `/` returned HTTP 200.
+  - `/api/recommendations?ingredient_id=1` returned HTTP 200 with empty `recommendations`.
+  - `/api/ingredients/1/recommendations` returned HTTP 200 with 4 dose recommendations.
+  - `/api/ingredients/search?q=d3` returned HTTP 200 with Vitamin D3.
+  - `/api/products/1` returned HTTP 200.
+  - `/api/admin/translations/ingredients` returned HTTP 401 Unauthorized, confirming the route exists and is auth-protected.
 
 ## Affiliate Disclosure Cleanup
 

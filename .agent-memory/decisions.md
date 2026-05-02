@@ -1,6 +1,6 @@
 # Decisions
 
-Last updated: 2026-05-01
+Last updated: 2026-05-02
 
 ## Shared Agent Memory
 
@@ -128,3 +128,27 @@ Rationale:
 Operational rule:
 
 - Backend code must validate referenced verified profiles where needed.
+
+## D1 Migration Journal Repair
+
+Decision: repair the remote `supplementstack-production` `d1_migrations`
+journal when Wrangler's journal lags behind schema objects that are already live.
+
+Context:
+
+- On 2026-05-02, applying migration 0036 initially failed because Wrangler
+  attempted to rerun 0026 against a database where Phase B/C schema objects
+  already existed.
+- The failure was `UNIQUE constraint failed: populations.slug`, confirming 0026
+  seed data was already present.
+- Before repair, remote schema verification confirmed Phase B/C objects existed,
+  including `populations`, `dose_recommendations`, translation tables,
+  `blog_posts`, `share_links`, `api_tokens`, and `dosage_guidelines_legacy`.
+
+Operational rule:
+
+- Only repair the migration journal after verifying the corresponding schema
+  objects/data exist remotely.
+- Record the repair in `.agent-memory/deploy-log.md`.
+- Prefer normal `wrangler d1 migrations apply` after journal repair so the new
+  migration itself is applied and recorded by Wrangler.

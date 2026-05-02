@@ -1,6 +1,6 @@
 # Current State
 
-Last updated: 2026-05-01
+Last updated: 2026-05-02
 
 ## Project
 
@@ -36,7 +36,8 @@ unless verified against code.
 
 ## Current Phase
 
-Phase B is complete. Phase C is complete. Phase D bundle is implemented and checked locally, but not committed, remote-migrated, or deployed.
+Phase B is complete. Phase C is complete. Phase D bundle is committed,
+remote-migrated, and deployed to Cloudflare Pages preview.
 
 Phase C Priority 1 (Hono module split), Priority 2 (public dose recommendations API), Priority 3 (admin audit logging), and Priority 4 (server-side unit conversion) are committed and deployed.
 Phase C tech-debt sweep complete (commit b866c3d).
@@ -45,13 +46,14 @@ Demo product loading fix is committed and deployed to Cloudflare Pages preview.
 D3 recommendations / product modal loading fix is committed and deployed to Cloudflare Pages preview.
 Preview search API-base fix is committed and deployed to Cloudflare Pages preview: production builds use same-origin `/api` by default, while Vite dev on localhost can still use `VITE_API_BASE_URL`.
 Affiliate disclosure cleanup is committed and deployed to Cloudflare Pages preview: product cards no longer show the visible Affiliate badge; the general affiliate disclosure lives in the footer disclaimer.
-Admin translations MVP for `ingredient_translations` is implemented locally but not committed or deployed.
-Root documentation cleanup is complete locally but not committed/deployed: README, DEPLOYMENT, implementation status, and agent planner now describe the Cloudflare-native line and point old backend/SQLite references to legacy context.
+Admin translations MVP for `ingredient_translations` is committed and deployed to Cloudflare Pages preview.
+Root documentation cleanup is committed: README, DEPLOYMENT, implementation status, and agent planner now describe the Cloudflare-native line and point old backend/SQLite references to legacy context.
 D1 backup workflow was checked locally against `wrangler.toml`: workflow exports `supplementstack-production`, matching the configured D1 database name. Local GitHub Actions dispatch was blocked because `gh` is unavailable and no GitHub token env var is set. Web UI/API test instructions are documented in `DEPLOYMENT.md`.
 CI has been refreshed for the Cloudflare line. Local lint/test/build are green. Frontend test tooling now tolerates an empty suite via Vitest `--passWithNoTests`, while still running and failing real tests normally.
 
 Last relevant commits on `main`:
 
+- `862ed57` - Feature: Phase D product recommendations and translations (migration 0036, admin translations MVP, Cloudflare-line CI/docs, lockfiles, local setup scripts).
 - `965d4e4` - Fix: Move affiliate disclosure to footer (removed visible product-card Affiliate badge; generalized footer affiliate note).
 - `b5dba6e` - Fix: Use same-origin API in deployed frontend (central API base helper, same-origin `/api` for production builds, local dev override only on localhost).
 - `2f4248b` - Fix: Restore demo product loading (`GET /api/demo/products`, frontend API-base consistency for SearchBar/SearchPage).
@@ -66,38 +68,42 @@ Last relevant commits on `main`:
 
 ## Latest Deployed Work
 
-Frontend affiliate disclosure cleanup is committed and deployed to Cloudflare Pages preview:
+Phase D product recommendations and translations are committed, remote-migrated,
+and deployed to Cloudflare Pages preview:
 
-- `frontend/src/components/ProductCard.tsx` no longer renders the visible `Affiliate` badge in product cards.
-- `frontend/src/components/LegalDisclaimer.tsx` now uses a general affiliate footnote: some links may be affiliate links, commission may be earned, recommendations remain independent.
-- Shop link / buy button behavior was left unchanged.
-- Admin and edit surfaces were intentionally not changed; `is_affiliate` remains visible/editable there.
-- Validation passed: `npm run build` in `frontend/`.
-- Deploy prep passed: `frontend/dist/functions/api/[[path]].ts` was present before deploy.
-- Deployed preview: `https://b4e4ea90.supplementstack.pages.dev`.
-- Smoke checks passed: preview root HTTP 200; downloaded preview JS no longer contains the old ProductCard Affiliate badge class/text, while allowed affiliate strings remain in footer/admin/edit surfaces.
+- Commit: `862ed57` - Feature: Phase D product recommendations and translations.
+- Remote D1: `0036_rename_recommendations_to_product_recommendations.sql`
+  applied successfully after repairing the remote `d1_migrations` journal for
+  already-live 0026-0035 migrations.
+- Remote schema now has `product_recommendations` as table plus temporary
+  `recommendations` view and `recommendations_insert`/`recommendations_delete`
+  triggers for deploy compatibility.
+- Deployed preview: `https://66a9ee27.supplementstack.pages.dev`.
+- Smoke checks passed: root HTTP 200; `/api/recommendations?ingredient_id=1`
+  HTTP 200; `/api/ingredients/1/recommendations` HTTP 200;
+  `/api/ingredients/search?q=d3` HTTP 200; `/api/products/1` HTTP 200;
+  unauthenticated `/api/admin/translations/ingredients` returned 401, not 404.
 
 ## Latest Local Work
 
-Phase D bundle has been implemented and checked locally, but no commit, remote D1 migration, or deploy has been performed.
+Latest local work is the post-deploy memory update for Phase D.
 
-Product recommendations rename is implemented locally:
+Product recommendations rename is deployed:
 
 - Migration `d1-migrations/0036_rename_recommendations_to_product_recommendations.sql` renames `recommendations` to `product_recommendations`.
 - Migration 0036 recreates indexes under the new table name.
 - Migration 0036 leaves a temporary `recommendations` compatibility view plus `INSTEAD OF INSERT` and `INSTEAD OF DELETE` triggers for the deploy window.
 - The public `/api/recommendations` route remains the compatibility API name; code now targets `product_recommendations` where the database table is referenced.
-- Safe deploy runbook: apply remote D1 migration 0036 first, then deploy Cloudflare Pages code. The temporary view/triggers allow old live code to keep working during the migration/deploy window.
+- Safe deploy runbook was followed: remote D1 migration 0036 first, then Cloudflare Pages code deploy. The temporary view/triggers allow old live code to keep working during the migration/deploy window.
 
-CI/test tooling is updated locally:
+CI/test tooling is committed:
 
 - `.github/workflows/ci.yml` now checks the Cloudflare line: Functions TypeScript compile plus frontend lint, test, build, and build-output verification.
 - `frontend/package.json` test script runs `vitest --passWithNoTests`.
 - Local Vitest is `0.34.6` and supports `--passWithNoTests`.
 - Local checks are green: frontend lint, frontend test, frontend build, and functions TypeScript compile.
-- No commit and no deploy were performed.
 
-Admin translations MVP for ingredients has been implemented locally:
+Admin translations MVP for ingredients is committed and deployed:
 
 - Backend: `functions/api/modules/admin.ts` now serves `GET /api/admin/translations/ingredients` and `PUT /api/admin/translations/ingredients/:ingredientId/:language`.
 - The GET route lists ingredients with a LEFT JOIN on `ingredient_translations`, normalizes/validates language, supports `q`, `limit`, and `offset`, and returns `missing`/`translated` status.
@@ -105,7 +111,6 @@ Admin translations MVP for ingredients has been implemented locally:
 - Frontend: `frontend/src/components/AdminLayout.tsx` and `frontend/src/pages/AdminPage.tsx` expose the new `translations` tab.
 - Frontend: `frontend/src/pages/admin/TranslationsTab.tsx` is a new focused component for language selection, search, editable ingredient translation fields, save state, loading, errors, and MVP scope notice.
 - Validation passed locally: `npm run build` in `frontend/`; `npx tsc -p tsconfig.json` in `functions/`.
-- No commit and no deploy were performed.
 
 D1 backup workflow status:
 
@@ -148,17 +153,15 @@ Production D1 migrations 0026-0035 are considered live according to the previous
 
 ## Git / Workspace Notes
 
-`functions/api/lib/*` and `functions/api/modules/*` are now tracked as part of `b1fd347`.
+`functions/api/lib/*` and `functions/api/modules/*` are tracked.
 
 Remaining notable untracked or modified paths typically include:
 
 - `.wrangler/`, `frontend/dist/`, `frontend/node_modules/`, `functions/node_modules/` (build/cache, gitignored or ignorable).
-- `_research_raw/*` (research source data — review before committing).
-- `docs/cloudflare-accounts.md`, `docs/codex-working-context.md` (project docs, untracked).
-- `frontend/package-lock.json`, `functions/package-lock.json` (untracked lockfiles — decide whether to commit).
-- `scripts/setup-local-dev.ps1`, `scripts/use-supplementstack-cloudflare.example.ps1` (local dev helpers, untracked).
+- `_research_raw/*` (research source data - review before committing).
 - `.claude/SESSION.md`, `.claude/commands/` (legacy Claude session log, see `.claude/SESSION.md` header).
-- Local Phase D bundle changes are present in docs, CI, frontend/admin UI, API modules, `frontend/package.json`, and `d1-migrations/0036_rename_recommendations_to_product_recommendations.sql`; they are not committed, remote-migrated, or deployed.
+- `frontend/dist/` may be present from the latest build/deploy prep and is not committed.
+- Phase D source files, docs, lockfiles, and generic setup scripts are committed in `862ed57`.
 
 `.agent-memory/handoff.md` is regenerated on every PreCompact and after every Bash tool use by `scripts/update-agent-handoff.ps1`. Treat it as a transient snapshot — never store unique information only there.
 
