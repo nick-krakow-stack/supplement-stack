@@ -82,6 +82,15 @@ surfaces, especially authenticated/logged-in paths:
   work; it was intentionally not changed in this pass.
 - Capture any further UX polish findings from browser QA and classify launch
   blockers versus later polish.
+- Keep OAuth out of the immediate polish pass. Google OAuth is a later
+  standalone task; Apple Login is omitted for now; Amazon Login can be evaluated
+  later but is not a launch blocker.
+- Preserve Health Consent as mandatory if/when OAuth is added. OAuth replaces
+  only password login and must not bypass consent, profile, recommendation, or
+  guideline logic.
+- Existing Google OAuth stubs and `google_id` are only a starting point; real
+  provider identity structure, callback handling, and user-linking/account-merge
+  behavior remain open design work.
 
 After usability, continue with legal/content/i18n/test/SEO work in that order:
 

@@ -62,6 +62,15 @@ Priority 6 - SEO and indexing readiness (gated by legal/compliance):
 - Prepare robots, sitemap, page metadata, canonical URLs, and OpenGraph/Twitter preview metadata.
 - Enable indexing only after legal/compliance approval and final production-domain content checks.
 
+Priority 7 - Auth/OAuth track (later, not a launch blocker):
+
+- Google OAuth is accepted as a later standalone task, not part of the current polish/QA pass.
+- Apple Login is intentionally omitted for now.
+- Amazon Login can be evaluated later as an optional provider, but must not block launch.
+- Current priority remains User/Demo/Admin browser QA plus persistence/onboarding polish before OAuth implementation.
+- Health Consent remains mandatory even with OAuth. OAuth replaces only password login, not consent, profile, recommendation, or guideline logic.
+- Existing backend has Google OAuth stubs and the database already has `google_id`, but real provider identity modeling, OAuth callback handling, and user-linking/account-merge behavior are still open design work.
+
 ## Deferred / Later
 
 - Compatibility cleanup migration: drop the temporary `recommendations` compatibility view and triggers after old previews/deploy windows are irrelevant.

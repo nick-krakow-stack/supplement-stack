@@ -70,6 +70,12 @@ Planning constraint: launch remains DE-only, but i18n/localization must be
 planned as locale + country + guideline-set support, not text translation only.
 German/DGE/D-A-CH is the DE default; other countries need configurable rule and
 source sets, e.g. USA must not inherit DGE/D-A-CH by default.
+Auth planning constraint: Google OAuth is a later standalone task. Apple Login
+is omitted for now. Amazon Login may be evaluated later but is not a launch
+blocker. Health Consent remains mandatory with OAuth; OAuth only replaces the
+password login path and does not bypass consent, profile, recommendation, or
+guideline logic. Existing backend stubs and `google_id` are not a complete
+provider identity/callback/user-linking design.
 
 Targeted user/demo/admin usability fixes are committed and deployed in
 `8fb5431` (`UX: Improve stack and admin usability flows`) and verified on
