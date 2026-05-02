@@ -1,10 +1,18 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+
+function getAuthRedirect(location: ReturnType<typeof useLocation>): string {
+  const state = location.state as { from?: { pathname?: string }; redirect?: string } | null;
+  const queryRedirect = new URLSearchParams(location.search).get('redirect');
+  const target = state?.redirect ?? state?.from?.pathname ?? queryRedirect ?? '/stacks';
+  return target.startsWith('/') && !target.startsWith('//') ? target : '/stacks';
+}
 
 export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -17,7 +25,7 @@ export default function LoginPage() {
     setSubmitting(true);
     try {
       await login(email, password);
-      navigate('/');
+      navigate(getAuthRedirect(location), { replace: true });
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??

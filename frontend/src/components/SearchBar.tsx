@@ -25,6 +25,7 @@ export default function SearchBar({ onSelect, placeholder = 'Wirkstoff suchen…
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
+  const [searchCompleted, setSearchCompleted] = useState(false);
 
   const debouncedQuery = useDebounce(query, 300);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -36,6 +37,9 @@ export default function SearchBar({ onSelect, placeholder = 'Wirkstoff suchen…
     if (debouncedQuery.trim().length < 1) {
       setResults([]);
       setOpen(false);
+      setError(null);
+      setSearchCompleted(false);
+      setLoading(false);
       return;
     }
 
@@ -44,6 +48,7 @@ export default function SearchBar({ onSelect, placeholder = 'Wirkstoff suchen…
 
     setLoading(true);
     setError(null);
+    setSearchCompleted(false);
 
     fetch(apiPath(`/ingredients/search?q=${encodeURIComponent(debouncedQuery.trim())}`), {
       signal: controller.signal,
@@ -55,16 +60,20 @@ export default function SearchBar({ onSelect, placeholder = 'Wirkstoff suchen…
       .then((data) => {
         const ingredients: Ingredient[] = data.ingredients ?? [];
         setResults(ingredients.slice(0, 10));
-        setOpen(ingredients.length > 0);
+        setOpen(true);
         setActiveIndex(-1);
+        setSearchCompleted(true);
       })
       .catch((err) => {
         if (err.name !== 'AbortError') {
           setError('Suche fehlgeschlagen. Bitte erneut versuchen.');
           setOpen(false);
+          setSearchCompleted(true);
         }
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
 
     return () => controller.abort();
   }, [debouncedQuery]);
@@ -87,6 +96,7 @@ export default function SearchBar({ onSelect, placeholder = 'Wirkstoff suchen…
       setResults([]);
       setOpen(false);
       setActiveIndex(-1);
+      setSearchCompleted(false);
       onSelect(ingredient);
     },
     [onSelect],
@@ -117,8 +127,18 @@ export default function SearchBar({ onSelect, placeholder = 'Wirkstoff suchen…
     setResults([]);
     setOpen(false);
     setActiveIndex(-1);
+    setError(null);
+    setSearchCompleted(false);
     inputRef.current?.focus();
   };
+
+  const showNoResults =
+    open &&
+    searchCompleted &&
+    !loading &&
+    !error &&
+    query.trim().length > 0 &&
+    results.length === 0;
 
   return (
     <div ref={containerRef} className="relative w-full">
@@ -165,11 +185,16 @@ export default function SearchBar({ onSelect, placeholder = 'Wirkstoff suchen…
       )}
 
       {/* Dropdown */}
-      {open && results.length > 0 && (
+      {open && (results.length > 0 || showNoResults) && (
         <ul
           role="listbox"
           className="absolute z-40 mt-2 w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
         >
+          {showNoResults && (
+            <li className="px-4 py-3 text-sm font-semibold text-slate-500">
+              Keine Wirkstoffe gefunden.
+            </li>
+          )}
           {results.map((ingredient, index) => (
             <li
               key={ingredient.id}

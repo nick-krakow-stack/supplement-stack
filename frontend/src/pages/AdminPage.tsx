@@ -32,6 +32,14 @@ interface AdminProduct {
   alternative_note?: string;
 }
 
+interface AdminProductOption {
+  id: number;
+  name: string;
+  brand?: string;
+  moderation_status?: string;
+  visibility?: string;
+}
+
 interface AdminUserProduct {
   id: number;
   user_id: number;
@@ -73,6 +81,8 @@ interface AdminStats {
   ingredients?: number;
   products_total?: number;
   products_pending?: number;
+  products?: number;
+  pending_products?: number;
   stacks?: number;
   [key: string]: number | undefined;
 }
@@ -99,6 +109,16 @@ function authHeaders(): Record<string, string> {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
+}
+
+function getShopHost(shopLink?: string): string | null {
+  if (!shopLink) return null;
+  try {
+    const url = new URL(shopLink);
+    return url.hostname.replace(/^www\./, '');
+  } catch {
+    return shopLink.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0] || shopLink;
+  }
 }
 
 type Tab = 'products' | 'ingredients' | 'translations' | 'interactions' | 'stats' | 'shop_domains' | 'rankings' | 'user_products';
@@ -134,6 +154,7 @@ function ProductsTab() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [actionLoading, setActionLoading] = useState<number | null>(null);
+  const [affiliateSavingId, setAffiliateSavingId] = useState<number | null>(null);
   const [filterNoAffiliate, setFilterNoAffiliate] = useState(false);
   const [cropModalProductId, setCropModalProductId] = useState<number | null>(null);
 
@@ -196,6 +217,31 @@ function ProductsTab() {
     setProducts((prev) =>
       prev.map((product) => (product.id === id ? { ...product, [field]: value } : product))
     );
+  };
+
+  const updateAffiliateFlag = async (product: AdminProduct, nextValue: number) => {
+    const previousValue = product.is_affiliate ? 1 : 0;
+    setAffiliateSavingId(product.id);
+    setError('');
+    updateProductField(product.id, 'is_affiliate', nextValue);
+    try {
+      const res = await fetch(`/api/products/${product.id}`, {
+        method: 'PUT',
+        headers: authHeaders(),
+        body: JSON.stringify({ is_affiliate: nextValue }),
+      });
+      if (!res.ok) throw new Error('Affiliate-Status konnte nicht gespeichert werden.');
+      const data = await res.json();
+      const updated = data.product ?? data;
+      setProducts((prev) =>
+        prev.map((p) => (p.id === product.id ? { ...p, ...updated } : p))
+      );
+    } catch (e: unknown) {
+      updateProductField(product.id, 'is_affiliate', previousValue);
+      setError(e instanceof Error ? e.message : 'Fehler.');
+    } finally {
+      setAffiliateSavingId(null);
+    }
   };
 
   const saveProductDetails = async (product: AdminProduct) => {
@@ -278,11 +324,19 @@ function ProductsTab() {
       )}
 
       <div className="flex flex-col gap-3">
-        {visibleProducts.map((product) => (
-          <div
-            key={product.id}
-            className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-col gap-3"
-          >
+        {visibleProducts.map((product) => {
+          const shopHost = getShopHost(product.shop_link);
+          const linkLabel = !product.shop_link
+            ? 'kein Link'
+            : product.is_affiliate
+              ? 'Nick Affiliate'
+              : 'Shop-Link ohne Affiliate';
+
+          return (
+            <div
+              key={product.id}
+              className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex flex-col gap-3"
+            >
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0">
                 <p className="font-semibold text-gray-900 truncate">{product.name}</p>
@@ -292,6 +346,20 @@ function ProductsTab() {
                 <p className="text-sm text-green-600 font-bold">€{product.price.toFixed(2)}/Monat</p>
                 <div className="mt-1">
                   <StatusBadge status={product.moderation_status} />
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 font-medium ${
+                    product.shop_link
+                      ? product.is_affiliate
+                        ? 'bg-amber-100 text-amber-700'
+                        : 'bg-slate-100 text-slate-700'
+                      : 'bg-gray-100 text-gray-500'
+                  }`}>
+                    {linkLabel}
+                  </span>
+                  {shopHost && (
+                    <span className="font-mono text-gray-500">{shopHost}</span>
+                  )}
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -335,13 +403,15 @@ function ProductsTab() {
                 type="checkbox"
                 id={`is_affiliate_${product.id}`}
                 checked={!!product.is_affiliate}
-                onChange={(e) =>
-                  updateProductField(product.id, 'is_affiliate', e.target.checked ? 1 : 0)
-                }
+                disabled={affiliateSavingId === product.id}
+                onChange={(e) => updateAffiliateFlag(product, e.target.checked ? 1 : 0)}
               />
               <label htmlFor={`is_affiliate_${product.id}`} className="text-sm font-medium text-gray-700">
-                Affiliate-Link
+                Nick Affiliate
               </label>
+              {affiliateSavingId === product.id && (
+                <span className="text-xs text-gray-500">Speichere...</span>
+              )}
             </div>
 
             {/* Product card metadata */}
@@ -426,7 +496,8 @@ function ProductsTab() {
               </button>
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -448,7 +519,7 @@ interface IngredientWithEdit extends Ingredient {
 function IngredientsTab() {
   const [ingredients, setIngredients] = useState<IngredientWithEdit[]>([]);
   const [allIngredients, setAllIngredients] = useState<Ingredient[]>([]);
-  const [allProducts, setAllProducts] = useState<{ id: number; name: string }[]>([]);
+  const [allProducts, setAllProducts] = useState<AdminProductOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -482,10 +553,13 @@ function IngredientsTab() {
   useEffect(() => {
     load();
     // Load products for recommendation dropdown
-    fetch('/api/products', { headers: authHeaders() })
-      .then((r) => r.json())
+    fetch('/api/admin/products', { headers: authHeaders() })
+      .then((r) => {
+        if (!r.ok) throw new Error('Produkte konnten nicht geladen werden.');
+        return r.json();
+      })
       .then((data) => setAllProducts(data.products ?? []))
-      .catch(() => {});
+      .catch((e: unknown) => setRecError(e instanceof Error ? e.message : 'Produkte konnten nicht geladen werden.'));
   }, [load]);
 
   const setField = (id: number, field: Partial<IngredientWithEdit>) => {
@@ -690,9 +764,14 @@ function IngredientsTab() {
             className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
           >
             <option value="">Produkt wählen</option>
-            {allProducts.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
+            {allProducts.map((p) => {
+              const status = [p.moderation_status, p.visibility].filter(Boolean).join(' / ');
+              return (
+                <option key={p.id} value={p.id}>
+                  {p.name}{p.brand ? ` - ${p.brand}` : ''}{status ? ` (${status})` : ''}
+                </option>
+              );
+            })}
           </select>
           <select
             value={recType}
@@ -1072,22 +1151,22 @@ function StatsTab() {
 
   if (!stats) return null;
 
-  const cards: Array<{ label: string; key: keyof AdminStats; icon: React.ReactNode; color: string }> = [
-    { label: 'Nutzer', key: 'users', icon: <Settings size={24} />, color: 'text-indigo-500' },
-    { label: 'Wirkstoffe', key: 'ingredients', icon: <BarChart3 size={24} />, color: 'text-green-500' },
-    { label: 'Produkte (gesamt)', key: 'products_total', icon: <CheckCircle size={24} />, color: 'text-purple-500' },
-    { label: 'Produkte (ausstehend)', key: 'products_pending', icon: <AlertTriangle size={24} />, color: 'text-yellow-500' },
-    { label: 'Stacks', key: 'stacks', icon: <BarChart3 size={24} />, color: 'text-orange-500' },
+  const cards: Array<{ label: string; keys: Array<keyof AdminStats>; icon: React.ReactNode; color: string }> = [
+    { label: 'Nutzer', keys: ['users'], icon: <Settings size={24} />, color: 'text-indigo-500' },
+    { label: 'Wirkstoffe', keys: ['ingredients'], icon: <BarChart3 size={24} />, color: 'text-green-500' },
+    { label: 'Produkte (gesamt)', keys: ['products_total', 'products'], icon: <CheckCircle size={24} />, color: 'text-purple-500' },
+    { label: 'Produkte (ausstehend)', keys: ['products_pending', 'pending_products'], icon: <AlertTriangle size={24} />, color: 'text-yellow-500' },
+    { label: 'Stacks', keys: ['stacks'], icon: <BarChart3 size={24} />, color: 'text-orange-500' },
   ];
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-      {cards.map(({ label, key, icon, color }) => (
-        <div key={key} className="bg-white rounded-2xl border border-gray-100 p-5 flex items-center gap-4 shadow-sm">
+      {cards.map(({ label, keys, icon, color }) => (
+        <div key={label} className="bg-white rounded-2xl border border-gray-100 p-5 flex items-center gap-4 shadow-sm">
           <div className={color}>{icon}</div>
           <div>
             <p className="text-2xl font-bold text-gray-900">
-              {stats[key] ?? '–'}
+              {keys.map((key) => stats[key]).find((value) => value !== undefined) ?? '–'}
             </p>
             <p className="text-sm text-gray-500">{label}</p>
           </div>
@@ -1299,51 +1378,78 @@ function UserProductsTab() {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<'pending' | 'approved' | 'rejected'>('pending');
   const [actionId, setActionId] = useState<number | null>(null);
+  const [error, setError] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
+    setError('');
     try {
       const res = await fetch(`/api/admin/user-products?status=${statusFilter}`, { headers: authHeaders() });
+      if (!res.ok) throw new Error('User-Produkte konnten nicht geladen werden.');
       const data = await res.json() as { products: AdminUserProduct[] };
       setProducts(data.products ?? []);
     } catch (err) {
       console.error('Failed to load admin user products:', err);
+      setError(err instanceof Error ? err.message : 'User-Produkte konnten nicht geladen werden.');
     } finally { setLoading(false); }
   }, [statusFilter]);
 
   useEffect(() => { load(); }, [load]);
 
-  const handleApprove = async (id: number) => {
+  const runAction = async (id: number, url: string, method: 'PUT' | 'DELETE', message: string) => {
     setActionId(id);
-    await fetch(`/api/admin/user-products/${id}/approve`, { method: 'PUT', headers: authHeaders() });
-    setProducts((prev) => prev.filter((p) => p.id !== id));
-    setActionId(null);
+    setError('');
+    try {
+      const res = await fetch(url, { method, headers: authHeaders() });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(data.error ?? message);
+      }
+      setProducts((prev) => prev.filter((p) => p.id !== id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : message);
+    } finally {
+      setActionId(null);
+    }
+  };
+
+  const handleApprove = async (id: number) => {
+    await runAction(
+      id,
+      `/api/admin/user-products/${id}/approve`,
+      'PUT',
+      'User-Produkt konnte nicht freigegeben werden.'
+    );
   };
 
   const handleReject = async (id: number) => {
-    setActionId(id);
-    await fetch(`/api/admin/user-products/${id}/reject`, { method: 'PUT', headers: authHeaders() });
-    setProducts((prev) => prev.filter((p) => p.id !== id));
-    setActionId(null);
+    await runAction(
+      id,
+      `/api/admin/user-products/${id}/reject`,
+      'PUT',
+      'User-Produkt konnte nicht abgelehnt werden.'
+    );
   };
 
   const handleDelete = async (id: number) => {
     if (!window.confirm('Produkt wirklich löschen?')) return;
-    setActionId(id);
-    await fetch(`/api/admin/user-products/${id}`, { method: 'DELETE', headers: authHeaders() });
-    setProducts((prev) => prev.filter((p) => p.id !== id));
-    setActionId(null);
+    await runAction(
+      id,
+      `/api/admin/user-products/${id}`,
+      'DELETE',
+      'User-Produkt konnte nicht gelöscht werden.'
+    );
   };
 
   return (
     <div className="space-y-4">
       {/* Status filter pills */}
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         {(['pending', 'approved', 'rejected'] as const).map((s) => (
           <button
             key={s}
             onClick={() => setStatusFilter(s)}
-            className={`px-3 py-1.5 text-xs font-medium rounded-full transition-all ${
+            className={`min-h-11 px-3 py-2 text-xs font-medium rounded-full transition-all ${
               statusFilter === s ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-600 hover:text-indigo-600'
             }`}
           >
@@ -1351,6 +1457,12 @@ function UserProductsTab() {
           </button>
         ))}
       </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm">
+          {error}
+        </div>
+      )}
 
       {loading && <p className="text-sm text-gray-500">Laden…</p>}
 
@@ -1369,7 +1481,7 @@ function UserProductsTab() {
                   <p className="text-xs text-gray-500 mt-0.5">
                     von {p.user_email ?? `user_id=${p.user_id}`} · €{p.price.toFixed(2)}
                     {p.shop_link && (
-                      <> · <a href={p.shop_link} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">Link</a></>
+                      <> · <a href={p.shop_link} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">User-Link</a></>
                     )}
                   </p>
                   {p.serving_size && (
@@ -1379,30 +1491,30 @@ function UserProductsTab() {
                   )}
                   {p.notes && <p className="text-xs text-gray-500 italic mt-1">{p.notes}</p>}
                 </div>
-                {p.is_affiliate ? (
-                  <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full flex-shrink-0">Affiliate</span>
+                {p.shop_link ? (
+                  <span className="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full flex-shrink-0">User-Link</span>
                 ) : null}
               </div>
               {statusFilter === 'pending' && (
-                <div className="flex gap-2 mt-1">
+                <div className="flex flex-col sm:flex-row gap-2 mt-1">
                   <button
                     onClick={() => handleApprove(p.id)}
                     disabled={actionId === p.id}
-                    className="flex-1 px-3 py-1.5 text-xs font-semibold bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white rounded-xl transition-all shadow-sm disabled:opacity-50"
+                    className="flex-1 min-h-11 px-3 py-2 text-xs font-semibold bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white rounded-xl transition-all shadow-sm disabled:opacity-50"
                   >
                     Freigeben
                   </button>
                   <button
                     onClick={() => handleReject(p.id)}
                     disabled={actionId === p.id}
-                    className="flex-1 px-3 py-1.5 text-xs font-semibold bg-red-500 hover:bg-red-600 text-white rounded-xl transition-colors disabled:opacity-50"
+                    className="flex-1 min-h-11 px-3 py-2 text-xs font-semibold bg-red-500 hover:bg-red-600 text-white rounded-xl transition-colors disabled:opacity-50"
                   >
                     Ablehnen
                   </button>
                   <button
                     onClick={() => handleDelete(p.id)}
                     disabled={actionId === p.id}
-                    className="px-3 py-1.5 text-xs font-medium text-red-600 border border-red-200 hover:bg-red-50 rounded-xl transition-colors disabled:opacity-50"
+                    className="min-h-11 px-3 py-2 text-xs font-medium text-red-600 border border-red-200 hover:bg-red-50 rounded-xl transition-colors disabled:opacity-50"
                   >
                     Löschen
                   </button>
@@ -1412,7 +1524,7 @@ function UserProductsTab() {
                 <button
                   onClick={() => handleDelete(p.id)}
                   disabled={actionId === p.id}
-                  className="self-start px-3 py-1.5 text-xs font-medium text-red-600 border border-red-200 hover:bg-red-50 rounded-xl transition-colors disabled:opacity-50"
+                  className="self-start min-h-11 px-3 py-2 text-xs font-medium text-red-600 border border-red-200 hover:bg-red-50 rounded-xl transition-colors disabled:opacity-50"
                 >
                   Löschen
                 </button>

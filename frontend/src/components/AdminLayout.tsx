@@ -156,7 +156,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           <aside className="relative flex flex-col w-64 bg-slate-900 h-full shadow-xl">
             <button
               onClick={() => setSidebarOpen(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-white p-1"
+              className="absolute top-3 right-3 flex min-h-11 min-w-11 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-800 hover:text-white"
               aria-label="Sidebar schließen"
             >
               <X size={20} />

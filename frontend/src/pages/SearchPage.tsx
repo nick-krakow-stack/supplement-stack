@@ -16,6 +16,13 @@ interface ManualDose {
   unit: string;
 }
 
+interface StackProductPayload {
+  id: number;
+  quantity: number;
+  dosage_text?: string;
+  timing?: string;
+}
+
 const POPULAR_INGREDIENTS: Array<{ id: number; name: string }> = [
   { id: -1, name: 'Magnesium' },
   { id: -2, name: 'Vitamin D' },
@@ -29,26 +36,95 @@ function getToken(): string | null {
   return localStorage.getItem('ss_token');
 }
 
-async function saveProductToStack(productId: number): Promise<number> {
+function buildStackProductPayload(
+  product: Product,
+  portions: number,
+  recommendedDose?: ManualDose,
+): StackProductPayload {
+  const doseText = recommendedDose
+    ? `${recommendedDose.value} ${recommendedDose.unit} täglich`
+    : `${portions} Portion${portions === 1 ? '' : 'en'} täglich`;
+
+  return {
+    id: product.id,
+    quantity: 1,
+    dosage_text: product.dosage_text ?? doseText,
+    timing: product.timing ?? 'Zum Frühstück',
+  };
+}
+
+async function resolveStackId(requestedStackId: number | null): Promise<number> {
+  if (requestedStackId != null) return requestedStackId;
+
   const res = await apiClient.get<{ stacks: Stack[] }>('/stacks');
   const stacks: Stack[] = res.data.stacks ?? [];
 
-  let stackId: number;
   if (stacks.length > 0) {
-    stackId = stacks[0].id;
-  } else {
-    const created = await apiClient.post<{ id: number; name: string }>('/stacks', { name: 'Mein Stack' });
-    stackId = created.data.id;
+    return stacks[0].id;
   }
 
-  const stackRes = await apiClient.get<{ items: Array<{ id: number; quantity: number }> }>(`/stacks/${stackId}`);
-  const currentItems = (stackRes.data.items ?? []).map((item) => ({ id: item.id, quantity: item.quantity ?? 1 }));
-  if (!currentItems.some((item) => item.id === productId)) {
-    currentItems.push({ id: productId, quantity: 1 });
-  }
+  const created = await apiClient.post<{ id?: number; stack?: { id: number } }>('/stacks', {
+    name: 'Mein Stack',
+    product_ids: [],
+  });
+  const createdId = created.data.id ?? created.data.stack?.id;
+  if (createdId == null) throw new Error('Stack konnte nicht erstellt werden.');
+  return createdId;
+}
 
-  await apiClient.put(`/stacks/${stackId}`, { product_ids: currentItems });
-  return stackId;
+async function loadStackProductPayloads(stackId: number): Promise<StackProductPayload[]> {
+  const stackRes = await apiClient.get<{
+    items?: StackProductPayload[];
+    products?: StackProductPayload[];
+  }>(`/stacks/${stackId}`);
+  const currentItems = stackRes.data.items ?? stackRes.data.products ?? [];
+  return currentItems.map((item) => ({
+    id: item.id,
+    quantity: item.quantity ?? 1,
+    dosage_text: item.dosage_text,
+    timing: item.timing,
+  }));
+}
+
+async function saveProductToStack(
+  stackId: number | null,
+  product: Product,
+  portions: number,
+  recommendedDose?: ManualDose,
+): Promise<number> {
+  const targetStackId = await resolveStackId(stackId);
+  const currentItems = await loadStackProductPayloads(targetStackId);
+  const nextProduct = buildStackProductPayload(product, portions, recommendedDose);
+  const nextItems = currentItems.some((item) => item.id === product.id)
+    ? currentItems.map((item) => (item.id === product.id ? { ...item, ...nextProduct } : item))
+    : [...currentItems, nextProduct];
+
+  await apiClient.put(`/stacks/${targetStackId}`, { product_ids: nextItems });
+  return targetStackId;
+}
+
+async function removeProductFromStack(stackId: number, productId: number): Promise<void> {
+  const currentItems = await loadStackProductPayloads(stackId);
+  await apiClient.put(`/stacks/${stackId}`, {
+    product_ids: currentItems.filter((item) => item.id !== productId),
+  });
+}
+
+async function clearStackProducts(stackId: number): Promise<void> {
+  await apiClient.put(`/stacks/${stackId}`, { product_ids: [] });
+}
+
+function upsertLocalStackItem(
+  items: LocalStackItem[],
+  nextItem: LocalStackItem,
+): LocalStackItem[] {
+  const idx = items.findIndex((item) => item.product.id === nextItem.product.id);
+  if (idx >= 0) {
+    const updated = [...items];
+    updated[idx] = nextItem;
+    return updated;
+  }
+  return [...items, nextItem];
 }
 
 interface StackWarning {
@@ -112,45 +188,64 @@ export default function SearchPage() {
 
   // Modal 3: add to stack
   const handleAddToStack = useCallback(
-    (
-      _stackId: number | null,
+    async (
+      stackId: number | null,
       product: Product,
       portions: number,
       daysSupply: number,
       monthlyPrice: number,
     ) => {
-      // Update local state immediately (no breaking change)
-      setStackItems((prev) => {
-        const idx = prev.findIndex((item) => item.product.id === product.id);
-        if (idx >= 0) {
-          const updated = [...prev];
-          updated[idx] = { product, portions, daysSupply, monthlyPrice };
-          return updated;
-        }
-        return [...prev, { product, portions, daysSupply, monthlyPrice }];
-      });
-
       // Persist to DB if user is logged in
       if (getToken()) {
-        saveProductToStack(product.id)
-          .then((sid) => {
-            setCurrentStackId(sid);
-            return apiClient.get<{ warnings: StackWarning[] }>(`/stack-warnings/${sid}`);
-          })
-          .then((res) => {
-            setWarnings(res.data.warnings ?? []);
-          })
-          .catch((err: unknown) => {
-            console.error('[SearchPage] saveProductToStack/warnings failed:', err);
-          });
+        const sid = await saveProductToStack(stackId, product, portions, manualDose);
+        setCurrentStackId(sid);
+        const res = await apiClient.get<{ warnings: StackWarning[] }>(`/stack-warnings/${sid}`);
+        setWarnings(res.data.warnings ?? []);
       }
+
+      setStackItems((prev) => upsertLocalStackItem(prev, {
+        product,
+        portions,
+        daysSupply,
+        monthlyPrice,
+      }));
     },
-    [],
+    [manualDose],
   );
 
-  const handleRemoveStackItem = useCallback((productId: number) => {
+  const handleRemoveStackItem = useCallback(async (productId: number) => {
+    const previousItems = stackItems;
     setStackItems((prev) => prev.filter((item) => item.product.id !== productId));
-  }, []);
+
+    if (token && currentStackId != null) {
+      try {
+        await removeProductFromStack(currentStackId, productId);
+        const res = await apiClient.get<{ warnings: StackWarning[] }>(`/stack-warnings/${currentStackId}`);
+        setWarnings(res.data.warnings ?? []);
+      } catch (err) {
+        console.error('[SearchPage] removeProductFromStack failed:', err);
+        setStackItems(previousItems);
+      }
+    }
+  }, [currentStackId, stackItems, token]);
+
+  const handleClearStackItems = useCallback(async () => {
+    const previousItems = stackItems;
+    setStackItems([]);
+    setWarnings([]);
+
+    if (token && currentStackId != null) {
+      try {
+        await clearStackProducts(currentStackId);
+      } catch (err) {
+        console.error('[SearchPage] clearStackProducts failed:', err);
+        setStackItems(previousItems);
+        return;
+      }
+    }
+
+    setCurrentStackId(null);
+  }, [currentStackId, stackItems, token]);
 
   const handleAddToWishlist = useCallback(async (productId: number): Promise<void> => {
     await apiClient.post('/wishlist', { product_id: productId });
@@ -238,7 +333,7 @@ export default function SearchPage() {
                     </div>
                   </div>
                   <button
-                    onClick={() => handleRemoveStackItem(item.product.id)}
+                    onClick={() => void handleRemoveStackItem(item.product.id)}
                     className="ml-3 p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
                     aria-label="Entfernen"
                   >
@@ -342,7 +437,7 @@ export default function SearchPage() {
                 </span>
               </div>
               <button
-                onClick={() => { setStackItems([]); setWarnings([]); setCurrentStackId(null); }}
+                onClick={() => void handleClearStackItems()}
                 className="flex items-center gap-1 text-xs text-red-500 hover:bg-red-50 rounded-lg px-2 py-1 transition-colors font-medium flex-shrink-0 ml-2"
               >
                 <Trash2 size={13} />
@@ -359,7 +454,7 @@ export default function SearchPage() {
                 >
                   <span className="max-w-[100px] truncate">{item.product.name}</span>
                   <button
-                    onClick={() => handleRemoveStackItem(item.product.id)}
+                    onClick={() => void handleRemoveStackItem(item.product.id)}
                     className="flex-shrink-0 ml-0.5 text-indigo-400 hover:text-indigo-700 transition-colors"
                     aria-label={`${item.product.name} entfernen`}
                   >

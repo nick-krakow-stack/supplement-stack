@@ -839,7 +839,10 @@ export function StackWorkspace({ mode = 'demo', token = null }: StackWorkspacePr
     async (product: DemoProduct, stackId?: string) => {
       const targetStackId = stackId ?? state.activeStackId;
       const targetStack = state.stacks.find((s) => s.id === targetStackId);
-      if (!targetStack || targetStack.products.some((p) => p.id === product.id)) return;
+      if (!targetStack) throw new Error('Stack konnte nicht gefunden werden.');
+      if (targetStack.products.some((p) => p.id === product.id)) {
+        throw new Error('Produkt ist bereits in diesem Stack.');
+      }
       const nextProducts = [...targetStack.products, product];
       if (mode === 'authenticated' && token) {
         try {
@@ -1035,15 +1038,15 @@ export function StackWorkspace({ mode = 'demo', token = null }: StackWorkspacePr
 
           <button
             className="ss-btn ss-btn-outline"
-            onClick={() =>
-              isDemo
-                ? demoRestrictedNotice()
-                : window.alert('Stack-Mailversand folgt im nächsten Release.')
-            }
+            disabled
+            style={{ opacity: 0.55, cursor: 'not-allowed' }}
           >
             <IconMail />
             Stack mailen
           </button>
+          <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>
+            E-Mail-Versand folgt bald.
+          </span>
 
           <button
             className="ss-btn ss-btn-red-soft"
@@ -1107,6 +1110,15 @@ export function StackWorkspace({ mode = 'demo', token = null }: StackWorkspacePr
             <p style={{ fontSize: 14, fontWeight: 600 }}>
               Noch leer — klicke auf &bdquo;Produkt hinzufügen&ldquo;, um zu starten.
             </p>
+            <button
+              type="button"
+              onClick={() => setAddModalOpen(true)}
+              className="ss-btn ss-btn-green"
+              style={{ margin: '18px auto 0' }}
+            >
+              <IconPlus />
+              Produkt hinzufügen
+            </button>
           </div>
         )}
 
@@ -1141,6 +1153,7 @@ export function StackWorkspace({ mode = 'demo', token = null }: StackWorkspacePr
       </main>
 
       {/* Bottom bar */}
+      {productsCount > 0 && (
       <div className="bottom-bar">
         <div>
           <div className="bb-title">Gewählte Supplements</div>
@@ -1168,6 +1181,7 @@ export function StackWorkspace({ mode = 'demo', token = null }: StackWorkspacePr
           </button>
         </div>
       </div>
+      )}
 
       {addModalOpen && (
         <AddProductModal

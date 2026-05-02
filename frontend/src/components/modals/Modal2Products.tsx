@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ChevronLeft, Heart, Package, ShoppingCart, Star, X } from 'lucide-react';
 import ModalWrapper from './ModalWrapper';
@@ -251,13 +251,13 @@ export default function Modal2Products({
   const [error, setError] = useState<string | null>(null);
   const [recommendationWarning, setRecommendationWarning] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const fetchAll = async () => {
+  const loadProducts = useCallback(
+    async (isCancelled: () => boolean = () => false) => {
       setLoading(true);
       setError(null);
       setRecommendationWarning(false);
+      setItems([]);
+      setUserProducts([]);
 
       const token = localStorage.getItem('ss_token');
 
@@ -275,7 +275,7 @@ export default function Modal2Products({
         ]);
 
         const userProdRes = userProdResult.status === 'fulfilled' ? userProdResult.value : null;
-        if (!cancelled && userProdRes && userProdRes.ok) {
+        if (!isCancelled() && userProdRes && userProdRes.ok) {
           try {
             const userProdData = await userProdRes.json();
             setUserProducts(userProdData.products ?? userProdData.user_products ?? []);
@@ -309,7 +309,7 @@ export default function Modal2Products({
           console.warn('Recommendations fetch failed:', recResult.reason);
         }
 
-        if (cancelled) return;
+        if (isCancelled()) return;
 
         const recommendations: Recommendation[] = recData.recommendations ?? [];
         const allProducts: Product[] = (prodData.products ?? []).map((product: Product) => (
@@ -341,20 +341,25 @@ export default function Modal2Products({
         setItems(withRec);
         setRecommendationWarning(recWarning);
       } catch (err) {
-        if (!cancelled) {
+        if (!isCancelled()) {
           setError('Produkte konnten nicht geladen werden.');
           console.error(err);
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!isCancelled()) setLoading(false);
       }
-    };
+    },
+    [ingredientId],
+  );
 
-    fetchAll();
+  useEffect(() => {
+    let cancelled = false;
+
+    void loadProducts(() => cancelled);
     return () => {
       cancelled = true;
     };
-  }, [ingredientId]);
+  }, [loadProducts]);
 
   return (
     <ModalWrapper onClose={onClose} size="lg" padded={false}>
@@ -399,7 +404,7 @@ export default function Modal2Products({
           <div className="rounded-2xl bg-red-50 p-4">
             <p className="text-sm font-semibold text-red-700">{error}</p>
             <button
-              onClick={() => window.location.reload()}
+              onClick={() => void loadProducts()}
               className="mt-2 text-xs font-bold text-red-600 underline"
             >
               Erneut versuchen

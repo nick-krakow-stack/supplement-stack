@@ -115,7 +115,7 @@ export default function WishlistPage() {
             </p>
           </div>
           <Link
-            to="/"
+            to="/search"
             className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2 font-semibold text-white shadow-sm transition hover:opacity-90"
           >
             <Search size={15} />

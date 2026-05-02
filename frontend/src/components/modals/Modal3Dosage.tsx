@@ -19,7 +19,7 @@ interface Modal3DosageProps {
     portions: number,
     daysSupply: number,
     monthlyPrice: number,
-  ) => void;
+  ) => void | Promise<void>;
   token: string | null;
   recommendedDose?: ManualDose;
 }
@@ -137,7 +137,7 @@ export default function Modal3Dosage({
 
     if (!token) {
       // Demo mode: add without stack
-      onAddToStack(null, product, portions, daysSupply, monthlyPrice);
+      await onAddToStack(null, product, portions, daysSupply, monthlyPrice);
       onClose();
       return;
     }
@@ -175,7 +175,7 @@ export default function Modal3Dosage({
         stackId = selectedStackId;
       }
 
-      onAddToStack(stackId, product, portions, daysSupply, monthlyPrice);
+      await onAddToStack(stackId, product, portions, daysSupply, monthlyPrice);
       onClose();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unbekannter Fehler';
@@ -347,13 +347,13 @@ export default function Modal3Dosage({
           {!token ? (
             <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl">
               <p className="text-sm text-amber-800">
-                Bitte anmelden, um zu einem Stack hinzuzufügen.
+                Ohne Login speicherst du das Produkt nur temporär in deinem Browser-Demo-Stack.
               </p>
               <a
                 href="/login"
                 className="inline-block mt-2 text-xs font-semibold text-amber-700 underline hover:text-amber-900"
               >
-                Zum Login → Demo-Modus verfügbar
+                Zum Login für dauerhaftes Speichern
               </a>
             </div>
           ) : stacksLoading ? (

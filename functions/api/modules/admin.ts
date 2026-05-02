@@ -277,9 +277,10 @@ admin.put('/user-products/:id/approve', async (c) => {
   const authErr = await ensureAdmin(c)
   if (authErr) return authErr
   const id = c.req.param('id')
-  await c.env.DB.prepare(`
+  const result = await c.env.DB.prepare(`
     UPDATE user_products SET status = 'approved', approved_at = datetime('now') WHERE id = ?
   `).bind(id).run()
+  if (result.meta.changes === 0) return c.json({ error: 'User product not found' }, 404)
   await logAdminAction(c, {
     action: 'approve_user_product',
     entity_type: 'user_product',
@@ -293,9 +294,10 @@ admin.put('/user-products/:id/reject', async (c) => {
   const authErr = await ensureAdmin(c)
   if (authErr) return authErr
   const id = c.req.param('id')
-  await c.env.DB.prepare(`
+  const result = await c.env.DB.prepare(`
     UPDATE user_products SET status = 'rejected' WHERE id = ?
   `).bind(id).run()
+  if (result.meta.changes === 0) return c.json({ error: 'User product not found' }, 404)
   await logAdminAction(c, {
     action: 'reject_user_product',
     entity_type: 'user_product',
@@ -309,7 +311,8 @@ admin.delete('/user-products/:id', async (c) => {
   const authErr = await ensureAdmin(c)
   if (authErr) return authErr
   const id = c.req.param('id')
-  await c.env.DB.prepare('DELETE FROM user_products WHERE id = ?').bind(id).run()
+  const result = await c.env.DB.prepare('DELETE FROM user_products WHERE id = ?').bind(id).run()
+  if (result.meta.changes === 0) return c.json({ error: 'User product not found' }, 404)
   await logAdminAction(c, {
     action: 'delete_user_product',
     entity_type: 'user_product',
