@@ -14,6 +14,7 @@ Last updated: 2026-05-02
   - Local checks are green: frontend lint, frontend test, frontend build, and functions TypeScript compile.
   - Preview deploy: `https://66a9ee27.supplementstack.pages.dev`.
   - Smoke checks passed for root, product recommendation API, dose recommendation API, D3 search, product 1, and admin translations auth routing.
+  - GitHub Actions D1 backup has run successfully both manually and automatically; token scopes are verified.
 
 - Frontend test tooling CI guard:
   - `frontend/package.json` test script now runs `vitest --passWithNoTests`.
@@ -27,6 +28,25 @@ Last updated: 2026-05-02
   - Checks passed: `npm run build` in `frontend/`; `npx tsc -p tsconfig.json` in `functions/`.
   - Public i18n playback remains out of scope.
 
+## Completed Locally - Not Committed Or Deployed
+
+- Admin translations have been extended beyond Ingredients:
+  - `GET /api/admin/translations/dose-recommendations?language=de&q=&limit=50&offset=0`
+  - `PUT /api/admin/translations/dose-recommendations/:doseRecommendationId/:language`
+  - `GET /api/admin/translations/verified-profiles?language=de&q=&limit=50&offset=0`
+  - `PUT /api/admin/translations/verified-profiles/:verifiedProfileId/:language`
+  - `GET /api/admin/translations/blog-posts?language=de&q=&limit=50&offset=0`
+  - `PUT /api/admin/translations/blog-posts/:blogPostId/:language`
+- `frontend/src/pages/admin/TranslationsTab.tsx` now has an entity selector for
+  Ingredients, Dose Recommendations, Verified Profiles, and Blog Posts.
+- Public i18n playback remains unchanged.
+- D1 backup is verified and must not be treated as open work.
+- Checks passed locally:
+  - `npm run lint --if-present` in `frontend/`
+  - `npm run test --if-present -- --run` in `frontend/`
+  - `npm run build` in `frontend/`
+  - `npx tsc -p tsconfig.json` in `functions/`
+
 ## Phase D - Next Required Actions
 
 Phase C and the integrated Phase D rollout are complete.
@@ -35,10 +55,6 @@ Phase C and the integrated Phase D rollout are complete.
   migration after deployed code no longer needs old-table compatibility.
 - Consider a later cleanup migration that drops the compatibility
   `recommendations` view and triggers once old previews are irrelevant.
-- Manually run the GitHub Actions D1 backup workflow to verify token scopes.
-  Local CLI dispatch is currently blocked because `gh` is unavailable and no
-  GitHub token env var is set; use the GitHub Actions web UI or authenticated
-  API flow documented in `DEPLOYMENT.md`.
 - Public i18n playback remains separate and was not changed.
 
 ## Completed Locally (Docs/Ops)
@@ -49,8 +65,8 @@ Phase C and the integrated Phase D rollout are complete.
 - `.github/workflows/ci.yml` has been refreshed for the Cloudflare line.
 - Backup workflow was checked against `wrangler.toml`; D1 database name matches
   `supplementstack-production`.
-- Backup workflow Web UI/API dispatch remains externally open because no local
-  `gh`/GitHub token is available.
+- GitHub Actions D1 backup workflow verification is complete: manual and
+  automatic runs succeeded, and token scopes are verified.
 - Secret-pattern review of the requested untracked docs/scripts/lockfiles found
   placeholders and references only, not raw token values in the checked files;
   those docs/scripts/lockfiles are now committed in `862ed57`.

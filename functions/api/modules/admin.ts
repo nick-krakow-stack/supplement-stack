@@ -14,6 +14,12 @@
 //   DELETE /user-products/:id      (admin)
 //   GET /translations/ingredients — ingredient translations list (admin)
 //   PUT /translations/ingredients/:ingredientId/:language — upsert ingredient translation (admin)
+//   GET /translations/dose-recommendations — dose recommendation translations list (admin)
+//   PUT /translations/dose-recommendations/:doseRecommendationId/:language — upsert dose recommendation translation (admin)
+//   GET /translations/verified-profiles — verified profile translations list (admin)
+//   PUT /translations/verified-profiles/:verifiedProfileId/:language — upsert verified profile translation (admin)
+//   GET /translations/blog-posts — blog translations list (admin)
+//   PUT /translations/blog-posts/:blogPostId/:language — upsert blog translation (admin)
 // Plus public shop-domain routes (mounted at /api/shop-domains):
 //   GET /resolve?url=       — resolve shop name from URL (public)
 //   GET /                   — list shop domains (public)
@@ -43,6 +49,55 @@ type IngredientTranslationRow = {
   status: 'missing' | 'translated'
 }
 
+type DoseRecommendationTranslationRow = {
+  dose_recommendation_id: number
+  ingredient_name: string
+  source_type: string
+  base_source_label: string
+  base_timing: string | null
+  base_context_note: string | null
+  dose_min: number | null
+  dose_max: number
+  unit: string
+  per_kg_body_weight: number | null
+  per_kg_cap: number | null
+  population_slug: string | null
+  purpose: string
+  sex_filter: string | null
+  is_athlete: number
+  is_active: number
+  language: string
+  source_label: string | null
+  timing: string | null
+  context_note: string | null
+  status: 'missing' | 'translated'
+}
+
+type VerifiedProfileTranslationRow = {
+  verified_profile_id: number
+  base_name: string
+  base_slug: string
+  base_credentials: string | null
+  base_bio: string | null
+  language: string
+  credentials: string | null
+  bio: string | null
+  status: 'missing' | 'translated'
+}
+
+type BlogTranslationRow = {
+  blog_post_id: number
+  r2_key: string
+  post_status: string
+  published_at: number | null
+  language: string
+  title: string | null
+  slug: string | null
+  excerpt: string | null
+  meta_description: string | null
+  status: 'missing' | 'translated'
+}
+
 function normalizeTranslationLanguage(value: string | undefined): string | null {
   if (!value) return null
   const normalized = value.trim().toLowerCase().replace(/_/g, '-')
@@ -60,6 +115,23 @@ function optionalText(value: unknown): string | null {
   if (typeof value !== 'string') return null
   const trimmed = value.trim()
   return trimmed.length > 0 ? trimmed : null
+}
+
+function parsePositiveId(value: string): number | null {
+  const parsed = Number(value)
+  if (!Number.isInteger(parsed) || parsed <= 0) return null
+  return parsed
+}
+
+function normalizeSlug(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const slug = value.trim().toLowerCase()
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) return null
+  return slug
+}
+
+function isUniqueConstraintError(error: unknown): boolean {
+  return error instanceof Error && /unique|constraint/i.test(error.message)
 }
 
 // GET /api/admin/products (admin only)
@@ -294,8 +366,8 @@ admin.put('/translations/ingredients/:ingredientId/:language', async (c) => {
   const authErr = await ensureAdmin(c)
   if (authErr) return authErr
 
-  const ingredientId = Number(c.req.param('ingredientId'))
-  if (!Number.isInteger(ingredientId) || ingredientId <= 0) {
+  const ingredientId = parsePositiveId(c.req.param('ingredientId'))
+  if (ingredientId === null) {
     return c.json({ error: 'Invalid ingredient id' }, 400)
   }
 
@@ -362,6 +434,433 @@ admin.put('/translations/ingredients/:ingredientId/:language', async (c) => {
       description,
       hypo_symptoms: hypoSymptoms,
       hyper_symptoms: hyperSymptoms,
+    },
+  })
+
+  return c.json({ translation })
+})
+
+// GET /api/admin/translations/dose-recommendations?language=de&q=&limit=50&offset=0 (admin)
+admin.get('/translations/dose-recommendations', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const language = normalizeTranslationLanguage(c.req.query('language') ?? 'de')
+  if (!language) return c.json({ error: 'Invalid language' }, 400)
+
+  const q = c.req.query('q')?.trim() ?? ''
+  const limit = parsePagination(c.req.query('limit'), 50, 100)
+  const offset = parsePagination(c.req.query('offset'), 0, 100000)
+  const like = `%${q}%`
+
+  const { results } = await c.env.DB.prepare(`
+    SELECT
+      dr.id as dose_recommendation_id,
+      i.name as ingredient_name,
+      dr.source_type as source_type,
+      dr.source_label as base_source_label,
+      dr.timing as base_timing,
+      dr.context_note as base_context_note,
+      dr.dose_min as dose_min,
+      dr.dose_max as dose_max,
+      dr.unit as unit,
+      dr.per_kg_body_weight as per_kg_body_weight,
+      dr.per_kg_cap as per_kg_cap,
+      dr.population_slug as population_slug,
+      dr.purpose as purpose,
+      dr.sex_filter as sex_filter,
+      dr.is_athlete as is_athlete,
+      dr.is_active as is_active,
+      ? as language,
+      t.source_label as source_label,
+      t.timing as timing,
+      t.context_note as context_note,
+      CASE WHEN t.dose_recommendation_id IS NULL THEN 'missing' ELSE 'translated' END as status
+    FROM dose_recommendations dr
+    JOIN ingredients i ON i.id = dr.ingredient_id
+    LEFT JOIN dose_recommendation_translations t
+      ON t.dose_recommendation_id = dr.id AND t.language = ?
+    WHERE (
+      ? = ''
+      OR i.name LIKE ?
+      OR dr.source_label LIKE ?
+      OR COALESCE(dr.timing, '') LIKE ?
+      OR COALESCE(dr.context_note, '') LIKE ?
+      OR COALESCE(t.source_label, '') LIKE ?
+      OR COALESCE(t.timing, '') LIKE ?
+      OR COALESCE(t.context_note, '') LIKE ?
+    )
+    ORDER BY
+      CASE WHEN t.dose_recommendation_id IS NULL THEN 0 ELSE 1 END ASC,
+      i.name ASC,
+      dr.id ASC
+    LIMIT ? OFFSET ?
+  `).bind(
+    language,
+    language,
+    q,
+    like,
+    like,
+    like,
+    like,
+    like,
+    like,
+    like,
+    limit,
+    offset,
+  ).all<DoseRecommendationTranslationRow>()
+
+  return c.json({ language, translations: results, limit, offset })
+})
+
+// PUT /api/admin/translations/dose-recommendations/:doseRecommendationId/:language (admin)
+admin.put('/translations/dose-recommendations/:doseRecommendationId/:language', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const doseRecommendationId = parsePositiveId(c.req.param('doseRecommendationId'))
+  if (doseRecommendationId === null) {
+    return c.json({ error: 'Invalid dose recommendation id' }, 400)
+  }
+
+  const language = normalizeTranslationLanguage(c.req.param('language'))
+  if (!language) return c.json({ error: 'Invalid language' }, 400)
+
+  const doseRecommendation = await c.env.DB.prepare('SELECT id FROM dose_recommendations WHERE id = ?')
+    .bind(doseRecommendationId)
+    .first<{ id: number }>()
+  if (!doseRecommendation) return c.json({ error: 'Dose recommendation not found' }, 404)
+
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const sourceLabel = optionalText(body.source_label)
+  const timing = optionalText(body.timing)
+  const contextNote = optionalText(body.context_note)
+
+  await c.env.DB.prepare(`
+    INSERT INTO dose_recommendation_translations (
+      dose_recommendation_id,
+      language,
+      source_label,
+      timing,
+      context_note
+    )
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(dose_recommendation_id, language) DO UPDATE SET
+      source_label = excluded.source_label,
+      timing = excluded.timing,
+      context_note = excluded.context_note
+  `).bind(
+    doseRecommendationId,
+    language,
+    sourceLabel,
+    timing,
+    contextNote,
+  ).run()
+
+  const translation = await c.env.DB.prepare(`
+    SELECT dose_recommendation_id, language, source_label, timing, context_note
+    FROM dose_recommendation_translations
+    WHERE dose_recommendation_id = ? AND language = ?
+  `).bind(doseRecommendationId, language).first()
+
+  await logAdminAction(c, {
+    action: 'upsert_dose_recommendation_translation',
+    entity_type: 'dose_recommendation_translation',
+    entity_id: doseRecommendationId,
+    changes: {
+      dose_recommendation_id: doseRecommendationId,
+      language,
+      source_label: sourceLabel,
+      timing,
+      context_note: contextNote,
+    },
+  })
+
+  return c.json({ translation })
+})
+
+// GET /api/admin/translations/verified-profiles?language=de&q=&limit=50&offset=0 (admin)
+admin.get('/translations/verified-profiles', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const language = normalizeTranslationLanguage(c.req.query('language') ?? 'de')
+  if (!language) return c.json({ error: 'Invalid language' }, 400)
+
+  const q = c.req.query('q')?.trim() ?? ''
+  const limit = parsePagination(c.req.query('limit'), 50, 100)
+  const offset = parsePagination(c.req.query('offset'), 0, 100000)
+  const like = `%${q}%`
+
+  const { results } = await c.env.DB.prepare(`
+    SELECT
+      vp.id as verified_profile_id,
+      vp.name as base_name,
+      vp.slug as base_slug,
+      vp.credentials as base_credentials,
+      vp.bio as base_bio,
+      ? as language,
+      t.credentials as credentials,
+      t.bio as bio,
+      CASE WHEN t.verified_profile_id IS NULL THEN 'missing' ELSE 'translated' END as status
+    FROM verified_profiles vp
+    LEFT JOIN verified_profile_translations t
+      ON t.verified_profile_id = vp.id AND t.language = ?
+    WHERE (
+      ? = ''
+      OR vp.name LIKE ?
+      OR vp.slug LIKE ?
+      OR COALESCE(vp.credentials, '') LIKE ?
+      OR COALESCE(vp.bio, '') LIKE ?
+      OR COALESCE(t.credentials, '') LIKE ?
+      OR COALESCE(t.bio, '') LIKE ?
+    )
+    ORDER BY
+      CASE WHEN t.verified_profile_id IS NULL THEN 0 ELSE 1 END ASC,
+      vp.name ASC
+    LIMIT ? OFFSET ?
+  `).bind(
+    language,
+    language,
+    q,
+    like,
+    like,
+    like,
+    like,
+    like,
+    like,
+    limit,
+    offset,
+  ).all<VerifiedProfileTranslationRow>()
+
+  return c.json({ language, translations: results, limit, offset })
+})
+
+// PUT /api/admin/translations/verified-profiles/:verifiedProfileId/:language (admin)
+admin.put('/translations/verified-profiles/:verifiedProfileId/:language', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const verifiedProfileId = parsePositiveId(c.req.param('verifiedProfileId'))
+  if (verifiedProfileId === null) {
+    return c.json({ error: 'Invalid verified profile id' }, 400)
+  }
+
+  const language = normalizeTranslationLanguage(c.req.param('language'))
+  if (!language) return c.json({ error: 'Invalid language' }, 400)
+
+  const verifiedProfile = await c.env.DB.prepare('SELECT id FROM verified_profiles WHERE id = ?')
+    .bind(verifiedProfileId)
+    .first<{ id: number }>()
+  if (!verifiedProfile) return c.json({ error: 'Verified profile not found' }, 404)
+
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const bio = optionalText(body.bio)
+  const credentials = optionalText(body.credentials)
+
+  await c.env.DB.prepare(`
+    INSERT INTO verified_profile_translations (
+      verified_profile_id,
+      language,
+      bio,
+      credentials
+    )
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(verified_profile_id, language) DO UPDATE SET
+      bio = excluded.bio,
+      credentials = excluded.credentials
+  `).bind(
+    verifiedProfileId,
+    language,
+    bio,
+    credentials,
+  ).run()
+
+  const translation = await c.env.DB.prepare(`
+    SELECT verified_profile_id, language, bio, credentials
+    FROM verified_profile_translations
+    WHERE verified_profile_id = ? AND language = ?
+  `).bind(verifiedProfileId, language).first()
+
+  await logAdminAction(c, {
+    action: 'upsert_verified_profile_translation',
+    entity_type: 'verified_profile_translation',
+    entity_id: verifiedProfileId,
+    changes: {
+      verified_profile_id: verifiedProfileId,
+      language,
+      bio,
+      credentials,
+    },
+  })
+
+  return c.json({ translation })
+})
+
+// GET /api/admin/translations/blog-posts?language=de&q=&limit=50&offset=0 (admin)
+admin.get('/translations/blog-posts', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const language = normalizeTranslationLanguage(c.req.query('language') ?? 'de')
+  if (!language) return c.json({ error: 'Invalid language' }, 400)
+
+  const q = c.req.query('q')?.trim() ?? ''
+  const limit = parsePagination(c.req.query('limit'), 50, 100)
+  const offset = parsePagination(c.req.query('offset'), 0, 100000)
+  const like = `%${q}%`
+
+  const { results } = await c.env.DB.prepare(`
+    SELECT
+      bp.id as blog_post_id,
+      bp.r2_key as r2_key,
+      bp.status as post_status,
+      bp.published_at as published_at,
+      ? as language,
+      t.title as title,
+      t.slug as slug,
+      t.excerpt as excerpt,
+      t.meta_description as meta_description,
+      CASE WHEN t.blog_post_id IS NULL THEN 'missing' ELSE 'translated' END as status
+    FROM blog_posts bp
+    LEFT JOIN blog_translations t
+      ON t.blog_post_id = bp.id AND t.language = ?
+    WHERE (
+      ? = ''
+      OR bp.r2_key LIKE ?
+      OR bp.status LIKE ?
+      OR COALESCE(t.title, '') LIKE ?
+      OR COALESCE(t.slug, '') LIKE ?
+      OR COALESCE(t.excerpt, '') LIKE ?
+      OR COALESCE(t.meta_description, '') LIKE ?
+    )
+    ORDER BY
+      CASE WHEN t.blog_post_id IS NULL THEN 0 ELSE 1 END ASC,
+      COALESCE(bp.published_at, bp.updated_at, bp.created_at) DESC,
+      bp.id DESC
+    LIMIT ? OFFSET ?
+  `).bind(
+    language,
+    language,
+    q,
+    like,
+    like,
+    like,
+    like,
+    like,
+    like,
+    limit,
+    offset,
+  ).all<BlogTranslationRow>()
+
+  return c.json({ language, translations: results, limit, offset })
+})
+
+// PUT /api/admin/translations/blog-posts/:blogPostId/:language (admin)
+admin.put('/translations/blog-posts/:blogPostId/:language', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const blogPostId = parsePositiveId(c.req.param('blogPostId'))
+  if (blogPostId === null) {
+    return c.json({ error: 'Invalid blog post id' }, 400)
+  }
+
+  const language = normalizeTranslationLanguage(c.req.param('language'))
+  if (!language) return c.json({ error: 'Invalid language' }, 400)
+
+  const blogPost = await c.env.DB.prepare('SELECT id FROM blog_posts WHERE id = ?')
+    .bind(blogPostId)
+    .first<{ id: number }>()
+  if (!blogPost) return c.json({ error: 'Blog post not found' }, 404)
+
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const title = optionalText(body.title)
+  if (!title) return c.json({ error: 'title is required' }, 400)
+
+  const slug = normalizeSlug(body.slug)
+  if (!slug) {
+    return c.json({ error: 'slug must use lowercase letters, numbers, and single hyphens only' }, 400)
+  }
+
+  const existingSlug = await c.env.DB.prepare(`
+    SELECT blog_post_id
+    FROM blog_translations
+    WHERE language = ? AND slug = ? AND blog_post_id <> ?
+  `).bind(language, slug, blogPostId).first<{ blog_post_id: number }>()
+  if (existingSlug) {
+    return c.json({ error: `Slug "${slug}" is already used for ${language}.` }, 409)
+  }
+
+  const excerpt = optionalText(body.excerpt)
+  const metaDescription = optionalText(body.meta_description)
+
+  try {
+    await c.env.DB.prepare(`
+      INSERT INTO blog_translations (
+        blog_post_id,
+        language,
+        title,
+        slug,
+        excerpt,
+        meta_description
+      )
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(blog_post_id, language) DO UPDATE SET
+        title = excluded.title,
+        slug = excluded.slug,
+        excerpt = excluded.excerpt,
+        meta_description = excluded.meta_description
+    `).bind(
+      blogPostId,
+      language,
+      title,
+      slug,
+      excerpt,
+      metaDescription,
+    ).run()
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      return c.json({ error: `Slug "${slug}" is already used for ${language}.` }, 409)
+    }
+    throw error
+  }
+
+  const translation = await c.env.DB.prepare(`
+    SELECT blog_post_id, language, title, slug, excerpt, meta_description
+    FROM blog_translations
+    WHERE blog_post_id = ? AND language = ?
+  `).bind(blogPostId, language).first()
+
+  await logAdminAction(c, {
+    action: 'upsert_blog_translation',
+    entity_type: 'blog_translation',
+    entity_id: blogPostId,
+    changes: {
+      blog_post_id: blogPostId,
+      language,
+      title,
+      slug,
+      excerpt,
+      meta_description: metaDescription,
     },
   })
 

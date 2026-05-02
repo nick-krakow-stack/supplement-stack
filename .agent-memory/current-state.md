@@ -48,7 +48,7 @@ Preview search API-base fix is committed and deployed to Cloudflare Pages previe
 Affiliate disclosure cleanup is committed and deployed to Cloudflare Pages preview: product cards no longer show the visible Affiliate badge; the general affiliate disclosure lives in the footer disclaimer.
 Admin translations MVP for `ingredient_translations` is committed and deployed to Cloudflare Pages preview.
 Root documentation cleanup is committed: README, DEPLOYMENT, implementation status, and agent planner now describe the Cloudflare-native line and point old backend/SQLite references to legacy context.
-D1 backup workflow was checked locally against `wrangler.toml`: workflow exports `supplementstack-production`, matching the configured D1 database name. Local GitHub Actions dispatch was blocked because `gh` is unavailable and no GitHub token env var is set. Web UI/API test instructions are documented in `DEPLOYMENT.md`.
+D1 backup workflow is verified: GitHub Actions D1 backup has run successfully both manually and automatically, and token scopes are confirmed. Backup verification is no longer an open next step.
 CI has been refreshed for the Cloudflare line. Local lint/test/build are green. Frontend test tooling now tolerates an empty suite via Vitest `--passWithNoTests`, while still running and failing real tests normally.
 
 Last relevant commits on `main`:
@@ -86,7 +86,41 @@ and deployed to Cloudflare Pages preview:
 
 ## Latest Local Work
 
-Latest local work is the post-deploy memory update for Phase D.
+Admin Translations extension is implemented locally, not committed and not deployed.
+Public i18n playback was not changed.
+
+- Backend: `functions/api/modules/admin.ts` now also serves admin-only GET/PUT
+  routes for `dose_recommendation_translations`,
+  `verified_profile_translations`, and `blog_translations`.
+- Dose recommendation translation upsert validates the source
+  `dose_recommendations` row, stores optional `source_label`, `timing`, and
+  `context_note` with empty strings normalized to `NULL`, and audits
+  `upsert_dose_recommendation_translation` as
+  `dose_recommendation_translation`.
+- Verified profile translation upsert validates the source
+  `verified_profiles` row, stores optional `bio` and `credentials` with empty
+  strings normalized to `NULL`, and audits
+  `upsert_verified_profile_translation` as `verified_profile_translation`.
+- Blog translation upsert validates the source `blog_posts` row, requires
+  `title` and normalized lowercase `slug`, validates slug format, returns a
+  409 for per-language slug conflicts, and audits `upsert_blog_translation` as
+  `blog_translation`.
+- Frontend: `frontend/src/pages/admin/TranslationsTab.tsx` now has an entity
+  selector for Ingredients, Dose Recommendations, Verified Profiles, and Blog
+  Posts while preserving the existing Ingredient editor behavior.
+- Frontend: `frontend/src/pages/admin/TranslationsTab.tsx` now guards
+  `loadTranslations()` with AbortController plus a monotonic request id so stale
+  entity/language/search responses cannot overwrite rows, drafts, loading,
+  saved state, or errors.
+- Frontend: `frontend/.eslintignore` was added so local generated
+  `frontend/dist/` output is not linted by `npm run lint --if-present`.
+- Local checks passed: `npm run lint --if-present`,
+  `npm run test --if-present -- --run`, and `npm run build` in `frontend/`;
+  `npx tsc -p tsconfig.json` in `functions/`.
+
+D1 backup workflow remains verified: GitHub Actions backup has run manually and
+automatically, token scopes are confirmed, and backup verification is not an
+open next step.
 
 Product recommendations rename is deployed:
 
@@ -115,7 +149,9 @@ Admin translations MVP for ingredients is committed and deployed:
 D1 backup workflow status:
 
 - Workflow configuration was checked against `wrangler.toml`; the configured D1 database name is `supplementstack-production`.
-- Web UI/API workflow dispatch remains externally open because local `gh` is unavailable and no GitHub token env var is set.
+- GitHub Actions D1 backup was successfully executed manually and automatically.
+- Token scopes for the backup workflow are verified.
+- Previous local CLI dispatch limitations are historical only; backup verification is complete and no longer an open task.
 
 ## Phase B Result
 

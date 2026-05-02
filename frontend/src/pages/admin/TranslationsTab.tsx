@@ -1,8 +1,18 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { CheckCircle, Languages, Loader2, Save, Search, XCircle } from 'lucide-react';
 import { apiClient } from '../../api/client';
 
+type EntityKey = 'ingredients' | 'dose-recommendations' | 'verified-profiles' | 'blog-posts';
 type TranslationStatus = 'missing' | 'translated';
+
+interface EntityConfig {
+  label: string;
+  heading: string;
+  endpoint: string;
+  searchPlaceholder: string;
+  emptyLabel: string;
+}
 
 interface IngredientTranslationRow {
   ingredient_id: number;
@@ -18,11 +28,119 @@ interface IngredientTranslationRow {
   status: TranslationStatus;
 }
 
-interface TranslationDraft {
+interface DoseRecommendationTranslationRow {
+  dose_recommendation_id: number;
+  ingredient_name: string;
+  source_type: string;
+  base_source_label: string;
+  base_timing: string | null;
+  base_context_note: string | null;
+  dose_min: number | null;
+  dose_max: number;
+  unit: string;
+  per_kg_body_weight: number | null;
+  per_kg_cap: number | null;
+  population_slug: string | null;
+  purpose: string;
+  sex_filter: string | null;
+  is_athlete: number;
+  is_active: number;
+  language: string;
+  source_label: string | null;
+  timing: string | null;
+  context_note: string | null;
+  status: TranslationStatus;
+}
+
+interface VerifiedProfileTranslationRow {
+  verified_profile_id: number;
+  base_name: string;
+  base_slug: string;
+  base_credentials: string | null;
+  base_bio: string | null;
+  language: string;
+  credentials: string | null;
+  bio: string | null;
+  status: TranslationStatus;
+}
+
+interface BlogTranslationRow {
+  blog_post_id: number;
+  r2_key: string;
+  post_status: string;
+  published_at: number | null;
+  language: string;
+  title: string | null;
+  slug: string | null;
+  excerpt: string | null;
+  meta_description: string | null;
+  status: TranslationStatus;
+}
+
+type TranslationRow =
+  | IngredientTranslationRow
+  | DoseRecommendationTranslationRow
+  | VerifiedProfileTranslationRow
+  | BlogTranslationRow;
+
+interface IngredientDraft {
   name: string;
   description: string;
   hypo_symptoms: string;
   hyper_symptoms: string;
+}
+
+interface DoseRecommendationDraft {
+  source_label: string;
+  timing: string;
+  context_note: string;
+}
+
+interface VerifiedProfileDraft {
+  credentials: string;
+  bio: string;
+}
+
+interface BlogDraft {
+  title: string;
+  slug: string;
+  excerpt: string;
+  meta_description: string;
+}
+
+type TranslationDraft = IngredientDraft | DoseRecommendationDraft | VerifiedProfileDraft | BlogDraft;
+
+interface SavedIngredientTranslation {
+  ingredient_id: number;
+  language: string;
+  name: string;
+  description: string | null;
+  hypo_symptoms: string | null;
+  hyper_symptoms: string | null;
+}
+
+interface SavedDoseRecommendationTranslation {
+  dose_recommendation_id: number;
+  language: string;
+  source_label: string | null;
+  timing: string | null;
+  context_note: string | null;
+}
+
+interface SavedVerifiedProfileTranslation {
+  verified_profile_id: number;
+  language: string;
+  credentials: string | null;
+  bio: string | null;
+}
+
+interface SavedBlogTranslation {
+  blog_post_id: number;
+  language: string;
+  title: string;
+  slug: string;
+  excerpt: string | null;
+  meta_description: string | null;
 }
 
 const LANGUAGE_OPTIONS = [
@@ -32,140 +150,564 @@ const LANGUAGE_OPTIONS = [
   { value: 'es', label: 'Spanisch' },
 ];
 
-function toDraft(row: IngredientTranslationRow): TranslationDraft {
-  return {
-    name: row.name ?? '',
-    description: row.description ?? '',
-    hypo_symptoms: row.hypo_symptoms ?? '',
-    hyper_symptoms: row.hyper_symptoms ?? '',
-  };
-}
+const ENTITY_CONFIG: Record<EntityKey, EntityConfig> = {
+  ingredients: {
+    label: 'Ingredients',
+    heading: 'Ingredient-Translations',
+    endpoint: '/admin/translations/ingredients',
+    searchPlaceholder: 'Ingredient oder Translation suchen',
+    emptyLabel: 'Keine Ingredients fuer diese Suche gefunden.',
+  },
+  'dose-recommendations': {
+    label: 'Dose Recommendations',
+    heading: 'Dose-Recommendation-Translations',
+    endpoint: '/admin/translations/dose-recommendations',
+    searchPlaceholder: 'Ingredient, Quelle, Timing oder Kontext suchen',
+    emptyLabel: 'Keine Dose Recommendations fuer diese Suche gefunden.',
+  },
+  'verified-profiles': {
+    label: 'Verified Profiles',
+    heading: 'Verified-Profile-Translations',
+    endpoint: '/admin/translations/verified-profiles',
+    searchPlaceholder: 'Name, Slug, Credentials oder Bio suchen',
+    emptyLabel: 'Keine Verified Profiles fuer diese Suche gefunden.',
+  },
+  'blog-posts': {
+    label: 'Blog Posts',
+    heading: 'Blog-Translations',
+    endpoint: '/admin/translations/blog-posts',
+    searchPlaceholder: 'R2-Key, Titel, Slug oder Excerpt suchen',
+    emptyLabel: 'Keine Blog Posts fuer diese Suche gefunden.',
+  },
+};
 
 function normalizeLanguage(value: string): string {
   return value.trim().toLowerCase().replace(/_/g, '-');
 }
 
 function getErrorMessage(error: unknown): string {
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'response' in error &&
+    typeof error.response === 'object' &&
+    error.response !== null &&
+    'data' in error.response &&
+    typeof error.response.data === 'object' &&
+    error.response.data !== null &&
+    'error' in error.response.data &&
+    typeof error.response.data.error === 'string'
+  ) {
+    return error.response.data.error;
+  }
   if (error instanceof Error) return error.message;
   return 'Die Anfrage ist fehlgeschlagen.';
 }
 
+function isCanceledRequest(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) return false;
+
+  const candidate = error as { code?: unknown; name?: unknown };
+  return candidate.code === 'ERR_CANCELED' || candidate.name === 'CanceledError' || candidate.name === 'AbortError';
+}
+
+function toDraft(row: TranslationRow): TranslationDraft {
+  if ('ingredient_id' in row) {
+    return {
+      name: row.name ?? '',
+      description: row.description ?? '',
+      hypo_symptoms: row.hypo_symptoms ?? '',
+      hyper_symptoms: row.hyper_symptoms ?? '',
+    };
+  }
+
+  if ('dose_recommendation_id' in row) {
+    return {
+      source_label: row.source_label ?? '',
+      timing: row.timing ?? '',
+      context_note: row.context_note ?? '',
+    };
+  }
+
+  if ('verified_profile_id' in row) {
+    return {
+      credentials: row.credentials ?? '',
+      bio: row.bio ?? '',
+    };
+  }
+
+  return {
+    title: row.title ?? '',
+    slug: row.slug ?? '',
+    excerpt: row.excerpt ?? '',
+    meta_description: row.meta_description ?? '',
+  };
+}
+
+function rowKey(row: TranslationRow): string {
+  if ('ingredient_id' in row) return String(row.ingredient_id);
+  if ('dose_recommendation_id' in row) return String(row.dose_recommendation_id);
+  if ('verified_profile_id' in row) return String(row.verified_profile_id);
+  return String(row.blog_post_id);
+}
+
+function formatDose(row: DoseRecommendationTranslationRow): string {
+  const min = row.dose_min !== null ? `${row.dose_min}-` : '';
+  const perKg = row.per_kg_body_weight !== null ? `, ${row.per_kg_body_weight} ${row.unit}/kg` : '';
+  const cap = row.per_kg_cap !== null ? `, cap ${row.per_kg_cap} ${row.unit}` : '';
+  return `${min}${row.dose_max} ${row.unit}${perKg}${cap}`;
+}
+
+function formatTimestamp(value: number | null): string {
+  if (value === null) return 'unpublished';
+  return new Date(value * 1000).toLocaleDateString('de-DE');
+}
+
+function statusBadge(status: TranslationStatus) {
+  return (
+    <span
+      className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+        status === 'missing' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
+      }`}
+    >
+      {status}
+    </span>
+  );
+}
+
+interface TextInputProps {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  required?: boolean;
+  placeholder?: string;
+}
+
+function TextInput({ label, value, onChange, required = false, placeholder }: TextInputProps) {
+  return (
+    <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
+      <span>
+        {label}
+        {required && <span className="text-red-500"> *</span>}
+      </span>
+      <input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        className="border border-gray-200 rounded-xl px-3 py-2 text-sm font-normal text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+      />
+    </label>
+  );
+}
+
+interface TextAreaProps extends TextInputProps {
+  rows?: number;
+}
+
+function TextArea({ label, value, onChange, required = false, placeholder, rows = 3 }: TextAreaProps) {
+  return (
+    <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
+      <span>
+        {label}
+        {required && <span className="text-red-500"> *</span>}
+      </span>
+      <textarea
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        rows={rows}
+        className="border border-gray-200 rounded-xl px-3 py-2 text-sm font-normal text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+      />
+    </label>
+  );
+}
+
+function SourceBlock({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+      <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">{title}</div>
+      <div className="space-y-2 text-sm text-gray-700">{children}</div>
+    </div>
+  );
+}
+
 export default function TranslationsTab() {
+  const [entity, setEntity] = useState<EntityKey>('ingredients');
   const [language, setLanguage] = useState('de');
   const [query, setQuery] = useState('');
-  const [rows, setRows] = useState<IngredientTranslationRow[]>([]);
-  const [drafts, setDrafts] = useState<Record<number, TranslationDraft>>({});
+  const [rows, setRows] = useState<TranslationRow[]>([]);
+  const [drafts, setDrafts] = useState<Record<string, TranslationDraft>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [savingId, setSavingId] = useState<number | null>(null);
-  const [savedId, setSavedId] = useState<number | null>(null);
+  const [savingKey, setSavingKey] = useState<string | null>(null);
+  const [savedKey, setSavedKey] = useState<string | null>(null);
+  const loadRequestIdRef = useRef(0);
+  const loadAbortControllerRef = useRef<AbortController | null>(null);
 
   const normalizedLanguage = useMemo(() => normalizeLanguage(language), [language]);
+  const config = ENTITY_CONFIG[entity];
 
   const loadTranslations = useCallback(async () => {
+    const requestId = loadRequestIdRef.current + 1;
+    loadRequestIdRef.current = requestId;
+    loadAbortControllerRef.current?.abort();
+    const abortController = new AbortController();
+    loadAbortControllerRef.current = abortController;
+
     setLoading(true);
     setError('');
-    setSavedId(null);
+    setSavedKey(null);
 
     try {
       const res = await apiClient.get<{
         language: string;
-        translations: IngredientTranslationRow[];
-      }>('/admin/translations/ingredients', {
+        translations: TranslationRow[];
+      }>(config.endpoint, {
         params: {
           language: normalizedLanguage,
           q: query.trim(),
           limit: 50,
           offset: 0,
         },
+        signal: abortController.signal,
       });
+
+      if (requestId !== loadRequestIdRef.current || abortController.signal.aborted) return;
+
       const nextRows = res.data.translations ?? [];
       setRows(nextRows);
-      setDrafts(Object.fromEntries(nextRows.map((row) => [row.ingredient_id, toDraft(row)])));
+      setDrafts(Object.fromEntries(nextRows.map((row) => [rowKey(row), toDraft(row)])));
     } catch (err) {
+      if (isCanceledRequest(err) || requestId !== loadRequestIdRef.current) return;
       setError(getErrorMessage(err));
     } finally {
-      setLoading(false);
+      if (requestId === loadRequestIdRef.current) {
+        setLoading(false);
+        if (loadAbortControllerRef.current === abortController) {
+          loadAbortControllerRef.current = null;
+        }
+      }
     }
-  }, [normalizedLanguage, query]);
+  }, [config.endpoint, normalizedLanguage, query]);
 
   useEffect(() => {
     loadTranslations();
   }, [loadTranslations]);
 
-  const updateDraft = (ingredientId: number, field: keyof TranslationDraft, value: string) => {
+  useEffect(() => {
+    return () => {
+      loadRequestIdRef.current += 1;
+      loadAbortControllerRef.current?.abort();
+    };
+  }, []);
+
+  const updateDraft = (key: string, field: string, value: string) => {
     setDrafts((prev) => ({
       ...prev,
-      [ingredientId]: {
-        ...prev[ingredientId],
+      [key]: {
+        ...(prev[key] ?? {}),
         [field]: value,
-      },
+      } as TranslationDraft,
     }));
-    setSavedId(null);
+    setSavedKey(null);
   };
 
-  const saveTranslation = async (row: IngredientTranslationRow) => {
-    const draft = drafts[row.ingredient_id];
-    if (!draft?.name.trim()) {
-      setError('Name ist Pflicht.');
-      return;
-    }
+  const saveTranslation = async (row: TranslationRow) => {
+    const key = rowKey(row);
+    const draft = drafts[key] ?? toDraft(row);
 
-    setSavingId(row.ingredient_id);
+    setSavingKey(key);
     setError('');
-    setSavedId(null);
+    setSavedKey(null);
 
     try {
-      const payload = {
-        name: draft.name.trim(),
-        description: draft.description.trim() || null,
-        hypo_symptoms: draft.hypo_symptoms.trim() || null,
-        hyper_symptoms: draft.hyper_symptoms.trim() || null,
-      };
-      const res = await apiClient.put<{
-        translation: {
-          ingredient_id: number;
-          language: string;
-          name: string;
-          description: string | null;
-          hypo_symptoms: string | null;
-          hyper_symptoms: string | null;
+      if ('ingredient_id' in row) {
+        const ingredientDraft = draft as IngredientDraft;
+        if (!ingredientDraft.name.trim()) {
+          setError('Name ist Pflicht.');
+          return;
+        }
+
+        const payload = {
+          name: ingredientDraft.name.trim(),
+          description: ingredientDraft.description.trim() || null,
+          hypo_symptoms: ingredientDraft.hypo_symptoms.trim() || null,
+          hyper_symptoms: ingredientDraft.hyper_symptoms.trim() || null,
         };
-      }>(
-        `/admin/translations/ingredients/${row.ingredient_id}/${normalizedLanguage}`,
-        payload,
-      );
-      const translation = res.data.translation;
-      setRows((prev) =>
-        prev.map((item) =>
-          item.ingredient_id === row.ingredient_id
-            ? {
-                ...item,
-                language: translation.language,
-                name: translation.name,
-                description: translation.description,
-                hypo_symptoms: translation.hypo_symptoms,
-                hyper_symptoms: translation.hyper_symptoms,
-                status: 'translated',
-              }
-            : item,
-        ),
-      );
-      setDrafts((prev) => ({
-        ...prev,
-        [row.ingredient_id]: {
-          name: translation.name,
-          description: translation.description ?? '',
-          hypo_symptoms: translation.hypo_symptoms ?? '',
-          hyper_symptoms: translation.hyper_symptoms ?? '',
-        },
-      }));
-      setSavedId(row.ingredient_id);
+        const res = await apiClient.put<{ translation: SavedIngredientTranslation }>(
+          `${ENTITY_CONFIG.ingredients.endpoint}/${row.ingredient_id}/${normalizedLanguage}`,
+          payload,
+        );
+        const translation = res.data.translation;
+        setRows((prev) =>
+          prev.map((item) =>
+            'ingredient_id' in item && item.ingredient_id === row.ingredient_id
+              ? { ...item, ...translation, status: 'translated' }
+              : item,
+          ),
+        );
+        setDrafts((prev) => ({
+          ...prev,
+          [key]: {
+            name: translation.name,
+            description: translation.description ?? '',
+            hypo_symptoms: translation.hypo_symptoms ?? '',
+            hyper_symptoms: translation.hyper_symptoms ?? '',
+          },
+        }));
+      } else if ('dose_recommendation_id' in row) {
+        const doseDraft = draft as DoseRecommendationDraft;
+        const payload = {
+          source_label: doseDraft.source_label.trim() || null,
+          timing: doseDraft.timing.trim() || null,
+          context_note: doseDraft.context_note.trim() || null,
+        };
+        const res = await apiClient.put<{
+          translation: SavedDoseRecommendationTranslation;
+        }>(
+          `${ENTITY_CONFIG['dose-recommendations'].endpoint}/${row.dose_recommendation_id}/${normalizedLanguage}`,
+          payload,
+        );
+        const translation = res.data.translation;
+        setRows((prev) =>
+          prev.map((item) =>
+            'dose_recommendation_id' in item && item.dose_recommendation_id === row.dose_recommendation_id
+              ? { ...item, ...translation, status: 'translated' }
+              : item,
+          ),
+        );
+        setDrafts((prev) => ({
+          ...prev,
+          [key]: {
+            source_label: translation.source_label ?? '',
+            timing: translation.timing ?? '',
+            context_note: translation.context_note ?? '',
+          },
+        }));
+      } else if ('verified_profile_id' in row) {
+        const profileDraft = draft as VerifiedProfileDraft;
+        const payload = {
+          credentials: profileDraft.credentials.trim() || null,
+          bio: profileDraft.bio.trim() || null,
+        };
+        const res = await apiClient.put<{
+          translation: SavedVerifiedProfileTranslation;
+        }>(
+          `${ENTITY_CONFIG['verified-profiles'].endpoint}/${row.verified_profile_id}/${normalizedLanguage}`,
+          payload,
+        );
+        const translation = res.data.translation;
+        setRows((prev) =>
+          prev.map((item) =>
+            'verified_profile_id' in item && item.verified_profile_id === row.verified_profile_id
+              ? { ...item, ...translation, status: 'translated' }
+              : item,
+          ),
+        );
+        setDrafts((prev) => ({
+          ...prev,
+          [key]: {
+            credentials: translation.credentials ?? '',
+            bio: translation.bio ?? '',
+          },
+        }));
+      } else {
+        const blogDraft = draft as BlogDraft;
+        if (!blogDraft.title.trim()) {
+          setError('Title ist Pflicht.');
+          return;
+        }
+        if (!blogDraft.slug.trim()) {
+          setError('Slug ist Pflicht.');
+          return;
+        }
+
+        const payload = {
+          title: blogDraft.title.trim(),
+          slug: blogDraft.slug.trim().toLowerCase(),
+          excerpt: blogDraft.excerpt.trim() || null,
+          meta_description: blogDraft.meta_description.trim() || null,
+        };
+        const res = await apiClient.put<{ translation: SavedBlogTranslation }>(
+          `${ENTITY_CONFIG['blog-posts'].endpoint}/${row.blog_post_id}/${normalizedLanguage}`,
+          payload,
+        );
+        const translation = res.data.translation;
+        setRows((prev) =>
+          prev.map((item) =>
+            'blog_post_id' in item && item.blog_post_id === row.blog_post_id
+              ? { ...item, ...translation, status: 'translated' }
+              : item,
+          ),
+        );
+        setDrafts((prev) => ({
+          ...prev,
+          [key]: {
+            title: translation.title,
+            slug: translation.slug,
+            excerpt: translation.excerpt ?? '',
+            meta_description: translation.meta_description ?? '',
+          },
+        }));
+      }
+
+      setSavedKey(key);
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
-      setSavingId(null);
+      setSavingKey(null);
     }
+  };
+
+  const renderFields = (row: TranslationRow) => {
+    const key = rowKey(row);
+    const draft = drafts[key] ?? toDraft(row);
+
+    if ('ingredient_id' in row) {
+      const ingredientDraft = draft as IngredientDraft;
+      return (
+        <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <SourceBlock title="Base / Source">
+            <p className="font-medium text-gray-900">{row.source_name}</p>
+            {row.source_description && <p className="line-clamp-3">{row.source_description}</p>}
+          </SourceBlock>
+          <div className="grid grid-cols-1 gap-4">
+            <TextInput
+              label="Translation name"
+              value={ingredientDraft.name}
+              onChange={(value) => updateDraft(key, 'name', value)}
+              required
+            />
+            <TextArea
+              label="Translation description"
+              value={ingredientDraft.description}
+              onChange={(value) => updateDraft(key, 'description', value)}
+            />
+          </div>
+          <TextArea
+            label="Translation hypo symptoms"
+            value={ingredientDraft.hypo_symptoms}
+            onChange={(value) => updateDraft(key, 'hypo_symptoms', value)}
+          />
+          <TextArea
+            label="Translation hyper symptoms"
+            value={ingredientDraft.hyper_symptoms}
+            onChange={(value) => updateDraft(key, 'hyper_symptoms', value)}
+          />
+        </div>
+      );
+    }
+
+    if ('dose_recommendation_id' in row) {
+      const doseDraft = draft as DoseRecommendationDraft;
+      return (
+        <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <SourceBlock title="Base / Source">
+            <p>
+              <span className="font-medium text-gray-900">{row.ingredient_name}</span>
+              <span className="text-gray-500"> · {row.source_type}</span>
+            </p>
+            <p>Source label: {row.base_source_label}</p>
+            <p>Dose: {formatDose(row)}</p>
+            <p>
+              Context: {row.population_slug ?? 'population n/a'} · {row.purpose}
+              {row.sex_filter ? ` · ${row.sex_filter}` : ''}
+              {row.is_athlete === 1 ? ' · athlete' : ''}
+            </p>
+            {row.base_timing && <p>Timing: {row.base_timing}</p>}
+            {row.base_context_note && <p>Note: {row.base_context_note}</p>}
+          </SourceBlock>
+          <div className="grid grid-cols-1 gap-4">
+            <TextInput
+              label="Translation source label"
+              value={doseDraft.source_label}
+              onChange={(value) => updateDraft(key, 'source_label', value)}
+              placeholder="Optional"
+            />
+            <TextInput
+              label="Translation timing"
+              value={doseDraft.timing}
+              onChange={(value) => updateDraft(key, 'timing', value)}
+              placeholder="Optional"
+            />
+            <TextArea
+              label="Translation context note"
+              value={doseDraft.context_note}
+              onChange={(value) => updateDraft(key, 'context_note', value)}
+              placeholder="Optional"
+            />
+          </div>
+        </div>
+      );
+    }
+
+    if ('verified_profile_id' in row) {
+      const profileDraft = draft as VerifiedProfileDraft;
+      return (
+        <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <SourceBlock title="Base / Source">
+            <p className="font-medium text-gray-900">{row.base_name}</p>
+            <p>Slug: {row.base_slug}</p>
+            {row.base_credentials && <p>Credentials: {row.base_credentials}</p>}
+            {row.base_bio && <p className="line-clamp-4">Bio: {row.base_bio}</p>}
+          </SourceBlock>
+          <div className="grid grid-cols-1 gap-4">
+            <TextInput
+              label="Translation credentials"
+              value={profileDraft.credentials}
+              onChange={(value) => updateDraft(key, 'credentials', value)}
+              placeholder="Optional"
+            />
+            <TextArea
+              label="Translation bio"
+              value={profileDraft.bio}
+              onChange={(value) => updateDraft(key, 'bio', value)}
+              rows={5}
+              placeholder="Optional"
+            />
+          </div>
+        </div>
+      );
+    }
+
+    const blogDraft = draft as BlogDraft;
+    return (
+      <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <SourceBlock title="Base / Source">
+          <p className="font-medium text-gray-900">Blog post ID {row.blog_post_id}</p>
+          <p>R2 key: {row.r2_key}</p>
+          <p>Status: {row.post_status}</p>
+          <p>Published: {formatTimestamp(row.published_at)}</p>
+        </SourceBlock>
+        <div className="grid grid-cols-1 gap-4">
+          <TextInput
+            label="Translation title"
+            value={blogDraft.title}
+            onChange={(value) => updateDraft(key, 'title', value)}
+            required
+          />
+          <TextInput
+            label="Translation slug"
+            value={blogDraft.slug}
+            onChange={(value) => updateDraft(key, 'slug', value)}
+            required
+            placeholder="lowercase-slug"
+          />
+          <TextArea
+            label="Translation excerpt"
+            value={blogDraft.excerpt}
+            onChange={(value) => updateDraft(key, 'excerpt', value)}
+            placeholder="Optional"
+          />
+          <TextArea
+            label="Translation meta description"
+            value={blogDraft.meta_description}
+            onChange={(value) => updateDraft(key, 'meta_description', value)}
+            placeholder="Optional"
+          />
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -175,14 +717,14 @@ export default function TranslationsTab() {
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <Languages size={20} className="text-indigo-600" />
-              <h2 className="text-lg font-semibold text-gray-900">Ingredient-Translations</h2>
+              <h2 className="text-lg font-semibold text-gray-900">{config.heading}</h2>
             </div>
             <p className="text-sm text-gray-600 max-w-3xl">
-              Dieses MVP pflegt nur Eintraege in ingredient_translations. Die oeffentliche i18n-Ausspielung
-              wird separat umgesetzt und hier noch nicht beeinflusst.
+              Dieser Admin-Tab pflegt bestehende Translation-Tabellen. Die oeffentliche i18n-Ausspielung
+              bleibt davon unberuehrt.
             </p>
           </div>
-          {savedId !== null && (
+          {savedKey !== null && (
             <div className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700">
               <CheckCircle size={16} />
               Gespeichert
@@ -190,44 +732,63 @@ export default function TranslationsTab() {
           )}
         </div>
 
-        <div className="mt-5 grid grid-cols-1 md:grid-cols-[180px_1fr_auto] gap-3">
-          <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wider text-gray-500">
-            Sprache
-            <select
-              value={language}
-              onChange={(event) => setLanguage(event.target.value)}
-              className="border border-gray-200 rounded-xl px-3 py-2 text-sm font-normal normal-case tracking-normal text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+        <div className="mt-5 grid grid-cols-1 gap-4">
+          <div className="flex flex-wrap gap-2">
+            {(Object.keys(ENTITY_CONFIG) as EntityKey[]).map((key) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setEntity(key)}
+                className={`rounded-xl border px-3 py-2 text-sm font-semibold transition-colors ${
+                  entity === key
+                    ? 'border-indigo-600 bg-indigo-600 text-white'
+                    : 'border-gray-200 bg-white text-gray-700 hover:border-indigo-300 hover:text-indigo-700'
+                }`}
+              >
+                {ENTITY_CONFIG[key].label}
+              </button>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-[180px_1fr_auto] gap-3">
+            <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wider text-gray-500">
+              Sprache
+              <select
+                value={language}
+                onChange={(event) => setLanguage(event.target.value)}
+                className="border border-gray-200 rounded-xl px-3 py-2 text-sm font-normal normal-case tracking-normal text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+              >
+                {LANGUAGE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label} ({option.value})
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wider text-gray-500">
+              Suche
+              <div className="relative">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder={config.searchPlaceholder}
+                  className="w-full border border-gray-200 rounded-xl pl-9 pr-3 py-2 text-sm font-normal normal-case tracking-normal text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                />
+              </div>
+            </label>
+
+            <button
+              type="button"
+              onClick={loadTranslations}
+              disabled={loading}
+              className="self-end inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-700 disabled:opacity-60"
             >
-              {LANGUAGE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label} ({option.value})
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wider text-gray-500">
-            Suche
-            <div className="relative">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Ingredient oder Translation suchen"
-                className="w-full border border-gray-200 rounded-xl pl-9 pr-3 py-2 text-sm font-normal normal-case tracking-normal text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
-              />
-            </div>
-          </label>
-
-          <button
-            type="button"
-            onClick={loadTranslations}
-            disabled={loading}
-            className="self-end inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-700 disabled:opacity-60"
-          >
-            {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
-            Laden
-          </button>
+              {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+              Laden
+            </button>
+          </div>
         </div>
       </div>
 
@@ -246,36 +807,33 @@ export default function TranslationsTab() {
 
       {!loading && rows.length === 0 && (
         <div className="rounded-2xl border border-gray-100 bg-white p-8 text-center text-sm text-gray-500 shadow-sm">
-          Keine Ingredients fuer diese Suche gefunden.
+          {config.emptyLabel}
         </div>
       )}
 
       {!loading && rows.length > 0 && (
         <div className="space-y-4">
           {rows.map((row) => {
-            const draft = drafts[row.ingredient_id] ?? toDraft(row);
-            const isSaving = savingId === row.ingredient_id;
+            const key = rowKey(row);
+            const isSaving = savingKey === key;
 
             return (
-              <section key={row.ingredient_id} className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+              <section key={`${entity}-${key}`} className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-base font-semibold text-gray-900">{row.source_name}</h3>
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                          row.status === 'missing'
-                            ? 'bg-amber-100 text-amber-700'
-                            : 'bg-emerald-100 text-emerald-700'
-                        }`}
-                      >
-                        {row.status === 'missing' ? 'missing' : 'translated'}
-                      </span>
-                      <span className="text-xs text-gray-400">ID {row.ingredient_id}</span>
+                      <h3 className="text-base font-semibold text-gray-900">
+                        {'ingredient_id' in row
+                          ? row.source_name
+                          : 'dose_recommendation_id' in row
+                            ? row.ingredient_name
+                            : 'verified_profile_id' in row
+                              ? row.base_name
+                              : row.r2_key}
+                      </h3>
+                      {statusBadge(row.status)}
+                      <span className="text-xs text-gray-400">ID {key}</span>
                     </div>
-                    {row.source_description && (
-                      <p className="mt-1 line-clamp-2 text-sm text-gray-500">{row.source_description}</p>
-                    )}
                   </div>
                   <button
                     type="button"
@@ -288,46 +846,7 @@ export default function TranslationsTab() {
                   </button>
                 </div>
 
-                <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
-                    Name
-                    <input
-                      value={draft.name}
-                      onChange={(event) => updateDraft(row.ingredient_id, 'name', event.target.value)}
-                      className="border border-gray-200 rounded-xl px-3 py-2 text-sm font-normal text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
-                    />
-                  </label>
-
-                  <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
-                    Beschreibung
-                    <textarea
-                      value={draft.description}
-                      onChange={(event) => updateDraft(row.ingredient_id, 'description', event.target.value)}
-                      rows={3}
-                      className="border border-gray-200 rounded-xl px-3 py-2 text-sm font-normal text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
-                    />
-                  </label>
-
-                  <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
-                    Mangel-Symptome
-                    <textarea
-                      value={draft.hypo_symptoms}
-                      onChange={(event) => updateDraft(row.ingredient_id, 'hypo_symptoms', event.target.value)}
-                      rows={3}
-                      className="border border-gray-200 rounded-xl px-3 py-2 text-sm font-normal text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
-                    />
-                  </label>
-
-                  <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
-                    Ueberdosierungs-Symptome
-                    <textarea
-                      value={draft.hyper_symptoms}
-                      onChange={(event) => updateDraft(row.ingredient_id, 'hyper_symptoms', event.target.value)}
-                      rows={3}
-                      className="border border-gray-200 rounded-xl px-3 py-2 text-sm font-normal text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
-                    />
-                  </label>
-                </div>
+                {renderFields(row)}
               </section>
             );
           })}

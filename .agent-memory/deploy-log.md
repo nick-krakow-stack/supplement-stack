@@ -12,6 +12,8 @@ Preview search API-base fix is deployed to Cloudflare Pages preview.
 Affiliate disclosure cleanup is deployed to Cloudflare Pages preview.
 Phase D product recommendations rename and admin translations MVP are committed,
 remote-migrated, and deployed to Cloudflare Pages preview.
+GitHub Actions D1 backup has run successfully both manually and automatically;
+token scopes are verified.
 
 Latest relevant commits:
 
@@ -160,7 +162,7 @@ Latest relevant commits:
 
 ## Follow-Up
 
-- D1 backup workflow has been triggered both manually and automatically. Token scopes verified.
+- D1 backup workflow has run successfully both manually and automatically. Token scopes verified.
 - Consider adding `pages_build_output_dir = "frontend/dist"` to `wrangler.toml` in a separate scoped task so Pages deploys consume config directly.
 
 When a future agent deploys or applies migrations, append the exact date, commit, command summary, and verification result here.
