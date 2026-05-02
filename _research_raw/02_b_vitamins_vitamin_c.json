@@ -1,0 +1,228 @@
+[
+  {
+    "name": "Vitamin B1",
+    "category": "vitamin_water_soluble",
+    "unit": "mg",
+    "description": "Thiamin ist essenziell für den Kohlenhydratstoffwechsel und die Funktion des Nervensystems. Als Coenzym Thiaminpyrophosphat (TPP) ist es an der oxidativen Decarboxylierung von Pyruvat und alpha-Ketoglutarat beteiligt. Ein Mangel führt zur klassischen Beriberi-Erkrankung und zum Wernicke-Korsakoff-Syndrom.",
+    "timing": "with_meal",
+    "upper_limit": null,
+    "upper_limit_unit": null,
+    "upper_limit_note": "Kein UL durch EFSA/BfR festgelegt, da überschüssiges Thiamin renal ausgeschieden wird.",
+    "hypo_symptoms": "Müdigkeit, Reizbarkeit, Konzentrationsschwäche, periphere Neuropathie, Muskelschwäche, Herzinsuffizienz (nasse Beriberi), Wernicke-Enzephalopathie (Augenbewegungsstörungen, Ataxie, Verwirrtheit) bei schwerem Mangel",
+    "hyper_symptoms": "Bei oraler Einnahme keine bekannte Toxizität.",
+    "external_url": "https://www.dge.de/wissenschaft/referenzwerte/thiamin/",
+    "synonyms": ["Thiamin", "Thiamine", "Aneurin", "TPP", "Thiaminpyrophosphat", "Thiamindiphosphat"],
+    "forms": [
+      {"name": "Thiaminhydrochlorid", "bioavailability": "medium", "timing": "with_meal", "is_recommended": 1, "score": 7, "comment": "Häufigste und günstigste Form in Supplementen. Ausreichende Bioverfügbarkeit bei normaler Dosierung, mit Nahrung besser aufgenommen."},
+      {"name": "Benfotiamin", "bioavailability": "very_high", "timing": "with_meal", "is_recommended": 1, "score": 9, "comment": "Fettlösliches Thiaminderivat mit deutlich höherer Bioverfügbarkeit (3–5× höher). Besonders wirksam bei diabetischer Neuropathie. Bevorzugt bei therapeutischem Einsatz."}
+    ],
+    "dosage_guidelines": [
+      {"source": "DGE", "source_url": "https://www.dge.de/wissenschaft/referenzwerte/thiamin/", "source_title": "Referenzwerte für die Nährstoffzufuhr – Thiamin", "population": "adult_male", "dose_min": 1.2, "dose_max": 1.3, "unit": "mg", "frequency": "daily", "timing": "with_meal", "notes": "Männer 19–65 Jahre: 1,3 mg/Tag", "is_default": 1},
+      {"source": "DGE", "source_url": "https://www.dge.de/wissenschaft/referenzwerte/thiamin/", "source_title": "Referenzwerte für die Nährstoffzufuhr – Thiamin", "population": "adult_female", "dose_min": 1.0, "dose_max": 1.1, "unit": "mg", "frequency": "daily", "timing": "with_meal", "notes": "Frauen 19–65 Jahre: 1,0 mg/Tag; Schwangerschaft: 1,2 mg/Tag; Stillzeit: 1,4 mg/Tag", "is_default": 0}
+    ],
+    "interactions": []
+  },
+  {
+    "name": "Vitamin B2",
+    "category": "vitamin_water_soluble",
+    "unit": "mg",
+    "description": "Riboflavin ist Bestandteil der Coenzyme FMN und FAD, die in der Atmungskette und bei Redoxreaktionen zentral sind. Es unterstützt den Energiestoffwechsel, die Aktivierung von Vitamin B6 und Folat sowie den Schutz vor oxidativem Stress. Riboflavin ist lichtempfindlich und wird durch UV-Bestrahlung zerstört.",
+    "timing": "with_meal",
+    "upper_limit": null,
+    "upper_limit_unit": null,
+    "upper_limit_note": "Kein UL durch EFSA/BfR festgelegt. Gelbe Urinverfärbung bei höheren Dosen ist harmlos.",
+    "hypo_symptoms": "Mundwinkelrhagaden, Glossitis, seborrhoeische Dermatitis, Augenbrennen, Lichtempfindlichkeit, Anämie",
+    "hyper_symptoms": "Keine bekannte orale Toxizität. Gelbe bis orangefarbene Urinverfärbung (harmlos).",
+    "external_url": "https://www.dge.de/wissenschaft/referenzwerte/riboflavin/",
+    "synonyms": ["Riboflavin", "Vitamin B2", "Laktoflavin", "FMN", "FAD"],
+    "forms": [
+      {"name": "Riboflavin", "bioavailability": "medium", "timing": "with_meal", "is_recommended": 1, "score": 7, "comment": "Standardform. Mit Mahlzeit deutlich besser absorbiert (~60–65%)."},
+      {"name": "Riboflavin-5-Phosphat (FMN)", "bioavailability": "high", "timing": "with_meal", "is_recommended": 1, "score": 9, "comment": "Aktive Form mit etwas höherer Bioverfügbarkeit. Wird direkt als FMN genutzt. Bevorzugt bei eingeschränkter Verdauungskapazität."}
+    ],
+    "dosage_guidelines": [
+      {"source": "DGE", "source_url": "https://www.dge.de/wissenschaft/referenzwerte/riboflavin/", "source_title": "Referenzwerte für die Nährstoffzufuhr – Riboflavin", "population": "adult_male", "dose_min": 1.4, "dose_max": 1.4, "unit": "mg", "frequency": "daily", "timing": "with_meal", "notes": "Männer 19–65 Jahre: 1,4 mg/Tag", "is_default": 1},
+      {"source": "DGE", "source_url": "https://www.dge.de/wissenschaft/referenzwerte/riboflavin/", "source_title": "Referenzwerte für die Nährstoffzufuhr – Riboflavin", "population": "adult_female", "dose_min": 1.1, "dose_max": 1.1, "unit": "mg", "frequency": "daily", "timing": "with_meal", "notes": "Frauen 19–65 Jahre: 1,1 mg/Tag; Schwangerschaft: 1,3 mg/Tag; Stillzeit: 1,4 mg/Tag", "is_default": 0},
+      {"source": "study", "source_url": "https://pubmed.ncbi.nlm.nih.gov/9237374/", "source_title": "Schoenen et al., 1998 – Riboflavin 400 mg/Tag zur Migräneprophylaxe", "population": "adult", "dose_min": 400, "dose_max": 400, "unit": "mg", "frequency": "daily", "timing": "with_meal", "notes": "Hochdosiertes Riboflavin (400 mg/Tag) zeigte in RCTs signifikante Reduktion der Migränehäufigkeit.", "is_default": 0}
+    ],
+    "interactions": []
+  },
+  {
+    "name": "Vitamin B3",
+    "category": "vitamin_water_soluble",
+    "unit": "mg",
+    "description": "Niacin umfasst Nicotinsäure und Nicotinamid, die zu NAD+ und NADP+ umgewandelt werden und in über 400 enzymatischen Reaktionen des Energie-, Fett- und DNA-Stoffwechsels wirken. Nicotinsäure in pharmakologischen Dosen senkt LDL und hebt HDL, verursacht aber den charakteristischen Niacin-Flush. Nicotinamid löst keinen Flush aus.",
+    "timing": "with_meal",
+    "upper_limit": 10,
+    "upper_limit_unit": "mg",
+    "upper_limit_note": "EFSA UL für Nicotinsäure: 10 mg/Tag; für Nicotinamid: 900 mg/Tag. BfR empfiehlt maximal 17 mg Nicotinsäure/Tag aus Supplementen.",
+    "hypo_symptoms": "Pellagra (Dermatitis, Diarrhoe, Demenz), Stomatitis, Glossitis, Reizbarkeit, Schlaflosigkeit",
+    "hyper_symptoms": "Niacin-Flush bei Nicotinsäure; bei chronischer Hochdosierung: Hepatotoxizität, erhöhter Blutzucker",
+    "external_url": "https://www.dge.de/wissenschaft/referenzwerte/niacin/",
+    "synonyms": ["Niacin", "Nicotinsäure", "Nicotinamid", "Niacinamid", "NAD-Vorläufer", "NR", "NMN", "Nicotinamidribosid", "Nicotinamidmononukleotid"],
+    "forms": [
+      {"name": "Nicotinamid (Niacinamid)", "bioavailability": "high", "timing": "with_meal", "is_recommended": 1, "score": 8, "comment": "Kein Flush, gut verträglich. Bevorzugte Form für Nahrungsergänzung. EFSA-UL 900 mg/Tag."},
+      {"name": "Nicotinsäure (Niacin)", "bioavailability": "high", "timing": "with_meal", "is_recommended": 0, "score": 6, "comment": "Stark lipidsenkend in Pharmakodosen, aber Flush und EFSA-UL 10 mg/Tag schränken Supplementierung ein."},
+      {"name": "Nicotinamidribosid (NR)", "bioavailability": "high", "timing": "morning", "is_recommended": 1, "score": 8, "comment": "NAD+-Vorläufer, kein Flush, gut verträglich. Erhöht NAD+-Spiegel effizient. Anti-Aging-Forschung vielversprechend."},
+      {"name": "Nicotinamidmononukleotid (NMN)", "bioavailability": "high", "timing": "morning", "is_recommended": 1, "score": 8, "comment": "Direkter NAD+-Vorläufer (eine Stufe näher als NR). Kein Flush. Aktive Langlebigkeitsforschung."}
+    ],
+    "dosage_guidelines": [
+      {"source": "DGE", "source_url": "https://www.dge.de/wissenschaft/referenzwerte/niacin/", "source_title": "Referenzwerte für die Nährstoffzufuhr – Niacin", "population": "adult_male", "dose_min": 15, "dose_max": 16, "unit": "mg", "frequency": "daily", "timing": "with_meal", "notes": "Männer 19–65 Jahre: 15–16 mg NE/Tag (Niacin-Äquivalente)", "is_default": 1},
+      {"source": "DGE", "source_url": "https://www.dge.de/wissenschaft/referenzwerte/niacin/", "source_title": "Referenzwerte für die Nährstoffzufuhr – Niacin", "population": "adult_female", "dose_min": 11, "dose_max": 13, "unit": "mg", "frequency": "daily", "timing": "with_meal", "notes": "Frauen 19–65 Jahre: 11–13 mg NE/Tag", "is_default": 0},
+      {"source": "study", "source_url": "https://pubmed.ncbi.nlm.nih.gov/34883140/", "source_title": "NR augments NAD+ metabolome in skeletal muscle", "population": "adult", "dose_min": 250, "dose_max": 500, "unit": "mg", "frequency": "daily", "timing": "morning", "notes": "NR 250–500 mg/Tag erhöht NAD+-Spiegel signifikant. Gut verträglich bis 2000 mg/Tag.", "is_default": 0}
+    ],
+    "interactions": []
+  },
+  {
+    "name": "Vitamin B5",
+    "category": "vitamin_water_soluble",
+    "unit": "mg",
+    "description": "Pantothensäure ist als Bestandteil von Coenzym A und dem Acyl-Carrier-Protein unverzichtbar für den Fettsäure-, Kohlenhydrat- und Proteinstoffwechsel sowie die Synthese von Steroidhormonen, Neurotransmittern und Hämoglobin.",
+    "timing": "with_meal",
+    "upper_limit": null,
+    "upper_limit_unit": null,
+    "upper_limit_note": "Kein UL festgelegt. Sehr hohe Dosen (>10 g/Tag) können Durchfall verursachen. Gilt als sehr sicher.",
+    "hypo_symptoms": "Brennen-Fuß-Syndrom, Müdigkeit, Kopfschmerzen, Schlafstörungen, Übelkeit, Taubheitsgefühle. Isolierter Mangel beim Menschen selten.",
+    "hyper_symptoms": "Sehr gute Verträglichkeit. Bei >10 g/Tag: Durchfall möglich.",
+    "external_url": "https://www.dge.de/wissenschaft/referenzwerte/pantothensaeure/",
+    "synonyms": ["Pantothensäure", "Pantothenic acid", "Vitamin B5", "Panthenol", "Dexpanthenol", "Calciumpantothenat"],
+    "forms": [
+      {"name": "Calciumpantothenat", "bioavailability": "high", "timing": "with_meal", "is_recommended": 1, "score": 8, "comment": "Stabilste und häufigste Form. Gut bioverfügbar, kostengünstig."},
+      {"name": "Panthenol (D-Panthenol)", "bioavailability": "very_high", "timing": "with_meal", "is_recommended": 1, "score": 9, "comment": "Alkoholform, wird effizient zu Pantothensäure oxidiert. Bessere Absorption. Auch topisch für Wundheilung (Dexpanthenol) eingesetzt."}
+    ],
+    "dosage_guidelines": [
+      {"source": "DGE", "source_url": "https://www.dge.de/wissenschaft/referenzwerte/pantothensaeure/", "source_title": "Referenzwerte für die Nährstoffzufuhr – Pantothensäure", "population": "adult", "dose_min": 6, "dose_max": 6, "unit": "mg", "frequency": "daily", "timing": "with_meal", "notes": "Schätzwert für angemessene Zufuhr. Erwachsene: 6 mg/Tag.", "is_default": 1}
+    ],
+    "interactions": []
+  },
+  {
+    "name": "Vitamin B6",
+    "category": "vitamin_water_soluble",
+    "unit": "mg",
+    "description": "Vitamin B6 ist als Pyridoxal-5-Phosphat (P5P) Coenzym für über 160 Enzymreaktionen, vor allem im Aminosäure- und Neurotransmitterstoffwechsel. Es ist essenziell für die Synthese von Serotonin, Dopamin, GABA und Noradrenalin sowie für den Homocysteinstoffwechsel. B6 ist das einzige wasserlösliche Vitamin mit einem klar definierten UL aufgrund neurotoxischer Effekte bei Hochdosierung.",
+    "timing": "with_meal",
+    "upper_limit": 25,
+    "upper_limit_unit": "mg",
+    "upper_limit_note": "EFSA UL: 25 mg/Tag für Erwachsene (2023 verschärft). BfR: maximal 3,5 mg/Tag aus Supplementen. Bei >200 mg/Tag über längere Zeit: periphere Neuropathie.",
+    "hypo_symptoms": "Seborrhoeische Dermatitis, Glossitis, periphere Neuropathie, Depressionen, Immunsuppression, mikrozytäre Anämie, erhöhtes Homocystein",
+    "hyper_symptoms": "Periphere sensorische Neuropathie (Kribbeln, Taubheit, Schmerzen) bei >25 mg/Tag über längere Zeit. Meist reversibel nach Absetzen.",
+    "external_url": "https://www.dge.de/wissenschaft/referenzwerte/vitamin-b6/",
+    "synonyms": ["Pyridoxin", "Pyridoxal", "Pyridoxamin", "P5P", "Pyridoxal-5-Phosphat", "Pyridoxin-HCl", "Vitamin B6"],
+    "forms": [
+      {"name": "Pyridoxin-Hydrochlorid (Pyridoxin-HCl)", "bioavailability": "high", "timing": "with_meal", "is_recommended": 1, "score": 7, "comment": "Günstigste Form. Muss zu P5P aktiviert werden. Bei den meisten gesunden Menschen ausreichend."},
+      {"name": "Pyridoxal-5-Phosphat (P5P)", "bioavailability": "very_high", "timing": "with_meal", "is_recommended": 1, "score": 10, "comment": "Biologisch aktive Form, direkt verwertbar ohne hepatische Aktivierung. Bevorzugt bei eingeschränkter Leberfunktion, MTHFR-Variante oder therapeutischem Einsatz."}
+    ],
+    "dosage_guidelines": [
+      {"source": "DGE", "source_url": "https://www.dge.de/wissenschaft/referenzwerte/vitamin-b6/", "source_title": "Referenzwerte für die Nährstoffzufuhr – Vitamin B6", "population": "adult_male", "dose_min": 1.4, "dose_max": 1.6, "unit": "mg", "frequency": "daily", "timing": "with_meal", "notes": "Männer 19–65 Jahre: 1,6 mg/Tag. Bedarf steigt mit erhöhter Proteinzufuhr.", "is_default": 1},
+      {"source": "DGE", "source_url": "https://www.dge.de/wissenschaft/referenzwerte/vitamin-b6/", "source_title": "Referenzwerte für die Nährstoffzufuhr – Vitamin B6", "population": "adult_female", "dose_min": 1.2, "dose_max": 1.4, "unit": "mg", "frequency": "daily", "timing": "with_meal", "notes": "Frauen 19–65 Jahre: 1,4 mg/Tag; Schwangerschaft: 1,8 mg/Tag; Stillzeit: 1,6 mg/Tag", "is_default": 0}
+    ],
+    "interactions": [
+      {"other_ingredient": "Vitamin B9", "type": "synergy", "severity": "medium", "mechanism": "B6, B9 und B12 wirken synergistisch zur Homocysteinsenkung. Kombination der drei B-Vitamine empfohlen bei erhöhtem Homocysteinspiegel.", "source_url": null},
+      {"other_ingredient": "Vitamin B12", "type": "synergy", "severity": "medium", "mechanism": "B6, B9 und B12 wirken synergistisch zur Homocysteinsenkung.", "source_url": null}
+    ]
+  },
+  {
+    "name": "Vitamin B7",
+    "category": "vitamin_water_soluble",
+    "unit": "µg",
+    "description": "Biotin (auch Vitamin H) ist als Coenzym für Carboxylasen essenziell und spielt eine Schlüsselrolle im Fettsäure-, Glucose- und Aminosäurestoffwechsel. Es ist bekannt für seine Rolle bei Haut-, Haar- und Nagelgesundheit. Wichtig: Hohe Biotindosen (>5 mg/Tag) können immunologische Laborassays (Troponin, TSH, Schilddrüsenhormone) erheblich verfälschen.",
+    "timing": "with_meal",
+    "upper_limit": null,
+    "upper_limit_unit": null,
+    "upper_limit_note": "Kein UL festgelegt. Sehr sicher. Wichtig: >5 mg/Tag kann Labordiagnostik (TSH, Troponin, Steroide) massiv verfälschen.",
+    "hypo_symptoms": "Haarausfall, brüchige Nägel, seborrhoeische Dermatitis, periorbitales Ekzem, periphere Neuropathie, Müdigkeit, Depressionen. Risiko erhöht bei rohem Eiweißkonsum (Avidin).",
+    "hyper_symptoms": "Keine bekannte Toxizität. Kritisch: Biotindosen >5 mg verfälschen Immunoassay-Laborwerte (falsch erhöhte/erniedrigte TSH, Troponin, Steroidhormone).",
+    "external_url": "https://www.dge.de/wissenschaft/referenzwerte/biotin/",
+    "synonyms": ["Biotin", "Vitamin B7", "Vitamin H", "Coenzym R", "D-Biotin"],
+    "forms": [
+      {"name": "D-Biotin", "bioavailability": "high", "timing": "with_meal", "is_recommended": 1, "score": 9, "comment": "Einzige biologisch aktive Form. Gut bioverfügbar (~100% aus Supplementen). Standardform."}
+    ],
+    "dosage_guidelines": [
+      {"source": "DGE", "source_url": "https://www.dge.de/wissenschaft/referenzwerte/biotin/", "source_title": "Referenzwerte für die Nährstoffzufuhr – Biotin", "population": "adult", "dose_min": 40, "dose_max": 40, "unit": "µg", "frequency": "daily", "timing": "with_meal", "notes": "Schätzwert für angemessene Zufuhr. Erwachsene: 40 µg/Tag.", "is_default": 1},
+      {"source": "study", "source_url": "https://pubmed.ncbi.nlm.nih.gov/28879475/", "source_title": "Hochdosiertes Biotin bei Haarausfall und Nagelbrüchigkeit", "population": "adult", "dose_min": 2500, "dose_max": 5000, "unit": "µg", "frequency": "daily", "timing": "with_meal", "notes": "2500–5000 µg/Tag in Studien zu Haarausfall. Bei >5000 µg/Tag: Laborwert-Interferenzen beachten.", "is_default": 0}
+    ],
+    "interactions": []
+  },
+  {
+    "name": "Vitamin B9",
+    "category": "vitamin_water_soluble",
+    "unit": "µg",
+    "description": "Folat (natürliche Form) und Folsäure (synthetische Form) sind essenziell für DNA-Synthese, Zellteilung und den Einkohlenstoffstoffwechsel. Die aktive Form ist 5-Methyltetrahydrofolat (5-MTHF). Kritisch in der Frühschwangerschaft zur Prävention von Neuralrohrdefekten. Bei der MTHFR-C677T-Genvariante (~10–15% homozygot) ist die Umwandlung von Folsäure zu 5-MTHF stark eingeschränkt.",
+    "timing": "morning",
+    "upper_limit": 1000,
+    "upper_limit_unit": "µg",
+    "upper_limit_note": "EFSA/BfR UL: 1000 µg/Tag synthetische Folsäure. Risiko: Hohe Folsäuredosen können Vitamin-B12-Mangel maskieren. Für L-Methylfolat (5-MTHF) kein UL festgelegt.",
+    "hypo_symptoms": "Megaloblastäre Anämie, Glossitis, erhöhtes Homocystein, Depressionen, kognitive Beeinträchtigung. In der Schwangerschaft: Neuralrohrdefekte (Spina bifida).",
+    "hyper_symptoms": "Maskierung eines Vitamin-B12-Mangels (kritisch – neurologische Schäden bei normalisierter Anämie). Gastrointestinale Beschwerden selten.",
+    "external_url": "https://www.dge.de/wissenschaft/referenzwerte/folat/",
+    "synonyms": ["Folat", "Folsäure", "Folic acid", "L-Methylfolat", "5-MTHF", "5-Methyltetrahydrofolat", "Methylfolat", "Metafolin", "Quatrefolic", "Vitamin B9", "Vitamin M", "DFE"],
+    "forms": [
+      {"name": "L-Methylfolat (5-MTHF, Metafolin, Quatrefolic)", "bioavailability": "very_high", "timing": "morning", "is_recommended": 1, "score": 10, "comment": "Biologisch aktive Form, direkt verwertbar ohne MTHFR-abhängige Umwandlung. Optimal für alle, besonders bei MTHFR-Polymorphismus. Überquert die Blut-Hirn-Schranke."},
+      {"name": "Folsäure", "bioavailability": "high", "timing": "morning", "is_recommended": 0, "score": 6, "comment": "Synthetische Form. Muss über MTHFR zu 5-MTHF umgewandelt werden. Bei MTHFR-Variante stark reduzierte Umwandlung. Kann als UMFA akkumulieren. Nicht empfohlen bei bekannter MTHFR-Variante."}
+    ],
+    "dosage_guidelines": [
+      {"source": "DGE", "source_url": "https://www.dge.de/wissenschaft/referenzwerte/folat/", "source_title": "Referenzwerte für die Nährstoffzufuhr – Folat", "population": "adult", "dose_min": 300, "dose_max": 300, "unit": "µg", "frequency": "daily", "timing": "morning", "notes": "Erwachsene: 300 µg DFE/Tag. Schwangerschaft: 550 µg DFE/Tag; mind. 4 Wochen vor Konzeption: +400 µg Folsäure/Tag.", "is_default": 1},
+      {"source": "study", "source_url": "https://pubmed.ncbi.nlm.nih.gov/21544854/", "source_title": "L-methylfolate bei MTHFR-Variante und Depression", "population": "adult", "dose_min": 400, "dose_max": 800, "unit": "µg", "frequency": "daily", "timing": "morning", "notes": "L-Methylfolat 400–800 µg/Tag bei MTHFR-Variante. Psychiatrische Indikationen: bis 15 mg/Tag.", "is_default": 0}
+    ],
+    "interactions": [
+      {"other_ingredient": "Vitamin B12", "type": "synergy", "severity": "high", "mechanism": "Hohe Folsäuredosen können megaloblastäre Anämie bei B12-Mangel normalisieren und so den B12-Mangel maskieren, während neurologische Schäden fortschreiten. Immer gemeinsam kontrollieren.", "source_url": null},
+      {"other_ingredient": "Vitamin B6", "type": "synergy", "severity": "medium", "mechanism": "B6, B9 und B12 wirken synergistisch zur Homocysteinsenkung via Remethylierung und Transsulfurierung.", "source_url": null}
+    ]
+  },
+  {
+    "name": "Vitamin B12",
+    "category": "vitamin_water_soluble",
+    "unit": "µg",
+    "description": "Cobalamin ist ein kobalthaltiges Vitamin, das ausschließlich von Mikroorganismen synthetisiert wird und vor allem in tierischen Lebensmitteln vorkommt. Es ist essenziell für DNA-Synthese, Myelinscheidensynthese, Folat- und Homocysteinstoffwechsel. B12-Mangel ist tückisch: Körperspeicher (Leber) betragen 2–5 mg und Mangelsymptome treten erst nach Jahren auf – dann oft mit irreversiblen neurologischen Schäden.",
+    "timing": "morning",
+    "upper_limit": null,
+    "upper_limit_unit": null,
+    "upper_limit_note": "Kein UL festgelegt. Sehr sicher. Cyanocobalamin: enthält Cyanidgruppe – bei Rauchern und Niereninsuffizienz nicht empfohlen.",
+    "hypo_symptoms": "Megaloblastäre Anämie, funikuläre Myelose (Ataxie, Spastik, Parästhesien), periphere Neuropathie, Gedächtniseinbußen, Demenz, Glossitis, erhöhter Homocystein- und Methylmalonsäurespiegel. Risiko: Veganer, Metformin-Einnahme, Magensäuremangel, Gastrektomie.",
+    "hyper_symptoms": "Keine bekannte Toxizität bei oraler Gabe. Selten akneiforme Reaktionen bei hohen Cyanocobalamin-Dosen.",
+    "external_url": "https://www.dge.de/wissenschaft/referenzwerte/vitamin-b12/",
+    "synonyms": ["Cobalamin", "Vitamin B12", "Methylcobalamin", "Adenosylcobalamin", "Hydroxocobalamin", "Cyanocobalamin", "MeCbl", "AdoCbl", "OHCbl", "CNCbl"],
+    "forms": [
+      {"name": "Methylcobalamin", "bioavailability": "very_high", "timing": "morning", "is_recommended": 1, "score": 10, "comment": "Aktive bioidentische Form, direkt für Einkohlenstoffstoffwechsel verwertbar. Bevorzugt für Nervengesundheit. Beste Form für Veganer und ältere Personen. Lichtempfindlich lagern."},
+      {"name": "Adenosylcobalamin", "bioavailability": "very_high", "timing": "with_meal", "is_recommended": 1, "score": 9, "comment": "Zweite aktive Form, ausschließlich in Mitochondrien aktiv. Coenzym der Methylmalonyl-CoA-Mutase. Optimal in Kombination mit Methylcobalamin."},
+      {"name": "Hydroxocobalamin", "bioavailability": "very_high", "timing": "morning", "is_recommended": 1, "score": 8, "comment": "Natürliche Speicherform. Wird zu Methyl- und Adenosylcobalamin umgewandelt. Bessere Gewebsspeicherung. Standardform für i.m.-Injektionen. Auch für Raucher sicher."},
+      {"name": "Cyanocobalamin", "bioavailability": "high", "timing": "morning", "is_recommended": 0, "score": 5, "comment": "Günstigste und stabilste synthetische Form. Enthält Cyanidgruppe. Bei Rauchern und Niereninsuffizienz nicht empfohlen. Muss mehrfach umgewandelt werden."}
+    ],
+    "dosage_guidelines": [
+      {"source": "DGE", "source_url": "https://www.dge.de/wissenschaft/referenzwerte/vitamin-b12/", "source_title": "Referenzwerte für die Nährstoffzufuhr – Vitamin B12", "population": "adult", "dose_min": 4.0, "dose_max": 4.0, "unit": "µg", "frequency": "daily", "timing": "morning", "notes": "Empfohlene Zufuhr: 4 µg/Tag. Aktiver Transport max. ~1,5 µg pro Mahlzeit. Passive Diffusion (1%) ermöglicht Aufnahme bei hohen oralen Dosen.", "is_default": 1},
+      {"source": "study", "source_url": "https://pubmed.ncbi.nlm.nih.gov/15992684/", "source_title": "Orale B12-Therapie bei Mangel und Veganer-Supplementierung", "population": "adult", "dose_min": 250, "dose_max": 2000, "unit": "µg", "frequency": "daily", "timing": "morning", "notes": "Veganer: 250–500 µg Methylcobalamin täglich oder 2000 µg wöchentlich. Bei Mangel: 1000–2000 µg/Tag.", "is_default": 0}
+    ],
+    "interactions": [
+      {"other_ingredient": "Vitamin B9", "type": "synergy", "severity": "high", "mechanism": "Hohe Folsäuredosen können B12-Mangelanämie maskieren – neurologische Schäden trotz normalisierter Blutbildwerte. Immer B12-Status prüfen wenn Folsäure hochdosiert wird.", "source_url": null},
+      {"other_ingredient": "Vitamin B6", "type": "synergy", "severity": "medium", "mechanism": "B6, B9 und B12 wirken synergistisch zur Homocysteinsenkung.", "source_url": null}
+    ]
+  },
+  {
+    "name": "Vitamin C",
+    "category": "vitamin_water_soluble",
+    "unit": "mg",
+    "description": "Ascorbinsäure ist das wichtigste wasserlösliche Antioxidans und essenziell für Kollagensynthese, Eisenresorption (Fe³⁺→Fe²⁺), Immunfunktion und als Cofaktor von Monooxygenasen (Carnitin-, Katecholamin- und Hormonsynthese). Menschen können Vitamin C nicht selbst synthetisieren (GULO-Gen-Mutation). Der Bedarf steigt bei Stress, Rauchen und Entzündungen erheblich.",
+    "timing": "with_meal",
+    "upper_limit": 2000,
+    "upper_limit_unit": "mg",
+    "upper_limit_note": "EFSA UL: 1000 mg/Tag; US-IOM: 2000 mg/Tag; BfR empfiehlt maximal 225 mg/Tag aus Supplementen. Ab >1000 mg/Tag: osmotische Diarrhoe (Darmtoleranz-Grenze, individuell sehr variabel). Nierensteine (Oxalat) bei sehr hohen Dosen und Prädisposition.",
+    "hypo_symptoms": "Skorbut: Zahnfleischbluten, Zahnausfall, perfollikuläre Hämorrhagien, schlechte Wundheilung, Müdigkeit, Gliederschmerzen, Anämie. Erste Mangelzeichen nach 4–6 Wochen.",
+    "hyper_symptoms": "Osmotische Diarrhoe, Blähungen ab ~1000–2000 mg/Tag. Erhöhtes Nierensteinrisiko bei >1000 mg/Tag und Prädisposition. Prooxidative Effekte bei Hämochromatose.",
+    "external_url": "https://www.dge.de/wissenschaft/referenzwerte/vitamin-c/",
+    "synonyms": ["Ascorbinsäure", "Ascorbic acid", "L-Ascorbinsäure", "Ascorbat", "Vitamin C", "Calciumascorbat", "Natriumascorbat", "Liposomales Vitamin C", "Ester-C"],
+    "forms": [
+      {"name": "L-Ascorbinsäure", "bioavailability": "high", "timing": "with_meal", "is_recommended": 1, "score": 8, "comment": "Standardform, günstig, gut untersucht. pH 2,5 – kann bei empfindlichem Magen reizen. Mit Mahlzeit einnehmen."},
+      {"name": "Natriumascorbat", "bioavailability": "high", "timing": "with_meal", "is_recommended": 1, "score": 8, "comment": "Gepuffert, pH-neutral, bessere Magenverträglichkeit. Enthält ~131 mg Natrium/g – bei Hypertonie beachten."},
+      {"name": "Calciumascorbat (Ester-C)", "bioavailability": "high", "timing": "with_meal", "is_recommended": 1, "score": 8, "comment": "pH-neutral, sehr gute Magenverträglichkeit. Enthält ~10% Calcium. Gute Wahl bei Magenproblemen."},
+      {"name": "Liposomales Vitamin C", "bioavailability": "very_high", "timing": "fasting", "is_recommended": 1, "score": 9, "comment": "In Phospholipid-Liposomen eingeschlossen. Umgeht teilweise den intestinalen Transporter, ermöglicht höhere Plasmaspiegel. Geringere Darmtoleranzprobleme bei hohen Dosen. Qualitätsunterschiede zwischen Produkten erheblich."}
+    ],
+    "dosage_guidelines": [
+      {"source": "DGE", "source_url": "https://www.dge.de/wissenschaft/referenzwerte/vitamin-c/", "source_title": "Referenzwerte für die Nährstoffzufuhr – Vitamin C", "population": "adult_male", "dose_min": 110, "dose_max": 110, "unit": "mg", "frequency": "daily", "timing": "with_meal", "notes": "Männer 19–65 Jahre: 110 mg/Tag. Raucher: +35 mg/Tag zusätzlich.", "is_default": 1},
+      {"source": "DGE", "source_url": "https://www.dge.de/wissenschaft/referenzwerte/vitamin-c/", "source_title": "Referenzwerte für die Nährstoffzufuhr – Vitamin C", "population": "adult_female", "dose_min": 95, "dose_max": 95, "unit": "mg", "frequency": "daily", "timing": "with_meal", "notes": "Frauen 19–65 Jahre: 95 mg/Tag; Schwangerschaft: 105 mg/Tag; Stillzeit: 125 mg/Tag.", "is_default": 0},
+      {"source": "study", "source_url": "https://pubmed.ncbi.nlm.nih.gov/29099763/", "source_title": "Hemilä – Vitamin C und Infektionen (Cochrane)", "population": "adult", "dose_min": 200, "dose_max": 1000, "unit": "mg", "frequency": "daily", "timing": "with_meal", "notes": "200–1000 mg/Tag zur Immununterstützung. Regelmäßige Prophylaxe (≥200 mg) reduziert Erkältungsdauer signifikant (Cochrane).", "is_default": 0}
+    ],
+    "interactions": [
+      {"other_ingredient": "Eisen", "type": "synergy", "severity": "medium", "mechanism": "Vitamin C erhöht die Resorption von nicht-Häm-Eisen um das 2–4-Fache durch Reduktion Fe³⁺→Fe²⁺. Bei Hämochromatose: gleichzeitige Einnahme vermeiden.", "source_url": null},
+      {"other_ingredient": "Vitamin E", "type": "synergy", "severity": "low", "mechanism": "Vitamin C regeneriert oxidiertes Vitamin E zurück zur aktiven Form. Synergistische antioxidative Wirkung im wässrigen und lipophilen Kompartiment.", "source_url": null}
+    ]
+  }
+]

@@ -1,0 +1,146 @@
+[
+  {
+    "name": "Vitamin A",
+    "category": "vitamin_fat_soluble",
+    "unit": "µg RAE",
+    "description": "Vitamin A ist ein fettlösliches Vitamin, das in zwei Hauptformen vorkommt: als vorgeformtes Retinol (aus tierischen Quellen) und als Provitamin-A-Carotinoide wie Beta-Carotin (aus pflanzlichen Quellen). Es ist essenziell für Sehvermögen, Immunfunktion, Zellwachstum und Gewebedifferenzierung. Beta-Carotin wird im Körper bedarfsgerecht in Retinol umgewandelt und gilt aus Nahrungsquellen als sicher, da keine Hypervitaminose durch Beta-Carotin aus der Nahrung bekannt ist.",
+    "timing": "with_meal",
+    "upper_limit": 3000,
+    "upper_limit_unit": "µg RAE",
+    "upper_limit_note": "EFSA/BfR UL für vorgeformtes Retinol bei Erwachsenen; kein UL für Beta-Carotin aus Nahrungsquellen; Raucher: Beta-Carotin-Supplemente meiden (erhöhtes Lungenkrebsrisiko)",
+    "hypo_symptoms": "Nachtblindheit, Xerophthalmie (Austrocknung der Hornhaut), erhöhte Infektanfälligkeit, Wachstumsstörungen bei Kindern, trockene und schuppige Haut, Keratinisierung der Schleimhäute",
+    "hyper_symptoms": "Kopfschmerzen, Übelkeit, Schwindel, Sehstörungen, Lebervergrößerung und -schäden, Knochenbrüchigkeit, Teratogenität bei Schwangeren (Missbildungen), Haarausfall, trockene Haut (chronische Überdosierung)",
+    "external_url": "https://www.dge.de/wissenschaft/referenzwerte/vitamin-a/",
+    "synonyms": ["Retinol", "Retinal", "Retinsäure", "Beta-Carotin", "Provitamin A", "Carotin", "Axerophthol", "Vitamin A1"],
+    "forms": [
+      { "name": "Retinol (Vitamin A1)", "bioavailability": "high", "timing": "with_meal", "is_recommended": 1, "score": 8, "comment": "Vorgeformtes Vitamin A aus tierischen Quellen mit hoher Bioverfügbarkeit (~75%). Direkt verwertbar ohne Umwandlung. Geeignet bei nachgewiesenem Mangel, jedoch Vorsicht bei Überdosierung – toxisches Potenzial vorhanden." },
+      { "name": "Retinylacetat", "bioavailability": "high", "timing": "with_meal", "is_recommended": 1, "score": 7, "comment": "Synthetische Esterform des Retinols, stabil und häufig in Supplementen verwendet. Wird im Darm zu Retinol hydrolysiert. Bioverfügbarkeit vergleichbar mit Retinol, gute Lagerstabilität." },
+      { "name": "Retinylpalmitat", "bioavailability": "high", "timing": "with_meal", "is_recommended": 1, "score": 7, "comment": "Natürliche Esterform des Retinols, häufig in angereicherten Lebensmitteln und Supplementen. Ähnlich wie Retinylacetat gut bioverfügbar, gut verträglich und weit verbreitet in der Supplementierung." },
+      { "name": "Beta-Carotin", "bioavailability": "medium", "timing": "with_meal", "is_recommended": 0, "score": 6, "comment": "Pflanzliches Provitamin A mit variabler Konversionsrate (1/12 bis 1/21 β-Carotin : Retinol). Sicher aus Nahrungsquellen (kein UL), aber hochdosierte Supplemente für Raucher kontraindiziert (ATBC- und CARET-Studie: erhöhtes Lungenkrebsrisiko). Aus Nahrung bevorzugen." }
+    ],
+    "dosage_guidelines": [
+      { "source": "DGE", "source_url": "https://www.dge.de/wissenschaft/referenzwerte/vitamin-a/", "source_title": "DGE Referenzwerte Vitamin A, 2015", "population": "adult_male", "dose_min": 850, "dose_max": 850, "unit": "µg RAE", "frequency": "daily", "timing": "with_meal", "notes": "DGE-Empfehlung für Männer ab 19 Jahren: 850 µg Retinoläquivalente (RAE) täglich", "is_default": 1 },
+      { "source": "DGE", "source_url": "https://www.dge.de/wissenschaft/referenzwerte/vitamin-a/", "source_title": "DGE Referenzwerte Vitamin A, 2015", "population": "adult_female", "dose_min": 700, "dose_max": 700, "unit": "µg RAE", "frequency": "daily", "timing": "with_meal", "notes": "DGE-Empfehlung für Frauen ab 19 Jahren: 700 µg Retinoläquivalente (RAE) täglich; erhöhter Bedarf in Schwangerschaft (800 µg) und Stillzeit (1300 µg)", "is_default": 1 },
+      { "source": "study", "source_url": "https://doi.org/10.1093/ajcn/nqaa059", "source_title": "Tanumihardjo et al., 2020, American Journal of Clinical Nutrition", "population": "adult", "dose_min": 500, "dose_max": 1000, "unit": "µg RAE", "frequency": "daily", "timing": "with_meal", "notes": "Studienbasierte Schätzung des tatsächlichen Bedarfs bei Erwachsenen unter Berücksichtigung von Bioverfügbarkeit und Konversionsrate pflanzlicher Quellen", "is_default": 0 }
+    ],
+    "interactions": [
+      { "other_ingredient": "Vitamin D3", "type": "synergy", "severity": "low", "mechanism": "Vitamin A und D3 interagieren auf Ebene des Retinoid-X-Rezeptors (RXR): RXR ist Bindungspartner für den Vitamin-D-Rezeptor (VDR). Sehr hohe Vitamin-A-Spiegel können Vitamin-D-Signalwege antagonisieren.", "source_url": null },
+      { "other_ingredient": "Vitamin K2", "type": "synergy", "severity": "low", "mechanism": "Alle drei fettlöslichen Vitamine A, D und K wirken synergistisch beim Calciumstoffwechsel und der Knochengesundheit.", "source_url": null },
+      { "other_ingredient": "Zink", "type": "synergy", "severity": "medium", "mechanism": "Zink ist essenziell für die Synthese des Retinol-bindenden Proteins (RBP). Zinkmangel kann zu funktionellem Vitamin-A-Mangel führen.", "source_url": null },
+      { "other_ingredient": "Vitamin E", "type": "synergy", "severity": "low", "mechanism": "Vitamin E schützt Vitamin A vor oxidativer Zerstörung im Darm und im Gewebe.", "source_url": null }
+    ]
+  },
+  {
+    "name": "Vitamin D3",
+    "category": "vitamin_fat_soluble",
+    "unit": "IU",
+    "description": "Vitamin D3 (Cholecalciferol) ist das körpereigene Vitamin D, das durch UVB-Strahlung in der Haut gebildet wird und essenzielle Funktionen bei Calciumaufnahme, Knochengesundheit, Immunregulation und Muskelstoffwechsel übernimmt. In nördlichen Breiten ist eine endogene Synthese von Oktober bis April kaum möglich, weshalb Supplementierung besonders in den Wintermonaten empfohlen wird. Viele klinische Studien zeigen, dass Blutspiegel über 50 nmol/L erst mit 2000–5000 IU zuverlässig erreicht werden.",
+    "timing": "with_meal",
+    "upper_limit": 4000,
+    "upper_limit_unit": "IU",
+    "upper_limit_note": "EFSA UL 4000 IU/Tag für Erwachsene; einige Experten halten unter ärztlicher Aufsicht bis 10.000 IU für kurzfristig tolerierbar; Überdosierung führt zu Hyperkalzämie",
+    "hypo_symptoms": "Osteomalazie, Rachitis bei Kindern, Muskelschwäche, erhöhte Infektanfälligkeit, Fatigue, depressive Verstimmung, chronische Schmerzen, Osteoporose",
+    "hyper_symptoms": "Hyperkalzämie, Übelkeit, Erbrechen, Polyurie, Nierenkalzinose, Herzrhythmusstörungen, Verwirrtheit, bei chronischer Überdosierung Nierenversagen",
+    "external_url": "https://www.dge.de/wissenschaft/referenzwerte/vitamin-d/",
+    "synonyms": ["Cholecalciferol", "Colecalciferol", "Vitamin D", "Sonnenvitamin", "Calcitriol", "25-Hydroxyvitamin D"],
+    "forms": [
+      { "name": "Cholecalciferol (D3)", "bioavailability": "high", "timing": "with_meal", "is_recommended": 1, "score": 9, "comment": "Körpereigene Form, die effektiver den 25(OH)D-Blutspiegel erhöht als D2. Fettlöslich – Einnahme mit fettreicher Mahlzeit verbessert Resorption um bis zu 50%. Bevorzugte Form." },
+      { "name": "Ergocalciferol (D2)", "bioavailability": "medium", "timing": "with_meal", "is_recommended": 0, "score": 5, "comment": "Pflanzliche/pilzliche Form, ~30% weniger wirksam als D3. Kürzere Halbwertszeit. Für Veganer relevant, aber D3 aus Flechten vorzuziehen." },
+      { "name": "Calcifediol (25-Hydroxy-D3)", "bioavailability": "very_high", "timing": "with_meal", "is_recommended": 1, "score": 8, "comment": "Bereits hydroxylierte Speicherform, bis zu 3-5x bioverfügbarer als D3. Sinnvoll bei Malabsorption. Nur unter ärztlicher Aufsicht." }
+    ],
+    "dosage_guidelines": [
+      { "source": "DGE", "source_url": "https://www.dge.de/wissenschaft/referenzwerte/vitamin-d/", "source_title": "DGE Referenzwerte Vitamin D, 2020", "population": "adult_male", "dose_min": 800, "dose_max": 800, "unit": "IU", "frequency": "daily", "timing": "with_meal", "notes": "DGE-Schätzwert bei fehlender endogener Synthese für Männer und Frauen 19–70 Jahre: 800 IU (20 µg) täglich", "is_default": 1 },
+      { "source": "DGE", "source_url": "https://www.dge.de/wissenschaft/referenzwerte/vitamin-d/", "source_title": "DGE Referenzwerte Vitamin D, 2020", "population": "adult_female", "dose_min": 800, "dose_max": 800, "unit": "IU", "frequency": "daily", "timing": "with_meal", "notes": "DGE-Schätzwert für Frauen 19–70 Jahre: 800 IU täglich", "is_default": 1 },
+      { "source": "study", "source_url": "https://doi.org/10.1210/jc.2011-2600", "source_title": "Holick et al., 2011, J Clin Endocrinol Metab – Endocrine Society Guidelines", "population": "adult", "dose_min": 1500, "dose_max": 2000, "unit": "IU", "frequency": "daily", "timing": "with_meal", "notes": "Endocrine Society: 1500–2000 IU/Tag für 25(OH)D-Spiegel >75 nmol/L (30 ng/ml)", "is_default": 0 },
+      { "source": "study", "source_url": "https://doi.org/10.1001/jama.2022.21417", "source_title": "LeBoff et al., 2022, JAMA – VITAL-Studie", "population": "adult", "dose_min": 2000, "dose_max": 2000, "unit": "IU", "frequency": "daily", "timing": "with_meal", "notes": "VITAL-Studie (n=25.871): 2000 IU/Tag D3 über 5 Jahre zeigte signifikante Reduktion von Krebsmortalität und Autoimmunerkrankungen", "is_default": 0 }
+    ],
+    "interactions": [
+      { "other_ingredient": "Vitamin K2", "type": "synergy", "severity": "medium", "mechanism": "D3 steigert Calciumabsorption; K2 aktiviert Osteocalcin und MGP, die Calcium in Knochen einlagern und Gefäßverkalkung verhindern. Bei >2000 IU D3 ist K2 empfohlen.", "source_url": "https://doi.org/10.3945/ajcn.2010.30052" },
+      { "other_ingredient": "Magnesium", "type": "synergy", "severity": "medium", "mechanism": "Magnesium ist Cofaktor für alle Enzyme der Vitamin-D-Aktivierung. Magnesiummangel kann die D3-zu-Calcitriol-Konversion hemmen.", "source_url": "https://doi.org/10.1186/s12937-018-0384-3" },
+      { "other_ingredient": "Vitamin A", "type": "separate", "severity": "medium", "mechanism": "Sehr hohe Vitamin-A-Spiegel (>3000 µg RAE) können über RXR-Kompetition die protektiven Knocheneffekte von D3 abschwächen.", "source_url": null }
+    ]
+  },
+  {
+    "name": "Vitamin K1",
+    "category": "vitamin_fat_soluble",
+    "unit": "µg",
+    "description": "Vitamin K1 (Phyllochinon) ist die pflanzliche Form des Vitamins K und kommt vor allem in grünem Blattgemüse vor. Es ist primär an der hepatischen Synthese von Gerinnungsfaktoren (II, VII, IX, X) beteiligt. Die Bioverfügbarkeit aus Nahrungsquellen ist gering (~10%), aus Supplements hingegen deutlich besser; K1 wird schnell in der Leber metabolisiert und kaum in extra-hepatisches Gewebe transportiert.",
+    "timing": "with_meal",
+    "upper_limit": null,
+    "upper_limit_unit": "µg",
+    "upper_limit_note": "EFSA hat kein UL für Vitamin K1 festgelegt; bei Vitamin-K-Antagonisten (Marcumar/Warfarin) ärztliche Aufsicht erforderlich",
+    "hypo_symptoms": "Verlängerte Blutungszeit, Blutungsneigung, Ekchymosen, bei Neugeborenen klassische Vitamin-K-Mangelblutung (VKDB)",
+    "hyper_symptoms": "Keine bekannte Toxizität aus natürlichem K1",
+    "external_url": "https://www.dge.de/wissenschaft/referenzwerte/vitamin-k/",
+    "synonyms": ["Phyllochinon", "Phytomenadion", "Phylloquinone", "Antihämorrhagisches Vitamin"],
+    "forms": [
+      { "name": "Phyllochinon (K1)", "bioavailability": "medium", "timing": "with_meal", "is_recommended": 1, "score": 7, "comment": "Natürliche Pflanzenform, gut zur Blutgerinnungsunterstützung. Bioverfügbarkeit aus Supplements höher als aus Nahrung." }
+    ],
+    "dosage_guidelines": [
+      { "source": "DGE", "source_url": "https://www.dge.de/wissenschaft/referenzwerte/vitamin-k/", "source_title": "DGE Referenzwerte Vitamin K, 2018", "population": "adult_male", "dose_min": 70, "dose_max": 70, "unit": "µg", "frequency": "daily", "timing": "with_meal", "notes": "DGE-Schätzwert für Männer ab 19 Jahren: 70 µg Vitamin K täglich", "is_default": 1 },
+      { "source": "DGE", "source_url": "https://www.dge.de/wissenschaft/referenzwerte/vitamin-k/", "source_title": "DGE Referenzwerte Vitamin K, 2018", "population": "adult_female", "dose_min": 60, "dose_max": 60, "unit": "µg", "frequency": "daily", "timing": "with_meal", "notes": "DGE-Schätzwert für Frauen ab 19 Jahren: 60 µg Vitamin K täglich", "is_default": 1 },
+      { "source": "study", "source_url": "https://doi.org/10.3945/ajcn.2008.26483", "source_title": "Booth et al., 2009, American Journal of Clinical Nutrition", "population": "adult", "dose_min": 100, "dose_max": 300, "unit": "µg", "frequency": "daily", "timing": "with_meal", "notes": "Für optimale Carboxylierung von Gerinnungs- und Knochenproteinen werden 100–300 µg K1/Tag diskutiert", "is_default": 0 }
+    ],
+    "interactions": [
+      { "other_ingredient": "Vitamin E", "type": "separate", "severity": "medium", "mechanism": "Hochdosiertes Vitamin E (>800 mg) kann Vitamin-K-abhängige Gerinnungsfaktoren reduzieren.", "source_url": "https://doi.org/10.1093/ajcn/65.4.1166" }
+    ]
+  },
+  {
+    "name": "Vitamin K2",
+    "category": "vitamin_fat_soluble",
+    "unit": "µg",
+    "description": "Vitamin K2 (Menachinon) ist die tierisch und bakteriell gebildete Vitamin-K-Form, die sich in der Seitenkettenlänge unterscheidet (MK-4 bis MK-13). K2 aktiviert extrahepatische Gla-Proteine wie Osteocalcin (Knochen) und Matrix-Gla-Protein (Gefäße) weitaus effektiver als K1. MK-7 aus Natto besitzt mit ~72 Stunden eine deutlich längere Halbwertszeit als MK-4 (~1-2 Stunden) und ist bei vergleichbarer Wirksamkeit in deutlich niedrigeren Dosen wirksam.",
+    "timing": "with_meal",
+    "upper_limit": null,
+    "upper_limit_unit": "µg",
+    "upper_limit_note": "EFSA hat kein UL für Vitamin K2 festgelegt; Wechselwirkung mit Vitamin-K-Antagonisten beachten",
+    "hypo_symptoms": "Erhöhtes Frakturrisiko, Knochendichteverlust, arteriosklerotische Calciumablagerungen in Gefäßwänden, erhöhtes kardiovaskuläres Risiko",
+    "hyper_symptoms": "Keine bekannte Toxizität; bei Antikoagulantientherapie mögliche Antagonisierung",
+    "external_url": "https://www.dge.de/wissenschaft/referenzwerte/vitamin-k/",
+    "synonyms": ["Menachinon", "Menaquinone", "MK-4", "MK-7", "Menatetrenon", "trans-Menachinon-7", "Natto-Vitamin K"],
+    "forms": [
+      { "name": "Menachinon-7 (MK-7)", "bioavailability": "high", "timing": "with_meal", "is_recommended": 1, "score": 9, "comment": "Bevorzugte K2-Form: Halbwertszeit ~72h ermöglicht stabile Serumspiegel mit einmal täglicher Gabe. 90–200 µg/Tag ausreichend für optimale MGP- und Osteocalcin-Carboxylierung." },
+      { "name": "Menachinon-4 (MK-4)", "bioavailability": "medium", "timing": "with_meal", "is_recommended": 1, "score": 7, "comment": "Kurze Halbwertszeit (~1-2h) erfordert 2-3 tägliche Einnahmen. In Japan medizinisch zugelassen (45 mg/Tag bei Osteoporose). Als Supplement in niedrigen Dosen weniger effektiv als MK-7." },
+      { "name": "Menachinon-4+7 Kombination", "bioavailability": "high", "timing": "with_meal", "is_recommended": 1, "score": 8, "comment": "Kombiniert schnelle Wirkung von MK-4 und Langzeitstabilität von MK-7. Für fokussierten Knochen- und Gefäßschutz sinnvoll." }
+    ],
+    "dosage_guidelines": [
+      { "source": "DGE", "source_url": "https://www.dge.de/wissenschaft/referenzwerte/vitamin-k/", "source_title": "DGE Referenzwerte Vitamin K, 2018", "population": "adult", "dose_min": 60, "dose_max": 70, "unit": "µg", "frequency": "daily", "timing": "with_meal", "notes": "DGE-Schätzwert gilt für Gesamt-Vitamin-K (K1+K2); spezifische K2-Referenzwerte fehlen", "is_default": 1 },
+      { "source": "study", "source_url": "https://doi.org/10.1007/s00198-012-2021-5", "source_title": "Knapen et al., 2013, Osteoporosis International", "population": "adult_female", "dose_min": 180, "dose_max": 180, "unit": "µg", "frequency": "daily", "timing": "with_meal", "notes": "3-Jahres-RCT: 180 µg MK-7/Tag verbesserte Knochenfestigkeit bei postmenopausalen Frauen signifikant", "is_default": 0 },
+      { "source": "study", "source_url": "https://doi.org/10.1016/j.thromres.2018.12.020", "source_title": "Vermeer et al., 2019, Thrombosis Research", "population": "adult", "dose_min": 90, "dose_max": 200, "unit": "µg", "frequency": "daily", "timing": "with_meal", "notes": "90–200 µg MK-7/Tag für vollständige MGP-Carboxylierung (Gefäßschutz); 180–200 µg für Osteocalcin-Carboxylierung (Knochen)", "is_default": 0 }
+    ],
+    "interactions": [
+      { "other_ingredient": "Vitamin D3", "type": "synergy", "severity": "medium", "mechanism": "D3 stimuliert Osteocalcin-Synthese; K2 carboxyliert und aktiviert Osteocalcin und MGP. Synergistische Kombination besonders bei höheren D3-Dosen (>2000 IU) zur Vermeidung ektoper Calciumablagerungen.", "source_url": "https://doi.org/10.3945/ajcn.2010.30052" },
+      { "other_ingredient": "Calcium", "type": "synergy", "severity": "low", "mechanism": "K2 aktiviert MGP, das Calcium aus Gefäßwänden fernhält. Bei Calcium-Supplementierung ist K2 besonders relevant.", "source_url": null }
+    ]
+  },
+  {
+    "name": "Vitamin E",
+    "category": "vitamin_fat_soluble",
+    "unit": "mg",
+    "description": "Vitamin E bezeichnet eine Gruppe von acht fettlöslichen Verbindungen (vier Tocopherole, vier Tocotrienole), wobei α-Tocopherol die biologisch aktivste Form ist. Als primäres fettlösliches Antioxidans schützt es Zellmembranen und LDL-Cholesterol vor oxidativer Schädigung. Natürliches d-α-Tocopherol (RRR-Konfiguration) weist eine bis zu doppelt so hohe biologische Aktivität auf wie synthetisches dl-α-Tocopherol.",
+    "timing": "with_meal",
+    "upper_limit": 300,
+    "upper_limit_unit": "mg",
+    "upper_limit_note": "EFSA UL 300 mg/Tag; BfR empfiehlt max. 30 mg/Tag zusätzlich zur Nahrung; hochdosierte Gaben erhöhen Blutungsrisiko",
+    "hypo_symptoms": "Periphere Neuropathie, Muskelschwäche, hämolytische Anämie (bei Frühgeborenen), Ataxie, erhöhte oxidative Stressmarker",
+    "hyper_symptoms": "Erhöhte Blutungsneigung, Hemmung von Vitamin-K-abhängiger Gerinnung, Übelkeit; >400 IU/Tag tendenziell erhöhte Gesamtmortalität (Meta-Analyse)",
+    "external_url": "https://www.dge.de/wissenschaft/referenzwerte/vitamin-e/",
+    "synonyms": ["Tocopherol", "Alpha-Tocopherol", "d-alpha-Tocopherol", "dl-alpha-Tocopherol", "Mixed Tocopherols", "Gamma-Tocopherol", "Tocotrienol"],
+    "forms": [
+      { "name": "d-α-Tocopherol (natürlich, RRR)", "bioavailability": "high", "timing": "with_meal", "is_recommended": 1, "score": 9, "comment": "Natürliche Form mit höchster biologischer Aktivität (1 mg = 1,49 IU). Bevorzugt durch α-TTP-Protein für Gewebeverteilung selektiert. Klar bevorzugt für Supplementierung." },
+      { "name": "dl-α-Tocopherol (synthetisch, all-rac)", "bioavailability": "medium", "timing": "with_meal", "is_recommended": 0, "score": 5, "comment": "Racemat aus 8 Stereoisomeren; nur das RRR-Isomer biologisch vollwertig aktiv. ~1,36-fache Dosis nötig für gleiche Wirkung wie natürliche Form." },
+      { "name": "Gemischte Tocopherole (Mixed Tocopherols)", "bioavailability": "high", "timing": "with_meal", "is_recommended": 1, "score": 8, "comment": "Kombination aus α-, β-, γ- und δ-Tocopherol. γ-Tocopherol hemmt spezifisch COX-2 und neutralisiert RNS. Entspricht natürlichem Nahrungsprofil besser als isoliertes α-Tocopherol." },
+      { "name": "Tocotrienole", "bioavailability": "medium", "timing": "with_meal", "is_recommended": 1, "score": 7, "comment": "Aus Palmöl oder Annatto. Zeigen neuroprotektive und cholesterinsenkende Effekte in Studien. Interessante Ergänzung zu Mixed Tocopherols." }
+    ],
+    "dosage_guidelines": [
+      { "source": "DGE", "source_url": "https://www.dge.de/wissenschaft/referenzwerte/vitamin-e/", "source_title": "DGE Referenzwerte Vitamin E, 2015", "population": "adult_male", "dose_min": 12, "dose_max": 15, "unit": "mg", "frequency": "daily", "timing": "with_meal", "notes": "DGE-Schätzwert für Männer: 12–15 mg α-Tocopherol-Äquivalente täglich", "is_default": 1 },
+      { "source": "DGE", "source_url": "https://www.dge.de/wissenschaft/referenzwerte/vitamin-e/", "source_title": "DGE Referenzwerte Vitamin E, 2015", "population": "adult_female", "dose_min": 11, "dose_max": 12, "unit": "mg", "frequency": "daily", "timing": "with_meal", "notes": "DGE-Schätzwert für Frauen: 11–12 mg α-Tocopherol-Äquivalente täglich", "is_default": 1 },
+      { "source": "study", "source_url": "https://doi.org/10.7326/0003-4819-142-1-200501040-00110", "source_title": "Miller et al., 2005, Annals of Internal Medicine – Meta-Analyse Hochdosis Vitamin E", "population": "adult", "dose_min": 67, "dose_max": 200, "unit": "mg", "frequency": "daily", "timing": "with_meal", "notes": "Dosen >400 IU/Tag mit erhöhter Gesamtmortalität assoziiert. Moderate Dosen von 67–200 mg/Tag (100–300 IU) empfohlen.", "is_default": 0 }
+    ],
+    "interactions": [
+      { "other_ingredient": "Vitamin K1", "type": "separate", "severity": "medium", "mechanism": "Hochdosiertes α-Tocopherol (>800 mg) hemmt Vitamin-K-abhängige Carboxylase. Bei normalen Dosen (<400 IU) klinisch weniger bedeutsam.", "source_url": "https://doi.org/10.1093/ajcn/65.4.1166" },
+      { "other_ingredient": "Vitamin C", "type": "synergy", "severity": "low", "mechanism": "Vitamin C regeneriert oxidiertes Vitamin E zurück zur aktiven Form. Synergistische antioxidative Wirkung.", "source_url": null },
+      { "other_ingredient": "Selen", "type": "synergy", "severity": "low", "mechanism": "Selen (als Glutathionperoxidase-Cofaktor) und Vitamin E wirken synergistisch im antioxidativen Schutzsystem.", "source_url": null }
+    ]
+  }
+]

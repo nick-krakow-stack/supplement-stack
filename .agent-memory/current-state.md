@@ -52,6 +52,7 @@ Profiles, and Blog Posts is committed and deployed to Cloudflare Pages preview.
 Root documentation cleanup is committed: README, DEPLOYMENT, implementation status, and agent planner now describe the Cloudflare-native line and point old backend/SQLite references to legacy context.
 D1 backup workflow is verified: GitHub Actions D1 backup has run successfully both manually and automatically, and token scopes are confirmed. Backup verification is no longer an open next step.
 CI has been refreshed for the Cloudflare line. Local lint/test/build are green. Frontend test tooling now tolerates an empty suite via Vitest `--passWithNoTests`, while still running and failing real tests normally.
+Worktree cleanup is complete locally: `_research_raw/01_fat_soluble_vitamins.json` and `_research_raw/02_b_vitamins_vitamin_c.json` are tracked as migration 0006 source material, and local `.claude/commands/` files are ignored without deleting them.
 
 Last relevant commits on `main`:
 

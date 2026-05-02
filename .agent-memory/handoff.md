@@ -1,9 +1,20 @@
 # Handoff
 
 Last updated: 2026-05-02
-Update mode: Admin translations expansion deploy handoff
+Update mode: Worktree cleanup handoff
 
 ## Latest Notes
+
+Cleanup-Worker completed the requested worktree cleanup. No files were deleted
+and no deploy was needed.
+
+- `_research_raw/01_fat_soluble_vitamins.json` and
+  `_research_raw/02_b_vitamins_vitamin_c.json` were reviewed for common raw
+  secret patterns and parsed as valid JSON.
+- `.gitignore` now ignores `.claude/commands/`, so local Claude command files
+  remain on disk but do not appear in `git status --short`.
+- `_research_raw/03_minerals_trace_elements.json` was already tracked and was
+  not changed.
 
 Ops-Worker committed and deployed the Admin Translations expansion. No D1
 migration was needed.
@@ -54,21 +65,15 @@ migration was needed.
 ## Git Snapshot
 
 - Branch: `main`
-- Latest code commit: `49ed83e` Feature: Expand admin translation management
-- Next expected commit: memory-only deploy record.
+- Latest code commit before cleanup: `49ed83e` Feature: Expand admin translation management
+- Cleanup commit completed in this session: `Ops: Track research sources and ignore local Claude commands`.
 
 ## Working Tree
 
-Expected after this handoff update:
+Expected after cleanup commit:
 
 ~~~text
-M .agent-memory/current-state.md
-M .agent-memory/deploy-log.md
-M .agent-memory/handoff.md
-M .agent-memory/next-steps.md
-?? .claude/commands/
-?? _research_raw/01_fat_soluble_vitamins.json
-?? _research_raw/02_b_vitamins_vitamin_c.json
+clean, except ignored local build/cache files and ignored `.claude/commands/`
 ~~~
 
 `frontend/dist/` exists locally from build output and is ignored/uncommitted.
