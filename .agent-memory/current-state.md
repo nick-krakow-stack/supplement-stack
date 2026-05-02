@@ -47,12 +47,15 @@ D3 recommendations / product modal loading fix is committed and deployed to Clou
 Preview search API-base fix is committed and deployed to Cloudflare Pages preview: production builds use same-origin `/api` by default, while Vite dev on localhost can still use `VITE_API_BASE_URL`.
 Affiliate disclosure cleanup is committed and deployed to Cloudflare Pages preview: product cards no longer show the visible Affiliate badge; the general affiliate disclosure lives in the footer disclaimer.
 Admin translations MVP for `ingredient_translations` is committed and deployed to Cloudflare Pages preview.
+Admin translations expansion for Ingredients, Dose Recommendations, Verified
+Profiles, and Blog Posts is committed and deployed to Cloudflare Pages preview.
 Root documentation cleanup is committed: README, DEPLOYMENT, implementation status, and agent planner now describe the Cloudflare-native line and point old backend/SQLite references to legacy context.
 D1 backup workflow is verified: GitHub Actions D1 backup has run successfully both manually and automatically, and token scopes are confirmed. Backup verification is no longer an open next step.
 CI has been refreshed for the Cloudflare line. Local lint/test/build are green. Frontend test tooling now tolerates an empty suite via Vitest `--passWithNoTests`, while still running and failing real tests normally.
 
 Last relevant commits on `main`:
 
+- `49ed83e` - Feature: Expand admin translation management (admin translation GET/PUT routes and UI for Ingredients, Dose Recommendations, Verified Profiles, and Blog Posts).
 - `862ed57` - Feature: Phase D product recommendations and translations (migration 0036, admin translations MVP, Cloudflare-line CI/docs, lockfiles, local setup scripts).
 - `965d4e4` - Fix: Move affiliate disclosure to footer (removed visible product-card Affiliate badge; generalized footer affiliate note).
 - `b5dba6e` - Fix: Use same-origin API in deployed frontend (central API base helper, same-origin `/api` for production builds, local dev override only on localhost).
@@ -67,6 +70,21 @@ Last relevant commits on `main`:
 - `9a5f523` - DB: Phase B abgeschlossen, migrations 0028-0035, `dosage_guidelines` migrated to `dose_recommendations`.
 
 ## Latest Deployed Work
+
+Admin translations expansion is committed and deployed to Cloudflare Pages
+preview:
+
+- Commit: `49ed83e` - Feature: Expand admin translation management.
+- No D1 migration was needed.
+- Deployed preview: `https://14cf1dba.supplementstack.pages.dev`.
+- Smoke checks passed: root HTTP 200; unauthenticated
+  `/api/admin/translations/ingredients`,
+  `/api/admin/translations/dose-recommendations`,
+  `/api/admin/translations/verified-profiles`, and
+  `/api/admin/translations/blog-posts` returned HTTP 401, not 404;
+  `/api/ingredients/search?q=d3` returned HTTP 200.
+
+## Previous Deployed Work
 
 Phase D product recommendations and translations are committed, remote-migrated,
 and deployed to Cloudflare Pages preview:
@@ -84,10 +102,8 @@ and deployed to Cloudflare Pages preview:
   `/api/ingredients/search?q=d3` HTTP 200; `/api/products/1` HTTP 200;
   unauthenticated `/api/admin/translations/ingredients` returned 401, not 404.
 
-## Latest Local Work
-
-Admin Translations extension is implemented locally, not committed and not deployed.
-Public i18n playback was not changed.
+Admin Translations extension is now committed and deployed. Public i18n playback
+was not changed.
 
 - Backend: `functions/api/modules/admin.ts` now also serves admin-only GET/PUT
   routes for `dose_recommendation_translations`,

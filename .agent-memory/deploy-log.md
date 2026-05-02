@@ -12,11 +12,14 @@ Preview search API-base fix is deployed to Cloudflare Pages preview.
 Affiliate disclosure cleanup is deployed to Cloudflare Pages preview.
 Phase D product recommendations rename and admin translations MVP are committed,
 remote-migrated, and deployed to Cloudflare Pages preview.
+Admin translations expansion is committed and deployed to Cloudflare Pages
+preview.
 GitHub Actions D1 backup has run successfully both manually and automatically;
 token scopes are verified.
 
 Latest relevant commits:
 
+- `49ed83e` - Feature: Expand admin translation management.
 - `862ed57` - Feature: Phase D product recommendations and translations.
 - `965d4e4` - Fix: Move affiliate disclosure to footer.
 - `b5dba6e` - Fix: Use same-origin API in deployed frontend.
@@ -27,6 +30,32 @@ Latest relevant commits:
 - `9a5f523` - DB: Phase B complete (migrations 0028-0035).
 
 ## Phase D Product Recommendations And Translations
+
+### 2026-05-02 - Cloudflare Pages: admin translations expansion
+
+- Commit: `49ed83e` - Feature: Expand admin translation management.
+- Scope: admin translation management now covers Ingredients, Dose
+  Recommendations, Verified Profiles, and Blog Posts.
+- No D1 migration was needed.
+- Local validation from handoff: `npm run lint --if-present`,
+  `npm run test --if-present -- --run`, and `npm run build` passed in
+  `frontend/`; `npx tsc -p tsconfig.json` passed in `functions/`.
+- Deploy prep: `npm run build` in `frontend/`; copied `functions` to
+  `frontend/dist/functions`; verified
+  `frontend/dist/functions/api/[[path]].ts` exists.
+- Deploy command: `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://14cf1dba.supplementstack.pages.dev`
+- Smoke checks on preview:
+  - `/` returned HTTP 200.
+  - `/api/admin/translations/ingredients` returned HTTP 401 Unauthorized,
+    confirming the route exists and is auth-protected.
+  - `/api/admin/translations/dose-recommendations` returned HTTP 401
+    Unauthorized, confirming the route exists and is auth-protected.
+  - `/api/admin/translations/verified-profiles` returned HTTP 401
+    Unauthorized, confirming the route exists and is auth-protected.
+  - `/api/admin/translations/blog-posts` returned HTTP 401 Unauthorized,
+    confirming the route exists and is auth-protected.
+  - `/api/ingredients/search?q=d3` returned HTTP 200.
 
 ### 2026-05-02 - D1 + Cloudflare Pages: Phase D rollout
 

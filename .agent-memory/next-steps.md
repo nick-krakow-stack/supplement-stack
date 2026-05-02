@@ -28,7 +28,20 @@ Last updated: 2026-05-02
   - Checks passed: `npm run build` in `frontend/`; `npx tsc -p tsconfig.json` in `functions/`.
   - Public i18n playback remains out of scope.
 
-## Completed Locally - Not Committed Or Deployed
+- Admin translations expansion:
+  - Committed as `49ed83e` - Feature: Expand admin translation management.
+  - Deployed preview: `https://14cf1dba.supplementstack.pages.dev`.
+  - No D1 migration was needed.
+  - Admin translation management now covers Ingredients, Dose Recommendations,
+    Verified Profiles, and Blog Posts.
+  - Preview smoke checks passed: `/` HTTP 200; unauthenticated
+    `/api/admin/translations/ingredients`,
+    `/api/admin/translations/dose-recommendations`,
+    `/api/admin/translations/verified-profiles`, and
+    `/api/admin/translations/blog-posts` HTTP 401, not 404;
+    `/api/ingredients/search?q=d3` HTTP 200.
+
+## Completed Locally
 
 - Admin translations have been extended beyond Ingredients:
   - `GET /api/admin/translations/dose-recommendations?language=de&q=&limit=50&offset=0`

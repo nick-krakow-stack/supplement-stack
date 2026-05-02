@@ -1,12 +1,26 @@
 # Handoff
 
 Last updated: 2026-05-02
-Update mode: Admin translations extension local handoff
+Update mode: Admin translations expansion deploy handoff
 
 ## Latest Notes
 
-Dev-Worker extended Admin Translations locally. No commit, migration, or deploy
-was performed.
+Ops-Worker committed and deployed the Admin Translations expansion. No D1
+migration was needed.
+
+- Feature commit: `49ed83e` - Feature: Expand admin translation management.
+- Preview URL: `https://14cf1dba.supplementstack.pages.dev`.
+- Deploy command: `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Deploy prep: `npm run build` in `frontend/`, copied `functions` to
+  `frontend/dist/functions`, and verified
+  `frontend/dist/functions/api/[[path]].ts` exists.
+- Preview smoke checks passed:
+  - `/` returned HTTP 200.
+  - `/api/admin/translations/ingredients` returned HTTP 401, not 404.
+  - `/api/admin/translations/dose-recommendations` returned HTTP 401, not 404.
+  - `/api/admin/translations/verified-profiles` returned HTTP 401, not 404.
+  - `/api/admin/translations/blog-posts` returned HTTP 401, not 404.
+  - `/api/ingredients/search?q=d3` returned HTTP 200.
 
 - Backend changed in `functions/api/modules/admin.ts`:
   - Added `GET/PUT /api/admin/translations/dose-recommendations`.
@@ -40,9 +54,8 @@ was performed.
 ## Git Snapshot
 
 - Branch: `main`
-- Latest code commit: `862ed57` Feature: Phase D product recommendations and translations
-- Current session intentionally leaves Admin Translations extension changes
-  uncommitted and undeployed.
+- Latest code commit: `49ed83e` Feature: Expand admin translation management
+- Next expected commit: memory-only deploy record.
 
 ## Working Tree
 
@@ -53,9 +66,6 @@ M .agent-memory/current-state.md
 M .agent-memory/deploy-log.md
 M .agent-memory/handoff.md
 M .agent-memory/next-steps.md
-M frontend/src/pages/admin/TranslationsTab.tsx
-M functions/api/modules/admin.ts
-?? frontend/.eslintignore
 ?? .claude/commands/
 ?? _research_raw/01_fat_soluble_vitamins.json
 ?? _research_raw/02_b_vitamins_vitamin_c.json
@@ -65,7 +75,6 @@ M functions/api/modules/admin.ts
 
 ## Next Planned Work
 
-- Commit/deploy Admin Translations extension only after review.
 - Later, add a cleanup migration to drop the temporary `recommendations` view
   and triggers after old previews/deploy windows no longer matter.
 - Public i18n playback remains separate and was not changed.
