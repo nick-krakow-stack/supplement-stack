@@ -299,7 +299,7 @@ export default function SearchPage() {
               <button
                 key={ing.id}
                 onClick={() => handlePopularChipClick(ing.name)}
-                className="px-4 py-2 text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 rounded-full transition-colors"
+                className="min-h-11 px-4 py-2 text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 rounded-full transition-colors"
               >
                 {ing.name}
               </button>
@@ -317,13 +317,13 @@ export default function SearchPage() {
               {stackItems.map((item) => (
                 <div
                   key={item.product.id}
-                  className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex items-center justify-between hover:-translate-y-0.5 hover:shadow-md transition-all duration-200"
+                  className="flex items-start justify-between gap-3 rounded-xl border border-gray-100 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
                 >
                   <div className="min-w-0 flex-1">
                     <p className="text-base font-semibold text-gray-900 truncate">
                       {item.product.name}
                     </p>
-                    <div className="flex items-center gap-2 mt-1">
+                    <div className="mt-1 flex flex-wrap items-center gap-2">
                       <p className="text-xs text-gray-500">
                         {item.portions}× täglich
                       </p>
@@ -334,7 +334,7 @@ export default function SearchPage() {
                   </div>
                   <button
                     onClick={() => void handleRemoveStackItem(item.product.id)}
-                    className="ml-3 p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
+                    className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg text-red-500 transition-colors hover:bg-red-50"
                     aria-label="Entfernen"
                   >
                     <X size={16} />
@@ -418,12 +418,12 @@ export default function SearchPage() {
       )}
 
       {/* Fixed footer bar — only visible when stack has items */}
-      {stackItems.length > 0 && (
+      {stackItems.length > 0 && activeModal === null && (
         <div className="fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-lg border-t border-gray-100 shadow-lg">
           <div className="max-w-2xl mx-auto px-4 py-3">
             {/* Summary row */}
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2 flex-wrap">
+            <div className="mb-2 flex flex-col gap-2 min-[431px]:flex-row min-[431px]:items-center min-[431px]:justify-between">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <ShoppingCart size={16} className="text-indigo-600 flex-shrink-0" />
                 <span className="text-sm font-semibold text-gray-900">
                   {stackItems.length}{' '}
@@ -431,14 +431,14 @@ export default function SearchPage() {
                 </span>
                 <span className="text-sm text-gray-500">
                   | Gesamt:{' '}
-                  <span className="inline-flex items-center px-2.5 py-1 bg-gradient-to-r from-emerald-500 to-green-600 text-white text-xs font-bold rounded-full ml-1">
+                  <span className="ml-1 inline-flex items-center rounded-full bg-gradient-to-r from-emerald-500 to-green-600 px-2.5 py-1 text-xs font-bold text-white">
                     €{totalMonthly.toFixed(2)}/Monat
                   </span>
                 </span>
               </div>
               <button
                 onClick={() => void handleClearStackItems()}
-                className="flex items-center gap-1 text-xs text-red-500 hover:bg-red-50 rounded-lg px-2 py-1 transition-colors font-medium flex-shrink-0 ml-2"
+                className="flex min-h-11 items-center justify-center gap-1 rounded-lg px-3 py-2 text-xs font-medium text-red-500 transition-colors hover:bg-red-50 min-[431px]:ml-2 min-[431px]:flex-shrink-0"
               >
                 <Trash2 size={13} />
                 Alle entfernen
@@ -450,12 +450,12 @@ export default function SearchPage() {
               {stackItems.map((item) => (
                 <span
                   key={item.product.id}
-                  className="inline-flex items-center gap-1 pl-2.5 pr-1 py-1 text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-100 rounded-full"
+                  className="inline-flex min-h-11 items-center gap-1 rounded-full border border-indigo-100 bg-indigo-50 py-1 pl-2.5 pr-1 text-xs font-medium text-indigo-700"
                 >
                   <span className="max-w-[100px] truncate">{item.product.name}</span>
                   <button
                     onClick={() => void handleRemoveStackItem(item.product.id)}
-                    className="flex-shrink-0 ml-0.5 text-indigo-400 hover:text-indigo-700 transition-colors"
+                    className="ml-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center text-indigo-400 transition-colors hover:text-indigo-700"
                     aria-label={`${item.product.name} entfernen`}
                   >
                     <X size={12} />

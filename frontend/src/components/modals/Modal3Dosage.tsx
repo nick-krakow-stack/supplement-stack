@@ -188,11 +188,11 @@ export default function Modal3Dosage({
   return (
     <ModalWrapper onClose={onClose}>
       {/* Header */}
-      <div className="flex items-center justify-between mb-5">
+      <div className="mb-5 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <button
             onClick={onBack}
-            className="p-2 rounded-xl text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+            className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
             aria-label="Zurück"
           >
             <ChevronLeft size={20} />
@@ -203,7 +203,7 @@ export default function Modal3Dosage({
         </div>
         <button
           onClick={onClose}
-          className="p-2 rounded-xl text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+          className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
           aria-label="Schließen"
         >
           <X size={20} />
@@ -266,15 +266,15 @@ export default function Modal3Dosage({
           </p>
 
           {/* Portions counter */}
-          <div className="flex items-center gap-3 mb-4">
-            <label htmlFor="portions" className="text-sm text-gray-700 whitespace-nowrap">
+          <div className="mb-4 flex flex-wrap items-center gap-3">
+            <label htmlFor="portions" className="text-sm text-gray-700">
               Portionen pro Tag
             </label>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => setPortions((p) => Math.max(MIN_PORTIONS, parseFloat((p - PORTIONS_STEP).toFixed(1))))}
-                className="w-9 h-9 rounded-xl bg-gray-100 hover:bg-indigo-100 hover:text-indigo-700 font-bold text-gray-700 transition-colors flex items-center justify-center"
+                className="flex h-11 w-11 items-center justify-center rounded-xl bg-gray-100 font-bold text-gray-700 transition-colors hover:bg-indigo-100 hover:text-indigo-700"
               >
                 −
               </button>
@@ -286,12 +286,12 @@ export default function Modal3Dosage({
                 step={PORTIONS_STEP}
                 value={portions}
                 onChange={handlePortionsChange}
-                className="text-xl font-bold text-gray-900 w-12 text-center border-0 bg-transparent focus:outline-none focus:ring-0"
+                className="h-11 w-16 border-0 bg-transparent text-center text-xl font-bold text-gray-900 focus:outline-none focus:ring-0"
               />
               <button
                 type="button"
                 onClick={() => setPortions((p) => Math.min(MAX_PORTIONS, parseFloat((p + PORTIONS_STEP).toFixed(1))))}
-                className="w-9 h-9 rounded-xl bg-gray-100 hover:bg-indigo-100 hover:text-indigo-700 font-bold text-gray-700 transition-colors flex items-center justify-center"
+                className="flex h-11 w-11 items-center justify-center rounded-xl bg-gray-100 font-bold text-gray-700 transition-colors hover:bg-indigo-100 hover:text-indigo-700"
               >
                 +
               </button>
@@ -387,7 +387,7 @@ export default function Modal3Dosage({
               </select>
 
               {selectedStackId === 'new' && (
-                <div className="flex items-center gap-2">
+                <div className="flex flex-col gap-2 min-[431px]:flex-row min-[431px]:items-center">
                   <Plus size={16} className="text-gray-400 flex-shrink-0" />
                   <input
                     type="text"
@@ -409,10 +409,10 @@ export default function Modal3Dosage({
       </div>
 
       {/* Footer actions */}
-      <div className="mt-6 pt-4 border-t border-gray-100 flex gap-3">
+      <div className="mt-6 flex flex-col gap-3 border-t border-gray-100 pt-4 min-[431px]:flex-row">
         <button
           onClick={onBack}
-          className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
+          className="flex min-h-11 items-center justify-center gap-1.5 rounded-xl bg-gray-100 px-4 py-2.5 text-sm font-semibold text-gray-600 transition-colors hover:bg-gray-200"
         >
           <ChevronLeft size={16} />
           Zurück
@@ -422,7 +422,7 @@ export default function Modal3Dosage({
           <button
             onClick={handleAddToStack}
             disabled={submitting}
-            className="flex-1 w-full bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold rounded-xl px-5 py-3 transition-all duration-200 shadow-sm flex items-center justify-center gap-2 disabled:opacity-60"
+            className="flex min-h-11 w-full flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 px-5 py-3 font-semibold text-white shadow-sm transition-all duration-200 hover:from-indigo-600 hover:to-purple-700 disabled:opacity-60"
           >
             <ShoppingCart size={16} />
             In Demo-Stack
@@ -431,7 +431,7 @@ export default function Modal3Dosage({
           <button
             onClick={handleAddToStack}
             disabled={submitting || (selectedStackId === 'new' && !newStackName.trim())}
-            className="flex-1 w-full bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold rounded-xl px-5 py-3 transition-all duration-200 shadow-sm flex items-center justify-center gap-2 disabled:opacity-60"
+            className="flex min-h-11 w-full flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 px-5 py-3 font-semibold text-white shadow-sm transition-all duration-200 hover:from-indigo-600 hover:to-purple-700 disabled:opacity-60"
           >
             {submitting ? (
               <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />

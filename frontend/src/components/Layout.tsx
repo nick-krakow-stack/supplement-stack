@@ -9,7 +9,7 @@ interface LayoutProps {
 }
 
 const navLinkClass =
-  'text-sm font-extrabold tracking-wide text-slate-500 transition-colors hover:text-blue-700';
+  'flex min-h-11 items-center rounded-xl px-2 text-sm font-extrabold tracking-wide text-slate-500 transition-colors hover:bg-slate-50 hover:text-blue-700 md:min-h-0 md:px-0 md:hover:bg-transparent';
 
 export default function Layout({ children }: LayoutProps) {
   const { user, isAdmin, logout } = useAuth();
@@ -47,7 +47,7 @@ export default function Layout({ children }: LayoutProps) {
       {isAdmin && (
         <Link
           to="/admin"
-          className="text-sm font-extrabold tracking-wide text-amber-600 transition-colors hover:text-amber-700"
+          className="flex min-h-11 items-center rounded-xl px-2 text-sm font-extrabold tracking-wide text-amber-600 transition-colors hover:bg-amber-50 hover:text-amber-700 md:min-h-0 md:px-0 md:hover:bg-transparent"
           onClick={closeMobile}
         >
           Admin
@@ -60,17 +60,17 @@ export default function Layout({ children }: LayoutProps) {
     <>
       <Link
         to="/profile"
-        className="text-sm font-bold text-slate-500 transition-colors hover:text-blue-700"
+        className="flex min-h-11 min-w-0 items-center rounded-xl px-2 text-sm font-bold text-slate-500 transition-colors hover:bg-slate-50 hover:text-blue-700 md:min-h-0 md:max-w-[180px] md:px-0 md:hover:bg-transparent"
         onClick={closeMobile}
       >
-        {user.email}
+        <span className="min-w-0 truncate break-all">{user.email}</span>
       </Link>
       <button
         onClick={() => {
           handleLogout();
           closeMobile();
         }}
-        className="border border-slate-200 bg-white px-4 py-2 text-sm font-extrabold text-slate-700 hover:bg-slate-50"
+        className="min-h-11 border border-slate-200 bg-white px-4 py-2 text-sm font-extrabold text-slate-700 hover:bg-slate-50"
       >
         Abmelden
       </button>
@@ -79,14 +79,14 @@ export default function Layout({ children }: LayoutProps) {
     <>
       <Link
         to="/login"
-        className="text-sm font-extrabold text-slate-500 transition-colors hover:text-blue-700"
+        className="flex min-h-11 items-center rounded-xl px-2 text-sm font-extrabold text-slate-500 transition-colors hover:bg-slate-50 hover:text-blue-700 md:min-h-0 md:px-0 md:hover:bg-transparent"
         onClick={closeMobile}
       >
         Anmelden
       </Link>
       <Link
         to="/register"
-        className="rounded-2xl bg-gradient-to-r from-blue-600 to-violet-600 px-5 py-2.5 text-sm font-black text-white shadow-lg shadow-blue-500/20 transition-all hover:from-blue-700 hover:to-violet-700"
+        className="flex min-h-11 items-center justify-center rounded-2xl bg-gradient-to-r from-blue-600 to-violet-600 px-5 py-2.5 text-sm font-black text-white shadow-lg shadow-blue-500/20 transition-all hover:from-blue-700 hover:to-violet-700"
         onClick={closeMobile}
       >
         Registrieren
@@ -101,13 +101,13 @@ export default function Layout({ children }: LayoutProps) {
           <div className="flex h-16 items-center justify-between">
             <Link
               to="/"
-              className="inline-flex items-center gap-2 text-xl font-black tracking-wide text-slate-900"
+              className="inline-flex min-w-0 items-center gap-2 text-xl font-black tracking-wide text-slate-900"
               onClick={closeMobile}
             >
               <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-100 to-blue-100 text-emerald-700">
                 <Leaf size={19} />
               </span>
-              <span className="bg-gradient-to-r from-blue-700 to-violet-700 bg-clip-text text-transparent">
+              <span className="truncate bg-gradient-to-r from-blue-700 to-violet-700 bg-clip-text text-transparent">
                 Supplement Stack
               </span>
             </Link>
@@ -116,7 +116,7 @@ export default function Layout({ children }: LayoutProps) {
             <div className="hidden items-center gap-4 md:flex">{authLinks}</div>
 
             <button
-              className="bg-transparent p-1 text-slate-500 transition-colors hover:text-blue-700 md:hidden"
+              className="flex h-11 w-11 flex-shrink-0 items-center justify-center bg-transparent p-0 text-slate-500 transition-colors hover:text-blue-700 md:hidden"
               onClick={() => setMobileOpen((open) => !open)}
               aria-label="Menü öffnen"
             >
@@ -126,9 +126,9 @@ export default function Layout({ children }: LayoutProps) {
         </div>
 
         {mobileOpen && (
-          <div className="flex flex-col gap-4 rounded-b-2xl border-t border-slate-100 bg-white px-4 py-4 shadow-lg md:hidden">
+          <div className="flex flex-col gap-1 rounded-b-2xl border-t border-slate-100 bg-white px-4 py-4 shadow-lg md:hidden">
             {navLinks}
-            <div className="flex flex-col gap-3 border-t border-slate-100 pt-4">
+            <div className="flex min-w-0 flex-col gap-2 border-t border-slate-100 pt-4">
               {authLinks}
             </div>
           </div>

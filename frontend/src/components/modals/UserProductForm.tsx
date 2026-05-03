@@ -141,7 +141,7 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
           {/* ── Product image ── */}
           <div>
             <label className={labelClass}>Produktfoto</label>
-            <div className="flex items-center gap-4">
+            <div className="flex items-start gap-4 max-[430px]:flex-col">
               {/* Preview */}
               <div className="relative flex-shrink-0">
                 {imageUrl ? (
@@ -160,7 +160,7 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
                   <button
                     type="button"
                     onClick={() => setImageUrl('')}
-                    className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center transition-colors"
+                    className="absolute -right-2 -top-2 flex h-8 w-8 items-center justify-center rounded-full bg-red-500 text-white transition-colors hover:bg-red-600"
                     aria-label="Foto entfernen"
                   >
                     <X size={10} />
@@ -168,11 +168,11 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
                 )}
               </div>
 
-              <div className="flex flex-col gap-2 flex-1">
+              <div className="flex flex-1 flex-col gap-2 max-[430px]:w-full">
                 <button
                   type="button"
                   onClick={() => setShowCrop(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 border border-indigo-200 text-indigo-600 hover:bg-indigo-50 font-medium rounded-xl text-xs transition-colors"
+                  className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-indigo-200 px-3 py-2 text-xs font-medium text-indigo-600 transition-colors hover:bg-indigo-50"
                 >
                   <Camera size={14} />
                   {imageUrl ? 'Foto ändern' : 'Foto hochladen'}
@@ -251,7 +251,7 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
           </div>
 
           {/* Serving size + unit */}
-          <div className="flex gap-3">
+          <div className="flex gap-3 max-[430px]:flex-col">
             <div className="flex-1">
               <label className={labelClass}>Portionsgröße</label>
               <input
@@ -277,7 +277,7 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
           </div>
 
           {/* Servings per container + container count */}
-          <div className="flex gap-3">
+          <div className="flex gap-3 max-[430px]:flex-col">
             <div className="flex-1">
               <label className={labelClass}>Portionen pro Behälter</label>
               <input
@@ -317,13 +317,13 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
           </div>
 
           {/* Affiliate checkbox */}
-          <div className="flex items-center gap-2">
+          <div className="flex min-h-11 items-center gap-2">
             <input
               id="is_affiliate"
               type="checkbox"
               checked={isAffiliate}
               onChange={(e) => setIsAffiliate(e.target.checked)}
-              className="w-4 h-4 rounded border-gray-300 text-indigo-600 cursor-pointer"
+              className="h-5 w-5 cursor-pointer rounded border-gray-300 text-indigo-600"
             />
             <label htmlFor="is_affiliate" className="text-sm text-gray-700 cursor-pointer">
               Affiliate-Link
@@ -348,18 +348,18 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
           )}
 
           {/* Actions */}
-          <div className="flex justify-end gap-3 pt-1">
+          <div className="flex justify-end gap-3 pt-1 max-[430px]:flex-col">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border border-gray-200 bg-white hover:bg-gray-50 text-gray-700 font-medium rounded-xl transition-colors text-sm"
+              className="min-h-11 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
             >
               Abbrechen
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="px-4 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold rounded-xl transition-all shadow-sm disabled:opacity-60 text-sm"
+              className="min-h-11 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition-all hover:from-indigo-600 hover:to-purple-700 disabled:opacity-60"
             >
               {submitting ? 'Speichere...' : isEdit ? 'Speichern' : 'Erstellen'}
             </button>

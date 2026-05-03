@@ -122,13 +122,13 @@ function ProductImage({ src, name }: { src?: string; name: string }) {
       <img
         src={src}
         alt={name}
-        className="h-20 w-20 flex-shrink-0 rounded-2xl border border-slate-200 bg-slate-50 object-cover shadow-sm sm:h-24 sm:w-24"
+        className="h-16 w-16 flex-shrink-0 rounded-2xl border border-slate-200 bg-slate-50 object-cover shadow-sm min-[431px]:h-20 min-[431px]:w-20 sm:h-24 sm:w-24"
       />
     );
   }
 
   return (
-    <div className="flex h-20 w-20 flex-shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 shadow-sm sm:h-24 sm:w-24">
+    <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-slate-50 shadow-sm min-[431px]:h-20 min-[431px]:w-20 sm:h-24 sm:w-24">
       <Package size={30} className="text-slate-400" />
     </div>
   );
@@ -154,18 +154,18 @@ function ProductRow({
   const monthlyPrice = calcMonthlyPrice(product.price, product.servings_per_container, product.container_count);
 
   return (
-    <li className="group flex items-center gap-4 rounded-3xl border border-transparent bg-white px-2 py-3 transition-all hover:border-slate-100 hover:bg-slate-50/80 sm:gap-6 sm:px-4">
+    <li className="group flex flex-col items-stretch gap-3 rounded-3xl border border-transparent bg-white px-2 py-3 transition-all hover:border-slate-100 hover:bg-slate-50/80 min-[431px]:flex-row min-[431px]:items-center min-[431px]:gap-4 sm:gap-6 sm:px-4">
       <ProductImage src={product.image_url} name={product.name} />
 
       <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-2">
+        <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
             {product.brand && (
               <p className="mb-1 text-xs font-black uppercase tracking-[0.2em] text-slate-400">
                 {product.brand}
               </p>
             )}
-            <p className="truncate text-xl font-black tracking-tight text-slate-900 sm:text-2xl">
+            <p className="break-words text-lg font-black tracking-tight text-slate-900 min-[431px]:text-xl sm:text-2xl">
               {product.name}
             </p>
           </div>
@@ -197,10 +197,10 @@ function ProductRow({
         </div>
       </div>
 
-      <div className="flex flex-shrink-0 flex-col items-end gap-2">
+      <div className="flex w-full flex-shrink-0 flex-col items-stretch gap-2 min-[431px]:w-auto min-[431px]:items-end">
         <button
           onClick={() => onSelect(product)}
-          className="rounded-2xl bg-gradient-to-r from-blue-600 to-violet-700 px-5 py-3 text-sm font-black text-white shadow-lg shadow-violet-600/20 transition-all hover:-translate-y-0.5 hover:shadow-xl sm:px-8 sm:py-4 sm:text-lg"
+          className="min-h-11 rounded-2xl bg-gradient-to-r from-blue-600 to-violet-700 px-5 py-3 text-sm font-black text-white shadow-lg shadow-violet-600/20 transition-all hover:-translate-y-0.5 hover:shadow-xl sm:px-8 sm:py-4 sm:text-lg"
         >
           Hinzufügen
         </button>
@@ -217,7 +217,7 @@ function ProductRow({
                 setWishlistState('idle');
               }
             }}
-            className={`flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-bold transition-colors ${
+            className={`flex min-h-11 items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-bold transition-colors ${
               wishlistState === 'done'
                 ? 'border-rose-200 bg-rose-100 text-rose-600'
                 : 'border-slate-200 bg-white text-slate-500 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-500'
@@ -363,28 +363,28 @@ export default function Modal2Products({
 
   return (
     <ModalWrapper onClose={onClose} size="lg" padded={false}>
-      <div className="sticky top-0 z-10 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-700 px-6 py-7 text-white sm:px-9 sm:py-8">
-        <div className="flex items-start justify-between gap-6">
+      <div className="sticky top-0 z-10 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-700 px-4 py-5 text-white sm:px-9 sm:py-8">
+        <div className="flex items-start justify-between gap-3 sm:gap-6">
           <div className="flex min-w-0 items-start gap-3">
             <button
               onClick={onBack}
-              className="mt-1 rounded-2xl p-2 text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+              className="mt-0 flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl text-white/70 transition-colors hover:bg-white/10 hover:text-white sm:mt-1"
               aria-label="Zurück"
             >
               <ChevronLeft size={26} />
             </button>
             <div className="min-w-0">
-              <p className="text-sm font-black uppercase tracking-[0.22em] text-white/70">
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-white/70 sm:text-sm sm:tracking-[0.22em]">
                 Produkt wählen
               </p>
-              <h2 className="mt-1 truncate text-3xl font-black tracking-tight sm:text-4xl">
+              <h2 className="mt-1 break-words text-2xl font-black tracking-tight sm:text-4xl">
                 {ingredientName}
               </h2>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="rounded-2xl p-2 text-white/75 transition-colors hover:bg-white/10 hover:text-white"
+            className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl text-white/75 transition-colors hover:bg-white/10 hover:text-white"
             aria-label="Schließen"
           >
             <X size={32} strokeWidth={1.8} />
@@ -392,7 +392,7 @@ export default function Modal2Products({
         </div>
       </div>
 
-      <div className="px-5 py-6 sm:px-9 sm:py-8">
+      <div className="px-3 py-5 sm:px-9 sm:py-8">
         {loading && (
           <div className="flex items-center justify-center py-12">
             <div className="mr-3 h-8 w-8 animate-spin rounded-full border-4 border-indigo-500 border-t-transparent" />

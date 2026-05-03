@@ -18,7 +18,7 @@ function authHeaders(): Record<string, string> {
 // ---- Skeleton row ----
 function SkeletonRow() {
   return (
-    <div className="flex items-center gap-4 p-4 animate-pulse">
+    <div className="flex items-center gap-4 p-4 animate-pulse max-[430px]:items-start">
       <div className="flex-1 flex flex-col gap-2">
         <div className="h-4 bg-gray-200 rounded w-1/3" />
         <div className="h-3 bg-gray-100 rounded w-1/4" />
@@ -61,11 +61,11 @@ function ProductRow({
       : null;
 
   return (
-    <div className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors">
+    <div className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-gray-50 max-[430px]:flex-col">
       {/* Main info */}
       <div className="flex-1 min-w-0 flex flex-col gap-0.5">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-medium text-gray-900 truncate">{product.name}</span>
+          <span className="min-w-0 break-words font-medium text-gray-900">{product.name}</span>
           {product.form && <FormBadge form={product.form} />}
         </div>
         <div className="flex items-center gap-3 text-sm text-gray-500 flex-wrap">
@@ -78,15 +78,15 @@ function ProductRow({
       </div>
 
       {/* Price */}
-      <span className="text-emerald-600 font-semibold text-sm whitespace-nowrap">
+      <span className="text-sm font-semibold text-emerald-600 max-[430px]:w-full">
         €{Number(product.price).toFixed(2)}/Mo.
       </span>
 
       {/* Actions */}
-      <div className="flex items-center gap-1 flex-shrink-0">
+      <div className="flex flex-shrink-0 items-center gap-2 max-[430px]:w-full">
         <button
           onClick={() => onEdit(product)}
-          className="p-2 rounded-lg text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+          className="flex h-11 w-11 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-indigo-50 hover:text-indigo-600 max-[430px]:flex-1"
           aria-label={`${product.name} bearbeiten`}
           title="Bearbeiten"
         >
@@ -95,7 +95,7 @@ function ProductRow({
         <button
           onClick={() => onDelete(product.id)}
           disabled={deleting}
-          className="p-2 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+          className="flex h-11 w-11 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-50 max-[430px]:flex-1"
           aria-label={`${product.name} löschen`}
           title="Löschen"
         >
@@ -207,7 +207,7 @@ export default function MyProductsPage() {
         <h1 className="text-2xl font-bold text-gray-900">Eigene Produkte</h1>
         <button
           onClick={handleOpenCreate}
-          className="inline-flex items-center gap-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold px-4 py-2 rounded-xl transition-all duration-200 shadow-sm"
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 px-4 py-2 font-semibold text-white shadow-sm transition-all duration-200 hover:from-indigo-600 hover:to-purple-700 max-[430px]:w-full"
         >
           <Plus size={18} />
           Neues Produkt erstellen
@@ -246,7 +246,7 @@ export default function MyProductsPage() {
             </p>
             <button
               onClick={handleOpenCreate}
-              className="inline-flex items-center gap-2 text-indigo-600 hover:text-indigo-800 font-medium text-sm transition-colors"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-medium text-indigo-600 transition-colors hover:text-indigo-800"
             >
               <Plus size={16} />
               Produkt erstellen

@@ -294,7 +294,7 @@ export default function ProductCard({
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="flex-1 inline-flex items-center justify-center gap-1.5 text-white rounded-[10px] py-[9px] text-[12.5px] font-bold transition-colors"
+            className="flex-1 inline-flex min-h-11 items-center justify-center gap-1.5 rounded-[10px] py-[9px] text-[12.5px] font-bold text-white transition-colors"
             style={{ background: '#3b82f6' }}
             onMouseEnter={(e) => (e.currentTarget.style.background = '#2563eb')}
             onMouseLeave={(e) => (e.currentTarget.style.background = '#3b82f6')}
@@ -307,7 +307,7 @@ export default function ProductCard({
           <button
             onClick={(e) => { e.stopPropagation(); onDelete(); }}
             aria-label="Produkt entfernen"
-            className="w-[38px] h-[38px] shrink-0 flex items-center justify-center rounded-[10px] transition-colors"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] transition-colors"
             style={{ background: '#fee2e2', border: '1.5px solid #fca5a5', color: '#dc2626' }}
             onMouseEnter={(e) => { e.currentTarget.style.background = '#fecaca'; e.currentTarget.style.borderColor = '#f87171'; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.borderColor = '#fca5a5'; }}
@@ -318,7 +318,7 @@ export default function ProductCard({
         {showSelectButton && onSelect && (
           <button
             onClick={(e) => { e.stopPropagation(); onSelect(); }}
-            className="flex-1 rounded-[10px] border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors"
+            className="min-h-11 flex-1 rounded-[10px] border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-50"
           >
             Alternative
           </button>
@@ -326,7 +326,7 @@ export default function ProductCard({
         {showWishlistButton && onAddToWishlist && (
           <button
             onClick={(e) => { e.stopPropagation(); onAddToWishlist(); }}
-            className="flex-1 rounded-[10px] border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-100 transition-colors"
+            className="min-h-11 flex-1 rounded-[10px] border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-600 transition-colors hover:bg-rose-100"
           >
             ♡ Merken
           </button>
