@@ -1,11 +1,92 @@
 # Handoff
 
-Last updated: 2026-05-02
-Update mode: Manual memory update after UX commit/deploy
+Last updated: 2026-05-03
+Update mode: Manual memory update after launch QA deploy
 
 ## Continuation Point
 
-Targeted user/demo/admin usability fixes are committed and deployed.
+Launch QA flow blockers are fixed, committed, and deployed.
+
+Code commit:
+
+- `fcb1a6b` - Fix: Close launch QA flow blockers.
+
+Deploy:
+
+- Command: `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://ae0fa762.supplementstack.pages.dev`
+- Build assets: JS `index-Hw7gzAwb.js`, CSS `index-DWw_l_3p.css`
+- Wrangler warned about uncommitted changes because memory files and
+  `.claude/SESSION.md` were dirty; expected.
+
+Launch-QA code scope:
+
+- `frontend/src/pages/WishlistPage.tsx`
+- `frontend/src/api/demo.ts`
+- `frontend/src/api/stacks.ts`
+- `frontend/src/api/wishlist.ts`
+- `frontend/src/api/products.ts`
+- `functions/api/modules/ingredients.ts`
+- `functions/api/modules/stacks.ts`
+- `functions/api/modules/user-products.ts`
+
+Implemented:
+
+- Wishlist shop-domain loading accepts current public `{ shops }` response and
+  always stores a `ShopDomain[]` fallback.
+- Public `GET /api/ingredients/:id/products` now requires
+  `p.visibility = 'public'` and `p.moderation_status = 'approved'`.
+- Product recommendation POST validates JSON/id/type and returns 409 for an
+  existing ingredient/product recommendation pair before insert.
+- `GET /api/stack-warnings/:id` now requires auth and allows only stack owner
+  or admin, matching stack GET authorization behavior.
+- Stale frontend API helpers now use `/demo/sessions`, `product_ids`,
+  wishlist `{ wishlist }`, and `PUT /products/:id/status` with
+  `moderation_status`.
+- User-products POST/PUT now catch invalid JSON with 400, trim/require
+  non-empty names, require non-negative numeric price on POST, allow missing
+  optional numeric fields, and reject provided non-numeric or negative price,
+  serving size, servings per container, and container count values. PUT keeps
+  price optional but validates it when provided.
+
+Checks run and passed:
+
+- `npm run lint --if-present` in `frontend/`
+- `npm run test --if-present -- --run` in `frontend/` passed with no test
+  files via `--passWithNoTests`
+- `npm run build` in `frontend/`
+- `npx tsc -p tsconfig.json` in `functions/`
+- `git diff --check` reported only CRLF warnings.
+
+Smoke checks passed on preview/live:
+
+- Root HTTP 200.
+- D3 search HTTP 200.
+- `/api/ingredients/1/products` HTTP 200 with approved/public D3 products.
+- `/api/ingredients/1/recommendations` HTTP 200 with 4 dose recommendations.
+- `/api/shop-domains` HTTP 200 with `{ shops }`.
+- `/api/demo/products` HTTP 200.
+- Unauthenticated `/api/stack-warnings/1` HTTP 401.
+- Unauthenticated `/api/admin/translations/ingredients` HTTP 401.
+- Unauthenticated `/api/user-products` HTTP 401.
+
+Step 1 status: code-level QA blockers are fixed and deployed. Browser-level
+authenticated QA remains manual validation, not an implementation blocker.
+Registration was tested successfully before rate limiting kicked in, but a
+final fresh registration smoke after deploy was not completed because
+`/auth/register` returned 429 after repeated QA attempts.
+
+Next continuation point:
+
+- Once the rate-limit window clears, run one fresh browser/API registration
+  smoke.
+- Then run logged-in browser QA for stack, wishlist, own products, and admin
+  flows.
+
+`.claude/SESSION.md` was already dirty and should not be touched unless
+explicitly requested.
+
+Previous targeted user/demo/admin usability fixes are committed and deployed.
 
 - Code commit: `8fb5431` - UX: Improve stack and admin usability flows.
 - Deploy command: `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`

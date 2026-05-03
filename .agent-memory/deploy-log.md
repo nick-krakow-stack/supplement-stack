@@ -1,6 +1,6 @@
 # Deploy Log
 
-Last updated: 2026-05-02
+Last updated: 2026-05-03
 
 ## Latest Known Production State
 
@@ -20,11 +20,14 @@ intentionally disabled/gated.
 UX add-product modal focus polish is committed and deployed to Cloudflare Pages.
 Targeted User/Demo/Search/Stack UX fixes plus Admin UX fixes are committed and
 deployed to Cloudflare Pages preview and live custom domain.
+Launch QA flow blockers are committed and deployed to Cloudflare Pages preview
+and live custom domain.
 GitHub Actions D1 backup has run successfully both manually and automatically;
 token scopes are verified.
 
 Latest relevant commits:
 
+- `fcb1a6b` - Fix: Close launch QA flow blockers.
 - `8fb5431` - UX: Improve stack and admin usability flows.
 - `078fc31` - UX: Auto-focus search field in 'Produkt hinzufuegen' modal (Demo + Stack-Workspace).
 - `e8f2bbc` - UX: Auto-focus name field when opening 'Produkt hinzufuegen' modal.
@@ -40,6 +43,45 @@ Latest relevant commits:
 - `9a5f523` - DB: Phase B complete (migrations 0028-0035).
 
 ## UX Usability Polish
+
+### 2026-05-03 - Cloudflare Pages: launch QA flow blockers
+
+- Commit: `fcb1a6b` - Fix: Close launch QA flow blockers.
+- Scope: wishlist shop-domain response shape, stale frontend API helpers,
+  ingredient product visibility/moderation filtering, product-recommendation
+  duplicate prevention, stack-warning authorization, and user-product
+  validation.
+- Local validation:
+  - `npm run lint --if-present` in `frontend/` passed.
+  - `npm run test --if-present -- --run` in `frontend/` passed with no test
+    files via `--passWithNoTests`.
+  - `npm run build` in `frontend/` passed.
+  - `npx tsc -p tsconfig.json` in `functions/` passed.
+  - `git diff --check` had no whitespace errors, only CRLF warnings.
+- Deploy command: `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://ae0fa762.supplementstack.pages.dev`
+- Build assets: JS `index-Hw7gzAwb.js`, CSS `index-DWw_l_3p.css`.
+- Wrangler warning: uncommitted changes existed at deploy time. Expected:
+  memory files and `.claude/SESSION.md` were dirty while code commit
+  `fcb1a6b` was committed.
+- Smoke checks on preview/live:
+  - Root returned HTTP 200.
+  - D3 search returned HTTP 200.
+  - `/api/ingredients/1/products` returned HTTP 200 with approved/public D3
+    products.
+  - `/api/ingredients/1/recommendations` returned HTTP 200 with 4 dose
+    recommendations.
+  - `/api/shop-domains` returned HTTP 200 with `{ shops }`.
+  - `/api/demo/products` returned HTTP 200.
+  - Unauthenticated `/api/stack-warnings/1` returned HTTP 401.
+  - Unauthenticated `/api/admin/translations/ingredients` returned HTTP 401.
+  - Unauthenticated `/api/user-products` returned HTTP 401.
+- Registration note: registration was tested successfully before rate limiting
+  kicked in, but final fresh registration smoke after deploy was not completed
+  because `/auth/register` returned 429 after repeated QA attempts.
+- Follow-up: once the rate-limit window clears, run one fresh browser/API
+  registration smoke, then logged-in browser QA for stack, wishlist, own
+  products, and admin flows.
 
 ### 2026-05-02 - Cloudflare Pages: stack and admin usability flows
 

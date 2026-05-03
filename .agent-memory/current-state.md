@@ -1,6 +1,6 @@
 # Current State
 
-Last updated: 2026-05-02
+Last updated: 2026-05-03
 
 ## Project
 
@@ -89,8 +89,35 @@ labeling, admin-product loading for recommendation prep, user-product
 moderation error handling, 404s for no-row moderation actions, and small mobile
 touch improvements.
 
+Launch QA flow blockers are fixed, committed, and deployed.
+
+- Commit: `fcb1a6b` - Fix: Close launch QA flow blockers.
+- Preview URL: `https://ae0fa762.supplementstack.pages.dev`.
+- Build assets: JS `index-Hw7gzAwb.js`, CSS `index-DWw_l_3p.css`.
+- Local checks passed: `npm run lint --if-present`,
+  `npm run test --if-present -- --run` with no test files via
+  `--passWithNoTests`, and `npm run build` in `frontend/`;
+  `npx tsc -p tsconfig.json` in `functions/`; `git diff --check` only CRLF
+  warnings.
+- Preview/live smoke checks passed: root HTTP 200; D3 search HTTP 200;
+  `/api/ingredients/1/products` HTTP 200 with approved/public D3 products;
+  `/api/ingredients/1/recommendations` HTTP 200 with 4 dose recommendations;
+  `/api/shop-domains` HTTP 200 with `{ shops }`; `/api/demo/products`
+  HTTP 200; unauthenticated `/api/stack-warnings/1` HTTP 401;
+  unauthenticated `/api/admin/translations/ingredients` HTTP 401;
+  unauthenticated `/api/user-products` HTTP 401.
+- Wrangler warned about uncommitted changes because memory files and
+  `.claude/SESSION.md` were dirty; expected.
+
+Step 1 status: code-level QA blockers are fixed and deployed. Browser-level
+authenticated QA remains manual validation, not an implementation blocker.
+Registration was tested successfully before rate limiting kicked in, but a
+final fresh registration smoke after deploy was not completed because
+`/auth/register` returned 429 after repeated QA attempts.
+
 Last relevant commits on `main`:
 
+- `fcb1a6b` - Fix: Close launch QA flow blockers.
 - `8fb5431` - UX: Improve stack and admin usability flows.
 - `078fc31` - UX: Auto-focus search field in 'Produkt hinzufuegen' modal (Demo + Stack-Workspace).
 - `e8f2bbc` - UX: Auto-focus name field when opening 'Produkt hinzufuegen' modal.
@@ -113,8 +140,24 @@ Last relevant commits on `main`:
 
 ## Latest Deployed Work
 
-Targeted User/Demo/Search/Stack UX fixes and Admin UX fixes are committed and
-deployed:
+Launch QA flow blockers are committed and deployed:
+
+- Commit: `fcb1a6b` - Fix: Close launch QA flow blockers.
+- Deploy command: `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://ae0fa762.supplementstack.pages.dev`
+- Build assets: JS `index-Hw7gzAwb.js`, CSS `index-DWw_l_3p.css`.
+- Local checks passed: frontend lint, frontend test with no test files via
+  `--passWithNoTests`, frontend build, functions TypeScript compile, and
+  `git diff --check` with only CRLF warnings.
+- Smoke checks passed on preview/live: root HTTP 200; D3 search HTTP 200;
+  approved/public ingredient products; dose recommendations; shop domains;
+  demo products; unauthenticated stack warnings, admin translations, and
+  user-products return HTTP 401.
+- Fresh registration post-deploy remains a follow-up because rate limiting
+  returned 429 after repeated QA attempts.
+
+Targeted User/Demo/Search/Stack UX fixes and Admin UX fixes are also committed
+and deployed:
 
 - Commit: `8fb5431` - UX: Improve stack and admin usability flows.
 - Local checks passed: `npm run lint --if-present` in `frontend/`;

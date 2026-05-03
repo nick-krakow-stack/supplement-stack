@@ -1,6 +1,6 @@
 # Next Steps
 
-Last updated: 2026-05-02
+Last updated: 2026-05-03
 
 ## Current Baseline
 
@@ -14,13 +14,24 @@ Phase C is complete. The integrated Phase D rollout is complete:
 - Production custom domain `supplementstack.de` is live in parallel to Cloudflare Pages preview URLs. All recent deploys have been published to both the subdomain and live domain. Public SEO indexing is intentionally deferred until legal/compliance is cleared.
 - Targeted User/Demo/Search/Stack UX fixes plus Admin UX fixes are committed
   and deployed in `8fb5431` (`UX: Improve stack and admin usability flows`).
+- Launch QA fixes for wishlist shop-domain response shape, stale frontend API
+  helpers, ingredient product visibility/moderation filtering,
+  product-recommendation duplicate prevention, stack-warning authorization, and
+  user-product validation are committed and deployed in `fcb1a6b`
+  (`Fix: Close launch QA flow blockers`).
 
 D1 backup is done and is not a next step. Production-domain promotion is done and is not a next step.
 
 ## Go-Live / Production Readiness
 
-Priority 1 - Usability QA and polish for logged-in user, demo, and admin:
+Priority 1 - Manual authenticated browser QA:
 
+- Once the rate-limit window clears, run one fresh browser/API registration
+  smoke. A registration was tested successfully before deploy, but the final
+  post-deploy fresh-register smoke hit HTTP 429 after repeated QA attempts.
+- Run logged-in browser QA for stack, wishlist, own products, and admin flows.
+  Code-level QA blockers are fixed and deployed; authenticated browser QA
+  remains manual validation, not an implementation blocker.
 - Targeted user/demo/admin usability fixes are committed and deployed in
   `8fb5431`. Preview/live smoke checks passed; browser-level QA remains open.
 - Admin TranslationsTab draft preservation and pagination remain explicit follow-up
