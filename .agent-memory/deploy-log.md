@@ -42,6 +42,29 @@ Latest relevant commits:
 - `b1fd347` - Refactor: Split Pages API into Hono modules.
 - `9a5f523` - DB: Phase B complete (migrations 0028-0035).
 
+## Live Domain Hardening
+
+### 2026-05-03 - Cloudflare Pages: FRONTEND_URL + CORS allowlist for live domain
+
+- Commit: `283cbc8` - Fix: Switch FRONTEND_URL and CORS allowlist to live domain.
+- Scope:
+  - `wrangler.toml`: `FRONTEND_URL` switched from `https://supplementstack.pages.dev` to `https://supplementstack.de` so password-reset mail links land on the live domain.
+  - `functions/api/[[path]].ts`: CORS allowlist switched from static array to function-origin. Now allows live domain (`supplementstack.de` + `www.supplementstack.de`), Pages main preview, all Pages preview hash subdomains via regex `/^https:\/\/[a-z0-9-]+\.supplementstack\.pages\.dev$/`, and `localhost:5173`.
+- Local validation:
+  - `npx tsc -p tsconfig.json` in `functions/` passed.
+  - `npm run build` in `frontend/` passed (1444 modules, 1.46s).
+- Deploy command: `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://9c8dfe74.supplementstack.pages.dev`
+- Build assets: JS `index-Bl-g6o41.js`, CSS `index-Cf3yP80d.css`.
+- Smoke checks:
+  - Preview root returned HTTP 200.
+  - Live `https://supplementstack.de/` returned HTTP 200.
+  - Live `/api/ingredients` returned HTTP 200.
+  - CORS preflight `OPTIONS /api/auth/forgot-password`:
+    - Origin `https://supplementstack.de` → `Access-Control-Allow-Origin: https://supplementstack.de` (echoed) ✓
+    - Origin `https://9c8dfe74.supplementstack.pages.dev` → echoed back ✓
+    - Origin `https://evil.example.com` → no `Access-Control-Allow-Origin` header (browser would block) ✓
+
 ## UX Usability Polish
 
 ### 2026-05-03 - Cloudflare Pages: launch QA flow blockers
