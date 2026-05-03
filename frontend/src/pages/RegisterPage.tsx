@@ -28,7 +28,14 @@ export default function RegisterPage() {
     setError(null);
     setSubmitting(true);
     try {
-      await register(email, password, { health_consent: healthConsent });
+      const ageTrimmed = age.trim();
+      const ageNum = ageTrimmed === '' ? undefined : Number.parseInt(ageTrimmed, 10);
+      await register(email, password, {
+        health_consent: healthConsent,
+        age: Number.isFinite(ageNum) ? (ageNum as number) : undefined,
+        gender: gender === '' ? undefined : gender,
+        guideline_source: guidelineSource === '' ? undefined : guidelineSource,
+      });
       navigate(getAuthRedirect(location), { replace: true });
     } catch (err: unknown) {
       const msg =

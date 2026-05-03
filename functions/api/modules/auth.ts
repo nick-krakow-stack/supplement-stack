@@ -39,6 +39,37 @@ auth.post('/register', async (c) => {
     return c.json({ error: 'Gesundheits-Einwilligung erforderlich (DSGVO Art. 9)' }, 400)
   const data = body as { email: string; password: string; age?: number; gender?: string; weight?: number; diet?: string; goals?: string; guideline_source?: string }
 
+  // Normalize: empty strings → undefined (treat as not provided)
+  const ageRaw = data.age
+  const genderRaw = typeof data.gender === 'string' ? data.gender.trim() : data.gender
+  const guidelineRaw = typeof data.guideline_source === 'string' ? data.guideline_source.trim() : data.guideline_source
+
+  let ageValue: number | null = null
+  if (ageRaw !== undefined && ageRaw !== null && (ageRaw as unknown) !== '') {
+    if (typeof ageRaw !== 'number' || !Number.isInteger(ageRaw) || ageRaw < 1 || ageRaw > 120) {
+      return c.json({ error: 'Alter muss eine ganze Zahl zwischen 1 und 120 sein.' }, 400)
+    }
+    ageValue = ageRaw
+  }
+
+  let genderValue: string | null = null
+  if (genderRaw !== undefined && genderRaw !== null && genderRaw !== '') {
+    const allowed = ['männlich', 'weiblich', 'divers'] as const
+    if (!allowed.includes(genderRaw as typeof allowed[number])) {
+      return c.json({ error: 'Geschlecht muss "männlich", "weiblich" oder "divers" sein.' }, 400)
+    }
+    genderValue = genderRaw
+  }
+
+  let guidelineValue: string | null = null
+  if (guidelineRaw !== undefined && guidelineRaw !== null && guidelineRaw !== '') {
+    const allowed = ['DGE', 'Studien', 'Influencer'] as const
+    if (!allowed.includes(guidelineRaw as typeof allowed[number])) {
+      return c.json({ error: 'Leitlinienquelle muss "DGE", "Studien" oder "Influencer" sein.' }, 400)
+    }
+    guidelineValue = guidelineRaw
+  }
+
   const existing = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(data.email).first<{ id: number }>()
   if (existing) return c.json({ error: 'E-Mail already exists' }, 409)
 
@@ -48,12 +79,12 @@ auth.post('/register', async (c) => {
   ).bind(
     data.email,
     password_hash,
-    data.age ?? null,
-    data.gender ?? null,
+    ageValue,
+    genderValue,
     data.weight ?? null,
     data.diet ?? null,
     data.goals ?? null,
-    data.guideline_source ?? null,
+    guidelineValue,
   ).run()
 
   const userId = result.meta.last_row_id
