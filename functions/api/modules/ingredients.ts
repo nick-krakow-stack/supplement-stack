@@ -424,7 +424,9 @@ ingredients.get('/:id/products', async (c) => {
     SELECT p.*, pi.quantity, pi.unit, pi.is_main
     FROM products p
     JOIN product_ingredients pi ON pi.product_id = p.id
-    WHERE pi.ingredient_id = ? AND p.visibility = 'public'
+    WHERE pi.ingredient_id = ?
+      AND p.visibility = 'public'
+      AND p.moderation_status = 'approved'
     ORDER BY pi.is_main DESC, p.name ASC
   `).bind(id).all()
   return c.json({ products })
@@ -630,14 +632,27 @@ recommendationsApp.post('/', async (c) => {
   if (authErr) return authErr
   const admErr = requireAdmin(c)
   if (admErr) return admErr
-  const body = await c.req.json()
-  if (!body.ingredient_id || !body.product_id) return c.json({ error: 'ingredient_id and product_id are required' }, 400)
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+  const ingredientId = Number(body.ingredient_id)
+  const productId = Number(body.product_id)
+  if (!Number.isInteger(ingredientId) || ingredientId <= 0 || !Number.isInteger(productId) || productId <= 0) {
+    return c.json({ error: 'ingredient_id and product_id must be positive integers' }, 400)
+  }
   if (!['recommended', 'alternative'].includes(body.type as string)) return c.json({ error: 'type must be recommended or alternative' }, 400)
-  const data = body as { ingredient_id: number; product_id: number; type: string }
+  const data = { ingredient_id: ingredientId, product_id: productId, type: body.type as string }
   const ingredient = await c.env.DB.prepare('SELECT id FROM ingredients WHERE id = ?').bind(data.ingredient_id).first()
   if (!ingredient) return c.json({ error: 'Ingredient not found' }, 404)
   const product = await c.env.DB.prepare('SELECT id FROM products WHERE id = ?').bind(data.product_id).first()
   if (!product) return c.json({ error: 'Product not found' }, 404)
+  const duplicate = await c.env.DB.prepare(
+    'SELECT id FROM product_recommendations WHERE ingredient_id = ? AND product_id = ?'
+  ).bind(data.ingredient_id, data.product_id).first<{ id: number }>()
+  if (duplicate) return c.json({ error: 'Recommendation already exists', id: duplicate.id }, 409)
   const result = await c.env.DB.prepare(
     'INSERT INTO product_recommendations (ingredient_id, product_id, type) VALUES (?, ?, ?)'
   ).bind(data.ingredient_id, data.product_id, data.type).run()

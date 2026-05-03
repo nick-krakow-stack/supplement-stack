@@ -13,6 +13,30 @@ import { ensureAuth } from '../lib/helpers'
 
 const userProducts = new Hono<AppContext>()
 
+function parseJsonBodyError(): Response {
+  return new Response(JSON.stringify({ error: 'Invalid JSON' }), {
+    status: 400,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
+
+function normalizeOptionalText(value: unknown): string | null | undefined {
+  if (value === undefined) return undefined
+  if (value === null) return null
+  return typeof value === 'string' ? value.trim() : undefined
+}
+
+function normalizeOptionalNonNegativeNumber(value: unknown): number | null | undefined {
+  if (value === undefined) return undefined
+  if (value === null || value === '') return undefined
+  const parsed = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined
+}
+
+function hasOwnKey(data: Record<string, unknown>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(data, key)
+}
+
 // GET /api/user-products
 userProducts.get('/', async (c) => {
   const authErr = await ensureAuth(c)
@@ -29,12 +53,39 @@ userProducts.post('/', async (c) => {
   const authErr = await ensureAuth(c)
   if (authErr) return authErr
   const user = c.get('user')
-  const body = await c.req.json()
-  if (!body.name || typeof body.name !== 'string') return c.json({ error: 'name erforderlich' }, 400)
-  const data = body as {
-    name: string; brand?: string; form?: string; price?: number; shop_link?: string;
-    image_url?: string; serving_size?: number; serving_unit?: string; servings_per_container?: number;
-    container_count?: number; is_affiliate?: number; notes?: string;
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return parseJsonBodyError()
+  }
+  const name = normalizeOptionalText(body.name)
+  if (typeof name !== 'string' || name.length === 0) return c.json({ error: 'name erforderlich' }, 400)
+  const price = normalizeOptionalNonNegativeNumber(body.price)
+  if (price === undefined) return c.json({ error: 'price must be a non-negative number' }, 400)
+  const servingSize = normalizeOptionalNonNegativeNumber(body.serving_size)
+  const servingsPerContainer = normalizeOptionalNonNegativeNumber(body.servings_per_container)
+  const containerCount = normalizeOptionalNonNegativeNumber(body.container_count)
+  if (
+    (hasOwnKey(body, 'serving_size') && servingSize === undefined) ||
+    (hasOwnKey(body, 'servings_per_container') && servingsPerContainer === undefined) ||
+    (hasOwnKey(body, 'container_count') && containerCount === undefined)
+  ) {
+    return c.json({ error: 'serving_size, servings_per_container and container_count must be non-negative numbers when provided' }, 400)
+  }
+  const data = {
+    name,
+    brand: normalizeOptionalText(body.brand),
+    form: normalizeOptionalText(body.form),
+    price,
+    shop_link: normalizeOptionalText(body.shop_link),
+    image_url: normalizeOptionalText(body.image_url),
+    serving_size: servingSize,
+    serving_unit: normalizeOptionalText(body.serving_unit),
+    servings_per_container: servingsPerContainer,
+    container_count: containerCount,
+    is_affiliate: body.is_affiliate === 1 || body.is_affiliate === true ? 1 : 0,
+    notes: normalizeOptionalText(body.notes),
   }
   const result = await c.env.DB.prepare(`
     INSERT INTO user_products (user_id, name, brand, form, price, shop_link, image_url, serving_size, serving_unit, servings_per_container, container_count, is_affiliate, notes)
@@ -67,11 +118,39 @@ userProducts.put('/:id', async (c) => {
     'SELECT id FROM user_products WHERE id = ? AND user_id = ?'
   ).bind(id, user.userId).first()
   if (!existing) return c.json({ error: 'Not found' }, 404)
-  const body = await c.req.json()
-  const data = body as {
-    name?: string; brand?: string; form?: string; price?: number; shop_link?: string;
-    image_url?: string; serving_size?: number; serving_unit?: string; servings_per_container?: number;
-    container_count?: number; is_affiliate?: number; notes?: string;
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return parseJsonBodyError()
+  }
+  const name = normalizeOptionalText(body.name)
+  if (name !== undefined && name !== null && name.length === 0) return c.json({ error: 'name darf nicht leer sein' }, 400)
+  const price = normalizeOptionalNonNegativeNumber(body.price)
+  const servingSize = normalizeOptionalNonNegativeNumber(body.serving_size)
+  const servingsPerContainer = normalizeOptionalNonNegativeNumber(body.servings_per_container)
+  const containerCount = normalizeOptionalNonNegativeNumber(body.container_count)
+  if (
+    (hasOwnKey(body, 'price') && price === undefined) ||
+    (hasOwnKey(body, 'serving_size') && servingSize === undefined) ||
+    (hasOwnKey(body, 'servings_per_container') && servingsPerContainer === undefined) ||
+    (hasOwnKey(body, 'container_count') && containerCount === undefined)
+  ) {
+    return c.json({ error: 'price, serving_size, servings_per_container and container_count must be non-negative numbers when provided' }, 400)
+  }
+  const data = {
+    name,
+    brand: normalizeOptionalText(body.brand),
+    form: normalizeOptionalText(body.form),
+    price,
+    shop_link: normalizeOptionalText(body.shop_link),
+    image_url: normalizeOptionalText(body.image_url),
+    serving_size: servingSize,
+    serving_unit: normalizeOptionalText(body.serving_unit),
+    servings_per_container: servingsPerContainer,
+    container_count: containerCount,
+    is_affiliate: body.is_affiliate === undefined ? undefined : body.is_affiliate === 1 || body.is_affiliate === true ? 1 : 0,
+    notes: normalizeOptionalText(body.notes),
   }
   await c.env.DB.prepare(`
     UPDATE user_products SET

@@ -1,8 +1,8 @@
 import { apiClient } from './client';
 import type { WishlistItem } from '../types';
 
-export async function getWishlist(): Promise<{ items: WishlistItem[] }> {
-  const res = await apiClient.get<{ items: WishlistItem[] }>('/wishlist');
+export async function getWishlist(): Promise<{ wishlist: WishlistItem[] }> {
+  const res = await apiClient.get<{ wishlist: WishlistItem[] }>('/wishlist');
   return res.data;
 }
 

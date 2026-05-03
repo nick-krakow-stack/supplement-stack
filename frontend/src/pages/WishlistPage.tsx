@@ -28,12 +28,14 @@ export default function WishlistPage() {
   // Load shop domains (public endpoint, no token needed)
   useEffect(() => {
     apiClient
-      .get<ShopDomain[]>('/shop-domains')
+      .get<{ shops?: ShopDomain[] } | ShopDomain[]>('/shop-domains')
       .then((res) => {
-        setShopDomains(res.data ?? []);
+        const shops = Array.isArray(res.data) ? res.data : res.data.shops;
+        setShopDomains(Array.isArray(shops) ? shops : []);
       })
       .catch(() => {
         // Graceful fallback: leave shopDomains empty, ProductCard handles it
+        setShopDomains([]);
       });
   }, []);
 

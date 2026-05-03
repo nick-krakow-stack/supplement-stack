@@ -1,6 +1,13 @@
 import { apiClient } from './client';
 import type { Stack, Interaction } from '../types';
 
+interface StackProductInput {
+  id: number;
+  quantity?: number;
+  dosage_text?: string;
+  timing?: string;
+}
+
 export async function getStacks(): Promise<{ stacks: Stack[] }> {
   const res = await apiClient.get<{ stacks: Stack[] }>('/stacks');
   return res.data;
@@ -12,7 +19,10 @@ export async function getStack(id: number): Promise<Stack> {
 }
 
 export async function createStack(name: string, productIds: number[] = []): Promise<Stack> {
-  const res = await apiClient.post<{ id: number; name: string }>('/stacks', { name, products: productIds });
+  const res = await apiClient.post<{ id: number; name: string }>('/stacks', {
+    name,
+    product_ids: productIds.map((id) => ({ id, quantity: 1 })),
+  });
   return { id: res.data.id, name: res.data.name, created_at: new Date().toISOString() };
 }
 
@@ -20,7 +30,7 @@ export async function deleteStack(id: number): Promise<void> {
   await apiClient.delete(`/stacks/${id}`);
 }
 
-export async function updateStack(id: number, data: { name?: string; products?: number[] }): Promise<Stack> {
+export async function updateStack(id: number, data: { name?: string; product_ids?: StackProductInput[] }): Promise<Stack> {
   const res = await apiClient.put<Stack>(`/stacks/${id}`, data);
   return res.data;
 }

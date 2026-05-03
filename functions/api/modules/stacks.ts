@@ -144,7 +144,13 @@ export const stackWarningsApp = new Hono<AppContext>()
 
 // GET /api/stack-warnings/:id
 stackWarningsApp.get('/:id', async (c) => {
+  const authErr = await ensureAuth(c)
+  if (authErr) return authErr
+  const user = c.get('user')
   const id = c.req.param('id')
+  const stack = await c.env.DB.prepare('SELECT * FROM stacks WHERE id = ?').bind(id).first<StackRow>()
+  if (!stack) return c.json({ error: 'Not found' }, 404)
+  if (stack.user_id !== user.userId && user.role !== 'admin') return c.json({ error: 'Forbidden' }, 403)
   const { results: items } = await c.env.DB.prepare(
     'SELECT pi.ingredient_id FROM stack_items si JOIN product_ingredients pi ON pi.product_id = si.product_id WHERE si.stack_id = ?'
   ).bind(id).all<{ ingredient_id: number }>()
