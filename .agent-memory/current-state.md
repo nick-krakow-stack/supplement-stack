@@ -89,6 +89,30 @@ Stack-warnings N+1 is fixed, committed, and deployed:
 - Wrangler warned about a dirty worktree because `.claude/SESSION.md` and
   `.claude/settings.json` were dirty; expected and not part of deploy.
 
+Google Analytics 4 consent implementation is committed and deployed:
+
+- Commit: `a18136d` - Feature: Add consent-based GA4 analytics.
+- Measurement ID: `G-QVHTTK2CNP`.
+- Frontend-only changes added a mobile consent banner, lazy GA script loading
+  only after explicit consent, localStorage persistence for accepted/declined
+  choices, SPA `page_view` tracking after consent, a footer
+  `Cookie-Einstellungen` reset that reopens the banner and denies future
+  analytics storage/events until renewed consent, and a minimal `/datenschutz`
+  page.
+- GA is not inserted statically in `index.html`; `gtag.js` is requested only
+  after Zustimmung by `CookieConsentBanner` / `analytics.ts`.
+- Footer now links `Datenschutz` and `Cookie-Einstellungen`.
+- Local validation passed: `npm run build` in `frontend/` and
+  `git diff --check` with only LF/CRLF warnings.
+- Deploy prep copied `functions/api` to `frontend/dist/functions/api`;
+  `frontend/dist/functions/api/[[path]].ts` existed before deploy.
+- Cloudflare Pages preview: `https://f876ad10.supplementstack.pages.dev`.
+- Preview `/` and `/datenschutz` returned HTTP 200.
+- Live `https://supplementstack.de/datenschutz` returned HTTP 200 and uses
+  `/assets/index-B7aLcsIq.js`.
+- Still open: Impressum/AGB are missing; Datenschutzerklaerung is a working
+  draft and needs legal review.
+
 Phase C Priority 1 (Hono module split), Priority 2 (public dose recommendations API), Priority 3 (admin audit logging), and Priority 4 (server-side unit conversion) are committed and deployed.
 Phase C tech-debt sweep complete (commit b866c3d).
 Phase C is complete.
@@ -200,6 +224,7 @@ the SearchPage footer while a modal is open.
 
 Last relevant commits on `main`:
 
+- `a18136d` - Feature: Add consent-based GA4 analytics.
 - `5905a20` - Fix: Batch stack warning interaction lookup.
 - `52ead1f` - Data: Require complete product package metadata.
 - `1df7616` - Memory: Record robots.txt deploy and Top-7 sprint status.
@@ -232,6 +257,21 @@ Last relevant commits on `main`:
 - `9a5f523` - DB: Phase B abgeschlossen, migrations 0028-0035, `dosage_guidelines` migrated to `dose_recommendations`.
 
 ## Latest Deployed Work
+
+Consent-based GA4 analytics is committed and deployed:
+
+- Commit: `a18136d` - Feature: Add consent-based GA4 analytics.
+- Measurement ID: `G-QVHTTK2CNP`.
+- Preview URL: `https://f876ad10.supplementstack.pages.dev`.
+- GA4 is not statically loaded in `index.html`; `gtag.js` is injected only
+  after Zustimmung, while Ablehnung is persisted and sends no GA events.
+- Footer has `Datenschutz` and `Cookie-Einstellungen`; `/datenschutz` is a
+  working draft and still requires legal review.
+- Checks passed: frontend build and `git diff --check` with only LF/CRLF
+  warnings.
+- Smoke checks passed: preview `/` and `/datenschutz` HTTP 200; live
+  `https://supplementstack.de/datenschutz` HTTP 200 with
+  `/assets/index-B7aLcsIq.js`.
 
 Stack-warnings batched interaction lookup is committed and deployed:
 

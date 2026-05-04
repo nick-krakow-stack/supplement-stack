@@ -49,6 +49,16 @@ Phase C is complete. The integrated Phase D rollout is complete:
   `https://1c23aea8.supplementstack.pages.dev`; preview root and unauth
   stack-warnings smoke checks passed, and live unauth stack-warnings returned
   HTTP 401.
+- GA4 consent implementation is closed in `a18136d`
+  (`Feature: Add consent-based GA4 analytics`) and deployed to
+  `https://f876ad10.supplementstack.pages.dev`. Measurement ID:
+  `G-QVHTTK2CNP`. GA4 is not statically loaded in `index.html`; `gtag.js` is
+  injected only after Zustimmung, Ablehnung is persisted, SPA pageviews run only
+  after consent, and the footer exposes `Datenschutz` plus
+  `Cookie-Einstellungen`. Preview `/` and `/datenschutz` returned HTTP 200;
+  live `https://supplementstack.de/datenschutz` returned HTTP 200 with
+  `/assets/index-B7aLcsIq.js`. Local checks passed: `npm run build` in
+  `frontend/` and `git diff --check` with only LF/CRLF warnings.
 
 Product required package metadata hardening is committed in `52ead1f`
 (`Data: Require complete product package metadata`). Remote D1 migration
@@ -66,9 +76,11 @@ D1 backup is done and is not a next step. Production-domain promotion is done an
 Pick from this list first when you have an open slot. These are the highest-
 signal items any agent — Claude, Codex, anyone — can pick up directly.
 
-1. ❌ **Footer legal links (Impressum / Datenschutz / AGB)**
+1. ❌ **Footer legal links (Impressum / AGB)**
    - File: `frontend/src/components/Layout.tsx`.
-   - Even stub pages with placeholder content help — they unblock the legal/compliance review which is currently the only thing gating SEO indexing.
+   - Datenschutz page/link now exists from GA4 consent work, but Impressum and
+     AGB are still missing. Real legal review remains required before SEO
+     indexing/public launch.
    - Effort: XS for stubs, M for real legal copy.
 
 2. ❌ **Demo session DoS vector**
@@ -109,7 +121,7 @@ Pick up the next ❌ item when continuing work.
 
 ## Additional Open Items From The Audit (Beyond Top-7)
 
-- ❌ **Footer legal links missing** — `frontend/src/components/Layout.tsx` has only generic disclaimer lines; Impressum, Datenschutz, AGB links are absent. Stub pages would already help. Blocks Legal/Compliance sign-off.
+- ❌ **Footer legal links incomplete** — Datenschutz exists from GA4 consent work, but Impressum and AGB links/pages are still absent. Blocks Legal/Compliance sign-off.
 - ⚠️ **Pre-existing TS errors** — `frontend/src/api/admin.ts` and `frontend/src/api/base.ts` together have 3 latent TypeScript errors that don't block `npm run build` (Vite's esbuild) but show under `npx tsc --noEmit`. Not introduced by recent fixes.
 - ⚠️ **Mobile-polish browser-QA outstanding** — `c76bcf4` was deployed; manual validation at 375px, 390px, and 430px in a real browser is still pending for demo, logged-in, and admin flows, including Search, StackWorkspace, product modal, dosage modal, My Products, and mobile nav.
 - ❌ **Demo session DoS vector** — `functions/api/modules/demo.ts:46-75` allows unbounded session creation. Add per-IP rate limit (KV) before launch traffic ramps up.

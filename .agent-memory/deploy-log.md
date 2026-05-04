@@ -24,11 +24,14 @@ Launch QA flow blockers are committed and deployed to Cloudflare Pages preview
 and live custom domain.
 Stack-warnings batched interaction lookup is committed and deployed to
 Cloudflare Pages preview and live custom domain.
+Consent-based GA4 analytics is committed and deployed to Cloudflare Pages
+preview and live custom domain.
 GitHub Actions D1 backup has run successfully both manually and automatically;
 token scopes are verified.
 
 Latest relevant commits:
 
+- `a18136d` - Feature: Add consent-based GA4 analytics.
 - `5905a20` - Fix: Batch stack warning interaction lookup.
 - `fcb1a6b` - Fix: Close launch QA flow blockers.
 - `8fb5431` - UX: Improve stack and admin usability flows.
@@ -44,6 +47,34 @@ Latest relevant commits:
 - `dd58ba2` - Feature: Add dose recommendations API.
 - `b1fd347` - Refactor: Split Pages API into Hono modules.
 - `9a5f523` - DB: Phase B complete (migrations 0028-0035).
+
+## Consent-Based GA4 Analytics
+
+### 2026-05-04 - Cloudflare Pages: GA4 analytics with explicit consent
+
+- Commit: `a18136d` - Feature: Add consent-based GA4 analytics.
+- Measurement ID: `G-QVHTTK2CNP`.
+- Scope: frontend-only GA4 consent banner, `localStorage` accepted/declined
+  persistence, lazy `gtag.js` injection after Zustimmung, SPA `page_view`
+  tracking only after consent, footer `Datenschutz` and
+  `Cookie-Einstellungen`, plus minimal `/datenschutz` page.
+- Privacy behavior: GA4 is not statically inserted in `index.html`; Ablehnung
+  loads no GA script and sends no GA events. If consent is reset after GA was
+  loaded, analytics storage is denied and future pageviews stop until renewed
+  consent.
+- Local validation:
+  - `npm run build` in `frontend/` passed.
+  - `git diff --check` passed with only LF/CRLF warnings.
+- Deploy prep: copied `functions/api` to `frontend/dist/functions/api`;
+  `frontend/dist/functions/api/[[path]].ts` existed before deploy.
+- Preview URL: `https://f876ad10.supplementstack.pages.dev`.
+- Smoke checks:
+  - Preview `/` returned HTTP 200.
+  - Preview `/datenschutz` returned HTTP 200.
+  - Live `https://supplementstack.de/datenschutz` returned HTTP 200 and used
+    `/assets/index-B7aLcsIq.js`.
+- Open: Impressum/AGB are still missing; Datenschutzerklaerung is a working
+  draft and needs legal review.
 
 ## Stack Warnings Performance
 

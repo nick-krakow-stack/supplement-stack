@@ -4,14 +4,14 @@ Last updated: 2026-05-04
 
 ## Continuation Point
 
-Use `.agent-memory/next-steps.md` as the source of truth for the current
-top-queue. This handoff is only a short restart note.
+Google Analytics 4 consent work is committed and deployed. Use
+`.agent-memory/next-steps.md` for the current queue.
 
 ## Git / Worktree
 
 - Branch: `main`.
-- Current last code commit: `5905a20` - Fix: Batch stack warning
-  interaction lookup.
+- Current last code commit: `a18136d` - Feature: Add consent-based GA4
+  analytics.
 - Worktree is expected to be dirty from `.claude/SESSION.md` and
   `.claude/settings.json`; memory files may also be dirty from this cleanup.
 - Do not treat `.claude/*` as part of the current implementation task.
@@ -26,6 +26,11 @@ top-queue. This handoff is only a short restart note.
 - Stack-warnings N+1 is closed in `5905a20`: `GET /api/stack-warnings/:id`
   now fetches interactions with one batched SQL `IN (...)` lookup and preserves
   existing auth/ownership/404/403 semantics.
+- GA4 consent implementation is closed in `a18136d` and deployed to
+  `https://f876ad10.supplementstack.pages.dev`: no static GA script, lazy
+  `gtag.js` after consent, localStorage choice persistence, SPA pageviews after
+  consent, footer `Datenschutz` / `Cookie-Einstellungen`, and a minimal
+  `/datenschutz` page. Live `/datenschutz` returns HTTP 200.
 - Robots pre-launch indexing block is closed.
 - D1 backup verification is done.
 
@@ -33,7 +38,7 @@ top-queue. This handoff is only a short restart note.
 
 Pick from `.agent-memory/next-steps.md` first:
 
-1. Footer legal links: Impressum / Datenschutz / AGB.
+1. Footer legal links: Impressum / AGB still missing; Datenschutz exists.
 2. Demo session DoS rate limit in `functions/api/modules/demo.ts`.
 3. Continue with the remaining audit backlog in `.agent-memory/next-steps.md`.
 
