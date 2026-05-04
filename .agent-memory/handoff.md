@@ -4,14 +4,14 @@ Last updated: 2026-05-04
 
 ## Continuation Point
 
-Google Analytics 4 consent work is committed and deployed. Use
-`.agent-memory/next-steps.md` for the current queue.
+Legal pages are committed and deployed. Use `.agent-memory/next-steps.md` for
+the current queue.
 
 ## Git / Worktree
 
 - Branch: `main`.
-- Current last code commit: `a18136d` - Feature: Add consent-based GA4
-  analytics.
+- Current last code commit: `9c2c627` - Legal: Add imprint privacy and terms
+  pages.
 - Worktree is expected to be dirty from `.claude/SESSION.md` and
   `.claude/settings.json`; memory files may also be dirty from this cleanup.
 - Do not treat `.claude/*` as part of the current implementation task.
@@ -32,14 +32,20 @@ Google Analytics 4 consent work is committed and deployed. Use
   consent, footer `Datenschutz` / `Cookie-Einstellungen`, and a minimal
   `/datenschutz` page. Live `/datenschutz` returns HTTP 200.
 - Robots pre-launch indexing block is closed.
+- Footer legal links/pages are closed in `9c2c627` and deployed to
+  `https://d6e92688.supplementstack.pages.dev`: `/impressum`, `/datenschutz`,
+  `/nutzungsbedingungen`, and `/agb` alias. External Google Fonts import is
+  removed; no Apple/OAuth/Social-Login active-processing wording is present.
+  Live legal routes returned HTTP 200.
 - D1 backup verification is done.
 
 ## Open Top Queue
 
 Pick from `.agent-memory/next-steps.md` first:
 
-1. Footer legal links: Impressum / AGB still missing; Datenschutz exists.
-2. Demo session DoS rate limit in `functions/api/modules/demo.ts`.
+1. Demo session DoS rate limit in `functions/api/modules/demo.ts`.
+2. Final legal/compliance review plus DSB/AVV/provider settings review before
+   SEO indexing.
 3. Continue with the remaining audit backlog in `.agent-memory/next-steps.md`.
 
 ## Still Open

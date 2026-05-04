@@ -59,6 +59,18 @@ Phase C is complete. The integrated Phase D rollout is complete:
   live `https://supplementstack.de/datenschutz` returned HTTP 200 with
   `/assets/index-B7aLcsIq.js`. Local checks passed: `npm run build` in
   `frontend/` and `git diff --check` with only LF/CRLF warnings.
+- Legal pages are closed in `9c2c627`
+  (`Legal: Add imprint privacy and terms pages`) and deployed to
+  `https://d6e92688.supplementstack.pages.dev`. Routes:
+  `/impressum`, `/datenschutz`, `/nutzungsbedingungen`, and `/agb` alias.
+  Footer links all legal pages plus `Cookie-Einstellungen`. Google Fonts import
+  removed; system fonts only. Privacy covers GA4 consent, Cloudflare,
+  GitHub/GitHub Actions, Google Analytics, and third-country processing. No
+  Apple/OAuth/Social-Login processing is described as active. Research bases:
+  §5 DDG, §25 TDDDG, Art. 13/6 DSGVO, §36 VSBG, §18 MStV, EU ODR shutdown
+  2025-07-20, and Google GA4 EU privacy/IP. Checks passed: frontend build and
+  `git diff --check` with only LF/CRLF warnings. Preview legal routes and live
+  legal routes returned HTTP 200 with asset `index-DtdVqjYU.js`.
 
 Product required package metadata hardening is committed in `52ead1f`
 (`Data: Require complete product package metadata`). Remote D1 migration
@@ -76,26 +88,27 @@ D1 backup is done and is not a next step. Production-domain promotion is done an
 Pick from this list first when you have an open slot. These are the highest-
 signal items any agent — Claude, Codex, anyone — can pick up directly.
 
-1. ❌ **Footer legal links (Impressum / AGB)**
-   - File: `frontend/src/components/Layout.tsx`.
-   - Datenschutz page/link now exists from GA4 consent work, but Impressum and
-     AGB are still missing. Real legal review remains required before SEO
-     indexing/public launch.
-   - Effort: XS for stubs, M for real legal copy.
-
-2. ❌ **Demo session DoS vector**
+1. ❌ **Demo session DoS vector**
    - File: `functions/api/modules/demo.ts:46-75`.
    - Currently no rate limit on demo session creation. Add per-IP KV throttle before launch traffic ramps up.
    - Effort: S.
 
-3. ❌ **No rate-limit on `POST /api/products`**
+2. ❌ **No rate-limit on `POST /api/products`**
    - Open from audit; review whether to add per-user/per-IP throttling.
    - Effort: S.
 
-4. ❌ **`shop-domains/resolve` substring spoofing**
+3. ❌ **`shop-domains/resolve` substring spoofing**
    - File: `functions/api/modules/admin.ts:879-885`.
    - Current substring matching can be spoofed; switch to exact host matching.
    - Effort: S.
+
+4. ⚠️ **Final legal/compliance review**
+   - Impressum, Datenschutz, Nutzungsbedingungen, health disclaimer, and
+     affiliate disclosure now have frontend surfaces but still need final
+     German legal review before SEO indexing/public launch.
+   - Also formally check DSB need/status, AVV/DPA setup, and Cloudflare,
+     GitHub, Google Analytics property/settings before indexing.
+   - Effort: Legal review dependent.
 
 The longer audit backlog is below in "Additional Open Items"; treat that as the secondary queue.
 
@@ -121,7 +134,7 @@ Pick up the next ❌ item when continuing work.
 
 ## Additional Open Items From The Audit (Beyond Top-7)
 
-- ❌ **Footer legal links incomplete** — Datenschutz exists from GA4 consent work, but Impressum and AGB links/pages are still absent. Blocks Legal/Compliance sign-off.
+- ✅ **Footer legal links/pages present and deployed** — Impressum, Datenschutz, Nutzungsbedingungen, and `/agb` alias are implemented and deployed in `9c2c627`. Final legal/compliance sign-off still blocks SEO indexing/public launch.
 - ⚠️ **Pre-existing TS errors** — `frontend/src/api/admin.ts` and `frontend/src/api/base.ts` together have 3 latent TypeScript errors that don't block `npm run build` (Vite's esbuild) but show under `npx tsc --noEmit`. Not introduced by recent fixes.
 - ⚠️ **Mobile-polish browser-QA outstanding** — `c76bcf4` was deployed; manual validation at 375px, 390px, and 430px in a real browser is still pending for demo, logged-in, and admin flows, including Search, StackWorkspace, product modal, dosage modal, My Products, and mobile nav.
 - ❌ **Demo session DoS vector** — `functions/api/modules/demo.ts:46-75` allows unbounded session creation. Add per-IP rate limit (KV) before launch traffic ramps up.

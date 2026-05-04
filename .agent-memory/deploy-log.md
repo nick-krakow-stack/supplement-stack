@@ -26,11 +26,14 @@ Stack-warnings batched interaction lookup is committed and deployed to
 Cloudflare Pages preview and live custom domain.
 Consent-based GA4 analytics is committed and deployed to Cloudflare Pages
 preview and live custom domain.
+Legal pages are committed and deployed to Cloudflare Pages preview and live
+custom domain.
 GitHub Actions D1 backup has run successfully both manually and automatically;
 token scopes are verified.
 
 Latest relevant commits:
 
+- `9c2c627` - Legal: Add imprint privacy and terms pages.
 - `a18136d` - Feature: Add consent-based GA4 analytics.
 - `5905a20` - Fix: Batch stack warning interaction lookup.
 - `fcb1a6b` - Fix: Close launch QA flow blockers.
@@ -47,6 +50,39 @@ Latest relevant commits:
 - `dd58ba2` - Feature: Add dose recommendations API.
 - `b1fd347` - Refactor: Split Pages API into Hono modules.
 - `9a5f523` - DB: Phase B complete (migrations 0028-0035).
+
+## Legal Pages
+
+### 2026-05-04 - Cloudflare Pages: imprint, privacy, terms
+
+- Commit: `9c2c627` - Legal: Add imprint privacy and terms pages.
+- Scope:
+  - Added `/impressum`, `/datenschutz`, `/nutzungsbedingungen`, and `/agb`
+    alias.
+  - Footer links `Impressum`, `Datenschutz`, `Nutzungsbedingungen`, and
+    `Cookie-Einstellungen`.
+  - Removed external Google Fonts import; app now uses system fonts.
+  - Expanded privacy text for GA4 consent, Cloudflare/GitHub/GitHub Actions,
+    Google Analytics, and third-country processing.
+  - No Apple/OAuth/Social-Login active-processing wording.
+- Research bases: §5 DDG, §25 TDDDG, Art. 13/6 DSGVO, §36 VSBG, §18 MStV,
+  EU ODR shutdown on 2025-07-20, and Google GA4 EU privacy/IP notes.
+- Local validation:
+  - `npm run build` in `frontend/` passed.
+  - `git diff --check` passed with only LF/CRLF warnings.
+- Build assets: `/assets/index-DtdVqjYU.js` and
+  `/assets/index-CieqqPmY.css`.
+- Deploy prep: copied `functions/api` to `frontend/dist/functions/api`;
+  `frontend/dist/functions/api/[[path]].ts` existed before deploy.
+- Preview URL: `https://d6e92688.supplementstack.pages.dev`.
+- Smoke checks:
+  - Preview `/impressum`, `/datenschutz`, and `/nutzungsbedingungen` returned
+    HTTP 200.
+  - Live `https://supplementstack.de/impressum`, `/datenschutz`,
+    `/nutzungsbedingungen`, and `/agb` returned HTTP 200 and used
+    `index-DtdVqjYU.js`.
+- Open: final legal review remains recommended/required before SEO indexing;
+  DSB/AVV/Cloudflare/GitHub/Google settings should be formally checked.
 
 ## Consent-Based GA4 Analytics
 

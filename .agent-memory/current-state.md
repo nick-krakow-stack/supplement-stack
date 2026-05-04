@@ -110,8 +110,41 @@ Google Analytics 4 consent implementation is committed and deployed:
 - Preview `/` and `/datenschutz` returned HTTP 200.
 - Live `https://supplementstack.de/datenschutz` returned HTTP 200 and uses
   `/assets/index-B7aLcsIq.js`.
-- Still open: Impressum/AGB are missing; Datenschutzerklaerung is a working
-  draft and needs legal review.
+- Superseded by the later legal-pages deploy in `9c2c627`.
+
+Legal pages are committed and deployed:
+
+- Commit: `9c2c627` - Legal: Add imprint privacy and terms pages.
+- Added `/impressum`, `/nutzungsbedingungen`, and `/agb` routes in the
+  frontend.
+- Added `frontend/src/pages/ImprintPage.tsx` and
+  `frontend/src/pages/TermsPage.tsx`; expanded
+  `frontend/src/pages/PrivacyPage.tsx`.
+- Footer now links `Impressum`, `Datenschutz`, `Nutzungsbedingungen`, and
+  `Cookie-Einstellungen`.
+- Removed the external Google Fonts `@import` from `frontend/src/styles.css`
+  and switched to a system font stack so font loading does not bypass consent.
+- Privacy text now notes possible third-country processing for Cloudflare,
+  GitHub/GitHub Actions, and Google Analytics with non-absolute safeguards
+  wording. No Apple/OAuth/Social-Login processing is described as active.
+- Scope is frontend-only; no backend or DB changes.
+- Research/legal bases used: §5 DDG, §25 TDDDG, Art. 13/6 DSGVO, §36 VSBG,
+  §18 MStV, EU ODR shutdown on 2025-07-20, and Google GA4 EU privacy/IP
+  notes.
+- Local checks passed: `npm run build` in `frontend/` and `git diff --check`
+  with only LF/CRLF warnings.
+- Build assets: `/assets/index-DtdVqjYU.js` and
+  `/assets/index-CieqqPmY.css`.
+- Deploy prep copied `functions/api` to `frontend/dist/functions/api`;
+  `frontend/dist/functions/api/[[path]].ts` existed before deploy.
+- Cloudflare Pages preview: `https://d6e92688.supplementstack.pages.dev`.
+- Preview smoke: `/impressum`, `/datenschutz`, and `/nutzungsbedingungen`
+  returned HTTP 200.
+- Live smoke: `https://supplementstack.de/impressum`, `/datenschutz`,
+  `/nutzungsbedingungen`, and `/agb` returned HTTP 200 and used
+  `index-DtdVqjYU.js`.
+- Open risk: final legal review plus DSB/AVV/Cloudflare/GitHub/Google settings
+  checks remain recommended/required before SEO indexing.
 
 Phase C Priority 1 (Hono module split), Priority 2 (public dose recommendations API), Priority 3 (admin audit logging), and Priority 4 (server-side unit conversion) are committed and deployed.
 Phase C tech-debt sweep complete (commit b866c3d).
@@ -224,6 +257,7 @@ the SearchPage footer while a modal is open.
 
 Last relevant commits on `main`:
 
+- `9c2c627` - Legal: Add imprint privacy and terms pages.
 - `a18136d` - Feature: Add consent-based GA4 analytics.
 - `5905a20` - Fix: Batch stack warning interaction lookup.
 - `52ead1f` - Data: Require complete product package metadata.
@@ -257,6 +291,28 @@ Last relevant commits on `main`:
 - `9a5f523` - DB: Phase B abgeschlossen, migrations 0028-0035, `dosage_guidelines` migrated to `dose_recommendations`.
 
 ## Latest Deployed Work
+
+Legal pages are committed and deployed:
+
+- Commit: `9c2c627` - Legal: Add imprint privacy and terms pages.
+- Preview URL: `https://d6e92688.supplementstack.pages.dev`.
+- Routes: `/impressum`, `/datenschutz`, `/nutzungsbedingungen`, and `/agb`
+  alias.
+- Footer now links `Impressum`, `Datenschutz`, `Nutzungsbedingungen`, and
+  `Cookie-Einstellungen`.
+- Google Fonts import removed; app uses system fonts.
+- Privacy text covers GA4 consent, Cloudflare/GitHub/GitHub Actions/Google
+  Analytics, and third-country processing. No Apple/OAuth/Social-Login
+  processing is described as active.
+- Checks passed: frontend build and `git diff --check` with only LF/CRLF
+  warnings.
+- Build assets: `/assets/index-DtdVqjYU.js` and
+  `/assets/index-CieqqPmY.css`.
+- Smoke checks passed: preview legal routes HTTP 200; live `/impressum`,
+  `/datenschutz`, `/nutzungsbedingungen`, and `/agb` HTTP 200 with
+  `index-DtdVqjYU.js`.
+- Open: final legal review plus DSB/AVV/provider settings review before SEO
+  indexing.
 
 Consent-based GA4 analytics is committed and deployed:
 
