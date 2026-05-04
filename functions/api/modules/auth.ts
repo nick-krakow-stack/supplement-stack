@@ -344,62 +344,78 @@ meApp.put('/', async (c) => {
     return c.json({ error: 'Invalid JSON' }, 400)
   }
 
-  const age = body.age === undefined || body.age === null || body.age === ''
+  const hasKey = (key: string): boolean => Object.prototype.hasOwnProperty.call(body, key)
+
+  const age = !hasKey('age') || body.age === null || body.age === ''
     ? null
     : typeof body.age === 'number'
       ? body.age
       : Number.NaN
-  const weight = body.weight === undefined || body.weight === null || body.weight === ''
+  const weight = !hasKey('weight') || body.weight === null || body.weight === ''
     ? null
     : typeof body.weight === 'number'
       ? body.weight
       : Number.NaN
-  const gender = typeof body.gender === 'string' && body.gender.trim() !== '' ? body.gender.trim() : null
-  const diet = typeof body.diet === 'string' && body.diet.trim() !== '' ? body.diet.trim() : null
-  const goals = typeof body.goals === 'string' && body.goals.trim() !== '' ? body.goals.trim() : null
-  const guidelineSource = typeof body.guideline_source === 'string' && body.guideline_source.trim() !== ''
+  const gender = hasKey('gender') && typeof body.gender === 'string' && body.gender.trim() !== '' ? body.gender.trim() : null
+  const diet = hasKey('diet') && typeof body.diet === 'string' && body.diet.trim() !== '' ? body.diet.trim() : null
+  const goals = hasKey('goals') && typeof body.goals === 'string' && body.goals.trim() !== '' ? body.goals.trim() : null
+  const guidelineSource = hasKey('guideline_source') && typeof body.guideline_source === 'string' && body.guideline_source.trim() !== ''
     ? body.guideline_source.trim()
     : null
   const isSmoker = body.is_smoker === true || body.is_smoker === 1 ? 1 : body.is_smoker === false || body.is_smoker === 0 ? 0 : null
 
-  if (age !== null && (!Number.isInteger(age) || age < 1 || age > 120)) {
+  if (hasKey('age') && age !== null && (!Number.isInteger(age) || age < 1 || age > 120)) {
     return c.json({ error: 'age must be an integer between 1 and 120' }, 400)
   }
-  if (weight !== null && (!Number.isFinite(weight) || weight <= 0 || weight > 500)) {
+  if (hasKey('weight') && weight !== null && (!Number.isFinite(weight) || weight <= 0 || weight > 500)) {
     return c.json({ error: 'weight must be greater than 0' }, 400)
   }
-  if (body.is_smoker !== undefined && isSmoker === null) {
+  if (hasKey('is_smoker') && isSmoker === null) {
     return c.json({ error: 'is_smoker must be true/false or 1/0' }, 400)
   }
 
-  const updated = await c.env.DB.prepare(`
+  const existing = await c.env.DB.prepare(
+    'SELECT id, email, age, gender, weight, diet_type, personal_goals, guideline_source, is_smoker, health_consent, health_consent_at, role FROM users WHERE id = ?'
+  ).bind(user.userId).first<UserRow>()
+  if (!existing) return c.json({ error: 'User not found' }, 404)
+
+  const target = {
+    age: hasKey('age') ? age : existing.age,
+    gender: hasKey('gender') ? gender : existing.gender,
+    weight: hasKey('weight') ? weight : existing.weight,
+    diet: hasKey('diet') ? diet : existing.diet_type,
+    goals: hasKey('goals') ? goals : existing.personal_goals,
+    guideline_source: hasKey('guideline_source') ? guidelineSource : existing.guideline_source,
+    is_smoker: hasKey('is_smoker') ? isSmoker as number : existing.is_smoker,
+  }
+
+  const result = await c.env.DB.prepare(`
     UPDATE users SET
-      age = COALESCE(?, age),
-      gender = COALESCE(?, gender),
-      weight = COALESCE(?, weight),
-      diet_type = COALESCE(?, diet_type),
-      personal_goals = COALESCE(?, personal_goals),
-      guideline_source = COALESCE(?, guideline_source),
-      is_smoker = COALESCE(?, is_smoker)
+      age = ?,
+      gender = ?,
+      weight = ?,
+      diet_type = ?,
+      personal_goals = ?,
+      guideline_source = ?,
+      is_smoker = ?
     WHERE id = ?
-    RETURNING id, email, age, gender, weight, diet_type, personal_goals,
-      guideline_source, is_smoker, health_consent, health_consent_at, role
   `).bind(
-    age,
-    gender,
-    weight,
-    diet,
-    goals,
-    guidelineSource,
-    isSmoker,
+    target.age,
+    target.gender,
+    target.weight,
+    target.diet,
+    target.goals,
+    target.guideline_source,
+    target.is_smoker,
     user.userId,
-  ).first<UserRow>()
-  if (!updated) return c.json({ error: 'User not found' }, 404)
+  ).run()
+  if (!result.success) return c.json({ error: 'Profile update failed' }, 500)
+
   return c.json({ profile: {
-    id: updated.id, email: updated.email, age: updated.age, gender: updated.gender, weight: updated.weight,
-    diet: updated.diet_type, goals: updated.personal_goals, guideline_source: updated.guideline_source,
-    is_smoker: updated.is_smoker, health_consent: updated.health_consent, health_consent_at: updated.health_consent_at,
-    role: updated.role ?? 'user',
+    id: existing.id, email: existing.email, age: target.age, gender: target.gender, weight: target.weight,
+    diet: target.diet, goals: target.goals, guideline_source: target.guideline_source,
+    is_smoker: target.is_smoker, health_consent: existing.health_consent, health_consent_at: existing.health_consent_at,
+    role: existing.role ?? 'user',
   }})
 })
 

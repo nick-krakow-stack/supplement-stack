@@ -50,9 +50,10 @@ remote-migrated, and deployed to Cloudflare Pages preview.
 Launch QA fixes are implemented locally but not yet committed, remote-migrated,
 or deployed:
 
-- `PUT /api/me` now validates profile payloads and uses one
-  `UPDATE ... RETURNING` statement so response generation does not depend on
-  fragile D1 batch result parsing and `is_smoker: 0` returns normally.
+- `PUT /api/me` now validates profile payloads, loads the existing profile,
+  computes final target values with explicit omitted-vs-provided key handling,
+  runs a plain `UPDATE`, and builds the response from those target values so no
+  post-mutation SELECT/RETURNING/batch parsing can turn persistence into a 500.
 - New migration `0041_stack_item_product_sources.sql` rebuilds `stack_items`
   from ambiguous `product_id` to explicit nullable `catalog_product_id` and
   `user_product_id` columns with a CHECK requiring exactly one reference.

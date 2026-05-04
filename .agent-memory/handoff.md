@@ -55,8 +55,9 @@ smokes after applying migration `0041_stack_item_product_sources.sql`.
   touched.
 - Branch: `main`.
 - Current local implementation:
-  - `PUT /api/me` validates profile payloads and uses one
-    `UPDATE ... RETURNING` statement.
+  - `PUT /api/me` validates profile payloads, loads the existing profile,
+    computes final target values, runs a plain `UPDATE`, and builds the
+    response from the target values.
   - `d1-migrations/0041_stack_item_product_sources.sql` rebuilds
     `stack_items` with explicit `catalog_product_id` and `user_product_id`
     plus a CHECK requiring exactly one reference. Legacy `product_id` is only

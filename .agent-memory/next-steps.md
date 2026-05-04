@@ -22,7 +22,8 @@ Phase C is complete. The integrated Phase D rollout is complete:
 - SearchPage/Wishlist werden als normale Fallback-/404-Routen behandelt; `raw`-Flags
   von SearchPage-Eingaben zählen nicht mehr zu den Launch-Blockern.
 - Launch QA fixes are implemented locally but not yet committed/deployed:
-  `PUT /api/me` uses validated `UPDATE ... RETURNING`, migration
+  `PUT /api/me` uses validated existing-profile load, final-value computation,
+  and plain `UPDATE`, migration
   `0041_stack_item_product_sources.sql` rebuilds `stack_items` with explicit
   `catalog_product_id` and `user_product_id` plus exactly-one CHECK,
   Stack API accepts legacy `{ id }` catalog payloads and new `product_type`
