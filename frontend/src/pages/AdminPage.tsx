@@ -17,12 +17,17 @@ interface AdminProduct {
   id: number;
   name: string;
   brand?: string;
+  form?: string;
   price: number;
   moderation_status?: string;
   visibility?: string;
   image_url?: string;
   is_affiliate?: number;
   shop_link?: string;
+  serving_size?: number;
+  serving_unit?: string;
+  servings_per_container?: number;
+  container_count?: number;
   timing?: string;
   dosage_text?: string;
   effect_summary?: string;
@@ -343,7 +348,23 @@ function ProductsTab() {
                 {product.brand && (
                   <p className="text-sm text-gray-500">{product.brand}</p>
                 )}
-                <p className="text-sm text-green-600 font-bold">€{product.price.toFixed(2)}/Monat</p>
+                <p className="text-sm text-green-600 font-bold">€{product.price.toFixed(2)}/Packung</p>
+                {(product.form || product.serving_size || product.servings_per_container) && (
+                  <p className="mt-1 text-xs text-gray-500">
+                    {[
+                      product.form,
+                      product.serving_size && product.serving_unit
+                        ? `${product.serving_size} ${product.serving_unit}`
+                        : null,
+                      product.servings_per_container
+                        ? `${product.servings_per_container} Portionen`
+                        : null,
+                      product.container_count ? `${product.container_count} Packung(en)` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </p>
+                )}
                 <div className="mt-1">
                   <StatusBadge status={product.moderation_status} />
                 </div>

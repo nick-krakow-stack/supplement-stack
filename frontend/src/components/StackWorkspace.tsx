@@ -144,9 +144,13 @@ function primaryDose(guideline?: DosageGuideline): ManualDose | null {
   return { value, unit: normalizeUnitToGerman(guideline.unit) };
 }
 
-function productMonthlyPrice(product: DemoProduct): number {
+function productTotalServings(product: DemoProduct): number {
   const totalServings = (product.servings_per_container ?? 0) * (product.container_count ?? 1);
-  return totalServings > 0 ? (product.price / totalServings) * 30 : product.price;
+  return totalServings > 0 ? totalServings : 30;
+}
+
+function productMonthlyPrice(product: DemoProduct): number {
+  return (product.price / productTotalServings(product)) * 30;
 }
 
 function formatEuro(value: number): string {
@@ -500,9 +504,7 @@ function AddProductModal({
                       <div>
                         <p className="text-sm font-semibold text-slate-500">Packung:</p>
                         <p className="mt-1 text-base font-black text-slate-950">
-                          {product.servings_per_container
-                            ? `${product.servings_per_container} Stück`
-                            : 'Nach Verbrauch'}
+                          {`${productTotalServings(product)} Portionen`}
                         </p>
                       </div>
                     </div>

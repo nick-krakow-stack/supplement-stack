@@ -17,6 +17,214 @@ import { ensureAuth, requireAdmin, logAdminAction } from '../lib/helpers'
 
 const products = new Hono<AppContext>()
 
+type ProductIngredientInput = {
+  ingredient_id: number
+  is_main: boolean
+  quantity: number
+  unit: string
+  form_id: number | null
+}
+
+type ProductCoreInput = {
+  name?: string
+  brand?: string
+  form?: string
+  price?: number
+  serving_size?: number
+  serving_unit?: string
+  servings_per_container?: number
+  container_count?: number
+}
+
+type ProductOptionalInput = {
+  shop_link?: string
+  image_url?: string
+  image_r2_key?: string
+  is_affiliate?: number
+  discontinued_at?: string
+  replacement_id?: number
+  timing?: string
+  dosage_text?: string
+  effect_summary?: string
+  warning_title?: string
+  warning_message?: string
+  warning_type?: string
+  alternative_note?: string
+}
+
+type ProductPayload = ProductCoreInput &
+  ProductOptionalInput & {
+    ingredients?: ProductIngredientInput[]
+  }
+
+function parseJsonBodyError(): Response {
+  return new Response(JSON.stringify({ error: 'Invalid JSON' }), {
+    status: 400,
+    headers: { 'Content-Type': 'application/json' },
+  })
+}
+
+function hasOwnKey(data: Record<string, unknown>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(data, key)
+}
+
+function optionalText(value: unknown): string | undefined {
+  if (value === undefined || value === null) return undefined
+  if (typeof value !== 'string') return undefined
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : undefined
+}
+
+function requiredText(value: unknown): string | undefined {
+  return optionalText(value)
+}
+
+function optionalCardText(value: unknown): string | null | undefined {
+  if (value === undefined) return undefined
+  if (value === null) return null
+  return typeof value === 'string' ? value.trim() : undefined
+}
+
+function positiveNumber(value: unknown): number | undefined {
+  if (value === undefined || value === null || value === '') return undefined
+  const parsed = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
+}
+
+function positiveInteger(value: unknown): number | undefined {
+  const parsed = positiveNumber(value)
+  return parsed !== undefined && Number.isInteger(parsed) ? parsed : undefined
+}
+
+function optionalPositiveIntegerOrNull(value: unknown): number | null | undefined {
+  if (value === undefined) return undefined
+  if (value === null || value === '') return null
+  return positiveInteger(value)
+}
+
+function booleanFlag(value: unknown): number | undefined {
+  if (value === undefined) return undefined
+  return value === 1 || value === true ? 1 : 0
+}
+
+function validateIngredients(value: unknown): { ingredients?: ProductIngredientInput[]; error?: string } {
+  if (!Array.isArray(value) || value.length === 0) {
+    return { error: 'Mindestens ein Wirkstoff ist erforderlich.' }
+  }
+
+  const ingredients: ProductIngredientInput[] = []
+  let mainCount = 0
+
+  for (const row of value) {
+    if (!row || typeof row !== 'object') {
+      return { error: 'Ungültige Wirkstoffdaten.' }
+    }
+    const ingredient = row as Record<string, unknown>
+    const ingredientId = positiveInteger(ingredient.ingredient_id)
+    const quantity = positiveNumber(ingredient.quantity)
+    const unit = requiredText(ingredient.unit)
+    const formId = optionalPositiveIntegerOrNull(ingredient.form_id)
+    const isMain = ingredient.is_main === 1 || ingredient.is_main === true
+
+    if (!ingredientId) return { error: 'Jeder Wirkstoff braucht eine gültige ingredient_id.' }
+    if (quantity === undefined) return { error: 'Jeder Wirkstoff braucht eine positive Menge.' }
+    if (!unit) return { error: 'Jeder Wirkstoff braucht eine Einheit.' }
+    if (formId === undefined && hasOwnKey(ingredient, 'form_id')) {
+      return { error: 'form_id muss eine positive Ganzzahl sein, wenn sie angegeben wird.' }
+    }
+    if (isMain) mainCount += 1
+
+    ingredients.push({
+      ingredient_id: ingredientId,
+      is_main: isMain,
+      quantity,
+      unit,
+      form_id: formId ?? null,
+    })
+  }
+
+  if (mainCount !== 1) return { error: 'Genau ein Hauptwirkstoff ist erforderlich.' }
+  return { ingredients }
+}
+
+function validateProductPayload(
+  body: Record<string, unknown>,
+  mode: 'create' | 'update',
+): { data?: ProductPayload; error?: string } {
+  const data: ProductPayload = {}
+  const requiredCoreFields = [
+    'name',
+    'brand',
+    'form',
+    'price',
+    'serving_size',
+    'serving_unit',
+    'servings_per_container',
+    'container_count',
+  ] as const
+
+  if (mode === 'create') {
+    for (const field of requiredCoreFields) {
+      if (!hasOwnKey(body, field)) return { error: 'Pflichtfelder fehlen.' }
+    }
+  }
+
+  for (const field of ['name', 'brand', 'form', 'serving_unit'] as const) {
+    if (!hasOwnKey(body, field)) continue
+    const value = requiredText(body[field])
+    if (!value) return { error: `${field} darf nicht leer sein.` }
+    data[field] = value
+  }
+
+  for (const field of ['price', 'serving_size'] as const) {
+    if (!hasOwnKey(body, field)) continue
+    const value = positiveNumber(body[field])
+    if (value === undefined) return { error: `${field} muss größer als 0 sein.` }
+    data[field] = value
+  }
+
+  for (const field of ['servings_per_container', 'container_count'] as const) {
+    if (!hasOwnKey(body, field)) continue
+    const value = positiveInteger(body[field])
+    if (value === undefined) return { error: `${field} muss eine positive Ganzzahl sein.` }
+    data[field] = value
+  }
+
+  for (const field of [
+    'shop_link',
+    'image_url',
+    'image_r2_key',
+    'discontinued_at',
+    'timing',
+    'dosage_text',
+    'effect_summary',
+    'warning_title',
+    'warning_message',
+    'warning_type',
+    'alternative_note',
+  ] as const) {
+    const value = optionalCardText(body[field])
+    if (value !== undefined) data[field] = value ?? undefined
+  }
+
+  const isAffiliate = booleanFlag(body.is_affiliate)
+  if (isAffiliate !== undefined) data.is_affiliate = isAffiliate
+
+  const replacementId = optionalPositiveIntegerOrNull(body.replacement_id)
+  if (replacementId === undefined && hasOwnKey(body, 'replacement_id')) {
+    return { error: 'replacement_id muss eine positive Ganzzahl sein, wenn sie angegeben wird.' }
+  }
+  if (replacementId !== undefined) data.replacement_id = replacementId ?? undefined
+
+  if (mode === 'create' || hasOwnKey(body, 'ingredients')) {
+    const ingredientValidation = validateIngredients(body.ingredients)
+    if (ingredientValidation.error) return { error: ingredientValidation.error }
+    data.ingredients = ingredientValidation.ingredients
+  }
+
+  return { data }
+}
+
 // GET /api/products
 products.get('/', async (c) => {
   const { results } = await c.env.DB.prepare(
@@ -47,43 +255,55 @@ products.get('/:id', async (c) => {
 products.post('/', async (c) => {
   const authErr = await ensureAuth(c)
   if (authErr) return authErr
-  const body = await c.req.json()
-  if (!body.name || !body.price) return c.json({ error: 'Required fields missing' }, 400)
-  if (!Array.isArray(body.ingredients) || body.ingredients.length === 0) {
-    return c.json({ error: 'At least one main ingredient required' }, 400)
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return parseJsonBodyError()
   }
-  const mainIngredient = (body.ingredients as Array<Record<string, unknown>>).find(i => i.is_main)
-  if (!mainIngredient) return c.json({ error: 'Main ingredient required' }, 400)
+  const validation = validateProductPayload(body, 'create')
+  if (validation.error || !validation.data?.ingredients) {
+    return c.json({ error: validation.error ?? 'Ungültige Produktdaten.' }, 400)
+  }
+  const data = validation.data
+  const ingredients = data.ingredients!
 
   const dup = await c.env.DB.prepare(
     'SELECT id FROM products WHERE name = ? AND brand = ?'
-  ).bind(body.name, body.brand || null).first()
+  ).bind(data.name, data.brand).first()
   if (dup) return c.json({ error: 'Duplicate product detected' }, 409)
 
   const result = await c.env.DB.prepare(
-    'INSERT INTO products (name, brand, form, price, shop_link, image_url, moderation_status, visibility) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    `INSERT INTO products (
+      name, brand, form, price, shop_link, image_url, moderation_status, visibility,
+      serving_size, serving_unit, servings_per_container, container_count
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
-    body.name,
-    body.brand || null,
-    body.form || null,
-    body.price,
-    body.shop_link || null,
-    body.image_url || null,
+    data.name,
+    data.brand,
+    data.form,
+    data.price,
+    data.shop_link ?? null,
+    data.image_url ?? null,
     'pending',
     'hidden',
+    data.serving_size,
+    data.serving_unit,
+    data.servings_per_container,
+    data.container_count,
   ).run()
   const productId = result.meta.last_row_id
 
-  for (const ing of body.ingredients as Array<Record<string, unknown>>) {
+  for (const ing of ingredients) {
     await c.env.DB.prepare(
       'INSERT INTO product_ingredients (product_id, ingredient_id, is_main, quantity, unit, form_id) VALUES (?, ?, ?, ?, ?, ?)'
     ).bind(
       productId,
       ing.ingredient_id,
       ing.is_main ? 1 : 0,
-      ing.quantity || null,
-      ing.unit || null,
-      ing.form_id || null,
+      ing.quantity,
+      ing.unit,
+      ing.form_id,
     ).run()
   }
 
@@ -99,14 +319,17 @@ products.put('/:id', async (c) => {
   const product = await c.env.DB.prepare('SELECT * FROM products WHERE id = ?').bind(id).first<ProductRow>()
   if (!product) return c.json({ error: 'Not found' }, 404)
   if (user.role !== 'admin') return c.json({ error: 'Forbidden' }, 403)
-  const body = await c.req.json()
-  const data = body as {
-    name?: string; brand?: string; form?: string; price?: number; shop_link?: string; image_url?: string;
-    image_r2_key?: string; is_affiliate?: number; discontinued_at?: string; replacement_id?: number;
-    serving_size?: number; serving_unit?: string; servings_per_container?: number; container_count?: number;
-    timing?: string; dosage_text?: string; effect_summary?: string; warning_title?: string;
-    warning_message?: string; warning_type?: string; alternative_note?: string;
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return parseJsonBodyError()
   }
+  const validation = validateProductPayload(body, 'update')
+  if (validation.error || !validation.data) {
+    return c.json({ error: validation.error ?? 'Ungültige Produktdaten.' }, 400)
+  }
+  const data = validation.data
   await c.env.DB.prepare(`
     UPDATE products SET
       name = COALESCE(?, name),
@@ -153,6 +376,23 @@ products.put('/:id', async (c) => {
     data.alternative_note ?? null,
     id,
   ).run()
+  if (data.ingredients) {
+    await c.env.DB.batch([
+      c.env.DB.prepare('DELETE FROM product_ingredients WHERE product_id = ?').bind(id),
+      ...data.ingredients.map((ing) =>
+        c.env.DB.prepare(
+          'INSERT INTO product_ingredients (product_id, ingredient_id, is_main, quantity, unit, form_id) VALUES (?, ?, ?, ?, ?, ?)'
+        ).bind(
+          id,
+          ing.ingredient_id,
+          ing.is_main ? 1 : 0,
+          ing.quantity,
+          ing.unit,
+          ing.form_id,
+        ),
+      ),
+    ])
+  }
   const updated = await c.env.DB.prepare('SELECT * FROM products WHERE id = ?').bind(id).first()
   await logAdminAction(c, {
     action: 'update_product',

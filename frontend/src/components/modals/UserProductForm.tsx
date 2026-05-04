@@ -78,24 +78,55 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
       setError('Bitte einen Produktnamen eingeben.');
       return;
     }
+    const trimmedBrand = brand.trim();
+    if (!trimmedBrand) {
+      setError('Bitte eine Marke oder einen Hersteller eingeben.');
+      return;
+    }
+    if (!form) {
+      setError('Bitte eine Produktform auswählen.');
+      return;
+    }
     const parsedPrice = parseFloat(price);
-    if (isNaN(parsedPrice) || parsedPrice < 0) {
-      setError('Bitte einen gültigen Preis eingeben.');
+    if (isNaN(parsedPrice) || parsedPrice <= 0) {
+      setError('Bitte einen gültigen Preis pro Packung eingeben.');
+      return;
+    }
+
+    const parsedServingSize = parseFloat(servingSize);
+    if (isNaN(parsedServingSize) || parsedServingSize <= 0) {
+      setError('Bitte eine gültige Portionsgröße eingeben.');
+      return;
+    }
+    const trimmedServingUnit = servingUnit.trim();
+    if (!trimmedServingUnit) {
+      setError('Bitte eine Einheit pro Portion eingeben.');
+      return;
+    }
+    const parsedServingsPerContainer = parseInt(servingsPerContainer, 10);
+    if (isNaN(parsedServingsPerContainer) || parsedServingsPerContainer <= 0) {
+      setError('Bitte die Portionen pro Behälter eingeben.');
+      return;
+    }
+    const parsedContainerCount = parseInt(containerCount, 10);
+    if (isNaN(parsedContainerCount) || parsedContainerCount <= 0) {
+      setError('Bitte die Anzahl der Behälter eingeben.');
       return;
     }
 
     const body: Record<string, unknown> = {
       name: trimmedName,
+      brand: trimmedBrand,
+      form,
       price: parsedPrice,
+      serving_size: parsedServingSize,
+      serving_unit: trimmedServingUnit,
+      servings_per_container: parsedServingsPerContainer,
+      container_count: parsedContainerCount,
       is_affiliate: isAffiliate ? 1 : 0,
     };
-    if (brand.trim()) body.brand = brand.trim();
-    if (form) body.form = form;
     if (imageUrl.trim()) body.image_url = imageUrl.trim();
-    if (servingSize !== '') body.serving_size = parseFloat(servingSize);
-    if (servingUnit.trim()) body.serving_unit = servingUnit.trim();
-    if (servingsPerContainer !== '') body.servings_per_container = parseInt(servingsPerContainer, 10);
-    if (containerCount !== '') body.container_count = parseInt(containerCount, 10);
+    else if (isEdit && initialProduct?.image_url) body.image_url = null;
     if (shopLink.trim()) body.shop_link = shopLink.trim();
     if (notes.trim()) body.notes = notes.trim();
 
@@ -206,23 +237,29 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
 
           {/* Brand */}
           <div>
-            <label className={labelClass}>Marke</label>
+            <label className={labelClass}>
+              Marke / Hersteller <span className="text-red-500">*</span>
+            </label>
             <input
               type="text"
               value={brand}
               onChange={(e) => setBrand(e.target.value)}
               className={inputClass}
               placeholder="z.B. Now Foods"
+              required
             />
           </div>
 
           {/* Form */}
           <div>
-            <label className={labelClass}>Form</label>
+            <label className={labelClass}>
+              Form <span className="text-red-500">*</span>
+            </label>
             <select
               value={form}
               onChange={(e) => setForm(e.target.value)}
               className={inputClass}
+              required
             >
               <option value="">— bitte wählen —</option>
               {FORM_OPTIONS.map((opt) => (
@@ -236,7 +273,7 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
           {/* Price */}
           <div>
             <label className={labelClass}>
-              Einmalpreis (Packung) <span className="text-red-500">*</span>
+              Preis pro Packung <span className="text-red-500">*</span>
             </label>
             <input
               type="number"
@@ -245,62 +282,75 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
               className={inputClass}
               placeholder="€ Preis pro Packung"
               step="0.01"
-              min="0"
+              min="0.01"
               required
             />
           </div>
 
           {/* Serving size + unit */}
-          <div className="flex gap-3 max-[430px]:flex-col">
-            <div className="flex-1">
-              <label className={labelClass}>Portionsgröße</label>
+          <div>
+            <label className={labelClass}>
+              Dosierung pro Portion <span className="text-red-500">*</span>
+            </label>
+            <div className="flex gap-3 max-[430px]:flex-col">
+              <div className="flex-1">
               <input
                 type="number"
                 value={servingSize}
                 onChange={(e) => setServingSize(e.target.value)}
                 className={inputClass}
-                placeholder="z.B. 1000"
+                placeholder="z.B. 1"
                 step="any"
-                min="0"
+                min="0.01"
+                required
               />
-            </div>
-            <div className="flex-1">
-              <label className={labelClass}>Einheit</label>
+              </div>
+              <div className="flex-1">
               <input
                 type="text"
                 value={servingUnit}
                 onChange={(e) => setServingUnit(e.target.value)}
                 className={inputClass}
-                placeholder="z.B. mg"
+                placeholder="z.B. Kapsel"
+                required
               />
+              </div>
             </div>
+            <p className="mt-1 text-xs text-gray-500">
+              Beispiel: 400 mg pro 1 Kapsel oder 600 mg pro 2 Kapseln.
+            </p>
           </div>
 
           {/* Servings per container + container count */}
-          <div className="flex gap-3 max-[430px]:flex-col">
-            <div className="flex-1">
-              <label className={labelClass}>Portionen pro Behälter</label>
+          <div>
+            <label className={labelClass}>
+              Packungsinhalt / Portionen <span className="text-red-500">*</span>
+            </label>
+            <div className="flex gap-3 max-[430px]:flex-col">
+              <div className="flex-1">
               <input
                 type="number"
                 value={servingsPerContainer}
                 onChange={(e) => setServingsPerContainer(e.target.value)}
                 className={inputClass}
-                placeholder="z.B. 60"
+                placeholder="Portionen pro Behälter, z.B. 60"
                 step="1"
-                min="0"
+                min="1"
+                required
               />
-            </div>
-            <div className="flex-1">
-              <label className={labelClass}>Anzahl Behälter</label>
+              </div>
+              <div className="flex-1">
               <input
                 type="number"
                 value={containerCount}
                 onChange={(e) => setContainerCount(e.target.value)}
                 className={inputClass}
-                placeholder="1"
+                placeholder="Anzahl Behälter, z.B. 1"
                 step="1"
                 min="1"
+                required
               />
+              </div>
             </div>
           </div>
 
