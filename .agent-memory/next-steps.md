@@ -45,23 +45,42 @@ Product required package metadata hardening is committed in `52ead1f`
 (`Data: Require complete product package metadata`). Remote D1 migration
 `0037_backfill_product_required_metadata.sql` has been applied to
 `supplementstack-production`; DB backfill data is live. The API/frontend
-validation changes from `52ead1f` are committed but will only become live with
-the next Cloudflare Pages deploy.
+validation changes from `52ead1f` rode along with the Profile DSGVO deploy
+on 2026-05-04 (preview `https://16edb9e2.supplementstack.pages.dev`,
+build `index-Dkeio0yL.js` / `index-RAoQ0gyV.css`) — both code and data are
+live.
 
 D1 backup is done and is not a next step. Production-domain promotion is done and is not a next step.
 
-## Current Local Follow-up
+## Open Cross-Agent TODOs (top of the queue)
 
-- Do not redeploy until the unrelated dirty Claude `auth/Profile` files are
-  either committed, stashed, or explicitly excluded from deploy prep.
-- Next safe deploy should publish the committed validation changes from
-  `52ead1f` after checking the intended deploy diff.
-- DB backfill data is already live. Live `/api/demo/products` returned HTTP
-  200 and showed updated remote data, including `Vitamin D3/K2 Tropfen` with
-  brand `Supplement Stack Demo`, `serving_size=1`, `serving_unit=Tropfen`, and
-  `servings_per_container=30`.
-- Later product-model follow-up: User-Produkte need a real ingredient mapping
-  or must be handled separately in ingredient-specific product selection.
+Pick from this list first when you have an open slot. These are the highest-
+signal items any agent — Claude, Codex, anyone — can pick up directly.
+
+1. ⚠️ **Stack-warnings N+1 query**
+   - File: `functions/api/modules/stacks.ts:159-166` (the only remaining ⚠️ in the Top-7).
+   - Current: nested `for (a) for (b > a)` loop firing one DB query per ingredient pair → O(n²) round-trips on every warnings fetch.
+   - Target: single SQL query against `interactions` using `IN (?,?,…)` for both `ingredient_a_id` and `ingredient_b_id`, returning all matching pairs at once.
+   - Acceptance: same response shape as today (`{ warnings: InteractionRow[] }`), same auth/ownership behaviour (Auth + IDOR were already closed in `fcb1a6b`). Add a smoke check that a stack with N ingredients fires exactly one DB query.
+   - Effort: M.
+
+2. ❌ **Footer legal links (Impressum / Datenschutz / AGB)**
+   - File: `frontend/src/components/Layout.tsx`.
+   - Even stub pages with placeholder content help — they unblock the legal/compliance review which is currently the only thing gating SEO indexing.
+   - Effort: XS for stubs, M for real legal copy.
+
+3. ❌ **Demo session DoS vector**
+   - File: `functions/api/modules/demo.ts:46-75`.
+   - Currently no rate limit on demo session creation. Add per-IP KV throttle before launch traffic ramps up.
+   - Effort: S.
+
+The longer audit backlog is below in "Additional Open Items"; treat that as the secondary queue.
+
+## Later Product-Model Follow-Up
+
+- User-Produkte need a real ingredient mapping or must be handled separately
+  in ingredient-specific product selection. Open question for the product
+  track, not a launch blocker.
 
 ## Audit Top-7 Bugfix Sprint Status
 
