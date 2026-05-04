@@ -83,13 +83,14 @@ live.
 
 D1 backup is done and is not a next step. Production-domain promotion is done and is not a next step.
 
-Demo session DoS hardening is implemented locally and awaiting commit/deploy:
+Demo session DoS hardening is closed in `18a4141` and deployed to
+`https://5b9c9907.supplementstack.pages.dev` plus the live custom domain:
 `POST /api/demo/sessions` is KV rate-limited per IP, no longer persists
 submitted `stack_json`, legacy GET returns an empty stack for existing unexpired
 keys, and Demo UI state remains page-local.
 
 User product moderation and shop-domain hardening is implemented locally and
-awaiting commit/deploy: trusted submitter flag migration, default pending
+deployed in `18a4141`: trusted submitter flag migration, default pending
 user-products with trusted auto-approval, approved-product user edit/delete
 locks, admin trusted toggles, product creation rate limits, and parsed
 hostname-based shop-domain matching.
@@ -106,6 +107,14 @@ signal items any agent — Claude, Codex, anyone — can pick up directly.
    - Also formally check DSB need/status, AVV/DPA setup, and Cloudflare,
      GitHub, Google Analytics property/settings before indexing.
    - Effort: Legal review dependent.
+
+2. ❌ **Approved user products need public catalog mapping**
+   - Current `user_products.status = 'approved'` is the moderation/lock state,
+     but `user_products` still have no durable ingredient mapping or catalog
+     conversion relation.
+   - Needed before approved/trusted user products can correctly appear in
+     ingredient-specific public product lists for everyone.
+   - Effort: M.
 
 The longer audit backlog is below in "Additional Open Items"; treat that as the secondary queue.
 
@@ -131,16 +140,16 @@ Pick up the next ❌ item when continuing work.
 
 ## Additional Open Items From The Audit (Beyond Top-7)
 
-- Demo session DoS vector is fixed locally and awaiting commit/deploy. The older
-  open bullet below is superseded by the local changes in
+- Demo session DoS vector is fixed and deployed in `18a4141`. The older
+  open bullet below is superseded by the deployed changes in
   `functions/api/modules/demo.ts` and `frontend/src/components/StackWorkspace.tsx`.
 
 - ✅ **Footer legal links/pages present and deployed** — Impressum, Datenschutz, Nutzungsbedingungen, and `/agb` alias are implemented and deployed in `9c2c627`. Final legal/compliance sign-off still blocks SEO indexing/public launch.
 - ⚠️ **Pre-existing TS errors** — `frontend/src/api/admin.ts` and `frontend/src/api/base.ts` together have 3 latent TypeScript errors that don't block `npm run build` (Vite's esbuild) but show under `npx tsc --noEmit`. Not introduced by recent fixes.
 - ⚠️ **Mobile-polish browser-QA outstanding** — `c76bcf4` was deployed; manual validation at 375px, 390px, and 430px in a real browser is still pending for demo, logged-in, and admin flows, including Search, StackWorkspace, product modal, dosage modal, My Products, and mobile nav.
-- ✅ **Demo session DoS vector** — fixed locally: `POST /api/demo/sessions` now uses KV per-IP rate limiting and no longer persists submitted `stack_json`; legacy GET returns an empty stack instead of stored user changes.
-- ✅ **No rate-limit on `POST /api/products`** — fixed locally: creation is now KV rate-limited per authenticated user.
-- ✅ **`shop-domains/resolve` substring spoofing** — fixed locally: resolve and ProductCard matching parse hostnames and allow only exact domain or subdomain matches.
+- ✅ **Demo session DoS vector** — fixed and deployed in `18a4141`: `POST /api/demo/sessions` now uses KV per-IP rate limiting and no longer persists submitted `stack_json`; legacy GET returns an empty stack instead of stored user changes.
+- ✅ **No rate-limit on `POST /api/products`** — fixed and deployed in `18a4141`: creation is now KV rate-limited per authenticated user.
+- ✅ **`shop-domains/resolve` substring spoofing** — fixed and deployed in `18a4141`: resolve and ProductCard matching parse hostnames and allow only exact domain or subdomain matches.
 - ❌ **`stack_items.product_id` FK ambiguity** — `d1-migrations/0001_initial.sql:78-85` doesn't distinguish catalog `products` from `user_products`. Schema concern; needs a discriminator column or separate FKs. Requires migration — coordinate before touching.
 - ❌ **Migration 0036 missing UPDATE trigger** — `d1-migrations/0036_rename_recommendations_to_product_recommendations.sql:27-41` has compatibility view + INSERT/DELETE triggers but no UPDATE trigger. Compatibility window is temporary; the deferred cleanup migration in "Deferred / Later" will drop the view entirely, so this may be moot.
 - ❌ **No email verification on register** — open question whether this is launch-blocking. Currently anyone can register with any address.

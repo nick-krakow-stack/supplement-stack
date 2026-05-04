@@ -17,13 +17,11 @@ Continue from `main` using the top queue in this file.
 
 ## Git / Worktree
 
-- Latest committed baseline before this restart handoff: `2457345` — Docs: Record
-  Codex model routing policy. A later memory-hand-off commit only snapshots this
-  restart state.
-- Worktree currently has local Demo hardening edits in
-  `functions/api/modules/demo.ts` and
-  `frontend/src/components/StackWorkspace.tsx`, plus expected dirty
-  `.claude/SESSION.md` and `.claude/settings.json` (do not modify `.claude/*`).
+- Latest committed baseline before this restart handoff: `18a4141` -
+  Security: Harden demo and user product moderation.
+- Worktree is expected dirty only in `.claude/SESSION.md` and
+  `.claude/settings.json` (do not modify `.claude/*`), plus any uncommitted
+  memory/deploy-log update from the current handoff if not yet committed.
 - Branch: `main`.
 
 ## Closed Baseline
@@ -40,9 +38,16 @@ Continue from `main` using the top queue in this file.
 
 1. Final legal/compliance review (DSB/AVV/provider checks) before SEO indexing.
 2. Manual authenticated browser/mobile QA.
+3. Product-model follow-up: approved/trusted user products need real ingredient
+   mapping or a catalog conversion relation before they can appear in
+   ingredient-specific public product lists.
 
-## Local User Product Hardening
+## Deployed User Product Hardening
 
+- Commit: `18a4141` - Security: Harden demo and user product moderation.
+- Remote D1 migration `0038_trusted_product_submitters.sql` applied to
+  `supplementstack-production`.
+- Preview URL: `https://5b9c9907.supplementstack.pages.dev`.
 - `d1-migrations/0038_trusted_product_submitters.sql` adds
   `users.is_trusted_product_submitter`.
 - `functions/api/modules/user-products.ts`: POST is rate-limited per user,
@@ -58,11 +63,16 @@ Continue from `main` using the top queue in this file.
   Products shows status and disables edit/delete for approved products;
   ProductCard uses the same safe host matching.
 - Checks passed: functions `npx tsc -p tsconfig.json`, frontend
-  `npm run lint --if-present`, frontend `npm run build`, and
-  `git diff --check` with CRLF warnings only.
+  `npm run lint --if-present`, frontend `npm run test --if-present -- --run`,
+  frontend `npm run build`, and `git diff --check` with CRLF warnings only.
+- Smoke checks passed: D1 column exists; spoofed `amazon.de.evil.com` resolves
+  to no shop; real `www.amazon.de` resolves to Amazon; unauthenticated admin
+  user-products returns HTTP 401.
 
-## Local Demo Hardening
+## Deployed Demo Hardening
 
+- Commit: `18a4141` - Security: Harden demo and user product moderation.
+- Preview URL: `https://5b9c9907.supplementstack.pages.dev`.
 - `functions/api/modules/demo.ts`: `/api/demo/products` now returns up to 7
   starter products; `POST /api/demo/sessions` is KV rate-limited per IP and
   returns a compatibility key/expiresAt without inserting submitted stack JSON
@@ -70,8 +80,11 @@ Continue from `main` using the top queue in this file.
 - `frontend/src/components/StackWorkspace.tsx`: Demo descriptions are kept in
   component state only and are not loaded from or written to localStorage.
 - Checks passed: functions `npx tsc -p tsconfig.json`, frontend
-  `npm run lint --if-present`, frontend `npm run build`, and
-  `git diff --check` with CRLF warnings only.
+  `npm run lint --if-present`, frontend `npm run test --if-present -- --run`,
+  frontend `npm run build`, and `git diff --check` with CRLF warnings only.
+- Smoke checks passed: preview/live root HTTP 200, preview/live
+  `/api/demo/products` HTTP 200 with 7 starter products, and preview
+  `POST /api/demo/sessions` HTTP 200 with empty-stack compatibility response.
 
 ## Model-Routing Reminder
 

@@ -28,11 +28,16 @@ Consent-based GA4 analytics is committed and deployed to Cloudflare Pages
 preview and live custom domain.
 Legal pages are committed and deployed to Cloudflare Pages preview and live
 custom domain.
+Demo/session abuse hardening, product creation rate limits, trusted
+user-product submitters, and shop-domain host matching are committed,
+remote-migrated, and deployed to Cloudflare Pages preview and live custom
+domain.
 GitHub Actions D1 backup has run successfully both manually and automatically;
 token scopes are verified.
 
 Latest relevant commits:
 
+- `18a4141` - Security: Harden demo and user product moderation.
 - `9c2c627` - Legal: Add imprint privacy and terms pages.
 - `a18136d` - Feature: Add consent-based GA4 analytics.
 - `5905a20` - Fix: Batch stack warning interaction lookup.
@@ -50,6 +55,69 @@ Latest relevant commits:
 - `dd58ba2` - Feature: Add dose recommendations API.
 - `b1fd347` - Refactor: Split Pages API into Hono modules.
 - `9a5f523` - DB: Phase B complete (migrations 0028-0035).
+
+## Demo And User Product Hardening
+
+### 2026-05-04 - D1 + Cloudflare Pages: demo/session abuse and product moderation hardening
+
+- Commit: `18a4141` - Security: Harden demo and user product moderation.
+- Remote D1 migration:
+  - Applied `d1-migrations/0038_trusted_product_submitters.sql` to
+    `supplementstack-production`.
+  - Control query confirmed `users.is_trusted_product_submitter` exists.
+- Scope:
+  - `/api/demo/products` now returns up to 7 starter products.
+  - `POST /api/demo/sessions` is KV rate-limited per client IP and no longer
+    persists submitted `stack_json` into D1.
+  - Legacy `GET /api/demo/sessions/:key` no longer returns stored user stack
+    changes.
+  - Demo stack descriptions are page-local in React state, not localStorage.
+  - `POST /api/user-products` is KV rate-limited per authenticated user.
+  - `POST /api/products` is KV rate-limited per authenticated user.
+  - New trusted submitter flag:
+    `users.is_trusted_product_submitter`.
+  - Normal user products remain `pending`; trusted submitters auto-create
+    `approved` user products.
+  - User-owned `approved` user products are locked against user edit/delete.
+  - Admin user-product tab can toggle trusted submitter status.
+  - Shop-domain matching now parses hostnames and allows only exact domain or
+    subdomain matches, preventing `amazon.de.evil.com` style spoofing.
+- Product-model caveat:
+  - `user_products.status = 'approved'` is the current moderation/lock state.
+  - Approved user products still need a durable ingredient mapping or catalog
+    conversion relation before they can appear in ingredient-specific public
+    product lists for everyone.
+- Local validation:
+  - `npx tsc -p tsconfig.json` in `functions/` passed.
+  - `npm run lint --if-present` in `frontend/` passed.
+  - `npm run test --if-present -- --run` in `frontend/` passed with no test
+    files via `--passWithNoTests`.
+  - `npm run build` in `frontend/` passed.
+  - `git diff --check` passed with only LF/CRLF warnings.
+- Build assets: JS `assets/index-BMGjisnj.js`, CSS
+  `assets/index-BBkQf4zK.css`.
+- Deploy prep:
+  - Rebuilt `frontend/dist`.
+  - Copied `functions/api` to `frontend/dist/functions/api`.
+  - Verified `frontend/dist/functions/api/[[path]].ts` exists.
+- Deploy command:
+  - `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://5b9c9907.supplementstack.pages.dev`.
+- Smoke checks:
+  - Preview root returned HTTP 200.
+  - Live root returned HTTP 200.
+  - Preview/live `/api/demo/products` returned HTTP 200 with 7 starter
+    products.
+  - Preview `POST /api/demo/sessions` returned HTTP 200 with a compatibility
+    key, `expiresAt`, and `stack: []`.
+  - Preview/live spoof resolve for `https://amazon.de.evil.com/item` returned
+    `shop_name: null`.
+  - Preview/live real resolve for `https://www.amazon.de/dp/test` returned
+    `shop_name: "Amazon"`.
+  - Preview/live unauthenticated `/api/admin/user-products` returned HTTP 401.
+- Wrangler warning:
+  - Dirty worktree warning was expected because `.claude/SESSION.md` and
+    `.claude/settings.json` remain dirty and were not part of the commit/deploy.
 
 ## Legal Pages
 

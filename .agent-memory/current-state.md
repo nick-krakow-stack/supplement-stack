@@ -43,8 +43,10 @@ unless verified against code.
 Phase B is complete. Phase C is complete. Phase D bundle is committed,
 remote-migrated, and deployed to Cloudflare Pages preview.
 
-Demo session hardening is implemented locally and awaiting commit/deploy:
+Demo session hardening is committed, migrated, and deployed:
 
+- Commit: `18a4141` - Security: Harden demo and user product moderation.
+- Preview URL: `https://5b9c9907.supplementstack.pages.dev`.
 - `functions/api/modules/demo.ts` now limits `/api/demo/products` to 7 starter
   products server-side.
 - `POST /api/demo/sessions` uses the existing KV `checkRateLimit` helper per
@@ -57,15 +59,24 @@ Demo session hardening is implemented locally and awaiting commit/deploy:
   component state only; Demo mode does not load or write the localStorage
   description cache.
 - Local checks passed: `npx tsc -p tsconfig.json` in `functions/`,
-  `npm run lint --if-present` in `frontend/`, `npm run build` in `frontend/`,
-  and `git diff --check` with CRLF warnings only.
+  `npm run lint --if-present` in `frontend/`,
+  `npm run test --if-present -- --run` in `frontend/` with no test files via
+  `--passWithNoTests`, `npm run build` in `frontend/`, and `git diff --check`
+  with CRLF warnings only.
+- Smoke checks passed on preview/live: root HTTP 200, `/api/demo/products`
+  HTTP 200 with 7 starter products, and preview `POST /api/demo/sessions`
+  HTTP 200 with an empty-stack compatibility response.
 
 User product moderation and shop-domain hardening is implemented locally and
-awaiting commit/deploy:
+deployed:
 
+- Commit: `18a4141` - Security: Harden demo and user product moderation.
 - New D1 migration
   `d1-migrations/0038_trusted_product_submitters.sql` adds
   `users.is_trusted_product_submitter`.
+- Remote D1 migration `0038_trusted_product_submitters.sql` was applied to
+  `supplementstack-production`; control query confirmed
+  `users.is_trusted_product_submitter` exists.
 - `POST /api/user-products` is KV rate-limited per user and creates products as
   `pending` by default, or `approved` immediately for trusted submitters.
 - User-owned `approved` user products are server-side locked against user
@@ -80,8 +91,18 @@ awaiting commit/deploy:
 - Admin and My Products UI expose trusted submitter controls, user-product
   status badges, and edit/delete lock messaging for approved user products.
 - Local checks passed: `npx tsc -p tsconfig.json` in `functions/`,
-  `npm run lint --if-present` in `frontend/`, `npm run build` in `frontend/`,
-  and `git diff --check` with CRLF warnings only.
+  `npm run lint --if-present` in `frontend/`,
+  `npm run test --if-present -- --run` in `frontend/` with no test files via
+  `--passWithNoTests`, `npm run build` in `frontend/`, and `git diff --check`
+  with CRLF warnings only.
+- Smoke checks passed on preview/live: `/api/shop-domains/resolve` rejects
+  `amazon.de.evil.com`, accepts `www.amazon.de`, and unauthenticated
+  `/api/admin/user-products` returns HTTP 401.
+- Product-model caveat: current `user_products` still have no durable
+  ingredient mapping or catalog conversion relation. `approved` is the
+  enforceable moderation/lock state; making approved user products appear in
+  ingredient-specific public product lists still needs a product-model
+  follow-up.
 
 Product required package metadata hardening is committed, remote-migrated, and
 live:
