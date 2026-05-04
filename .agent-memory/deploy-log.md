@@ -42,6 +42,20 @@ Latest relevant commits:
 - `b1fd347` - Refactor: Split Pages API into Hono modules.
 - `9a5f523` - DB: Phase B complete (migrations 0028-0035).
 
+## Pre-Launch Indexing Block
+
+### 2026-05-04 - Cloudflare Pages: robots.txt disallowing search crawlers
+
+- Commit: `1d8b288` - Fix: Disallow search crawlers by name in robots.txt (follow-up to `70aa1f9`).
+- Scope: created `frontend/public/robots.txt`. Initial version had only `User-agent: *` `Disallow: /`. After deploy, the live domain returned a Cloudflare-managed AI-bot block prepended at the front with `User-agent: *` `Allow: /`. Hardened the file to also list search crawlers by name (Googlebot, Googlebot-Image, Bingbot, DuckDuckBot, YandexBot, Baiduspider, Slurp), each with `Disallow: /`. Spec-wise a name-specific Disallow takes precedence over a wildcard Allow, so this protects against Cloudflare's prepend behaviour.
+- Local validation: `npm run build` (frontend/) clean. Vite copies `frontend/public/*` into `frontend/dist/` automatically.
+- Deploy commands: two deploys, the second after the hardening edit.
+- Preview URLs: `https://7d3e5fb6.supplementstack.pages.dev` then `https://78a83b47.supplementstack.pages.dev`.
+- Smoke checks:
+  - Preview `/robots.txt` returned HTTP 200 with the file as written.
+  - Live `https://supplementstack.de/robots.txt` returned HTTP 200; visible structure confirms Cloudflare's managed AI-bot block precedes our explicit search-crawler Disallows + wildcard Disallow.
+- Follow-up: when legal/compliance is cleared and SEO is intentionally enabled, replace the file with an empty/permissive version (or a per-path policy plus `Sitemap:` reference).
+
 ## Registration Data Persistence
 
 ### 2026-05-03 - Cloudflare Pages: persist age, gender, guideline_source on register

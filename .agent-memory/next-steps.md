@@ -1,6 +1,6 @@
 # Next Steps
 
-Last updated: 2026-05-03
+Last updated: 2026-05-04
 
 ## Current Baseline
 
@@ -19,8 +19,51 @@ Phase C is complete. The integrated Phase D rollout is complete:
   product-recommendation duplicate prevention, stack-warning authorization, and
   user-product validation are committed and deployed in `fcb1a6b`
   (`Fix: Close launch QA flow blockers`).
+- Mobile-first polish round 1 for 375px-430px is committed in `c76bcf4`
+  (`UX: Improve mobile core flows`); browser-QA at 375px/430px is still open.
+- Live-domain hardening: `FRONTEND_URL` switched to `https://supplementstack.de`,
+  CORS allowlist now includes live domain + Pages preview hash subdomains,
+  committed and deployed in `283cbc8`.
+- Registration data-loss bug closed: `age`/`gender`/`guideline_source` are now
+  persisted via `RegisterPage` → `AuthContext` → API → DB with backend
+  validation, committed and deployed in `e832263`.
+- Pre-launch indexing block: `frontend/public/robots.txt` disallows search
+  crawlers by name (Googlebot, Bingbot, etc.) plus wildcard, committed and
+  deployed in `1d8b288`. Cloudflare prepends a managed AI-bot block on the
+  live domain; specific Disallows take precedence over Cloudflare's wildcard
+  Allow.
 
 D1 backup is done and is not a next step. Production-domain promotion is done and is not a next step.
+
+## Audit Top-7 Bugfix Sprint Status
+
+Snapshot from the 2026-05-03 risk/UX audit (User-UX, Admin-UX, Risk forks).
+Each item lists the issue, file:line where applicable, and current status.
+Pick up the next ❌ item when continuing work.
+
+1. ✅ **CORS + `FRONTEND_URL` for live domain** — closed in `283cbc8`. Reset-mail link now points to `supplementstack.de`; CORS allowlist accepts live, www, all `*.supplementstack.pages.dev` previews, and `localhost:5173`.
+2. ✅ **RegisterPage `age`/`gender`/`guideline_source` data loss** — closed in `e832263`. Values flow through all layers; backend validates `age` 1-120, `gender` enum, `guideline_source` enum, empty strings → `NULL`.
+3. ✅ **Admin Stats field-name mismatch** — already mitigated by Codex; `frontend/src/pages/AdminPage.tsx:1157-1158` accepts both key forms (`products_total`/`products` and `products_pending`/`pending_products`).
+4. ⚠️ **`stack-warnings/:id` Auth + N+1** — Auth/IDOR closed in `fcb1a6b`. **N+1 still open**: `functions/api/modules/stacks.ts:159-166` uses an O(n²) double-loop firing one DB query per ingredient pair. Replace with a single `IN (...)` query joining the interactions table. M-effort.
+5. ✅ **`ingredients/:id/products` moderation filter** — closed in `fcb1a6b` (`functions/api/modules/ingredients.ts:427`).
+6. ✅ **`robots.txt` blocking indexing pre-launch** — closed in `1d8b288`. Note: Cloudflare auto-prepends a managed AI-bot block; if Cloudflare ever changes that prepend or if a new search-crawler user-agent emerges, revisit `frontend/public/robots.txt`.
+7. ❌ **Profile self-service (DSGVO Art. 17)** — `frontend/src/pages/ProfilePage.tsx` has no password change and no account deletion. Email is read-only. Required for German launch (DSGVO right to erasure). M-effort: needs new backend endpoints (`PATCH /api/me/password`, `DELETE /api/me`) plus frontend UI with confirmation flow.
+
+## Additional Open Items From The Audit (Beyond Top-7)
+
+- ❌ **Footer legal links missing** — `frontend/src/components/Layout.tsx` has only generic disclaimer lines; Impressum, Datenschutz, AGB links are absent. Stub pages would already help. Blocks Legal/Compliance sign-off.
+- ⚠️ **Pre-existing TS errors** — `frontend/src/api/admin.ts` and `frontend/src/api/base.ts` together have 3 latent TypeScript errors that don't block `npm run build` (Vite's esbuild) but show under `npx tsc --noEmit`. Not introduced by recent fixes.
+- ⚠️ **Mobile-polish browser-QA outstanding** — `c76bcf4` was deployed; manual validation at 375px/430px in a real browser still pending for Search, StackWorkspace, product modal, dosage modal, My Products, mobile nav.
+- ❌ **Demo session DoS vector** — `functions/api/modules/demo.ts:46-75` allows unbounded session creation. Add per-IP rate limit (KV) before launch traffic ramps up.
+- ❌ **No rate-limit on `POST /api/products`** — open from audit; review whether to add per-user/per-IP throttling.
+- ❌ **`shop-domains/resolve` substring spoofing** — `functions/api/modules/admin.ts:879-885` matches by substring, can be spoofed. Switch to exact host match.
+- ❌ **`stack_items.product_id` FK ambiguity** — `d1-migrations/0001_initial.sql:78-85` doesn't distinguish catalog `products` from `user_products`. Schema concern; needs a discriminator column or separate FKs. Requires migration — coordinate before touching.
+- ❌ **Migration 0036 missing UPDATE trigger** — `d1-migrations/0036_rename_recommendations_to_product_recommendations.sql:27-41` has compatibility view + INSERT/DELETE triggers but no UPDATE trigger. Compatibility window is temporary; the deferred cleanup migration in "Deferred / Later" will drop the view entirely, so this may be moot.
+- ❌ **No email verification on register** — open question whether this is launch-blocking. Currently anyone can register with any address.
+- ❌ **`window.alert` usage in admin** — replace with toast/dialog component for consistent UX.
+- ❌ **Admin `dose_recommendations` CRUD missing** — admin can edit translations but not the underlying `dose_recommendations` rows. Read-only currently.
+- ❌ **Admin audit-log viewer missing** — `admin_audit_log` is written to but has no UI surface.
+- ❌ **Admin TranslationsTab draft preservation + pagination** — explicit follow-up flagged in earlier UX pass; not done.
 
 ## Go-Live / Production Readiness
 
@@ -42,6 +85,9 @@ Priority 1 - Manual authenticated browser QA:
 - Capture any additional UX polish findings from manual browser QA and decide
   whether they are launch blockers or later polish.
 - Prioritize mobile ergonomics and obvious next actions for Kevin, Sabine, and Marco before expanding scope.
+- Validate the local mobile-first polish in a browser at 375px and 430px for
+  Search, StackWorkspace, product modal, dosage modal, My Products, and mobile
+  nav before deploy.
 
 Priority 2 - Legal and compliance final review (blocker for SEO indexing/public launch, not for live-domain availability):
 
