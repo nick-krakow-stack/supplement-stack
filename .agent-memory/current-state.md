@@ -39,8 +39,8 @@ unless verified against code.
 Phase B is complete. Phase C is complete. Phase D bundle is committed,
 remote-migrated, and deployed to Cloudflare Pages preview.
 
-Product required package metadata hardening is committed and remote-migrated,
-but not yet deployed to Cloudflare Pages:
+Product required package metadata hardening is committed, remote-migrated, and
+live:
 
 - Code commit: `52ead1f` - Data: Require complete product package metadata.
 - Remote D1 migration
@@ -53,10 +53,11 @@ but not yet deployed to Cloudflare Pages:
   shows the backfilled data, e.g. `Vitamin D3/K2 Tropfen` with brand
   `Supplement Stack Demo`, `serving_size=1`, `serving_unit=Tropfen`, and
   `servings_per_container=30`.
-- The committed API/frontend validation changes from `52ead1f` are not live
-  yet because no Cloudflare Pages deploy was run after the commit.
-- No Cloudflare Pages deploy was run intentionally because Claude's ongoing
-  `auth/Profile` files were dirty and must not be published accidentally.
+- The committed API/frontend validation changes from `52ead1f` rode along with
+  the Profile DSGVO deploy on 2026-05-04. Preview:
+  `https://16edb9e2.supplementstack.pages.dev`; build assets:
+  `index-Dkeio0yL.js` / `index-RAoQ0gyV.css`.
+- Both the product metadata code validation and the backfilled data are live.
 - Checks before commit passed: frontend `npm run lint --if-present`, frontend
   `npm run build`, functions `npx tsc -p tsconfig.json`, and
   `git diff --check` with CRLF warnings only.

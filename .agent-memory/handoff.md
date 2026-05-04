@@ -1,73 +1,49 @@
 # Handoff
 
 Last updated: 2026-05-04
-Update mode: Manual memory correction
 
-## Latest Notes
+## Continuation Point
 
-Product required package metadata hardening final status:
+Use `.agent-memory/next-steps.md` as the source of truth for the current
+top-queue. This handoff is only a short restart note.
 
-- Code commit exists: `52ead1f` - Data: Require complete product package
-  metadata.
-- Remote D1 migration `0037_backfill_product_required_metadata.sql` was applied
-  to `supplementstack-production`.
-- Remote D1 control query for old products 1-21 returned `missing_count = 0`
-  for missing brand, serving size/unit, servings per container, container
-  count, and main ingredient quantity/unit.
-- Live `/api/demo/products` returned HTTP 200 and shows new DB data, e.g.
-  `Vitamin D3/K2 Tropfen` with brand `Supplement Stack Demo`,
-  `serving_size=1`, `serving_unit=Tropfen`, and
-  `servings_per_container=30`.
-- Frontend lint, frontend build, functions `npx tsc -p tsconfig.json`, and
-  `git diff --check` passed before commit; diff check only reported CRLF
-  warnings.
-- No Cloudflare Pages deploy was run after `52ead1f` because Claude's ongoing
-  `auth/Profile` files were dirty and must not be published accidentally.
-- DB backfill data is live. API/frontend validation changes from `52ead1f` are
-  committed, but become live only with the next safe Pages deploy.
+## Git / Worktree
 
-## Git Snapshot
+- Branch: `main`.
+- Current last commit: `326050f` - Memory: Promote N+1 to top-of-queue
+  cross-agent TODO list.
+- Worktree is expected to be dirty from `.claude/SESSION.md` and
+  `.claude/settings.json`; memory files may also be dirty from this cleanup.
+- Do not treat `.claude/*` as part of the current implementation task.
 
-- Branch: main.
-- Latest git commit at memory correction time:
-  `808f228` - Memory: Record profile DSGVO deploy and close Top-7 sprint.
-- Relevant code commit:
-  `52ead1f` - Data: Require complete product package metadata.
+## Closed Baseline
 
-## Current Local Follow-up
+- Profile DSGVO self-service is closed in `78d8925`, deployed, and recorded in
+  `808f228`.
+- Product required package metadata hardening is live: data migration 0037 and
+  API/frontend validation from `52ead1f` are both live per
+  `.agent-memory/next-steps.md`.
+- Robots pre-launch indexing block is closed.
+- D1 backup verification is done.
 
-- Do not deploy blindly. Before the next Pages deploy, verify the intended diff
-  so unrelated Claude `auth/Profile` work is not published accidentally.
-- Next safe Pages deploy should publish the committed validation changes from
-  `52ead1f`.
-- DB backfill data from migration 0037 is already live on
-  `supplementstack-production`.
-- Later product-model follow-up: user products need real ingredient mapping or
-  must be handled separately in ingredient-specific product selection.
+## Open Top Queue
 
-## Current Open Work
+Pick from `.agent-memory/next-steps.md` first:
 
-- Manual authenticated browser QA remains open for register/login, stack,
-  wishlist, own products, profile, and admin flows.
-- Mobile browser/device QA at 375px, 390px, and 430px remains open for demo,
-  logged-in, and admin flows.
-- Legal/compliance review remains a blocker for public SEO indexing.
-- Launch hardening items from `.agent-memory/next-steps.md` remain the source
-  of truth for prioritization.
+1. Stack-warnings N+1 query in `functions/api/modules/stacks.ts`.
+2. Footer legal links: Impressum / Datenschutz / AGB.
+3. Demo session DoS rate limit in `functions/api/modules/demo.ts`.
+
+## Still Open
+
+- Manual authenticated browser/mobile QA remains open.
+- Legal/compliance review remains open and gates SEO indexing/public launch.
 
 ## Required Startup For Next Agent
 
 1. Read `AGENTS.md`.
 2. Read `CLAUDE.md`.
 3. Read `.agent-memory/current-state.md`.
-4. Read this handoff.
+4. Read `.agent-memory/handoff.md`.
 5. Read `.agent-memory/next-steps.md`.
 6. Run `git status --short`.
-
-## Constraints
-
-- Do not write secrets, tokens, passwords, or raw credential values into memory
-  files.
-- Keep implementation compatible with Cloudflare Workers / Pages Functions.
-- Review untracked files before deleting or committing them.
-- Use code and migrations as source of truth when docs conflict.
