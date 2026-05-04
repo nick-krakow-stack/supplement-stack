@@ -42,6 +42,22 @@ Latest relevant commits:
 - `b1fd347` - Refactor: Split Pages API into Hono modules.
 - `9a5f523` - DB: Phase B complete (migrations 0028-0035).
 
+## Registration Data Persistence
+
+### 2026-05-03 - Cloudflare Pages: persist age, gender, guideline_source on register
+
+- Commit: `e832263` - Fix: Persist age, gender, guideline_source on register.
+- Scope: `RegisterPage.tsx` collected `age`/`gender`/`guidelineSource` but only `health_consent` was forwarded; values are now passed through `AuthContext.register()` and the `/api/auth/register` endpoint and persisted on the `users` row. Backend validates `age` (integer 1-120), `gender` (`männlich`/`weiblich`/`divers`), `guideline_source` (`DGE`/`Studien`/`Influencer`); empty strings normalize to `NULL`.
+- DB schema: columns `users.age`, `users.gender`, `users.guideline_source` already exist (`d1-migrations/0001_initial.sql`); no migration needed.
+- Local validation: `npx tsc -p tsconfig.json` (functions/) clean; `npm run build` (frontend/) clean. 3 pre-existing TS errors in `frontend/src/api/admin.ts` and `src/api/base.ts` are unrelated to this change.
+- Deploy command: `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://0718b546.supplementstack.pages.dev`
+- Build assets: JS `index-zWVCB7vc.js`, CSS `index-Cf3yP80d.css`.
+- Smoke checks:
+  - Preview root and live `https://supplementstack.de/` returned HTTP 200.
+  - `POST /api/auth/register` with `age: 999` returned HTTP 400 with `{"error":"Alter muss eine ganze Zahl zwischen 1 und 120 sein."}` — backend validation confirmed.
+  - Full register-flow smoke deferred (would create a real user in production D1; rate-limit window also still relevant).
+
 ## Live Domain Hardening
 
 ### 2026-05-03 - Cloudflare Pages: FRONTEND_URL + CORS allowlist for live domain
