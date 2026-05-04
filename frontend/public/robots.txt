@@ -1,0 +1,3 @@
+# Pre-launch: indexing intentionally disabled until legal/compliance clears.
+User-agent: *
+Disallow: /
