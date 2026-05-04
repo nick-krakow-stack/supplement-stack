@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Leaf, Menu, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import LegalDisclaimer from './LegalDisclaimer';
+import { resetAnalyticsConsentChoice } from '../lib/analytics';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -138,6 +139,18 @@ export default function Layout({ children }: LayoutProps) {
       <main className="mx-auto max-w-[1280px] px-4 py-6 sm:px-6 lg:px-8">{children}</main>
 
       <footer className="mx-auto max-w-[1280px] px-4 pb-6 pt-2 sm:px-6 lg:px-8 space-y-1">
+        <nav className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-bold text-slate-500">
+          <Link to="/datenschutz" className="hover:text-blue-700 hover:underline">
+            Datenschutz
+          </Link>
+          <button
+            type="button"
+            onClick={resetAnalyticsConsentChoice}
+            className="rounded-none bg-transparent p-0 text-xs font-bold text-slate-500 hover:text-blue-700 hover:underline"
+          >
+            Cookie-Einstellungen
+          </button>
+        </nav>
         <LegalDisclaimer variant="affiliate" />
         <LegalDisclaimer variant="health" />
       </footer>

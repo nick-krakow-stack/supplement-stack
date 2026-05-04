@@ -3,6 +3,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import Layout from './components/Layout';
 import AdminLayout from './components/AdminLayout';
 import ProtectedRoute from './components/ProtectedRoute';
+import CookieConsentBanner from './components/CookieConsentBanner';
 
 import LandingPage from './pages/LandingPage';
 import SearchPage from './pages/SearchPage';
@@ -16,6 +17,7 @@ import DemoPage from './pages/DemoPage';
 import MyProductsPage from './pages/MyProductsPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
+import PrivacyPage from './pages/PrivacyPage';
 
 function NotFoundPage() {
   return (
@@ -40,6 +42,7 @@ function NotFoundPage() {
 export default function App() {
   return (
     <AuthProvider>
+      <CookieConsentBanner />
       <Routes>
         {/* Admin — completely separate layout, no normal navbar/footer */}
         <Route
@@ -90,6 +93,7 @@ export default function App() {
                 />
                 <Route path="/forgot-password" element={<ForgotPasswordPage />} />
                 <Route path="/reset-password" element={<ResetPasswordPage />} />
+                <Route path="/datenschutz" element={<PrivacyPage />} />
                 <Route
                   path="/my-products"
                   element={
