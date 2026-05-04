@@ -1,244 +1,96 @@
 # Handoff
 
-Last updated: 2026-05-03
-Update mode: Manual memory update after launch QA deploy
+Last updated: 2026-05-04
+Update mode: Manual memory-worker cleanup
 
-## Continuation Point
+## Current State
 
-Launch QA flow blockers are fixed, committed, and deployed.
+Supplement Stack is on the Cloudflare-native line:
 
-Code commit:
+- Frontend: React, Vite, TypeScript, Tailwind CSS.
+- Backend: Cloudflare Pages Functions with Hono.
+- Database: Cloudflare D1.
+- Storage: Cloudflare R2 for product images.
+- Deployment: Wrangler CLI / Cloudflare Pages.
 
-- `fcb1a6b` - Fix: Close launch QA flow blockers.
+Phase B, Phase C, and the integrated Phase D rollout are complete. Production
+custom domain `https://supplementstack.de/` is live in parallel with Pages
+preview URLs. Public SEO indexing remains intentionally blocked until legal and
+compliance sign-off.
 
-Deploy:
+## Latest Relevant Work
 
-- Command: `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
-- Preview URL: `https://ae0fa762.supplementstack.pages.dev`
-- Build assets: JS `index-Hw7gzAwb.js`, CSS `index-DWw_l_3p.css`
-- Wrangler warned about uncommitted changes because memory files and
-  `.claude/SESSION.md` were dirty; expected.
+Mobile core-flow polish is no longer local-only. It is committed and deployed:
 
-Launch-QA code scope:
+- Commit: `c76bcf4` - UX: Improve mobile core flows.
+- Preview URL: `https://d5b331fd.supplementstack.pages.dev`.
+- Live domain `https://supplementstack.de/` returned HTTP 200 after deploy with
+  JS `assets/index-Bl-g6o41.js` and CSS `assets/index-Cf3yP80d.css`.
+- Checks passed: frontend `npm run lint --if-present`, frontend
+  `npm run build`, and `git diff --check` with only LF/CRLF warnings.
 
-- `frontend/src/pages/WishlistPage.tsx`
-- `frontend/src/api/demo.ts`
-- `frontend/src/api/stacks.ts`
-- `frontend/src/api/wishlist.ts`
-- `frontend/src/api/products.ts`
-- `functions/api/modules/ingredients.ts`
-- `functions/api/modules/stacks.ts`
-- `functions/api/modules/user-products.ts`
+Mobile polish scope completed for core flows: responsive header/nav, product
+cards, SearchPage stack footer/chips, modal bottom sheets and touch targets,
+product selection modal, dosage modal, user product form, and My Products
+mobile rows.
 
-Implemented:
+P1 mobile collision fix is included: `ModalWrapper` uses `z-[60]`, and the
+SearchPage fixed footer is hidden while a modal is open.
 
-- Wishlist shop-domain loading accepts current public `{ shops }` response and
-  always stores a `ShopDomain[]` fallback.
-- Public `GET /api/ingredients/:id/products` now requires
-  `p.visibility = 'public'` and `p.moderation_status = 'approved'`.
-- Product recommendation POST validates JSON/id/type and returns 409 for an
-  existing ingredient/product recommendation pair before insert.
-- `GET /api/stack-warnings/:id` now requires auth and allows only stack owner
-  or admin, matching stack GET authorization behavior.
-- Stale frontend API helpers now use `/demo/sessions`, `product_ids`,
-  wishlist `{ wishlist }`, and `PUT /products/:id/status` with
-  `moderation_status`.
-- User-products POST/PUT now catch invalid JSON with 400, trim/require
-  non-empty names, require non-negative numeric price on POST, allow missing
-  optional numeric fields, and reject provided non-numeric or negative price,
-  serving size, servings per container, and container count values. PUT keeps
-  price optional but validates it when provided.
+Claude has since committed robots and memory changes. Recent commits include:
 
-Checks run and passed:
+- `1df7616` - Memory: Record robots.txt deploy and Top-7 sprint status.
+- `1d8b288` - Fix: Disallow search crawlers by name in robots.txt.
+- `70aa1f9` - Fix: Add robots.txt blocking all indexing pre-launch.
+- `c76bcf4` - UX: Improve mobile core flows.
 
-- `npm run lint --if-present` in `frontend/`
-- `npm run test --if-present -- --run` in `frontend/` passed with no test
-  files via `--passWithNoTests`
-- `npm run build` in `frontend/`
-- `npx tsc -p tsconfig.json` in `functions/`
-- `git diff --check` reported only CRLF warnings.
+D1 backup verification is complete and must not be listed as an active next
+step.
 
-Smoke checks passed on preview/live:
+## Dirty Worktree
 
-- Root HTTP 200.
-- D3 search HTTP 200.
-- `/api/ingredients/1/products` HTTP 200 with approved/public D3 products.
-- `/api/ingredients/1/recommendations` HTTP 200 with 4 dose recommendations.
-- `/api/shop-domains` HTTP 200 with `{ shops }`.
-- `/api/demo/products` HTTP 200.
-- Unauthenticated `/api/stack-warnings/1` HTTP 401.
-- Unauthenticated `/api/admin/translations/ingredients` HTTP 401.
-- Unauthenticated `/api/user-products` HTTP 401.
+Expected unrelated dirty files from Claude/Profile work must remain dirty:
 
-Step 1 status: code-level QA blockers are fixed and deployed. Browser-level
-authenticated QA remains manual validation, not an implementation blocker.
-Registration was tested successfully before rate limiting kicked in, but a
-final fresh registration smoke after deploy was not completed because
-`/auth/register` returned 429 after repeated QA attempts.
+```text
+M .claude/SESSION.md
+M .claude/settings.json
+M frontend/src/api/auth.ts
+M frontend/src/pages/ProfilePage.tsx
+M functions/api/modules/auth.ts
+```
 
-Next continuation point:
+Memory files may also be dirty from this cleanup:
 
-- Once the rate-limit window clears, run one fresh browser/API registration
-  smoke.
-- Then run logged-in browser QA for stack, wishlist, own products, and admin
-  flows.
+```text
+M .agent-memory/current-state.md
+M .agent-memory/handoff.md
+M .agent-memory/next-steps.md
+```
 
-`.claude/SESSION.md` was already dirty and should not be touched unless
-explicitly requested.
+Do not undo, restage, or rework Claude's robots commits or unrelated dirty
+Profile/auth files.
 
-Previous targeted user/demo/admin usability fixes are committed and deployed.
+## Next Step
 
-- Code commit: `8fb5431` - UX: Improve stack and admin usability flows.
-- Deploy command: `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
-- Preview URL: `https://2b00223a.supplementstack.pages.dev`
-- Preview smoke checks passed: root HTTP 200 with JS `index-D8jGeaah.js`, CSS
-  `index-DWw_l_3p.css`, and `x-robots-tag: noindex`; D3 search HTTP 200 with
-  Vitamin D3; admin translations unauth HTTP 401, not 404; dose
-  recommendations HTTP 200 with 4 rows.
-- Live smoke checks passed: `https://supplementstack.de/` HTTP 200 with the
-  same JS/CSS asset names; live D3 search HTTP 200; live admin translations
-  unauth HTTP 401, not 404.
-- Wrangler warned that uncommitted changes existed. Expected: memory files and
-  `.claude/SESSION.md` were dirty while the code commit itself was committed.
+Run real-device/browser QA at 375px, 390px, and 430px for:
 
-Files changed by code commit `8fb5431`:
+- Demo flow.
+- Logged-in user flow.
+- Admin flow.
 
-- `frontend/src/pages/SearchPage.tsx`
-- `frontend/src/components/modals/Modal3Dosage.tsx`
-- `frontend/src/components/StackWorkspace.tsx`
-- `frontend/src/components/SearchBar.tsx`
-- `frontend/src/components/modals/Modal2Products.tsx`
-- `frontend/src/pages/WishlistPage.tsx`
-- `frontend/src/pages/LoginPage.tsx`
-- `frontend/src/pages/RegisterPage.tsx`
-- `frontend/src/pages/AdminPage.tsx`
-- `frontend/src/components/AdminLayout.tsx`
-- `functions/api/modules/admin.ts`
+Continue usability polish only if QA finds issues. Current focus is validation,
+not deployment.
 
-Implemented in `8fb5431`:
+## Constraints For Next Agent
 
-- SearchPage logged-in add now uses the selected Modal3 stack id and persists
-  `product_ids` entries with dosage/timing metadata. SearchPage remove/clear now
-  persists remaining stack items when a saved stack is known.
-- Login/Register default post-auth redirect is `/stacks`, while route state or
-  `?redirect=` is respected for safe same-origin paths.
-- StackWorkspace duplicate add now leaves the modal open and shows
-  `Produkt ist bereits in diesem Stack.`
-- StackWorkspace empty stack has a primary `Produkt hinzufuegen` CTA and hides
-  the bottom bar until products exist.
-- Stack mail action is disabled with inline `E-Mail-Versand folgt bald.` copy
-  instead of an active alert dead end.
-- SearchBar shows a no-results state after completed empty searches and does
-  not show an error for aborted typing searches.
-- Modal2Products retry calls the local loader instead of `window.location.reload()`.
-- Wishlist empty CTA routes to `/search`.
-- Modal3 no-login copy now says the browser Demo stack is temporary.
-- Admin stats product cards now fall back from `products_total` /
-  `products_pending` to API keys `products` / `pending_products`.
-- Admin product affiliate toggles save immediately through `PUT /api/products/:id`,
-  show saving state, and roll back locally on failure.
-- Admin products distinguish `Nick Affiliate`, `Shop-Link ohne Affiliate`, and
-  `kein Link`, including shop host where available.
-- IngredientsTab recommendation product dropdown now loads `/api/admin/products`
-  and includes moderation/visibility status in option labels where available.
-- UserProductsTab approve/reject/delete check `res.ok`, show an error banner,
-  and do not remove list items on failed actions.
-- Admin user-product approve/reject/delete routes return 404 when no row was
-  touched.
-- UserProductsTab action controls and AdminLayout mobile close received small
-  touch-target improvements.
-- Admin TranslationsTab draft preservation and pagination are documented as
-  follow-up only; no TranslationsTab implementation was changed in this pass.
-
-Next agent should continue with manual browser QA for the actual product
-surfaces, especially authenticated/logged-in paths:
-
-- Logged-in user: register/login, search, product modal, add product to stack,
-  edit/remove stack items, wishlist, profile, and user product management.
-- Demo: no-login ingredient search, product selection, add-to-stack, modal focus
-  behavior, empty states, and error states.
-- Admin: product management, dose recommendations, translation editing,
-  affiliate/user link distinction, and moderation states.
-- Keep TranslationsTab draft preservation and pagination as explicit follow-up
-  work; it was intentionally not changed in this pass.
-- Capture any further UX polish findings from browser QA and classify launch
-  blockers versus later polish.
-- Keep OAuth out of the immediate polish pass. Google OAuth is a later
-  standalone task; Apple Login is omitted for now; Amazon Login can be evaluated
-  later but is not a launch blocker.
-- Preserve Health Consent as mandatory if/when OAuth is added. OAuth replaces
-  only password login and must not bypass consent, profile, recommendation, or
-  guideline logic.
-- Existing Google OAuth stubs and `google_id` are only a starting point; real
-  provider identity structure, callback handling, and user-linking/account-merge
-  behavior remain open design work.
-
-After usability, continue with legal/content/i18n/test/SEO work in that order:
-
-- Legal/compliance remains the blocker for SEO indexing/public launch copy:
-  Impressum, Datenschutz, cookie/cookie-banner needs, health disclaimer,
-  affiliate disclosure, German health-claim wording, and affiliate labeling.
-- Content/data QA remains required for D3 and other ingredient pages, product
-  data, product recommendations, dosage display, and German default guideline
-  wording against source data.
-- I18n/localization is a planned track. Launch remains DE-only, but architecture
-  must support locale + country + guideline-set, not just translated text.
-  German/DGE/D-A-CH is the DE default; other countries need configurable
-  recommendation sources and rules, e.g. USA must not inherit DGE/D-A-CH by
-  default.
-- Add targeted API/UI smoke and unit tests for launch-critical paths.
-- SEO/indexing preparation can continue, but indexing stays gated until
-  legal/compliance approval and final production-domain content checks.
-
-## Current Baseline
-
-- Production custom domain `supplementstack.de` is live in parallel to
-  Cloudflare Pages preview URLs and intentionally not indexed yet.
-- Recent deploys have been published to both the subdomain and live domain.
-- Phase B, Phase C, and Phase D rollout are complete.
-- Product recommendations rename and temporary compatibility layer are deployed.
-- Admin translations MVP and expansion are committed and deployed.
-- D1 backup verification is complete.
-- Targeted User/Demo/Search/Stack UX fixes plus Admin UX fixes are committed
-  and deployed in `8fb5431`.
-- `wrangler.toml` already contains `pages_build_output_dir = "frontend/dist"`.
-- Compatibility cleanup remains later: drop the temporary `recommendations`
-  compatibility view and triggers after old previews/deploy windows are
-  irrelevant.
-
-## Latest Commits / Deploys
-
-- `8fb5431` - UX: Improve stack and admin usability flows. Deployed to
-  `https://2b00223a.supplementstack.pages.dev`; live custom-domain smoke checks
-  passed on `https://supplementstack.de/`.
-- `078fc31` - UX: Auto-focus search field in 'Produkt hinzufuegen' modal
-  (Demo + Stack-Workspace). Cloudflare Pages deploy successful per
-  `.claude/SESSION.md` at 2026-05-02 13:28:28; preview URL not recorded.
-- `e8f2bbc` - UX: Auto-focus name field when opening 'Produkt hinzufuegen'
-  modal. Cloudflare Pages deploy successful per `.claude/SESSION.md` at
-  2026-05-02 13:22:20; preview URL not recorded.
-- `cebd31a` - Memory: Production domain live, reorganize next-steps.
-- `216e2df` - Ops: Track research sources and ignore local Claude commands.
-- `49ed83e` - Feature: Expand admin translation management.
-- `862ed57` - Feature: Phase D product recommendations and translations.
-
-## Required Startup For Next Agent
-
-1. Read `AGENTS.md`.
-2. Read `CLAUDE.md`.
-3. Read `.agent-memory/current-state.md`.
-4. Read this handoff.
-5. Read `.agent-memory/next-steps.md`.
-6. Run `git status --short`.
-
-## Constraints
-
+- Required startup: read `AGENTS.md`, `CLAUDE.md`,
+  `.agent-memory/current-state.md`, this handoff, and
+  `.agent-memory/next-steps.md`, then run `git status --short`.
 - Do not write secrets, tokens, passwords, or raw credential values into memory
   files.
-- Do not revert unrelated or user/Claude changes.
-- Current expected worktree before committing memory: `.claude/SESSION.md` plus
-  memory files may be modified. Do not touch `.claude/SESSION.md` unless the
-  user explicitly asks.
-- Use `dose_recommendations` for dosage recommendations.
+- Do not touch `.claude/SESSION.md`, `.claude/settings.json`,
+  `frontend/src/api/auth.ts`, `frontend/src/pages/ProfilePage.tsx`,
+  `functions/api/modules/auth.ts`, or robots/public files unless Nick
+  explicitly asks.
 - Keep implementation compatible with Cloudflare Workers / Pages Functions.
-- Review untracked files before deleting or committing them.
+- Use code and migrations as source of truth when docs conflict.

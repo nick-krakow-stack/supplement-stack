@@ -19,8 +19,11 @@ Phase C is complete. The integrated Phase D rollout is complete:
   product-recommendation duplicate prevention, stack-warning authorization, and
   user-product validation are committed and deployed in `fcb1a6b`
   (`Fix: Close launch QA flow blockers`).
-- Mobile-first polish round 1 for 375px-430px is committed in `c76bcf4`
-  (`UX: Improve mobile core flows`); browser-QA at 375px/430px is still open.
+- Mobile-first polish round 1 for 375px-430px is committed and deployed in
+  `c76bcf4` (`UX: Improve mobile core flows`). Preview:
+  `https://d5b331fd.supplementstack.pages.dev`; live domain returned HTTP 200
+  with JS `assets/index-Bl-g6o41.js` and CSS `assets/index-Cf3yP80d.css`.
+  Browser/device QA at 375px, 390px, and 430px is still open.
 - Live-domain hardening: `FRONTEND_URL` switched to `https://supplementstack.de`,
   CORS allowlist now includes live domain + Pages preview hash subdomains,
   committed and deployed in `283cbc8`.
@@ -53,7 +56,7 @@ Pick up the next ❌ item when continuing work.
 
 - ❌ **Footer legal links missing** — `frontend/src/components/Layout.tsx` has only generic disclaimer lines; Impressum, Datenschutz, AGB links are absent. Stub pages would already help. Blocks Legal/Compliance sign-off.
 - ⚠️ **Pre-existing TS errors** — `frontend/src/api/admin.ts` and `frontend/src/api/base.ts` together have 3 latent TypeScript errors that don't block `npm run build` (Vite's esbuild) but show under `npx tsc --noEmit`. Not introduced by recent fixes.
-- ⚠️ **Mobile-polish browser-QA outstanding** — `c76bcf4` was deployed; manual validation at 375px/430px in a real browser still pending for Search, StackWorkspace, product modal, dosage modal, My Products, mobile nav.
+- ⚠️ **Mobile-polish browser-QA outstanding** — `c76bcf4` was deployed; manual validation at 375px, 390px, and 430px in a real browser is still pending for demo, logged-in, and admin flows, including Search, StackWorkspace, product modal, dosage modal, My Products, and mobile nav.
 - ❌ **Demo session DoS vector** — `functions/api/modules/demo.ts:46-75` allows unbounded session creation. Add per-IP rate limit (KV) before launch traffic ramps up.
 - ❌ **No rate-limit on `POST /api/products`** — open from audit; review whether to add per-user/per-IP throttling.
 - ❌ **`shop-domains/resolve` substring spoofing** — `functions/api/modules/admin.ts:879-885` matches by substring, can be spoofed. Switch to exact host match.
@@ -85,9 +88,10 @@ Priority 1 - Manual authenticated browser QA:
 - Capture any additional UX polish findings from manual browser QA and decide
   whether they are launch blockers or later polish.
 - Prioritize mobile ergonomics and obvious next actions for Kevin, Sabine, and Marco before expanding scope.
-- Validate the local mobile-first polish in a browser at 375px and 430px for
-  Search, StackWorkspace, product modal, dosage modal, My Products, and mobile
-  nav before deploy.
+- Validate the deployed mobile-first polish in a browser or real device at
+  375px, 390px, and 430px for demo, logged-in, and admin flows. Cover Search,
+  StackWorkspace, product modal, dosage modal, My Products, mobile nav, and
+  admin touch/layout behavior.
 
 Priority 2 - Legal and compliance final review (blocker for SEO indexing/public launch, not for live-domain availability):
 

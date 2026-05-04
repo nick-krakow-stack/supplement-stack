@@ -1,6 +1,6 @@
 # Current State
 
-Last updated: 2026-05-03
+Last updated: 2026-05-04
 
 ## Project
 
@@ -115,8 +115,54 @@ Registration was tested successfully before rate limiting kicked in, but a
 final fresh registration smoke after deploy was not completed because
 `/auth/register` returned 429 after repeated QA attempts.
 
+Mobile-first polish round 1 is committed and deployed:
+
+- Commit: `c76bcf4` - UX: Improve mobile core flows.
+- Preview URL: `https://d5b331fd.supplementstack.pages.dev`.
+- Live domain `https://supplementstack.de/` returned HTTP 200 after deploy
+  with new build assets JS `assets/index-Bl-g6o41.js` and CSS
+  `assets/index-Cf3yP80d.css`.
+- Local checks passed: `npm run lint --if-present` in `frontend/`,
+  `npm run build` in `frontend/`, and `git diff --check` with only LF/CRLF
+  warnings.
+- Functions were not changed, so no Functions TypeScript compile was run.
+- Browser/device QA at 375px, 390px, and 430px remains the next validation
+  step for demo, logged-in, and admin flows.
+
+Scope was frontend-only and targeted 375px-430px ergonomics:
+
+- `frontend/src/styles.css`
+- `frontend/src/components/Layout.tsx`
+- `frontend/src/components/ProductCard.tsx`
+- `frontend/src/components/modals/ModalWrapper.tsx`
+- `frontend/src/components/modals/Modal2Products.tsx`
+- `frontend/src/components/modals/Modal3Dosage.tsx`
+- `frontend/src/components/modals/UserProductForm.tsx`
+- `frontend/src/pages/SearchPage.tsx`
+- `frontend/src/pages/MyProductsPage.tsx`
+
+Implemented: responsive header/nav, product cards, SearchPage stack footer and
+chips, modal bottom sheets and touch targets, product selection modal, dosage
+modal, user product form, My Products mobile rows, StackWorkspace toolbar and
+bottom bar wrapping, 44px touch targets for key controls, safe-area modal
+padding, product modal rows that stack below 431px, dosage footer and portion
+controls with touch-sized buttons, SearchPage fixed footer/chips/remove
+controls hardened for narrow screens, MyProducts rows/form actions stacked on
+xs screens, and Layout mobile nav/email/menu touch improvements.
+
+P1 z-index/footer collision is fixed via `ModalWrapper` `z-[60]` plus hiding
+the SearchPage footer while a modal is open.
+
 Last relevant commits on `main`:
 
+- `1df7616` - Memory: Record robots.txt deploy and Top-7 sprint status.
+- `1d8b288` - Fix: Disallow search crawlers by name in robots.txt.
+- `70aa1f9` - Fix: Add robots.txt blocking all indexing pre-launch.
+- `1126d15` - Memory: Record register data-persistence deploy.
+- `e832263` - Fix: Persist age, gender, guideline_source on register.
+- `081af3d` - Memory: Record live-domain CORS + FRONTEND_URL deploy.
+- `283cbc8` - Fix: Switch FRONTEND_URL and CORS allowlist to live domain.
+- `c76bcf4` - UX: Improve mobile core flows.
 - `fcb1a6b` - Fix: Close launch QA flow blockers.
 - `8fb5431` - UX: Improve stack and admin usability flows.
 - `078fc31` - UX: Auto-focus search field in 'Produkt hinzufuegen' modal (Demo + Stack-Workspace).
