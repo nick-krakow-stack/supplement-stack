@@ -24,6 +24,22 @@ import {
 
 const auth = new Hono<AppContext>()
 
+const ALLOWED_GENDERS = ['männlich', 'weiblich', 'divers'] as const
+const ALLOWED_DIETS = ['omnivore', 'vegetarisch', 'vegan'] as const
+
+function normalizeGuidelineSource(value: unknown): string | null | undefined {
+  if (value === undefined) return undefined
+  if (value === null) return null
+  if (typeof value !== 'string') return undefined
+
+  const trimmed = value.trim()
+  if (trimmed === '') return null
+  if (trimmed === 'DGE') return 'DGE'
+  if (trimmed === 'Studien' || trimmed === 'studien') return 'studien'
+  if (trimmed === 'Influencer' || trimmed === 'influencer') return 'influencer'
+  return undefined
+}
+
 // POST /api/auth/register
 auth.post('/register', async (c) => {
   const ip = c.req.header('CF-Connecting-IP') ?? c.req.header('X-Forwarded-For') ?? 'unknown'
@@ -42,7 +58,7 @@ auth.post('/register', async (c) => {
   // Normalize: empty strings → undefined (treat as not provided)
   const ageRaw = data.age
   const genderRaw = typeof data.gender === 'string' ? data.gender.trim() : data.gender
-  const guidelineRaw = typeof data.guideline_source === 'string' ? data.guideline_source.trim() : data.guideline_source
+  const guidelineValue = normalizeGuidelineSource(data.guideline_source)
 
   let ageValue: number | null = null
   if (ageRaw !== undefined && ageRaw !== null && (ageRaw as unknown) !== '') {
@@ -54,20 +70,14 @@ auth.post('/register', async (c) => {
 
   let genderValue: string | null = null
   if (genderRaw !== undefined && genderRaw !== null && genderRaw !== '') {
-    const allowed = ['männlich', 'weiblich', 'divers'] as const
-    if (!allowed.includes(genderRaw as typeof allowed[number])) {
+    if (!ALLOWED_GENDERS.includes(genderRaw as typeof ALLOWED_GENDERS[number])) {
       return c.json({ error: 'Geschlecht muss "männlich", "weiblich" oder "divers" sein.' }, 400)
     }
     genderValue = genderRaw
   }
 
-  let guidelineValue: string | null = null
-  if (guidelineRaw !== undefined && guidelineRaw !== null && guidelineRaw !== '') {
-    const allowed = ['DGE', 'Studien', 'Influencer'] as const
-    if (!allowed.includes(guidelineRaw as typeof allowed[number])) {
-      return c.json({ error: 'Leitlinienquelle muss "DGE", "Studien" oder "Influencer" sein.' }, 400)
-    }
-    guidelineValue = guidelineRaw
+  if (data.guideline_source !== undefined && guidelineValue === undefined) {
+    return c.json({ error: 'Leitlinienquelle muss "DGE", "Studien" oder "Influencer" sein.' }, 400)
   }
 
   const existing = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(data.email).first<{ id: number }>()
@@ -84,7 +94,7 @@ auth.post('/register', async (c) => {
     data.weight ?? null,
     data.diet ?? null,
     data.goals ?? null,
-    guidelineValue,
+    guidelineValue ?? null,
   ).run()
 
   const userId = result.meta.last_row_id
@@ -359,9 +369,7 @@ meApp.put('/', async (c) => {
   const gender = hasKey('gender') && typeof body.gender === 'string' && body.gender.trim() !== '' ? body.gender.trim() : null
   const diet = hasKey('diet') && typeof body.diet === 'string' && body.diet.trim() !== '' ? body.diet.trim() : null
   const goals = hasKey('goals') && typeof body.goals === 'string' && body.goals.trim() !== '' ? body.goals.trim() : null
-  const guidelineSource = hasKey('guideline_source') && typeof body.guideline_source === 'string' && body.guideline_source.trim() !== ''
-    ? body.guideline_source.trim()
-    : null
+  const guidelineSource = hasKey('guideline_source') ? normalizeGuidelineSource(body.guideline_source) : undefined
   const isSmoker = body.is_smoker === true || body.is_smoker === 1 ? 1 : body.is_smoker === false || body.is_smoker === 0 ? 0 : null
 
   if (hasKey('age') && age !== null && (!Number.isInteger(age) || age < 1 || age > 120)) {
@@ -369,6 +377,21 @@ meApp.put('/', async (c) => {
   }
   if (hasKey('weight') && weight !== null && (!Number.isFinite(weight) || weight <= 0 || weight > 500)) {
     return c.json({ error: 'weight must be greater than 0' }, 400)
+  }
+  if (hasKey('gender') && body.gender !== null && body.gender !== '' && typeof body.gender !== 'string') {
+    return c.json({ error: 'gender must be männlich, weiblich, or divers' }, 400)
+  }
+  if (hasKey('gender') && gender !== null && !ALLOWED_GENDERS.includes(gender as typeof ALLOWED_GENDERS[number])) {
+    return c.json({ error: 'gender must be männlich, weiblich, or divers' }, 400)
+  }
+  if (hasKey('diet') && body.diet !== null && body.diet !== '' && typeof body.diet !== 'string') {
+    return c.json({ error: 'diet must be omnivore, vegetarisch, or vegan' }, 400)
+  }
+  if (hasKey('diet') && diet !== null && !ALLOWED_DIETS.includes(diet as typeof ALLOWED_DIETS[number])) {
+    return c.json({ error: 'diet must be omnivore, vegetarisch, or vegan' }, 400)
+  }
+  if (hasKey('guideline_source') && guidelineSource === undefined) {
+    return c.json({ error: 'guideline_source must be DGE, studien, or influencer' }, 400)
   }
   if (hasKey('is_smoker') && isSmoker === null) {
     return c.json({ error: 'is_smoker must be true/false or 1/0' }, 400)
@@ -385,7 +408,7 @@ meApp.put('/', async (c) => {
     weight: hasKey('weight') ? weight : existing.weight,
     diet: hasKey('diet') ? diet : existing.diet_type,
     goals: hasKey('goals') ? goals : existing.personal_goals,
-    guideline_source: hasKey('guideline_source') ? guidelineSource : existing.guideline_source,
+    guideline_source: hasKey('guideline_source') ? guidelineSource ?? null : existing.guideline_source,
     is_smoker: hasKey('is_smoker') ? isSmoker as number : existing.is_smoker,
   }
 

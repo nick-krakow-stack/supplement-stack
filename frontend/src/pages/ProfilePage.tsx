@@ -226,8 +226,8 @@ export default function ProfilePage() {
             >
               <option value="">Keine Angabe</option>
               <option value="DGE">DGE</option>
-              <option value="Studien">Studien</option>
-              <option value="Influencer">Influencer</option>
+              <option value="studien">Studien</option>
+              <option value="influencer">Influencer</option>
             </select>
           </div>
 
