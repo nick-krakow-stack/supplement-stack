@@ -1,6 +1,6 @@
 # Deploy Log
 
-Last updated: 2026-05-04
+Last updated: 2026-05-05
 
 ## Latest Known Production State
 
@@ -64,7 +64,7 @@ Latest relevant commits:
 
 ## Product Ingredient Publishing Model
 
-### 2026-05-04 - D1 + Cloudflare Pages: sub-ingredient product workflow
+### 2026-05-05 - D1 + Cloudflare Pages: sub-ingredient product workflow
 
 - Commit: `29dcde5` - Feature: Add sub-ingredient product workflow.
 - Remote D1 migration:

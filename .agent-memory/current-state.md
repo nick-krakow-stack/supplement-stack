@@ -1,6 +1,6 @@
 # Current State
 
-Last updated: 2026-05-04
+Last updated: 2026-05-05
 
 Model-routing workflow policy for Codex/Sub-Agent delegation is initially recorded in
 commit `2457345`; this restart handoff extends it with Spark
