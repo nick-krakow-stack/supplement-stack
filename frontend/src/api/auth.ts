@@ -41,3 +41,47 @@ export async function updateMe(data: Partial<Omit<User, 'id' | 'email' | 'role'>
   const res = await apiClient.put<{ profile: User }>('/me', data);
   return res.data.profile;
 }
+
+function extractError(err: unknown, fallback: string): Error {
+  const msg =
+    (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? fallback;
+  return new Error(msg);
+}
+
+// Helper: bewahrt das Token vor dem 401-Interceptor in client.ts.
+// 401 bei falschem aktuellem Passwort darf den User NICHT ausloggen.
+function preserveTokenOn401<T>(fn: () => Promise<T>): Promise<T> {
+  const savedToken = localStorage.getItem('ss_token');
+  return fn().catch((err) => {
+    const status = (err as { response?: { status?: number } })?.response?.status;
+    if (status === 401 && savedToken && !localStorage.getItem('ss_token')) {
+      localStorage.setItem('ss_token', savedToken);
+    }
+    throw err;
+  });
+}
+
+export async function changePassword(payload: {
+  current_password: string;
+  new_password: string;
+}): Promise<{ ok: true }> {
+  try {
+    const res = await preserveTokenOn401(() =>
+      apiClient.patch<{ ok: true }>('/me/password', payload),
+    );
+    return res.data;
+  } catch (err) {
+    throw extractError(err, 'Passwort konnte nicht geändert werden.');
+  }
+}
+
+export async function deleteAccount(payload: { password: string }): Promise<{ ok: true }> {
+  try {
+    const res = await preserveTokenOn401(() =>
+      apiClient.delete<{ ok: true }>('/me', { data: payload }),
+    );
+    return res.data;
+  } catch (err) {
+    throw extractError(err, 'Account konnte nicht gelöscht werden.');
+  }
+}

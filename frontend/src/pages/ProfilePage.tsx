@@ -1,9 +1,13 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { updateMe } from '../api/auth';
+import { updateMe, changePassword, deleteAccount } from '../api/auth';
+
+const DELETE_CONFIRM_PHRASE = 'LÖSCHEN';
 
 export default function ProfilePage() {
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, logout } = useAuth();
+  const navigate = useNavigate();
 
   const [age, setAge] = useState('');
   const [gender, setGender] = useState('');
@@ -15,6 +19,20 @@ export default function ProfilePage() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Passwort-Änderung
+  const [pwCurrent, setPwCurrent] = useState('');
+  const [pwNew, setPwNew] = useState('');
+  const [pwRepeat, setPwRepeat] = useState('');
+  const [pwSuccess, setPwSuccess] = useState(false);
+  const [pwError, setPwError] = useState<string | null>(null);
+  const [pwSubmitting, setPwSubmitting] = useState(false);
+
+  // Account-Löschung
+  const [delConfirmPhrase, setDelConfirmPhrase] = useState('');
+  const [delPassword, setDelPassword] = useState('');
+  const [delError, setDelError] = useState<string | null>(null);
+  const [delSubmitting, setDelSubmitting] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -52,6 +70,57 @@ export default function ProfilePage() {
       setError(msg);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPwError(null);
+    setPwSuccess(false);
+
+    if (pwNew.length < 8) {
+      setPwError('Neues Passwort muss mindestens 8 Zeichen lang sein.');
+      return;
+    }
+    if (pwNew !== pwRepeat) {
+      setPwError('Die neuen Passwörter stimmen nicht überein.');
+      return;
+    }
+    if (pwNew === pwCurrent) {
+      setPwError('Neues Passwort muss sich vom aktuellen unterscheiden.');
+      return;
+    }
+
+    setPwSubmitting(true);
+    try {
+      await changePassword({ current_password: pwCurrent, new_password: pwNew });
+      setPwCurrent('');
+      setPwNew('');
+      setPwRepeat('');
+      setPwSuccess(true);
+    } catch (err) {
+      setPwError(err instanceof Error ? err.message : 'Passwort konnte nicht geändert werden.');
+    } finally {
+      setPwSubmitting(false);
+    }
+  };
+
+  const deleteAllowed =
+    delConfirmPhrase === DELETE_CONFIRM_PHRASE && delPassword.length > 0 && !delSubmitting;
+
+  const handleDeleteAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setDelError(null);
+    if (!deleteAllowed) return;
+
+    setDelSubmitting(true);
+    try {
+      await deleteAccount({ password: delPassword });
+      logout();
+      navigate('/', { replace: true });
+    } catch (err) {
+      setDelError(err instanceof Error ? err.message : 'Account konnte nicht gelöscht werden.');
+      setDelSubmitting(false);
     }
   };
 
@@ -207,6 +276,141 @@ export default function ProfilePage() {
 
           <button type="submit" disabled={submitting} className="self-start">
             {submitting ? 'Speichern...' : 'Speichern'}
+          </button>
+        </form>
+      </div>
+
+      {/* Sektion: Passwort ändern */}
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mt-4">
+        <h2>Passwort ändern</h2>
+
+        <form onSubmit={handlePasswordSubmit} className="flex flex-col gap-4 mt-2">
+          <div>
+            <label htmlFor="pw-current" className="block text-sm font-medium text-gray-700 mb-1">
+              Aktuelles Passwort
+            </label>
+            <input
+              id="pw-current"
+              type="password"
+              autoComplete="current-password"
+              value={pwCurrent}
+              onChange={(e) => setPwCurrent(e.target.value)}
+              required
+              className="w-full min-h-[44px] border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 bg-white"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="pw-new" className="block text-sm font-medium text-gray-700 mb-1">
+              Neues Passwort
+            </label>
+            <input
+              id="pw-new"
+              type="password"
+              autoComplete="new-password"
+              minLength={8}
+              value={pwNew}
+              onChange={(e) => setPwNew(e.target.value)}
+              required
+              className="w-full min-h-[44px] border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 bg-white"
+            />
+            <p className="text-xs text-gray-400 mt-1">Mindestens 8 Zeichen.</p>
+          </div>
+
+          <div>
+            <label htmlFor="pw-repeat" className="block text-sm font-medium text-gray-700 mb-1">
+              Neues Passwort wiederholen
+            </label>
+            <input
+              id="pw-repeat"
+              type="password"
+              autoComplete="new-password"
+              minLength={8}
+              value={pwRepeat}
+              onChange={(e) => setPwRepeat(e.target.value)}
+              required
+              className="w-full min-h-[44px] border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 bg-white"
+            />
+          </div>
+
+          {pwError && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              {pwError}
+            </p>
+          )}
+
+          {pwSuccess && (
+            <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+              Passwort erfolgreich geändert.
+            </p>
+          )}
+
+          <button
+            type="submit"
+            disabled={pwSubmitting}
+            className="self-start min-h-[44px]"
+          >
+            {pwSubmitting ? 'Wird gespeichert...' : 'Passwort ändern'}
+          </button>
+        </form>
+      </div>
+
+      {/* Sektion: Account löschen (DSGVO Art. 17) */}
+      <div className="bg-white rounded-2xl border border-red-200 shadow-sm p-6 mt-4 mb-8">
+        <h2 className="text-red-700">Account löschen</h2>
+
+        <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mt-2">
+          <p className="font-medium mb-1">Diese Aktion ist endgültig.</p>
+          <p>
+            Alle deine Stacks, eigenen Produkte, deine Wunschliste und deine Profildaten werden
+            unwiderruflich gelöscht. Die Löschung erfolgt sofort und kann nicht rückgängig gemacht
+            werden.
+          </p>
+        </div>
+
+        <form onSubmit={handleDeleteAccount} className="flex flex-col gap-4 mt-4">
+          <div>
+            <label htmlFor="del-confirm" className="block text-sm font-medium text-gray-700 mb-1">
+              Tippe <span className="font-mono font-semibold">{DELETE_CONFIRM_PHRASE}</span> zur
+              Bestätigung
+            </label>
+            <input
+              id="del-confirm"
+              type="text"
+              autoComplete="off"
+              value={delConfirmPhrase}
+              onChange={(e) => setDelConfirmPhrase(e.target.value)}
+              placeholder={DELETE_CONFIRM_PHRASE}
+              className="w-full min-h-[44px] border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-400 bg-white"
+            />
+          </div>
+
+          <div>
+            <label htmlFor="del-password" className="block text-sm font-medium text-gray-700 mb-1">
+              Aktuelles Passwort
+            </label>
+            <input
+              id="del-password"
+              type="password"
+              autoComplete="current-password"
+              value={delPassword}
+              onChange={(e) => setDelPassword(e.target.value)}
+              className="w-full min-h-[44px] border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-300 focus:border-red-400 bg-white"
+            />
+          </div>
+
+          {delError && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              {delError}
+            </p>
+          )}
+
+          <button
+            type="submit"
+            disabled={!deleteAllowed}
+            className="self-start min-h-[44px] bg-red-600 hover:bg-red-700 disabled:bg-red-300 disabled:cursor-not-allowed text-white font-medium rounded-xl px-4 py-2"
+          >
+            {delSubmitting ? 'Account wird gelöscht...' : 'Account endgültig löschen'}
           </button>
         </form>
       </div>

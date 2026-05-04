@@ -242,6 +242,96 @@ meApp.get('/', async (c) => {
   return c.json({ profile })
 })
 
+// PATCH /api/me/password — Self-Service Passwortwechsel (DSGVO Art. 16)
+meApp.patch('/password', async (c) => {
+  const authErr = await ensureAuth(c)
+  if (authErr) return authErr
+  const user = c.get('user')
+
+  const allowed = await checkRateLimit(c.env.RATE_LIMITER, `pwchange:${user.userId}`, 5, 15 * 60)
+  if (!allowed) return c.json({ error: 'Zu viele Versuche. Bitte warte kurz.' }, 429)
+
+  const body = await c.req.json().catch(() => null) as { current_password?: unknown; new_password?: unknown } | null
+  const currentPassword = body && typeof body.current_password === 'string' ? body.current_password : ''
+  const newPassword = body && typeof body.new_password === 'string' ? body.new_password : ''
+
+  if (!currentPassword) return c.json({ error: 'Aktuelles Passwort erforderlich.' }, 400)
+  if (newPassword.length < 8) return c.json({ error: 'Neues Passwort muss mindestens 8 Zeichen lang sein.' }, 400)
+  if (newPassword === currentPassword) return c.json({ error: 'Neues Passwort muss sich vom aktuellen unterscheiden.' }, 400)
+
+  const row = await c.env.DB.prepare('SELECT password_hash FROM users WHERE id = ?')
+    .bind(user.userId)
+    .first<{ password_hash: string }>()
+  if (!row) return c.json({ error: 'User not found' }, 404)
+
+  const valid = await verifyPassword(currentPassword, row.password_hash)
+  if (!valid) return c.json({ error: 'Aktuelles Passwort ist falsch.' }, 401)
+
+  const newHash = await hashPassword(newPassword)
+  await c.env.DB.prepare('UPDATE users SET password_hash = ? WHERE id = ?')
+    .bind(newHash, user.userId)
+    .run()
+
+  return c.json({ ok: true })
+})
+
+// DELETE /api/me — Account-Löschung (DSGVO Art. 17, Recht auf Löschung)
+meApp.delete('/', async (c) => {
+  const authErr = await ensureAuth(c)
+  if (authErr) return authErr
+  const user = c.get('user')
+
+  const allowed = await checkRateLimit(c.env.RATE_LIMITER, `accdel:${user.userId}`, 3, 60 * 60)
+  if (!allowed) return c.json({ error: 'Zu viele Versuche. Bitte warte kurz.' }, 429)
+
+  const body = await c.req.json().catch(() => null) as { password?: unknown } | null
+  const password = body && typeof body.password === 'string' ? body.password : ''
+  if (!password) return c.json({ error: 'Passwort erforderlich.' }, 400)
+
+  const row = await c.env.DB.prepare('SELECT password_hash FROM users WHERE id = ?')
+    .bind(user.userId)
+    .first<{ password_hash: string }>()
+  if (!row) return c.json({ error: 'User not found' }, 404)
+
+  const valid = await verifyPassword(password, row.password_hash)
+  if (!valid) return c.json({ error: 'Passwort ist falsch.' }, 401)
+
+  // DSGVO Art. 17: harte Löschung. D1 erzwingt FK-Constraints nicht zuverlässig
+  // → dependent rows explizit in Transaktion löschen.
+  // Reihenfolge: Kinder vor Eltern. stack_items hängt an stacks(id), nicht an
+  // users(id) direkt — daher zuerst stack_items via Sub-Select, dann stacks.
+  const userId = user.userId
+  const coreStmts = [
+    c.env.DB.prepare('DELETE FROM stack_items WHERE stack_id IN (SELECT id FROM stacks WHERE user_id = ?)').bind(userId),
+    c.env.DB.prepare('DELETE FROM stacks WHERE user_id = ?').bind(userId),
+    c.env.DB.prepare('DELETE FROM wishlist WHERE user_id = ?').bind(userId),
+    c.env.DB.prepare('DELETE FROM user_products WHERE user_id = ?').bind(userId),
+    c.env.DB.prepare('DELETE FROM consent_log WHERE user_id = ?').bind(userId),
+    c.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(userId),
+  ]
+  await c.env.DB.batch(coreStmts)
+
+  // Optionale Tabellen aus späteren Migrationen (0029+, 0031+, 0032+, 0033+).
+  // Live-DB hat aktuell nur 0001-0022 angewendet — diese Tabellen fehlen evtl.
+  // Best-Effort-Cleanup: einzeln, jeder Fehler stillschweigend ignoriert.
+  const optionalCleanup: Array<[string, unknown[]]> = [
+    ['UPDATE admin_audit_log SET user_id = NULL WHERE user_id = ?', [userId]],
+    ['UPDATE dose_recommendations SET created_by_user_id = NULL WHERE created_by_user_id = ?', [userId]],
+    ['UPDATE share_links SET creator_user_id = NULL WHERE creator_user_id = ?', [userId]],
+    ['UPDATE blog_posts SET author_id = NULL WHERE author_id = ?', [userId]],
+    ['DELETE FROM api_tokens WHERE created_by_user_id = ?', [userId]],
+  ]
+  for (const [sql, params] of optionalCleanup) {
+    try {
+      await c.env.DB.prepare(sql).bind(...params).run()
+    } catch {
+      // Tabelle existiert noch nicht in der Live-DB — überspringen.
+    }
+  }
+
+  return c.json({ ok: true })
+})
+
 // PUT /api/me
 meApp.put('/', async (c) => {
   const authErr = await ensureAuth(c)
