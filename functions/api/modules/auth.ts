@@ -337,9 +337,43 @@ meApp.put('/', async (c) => {
   const authErr = await ensureAuth(c)
   if (authErr) return authErr
   const user = c.get('user')
-  const body = await c.req.json()
-  const data = body as { age?: number; gender?: string; weight?: number; diet?: string; goals?: string; guideline_source?: string; is_smoker?: number }
-  await c.env.DB.prepare(`
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const age = body.age === undefined || body.age === null || body.age === ''
+    ? null
+    : typeof body.age === 'number'
+      ? body.age
+      : Number.NaN
+  const weight = body.weight === undefined || body.weight === null || body.weight === ''
+    ? null
+    : typeof body.weight === 'number'
+      ? body.weight
+      : Number.NaN
+  const gender = typeof body.gender === 'string' && body.gender.trim() !== '' ? body.gender.trim() : null
+  const diet = typeof body.diet === 'string' && body.diet.trim() !== '' ? body.diet.trim() : null
+  const goals = typeof body.goals === 'string' && body.goals.trim() !== '' ? body.goals.trim() : null
+  const guidelineSource = typeof body.guideline_source === 'string' && body.guideline_source.trim() !== ''
+    ? body.guideline_source.trim()
+    : null
+  const isSmoker = body.is_smoker === true || body.is_smoker === 1 ? 1 : body.is_smoker === false || body.is_smoker === 0 ? 0 : null
+
+  if (age !== null && (!Number.isInteger(age) || age < 1 || age > 120)) {
+    return c.json({ error: 'age must be an integer between 1 and 120' }, 400)
+  }
+  if (weight !== null && (!Number.isFinite(weight) || weight <= 0 || weight > 500)) {
+    return c.json({ error: 'weight must be greater than 0' }, 400)
+  }
+  if (body.is_smoker !== undefined && isSmoker === null) {
+    return c.json({ error: 'is_smoker must be true/false or 1/0' }, 400)
+  }
+
+  const [updateResult, selectResult] = await c.env.DB.batch([
+    c.env.DB.prepare(`
     UPDATE users SET
       age = COALESCE(?, age),
       gender = COALESCE(?, gender),
@@ -350,18 +384,21 @@ meApp.put('/', async (c) => {
       is_smoker = COALESCE(?, is_smoker)
     WHERE id = ?
   `).bind(
-    data.age ?? null,
-    data.gender ?? null,
-    data.weight ?? null,
-    data.diet ?? null,
-    data.goals ?? null,
-    data.guideline_source ?? null,
-    data.is_smoker ?? null,
+    age,
+    gender,
+    weight,
+    diet,
+    goals,
+    guidelineSource,
+    isSmoker,
     user.userId,
-  ).run()
-  const updated = await c.env.DB.prepare(
+  ),
+    c.env.DB.prepare(
     'SELECT id, email, age, gender, weight, diet_type, personal_goals, guideline_source, is_smoker, health_consent, health_consent_at, role FROM users WHERE id = ?'
-  ).bind(user.userId).first<UserRow>()
+    ).bind(user.userId),
+  ])
+  if (!updateResult.success) return c.json({ error: 'Profile update failed' }, 500)
+  const updated = selectResult.results?.[0] as UserRow | undefined
   if (!updated) return c.json({ error: 'User not found' }, 404)
   return c.json({ profile: {
     id: updated.id, email: updated.email, age: updated.age, gender: updated.gender, weight: updated.weight,

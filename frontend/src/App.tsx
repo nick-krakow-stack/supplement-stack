@@ -6,12 +6,10 @@ import ProtectedRoute from './components/ProtectedRoute';
 import CookieConsentBanner from './components/CookieConsentBanner';
 
 import LandingPage from './pages/LandingPage';
-import SearchPage from './pages/SearchPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ProfilePage from './pages/ProfilePage';
 import StacksPage from './pages/StacksPage';
-import WishlistPage from './pages/WishlistPage';
 import AdminPage from './pages/AdminPage';
 import DemoPage from './pages/DemoPage';
 import MyProductsPage from './pages/MyProductsPage';
@@ -74,7 +72,6 @@ export default function App() {
             <Layout>
               <Routes>
                 <Route path="/" element={<LandingPage />} />
-                <Route path="/search" element={<SearchPage />} />
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/register" element={<RegisterPage />} />
                 <Route
@@ -82,14 +79,6 @@ export default function App() {
                   element={
                     <ProtectedRoute>
                       <ProfilePage />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route
-                  path="/wishlist"
-                  element={
-                    <ProtectedRoute>
-                      <WishlistPage />
                     </ProtectedRoute>
                   }
                 />

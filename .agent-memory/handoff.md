@@ -4,7 +4,9 @@ Last updated: 2026-05-05
 
 ## Continuation Point
 
-Continue from `main` using the top queue in this file.
+Continue from `main` with local Launch-QA fixes implemented but not committed,
+remote-migrated, or deployed. Next step is review/commit/deploy or run live
+smokes after applying migration `0041_stack_item_product_sources.sql`.
 
 ## Restart Startup (exact)
 
@@ -52,6 +54,31 @@ Continue from `main` using the top queue in this file.
 - `.claude/SESSION.md` and `.claude/settings.json` remain dirty and must not be
   touched.
 - Branch: `main`.
+- Current local implementation:
+  - `PUT /api/me` validates profile payloads and batches update+reload.
+  - `d1-migrations/0041_stack_item_product_sources.sql` rebuilds
+    `stack_items` with explicit `catalog_product_id` and `user_product_id`
+    plus a CHECK requiring exactly one reference. Legacy `product_id` is only
+    read during backfill.
+  - Stack API accepts legacy `{ id }` catalog payloads and new
+    `{ id, product_type }` payloads, validates all rows before replace, uses
+    `stack.user_id` for user-product ownership, and returns `product_type` in
+    stack item responses.
+  - Stack warnings UNION `product_ingredients` and
+    `user_product_ingredients`.
+  - `StackWorkspace` uses `catalog:id` / `user_product:id` keys, loads own
+    pending/approved user products in add-product selection, and persists
+    `product_type`.
+  - Demo D3/K2 product seed/backfill now uses 2,000 IU D3 instead of 10,000 IU.
+  - App/Layout route check found no active `/search` or `/wishlist` routes/nav
+    links. Do not revert existing dirty UI cleanup changes.
+- Checks already passed locally: functions `npx tsc -p tsconfig.json`;
+  frontend `npm run lint --if-present`; frontend `npm run build`;
+  `git diff --check` with CRLF warnings only; isolated Python/SQLite migration
+  0041 schema check.
+- Local `wrangler d1 migrations apply supplementstack-production --local`
+  failed before 0041 at old migration `0009_auth_profile_extensions.sql`
+  because the existing local Wrangler state lacks `google_id`.
 
 ## Closed Baseline
 
@@ -64,6 +91,10 @@ Continue from `main` using the top queue in this file.
   legal/footer pages, GA consent, mobile core flows, auth/session UX fixes, etc.).
 
 ## Open Top Queue
+
+1. Entscheidung (2026-05-05): SearchPage und WishlistPage werden bewusst nur über
+   Wildcard/404 erreicht; Roh-`raw`-Flags aus SearchPage-Daten gelten nicht mehr als
+   Launch-Blocker.
 
 1. Final legal/compliance review (DSB/AVV/provider checks) before SEO indexing.
 2. Manual authenticated browser/mobile QA.

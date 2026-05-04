@@ -43,6 +43,43 @@ unless verified against code.
 Phase B is complete. Phase C is complete. Phase D bundle is committed,
 remote-migrated, and deployed to Cloudflare Pages preview.
 
+- Decision (2026-05-05): SearchPage and WishlistPage are now intentionally kept out of
+  explicit routes and navigation. They fall through to wildcard/404 handling, and any raw
+  SearchPage flags are no longer treated as launch blockers.
+
+Launch QA fixes are implemented locally but not yet committed, remote-migrated,
+or deployed:
+
+- `PUT /api/me` now validates profile payloads and runs profile update plus
+  reload through one D1 `batch`, so a reload failure cannot leave a
+  partial-success 500 response after persistence.
+- New migration `0041_stack_item_product_sources.sql` rebuilds `stack_items`
+  from ambiguous `product_id` to explicit nullable `catalog_product_id` and
+  `user_product_id` columns with a CHECK requiring exactly one reference.
+  Existing `product_id` values are backfilled into `catalog_product_id`.
+- Stack create/update still accepts legacy `{ id }` payloads as catalog
+  products and accepts `{ id, product_type: 'catalog' | 'user_product' }`.
+  Backend validation checks catalog products against approved/public
+  `products`, and user products against the stack owner with status
+  `pending` or `approved`.
+- `GET /api/stacks/:id` returns a UNION of catalog products and user products
+  with `product_type` in each item. `GET /api/stack-warnings/:id` evaluates
+  both `product_ingredients` and `user_product_ingredients`.
+- `StackWorkspace` keeps string keys `catalog:id` and `user_product:id`,
+  loads own pending/approved user products into the add-product modal, and
+  persists the source discriminator in stack payloads.
+- Demo D3/K2 seed was reduced from 10,000 IU to 2,000 IU D3 in both the fresh
+  seed and migration 0041 backfill for existing databases.
+- Route/header check found no active `/search` or `/wishlist` App/Layout routes
+  or nav links; un-routed page files remain untouched.
+- Checks passed locally: functions `npx tsc -p tsconfig.json`; frontend
+  `npm run lint --if-present`; frontend `npm run build`; `git diff --check`
+  with CRLF warnings only; isolated Python/SQLite check for migration 0041.
+- `wrangler d1 migrations apply supplementstack-production --local` could not
+  reach 0041 because the existing local Wrangler state fails earlier at
+  `0009_auth_profile_extensions.sql` with missing `google_id`; this is a local
+  state issue and not an 0041 syntax failure.
+
 Sub-ingredient product workflow is committed, remote-migrated, and deployed:
 
 - Commit: `29dcde5` - Feature: Add sub-ingredient product workflow.

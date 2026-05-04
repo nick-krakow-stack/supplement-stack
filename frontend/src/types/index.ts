@@ -53,6 +53,7 @@ export interface ProductIngredient {
 
 export interface Product {
   id: number;
+  product_type?: 'catalog' | 'user_product';
   name: string;
   brand?: string;
   form?: string;
@@ -83,6 +84,7 @@ export interface StackItem {
   id: number;
   stack_id: number;
   product_id: number;
+  product_type?: 'catalog' | 'user_product';
   quantity: number;
   product?: Product;
 }

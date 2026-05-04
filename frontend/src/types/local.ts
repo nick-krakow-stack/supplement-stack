@@ -71,6 +71,7 @@ export interface UserProductIngredient {
 
 export interface Product {
   id: number;
+  product_type?: 'catalog' | 'user_product';
   name: string;
   brand?: string;
   price: number;

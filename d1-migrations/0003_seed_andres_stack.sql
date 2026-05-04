@@ -59,9 +59,9 @@ INSERT OR IGNORE INTO products (id, name, form, price, moderation_status, visibi
 -- -------------------------------------------------------------------------
 -- Product ↔ ingredient links
 -- -------------------------------------------------------------------------
--- Vitamin D3/K2 Tropfen: D3 (main, 10000 IU/drop) + K2 (100 µg/drop)
+-- Vitamin D3/K2 Tropfen: D3 (main, 2000 IU/drop demo amount) + K2 (100 µg/drop)
 INSERT OR IGNORE INTO product_ingredients (product_id, ingredient_id, is_main, quantity, unit) VALUES
-(1, 1, 1, 10000, 'IU'),
+(1, 1, 1, 2000, 'IU'),
 (1, 2, 0, 100,   'µg');
 
 -- Magnesiumcitrat: Magnesium (main, 300 mg per 2 caps)

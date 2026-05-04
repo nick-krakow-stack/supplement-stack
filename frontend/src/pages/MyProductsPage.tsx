@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Pencil, Trash2, Info } from 'lucide-react';
+import { Plus, Pencil, Trash2 } from 'lucide-react';
 import UserProductForm, { UserProduct } from '../components/modals/UserProductForm';
 
 function getToken(): string | null {
@@ -41,16 +41,6 @@ function FormBadge({ form }: { form: string }) {
   );
 }
 
-function UserProductStatusBadge({ status }: { status?: UserProduct['status'] }) {
-  if (status === 'approved') {
-    return <span className="inline-block bg-emerald-50 text-emerald-700 text-xs font-medium px-2 py-0.5 rounded-full">Freigegeben</span>;
-  }
-  if (status === 'rejected') {
-    return <span className="inline-block bg-red-50 text-red-700 text-xs font-medium px-2 py-0.5 rounded-full">Abgelehnt</span>;
-  }
-  return <span className="inline-block bg-amber-50 text-amber-700 text-xs font-medium px-2 py-0.5 rounded-full">Pruefung</span>;
-}
-
 // ---- Product row ----
 function ProductRow({
   product,
@@ -78,7 +68,6 @@ function ProductRow({
         <div className="flex items-center gap-2 flex-wrap">
           <span className="min-w-0 break-words font-medium text-gray-900">{product.name}</span>
           {product.form && <FormBadge form={product.form} />}
-          <UserProductStatusBadge status={product.status} />
         </div>
         <div className="flex items-center gap-3 text-sm text-gray-500 flex-wrap">
           {product.brand && <span>{product.brand}</span>}
@@ -224,7 +213,7 @@ export default function MyProductsPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-indigo-50/30 p-4 md:p-6">
-    <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-6">
       {/* Page header */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <h1 className="text-2xl font-bold text-gray-900">Eigene Produkte</h1>
@@ -235,12 +224,6 @@ export default function MyProductsPage() {
           <Plus size={18} />
           Neues Produkt erstellen
         </button>
-      </div>
-
-      {/* Info banner */}
-      <div className="flex items-start gap-2 bg-indigo-50 border border-indigo-100 text-indigo-700 rounded-xl px-4 py-3 text-sm">
-        <Info size={16} className="flex-shrink-0 mt-0.5" />
-        <span>Neue Produkte bleiben privat in Prüfung. Freigegebene Produkte sind danach gesperrt.</span>
       </div>
 
       {/* Error */}

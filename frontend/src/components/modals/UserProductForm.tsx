@@ -1,4 +1,4 @@
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useMemo, useState } from 'react';
 import ModalWrapper from './ModalWrapper';
 import ImageCropModal from '../ImageCropModal';
 import SearchBar from '../SearchBar';
@@ -70,6 +70,23 @@ function authHeaders(): Record<string, string> {
 }
 
 const FORM_OPTIONS = ['Kapsel', 'Tablette', 'Pulver', 'Tropfen', 'Gel', 'Sonstige'];
+const SERVING_UNIT_OPTIONS = [
+  'Kapsel',
+  'Kapseln',
+  'Tablette',
+  'Tabletten',
+  'Tropfen',
+  'Portion',
+  'Portionen',
+  'Messlöffel',
+  'Esslöffel',
+  'Teelöffel',
+  'Softgel',
+  'Softgels',
+  'ml',
+  'g',
+  'Sonstige',
+];
 
 const MAX_INGREDIENT_ROWS = 50;
 const ROW_LIMIT_MESSAGE = 'Maximal 50 Wirkstoffe sind erlaubt.';
@@ -155,6 +172,13 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
   const [error, setError] = useState('');
 
   const isIngredientLimitReached = ingredientRows.length >= MAX_INGREDIENT_ROWS;
+  const servingUnitOptions = useMemo(() => {
+    const normalized = servingUnit.trim();
+    if (!normalized || SERVING_UNIT_OPTIONS.includes(normalized)) {
+      return SERVING_UNIT_OPTIONS;
+    }
+    return [...SERVING_UNIT_OPTIONS, normalized];
+  }, [servingUnit]);
 
   const defaultBasisUnit = () => servingUnit.trim();
 
@@ -843,14 +867,19 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
                 min="0.01"
                 required
               />
-              <input
-                type="text"
+              <select
                 value={servingUnit}
                 onChange={(e) => setServingUnit(e.target.value)}
                 className={inputClass}
-                placeholder="z.B. Kapsel"
                 required
-              />
+              >
+                <option value="">-- bitte auswählen --</option>
+                {servingUnitOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
             </div>
             <p className="mt-1 text-xs text-gray-500">Beispiel: 400 mg pro 1 Kapsel</p>
           </div>

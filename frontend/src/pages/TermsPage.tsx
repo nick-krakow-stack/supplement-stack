@@ -19,7 +19,7 @@ export default function TermsPage() {
         </p>
         <p>
           Supplement Stack ist ein kostenloser Dienst zur Verwaltung von Supplement-Stacks,
-          Produktinformationen, Wunschlisten und eigenen Produktdaten. Eine kostenpflichtige
+          Produktinformationen, gespeicherten Daten und eigenen Produktdaten. Eine kostenpflichtige
           Version oder ein Abonnement ist aktuell nicht vorgesehen.
         </p>
       </section>
@@ -27,7 +27,7 @@ export default function TermsPage() {
       <section className="mt-8 space-y-3 text-sm leading-relaxed text-slate-700">
         <h2 className="text-xl font-black text-slate-900">2. Account und Nutzung</h2>
         <p>
-          Nutzer k&ouml;nnen einen Account anlegen, um Stacks, Wishlist-Eintr&auml;ge und eigene
+          Nutzer k&ouml;nnen einen Account anlegen, um Stacks und eigene
           Produkte zu speichern. Du bist daf&uuml;r verantwortlich, deine Zugangsdaten vertraulich
           zu behandeln und korrekte Angaben zu machen.
         </p>

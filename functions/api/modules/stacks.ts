@@ -16,21 +16,169 @@ import { ensureAuth } from '../lib/helpers'
 
 const stacks = new Hono<AppContext>()
 
-async function validatePublicCatalogProductIds(
+type StackProductType = 'catalog' | 'user_product'
+
+type StackProductInput = {
+  id: number
+  product_type: StackProductType
+  quantity: number
+  dosage_text: string | null
+  timing: string | null
+}
+
+type StackProductValidation = {
+  items?: StackProductInput[]
+  error?: string
+}
+
+function normalizeStackProductType(value: unknown): StackProductType | null {
+  if (value === undefined || value === null || value === '' || value === 'catalog') return 'catalog'
+  if (value === 'user_product') return 'user_product'
+  return null
+}
+
+function normalizeStackProductItems(value: unknown): StackProductValidation {
+  const rawItems: Array<Record<string, unknown>> = Array.isArray(value)
+    ? value.map((item) => (
+        typeof item === 'number' ? { id: item } : item && typeof item === 'object' ? item as Record<string, unknown> : {}
+      ))
+    : []
+
+  const items: StackProductInput[] = []
+  for (const item of rawItems) {
+    const id = Number(item.id)
+    const productType = normalizeStackProductType(item.product_type ?? item.product_source ?? item.source)
+    const quantity = item.quantity === undefined || item.quantity === null || item.quantity === ''
+      ? 1
+      : Number(item.quantity)
+    const dosageText = typeof item.dosage_text === 'string' && item.dosage_text.trim() !== ''
+      ? item.dosage_text.trim()
+      : null
+    const timing = typeof item.timing === 'string' && item.timing.trim() !== ''
+      ? item.timing.trim()
+      : null
+
+    if (!Number.isInteger(id) || id <= 0) {
+      return { error: 'product_ids must reference valid products' }
+    }
+    if (productType === null) {
+      return { error: 'product_type must be catalog or user_product' }
+    }
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      return { error: 'quantity must be greater than 0' }
+    }
+
+    items.push({ id, product_type: productType, quantity, dosage_text: dosageText, timing })
+  }
+
+  return { items }
+}
+
+async function validateStackProductReferences(
   db: D1Database,
-  productIds: number[],
+  userId: number,
+  items: StackProductInput[],
 ): Promise<boolean> {
-  const uniqueIds = [...new Set(productIds)]
-  if (uniqueIds.length === 0) return true
-  const placeholders = uniqueIds.map(() => '?').join(',')
-  const row = await db.prepare(`
+  const catalogIds = [...new Set(items.filter((item) => item.product_type === 'catalog').map((item) => item.id))]
+  if (catalogIds.length > 0) {
+    const placeholders = catalogIds.map(() => '?').join(',')
+    const row = await db.prepare(`
     SELECT COUNT(*) as count
     FROM products
     WHERE id IN (${placeholders})
       AND moderation_status = 'approved'
       AND visibility = 'public'
-  `).bind(...uniqueIds).first<{ count: number }>()
-  return (row?.count ?? 0) === uniqueIds.length
+  `).bind(...catalogIds).first<{ count: number }>()
+    if ((row?.count ?? 0) !== catalogIds.length) return false
+  }
+
+  const userProductIds = [...new Set(items.filter((item) => item.product_type === 'user_product').map((item) => item.id))]
+  if (userProductIds.length > 0) {
+    const placeholders = userProductIds.map(() => '?').join(',')
+    const row = await db.prepare(`
+      SELECT COUNT(*) as count
+      FROM user_products
+      WHERE id IN (${placeholders})
+        AND user_id = ?
+        AND status IN ('pending', 'approved')
+    `).bind(...userProductIds, userId).first<{ count: number }>()
+    if ((row?.count ?? 0) !== userProductIds.length) return false
+  }
+
+  return true
+}
+
+async function loadStackItems(
+  db: D1Database,
+  stackId: number | string,
+  ownerUserId: number,
+): Promise<StackItemRow[]> {
+  const { results } = await db.prepare(`
+    SELECT *
+    FROM (
+      SELECT
+        si.id AS stack_item_id,
+        p.id,
+        'catalog' AS product_type,
+        p.name,
+        p.brand,
+        p.price,
+        p.price as product_price,
+        p.image_url,
+        p.shop_link,
+        p.is_affiliate,
+        p.discontinued_at,
+        p.serving_size,
+        p.serving_unit,
+        p.servings_per_container,
+        p.container_count,
+        COALESCE(si.timing, p.timing) AS timing,
+        COALESCE(si.dosage_text, p.dosage_text) AS dosage_text,
+        p.effect_summary,
+        p.warning_title,
+        p.warning_message,
+        p.warning_type,
+        p.alternative_note,
+        si.quantity
+      FROM stack_items si
+      JOIN products p ON p.id = si.catalog_product_id
+      WHERE si.stack_id = ?
+        AND si.catalog_product_id IS NOT NULL
+
+      UNION ALL
+
+      SELECT
+        si.id AS stack_item_id,
+        up.id,
+        'user_product' AS product_type,
+        up.name,
+        up.brand,
+        up.price,
+        up.price as product_price,
+        up.image_url,
+        up.shop_link,
+        up.is_affiliate,
+        NULL AS discontinued_at,
+        up.serving_size,
+        up.serving_unit,
+        up.servings_per_container,
+        up.container_count,
+        COALESCE(si.timing, up.timing) AS timing,
+        COALESCE(si.dosage_text, up.dosage_text) AS dosage_text,
+        up.effect_summary,
+        up.warning_title,
+        up.warning_message,
+        up.warning_type,
+        up.alternative_note,
+        si.quantity
+      FROM stack_items si
+      JOIN user_products up ON up.id = si.user_product_id AND up.user_id = ?
+      WHERE si.stack_id = ?
+        AND si.user_product_id IS NOT NULL
+    )
+    ORDER BY stack_item_id ASC
+  `).bind(stackId, ownerUserId, stackId).all<StackItemRow>()
+  return results
 }
 
 // GET /api/stacks
@@ -61,17 +209,13 @@ stacks.post('/', async (c) => {
     return c.json({ error: 'Invalid JSON' }, 400)
   }
   if (!data.name) return c.json({ error: 'Stack-Name ist erforderlich' }, 400)
-  const items: Array<Record<string, unknown>> = Array.isArray(data.product_ids)
-    ? (data.product_ids as Array<Record<string, unknown>>)
-    : Array.isArray(data.products)
-      ? (data.products as number[]).map(id => ({ id, quantity: 1 }))
-      : []
-  const productIds = items.map((item) => Number(item.id))
-  if (productIds.some((id) => !Number.isInteger(id) || id <= 0)) {
-    return c.json({ error: 'product_ids must reference catalog products' }, 400)
+  const rawItems = Array.isArray(data.product_ids) ? data.product_ids : data.products
+  const normalized = normalizeStackProductItems(rawItems)
+  if (normalized.error || !normalized.items) {
+    return c.json({ error: normalized.error ?? 'Invalid product_ids' }, 400)
   }
-  if (!(await validatePublicCatalogProductIds(c.env.DB, productIds))) {
-    return c.json({ error: 'Only approved public catalog products can be used in stacks' }, 400)
+  if (!(await validateStackProductReferences(c.env.DB, user.userId, normalized.items))) {
+    return c.json({ error: 'Stacks can only use public catalog products or your own pending/approved products' }, 400)
   }
 
   const stackResult = await c.env.DB.prepare(
@@ -79,10 +223,17 @@ stacks.post('/', async (c) => {
   ).bind(user.userId, data.name).run()
   const stackId = stackResult.meta.last_row_id
 
-  for (const item of items) {
+  for (const item of normalized.items) {
     await c.env.DB.prepare(
-      'INSERT INTO stack_items (stack_id, product_id, quantity, dosage_text, timing) VALUES (?, ?, ?, ?, ?)'
-    ).bind(stackId, item.id, item.quantity || 1, item.dosage_text ?? null, item.timing ?? null).run()
+      'INSERT INTO stack_items (stack_id, catalog_product_id, user_product_id, quantity, dosage_text, timing) VALUES (?, ?, ?, ?, ?, ?)'
+    ).bind(
+      stackId,
+      item.product_type === 'catalog' ? item.id : null,
+      item.product_type === 'user_product' ? item.id : null,
+      item.quantity,
+      item.dosage_text,
+      item.timing,
+    ).run()
   }
   return c.json({ id: stackId, name: data.name })
 })
@@ -95,16 +246,7 @@ stacks.get('/:id', async (c) => {
   const stack = await c.env.DB.prepare('SELECT * FROM stacks WHERE id = ?').bind(c.req.param('id')).first<StackRow>()
   if (!stack) return c.json({ error: 'Not found' }, 404)
   if (stack.user_id !== user.userId && user.role !== 'admin') return c.json({ error: 'Forbidden' }, 403)
-  const { results: items } = await c.env.DB.prepare(`
-    SELECT p.id, p.name, p.brand, p.price, p.price as product_price, p.image_url, p.shop_link, p.is_affiliate,
-           p.discontinued_at, p.serving_size, p.serving_unit, p.servings_per_container,
-           p.container_count, COALESCE(si.timing, p.timing) AS timing, COALESCE(si.dosage_text, p.dosage_text) AS dosage_text,
-           p.effect_summary, p.warning_title,
-           p.warning_message, p.warning_type, p.alternative_note, si.quantity
-    FROM stack_items si
-    JOIN products p ON p.id = si.product_id
-    WHERE si.stack_id = ?
-  `).bind(stack.id).all<StackItemRow>()
+  const items = await loadStackItems(c.env.DB, stack.id, stack.user_id)
   const total = items.reduce((sum, i) => sum + (i.product_price * i.quantity), 0)
   return c.json({ stack, items, total })
 })
@@ -131,37 +273,54 @@ stacks.put('/:id', async (c) => {
   const stack = await c.env.DB.prepare('SELECT * FROM stacks WHERE id = ?').bind(id).first<StackRow>()
   if (!stack) return c.json({ error: 'Not found' }, 404)
   if (stack.user_id !== user.userId && user.role !== 'admin') return c.json({ error: 'Forbidden' }, 403)
-  const body = await c.req.json()
-  const data = body as { name?: string; product_ids?: Array<{ id: number; quantity?: number; dosage_text?: string; timing?: string }> }
-  if (data.name) {
-    await c.env.DB.prepare('UPDATE stacks SET name = ? WHERE id = ?').bind(data.name, id).run()
+  let data: Record<string, unknown>
+  try {
+    data = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
   }
+
+  const name = typeof data.name === 'string' && data.name.trim() !== '' ? data.name.trim() : null
+  if (data.name !== undefined && name === null) {
+    return c.json({ error: 'Stack-Name darf nicht leer sein' }, 400)
+  }
+
+  let normalizedItems: StackProductInput[] | null = null
   if (data.product_ids !== undefined) {
-    const productIds = data.product_ids.map((item) => Number(item.id))
-    if (productIds.some((productId) => !Number.isInteger(productId) || productId <= 0)) {
-      return c.json({ error: 'product_ids must reference catalog products' }, 400)
+    const normalized = normalizeStackProductItems(data.product_ids)
+    if (normalized.error || !normalized.items) {
+      return c.json({ error: normalized.error ?? 'Invalid product_ids' }, 400)
     }
-    if (!(await validatePublicCatalogProductIds(c.env.DB, productIds))) {
-      return c.json({ error: 'Only approved public catalog products can be used in stacks' }, 400)
+    if (!(await validateStackProductReferences(c.env.DB, stack.user_id, normalized.items))) {
+      return c.json({ error: 'Stacks can only use public catalog products or your own pending/approved products' }, 400)
     }
-    await c.env.DB.prepare('DELETE FROM stack_items WHERE stack_id = ?').bind(id).run()
-    for (const item of data.product_ids) {
-      await c.env.DB.prepare(
-        'INSERT INTO stack_items (stack_id, product_id, quantity, dosage_text, timing) VALUES (?, ?, ?, ?, ?)'
-      ).bind(id, item.id, item.quantity || 1, item.dosage_text ?? null, item.timing ?? null).run()
-    }
+    normalizedItems = normalized.items
+  }
+
+  const statements: D1PreparedStatement[] = []
+  if (name !== null) {
+    statements.push(c.env.DB.prepare('UPDATE stacks SET name = ? WHERE id = ?').bind(name, id))
+  }
+  if (normalizedItems !== null) {
+    statements.push(c.env.DB.prepare('DELETE FROM stack_items WHERE stack_id = ?').bind(id))
+    statements.push(...normalizedItems.map((item) =>
+      c.env.DB.prepare(
+        'INSERT INTO stack_items (stack_id, catalog_product_id, user_product_id, quantity, dosage_text, timing) VALUES (?, ?, ?, ?, ?, ?)'
+      ).bind(
+        id,
+        item.product_type === 'catalog' ? item.id : null,
+        item.product_type === 'user_product' ? item.id : null,
+        item.quantity,
+        item.dosage_text,
+        item.timing,
+      )
+    ))
+  }
+  if (statements.length > 0) {
+    await c.env.DB.batch(statements)
   }
   const updated = await c.env.DB.prepare('SELECT * FROM stacks WHERE id = ?').bind(id).first()
-  const { results: items } = await c.env.DB.prepare(`
-    SELECT p.id, p.name, p.brand, p.price, p.price as product_price, p.image_url, p.shop_link, p.is_affiliate,
-           p.discontinued_at, p.serving_size, p.serving_unit, p.servings_per_container,
-           p.container_count, COALESCE(si.timing, p.timing) AS timing, COALESCE(si.dosage_text, p.dosage_text) AS dosage_text,
-           p.effect_summary, p.warning_title,
-           p.warning_message, p.warning_type, p.alternative_note, si.quantity
-    FROM stack_items si
-    JOIN products p ON p.id = si.product_id
-    WHERE si.stack_id = ?
-  `).bind(id).all()
+  const items = await loadStackItems(c.env.DB, id, stack.user_id)
   return c.json({ stack: updated, items })
 })
 
@@ -183,18 +342,50 @@ stackWarningsApp.get('/:id', async (c) => {
   if (!stack) return c.json({ error: 'Not found' }, 404)
   if (stack.user_id !== user.userId && user.role !== 'admin') return c.json({ error: 'Forbidden' }, 403)
   const { results: items } = await c.env.DB.prepare(
-    `SELECT si.product_id, pi.ingredient_id, pi.parent_ingredient_id
-     FROM stack_items si
-     JOIN product_ingredients pi ON pi.product_id = si.product_id
-     WHERE si.stack_id = ?
-       AND pi.search_relevant = 1`
-  ).bind(id).all<{ product_id: number; ingredient_id: number; parent_ingredient_id: number | null }>()
+    `SELECT *
+     FROM (
+       SELECT
+         si.id AS stack_item_id,
+         si.catalog_product_id AS product_id,
+         'catalog' AS product_type,
+         pi.ingredient_id,
+         pi.parent_ingredient_id
+       FROM stack_items si
+       JOIN product_ingredients pi ON pi.product_id = si.catalog_product_id
+       WHERE si.stack_id = ?
+         AND si.catalog_product_id IS NOT NULL
+         AND pi.search_relevant = 1
 
-  const rowsByProduct = new Map<number, typeof items>()
+       UNION ALL
+
+       SELECT
+         si.id AS stack_item_id,
+         si.user_product_id AS product_id,
+         'user_product' AS product_type,
+         upi.ingredient_id,
+         upi.parent_ingredient_id
+       FROM stack_items si
+       JOIN user_products up ON up.id = si.user_product_id AND up.user_id = ?
+       JOIN user_product_ingredients upi ON upi.user_product_id = up.id
+       WHERE si.stack_id = ?
+         AND si.user_product_id IS NOT NULL
+         AND upi.search_relevant = 1
+     )
+     ORDER BY stack_item_id ASC`
+  ).bind(id, stack.user_id, id).all<{
+    stack_item_id: number
+    product_id: number
+    product_type: StackProductType
+    ingredient_id: number
+    parent_ingredient_id: number | null
+  }>()
+
+  const rowsByProduct = new Map<string, typeof items>()
   for (const item of items) {
-    const rows = rowsByProduct.get(item.product_id) ?? []
+    const key = `${item.product_type}:${item.product_id}`
+    const rows = rowsByProduct.get(key) ?? []
     rows.push(item)
-    rowsByProduct.set(item.product_id, rows)
+    rowsByProduct.set(key, rows)
   }
 
   const effectiveIngredientIds = new Set<number>()

@@ -2,6 +2,45 @@
 
 Last updated: 2026-05-05
 
+## Stack Item Product References
+
+Decision: `stack_items` must not use one ambiguous `product_id` for both
+catalog `products` and private `user_products`.
+
+Implementation status:
+
+- Implemented locally in migration `0041_stack_item_product_sources.sql`; not
+  yet remote-migrated or deployed.
+- Migration 0041 rebuilds `stack_items` with nullable
+  `catalog_product_id` and `user_product_id` columns.
+- A CHECK constraint requires exactly one of the two columns to be non-NULL.
+- Existing stack rows are backfilled from legacy `product_id` into
+  `catalog_product_id`; the rebuilt table no longer keeps `product_id` as a
+  schema source.
+
+Operational rule:
+
+- API backward compatibility remains: old payloads `{ id }` mean catalog
+  products.
+- New stack payloads may use `{ id, product_type: 'catalog' }` or
+  `{ id, product_type: 'user_product' }`.
+- Backend validation maps those payloads to the correct column and validates
+  all items before deleting/reinserting stack rows.
+- User product validation must use the stack owner (`stack.user_id`) so admin
+  edits of another user's stack still validate against that user's products.
+- Stack item responses include `product_type` so frontend keys stay
+  collision-free as `catalog:id` or `user_product:id`.
+- Stack warnings must combine `product_ingredients` for catalog products and
+  `user_product_ingredients` for user products.
+
+Rationale:
+
+- `products.id` and `user_products.id` can collide.
+- A discriminator plus one numeric ID is still easy to misuse in SQL and keeps
+  the ambiguity at the schema boundary.
+- Explicit nullable references encode intent directly and keep legacy payload
+  compatibility in the API instead of the table design.
+
 ## Sub-Ingredient Prompt Mapping
 
 Decision: product and user-product ingredient rows may reference a
@@ -86,8 +125,10 @@ Operational rule:
   `product_ingredients`, sets `products.moderation_status='approved'` and
   `visibility='public'`, and writes `user_products.published_product_id` plus
   `published_at`.
-- Stacks and Wishlist only accept approved/public catalog `products.id` values;
-  raw `user_products.id` values are not a supported product FK.
+- Wishlist still accepts approved/public catalog `products.id` values only.
+- Stacks may store either approved/public catalog products or the stack
+  owner's own pending/approved user products through the explicit
+  `catalog_product_id` / `user_product_id` schema introduced by migration 0041.
 
 Rationale:
 

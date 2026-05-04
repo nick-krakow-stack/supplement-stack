@@ -362,7 +362,7 @@ export default function ProfilePage() {
         <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mt-2">
           <p className="font-medium mb-1">Diese Aktion ist endgültig.</p>
           <p>
-            Alle deine Stacks, eigenen Produkte, deine Wunschliste und deine Profildaten werden
+            Alle deine Stacks, eigenen Produkte, deine gespeicherten Daten und deine Profildaten werden
             unwiderruflich gelöscht. Die Löschung erfolgt sofort und kann nicht rückgängig gemacht
             werden.
           </p>

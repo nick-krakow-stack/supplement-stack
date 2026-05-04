@@ -25,6 +25,7 @@ import type { DosageGuideline, Ingredient, ShopDomain } from '../types/local';
 
 export interface DemoProduct {
   id: number;
+  product_type?: 'catalog' | 'user_product';
   name: string;
   price: number;
   brand?: string;
@@ -47,6 +48,15 @@ export interface DemoProduct {
   warning_type?: string;
   alternative_note?: string;
   ingredient_category?: string;
+  status?: 'pending' | 'approved' | 'rejected';
+  user_product_status?: 'pending' | 'approved' | 'rejected';
+  published_product_id?: number | null;
+  ingredients?: Array<{
+    ingredient_id: number;
+    quantity?: number | null;
+    unit?: string | null;
+    search_relevant?: number | boolean;
+  }>;
 }
 
 export interface DemoStack {
@@ -128,6 +138,10 @@ function saveDescription(stackId: string, description: string) {
   }
 }
 
+function productStackKey(product: Pick<DemoProduct, 'id' | 'product_type'>): string {
+  return `${product.product_type ?? 'catalog'}:${product.id}`;
+}
+
 interface ManualDose {
   value: number;
   unit: string;
@@ -198,11 +212,15 @@ function categorize(product: DemoProduct): CategoryKey {
 function AddProductModal({
   stacks,
   activeStackId,
+  isDemo,
+  token,
   onAdd,
   onClose,
 }: {
   stacks: DemoStack[];
   activeStackId: string;
+  isDemo: boolean;
+  token?: string | null;
   onAdd: (product: DemoProduct, stackId: string) => Promise<void>;
   onClose: () => void;
 }) {
@@ -214,7 +232,7 @@ function AddProductModal({
   const [targetStackId, setTargetStackId] = useState(activeStackId);
   const [products, setProducts] = useState<DemoProduct[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
-  const [savingProductId, setSavingProductId] = useState<number | null>(null);
+  const [savingProductKey, setSavingProductKey] = useState<string | null>(null);
   const [error, setError] = useState('');
 
   const dgeGuideline = guidelines.find((gl) => gl.source === 'DGE' || gl.is_default) ?? guidelines[0];
@@ -251,12 +269,45 @@ function AddProductModal({
     setStep('products');
     setProductsLoading(true);
     setError('');
-    fetch(apiPath(`/ingredients/${ingredient.id}/products`))
+    const catalogPromise = fetch(apiPath(`/ingredients/${ingredient.id}/products`))
       .then((response) => {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return response.json();
+        return response.json() as Promise<{ products?: DemoProduct[] }>;
+      });
+    const userProductsPromise = !isDemo && token
+      ? fetch(apiPath('/user-products'), { headers: authHeaders(token) })
+          .then((response) => (response.ok ? response.json() : { products: [] }))
+          .catch(() => ({ products: [] }))
+      : Promise.resolve({ products: [] });
+
+    Promise.all([catalogPromise, userProductsPromise])
+      .then(([catalogData, userData]) => {
+        const catalogProducts = (catalogData.products ?? []).map((product) => ({
+          ...product,
+          product_type: 'catalog' as const,
+        }));
+        const catalogKeys = new Set(catalogProducts.map(productStackKey));
+        const catalogIds = new Set(catalogProducts.map((product) => product.id));
+        const ownProducts = ((userData.products ?? []) as DemoProduct[])
+          .filter((product) => product.user_product_status !== 'rejected' && product.status !== 'rejected')
+          .filter((product) => product.published_product_id == null || !catalogIds.has(product.published_product_id))
+          .filter((product) => product.ingredients?.some((row) => (
+            row.ingredient_id === ingredient.id && Boolean(row.search_relevant ?? 1)
+          )))
+          .map((product) => {
+            const matchingIngredient = product.ingredients?.find((row) => row.ingredient_id === ingredient.id);
+            return {
+              ...product,
+              product_type: 'user_product' as const,
+              quantity: product.quantity ?? matchingIngredient?.quantity ?? undefined,
+              unit: product.unit ?? matchingIngredient?.unit ?? undefined,
+              user_product_status: product.user_product_status ?? product.status,
+            };
+          })
+          .filter((product) => !catalogKeys.has(productStackKey(product)));
+
+        setProducts([...ownProducts, ...catalogProducts]);
       })
-      .then((data) => setProducts(data.products ?? []))
       .catch(() => setError('Produkte konnten nicht geladen werden.'))
       .finally(() => setProductsLoading(false));
   };
@@ -267,7 +318,7 @@ function AddProductModal({
       dosage_text: product.dosage_text || `${dose.value || 1} ${dose.unit || 'Portion'} täglich`,
       timing: product.timing || 'Zum Frühstück',
     };
-    setSavingProductId(product.id);
+    setSavingProductKey(productStackKey(product));
     setError('');
     try {
       await onAdd(enhanced, targetStackId);
@@ -275,7 +326,7 @@ function AddProductModal({
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Produkt konnte nicht gespeichert werden.');
     } finally {
-      setSavingProductId(null);
+      setSavingProductKey(null);
     }
   };
 
@@ -475,11 +526,20 @@ function AddProductModal({
                 </p>
               )}
               <div className="grid gap-4">
-                {products.map((product) => (
-                  <div key={product.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                {products.map((product) => {
+                  const key = productStackKey(product);
+                  return (
+                  <div key={key} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                     <div className="flex items-start justify-between gap-4">
                       <div>
-                        <h4 className="text-xl font-black text-slate-950">{product.name}</h4>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h4 className="text-xl font-black text-slate-950">{product.name}</h4>
+                          {product.product_type === 'user_product' && (
+                            <span className="rounded-full bg-violet-100 px-2.5 py-1 text-xs font-black text-violet-700">
+                              Eigenes Produkt
+                            </span>
+                          )}
+                        </div>
                         {product.brand && (
                           <p className="mt-1 text-base font-semibold text-slate-500">{product.brand}</p>
                         )}
@@ -522,14 +582,15 @@ function AddProductModal({
                     </div>
                     <button
                       onClick={() => void addProduct(product)}
-                      disabled={savingProductId === product.id}
+                      disabled={savingProductKey === key}
                       className="mt-4 inline-flex w-full items-center justify-center gap-3 rounded-xl bg-blue-600 px-5 py-3 text-base font-black text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <Plus size={22} />
-                      {savingProductId === product.id ? 'Speichert...' : 'Hinzufügen'}
+                      {savingProductKey === key ? 'Speichert...' : 'Hinzufügen'}
                     </button>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
             <div className="mt-6 flex items-center justify-between gap-4">
@@ -540,10 +601,12 @@ function AddProductModal({
                 <ArrowLeft size={20} />
                 Zurück zur Dosierung
               </button>
-              <p className="hidden items-center gap-2 text-sm font-semibold text-slate-500 sm:flex">
-                <Info size={18} />
-                Demo-Modus: Änderungen werden nach Neuladen zurückgesetzt.
-              </p>
+              {isDemo && (
+                <p className="hidden items-center gap-2 text-sm font-semibold text-slate-500 sm:flex">
+                  <Info size={18} />
+                  Demo-Modus: Änderungen werden nach Neuladen zurückgesetzt.
+                </p>
+              )}
             </div>
           </>
         )}
@@ -627,7 +690,7 @@ export function StackWorkspace({ mode = 'demo', token = null }: StackWorkspacePr
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [shopDomains, setShopDomains] = useState<ShopDomain[]>([]);
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(mode === 'authenticated');
   const [error, setError] = useState('');
   const { user, logout } = useAuth();
@@ -717,7 +780,7 @@ export function StackWorkspace({ mode = 'demo', token = null }: StackWorkspacePr
   useEffect(() => {
     if (!activeStack) return;
     setSelectedIds((prev) => {
-      const valid = new Set([...prev].filter((id) => activeStack.products.some((p) => p.id === id)));
+      const valid = new Set([...prev].filter((key) => activeStack.products.some((p) => productStackKey(p) === key)));
       if (valid.size === prev.size) return prev;
       return valid;
     });
@@ -730,6 +793,7 @@ export function StackWorkspace({ mode = 'demo', token = null }: StackWorkspacePr
         ...(name ? { name } : {}),
         product_ids: products.map((product) => ({
           id: product.id,
+          product_type: product.product_type ?? 'catalog',
           quantity: product.quantity ?? 1,
           dosage_text: product.dosage_text,
           timing: product.timing,
@@ -846,7 +910,7 @@ export function StackWorkspace({ mode = 'demo', token = null }: StackWorkspacePr
       const targetStackId = stackId ?? state.activeStackId;
       const targetStack = state.stacks.find((s) => s.id === targetStackId);
       if (!targetStack) throw new Error('Stack konnte nicht gefunden werden.');
-      if (targetStack.products.some((p) => p.id === product.id)) {
+      if (targetStack.products.some((p) => productStackKey(p) === productStackKey(product))) {
         throw new Error('Produkt ist bereits in diesem Stack.');
       }
       const nextProducts = [...targetStack.products, product];
@@ -870,9 +934,9 @@ export function StackWorkspace({ mode = 'demo', token = null }: StackWorkspacePr
   );
 
   const handleRemoveProduct = useCallback(
-    async (productId: number) => {
+    async (productKey: string) => {
       if (!activeStack) return;
-      const nextProducts = activeStack.products.filter((p) => p.id !== productId);
+      const nextProducts = activeStack.products.filter((p) => productStackKey(p) !== productKey);
       if (mode === 'authenticated' && token) {
         try {
           await persistStackProducts(activeStack.id, nextProducts);
@@ -894,17 +958,17 @@ export function StackWorkspace({ mode = 'demo', token = null }: StackWorkspacePr
 
   // ---- Selection / totals ----
 
-  const toggleSelected = (id: number) => {
+  const toggleSelected = (key: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   };
 
   const selectedProducts = useMemo(
-    () => (activeStack?.products.filter((p) => selectedIds.has(p.id)) ?? []),
+    () => (activeStack?.products.filter((p) => selectedIds.has(productStackKey(p))) ?? []),
     [activeStack, selectedIds],
   );
   const totalOnce = selectedProducts.reduce((sum, p) => sum + (p.price ?? 0), 0);
@@ -917,7 +981,7 @@ export function StackWorkspace({ mode = 'demo', token = null }: StackWorkspacePr
     setSelectedIds((prev) =>
       prev.size === activeStack.products.length
         ? new Set()
-        : new Set(activeStack.products.map((p) => p.id)),
+        : new Set(activeStack.products.map(productStackKey)),
     );
   };
 
@@ -975,16 +1039,17 @@ export function StackWorkspace({ mode = 'demo', token = null }: StackWorkspacePr
       />
 
       <main className="ss-page">
-        <div className={`info-banner${isDemo ? ' info-banner-demo' : ''}`}>
-          <IconInfoCircle />
-          <strong>{isDemo ? 'Interaktive Demo:' : 'Gespeicherte Verwaltung:'}</strong>
-          &nbsp;
-          <span>
-            {isDemo
-              ? 'Alles nutzbar — nach dem Neuladen startet wieder der Demo-Stack. Registriere dich, um Änderungen dauerhaft zu speichern.'
-              : 'Diese Ansicht nutzt dieselbe Oberfläche wie die Demo und speichert Änderungen dauerhaft in deinem Account.'}
-          </span>
-        </div>
+        {isDemo && (
+          <div className="info-banner info-banner-demo">
+            <IconInfoCircle />
+            <strong>Interaktive Demo:</strong>
+            &nbsp;
+            <span>
+              Alles nutzbar — nach dem Neuladen startet wieder der Demo-Stack. Registriere dich,
+              um Änderungen dauerhaft zu speichern.
+            </span>
+          </div>
+        )}
 
         {error && (
           <div
@@ -1139,19 +1204,22 @@ export function StackWorkspace({ mode = 'demo', token = null }: StackWorkspacePr
                 </span>
               </div>
               <div className="masonry-grid">
-                {items.map((p) => (
-                  <div key={p.id} className="masonry-item">
+                {items.map((p) => {
+                  const key = productStackKey(p);
+                  return (
+                  <div key={key} className="masonry-item">
                     <ProductCard
                       product={p}
                       shopDomains={shopDomains}
-                      selected={selectedIds.has(p.id)}
-                      onToggleSelected={() => toggleSelected(p.id)}
-                      onDelete={() => void handleRemoveProduct(p.id)}
+                      selected={selectedIds.has(key)}
+                      onToggleSelected={() => toggleSelected(key)}
+                      onDelete={() => void handleRemoveProduct(key)}
                       showWishlistButton={false}
                       showSelectButton={false}
                     />
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           );
@@ -1193,6 +1261,8 @@ export function StackWorkspace({ mode = 'demo', token = null }: StackWorkspacePr
         <AddProductModal
           stacks={state.stacks}
           activeStackId={state.activeStackId}
+          isDemo={isDemo}
+          token={token}
           onAdd={handleAddProduct}
           onClose={() => setAddModalOpen(false)}
         />

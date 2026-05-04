@@ -26,14 +26,8 @@ export default function Layout({ children }: LayoutProps) {
 
   const navLinks = (
     <>
-      <Link to="/search" className={navLinkClass} onClick={closeMobile}>
-        Suchen
-      </Link>
       <Link to="/stacks" className={navLinkClass} onClick={closeMobile}>
         Meine Stacks
-      </Link>
-      <Link to="/wishlist" className={navLinkClass} onClick={closeMobile}>
-        Wunschliste
       </Link>
       {user && (
         <Link to="/my-products" className={navLinkClass} onClick={closeMobile}>

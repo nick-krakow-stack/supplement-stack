@@ -3,6 +3,7 @@ import type { Stack, Interaction } from '../types';
 
 interface StackProductInput {
   id: number;
+  product_type?: 'catalog' | 'user_product';
   quantity?: number;
   dosage_text?: string;
   timing?: string;

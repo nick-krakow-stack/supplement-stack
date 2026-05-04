@@ -19,6 +19,20 @@ Phase C is complete. The integrated Phase D rollout is complete:
   product-recommendation duplicate prevention, stack-warning authorization, and
   user-product validation are committed and deployed in `fcb1a6b`
   (`Fix: Close launch QA flow blockers`).
+- SearchPage/Wishlist werden als normale Fallback-/404-Routen behandelt; `raw`-Flags
+  von SearchPage-Eingaben zählen nicht mehr zu den Launch-Blockern.
+- Launch QA fixes are implemented locally but not yet committed/deployed:
+  `PUT /api/me` uses validated D1 batch update+reload, migration
+  `0041_stack_item_product_sources.sql` rebuilds `stack_items` with explicit
+  `catalog_product_id` and `user_product_id` plus exactly-one CHECK,
+  Stack API accepts legacy `{ id }` catalog payloads and new `product_type`
+  payloads, own pending/approved user products are selectable in
+  `StackWorkspace`, stack warnings read catalog and user-product ingredient
+  rows, and Demo D3/K2 seed/backfill now uses 2,000 IU instead of 10,000 IU.
+  Local checks passed: functions TypeScript, frontend lint, frontend build,
+  `git diff --check`, and isolated migration 0041 schema check. Local Wrangler
+  migration apply is blocked before 0041 by the existing local state failing
+  migration 0009 on missing `google_id`.
 - Mobile-first polish round 1 for 375px-430px is committed and deployed in
   `c76bcf4` (`UX: Improve mobile core flows`). Preview:
   `https://d5b331fd.supplementstack.pages.dev`; live domain returned HTTP 200
@@ -212,7 +226,10 @@ Pick up the next ❌ item when continuing work.
 - ✅ **Demo session DoS vector** — fixed and deployed in `18a4141`: `POST /api/demo/sessions` now uses KV per-IP rate limiting and no longer persists submitted `stack_json`; legacy GET returns an empty stack instead of stored user changes.
 - ✅ **No rate-limit on `POST /api/products`** — fixed and deployed in `18a4141`: creation is now KV rate-limited per authenticated user.
 - ✅ **`shop-domains/resolve` substring spoofing** — fixed and deployed in `18a4141`: resolve and ProductCard matching parse hostnames and allow only exact domain or subdomain matches.
-- ❌ **`stack_items.product_id` FK ambiguity** — `d1-migrations/0001_initial.sql:78-85` doesn't distinguish catalog `products` from `user_products`. Schema concern; needs a discriminator column or separate FKs. Requires migration — coordinate before touching.
+- ✅ **`stack_items.product_id` FK ambiguity** — closed locally by
+  `d1-migrations/0041_stack_item_product_sources.sql`, which rebuilds
+  `stack_items` with explicit `catalog_product_id` and `user_product_id`.
+  Needs commit, remote D1 migration, deploy, and live smoke verification.
 - ❌ **Migration 0036 missing UPDATE trigger** — `d1-migrations/0036_rename_recommendations_to_product_recommendations.sql:27-41` has compatibility view + INSERT/DELETE triggers but no UPDATE trigger. Compatibility window is temporary; the deferred cleanup migration in "Deferred / Later" will drop the view entirely, so this may be moot.
 - ❌ **No email verification on register** — open question whether this is launch-blocking. Currently anyone can register with any address.
 - ❌ **`window.alert` usage in admin** — replace with toast/dialog component for consistent UX.

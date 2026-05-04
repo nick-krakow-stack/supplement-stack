@@ -77,7 +77,7 @@ function HeroSection({ isLoggedIn }: { isLoggedIn: boolean }) {
           )}
           {isLoggedIn && (
             <Link
-              to="/search"
+              to="/stacks"
               className="inline-flex items-center gap-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold rounded-2xl px-8 py-4 text-base shadow-lg hover:shadow-xl transition-all duration-200 w-full sm:w-auto justify-center"
             >
               <Zap size={18} />
