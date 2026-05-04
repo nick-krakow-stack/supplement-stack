@@ -40,6 +40,15 @@ Phase C is complete. The integrated Phase D rollout is complete:
   rate limits, plus matching ProfilePage sections with `LÖSCHEN` confirmation
   phrase. Account deletion is hard-delete in a batch transaction with
   best-effort cleanup for later-migration tables.
+- Stack-warnings N+1 is closed in `5905a20`
+  (`Fix: Batch stack warning interaction lookup`). `GET /api/stack-warnings/:id`
+  now returns early with `{ warnings: [] }` for 0/1 ingredient id and otherwise
+  loads matching `interactions` rows with a single SQL query using dynamic
+  `IN (...)` placeholders for both ingredient columns. Auth, ownership, 404,
+  and 403 semantics are unchanged. Preview:
+  `https://1c23aea8.supplementstack.pages.dev`; preview root and unauth
+  stack-warnings smoke checks passed, and live unauth stack-warnings returned
+  HTTP 401.
 
 Product required package metadata hardening is committed in `52ead1f`
 (`Data: Require complete product package metadata`). Remote D1 migration
@@ -57,21 +66,23 @@ D1 backup is done and is not a next step. Production-domain promotion is done an
 Pick from this list first when you have an open slot. These are the highest-
 signal items any agent — Claude, Codex, anyone — can pick up directly.
 
-1. ⚠️ **Stack-warnings N+1 query**
-   - File: `functions/api/modules/stacks.ts:159-166` (the only remaining ⚠️ in the Top-7).
-   - Current: nested `for (a) for (b > a)` loop firing one DB query per ingredient pair → O(n²) round-trips on every warnings fetch.
-   - Target: single SQL query against `interactions` using `IN (?,?,…)` for both `ingredient_a_id` and `ingredient_b_id`, returning all matching pairs at once.
-   - Acceptance: same response shape as today (`{ warnings: InteractionRow[] }`), same auth/ownership behaviour (Auth + IDOR were already closed in `fcb1a6b`). Add a smoke check that a stack with N ingredients fires exactly one DB query.
-   - Effort: M.
-
-2. ❌ **Footer legal links (Impressum / Datenschutz / AGB)**
+1. ❌ **Footer legal links (Impressum / Datenschutz / AGB)**
    - File: `frontend/src/components/Layout.tsx`.
    - Even stub pages with placeholder content help — they unblock the legal/compliance review which is currently the only thing gating SEO indexing.
    - Effort: XS for stubs, M for real legal copy.
 
-3. ❌ **Demo session DoS vector**
+2. ❌ **Demo session DoS vector**
    - File: `functions/api/modules/demo.ts:46-75`.
    - Currently no rate limit on demo session creation. Add per-IP KV throttle before launch traffic ramps up.
+   - Effort: S.
+
+3. ❌ **No rate-limit on `POST /api/products`**
+   - Open from audit; review whether to add per-user/per-IP throttling.
+   - Effort: S.
+
+4. ❌ **`shop-domains/resolve` substring spoofing**
+   - File: `functions/api/modules/admin.ts:879-885`.
+   - Current substring matching can be spoofed; switch to exact host matching.
    - Effort: S.
 
 The longer audit backlog is below in "Additional Open Items"; treat that as the secondary queue.
@@ -91,7 +102,7 @@ Pick up the next ❌ item when continuing work.
 1. ✅ **CORS + `FRONTEND_URL` for live domain** — closed in `283cbc8`. Reset-mail link now points to `supplementstack.de`; CORS allowlist accepts live, www, all `*.supplementstack.pages.dev` previews, and `localhost:5173`.
 2. ✅ **RegisterPage `age`/`gender`/`guideline_source` data loss** — closed in `e832263`. Values flow through all layers; backend validates `age` 1-120, `gender` enum, `guideline_source` enum, empty strings → `NULL`.
 3. ✅ **Admin Stats field-name mismatch** — already mitigated by Codex; `frontend/src/pages/AdminPage.tsx:1157-1158` accepts both key forms (`products_total`/`products` and `products_pending`/`pending_products`).
-4. ⚠️ **`stack-warnings/:id` Auth + N+1** — Auth/IDOR closed in `fcb1a6b`. **N+1 still open**: `functions/api/modules/stacks.ts:159-166` uses an O(n²) double-loop firing one DB query per ingredient pair. Replace with a single `IN (...)` query joining the interactions table. M-effort.
+4. ✅ **`stack-warnings/:id` Auth + N+1** — Auth/IDOR closed in `fcb1a6b`; N+1 closed in `5905a20`. `GET /api/stack-warnings/:id` now batches interaction lookup into one SQL query with dynamic `IN (...)` placeholders for both ingredient columns, returns `{ warnings: [] }` immediately for 0/1 ingredient id, and preserves auth/ownership/404/403 semantics.
 5. ✅ **`ingredients/:id/products` moderation filter** — closed in `fcb1a6b` (`functions/api/modules/ingredients.ts:427`).
 6. ✅ **`robots.txt` blocking indexing pre-launch** — closed in `1d8b288`. Note: Cloudflare auto-prepends a managed AI-bot block; if Cloudflare ever changes that prepend or if a new search-crawler user-agent emerges, revisit `frontend/public/robots.txt`.
 7. ✅ **Profile self-service (DSGVO Art. 16 + 17)** — closed in `78d8925`. New endpoints `PATCH /api/me/password` and `DELETE /api/me` require re-auth via current password and are rate-limited. Account deletion hard-deletes via `db.batch([...])` for `stack_items`/`stacks`/`wishlist`/`user_products`/`consent_log`/`users` plus a best-effort cleanup loop for tables from later migrations. ProfilePage has two new sections; deletion requires typing `LÖSCHEN` plus password.

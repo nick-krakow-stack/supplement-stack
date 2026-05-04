@@ -69,6 +69,26 @@ Cloudflare Pages preview URLs. All recent deploys have been published to both
 the subdomain and live domain. Public SEO indexing is intentionally deferred
 until legal/compliance is cleared.
 
+Stack-warnings N+1 is fixed, committed, and deployed:
+
+- Commit: `5905a20` - Fix: Batch stack warning interaction lookup.
+- `GET /api/stack-warnings/:id` in `functions/api/modules/stacks.ts` no longer
+  runs an O(n^2) pair loop with one query per ingredient pair.
+- It now returns `{ warnings: [] }` immediately for stacks with 0 or 1
+  ingredient id, and otherwise uses one SQL query with dynamic `IN (...)`
+  placeholders for both `ingredient_a_id` and `ingredient_b_id`.
+- Auth, ownership, 404, and 403 semantics are unchanged.
+- Checks passed: `npx tsc -p tsconfig.json` in `functions`; `git diff --check`
+  with only CRLF warnings; `npm run build` in `frontend`.
+- Deploy command: `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`.
+- Preview URL: `https://1c23aea8.supplementstack.pages.dev`.
+- Preview root returned HTTP 200 with assets `index-Dkeio0yL.js` /
+  `index-RAoQ0gyV.css`; preview unauth `/api/stack-warnings/1` returned HTTP
+  401; live `https://supplementstack.de/api/stack-warnings/1` returned HTTP
+  401.
+- Wrangler warned about a dirty worktree because `.claude/SESSION.md` and
+  `.claude/settings.json` were dirty; expected and not part of deploy.
+
 Phase C Priority 1 (Hono module split), Priority 2 (public dose recommendations API), Priority 3 (admin audit logging), and Priority 4 (server-side unit conversion) are committed and deployed.
 Phase C tech-debt sweep complete (commit b866c3d).
 Phase C is complete.
@@ -180,6 +200,7 @@ the SearchPage footer while a modal is open.
 
 Last relevant commits on `main`:
 
+- `5905a20` - Fix: Batch stack warning interaction lookup.
 - `52ead1f` - Data: Require complete product package metadata.
 - `1df7616` - Memory: Record robots.txt deploy and Top-7 sprint status.
 - `1d8b288` - Fix: Disallow search crawlers by name in robots.txt.
@@ -211,6 +232,19 @@ Last relevant commits on `main`:
 - `9a5f523` - DB: Phase B abgeschlossen, migrations 0028-0035, `dosage_guidelines` migrated to `dose_recommendations`.
 
 ## Latest Deployed Work
+
+Stack-warnings batched interaction lookup is committed and deployed:
+
+- Commit: `5905a20` - Fix: Batch stack warning interaction lookup.
+- Deploy command: `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://1c23aea8.supplementstack.pages.dev`
+- Build assets: JS `index-Dkeio0yL.js`, CSS `index-RAoQ0gyV.css`.
+- Local checks passed: functions TypeScript compile, frontend build, and
+  `git diff --check` with only CRLF warnings.
+- Smoke checks passed: preview root HTTP 200; preview unauthenticated
+  `/api/stack-warnings/1` HTTP 401; live unauthenticated
+  `/api/stack-warnings/1` HTTP 401.
+- Browser/mobile QA and legal/compliance review remain open.
 
 Launch QA flow blockers are committed and deployed:
 
@@ -377,6 +411,9 @@ Production D1 migrations 0026-0035 are considered live according to the previous
 - Product-to-ingredient recommendation links target `product_recommendations`;
   migration 0036 keeps a temporary `recommendations` view/triggers for deploy
   compatibility. The public `/api/recommendations` route name remains.
+- `GET /api/stack-warnings/:id` now keeps the existing auth/ownership
+  behaviour and fetches all matching interaction warnings through one batched
+  SQL `IN (...)` lookup instead of an O(n^2) per-pair query loop.
 
 ## Agent Workflow
 

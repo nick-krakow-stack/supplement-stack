@@ -10,8 +10,8 @@ top-queue. This handoff is only a short restart note.
 ## Git / Worktree
 
 - Branch: `main`.
-- Current last commit: `326050f` - Memory: Promote N+1 to top-of-queue
-  cross-agent TODO list.
+- Current last code commit: `5905a20` - Fix: Batch stack warning
+  interaction lookup.
 - Worktree is expected to be dirty from `.claude/SESSION.md` and
   `.claude/settings.json`; memory files may also be dirty from this cleanup.
 - Do not treat `.claude/*` as part of the current implementation task.
@@ -23,6 +23,9 @@ top-queue. This handoff is only a short restart note.
 - Product required package metadata hardening is live: data migration 0037 and
   API/frontend validation from `52ead1f` are both live per
   `.agent-memory/next-steps.md`.
+- Stack-warnings N+1 is closed in `5905a20`: `GET /api/stack-warnings/:id`
+  now fetches interactions with one batched SQL `IN (...)` lookup and preserves
+  existing auth/ownership/404/403 semantics.
 - Robots pre-launch indexing block is closed.
 - D1 backup verification is done.
 
@@ -30,9 +33,9 @@ top-queue. This handoff is only a short restart note.
 
 Pick from `.agent-memory/next-steps.md` first:
 
-1. Stack-warnings N+1 query in `functions/api/modules/stacks.ts`.
-2. Footer legal links: Impressum / Datenschutz / AGB.
-3. Demo session DoS rate limit in `functions/api/modules/demo.ts`.
+1. Footer legal links: Impressum / Datenschutz / AGB.
+2. Demo session DoS rate limit in `functions/api/modules/demo.ts`.
+3. Continue with the remaining audit backlog in `.agent-memory/next-steps.md`.
 
 ## Still Open
 

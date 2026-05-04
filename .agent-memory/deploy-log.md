@@ -1,6 +1,6 @@
 # Deploy Log
 
-Last updated: 2026-05-03
+Last updated: 2026-05-04
 
 ## Latest Known Production State
 
@@ -22,11 +22,14 @@ Targeted User/Demo/Search/Stack UX fixes plus Admin UX fixes are committed and
 deployed to Cloudflare Pages preview and live custom domain.
 Launch QA flow blockers are committed and deployed to Cloudflare Pages preview
 and live custom domain.
+Stack-warnings batched interaction lookup is committed and deployed to
+Cloudflare Pages preview and live custom domain.
 GitHub Actions D1 backup has run successfully both manually and automatically;
 token scopes are verified.
 
 Latest relevant commits:
 
+- `5905a20` - Fix: Batch stack warning interaction lookup.
 - `fcb1a6b` - Fix: Close launch QA flow blockers.
 - `8fb5431` - UX: Improve stack and admin usability flows.
 - `078fc31` - UX: Auto-focus search field in 'Produkt hinzufuegen' modal (Demo + Stack-Workspace).
@@ -41,6 +44,30 @@ Latest relevant commits:
 - `dd58ba2` - Feature: Add dose recommendations API.
 - `b1fd347` - Refactor: Split Pages API into Hono modules.
 - `9a5f523` - DB: Phase B complete (migrations 0028-0035).
+
+## Stack Warnings Performance
+
+### 2026-05-04 - Cloudflare Pages: batched stack warning interaction lookup
+
+- Commit: `5905a20` - Fix: Batch stack warning interaction lookup.
+- Scope: `GET /api/stack-warnings/:id` in `functions/api/modules/stacks.ts`
+  no longer loads interactions with an O(n^2) pair loop. Stacks with 0 or 1
+  ingredient id return `{ warnings: [] }` immediately; otherwise one SQL query
+  uses dynamic `IN (...)` placeholders for both ingredient columns.
+- Semantics: auth, ownership, 404, and 403 behaviour unchanged.
+- Local validation:
+  - `npx tsc -p tsconfig.json` in `functions/` passed.
+  - `git diff --check` passed with only CRLF warnings.
+  - `npm run build` in `frontend/` passed.
+- Deploy command: `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://1c23aea8.supplementstack.pages.dev`
+- Build assets: JS `index-Dkeio0yL.js`, CSS `index-RAoQ0gyV.css`.
+- Smoke checks:
+  - Preview root returned HTTP 200 with the expected assets.
+  - Preview unauthenticated `/api/stack-warnings/1` returned HTTP 401.
+  - Live `https://supplementstack.de/api/stack-warnings/1` returned HTTP 401.
+- Wrangler warning: dirty worktree because `.claude/SESSION.md` and
+  `.claude/settings.json` were dirty; expected and not part of deploy.
 
 ## Profile Self-Service (DSGVO Art. 16 + 17)
 
