@@ -32,11 +32,14 @@ Demo/session abuse hardening, product creation rate limits, trusted
 user-product submitters, and shop-domain host matching are committed,
 remote-migrated, and deployed to Cloudflare Pages preview and live custom
 domain.
+Product ingredient publishing model is committed, remote-migrated, and
+deployed to Cloudflare Pages preview and live custom domain.
 GitHub Actions D1 backup has run successfully both manually and automatically;
 token scopes are verified.
 
 Latest relevant commits:
 
+- `1272e11` - Feature: Add product ingredient publishing model.
 - `18a4141` - Security: Harden demo and user product moderation.
 - `9c2c627` - Legal: Add imprint privacy and terms pages.
 - `a18136d` - Feature: Add consent-based GA4 analytics.
@@ -55,6 +58,63 @@ Latest relevant commits:
 - `dd58ba2` - Feature: Add dose recommendations API.
 - `b1fd347` - Refactor: Split Pages API into Hono modules.
 - `9a5f523` - DB: Phase B complete (migrations 0028-0035).
+
+## Product Ingredient Publishing Model
+
+### 2026-05-04 - D1 + Cloudflare Pages: product ingredient publishing model
+
+- Commit: `1272e11` - Feature: Add product ingredient publishing model.
+- Remote D1 migration:
+  - Applied `d1-migrations/0039_product_ingredient_model.sql` to
+    `supplementstack-production`.
+  - Control query confirmed `product_ingredients.search_relevant` column = 1,
+    `user_product_ingredients` table = 1,
+    `ingredient_sub_ingredients` table = 1, and
+    `user_products.published_product_id` column = 1.
+- Scope:
+  - Catalog `product_ingredients` now has search-relevant and basis metadata
+    for ingredient-specific public product filtering.
+  - `user_product_ingredients` stores durable ingredient rows for user
+    products.
+  - `ingredient_sub_ingredients` is schema-ready for later prompted
+    sub-ingredient entry.
+  - `user_products.published_product_id` links approved/private user products
+    to published catalog products after admin publish.
+  - Admin publish copies checked user products into public approved
+    `products` and `product_ingredients`.
+  - Trusted submitters create `user_products` as approved/private moderation
+    state but are not auto-published into the catalog.
+- Local validation before commit/deploy:
+  - `npx tsc -p tsconfig.json` in `functions/` passed.
+  - `npm run lint --if-present` in `frontend/` passed.
+  - Frontend Vitest passed with no test files.
+  - `npm run build` in `frontend/` passed.
+  - `git diff --check` passed with CRLF warnings only.
+  - Mojibake `rg` check passed.
+- Frontend build assets: JS `index-BvEYaSZm.js`, CSS `index-BxLAbVeG.css`.
+- Deploy command:
+  - `wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://0ed675d5.supplementstack.pages.dev`.
+- Smoke checks:
+  - Preview root returned HTTP 200 and had the new JS asset.
+  - Live root returned HTTP 200 and had the new JS asset.
+  - Preview `/api/demo/products` returned HTTP 200 with count 7.
+  - Live `/api/demo/products` returned HTTP 200 with count 7.
+  - Preview `/api/ingredients/1/products` returned HTTP 200 with count 3.
+  - Live `/api/ingredients/1/products` returned HTTP 200 with count 3.
+  - Preview `/api/admin/user-products` unauthenticated returned HTTP 401.
+  - Preview `/api/user-products` unauthenticated returned HTTP 401.
+  - Live `/api/admin/user-products` unauthenticated returned HTTP 401.
+  - Preview/live `/api/ingredients/1/recommendations` returned HTTP 200 with
+    count 4.
+- Remaining follow-up:
+  - Seed/manage `ingredient_sub_ingredients` and add smart UI prompts for
+    sub-ingredients such as L-Carnitin forms and Omega-3 EPA/DHA/DPA.
+  - Final legal/compliance review and authenticated browser/mobile QA remain
+    open.
+- Workspace note:
+  - `.claude/SESSION.md` and `.claude/settings.json` remain dirty and were
+    intentionally untouched.
 
 ## Demo And User Product Hardening
 
@@ -83,10 +143,9 @@ Latest relevant commits:
   - Shop-domain matching now parses hostnames and allows only exact domain or
     subdomain matches, preventing `amazon.de.evil.com` style spoofing.
 - Product-model caveat:
-  - `user_products.status = 'approved'` is the current moderation/lock state.
-  - Approved user products still need a durable ingredient mapping or catalog
-    conversion relation before they can appear in ingredient-specific public
-    product lists for everyone.
+  - Superseded by `1272e11`. `user_products.status = 'approved'` remains the
+    private moderation/lock state, but durable ingredient mapping and admin
+    catalog conversion are now deployed.
 - Local validation:
   - `npx tsc -p tsconfig.json` in `functions/` passed.
   - `npm run lint --if-present` in `frontend/` passed.

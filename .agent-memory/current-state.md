@@ -43,13 +43,19 @@ unless verified against code.
 Phase B is complete. Phase C is complete. Phase D bundle is committed,
 remote-migrated, and deployed to Cloudflare Pages preview.
 
-Product-model follow-up is implemented locally but not yet migrated/deployed:
+Product-model follow-up is committed, remote-migrated, and deployed:
 
-- New migration `d1-migrations/0039_product_ingredient_model.sql` adds
-  `product_ingredients.search_relevant`, `basis_quantity`, `basis_unit`, and
-  `parent_ingredient_id`; creates `user_product_ingredients`; creates
-  `ingredient_sub_ingredients`; and adds `user_products.published_product_id`
-  plus `published_at`.
+- Commit: `1272e11` - Feature: Add product ingredient publishing model.
+- Remote D1 migration `d1-migrations/0039_product_ingredient_model.sql` was
+  applied successfully to `supplementstack-production`.
+- Remote control query confirmed:
+  `product_ingredients.search_relevant` column = 1,
+  `user_product_ingredients` table = 1,
+  `ingredient_sub_ingredients` table = 1, and
+  `user_products.published_product_id` column = 1.
+- The migration extends catalog `product_ingredients`, adds durable
+  `user_product_ingredients`, adds `ingredient_sub_ingredients`, and adds
+  `user_products.published_product_id` plus `published_at`.
 - `functions/api/modules/products.ts` no longer requires exactly one
   `is_main` ingredient; `is_main` is now legacy/display metadata.
 - `functions/api/modules/user-products.ts` accepts optional `ingredients`
@@ -58,20 +64,28 @@ Product-model follow-up is implemented locally but not yet migrated/deployed:
 - `functions/api/modules/admin.ts` returns user-product ingredient rows and
   adds idempotent `PUT /api/admin/user-products/:id/publish` to convert a
   user product into public approved catalog `products` + `product_ingredients`.
-- `functions/api/modules/ingredients.ts` filters ingredient product lists and
-  product recommendations through `product_ingredients.search_relevant = 1`.
-- `functions/api/modules/stacks.ts` filters stack interaction warning
-  ingredients through `search_relevant = 1` and only accepts approved/public
-  catalog products in stack items.
-- `functions/api/modules/wishlist.ts` only accepts approved/public catalog
-  products.
-- Trusted submitters remain auto-approved but are not auto-published; publish
-  requires admin validation that search-relevant rows have quantity/unit and
-  basis_quantity/basis_unit.
-- Local backend checks passed: `npx tsc -p tsconfig.json` in `functions/` and
-  `git diff --check` with CRLF warnings only.
-- Frontend files became dirty during the session but were not edited by the
-  backend task; leave them for their owner unless explicitly instructed.
+- Public ingredient product lists, product recommendations, stack-warning
+  interaction lookup, stacks, and wishlist now rely on approved/public catalog
+  products and search-relevant ingredient rows where applicable.
+- Trusted submitters create `user_products` as approved/private moderation
+  state, but not auto-published into the catalog. Public catalog visibility
+  requires admin publish so verified search-relevant ingredient rows are copied
+  into `products` / `product_ingredients`.
+- Local checks before commit/deploy passed: functions
+  `npx tsc -p tsconfig.json`; frontend lint; frontend Vitest with no test
+  files; frontend build; `git diff --check` with CRLF warnings only; mojibake
+  `rg` check.
+- Frontend build assets: JS `index-BvEYaSZm.js`, CSS `index-BxLAbVeG.css`.
+- Deploy command: `wrangler pages deploy frontend/dist --project-name supplementstack`.
+- Preview URL: `https://0ed675d5.supplementstack.pages.dev`.
+- Smoke checks passed: preview root 200 and has new asset; live root 200 and
+  has new asset; preview/live `/api/demo/products` 200 count 7; preview/live
+  `/api/ingredients/1/products` 200 count 3; preview/live
+  `/api/ingredients/1/recommendations` 200 count 4; preview/live unauth admin
+  or user product endpoints returned 401 as expected.
+- Remaining product-model follow-up: seed/manage `ingredient_sub_ingredients`
+  and add smart UI prompts for sub-ingredients such as L-Carnitin forms and
+  Omega-3 EPA/DHA/DPA. Schema is ready; guided prompts are not implemented.
 
 Demo session hardening is committed, migrated, and deployed:
 
@@ -97,8 +111,7 @@ Demo session hardening is committed, migrated, and deployed:
   HTTP 200 with 7 starter products, and preview `POST /api/demo/sessions`
   HTTP 200 with an empty-stack compatibility response.
 
-User product moderation and shop-domain hardening is implemented locally and
-deployed:
+User product moderation and shop-domain hardening is implemented and deployed:
 
 - Commit: `18a4141` - Security: Harden demo and user product moderation.
 - New D1 migration
@@ -128,11 +141,10 @@ deployed:
 - Smoke checks passed on preview/live: `/api/shop-domains/resolve` rejects
   `amazon.de.evil.com`, accepts `www.amazon.de`, and unauthenticated
   `/api/admin/user-products` returns HTTP 401.
-- Product-model caveat: current `user_products` still have no durable
-  ingredient mapping or catalog conversion relation. `approved` is the
-  enforceable moderation/lock state; making approved user products appear in
-  ingredient-specific public product lists still needs a product-model
-  follow-up.
+- Product-model caveat superseded by `1272e11`: user products now have durable
+  ingredient rows and admin catalog publishing through
+  `user_products.published_product_id`. `approved` remains the private
+  moderation/lock state; public visibility requires admin publish.
 
 Product required package metadata hardening is committed, remote-migrated, and
 live:
@@ -156,8 +168,9 @@ live:
 - Checks before commit passed: frontend `npm run lint --if-present`, frontend
   `npm run build`, functions `npx tsc -p tsconfig.json`, and
   `git diff --check` with CRLF warnings only.
-- Later product-model follow-up: user products need real ingredient mapping or
-  separate handling in ingredient-specific product selection.
+- Later product-model follow-up: seed/manage `ingredient_sub_ingredients` and
+  add guided prompts for sub-ingredients such as L-Carnitin forms and Omega-3
+  EPA/DHA/DPA.
 
 Production custom domain `supplementstack.de` is live in parallel to the
 Cloudflare Pages preview URLs. All recent deploys have been published to both
@@ -352,6 +365,7 @@ the SearchPage footer while a modal is open.
 
 Last relevant commits on `main`:
 
+- `1272e11` - Feature: Add product ingredient publishing model.
 - `9c2c627` - Legal: Add imprint privacy and terms pages.
 - `a18136d` - Feature: Add consent-based GA4 analytics.
 - `5905a20` - Fix: Batch stack warning interaction lookup.
@@ -386,6 +400,23 @@ Last relevant commits on `main`:
 - `9a5f523` - DB: Phase B abgeschlossen, migrations 0028-0035, `dosage_guidelines` migrated to `dose_recommendations`.
 
 ## Latest Deployed Work
+
+Product ingredient publishing model is committed, remote-migrated, and
+deployed:
+
+- Commit: `1272e11` - Feature: Add product ingredient publishing model.
+- Remote D1 migration `0039_product_ingredient_model.sql` applied successfully
+  to `supplementstack-production`.
+- Remote control query confirmed required 0039 schema objects/columns exist:
+  `product_ingredients.search_relevant`, `user_product_ingredients`,
+  `ingredient_sub_ingredients`, and `user_products.published_product_id`.
+- Frontend build assets: JS `index-BvEYaSZm.js`, CSS `index-BxLAbVeG.css`.
+- Deploy command: `wrangler pages deploy frontend/dist --project-name supplementstack`.
+- Preview URL: `https://0ed675d5.supplementstack.pages.dev`.
+- Smoke checks passed on preview/live: root uses the new asset,
+  `/api/demo/products` returns 7 products, `/api/ingredients/1/products`
+  returns 3 products, `/api/ingredients/1/recommendations` returns 4 rows, and
+  unauthenticated admin/user product endpoints return 401.
 
 Legal pages are committed and deployed:
 

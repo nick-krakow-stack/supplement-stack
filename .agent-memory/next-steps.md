@@ -89,32 +89,37 @@ Demo session DoS hardening is closed in `18a4141` and deployed to
 submitted `stack_json`, legacy GET returns an empty stack for existing unexpired
 keys, and Demo UI state remains page-local.
 
-User product moderation and shop-domain hardening is implemented locally and
-deployed in `18a4141`: trusted submitter flag migration, default pending
+User product moderation and shop-domain hardening is implemented and deployed
+in `18a4141`: trusted submitter flag migration, default pending
 user-products with trusted auto-approval, approved-product user edit/delete
 locks, admin trusted toggles, product creation rate limits, and parsed
 hostname-based shop-domain matching.
 
-Product-model follow-up is implemented locally and needs review/migration/deploy:
+Product-model follow-up is closed in `1272e11`
+(`Feature: Add product ingredient publishing model`) and deployed:
 
-- Migration `0039_product_ingredient_model.sql` extends catalog
-  `product_ingredients`, adds `user_product_ingredients`, adds
-  `ingredient_sub_ingredients`, and adds `user_products.published_product_id`
-  plus `published_at`.
+- Remote D1 migration `0039_product_ingredient_model.sql` applied successfully
+  to `supplementstack-production`.
+- Remote control query confirmed:
+  `product_ingredients.search_relevant` column = 1,
+  `user_product_ingredients` table = 1,
+  `ingredient_sub_ingredients` table = 1, and
+  `user_products.published_product_id` column = 1.
 - User-product APIs accept optional ingredient rows and return them.
 - Admin has idempotent `PUT /api/admin/user-products/:id/publish` to convert a
   user product to approved/public catalog `products` plus
   `product_ingredients`.
-- Public ingredient product lists, product recommendations, and stack-warning
-  interaction lookup now require `product_ingredients.search_relevant = 1`.
-- Stacks and Wishlist now accept only approved/public catalog products, not raw
-  `user_products.id` values.
-- Trusted submitters remain auto-approved but not auto-published; admin publish
-  enforces complete search-relevant ingredient amount and basis metadata.
-- Backend checks passed locally: `npx tsc -p tsconfig.json` in `functions/`;
-  `git diff --check` passed with CRLF warnings only.
-- Important deploy order: apply remote D1 migration 0039 first, then deploy
-  code, because several routes query the new columns.
+- Public ingredient product lists, product recommendations, stack-warning
+  interaction lookup, stacks, and wishlist now use approved/public catalog
+  products and search-relevant ingredient rows where applicable.
+- Trusted submitters create approved/private user-products but are not
+  auto-published. Public catalog visibility requires admin publish after
+  checking search-relevant ingredient rows.
+- Preview URL: `https://0ed675d5.supplementstack.pages.dev`.
+- Build assets: JS `index-BvEYaSZm.js`, CSS `index-BxLAbVeG.css`.
+- Smoke checks passed on preview/live for root assets, demo products count 7,
+  D3 products count 3, D3 recommendations count 4, and unauth product/admin
+  product endpoints returning 401.
 
 ## Open Cross-Agent TODOs (top of the queue)
 
@@ -129,26 +134,22 @@ signal items any agent — Claude, Codex, anyone — can pick up directly.
      GitHub, Google Analytics property/settings before indexing.
    - Effort: Legal review dependent.
 
-2. ❌ **Approved user products need public catalog mapping**
-   - Current `user_products.status = 'approved'` is the moderation/lock state,
-     but `user_products` still have no durable ingredient mapping or catalog
-     conversion relation.
-   - Needed before approved/trusted user products can correctly appear in
-     ingredient-specific public product lists for everyone.
+2. ❌ **Seed/manage ingredient sub-ingredients and guided prompts**
+   - `ingredient_sub_ingredients` is schema-ready, but no guided UI/admin flow
+     exists yet for sub-ingredient prompts such as L-Carnitin forms or Omega-3
+     EPA/DHA/DPA.
+   - Needed for smarter user-product ingredient entry and validation.
    - Effort: M.
-   - Superseded by local WIP in migration 0039 and backend modules; still
-     open until reviewed, migrated, deployed, and smoke-tested.
 
 The longer audit backlog is below in "Additional Open Items"; treat that as the secondary queue.
 
 ## Later Product-Model Follow-Up
 
-- User-Produkte need a real ingredient mapping or must be handled separately
-  in ingredient-specific product selection. Open question for the product
-  track, not a launch blocker.
-- Superseded by local WIP for real ingredient mapping and catalog conversion.
-  Remaining work is review, migration/deploy, frontend wiring if needed, and
-  smoke QA.
+- User-product ingredient mapping and catalog conversion are deployed in
+  `1272e11`.
+- Remaining product-model work: seed/manage `ingredient_sub_ingredients` and
+  add smart UI prompts for sub-ingredients, especially L-Carnitin forms and
+  Omega-3 EPA/DHA/DPA.
 
 ## Audit Top-7 Bugfix Sprint Status
 

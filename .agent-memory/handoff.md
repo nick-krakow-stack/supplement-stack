@@ -17,22 +17,15 @@ Continue from `main` using the top queue in this file.
 
 ## Git / Worktree
 
-- Latest committed baseline before this handoff: `18a4141` -
-  Security: Harden demo and user product moderation.
-- Active local backend/schema WIP implements the product-model follow-up:
-  `d1-migrations/0039_product_ingredient_model.sql`,
-  `functions/api/modules/admin.ts`, `ingredients.ts`, `products.ts`,
-  `stacks.ts`, `user-products.ts`, and `wishlist.ts`.
+- Latest committed baseline before this handoff: `1272e11` -
+  Feature: Add product ingredient publishing model.
+- Product-model follow-up is no longer local WIP: migration 0039 was applied
+  remotely and the code was deployed to preview/live.
 - `.agent-memory/current-state.md`, `.agent-memory/next-steps.md`,
-  `.agent-memory/handoff.md`, and `.agent-memory/decisions.md` were updated
-  for this WIP.
+  `.agent-memory/handoff.md`, `.agent-memory/decisions.md`, and
+  `.agent-memory/deploy-log.md` were updated for the completed deploy.
 - `.claude/SESSION.md` and `.claude/settings.json` remain dirty and must not be
   touched.
-- Frontend files are dirty from outside this backend task:
-  `frontend/src/components/modals/Modal2Products.tsx`,
-  `frontend/src/components/modals/UserProductForm.tsx`,
-  `frontend/src/pages/AdminPage.tsx`, and `frontend/src/types/local.ts`.
-  Do not revert them without explicit owner instruction.
 - Branch: `main`.
 
 ## Closed Baseline
@@ -49,8 +42,34 @@ Continue from `main` using the top queue in this file.
 
 1. Final legal/compliance review (DSB/AVV/provider checks) before SEO indexing.
 2. Manual authenticated browser/mobile QA.
-3. Review/apply/deploy the local product-model WIP and run remote D1 migration
-   0039 before deploying code that queries the new columns.
+3. Seed/manage `ingredient_sub_ingredients` and add smart UI prompts for
+   sub-ingredients such as L-Carnitin forms and Omega-3 EPA/DHA/DPA.
+
+## Deployed Product Ingredient Publishing Model
+
+- Commit: `1272e11` - Feature: Add product ingredient publishing model.
+- Remote D1 migration `0039_product_ingredient_model.sql` applied successfully
+  to `supplementstack-production`.
+- Remote control query confirmed:
+  `product_ingredients.search_relevant` column = 1,
+  `user_product_ingredients` table = 1,
+  `ingredient_sub_ingredients` table = 1, and
+  `user_products.published_product_id` column = 1.
+- Frontend build assets: JS `index-BvEYaSZm.js`, CSS `index-BxLAbVeG.css`.
+- Deploy command: `wrangler pages deploy frontend/dist --project-name supplementstack`.
+- Preview URL: `https://0ed675d5.supplementstack.pages.dev`.
+- Smoke checks passed: preview/live root 200 with new asset; preview/live
+  `/api/demo/products` 200 count 7; preview/live
+  `/api/ingredients/1/products` 200 count 3; preview/live
+  `/api/ingredients/1/recommendations` 200 count 4; preview/live
+  unauthenticated product/admin product endpoints returned 401 as expected.
+- Local checks before commit/deploy passed: functions
+  `npx tsc -p tsconfig.json`, frontend lint, frontend Vitest with no test
+  files, frontend build, `git diff --check` with CRLF warnings only, and
+  mojibake `rg` check.
+- Decision reminder: trusted submitters create approved/private
+  `user_products`, but public catalog visibility requires admin publish into
+  `products` / `product_ingredients`.
 
 ## Deployed User Product Hardening
 

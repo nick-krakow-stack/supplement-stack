@@ -8,11 +8,24 @@ Decision: `user_products.status = 'approved'` remains the user-edit lock, but
 public/nutzbare products now require conversion into the catalog `products`
 table via `user_products.published_product_id`.
 
+Deployment status:
+
+- Implemented, committed, remote-migrated, and deployed in `1272e11`
+  (`Feature: Add product ingredient publishing model`).
+- Remote D1 migration `0039_product_ingredient_model.sql` is applied to
+  `supplementstack-production`.
+- Remote schema verification confirmed `product_ingredients.search_relevant`,
+  `user_product_ingredients`, `ingredient_sub_ingredients`, and
+  `user_products.published_product_id`.
+
 Operational rule:
 
 - Normal users create user products as `pending`.
 - Trusted product submitters create user products as `approved` immediately,
   but they are not auto-published to the public catalog.
+- Trusted submitter approval is a private moderation state only; public catalog
+  visibility still requires admin publish so verified search-relevant
+  ingredient rows are copied into `products` and `product_ingredients`.
 - Users cannot edit or delete their own `approved` user products.
 - Rejected products may be edited by their owner; editing resubmits as
   `pending`, or `approved` if the owner is trusted at that time.
