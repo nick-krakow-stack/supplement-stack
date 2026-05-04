@@ -36,11 +36,19 @@ Product ingredient publishing model is committed, remote-migrated, and
 deployed to Cloudflare Pages preview and live custom domain.
 Sub-ingredient product workflow is committed, remote-migrated, and deployed to
 Cloudflare Pages preview and live custom domain.
+Launch QA stack/profile fixes, stack item explicit product references, demo
+D3/K2 dosage reduction, and guideline-source normalization are committed,
+remote-migrated, deployed, and live-smoked on preview/live.
 GitHub Actions D1 backup has run successfully both manually and automatically;
 token scopes are verified.
 
 Latest relevant commits:
 
+- `24b10b5` - Fix: Normalize guideline source values.
+- `cb76cf3` - Fix: Remove D1 run success check from profile update.
+- `1a3b8e6` - Fix: Build profile response from target values.
+- `baa91a5` - Fix: Close live profile and stack warning smokes.
+- `0b29fe0` - Fix: Launch QA stack and profile flows.
 - `29dcde5` - Feature: Add sub-ingredient product workflow.
 - `1272e11` - Feature: Add product ingredient publishing model.
 - `18a4141` - Security: Harden demo and user product moderation.
@@ -63,6 +71,71 @@ Latest relevant commits:
 - `9a5f523` - DB: Phase B complete (migrations 0028-0035).
 
 ## Product Ingredient Publishing Model
+
+### 2026-05-05 - D1 + Cloudflare Pages: launch QA stack/profile bundle
+
+- Commits:
+  - `0b29fe0` - launch QA stack/profile flows.
+  - `baa91a5` - live profile + stack warning smokes.
+  - `1a3b8e6` - profile response path.
+  - `cb76cf3` - D1 run handling.
+  - `24b10b5` - guideline normalization.
+- Remote D1 migration:
+  - Applied `d1-migrations/0041_stack_item_product_sources.sql` to
+    `supplementstack-production`.
+  - Migration rebuilds `stack_items` with explicit `catalog_product_id` and
+    `user_product_id` columns plus a CHECK requiring exactly one reference.
+    Existing legacy `product_id` values are backfilled to
+    `catalog_product_id`.
+- Scope:
+  - `PUT /api/me` uses validated existing-profile load, final target value
+    computation, plain D1 `UPDATE`, and response construction from target
+    values.
+  - Register and `PUT /api/me` normalize guideline source input to the live
+    DB CHECK values: `DGE`, `studien`, `influencer`.
+  - `PUT /api/me` validates `gender` and `diet` before DB update.
+  - Stack API accepts legacy `{ id }` catalog payloads and new
+    `{ id, product_type: 'catalog' | 'user_product' }` payloads, stores them
+    through explicit reference columns, validates all items before replace, and
+    uses `stack.user_id` for user-product ownership.
+  - `GET /api/stacks/:id` returns `product_type`; stack warnings evaluate both
+    catalog `product_ingredients` and stack-owner-constrained
+    `user_product_ingredients`.
+  - `StackWorkspace` keeps string keys `catalog:id` and `user_product:id`,
+    loads own pending/approved user products, and hides user products whose
+    `published_product_id` already exists in the loaded catalog list.
+  - Demo D3/K2 product seed/backfill uses 2,000 IU D3 instead of 10,000 IU.
+  - Search/Wishlist remain intentionally outside App/Layout routes and nav;
+    raw paths are SPA fallback only.
+- Validation:
+  - Functions `npx tsc -p tsconfig.json` passed.
+  - Frontend `npm run lint --if-present` passed.
+  - Frontend `npm run build` passed.
+  - Frontend tests with no files passed earlier.
+  - `git diff --check` passed.
+  - Local Wrangler migration apply remains blocked before 0041 by old local
+    state migration 0009 on missing `google_id`; remote migration 0041 is
+    applied successfully.
+- Preview URL: `https://5fb3de86.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`; live root uses asset
+  `index-BfFUmB15.js`.
+- Final live smokes:
+  - Profile `PUT /api/me` returned HTTP 200 with age 34, weight 82, gender
+    `divers`, `guideline_source=studien`, and `is_smoker=0`.
+  - Invalid gender `PUT /api/me` returned HTTP 400.
+  - Own pending user product `QA L-Carnitin Triple Komplex` was added to a
+    temporary stack; `GET /api/stacks/:id` returned
+    `product_type=user_product`; `GET /api/stack-warnings/:id` returned HTTP
+    200 with 0 warnings; the temporary stack was deleted.
+  - `/api/demo/products` returned 7 products and the D3 product quantity is
+    2,000 IU.
+  - Preview root and live root returned HTTP 200 with asset
+    `index-BfFUmB15.js`.
+  - `/forgot-password` returned HTTP 200.
+  - `/search` and `/wishlist` have no explicit App/Layout routes or nav links.
+- Workspace note:
+  - `.claude/SESSION.md` and `.claude/settings.json` remain dirty and were
+    intentionally untouched.
 
 ### 2026-05-05 - D1 + Cloudflare Pages: sub-ingredient product workflow
 

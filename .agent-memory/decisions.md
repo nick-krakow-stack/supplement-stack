@@ -9,8 +9,11 @@ catalog `products` and private `user_products`.
 
 Implementation status:
 
-- Implemented locally in migration `0041_stack_item_product_sources.sql`; not
-  yet remote-migrated or deployed.
+- Implemented, committed, remote-migrated, deployed, and live-smoked in the
+  Launch-QA stack/profile bundle (`0b29fe0`, `baa91a5`, `1a3b8e6`,
+  `cb76cf3`, `24b10b5`).
+- Remote D1 migration `0041_stack_item_product_sources.sql` applied
+  successfully to `supplementstack-production`.
 - Migration 0041 rebuilds `stack_items` with nullable
   `catalog_product_id` and `user_product_id` columns.
 - A CHECK constraint requires exactly one of the two columns to be non-NULL.

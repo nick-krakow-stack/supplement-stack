@@ -47,14 +47,19 @@ remote-migrated, and deployed to Cloudflare Pages preview.
   explicit routes and navigation. They fall through to wildcard/404 handling, and any raw
   SearchPage flags are no longer treated as launch blockers.
 
-Launch QA fixes are implemented locally but not yet committed, remote-migrated,
-or deployed:
+Launch QA stack/profile fixes are committed, remote-migrated, deployed, and
+live-smoked:
 
 - `PUT /api/me` now validates profile payloads, loads the existing profile,
   computes final target values with explicit omitted-vs-provided key handling,
   runs a plain `UPDATE`, and builds the response from those target values so no
   post-mutation SELECT/RETURNING/batch parsing can turn persistence into a 500.
-- New migration `0041_stack_item_product_sources.sql` rebuilds `stack_items`
+- Guideline source input is normalized in register and `PUT /api/me`: accepted
+  values are `DGE`, `Studien`/`studien`, and `Influencer`/`influencer`, stored
+  as `DGE`, `studien`, or `influencer`. `PUT /api/me` also validates `gender`
+  and `diet` before DB update.
+- Remote D1 migration `0041_stack_item_product_sources.sql` was applied
+  successfully to `supplementstack-production`; it rebuilds `stack_items`
   from ambiguous `product_id` to explicit nullable `catalog_product_id` and
   `user_product_id` columns with a CHECK requiring exactly one reference.
   Existing `product_id` values are backfilled into `catalog_product_id`.
@@ -76,9 +81,25 @@ or deployed:
   seed and migration 0041 backfill for existing databases.
 - Route/header check found no active `/search` or `/wishlist` App/Layout routes
   or nav links; un-routed page files remain untouched.
-- Checks passed locally after the live-smoke follow-up: functions
-  `npx tsc -p tsconfig.json`; frontend `npm run lint --if-present`; frontend
-  `npm run build`; `git diff --check` with CRLF warnings only; isolated
+- Bundle commits: `0b29fe0` (launch QA stack/profile flows), `baa91a5` (live
+  profile + stack warning smokes), `1a3b8e6` (profile response path),
+  `cb76cf3` (D1 run handling), and `24b10b5` (guideline normalization).
+- Latest preview: `https://5fb3de86.supplementstack.pages.dev`; live
+  `https://supplementstack.de` uses asset `index-BfFUmB15.js`.
+- Final live smokes passed: profile `PUT /api/me` returned 200 with age 34,
+  weight 82, gender `divers`, `guideline_source=studien`, `is_smoker=0`;
+  invalid gender returned 400; own pending user product
+  `QA L-Carnitin Triple Komplex` could be added to a temporary stack,
+  `GET /api/stacks/:id` returned `product_type=user_product`,
+  `GET /api/stack-warnings/:id` returned 200 with 0 warnings, and the temp
+  stack was deleted; `/api/demo/products` returned 7 products with D3 product
+  quantity 2,000 IU; preview/live root returned 200 with
+  `index-BfFUmB15.js`; `/forgot-password` returned 200; `/search` and
+  `/wishlist` remain SPA fallback only with no nav links or explicit App/Layout
+  routes.
+- Checks passed: functions `npx tsc -p tsconfig.json`; frontend
+  `npm run lint --if-present`; frontend `npm run build`; frontend tests with
+  no files passed earlier; `git diff --check` with CRLF warnings only; isolated
   Python/SQLite check for migration 0041. A remote D1 syntax probe for the new
   interactions query returned the D3/K2 row successfully.
 - `wrangler d1 migrations apply supplementstack-production --local` could not
@@ -485,6 +506,20 @@ Last relevant commits on `main`:
 - `9a5f523` - DB: Phase B abgeschlossen, migrations 0028-0035, `dosage_guidelines` migrated to `dose_recommendations`.
 
 ## Latest Deployed Work
+
+Launch QA stack/profile fixes are committed, remote-migrated, deployed, and
+live-smoked:
+
+- Bundle commits: `0b29fe0`, `baa91a5`, `1a3b8e6`, `cb76cf3`, `24b10b5`.
+- Remote D1 migration `0041_stack_item_product_sources.sql` applied
+  successfully to `supplementstack-production`.
+- Preview URL: `https://5fb3de86.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`; live root uses asset
+  `index-BfFUmB15.js`.
+- Final live smokes passed for `PUT /api/me`, invalid profile validation,
+  own pending user product stack add/load/warnings/delete, demo products count
+  7 with D3 quantity 2,000 IU, root/forgot-password routes, and Search/Wishlist
+  fallback/no-nav state.
 
 Sub-ingredient product workflow is committed, remote-migrated, and deployed:
 

@@ -4,9 +4,10 @@ Last updated: 2026-05-05
 
 ## Continuation Point
 
-Continue from `main` with local Launch-QA fixes implemented but not committed,
-remote-migrated, or deployed. Next step is review/commit/deploy or run live
-smokes after applying migration `0041_stack_item_product_sources.sql`.
+Continue from `main` after the Launch-QA stack/profile bundle was committed,
+remote-migrated, deployed, and live-smoked. Next implementation work should
+start from the open queue below; no launch-QA stack/profile deploy step is
+pending.
 
 ## Restart Startup (exact)
 
@@ -19,42 +20,39 @@ smokes after applying migration `0041_stack_item_product_sources.sql`.
 
 ## Git / Worktree
 
-- Latest committed/deployed baseline before this handoff: `29dcde5` -
-  Feature: Add sub-ingredient product workflow.
-- Sub-ingredient backend/schema work is committed, remote-migrated, and
-  deployed.
-- Remote D1 migration `0040_seed_ingredient_sub_ingredients.sql` was applied
+- Latest committed/deployed bundle:
+  - `0b29fe0` - launch QA stack/profile flows.
+  - `baa91a5` - live profile + stack warning smokes.
+  - `1a3b8e6` - profile response path.
+  - `cb76cf3` - D1 run handling.
+  - `24b10b5` - guideline normalization.
+- Remote D1 migration `0041_stack_item_product_sources.sql` was applied
   successfully to `supplementstack-production`.
-- Migration control confirmed six `ingredient_sub_ingredients` rows:
-  L-Carnitin children ALCAR/Tartrat/Fumarat and Omega-3 children EPA/DHA/DPA.
-- Migration control confirmed `products.source_user_product_id` exists
-  (`source_col=1`).
-- Pages deploy succeeded. Preview:
-  `https://421f79ea.supplementstack.pages.dev`; live:
-  `https://supplementstack.de`.
-- Local checks passed: functions `npx tsc -p tsconfig.json`; frontend
-  `npm run lint --if-present`; frontend
-  `npm run test --if-present -- --run` with no test files via
-  passWithNoTests; frontend `npm run build`; `git diff --check`; mojibake scan
-  for touched frontend/backend files.
-- Smoke checks passed on live and preview:
-  `/api/ingredients/10/sub-ingredients` 200 count 3 EPA/DHA/DPA;
-  `/api/ingredients/13/sub-ingredients` 200 count 3 ALCAR/Tartrat/Fumarat;
-  `/api/ingredients/10/products` 200 count 1 on live;
-  `/api/demo/products` 200 count 7; `/api/admin/user-products`
-  unauthenticated 401.
-- Demo mode note: current `StackWorkspace` demo flow creates fresh client-side
-  demo state on load and does not persist stack edits via `/api/stacks`; demo
-  products come from `/api/demo/products`.
-- Product-model and sub-ingredient backend follow-ups are deployed; remaining
-  launch work is UI/admin management, manual QA, and policy/legal review.
-- `.agent-memory/current-state.md`, `.agent-memory/next-steps.md`,
-  `.agent-memory/handoff.md`, `.agent-memory/decisions.md`, and
-  `.agent-memory/deploy-log.md` were updated for the completed deploy.
+- Latest preview: `https://5fb3de86.supplementstack.pages.dev`.
+- Live `https://supplementstack.de` uses asset `index-BfFUmB15.js`.
+- Final live smokes passed:
+  - Profile `PUT /api/me` returned 200 with age 34, weight 82, gender
+    `divers`, `guideline_source=studien`, and `is_smoker=0`.
+  - Invalid gender `PUT /api/me` returned 400.
+  - Own pending user product `QA L-Carnitin Triple Komplex` could be added to
+    a temporary stack; `GET /api/stacks/:id` returned
+    `product_type=user_product`; `GET /api/stack-warnings/:id` returned 200
+    with 0 warnings; temp stack was deleted.
+  - `/api/demo/products` returned 7 products and the D3 product quantity is
+    2,000 IU.
+  - Preview root and live root returned 200 with asset `index-BfFUmB15.js`;
+    `/forgot-password` returned 200.
+  - `/search` and `/wishlist` remain SPA fallback only with no nav links and
+    no explicit App/Layout routes.
+- Checks passed: functions `npx tsc -p tsconfig.json`; frontend
+  `npm run lint --if-present`; frontend `npm run build`; frontend tests with
+  no files passed earlier; `git diff --check`.
+- Local Wrangler migration apply is still blocked before 0041 by the existing
+  local state failing migration 0009 on missing `google_id`; remote is fine.
 - `.claude/SESSION.md` and `.claude/settings.json` remain dirty and must not be
   touched.
 - Branch: `main`.
-- Current local implementation:
+- Current deployed implementation:
   - `PUT /api/me` validates profile payloads, loads the existing profile,
     computes final target values, runs a plain `UPDATE`, and builds the
     response from the target values.
