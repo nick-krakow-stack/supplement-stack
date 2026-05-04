@@ -18,6 +18,8 @@ import MyProductsPage from './pages/MyProductsPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import PrivacyPage from './pages/PrivacyPage';
+import ImprintPage from './pages/ImprintPage';
+import TermsPage from './pages/TermsPage';
 
 function NotFoundPage() {
   return (
@@ -93,7 +95,10 @@ export default function App() {
                 />
                 <Route path="/forgot-password" element={<ForgotPasswordPage />} />
                 <Route path="/reset-password" element={<ResetPasswordPage />} />
+                <Route path="/impressum" element={<ImprintPage />} />
                 <Route path="/datenschutz" element={<PrivacyPage />} />
+                <Route path="/nutzungsbedingungen" element={<TermsPage />} />
+                <Route path="/agb" element={<TermsPage />} />
                 <Route
                   path="/my-products"
                   element={

@@ -72,7 +72,6 @@ export default function StacksHeader({
                 letterSpacing: '2.5px',
                 textTransform: 'uppercase',
                 opacity: 0.6,
-                fontFamily: 'Nunito,sans-serif',
               }}
             >
               Supplement
@@ -82,7 +81,6 @@ export default function StacksHeader({
                 fontSize: '18px',
                 fontWeight: 900,
                 letterSpacing: '-0.5px',
-                fontFamily: 'Nunito,sans-serif',
               }}
             >
               Stack

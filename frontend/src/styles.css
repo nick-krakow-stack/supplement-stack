@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&display=swap');
-
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -9,7 +7,7 @@ html {
 }
 
 body {
-  font-family: 'Nunito', system-ui, -apple-system, sans-serif;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
   background: #eef0f7;
 }
@@ -93,7 +91,7 @@ body {
 .header-email { font-size: 12px; }
 .btn-logout {
   padding: 6px 16px; border-radius: 20px;
-  font-size: 12.5px; font-family: 'Nunito', sans-serif;
+  font-size: 12.5px; font-family: inherit;
   font-weight: 600; cursor: pointer; transition: all 0.15s;
 }
 .header-nav-left {
@@ -134,7 +132,7 @@ body {
   width: 100%; padding: 9px 34px 9px 13px;
   background: #fff; border: 1.5px solid #e0e4f0;
   border-radius: 10px; color: #1a1a2e;
-  font-family: 'Nunito', sans-serif; font-size: 13.5px; font-weight: 600;
+  font-family: inherit; font-size: 13.5px; font-weight: 600;
   cursor: pointer; appearance: none; outline: none;
   transition: border-color 0.15s;
   box-shadow: 0 1px 4px rgba(99,102,241,0.08);
@@ -148,7 +146,7 @@ body {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 9px 16px; border-radius: 10px;
   min-height: 44px;
-  font-size: 13px; font-weight: 700; font-family: 'Nunito', sans-serif;
+  font-size: 13px; font-weight: 700; font-family: inherit;
   cursor: pointer; transition: all 0.15s; border: none; white-space: nowrap;
 }
 .ss-btn-green  { background: #22c55e; color: #fff; }
@@ -219,7 +217,7 @@ body {
   min-height: 44px;
   background: linear-gradient(135deg, #7c3aed, #6366f1);
   color: #fff; border: none;
-  font-family: 'Nunito', sans-serif; font-size: 14px; font-weight: 800;
+  font-family: inherit; font-size: 14px; font-weight: 800;
   cursor: pointer; transition: opacity 0.15s;
   box-shadow: 0 4px 14px rgba(99,102,241,0.35);
 }
@@ -415,7 +413,7 @@ body {
   width: 100%; padding: 11px 14px;
   background: #f9fafb; border: 1.5px solid #e0e4f0;
   border-radius: 10px; color: #1a1a2e;
-  font-family: 'Nunito', sans-serif; font-size: 14px; font-weight: 600;
+  font-family: inherit; font-size: 14px; font-weight: 600;
   outline: none; transition: border-color 0.15s; resize: none;
 }
 .ss-modal-input:focus, .ss-modal-textarea:focus { border-color: #6366f1; background: #fff; }
@@ -424,7 +422,7 @@ body {
 .ss-modal-btn-cancel {
   padding: 10px 20px; border-radius: 10px;
   background: #f3f4f6; border: none; color: #6b7280;
-  font-family: 'Nunito', sans-serif; font-size: 14px; font-weight: 700;
+  font-family: inherit; font-size: 14px; font-weight: 700;
   cursor: pointer; transition: all 0.15s;
 }
 .ss-modal-btn-cancel:hover { background: #e5e7eb; }
@@ -432,7 +430,7 @@ body {
   padding: 10px 24px; border-radius: 10px;
   background: linear-gradient(135deg, #7c3aed, #6366f1);
   color: #fff; border: none;
-  font-family: 'Nunito', sans-serif; font-size: 14px; font-weight: 800;
+  font-family: inherit; font-size: 14px; font-weight: 800;
   cursor: pointer; transition: opacity 0.15s;
   box-shadow: 0 4px 14px rgba(99,102,241,0.3);
 }
@@ -440,7 +438,7 @@ body {
 
 @layer base {
   html {
-    font-family: 'Nunito', system-ui, sans-serif;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     @apply text-slate-900;
     background: #eef0f7;
   }

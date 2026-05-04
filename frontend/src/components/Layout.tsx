@@ -140,8 +140,14 @@ export default function Layout({ children }: LayoutProps) {
 
       <footer className="mx-auto max-w-[1280px] px-4 pb-6 pt-2 sm:px-6 lg:px-8 space-y-1">
         <nav className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-bold text-slate-500">
+          <Link to="/impressum" className="hover:text-blue-700 hover:underline">
+            Impressum
+          </Link>
           <Link to="/datenschutz" className="hover:text-blue-700 hover:underline">
             Datenschutz
+          </Link>
+          <Link to="/nutzungsbedingungen" className="hover:text-blue-700 hover:underline">
+            Nutzungsbedingungen
           </Link>
           <button
             type="button"
