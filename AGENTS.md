@@ -48,6 +48,17 @@ The Orchestrator does not implement code and does not edit files directly. The O
 - Match the Sub-Agent to the work: implementation to Dev-Agent, evidence to Science-Agent, visual work to UI-Agent, flow work to UX-Agent, validation to QA-Agent, and so on.
 - The Orchestrator remains accountable for integration, consistency, and final communication.
 
+### Orchestrator Model Routing
+
+- Codex remains Orchestrator and delegates tasks to Sub-Agents.
+- The Orchestrator chooses which model each Sub-Agent should use.
+- Use `gpt-5.3-codex-spark` for simple, clearly scoped tasks.
+- Use `gpt-5.5` with higher reasoning for complex, risky, architectural, security, legal, or
+  product-critical tasks.
+- Quality cannot drop on lower-cost runs: the Orchestrator reviews outputs, tests and
+  validates assumptions, and escalates Spark-tasks to stronger models when risk, ambiguity, or
+  quality concerns appear.
+
 ## Required Handoff
 
 Before ending a meaningful work session, update the shared memory files:

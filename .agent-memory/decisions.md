@@ -42,6 +42,19 @@ Operational rule:
 - Implementation and file edits are delegated to the responsible Sub-Agent, especially Dev-Agent for code changes.
 - Delegation must stay efficient: only relevant bounded subtasks, short handoffs, and no unnecessary parallel agents.
 
+Decision: Codex remains Orchestrator and applies an explicit model-routing policy for future Sub-Agent execution.
+
+Operational rule:
+
+- Codex is the default Orchestrator and selects model variants per task.
+- For simple, clearly scoped tasks, assign `gpt-5.3-codex-spark` to Sub-Agents.
+- For complex, risky, architectural, security, legal, or product-critical tasks, assign `gpt-5.5`
+  (high-reasoning profile).
+- Orchestrator review remains mandatory for all tasks:
+  - validate outputs,
+  - test and verify quality,
+  - escalate or rerun any Spark assignment if risk, ambiguity, or quality concerns appear.
+
 ## Automatic Handoff Snapshots
 
 Decision: use `scripts/update-agent-handoff.ps1` for cheap automatic handoff snapshots.
