@@ -13,7 +13,7 @@
 
 import { Hono } from 'hono'
 import type { AppContext, ProductRow } from '../lib/types'
-import { ensureAuth, requireAdmin, logAdminAction } from '../lib/helpers'
+import { checkRateLimit, ensureAuth, requireAdmin, logAdminAction } from '../lib/helpers'
 
 const products = new Hono<AppContext>()
 
@@ -255,6 +255,10 @@ products.get('/:id', async (c) => {
 products.post('/', async (c) => {
   const authErr = await ensureAuth(c)
   if (authErr) return authErr
+  const user = c.get('user')
+  const allowed = await checkRateLimit(c.env.RATE_LIMITER, `products:create:${user.userId}`, 10, 60 * 60)
+  if (!allowed) return c.json({ error: 'Zu viele Produktanlagen. Bitte warte kurz.' }, 429)
+
   let body: Record<string, unknown>
   try {
     body = await c.req.json()

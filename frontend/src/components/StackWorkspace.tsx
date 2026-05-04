@@ -621,7 +621,9 @@ const HEADER_VARIANT: StacksHeaderVariant = 'warm';
 
 export function StackWorkspace({ mode = 'demo', token = null }: StackWorkspaceProps) {
   const [state, setState] = useState<DemoState>(createDefaultState);
-  const [descriptions, setDescriptions] = useState<Record<string, string>>(() => loadDescriptions());
+  const [descriptions, setDescriptions] = useState<Record<string, string>>(() =>
+    mode === 'authenticated' ? loadDescriptions() : {},
+  );
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [shopDomains, setShopDomains] = useState<ShopDomain[]>([]);
@@ -807,7 +809,7 @@ export function StackWorkspace({ mode = 'demo', token = null }: StackWorkspacePr
       setDescriptions((prev) => {
         const next = { ...prev };
         delete next[id];
-        saveDescription(id, '');
+        if (mode === 'authenticated') saveDescription(id, '');
         return next;
       });
     },
@@ -826,8 +828,10 @@ export function StackWorkspace({ mode = 'demo', token = null }: StackWorkspacePr
         stacks: prev.stacks.map((s) => (s.id === activeStack.id ? { ...s, name: newName } : s)),
       }));
       setDescriptions((prev) => {
-        const next = { ...prev, [activeStack.id]: newDescription };
-        saveDescription(activeStack.id, newDescription);
+        const next = { ...prev };
+        if (newDescription) next[activeStack.id] = newDescription;
+        else delete next[activeStack.id];
+        if (mode === 'authenticated') saveDescription(activeStack.id, newDescription);
         return next;
       });
       setEditModalOpen(false);

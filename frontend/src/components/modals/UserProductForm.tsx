@@ -18,6 +18,8 @@ export interface UserProduct {
   container_count?: number;
   is_affiliate?: number | boolean;
   notes?: string;
+  status?: 'pending' | 'approved' | 'rejected';
+  approved_at?: string | null;
   created_at?: string;
 }
 
@@ -148,9 +150,10 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
 
       const data = await res.json();
 
-      const saved: UserProduct = isEdit
-        ? (data.product ?? { ...initialProduct!, ...body })
-        : { id: data.id, ...(body as Omit<UserProduct, 'id'>) } as UserProduct;
+      const saved: UserProduct = data.product
+        ?? (isEdit
+          ? { ...initialProduct!, ...body }
+          : { id: data.id, status: 'pending', ...(body as Omit<UserProduct, 'id'>) } as UserProduct);
 
       onSaved(saved);
     } catch (err: unknown) {

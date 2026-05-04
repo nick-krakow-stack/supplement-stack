@@ -20,8 +20,10 @@ Continue from `main` using the top queue in this file.
 - Latest committed baseline before this restart handoff: `2457345` — Docs: Record
   Codex model routing policy. A later memory-hand-off commit only snapshots this
   restart state.
-- Worktree is expected dirty only in `.claude/SESSION.md` and `.claude/settings.json`
-  (do not modify `.claude/*`).
+- Worktree currently has local Demo hardening edits in
+  `functions/api/modules/demo.ts` and
+  `frontend/src/components/StackWorkspace.tsx`, plus expected dirty
+  `.claude/SESSION.md` and `.claude/settings.json` (do not modify `.claude/*`).
 - Branch: `main`.
 
 ## Closed Baseline
@@ -36,11 +38,40 @@ Continue from `main` using the top queue in this file.
 
 ## Open Top Queue
 
-1. Demo session DoS rate limit in `functions/api/modules/demo.ts`.
-2. Product POST rate limit in product write path.
-3. `shop-domains/resolve` exact host matching in `functions/api/modules/admin.ts`.
-4. Final legal/compliance review (DSB/AVV/provider checks) before SEO indexing.
-5. Manual authenticated browser/mobile QA.
+1. Final legal/compliance review (DSB/AVV/provider checks) before SEO indexing.
+2. Manual authenticated browser/mobile QA.
+
+## Local User Product Hardening
+
+- `d1-migrations/0038_trusted_product_submitters.sql` adds
+  `users.is_trusted_product_submitter`.
+- `functions/api/modules/user-products.ts`: POST is rate-limited per user,
+  default status remains `pending`, trusted submitters auto-create `approved`
+  products, approved user products are locked against user edit/delete, and
+  rejected edits resubmit for moderation.
+- `functions/api/modules/admin.ts`: admin user-product rows include the trusted
+  submitter flag, admins can toggle trusted submitter status, and shop-domain
+  resolve uses parsed hostname exact/subdomain matching.
+- `functions/api/modules/products.ts`: `POST /api/products` is rate-limited per
+  user.
+- Frontend updates: Admin user-product tab can toggle trusted users; My
+  Products shows status and disables edit/delete for approved products;
+  ProductCard uses the same safe host matching.
+- Checks passed: functions `npx tsc -p tsconfig.json`, frontend
+  `npm run lint --if-present`, frontend `npm run build`, and
+  `git diff --check` with CRLF warnings only.
+
+## Local Demo Hardening
+
+- `functions/api/modules/demo.ts`: `/api/demo/products` now returns up to 7
+  starter products; `POST /api/demo/sessions` is KV rate-limited per IP and
+  returns a compatibility key/expiresAt without inserting submitted stack JSON
+  into D1; legacy GET returns `{ stack: [] }` for existing unexpired rows.
+- `frontend/src/components/StackWorkspace.tsx`: Demo descriptions are kept in
+  component state only and are not loaded from or written to localStorage.
+- Checks passed: functions `npx tsc -p tsconfig.json`, frontend
+  `npm run lint --if-present`, frontend `npm run build`, and
+  `git diff --check` with CRLF warnings only.
 
 ## Model-Routing Reminder
 

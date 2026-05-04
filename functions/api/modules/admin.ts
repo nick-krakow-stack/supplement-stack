@@ -134,6 +134,24 @@ function isUniqueConstraintError(error: unknown): boolean {
   return error instanceof Error && /unique|constraint/i.test(error.message)
 }
 
+function normalizeShopHostname(value: string): string | null {
+  const raw = value.trim().toLowerCase()
+  if (!raw) return null
+  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`
+  try {
+    const url = new URL(withScheme)
+    const hostname = url.hostname.toLowerCase().replace(/\.$/, '')
+    if (!hostname || hostname.includes('..')) return null
+    return hostname
+  } catch {
+    return null
+  }
+}
+
+function shopHostMatchesDomain(hostname: string, domain: string): boolean {
+  return hostname === domain || hostname.endsWith(`.${domain}`)
+}
+
 // GET /api/admin/products (admin only)
 admin.get('/products', async (c) => {
   const authErr = await ensureAuth(c)
@@ -188,14 +206,16 @@ admin.post('/shop-domains', async (c) => {
   if (admErr) return admErr
   const body = await c.req.json()
   if (!body.domain || !body.display_name) return c.json({ error: 'domain und display_name erforderlich' }, 400)
+  const normalizedDomain = normalizeShopHostname(String(body.domain))
+  if (!normalizedDomain) return c.json({ error: 'ungueltige Domain' }, 400)
   const result = await c.env.DB.prepare(
     'INSERT INTO shop_domains (domain, display_name) VALUES (?, ?)'
-  ).bind(String(body.domain).trim(), String(body.display_name).trim()).run()
+  ).bind(normalizedDomain, String(body.display_name).trim()).run()
   await logAdminAction(c, {
     action: 'create_shop_domain',
     entity_type: 'shop_domain',
     entity_id: result.meta.last_row_id as number,
-    changes: body,
+    changes: { ...body, domain: normalizedDomain },
   })
   return c.json({ id: result.meta.last_row_id }, 201)
 })
@@ -262,8 +282,11 @@ admin.get('/user-products', async (c) => {
   const authErr = await ensureAdmin(c)
   if (authErr) return authErr
   const status = c.req.query('status') ?? 'pending'
+  if (!['pending', 'approved', 'rejected'].includes(status)) {
+    return c.json({ error: 'Invalid status' }, 400)
+  }
   const { results } = await c.env.DB.prepare(`
-    SELECT up.*, u.email as user_email
+    SELECT up.*, u.email as user_email, u.is_trusted_product_submitter as user_is_trusted_product_submitter
     FROM user_products up
     LEFT JOIN users u ON up.user_id = u.id
     WHERE up.status = ?
@@ -295,7 +318,7 @@ admin.put('/user-products/:id/reject', async (c) => {
   if (authErr) return authErr
   const id = c.req.param('id')
   const result = await c.env.DB.prepare(`
-    UPDATE user_products SET status = 'rejected' WHERE id = ?
+    UPDATE user_products SET status = 'rejected', approved_at = NULL WHERE id = ?
   `).bind(id).run()
   if (result.meta.changes === 0) return c.json({ error: 'User product not found' }, 404)
   await logAdminAction(c, {
@@ -319,6 +342,37 @@ admin.delete('/user-products/:id', async (c) => {
     entity_id: Number(id),
   })
   return c.json({ ok: true })
+})
+
+// PUT /api/admin/users/:id/trusted-product-submitter (admin)
+admin.put('/users/:id/trusted-product-submitter', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const userId = parsePositiveId(c.req.param('id'))
+  if (userId === null) return c.json({ error: 'Invalid user id' }, 400)
+
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const trusted = body.is_trusted_product_submitter === true || body.is_trusted_product_submitter === 1 ? 1 : 0
+  const result = await c.env.DB.prepare(
+    'UPDATE users SET is_trusted_product_submitter = ? WHERE id = ?'
+  ).bind(trusted, userId).run()
+  if (result.meta.changes === 0) return c.json({ error: 'User not found' }, 404)
+
+  await logAdminAction(c, {
+    action: trusted ? 'trust_product_submitter' : 'untrust_product_submitter',
+    entity_type: 'user',
+    entity_id: userId,
+    changes: { is_trusted_product_submitter: trusted },
+  })
+
+  return c.json({ ok: true, user_id: userId, is_trusted_product_submitter: trusted })
 })
 
 // GET /api/admin/translations/ingredients?language=de&q=&limit=50&offset=0 (admin)
@@ -882,8 +936,13 @@ export const shopDomainsPublicApp = new Hono<AppContext>()
 shopDomainsPublicApp.get('/resolve', async (c) => {
   const url = c.req.query('url') || ''
   if (!url) return c.json({ shop_name: null, button_text: 'Jetzt kaufen' })
+  const hostname = normalizeShopHostname(url)
+  if (!hostname) return c.json({ shop_name: null, button_text: 'Jetzt kaufen' })
   const { results: shops } = await c.env.DB.prepare('SELECT domain, display_name FROM shop_domains').all<{ domain: string; display_name: string }>()
-  const match = shops.find(s => url.toLowerCase().includes(s.domain.toLowerCase()))
+  const match = shops.find((shop) => {
+    const domain = normalizeShopHostname(shop.domain)
+    return domain ? shopHostMatchesDomain(hostname, domain) : false
+  })
   if (!match) return c.json({ shop_name: null, button_text: 'Jetzt kaufen' })
   return c.json({ shop_name: match.display_name, button_text: `Bei ${match.display_name} kaufen` })
 })

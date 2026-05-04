@@ -1,6 +1,45 @@
 # Decisions
 
-Last updated: 2026-05-02
+Last updated: 2026-05-04
+
+## User Product Publication Lock
+
+Decision: `user_products.status = 'approved'` is the current publication lock
+for user-submitted products.
+
+Operational rule:
+
+- Normal users create user products as `pending`.
+- Trusted product submitters create user products as `approved` immediately.
+- Users cannot edit or delete their own `approved` user products.
+- Rejected products may be edited by their owner; editing resubmits as
+  `pending`, or `approved` if the owner is trusted at that time.
+- Admins may still approve, reject, delete, and mark/unmark trusted submitters.
+
+Rationale:
+
+- The current model has no durable relation from a user product to a catalog
+  product or Nick-owned affiliate link. Using `approved` as the lock is the
+  conservative enforceable rule until a future conversion relation exists.
+
+## Demo Session Storage
+
+Decision: active Demo mode must not use long-lived server-side stack storage.
+
+Operational rule:
+
+- The current Demo UI flow loads starter products from `/api/demo/products` and
+  keeps user edits in browser page state only.
+- `POST /api/demo/sessions` is compatibility-only, rate-limited by IP with KV,
+  and must not persist submitted Stack JSON into D1.
+- `GET /api/demo/sessions/:key` must not return persisted user changes; legacy
+  keys may return an empty stack or 404.
+
+Rationale:
+
+- Prevent old clients or abusive callers from filling D1 with arbitrary demo
+  stack payloads.
+- Ensure reloading Demo always returns to the curated starter stack.
 
 ## Shared Agent Memory
 

@@ -9,7 +9,7 @@
 
 import { Hono } from 'hono'
 import type { AppContext } from '../lib/types'
-import { ensureAuth } from '../lib/helpers'
+import { checkRateLimit, ensureAuth } from '../lib/helpers'
 
 const userProducts = new Hono<AppContext>()
 
@@ -63,6 +63,9 @@ userProducts.post('/', async (c) => {
   const authErr = await ensureAuth(c)
   if (authErr) return authErr
   const user = c.get('user')
+  const allowed = await checkRateLimit(c.env.RATE_LIMITER, `user-products:create:${user.userId}`, 10, 60 * 60)
+  if (!allowed) return c.json({ error: 'Zu viele Produktanlagen. Bitte warte kurz.' }, 429)
+
   let body: Record<string, unknown>
   try {
     body = await c.req.json()
@@ -99,9 +102,17 @@ userProducts.post('/', async (c) => {
     is_affiliate: body.is_affiliate === 1 || body.is_affiliate === true ? 1 : 0,
     notes: normalizeOptionalText(body.notes),
   }
+  const submitter = await c.env.DB.prepare(
+    'SELECT is_trusted_product_submitter FROM users WHERE id = ?'
+  ).bind(user.userId).first<{ is_trusted_product_submitter: number }>()
+  const autoApproved = submitter?.is_trusted_product_submitter === 1
   const result = await c.env.DB.prepare(`
-    INSERT INTO user_products (user_id, name, brand, form, price, shop_link, image_url, serving_size, serving_unit, servings_per_container, container_count, is_affiliate, notes)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO user_products (
+      user_id, name, brand, form, price, shop_link, image_url,
+      serving_size, serving_unit, servings_per_container, container_count,
+      is_affiliate, notes, status, approved_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     user.userId,
     data.name,
@@ -116,8 +127,13 @@ userProducts.post('/', async (c) => {
     data.container_count,
     data.is_affiliate ?? 0,
     data.notes ?? null,
+    autoApproved ? 'approved' : 'pending',
+    autoApproved ? new Date().toISOString() : null,
   ).run()
-  return c.json({ id: result.meta.last_row_id }, 201)
+  const created = await c.env.DB.prepare('SELECT * FROM user_products WHERE id = ?')
+    .bind(result.meta.last_row_id)
+    .first()
+  return c.json({ id: result.meta.last_row_id, product: created }, 201)
 })
 
 // PUT /api/user-products/:id
@@ -127,9 +143,13 @@ userProducts.put('/:id', async (c) => {
   const user = c.get('user')
   const id = c.req.param('id')
   const existing = await c.env.DB.prepare(
-    'SELECT id FROM user_products WHERE id = ? AND user_id = ?'
-  ).bind(id, user.userId).first()
+    'SELECT id, status FROM user_products WHERE id = ? AND user_id = ?'
+  ).bind(id, user.userId).first<{ id: number; status: string }>()
   if (!existing) return c.json({ error: 'Not found' }, 404)
+  if (existing.status === 'approved') {
+    return c.json({ error: 'Freigegebene Produkte koennen nicht mehr bearbeitet werden.' }, 409)
+  }
+
   let body: Record<string, unknown>
   try {
     body = await c.req.json()
@@ -170,6 +190,10 @@ userProducts.put('/:id', async (c) => {
     is_affiliate: body.is_affiliate === undefined ? undefined : body.is_affiliate === 1 || body.is_affiliate === true ? 1 : 0,
     notes: normalizeOptionalText(body.notes),
   }
+  const submitter = await c.env.DB.prepare(
+    'SELECT is_trusted_product_submitter FROM users WHERE id = ?'
+  ).bind(user.userId).first<{ is_trusted_product_submitter: number }>()
+  const autoApproved = submitter?.is_trusted_product_submitter === 1
   const imageUrlProvided = hasOwnKey(body, 'image_url')
   const imageUrlValue = data.image_url === '' ? null : data.image_url ?? null
   await c.env.DB.prepare(`
@@ -185,7 +209,9 @@ userProducts.put('/:id', async (c) => {
       servings_per_container = COALESCE(?, servings_per_container),
       container_count = COALESCE(?, container_count),
       is_affiliate = COALESCE(?, is_affiliate),
-      notes = COALESCE(?, notes)
+      notes = COALESCE(?, notes),
+      status = ?,
+      approved_at = CASE WHEN ? THEN COALESCE(approved_at, datetime('now')) ELSE NULL END
     WHERE id = ? AND user_id = ?
   `).bind(
     data.name ?? null, data.brand ?? null, data.form ?? null, data.price ?? null,
@@ -193,6 +219,8 @@ userProducts.put('/:id', async (c) => {
     data.serving_size ?? null, data.serving_unit ?? null,
     data.servings_per_container ?? null, data.container_count ?? null,
     data.is_affiliate ?? null, data.notes ?? null,
+    autoApproved ? 'approved' : 'pending',
+    autoApproved ? 1 : 0,
     id, user.userId,
   ).run()
   const updated = await c.env.DB.prepare('SELECT * FROM user_products WHERE id = ?').bind(id).first()
@@ -206,9 +234,12 @@ userProducts.delete('/:id', async (c) => {
   const user = c.get('user')
   const id = c.req.param('id')
   const existing = await c.env.DB.prepare(
-    'SELECT id FROM user_products WHERE id = ? AND user_id = ?'
-  ).bind(id, user.userId).first()
+    'SELECT id, status FROM user_products WHERE id = ? AND user_id = ?'
+  ).bind(id, user.userId).first<{ id: number; status: string }>()
   if (!existing) return c.json({ error: 'Not found' }, 404)
+  if (existing.status === 'approved') {
+    return c.json({ error: 'Freigegebene Produkte koennen nicht mehr geloescht werden.' }, 409)
+  }
   await c.env.DB.prepare('DELETE FROM user_products WHERE id = ?').bind(id).run()
   return c.json({ ok: true })
 })

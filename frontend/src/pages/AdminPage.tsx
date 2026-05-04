@@ -61,6 +61,8 @@ interface AdminUserProduct {
   is_affiliate?: number;
   notes?: string;
   status: 'pending' | 'approved' | 'rejected';
+  approved_at?: string | null;
+  user_is_trusted_product_submitter?: number;
   created_at: string;
 }
 
@@ -1399,6 +1401,7 @@ function UserProductsTab() {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<'pending' | 'approved' | 'rejected'>('pending');
   const [actionId, setActionId] = useState<number | null>(null);
+  const [trustedUserActionId, setTrustedUserActionId] = useState<number | null>(null);
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
@@ -1462,6 +1465,34 @@ function UserProductsTab() {
     );
   };
 
+  const handleTrustedToggle = async (product: AdminUserProduct) => {
+    const nextValue = product.user_is_trusted_product_submitter ? 0 : 1;
+    setTrustedUserActionId(product.user_id);
+    setError('');
+    try {
+      const res = await fetch(`/api/admin/users/${product.user_id}/trusted-product-submitter`, {
+        method: 'PUT',
+        headers: authHeaders(),
+        body: JSON.stringify({ is_trusted_product_submitter: nextValue }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({})) as { error?: string };
+        throw new Error(data.error ?? 'Trusted-Status konnte nicht gespeichert werden.');
+      }
+      setProducts((prev) =>
+        prev.map((p) =>
+          p.user_id === product.user_id
+            ? { ...p, user_is_trusted_product_submitter: nextValue }
+            : p
+        )
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Trusted-Status konnte nicht gespeichert werden.');
+    } finally {
+      setTrustedUserActionId(null);
+    }
+  };
+
   return (
     <div className="space-y-4">
       {/* Status filter pills */}
@@ -1511,6 +1542,23 @@ function UserProductsTab() {
                     </p>
                   )}
                   {p.notes && <p className="text-xs text-gray-500 italic mt-1">{p.notes}</p>}
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${
+                      p.user_is_trusted_product_submitter
+                        ? 'bg-emerald-50 text-emerald-700'
+                        : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      {p.user_is_trusted_product_submitter ? 'Trusted User' : 'Nicht trusted'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleTrustedToggle(p)}
+                      disabled={trustedUserActionId === p.user_id}
+                      className="min-h-9 rounded-lg border border-gray-200 px-3 py-1 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      {p.user_is_trusted_product_submitter ? 'Trusted entfernen' : 'Als trusted markieren'}
+                    </button>
+                  </div>
                 </div>
                 {p.shop_link ? (
                   <span className="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full flex-shrink-0">User-Link</span>

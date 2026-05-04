@@ -121,6 +121,24 @@ function getFallbackWarning(product: ProductCardProduct): ProductWarning | null 
   return null;
 }
 
+function normalizeShopHostname(value?: string): string | null {
+  const raw = value?.trim().toLowerCase();
+  if (!raw) return null;
+  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`;
+  try {
+    const url = new URL(withScheme);
+    const hostname = url.hostname.toLowerCase().replace(/\.$/, '');
+    if (!hostname || hostname.includes('..')) return null;
+    return hostname;
+  } catch {
+    return null;
+  }
+}
+
+function shopHostMatchesDomain(hostname: string, domain: string): boolean {
+  return hostname === domain || hostname.endsWith(`.${domain}`);
+}
+
 export default function ProductCard({
   product, onAddToWishlist, onSelect, onToggleSelected, onDelete,
   recommendationType, showWishlistButton = false, showSelectButton = false,
@@ -135,8 +153,14 @@ export default function ProductCard({
   const timingKey = getTimingKey(product.timing);
   const timing = TIMING_STYLES[timingKey];
 
-  const matchedShop = shopDomains?.find((s) => product.shop_link?.toLowerCase().includes(s.domain.toLowerCase()));
-  const shopName = matchedShop?.display_name ?? (product.shop_link?.toLowerCase().includes('amazon') ? 'Amazon' : null);
+  const productHost = normalizeShopHostname(product.shop_link);
+  const matchedShop = productHost
+    ? shopDomains?.find((s) => {
+        const domain = normalizeShopHostname(s.domain);
+        return domain ? shopHostMatchesDomain(productHost, domain) : false;
+      })
+    : undefined;
+  const shopName = matchedShop?.display_name ?? null;
   const buttonText = shopName ? `Bei ${shopName} kaufen` : 'Jetzt kaufen';
 
   const monthlyPrice = calcMonthlyPrice(price, product.servings_per_container, product.container_count);

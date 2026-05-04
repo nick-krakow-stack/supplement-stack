@@ -41,6 +41,16 @@ function FormBadge({ form }: { form: string }) {
   );
 }
 
+function UserProductStatusBadge({ status }: { status?: UserProduct['status'] }) {
+  if (status === 'approved') {
+    return <span className="inline-block bg-emerald-50 text-emerald-700 text-xs font-medium px-2 py-0.5 rounded-full">Freigegeben</span>;
+  }
+  if (status === 'rejected') {
+    return <span className="inline-block bg-red-50 text-red-700 text-xs font-medium px-2 py-0.5 rounded-full">Abgelehnt</span>;
+  }
+  return <span className="inline-block bg-amber-50 text-amber-700 text-xs font-medium px-2 py-0.5 rounded-full">Pruefung</span>;
+}
+
 // ---- Product row ----
 function ProductRow({
   product,
@@ -59,6 +69,7 @@ function ProductRow({
       : product.serving_size != null
       ? String(product.serving_size)
       : null;
+  const locked = product.status === 'approved';
 
   return (
     <div className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-gray-50 max-[430px]:flex-col">
@@ -67,6 +78,7 @@ function ProductRow({
         <div className="flex items-center gap-2 flex-wrap">
           <span className="min-w-0 break-words font-medium text-gray-900">{product.name}</span>
           {product.form && <FormBadge form={product.form} />}
+          <UserProductStatusBadge status={product.status} />
         </div>
         <div className="flex items-center gap-3 text-sm text-gray-500 flex-wrap">
           {product.brand && <span>{product.brand}</span>}
@@ -75,6 +87,11 @@ function ProductRow({
             <span>{product.servings_per_container} Portionen</span>
           )}
         </div>
+        {locked && (
+          <p className="mt-1 text-xs text-gray-500">
+            Dieses Produkt ist freigegeben und kann nicht mehr bearbeitet oder geloescht werden.
+          </p>
+        )}
       </div>
 
       {/* Price */}
@@ -86,18 +103,19 @@ function ProductRow({
       <div className="flex flex-shrink-0 items-center gap-2 max-[430px]:w-full">
         <button
           onClick={() => onEdit(product)}
+          disabled={locked}
           className="flex h-11 w-11 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-indigo-50 hover:text-indigo-600 max-[430px]:flex-1"
           aria-label={`${product.name} bearbeiten`}
-          title="Bearbeiten"
+          title={locked ? 'Freigegebene Produkte sind gesperrt' : 'Bearbeiten'}
         >
           <Pencil size={16} />
         </button>
         <button
           onClick={() => onDelete(product.id)}
-          disabled={deleting}
+          disabled={deleting || locked}
           className="flex h-11 w-11 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-50 max-[430px]:flex-1"
           aria-label={`${product.name} löschen`}
-          title="Löschen"
+          title={locked ? 'Freigegebene Produkte sind gesperrt' : 'Löschen'}
         >
           <Trash2 size={16} />
         </button>
@@ -144,6 +162,7 @@ export default function MyProductsPage() {
   };
 
   const handleOpenEdit = (product: UserProduct) => {
+    if (product.status === 'approved') return;
     setEditingProduct(product);
     setShowForm(true);
   };
@@ -167,6 +186,10 @@ export default function MyProductsPage() {
 
   const handleDelete = async (id: number) => {
     const product = products.find((p) => p.id === id);
+    if (product?.status === 'approved') {
+      setError('Freigegebene Produkte koennen nicht mehr geloescht werden.');
+      return;
+    }
     if (!window.confirm(`Produkt "${product?.name ?? id}" wirklich löschen?`)) return;
     setDeletingId(id);
     try {
@@ -217,7 +240,7 @@ export default function MyProductsPage() {
       {/* Info banner */}
       <div className="flex items-start gap-2 bg-indigo-50 border border-indigo-100 text-indigo-700 rounded-xl px-4 py-3 text-sm">
         <Info size={16} className="flex-shrink-0 mt-0.5" />
-        <span>Eigene Produkte sind nur für dich sichtbar.</span>
+        <span>Neue Produkte bleiben privat in Prüfung. Freigegebene Produkte sind danach gesperrt.</span>
       </div>
 
       {/* Error */}

@@ -39,6 +39,7 @@ export type UserRow = {
   health_consent: number
   health_consent_at: string | null
   deleted_at: string | null
+  is_trusted_product_submitter: number
 }
 
 export type IngredientRow = {

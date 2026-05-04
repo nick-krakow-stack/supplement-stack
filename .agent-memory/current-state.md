@@ -43,6 +43,46 @@ unless verified against code.
 Phase B is complete. Phase C is complete. Phase D bundle is committed,
 remote-migrated, and deployed to Cloudflare Pages preview.
 
+Demo session hardening is implemented locally and awaiting commit/deploy:
+
+- `functions/api/modules/demo.ts` now limits `/api/demo/products` to 7 starter
+  products server-side.
+- `POST /api/demo/sessions` uses the existing KV `checkRateLimit` helper per
+  client IP (`10` requests per 15 minutes) and no longer writes submitted
+  `stack_json` into D1.
+- `GET /api/demo/sessions/:key` no longer returns persisted Stack JSON; existing
+  unexpired legacy rows resolve to `{ stack: [] }`, while missing/expired keys
+  return 404.
+- `frontend/src/components/StackWorkspace.tsx` keeps Demo stack descriptions in
+  component state only; Demo mode does not load or write the localStorage
+  description cache.
+- Local checks passed: `npx tsc -p tsconfig.json` in `functions/`,
+  `npm run lint --if-present` in `frontend/`, `npm run build` in `frontend/`,
+  and `git diff --check` with CRLF warnings only.
+
+User product moderation and shop-domain hardening is implemented locally and
+awaiting commit/deploy:
+
+- New D1 migration
+  `d1-migrations/0038_trusted_product_submitters.sql` adds
+  `users.is_trusted_product_submitter`.
+- `POST /api/user-products` is KV rate-limited per user and creates products as
+  `pending` by default, or `approved` immediately for trusted submitters.
+- User-owned `approved` user products are server-side locked against user
+  update/delete; rejected edits resubmit as pending unless the submitter is
+  trusted.
+- Admin user-product moderation now returns the submitter trusted flag and has
+  `PUT /api/admin/users/:id/trusted-product-submitter` with audit logging.
+- `POST /api/products` is KV rate-limited per user.
+- `/api/shop-domains/resolve` and ProductCard shop matching now parse hostnames
+  and allow only exact domain or subdomain matches, preventing spoofed hosts
+  such as `amazon.de.evil.com`.
+- Admin and My Products UI expose trusted submitter controls, user-product
+  status badges, and edit/delete lock messaging for approved user products.
+- Local checks passed: `npx tsc -p tsconfig.json` in `functions/`,
+  `npm run lint --if-present` in `frontend/`, `npm run build` in `frontend/`,
+  and `git diff --check` with CRLF warnings only.
+
 Product required package metadata hardening is committed, remote-migrated, and
 live:
 

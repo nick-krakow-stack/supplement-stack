@@ -8,9 +8,21 @@
 // ---------------------------------------------------------------------------
 
 import { Hono } from 'hono'
-import type { AppContext, DemoSessionRow } from '../lib/types'
+import type { Context } from 'hono'
+import { checkRateLimit } from '../lib/helpers'
+import type { AppContext } from '../lib/types'
 
 const demo = new Hono<AppContext>()
+const DEMO_SESSION_RATE_LIMIT = 10
+const DEMO_SESSION_RATE_WINDOW_SECONDS = 15 * 60
+
+function clientIp(c: Context<AppContext>): string {
+  return (
+    c.req.header('CF-Connecting-IP') ??
+    c.req.header('X-Forwarded-For')?.split(',')[0]?.trim() ??
+    'unknown'
+  )
+}
 
 // GET /api/demo/products
 demo.get('/products', async (c) => {
@@ -37,35 +49,38 @@ demo.get('/products', async (c) => {
     ORDER BY
       CASE WHEN p.discontinued_at IS NULL THEN 0 ELSE 1 END,
       p.id ASC
-    LIMIT 18
+    LIMIT 7
   `).all()
   return c.json({ products })
 })
 
 // POST /api/demo/sessions
 demo.post('/sessions', async (c) => {
-  let data: Record<string, unknown>
-  try {
-    data = await c.req.json()
-  } catch {
-    data = {}
+  const ip = clientIp(c)
+  const allowed = await checkRateLimit(
+    c.env.RATE_LIMITER,
+    `demo_session:${ip}`,
+    DEMO_SESSION_RATE_LIMIT,
+    DEMO_SESSION_RATE_WINDOW_SECONDS,
+  )
+  if (!allowed) {
+    return c.json({ error: 'Too many demo sessions. Please try again later.' }, 429)
   }
+
   const DEMO_TTL = Number(c.env.DEMO_SESSION_TTL_MINUTES || '1440')
   const key = crypto.randomUUID()
   const expiresAt = new Date(Date.now() + DEMO_TTL * 60 * 1000).toISOString()
-  await c.env.DB.prepare(
-    'INSERT INTO demo_sessions (key, stack_json, expires_at) VALUES (?, ?, ?)'
-  ).bind(key, JSON.stringify(data.stack || []), expiresAt).run()
-  return c.json({ key, expiresAt })
+
+  return c.json({ key, expiresAt, stack: [] })
 })
 
 // GET /api/demo/sessions/:key
 demo.get('/sessions/:key', async (c) => {
   const session = await c.env.DB.prepare(
-    'SELECT * FROM demo_sessions WHERE key = ? AND expires_at > ?'
-  ).bind(c.req.param('key'), new Date().toISOString()).first<DemoSessionRow>()
+    'SELECT expires_at FROM demo_sessions WHERE key = ? AND expires_at > ?'
+  ).bind(c.req.param('key'), new Date().toISOString()).first<{ expires_at: string | null }>()
   if (!session) return c.json({ error: 'Not found or expired' }, 404)
-  return c.json({ stack: JSON.parse(session.stack_json || '[]'), expires_at: session.expires_at })
+  return c.json({ stack: [], expires_at: session.expires_at })
 })
 
 // GET /api/demo/reset
