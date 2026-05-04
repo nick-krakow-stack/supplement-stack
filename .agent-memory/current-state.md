@@ -43,6 +43,36 @@ unless verified against code.
 Phase B is complete. Phase C is complete. Phase D bundle is committed,
 remote-migrated, and deployed to Cloudflare Pages preview.
 
+Product-model follow-up is implemented locally but not yet migrated/deployed:
+
+- New migration `d1-migrations/0039_product_ingredient_model.sql` adds
+  `product_ingredients.search_relevant`, `basis_quantity`, `basis_unit`, and
+  `parent_ingredient_id`; creates `user_product_ingredients`; creates
+  `ingredient_sub_ingredients`; and adds `user_products.published_product_id`
+  plus `published_at`.
+- `functions/api/modules/products.ts` no longer requires exactly one
+  `is_main` ingredient; `is_main` is now legacy/display metadata.
+- `functions/api/modules/user-products.ts` accepts optional `ingredients`
+  arrays, stores rows in `user_product_ingredients`, and returns ingredient
+  rows on list/create/update.
+- `functions/api/modules/admin.ts` returns user-product ingredient rows and
+  adds idempotent `PUT /api/admin/user-products/:id/publish` to convert a
+  user product into public approved catalog `products` + `product_ingredients`.
+- `functions/api/modules/ingredients.ts` filters ingredient product lists and
+  product recommendations through `product_ingredients.search_relevant = 1`.
+- `functions/api/modules/stacks.ts` filters stack interaction warning
+  ingredients through `search_relevant = 1` and only accepts approved/public
+  catalog products in stack items.
+- `functions/api/modules/wishlist.ts` only accepts approved/public catalog
+  products.
+- Trusted submitters remain auto-approved but are not auto-published; publish
+  requires admin validation that search-relevant rows have quantity/unit and
+  basis_quantity/basis_unit.
+- Local backend checks passed: `npx tsc -p tsconfig.json` in `functions/` and
+  `git diff --check` with CRLF warnings only.
+- Frontend files became dirty during the session but were not edited by the
+  backend task; leave them for their owner unless explicitly instructed.
+
 Demo session hardening is committed, migrated, and deployed:
 
 - Commit: `18a4141` - Security: Harden demo and user product moderation.

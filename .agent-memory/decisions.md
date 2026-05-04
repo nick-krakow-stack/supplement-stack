@@ -2,25 +2,36 @@
 
 Last updated: 2026-05-04
 
-## User Product Publication Lock
+## User Product Publication And Catalog Conversion
 
-Decision: `user_products.status = 'approved'` is the current publication lock
-for user-submitted products.
+Decision: `user_products.status = 'approved'` remains the user-edit lock, but
+public/nutzbare products now require conversion into the catalog `products`
+table via `user_products.published_product_id`.
 
 Operational rule:
 
 - Normal users create user products as `pending`.
-- Trusted product submitters create user products as `approved` immediately.
+- Trusted product submitters create user products as `approved` immediately,
+  but they are not auto-published to the public catalog.
 - Users cannot edit or delete their own `approved` user products.
 - Rejected products may be edited by their owner; editing resubmits as
   `pending`, or `approved` if the owner is trusted at that time.
 - Admins may still approve, reject, delete, and mark/unmark trusted submitters.
+- Admins publish a checked user product through
+  `PUT /api/admin/user-products/:id/publish`.
+- Publish copies the user product into `products` and its ingredient rows into
+  `product_ingredients`, sets `products.moderation_status='approved'` and
+  `visibility='public'`, and writes `user_products.published_product_id` plus
+  `published_at`.
+- Stacks and Wishlist only accept approved/public catalog `products.id` values;
+  raw `user_products.id` values are not a supported product FK.
 
 Rationale:
 
-- The current model has no durable relation from a user product to a catalog
-  product or Nick-owned affiliate link. Using `approved` as the lock is the
-  conservative enforceable rule until a future conversion relation exists.
+- `stack_items.product_id`, `wishlist.product_id`, recommendations, and public
+  ingredient product lists all point at catalog `products`.
+- A dedicated publish conversion keeps raw user submissions separate from
+  public/nutzbare catalog products while preserving idempotent moderation.
 
 ## Demo Session Storage
 

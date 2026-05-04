@@ -35,7 +35,13 @@ wishlist.post('/', async (c) => {
   const body = await c.req.json()
   if (!body.product_id || typeof body.product_id !== 'number') return c.json({ error: 'product_id is required' }, 400)
   const { product_id } = body as { product_id: number }
-  const product = await c.env.DB.prepare('SELECT id FROM products WHERE id = ?').bind(product_id).first()
+  const product = await c.env.DB.prepare(`
+    SELECT id
+    FROM products
+    WHERE id = ?
+      AND moderation_status = 'approved'
+      AND visibility = 'public'
+  `).bind(product_id).first()
   if (!product) return c.json({ error: 'Product not found' }, 404)
   try {
     const result = await c.env.DB.prepare(

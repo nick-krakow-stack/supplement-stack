@@ -421,10 +421,18 @@ ingredients.get('/:id/dosage-guidelines', async (c) => {
 ingredients.get('/:id/products', async (c) => {
   const id = c.req.param('id')
   const { results: products } = await c.env.DB.prepare(`
-    SELECT p.*, pi.quantity, pi.unit, pi.is_main
+    SELECT p.*,
+           pi.quantity,
+           pi.unit,
+           pi.is_main,
+           pi.basis_quantity,
+           pi.basis_unit,
+           pi.search_relevant,
+           pi.parent_ingredient_id
     FROM products p
     JOIN product_ingredients pi ON pi.product_id = p.id
     WHERE pi.ingredient_id = ?
+      AND pi.search_relevant = 1
       AND p.visibility = 'public'
       AND p.moderation_status = 'approved'
     ORDER BY pi.is_main DESC, p.name ASC
@@ -612,9 +620,13 @@ recommendationsApp.get('/', async (c) => {
     return c.json({ error: 'ingredient_id must be a positive integer' }, 400)
   try {
     const { results: recommendations } = await c.env.DB.prepare(`
-      SELECT r.product_id, r.type
+      SELECT DISTINCT r.product_id, r.type
       FROM product_recommendations r
       JOIN products p ON p.id = r.product_id
+      JOIN product_ingredients pi
+        ON pi.product_id = p.id
+       AND pi.ingredient_id = r.ingredient_id
+       AND pi.search_relevant = 1
       WHERE r.ingredient_id = ?
         AND p.moderation_status = 'approved'
         AND p.visibility = 'public'

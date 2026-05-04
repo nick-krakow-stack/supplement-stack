@@ -48,6 +48,18 @@ export interface ProductIngredient {
   is_main?: number;
 }
 
+export interface UserProductIngredient {
+  ingredient_id: number;
+  form_id?: number | null;
+  quantity?: number | null;
+  unit?: string | null;
+  basis_quantity: number;
+  basis_unit: string;
+  search_relevant: number | boolean;
+  parent_ingredient_id?: number | null;
+  ingredient_name?: string;
+}
+
 export interface Product {
   id: number;
   name: string;

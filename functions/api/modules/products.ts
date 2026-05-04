@@ -22,6 +22,10 @@ type ProductIngredientInput = {
   is_main: boolean
   quantity: number
   unit: string
+  basis_quantity: number | null
+  basis_unit: string | null
+  search_relevant: number
+  parent_ingredient_id: number | null
   form_id: number | null
 }
 
@@ -102,6 +106,12 @@ function optionalPositiveIntegerOrNull(value: unknown): number | null | undefine
   return positiveInteger(value)
 }
 
+function optionalPositiveNumberOrNull(value: unknown): number | null | undefined {
+  if (value === undefined) return undefined
+  if (value === null || value === '') return null
+  return positiveNumber(value)
+}
+
 function booleanFlag(value: unknown): number | undefined {
   if (value === undefined) return undefined
   return value === 1 || value === true ? 1 : 0
@@ -113,7 +123,6 @@ function validateIngredients(value: unknown): { ingredients?: ProductIngredientI
   }
 
   const ingredients: ProductIngredientInput[] = []
-  let mainCount = 0
 
   for (const row of value) {
     if (!row || typeof row !== 'object') {
@@ -124,7 +133,17 @@ function validateIngredients(value: unknown): { ingredients?: ProductIngredientI
     const quantity = positiveNumber(ingredient.quantity)
     const unit = requiredText(ingredient.unit)
     const formId = optionalPositiveIntegerOrNull(ingredient.form_id)
+    const basisQuantity = optionalPositiveNumberOrNull(ingredient.basis_quantity)
+    const basisUnit = optionalCardText(ingredient.basis_unit)
+    const parentIngredientId = optionalPositiveIntegerOrNull(ingredient.parent_ingredient_id)
     const isMain = ingredient.is_main === 1 || ingredient.is_main === true
+    const searchRelevant = ingredient.search_relevant === undefined
+      ? 1
+      : ingredient.search_relevant === 1 || ingredient.search_relevant === true
+        ? 1
+        : ingredient.search_relevant === 0 || ingredient.search_relevant === false
+          ? 0
+          : undefined
 
     if (!ingredientId) return { error: 'Jeder Wirkstoff braucht eine gültige ingredient_id.' }
     if (quantity === undefined) return { error: 'Jeder Wirkstoff braucht eine positive Menge.' }
@@ -132,18 +151,27 @@ function validateIngredients(value: unknown): { ingredients?: ProductIngredientI
     if (formId === undefined && hasOwnKey(ingredient, 'form_id')) {
       return { error: 'form_id muss eine positive Ganzzahl sein, wenn sie angegeben wird.' }
     }
-    if (isMain) mainCount += 1
+    if (basisQuantity === undefined && hasOwnKey(ingredient, 'basis_quantity')) {
+      return { error: 'basis_quantity muss groesser als 0 sein, wenn sie angegeben wird.' }
+    }
+    if (parentIngredientId === undefined && hasOwnKey(ingredient, 'parent_ingredient_id')) {
+      return { error: 'parent_ingredient_id muss eine positive Ganzzahl sein, wenn sie angegeben wird.' }
+    }
+    if (searchRelevant === undefined) return { error: 'search_relevant muss true/false oder 1/0 sein.' }
 
     ingredients.push({
       ingredient_id: ingredientId,
       is_main: isMain,
       quantity,
       unit,
+      basis_quantity: basisQuantity ?? null,
+      basis_unit: basisUnit ?? null,
+      search_relevant: searchRelevant,
+      parent_ingredient_id: parentIngredientId ?? null,
       form_id: formId ?? null,
     })
   }
 
-  if (mainCount !== 1) return { error: 'Genau ein Hauptwirkstoff ist erforderlich.' }
   return { ingredients }
 }
 
@@ -240,10 +268,13 @@ products.get('/:id', async (c) => {
   if (!product) return c.json({ error: 'Not found' }, 404)
   const { results: ingredients } = await c.env.DB.prepare(`
     SELECT pi.*, i.name as ingredient_name, i.unit as ingredient_unit,
-           i.description as ingredient_description
+           i.description as ingredient_description,
+           parent.name as parent_ingredient_name
     FROM product_ingredients pi
     JOIN ingredients i ON i.id = pi.ingredient_id
+    LEFT JOIN ingredients parent ON parent.id = pi.parent_ingredient_id
     WHERE pi.product_id = ?
+    ORDER BY pi.is_main DESC, pi.search_relevant DESC, pi.id ASC
   `).bind(id).all()
   const { results: recommendations } = await c.env.DB.prepare(
     'SELECT r.* FROM product_recommendations r WHERE r.product_id = ?'
@@ -300,7 +331,10 @@ products.post('/', async (c) => {
 
   for (const ing of ingredients) {
     await c.env.DB.prepare(
-      'INSERT INTO product_ingredients (product_id, ingredient_id, is_main, quantity, unit, form_id) VALUES (?, ?, ?, ?, ?, ?)'
+      `INSERT INTO product_ingredients (
+        product_id, ingredient_id, is_main, quantity, unit, form_id,
+        basis_quantity, basis_unit, search_relevant, parent_ingredient_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(
       productId,
       ing.ingredient_id,
@@ -308,6 +342,10 @@ products.post('/', async (c) => {
       ing.quantity,
       ing.unit,
       ing.form_id,
+      ing.basis_quantity,
+      ing.basis_unit,
+      ing.search_relevant,
+      ing.parent_ingredient_id,
     ).run()
   }
 
@@ -385,7 +423,10 @@ products.put('/:id', async (c) => {
       c.env.DB.prepare('DELETE FROM product_ingredients WHERE product_id = ?').bind(id),
       ...data.ingredients.map((ing) =>
         c.env.DB.prepare(
-          'INSERT INTO product_ingredients (product_id, ingredient_id, is_main, quantity, unit, form_id) VALUES (?, ?, ?, ?, ?, ?)'
+          `INSERT INTO product_ingredients (
+            product_id, ingredient_id, is_main, quantity, unit, form_id,
+            basis_quantity, basis_unit, search_relevant, parent_ingredient_id
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         ).bind(
           id,
           ing.ingredient_id,
@@ -393,6 +434,10 @@ products.put('/:id', async (c) => {
           ing.quantity,
           ing.unit,
           ing.form_id,
+          ing.basis_quantity,
+          ing.basis_unit,
+          ing.search_relevant,
+          ing.parent_ingredient_id,
         ),
       ),
     ])

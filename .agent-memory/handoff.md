@@ -17,11 +17,22 @@ Continue from `main` using the top queue in this file.
 
 ## Git / Worktree
 
-- Latest committed baseline before this restart handoff: `18a4141` -
+- Latest committed baseline before this handoff: `18a4141` -
   Security: Harden demo and user product moderation.
-- Worktree is expected dirty only in `.claude/SESSION.md` and
-  `.claude/settings.json` (do not modify `.claude/*`), plus any uncommitted
-  memory/deploy-log update from the current handoff if not yet committed.
+- Active local backend/schema WIP implements the product-model follow-up:
+  `d1-migrations/0039_product_ingredient_model.sql`,
+  `functions/api/modules/admin.ts`, `ingredients.ts`, `products.ts`,
+  `stacks.ts`, `user-products.ts`, and `wishlist.ts`.
+- `.agent-memory/current-state.md`, `.agent-memory/next-steps.md`,
+  `.agent-memory/handoff.md`, and `.agent-memory/decisions.md` were updated
+  for this WIP.
+- `.claude/SESSION.md` and `.claude/settings.json` remain dirty and must not be
+  touched.
+- Frontend files are dirty from outside this backend task:
+  `frontend/src/components/modals/Modal2Products.tsx`,
+  `frontend/src/components/modals/UserProductForm.tsx`,
+  `frontend/src/pages/AdminPage.tsx`, and `frontend/src/types/local.ts`.
+  Do not revert them without explicit owner instruction.
 - Branch: `main`.
 
 ## Closed Baseline
@@ -38,9 +49,8 @@ Continue from `main` using the top queue in this file.
 
 1. Final legal/compliance review (DSB/AVV/provider checks) before SEO indexing.
 2. Manual authenticated browser/mobile QA.
-3. Product-model follow-up: approved/trusted user products need real ingredient
-   mapping or a catalog conversion relation before they can appear in
-   ingredient-specific public product lists.
+3. Review/apply/deploy the local product-model WIP and run remote D1 migration
+   0039 before deploying code that queries the new columns.
 
 ## Deployed User Product Hardening
 

@@ -10,6 +10,7 @@
 //   PUT /product-rankings/:productId — upsert ranking (admin)
 //   GET /user-products?status= — user-submitted products (admin)
 //   PUT /user-products/:id/approve (admin)
+//   PUT /user-products/:id/publish  (admin)
 //   PUT /user-products/:id/reject  (admin)
 //   DELETE /user-products/:id      (admin)
 //   GET /translations/ingredients — ingredient translations list (admin)
@@ -98,6 +99,23 @@ type BlogTranslationRow = {
   status: 'missing' | 'translated'
 }
 
+type UserProductIngredientRow = {
+  id: number
+  user_product_id: number
+  ingredient_id: number
+  form_id: number | null
+  quantity: number | null
+  unit: string | null
+  basis_quantity: number | null
+  basis_unit: string | null
+  search_relevant: number
+  parent_ingredient_id: number | null
+  is_main: number
+  ingredient_name: string
+  ingredient_unit: string | null
+  parent_ingredient_name: string | null
+}
+
 function normalizeTranslationLanguage(value: string | undefined): string | null {
   if (!value) return null
   const normalized = value.trim().toLowerCase().replace(/_/g, '-')
@@ -121,6 +139,10 @@ function parsePositiveId(value: string): number | null {
   const parsed = Number(value)
   if (!Number.isInteger(parsed) || parsed <= 0) return null
   return parsed
+}
+
+function hasOwnKey(data: Record<string, unknown>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(data, key)
 }
 
 function normalizeSlug(value: unknown): string | null {
@@ -150,6 +172,155 @@ function normalizeShopHostname(value: string): string | null {
 
 function shopHostMatchesDomain(hostname: string, domain: string): boolean {
   return hostname === domain || hostname.endsWith(`.${domain}`)
+}
+
+function booleanFlag(value: unknown): number | undefined {
+  if (value === undefined) return undefined
+  if (value === true || value === 1) return 1
+  if (value === false || value === 0) return 0
+  return undefined
+}
+
+async function attachUserProductIngredients(
+  db: D1Database,
+  products: Record<string, unknown>[],
+): Promise<Array<Record<string, unknown> & { ingredients: UserProductIngredientRow[] }>> {
+  if (products.length === 0) return []
+  const ids = products
+    .map((product) => Number(product.id))
+    .filter((id) => Number.isInteger(id) && id > 0)
+  if (ids.length === 0) return products.map((product) => ({ ...product, ingredients: [] }))
+
+  const placeholders = ids.map(() => '?').join(',')
+  const { results } = await db.prepare(`
+    SELECT upi.*, i.name as ingredient_name, i.unit as ingredient_unit,
+           parent.name as parent_ingredient_name
+    FROM user_product_ingredients upi
+    JOIN ingredients i ON i.id = upi.ingredient_id
+    LEFT JOIN ingredients parent ON parent.id = upi.parent_ingredient_id
+    WHERE upi.user_product_id IN (${placeholders})
+    ORDER BY upi.user_product_id ASC, upi.is_main DESC, upi.search_relevant DESC, upi.id ASC
+  `).bind(...ids).all<UserProductIngredientRow>()
+
+  const byProduct = new Map<number, UserProductIngredientRow[]>()
+  for (const row of results) {
+    const list = byProduct.get(row.user_product_id) ?? []
+    list.push(row)
+    byProduct.set(row.user_product_id, list)
+  }
+
+  return products.map((product) => ({
+    ...product,
+    ingredients: byProduct.get(Number(product.id)) ?? [],
+  }))
+}
+
+function buildProductIngredientInsert(
+  db: D1Database,
+  productId: number,
+  ingredient: UserProductIngredientRow,
+): D1PreparedStatement {
+  return db.prepare(`
+    INSERT INTO product_ingredients (
+      product_id, ingredient_id, is_main, quantity, unit, form_id,
+      basis_quantity, basis_unit, search_relevant, parent_ingredient_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    productId,
+    ingredient.ingredient_id,
+    ingredient.is_main === 1 ? 1 : 0,
+    ingredient.quantity,
+    ingredient.unit,
+    ingredient.form_id,
+    ingredient.basis_quantity,
+    ingredient.basis_unit,
+    ingredient.search_relevant,
+    ingredient.parent_ingredient_id,
+  )
+}
+
+async function validateUserProductPublish(
+  db: D1Database,
+  ingredients: UserProductIngredientRow[],
+): Promise<string | null> {
+  const maxRows = 50
+  if (ingredients.length === 0) return 'Mindestens ein Wirkstoff ist fuer Publish erforderlich.'
+  if (ingredients.length > maxRows) return `Maximal ${maxRows} Wirkstoffzeilen sind erlaubt.`
+
+  const duplicateKeys = new Set<string>()
+  let searchRelevantCount = 0
+
+  for (const row of ingredients) {
+    const duplicateKey = `${row.ingredient_id}:${row.form_id ?? ''}:${row.parent_ingredient_id ?? ''}`
+    if (duplicateKeys.has(duplicateKey)) return 'Doppelte Wirkstoffzeilen sind nicht erlaubt.'
+    duplicateKeys.add(duplicateKey)
+
+    if (row.search_relevant === 1) {
+      searchRelevantCount += 1
+      if (
+        row.quantity === null ||
+        row.quantity <= 0 ||
+        !row.unit ||
+        row.unit.trim().length === 0 ||
+        row.basis_quantity === null ||
+        row.basis_quantity <= 0 ||
+        !row.basis_unit ||
+        row.basis_unit.trim().length === 0
+      ) {
+        return 'Suchrelevante Wirkstoffe brauchen quantity, unit, basis_quantity und basis_unit.'
+      }
+    }
+  }
+
+  if (searchRelevantCount === 0) return 'Mindestens ein suchrelevanter Wirkstoff ist fuer Publish erforderlich.'
+
+  const ingredientIds = [...new Set(ingredients.map((row) => row.ingredient_id))]
+  const ingredientPlaceholders = ingredientIds.map(() => '?').join(',')
+  const ingredientCount = await db.prepare(
+    `SELECT COUNT(*) as count FROM ingredients WHERE id IN (${ingredientPlaceholders})`
+  ).bind(...ingredientIds).first<CountRow>()
+  if ((ingredientCount?.count ?? 0) !== ingredientIds.length) return 'Mindestens ein Wirkstoff existiert nicht.'
+
+  const formRows = ingredients.filter((row) => row.form_id !== null)
+  if (formRows.length > 0) {
+    const formIds = [...new Set(formRows.map((row) => row.form_id as number))]
+    const formPlaceholders = formIds.map(() => '?').join(',')
+    const { results: forms } = await db.prepare(
+      `SELECT id, ingredient_id FROM ingredient_forms WHERE id IN (${formPlaceholders})`
+    ).bind(...formIds).all<{ id: number; ingredient_id: number }>()
+    const formMap = new Map(forms.map((row) => [row.id, row.ingredient_id]))
+    for (const row of formRows) {
+      if (formMap.get(row.form_id as number) !== row.ingredient_id) {
+        return 'Mindestens eine form_id gehoert nicht zum angegebenen Wirkstoff.'
+      }
+    }
+  }
+
+  const parentRows = ingredients.filter((row) => row.parent_ingredient_id !== null)
+  if (parentRows.length > 0) {
+    const parentIds = [...new Set(parentRows.map((row) => row.parent_ingredient_id as number))]
+    const parentPlaceholders = parentIds.map(() => '?').join(',')
+    const parentCount = await db.prepare(
+      `SELECT COUNT(*) as count FROM ingredients WHERE id IN (${parentPlaceholders})`
+    ).bind(...parentIds).first<CountRow>()
+    if ((parentCount?.count ?? 0) !== parentIds.length) return 'Mindestens ein Parent-Wirkstoff existiert nicht.'
+
+    const relationClauses = parentRows.map(() => '(parent_ingredient_id = ? AND child_ingredient_id = ?)').join(' OR ')
+    const relationBindings = parentRows.flatMap((row) => [row.parent_ingredient_id as number, row.ingredient_id])
+    const { results: relations } = await db.prepare(
+      `SELECT parent_ingredient_id, child_ingredient_id
+       FROM ingredient_sub_ingredients
+       WHERE ${relationClauses}`
+    ).bind(...relationBindings).all<{ parent_ingredient_id: number; child_ingredient_id: number }>()
+    const allowedRelations = new Set(relations.map((row) => `${row.parent_ingredient_id}:${row.child_ingredient_id}`))
+    for (const row of parentRows) {
+      if (!allowedRelations.has(`${row.parent_ingredient_id}:${row.ingredient_id}`)) {
+        return 'Mindestens eine Parent/Sub-Wirkstoff-Beziehung ist nicht zugelassen.'
+      }
+    }
+  }
+
+  return null
 }
 
 // GET /api/admin/products (admin only)
@@ -292,7 +463,8 @@ admin.get('/user-products', async (c) => {
     WHERE up.status = ?
     ORDER BY up.created_at DESC
   `).bind(status).all()
-  return c.json({ products: results })
+  const products = await attachUserProductIngredients(c.env.DB, results as Record<string, unknown>[])
+  return c.json({ products })
 })
 
 // PUT /api/admin/user-products/:id/approve (admin)
@@ -310,6 +482,131 @@ admin.put('/user-products/:id/approve', async (c) => {
     entity_id: Number(id),
   })
   return c.json({ ok: true })
+})
+
+// PUT /api/admin/user-products/:id/publish (admin)
+admin.put('/user-products/:id/publish', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+  const id = parsePositiveId(c.req.param('id'))
+  if (id === null) return c.json({ error: 'Invalid user product id' }, 400)
+
+  let body: Record<string, unknown> = {}
+  try {
+    const text = await c.req.text()
+    body = text.trim().length > 0 ? JSON.parse(text) as Record<string, unknown> : {}
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const isAffiliate = booleanFlag(body.is_affiliate)
+  if (hasOwnKey(body, 'is_affiliate') && isAffiliate === undefined) {
+    return c.json({ error: 'is_affiliate must be true/false or 1/0' }, 400)
+  }
+
+  const userProduct = await c.env.DB.prepare(
+    'SELECT * FROM user_products WHERE id = ?'
+  ).bind(id).first<Record<string, unknown>>()
+  if (!userProduct) return c.json({ error: 'User product not found' }, 404)
+
+  const existingPublishedId = Number(userProduct.published_product_id)
+  if (Number.isInteger(existingPublishedId) && existingPublishedId > 0) {
+    const existingProduct = await c.env.DB.prepare(
+      'SELECT * FROM products WHERE id = ?'
+    ).bind(existingPublishedId).first<ProductRow>()
+    if (existingProduct) {
+      const { results: productIngredients } = await c.env.DB.prepare(`
+        SELECT pi.*, i.name as ingredient_name, i.unit as ingredient_unit,
+               parent.name as parent_ingredient_name
+        FROM product_ingredients pi
+        JOIN ingredients i ON i.id = pi.ingredient_id
+        LEFT JOIN ingredients parent ON parent.id = pi.parent_ingredient_id
+        WHERE pi.product_id = ?
+        ORDER BY pi.is_main DESC, pi.search_relevant DESC, pi.id ASC
+      `).bind(existingPublishedId).all()
+      return c.json({ ok: true, product: existingProduct, ingredients: productIngredients, idempotent: true })
+    }
+  }
+
+  const { results: ingredients } = await c.env.DB.prepare(`
+    SELECT upi.*, i.name as ingredient_name, i.unit as ingredient_unit,
+           parent.name as parent_ingredient_name
+    FROM user_product_ingredients upi
+    JOIN ingredients i ON i.id = upi.ingredient_id
+    LEFT JOIN ingredients parent ON parent.id = upi.parent_ingredient_id
+    WHERE upi.user_product_id = ?
+    ORDER BY upi.is_main DESC, upi.search_relevant DESC, upi.id ASC
+  `).bind(id).all<UserProductIngredientRow>()
+
+  const validationError = await validateUserProductPublish(c.env.DB, ingredients)
+  if (validationError) return c.json({ error: validationError }, 400)
+
+  const affiliateValue = isAffiliate ?? (userProduct.is_affiliate === 1 ? 1 : 0)
+  const result = await c.env.DB.prepare(`
+    INSERT INTO products (
+      name, brand, form, price, shop_link, image_url, moderation_status, visibility,
+      is_affiliate, serving_size, serving_unit, servings_per_container, container_count,
+      timing, dosage_text, effect_summary, warning_title, warning_message,
+      warning_type, alternative_note
+    ) VALUES (?, ?, ?, ?, ?, ?, 'approved', 'public', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    userProduct.name,
+    userProduct.brand,
+    userProduct.form,
+    userProduct.price,
+    userProduct.shop_link ?? null,
+    userProduct.image_url ?? null,
+    affiliateValue,
+    userProduct.serving_size,
+    userProduct.serving_unit,
+    userProduct.servings_per_container,
+    userProduct.container_count,
+    userProduct.timing ?? null,
+    userProduct.dosage_text ?? null,
+    userProduct.effect_summary ?? null,
+    userProduct.warning_title ?? null,
+    userProduct.warning_message ?? null,
+    userProduct.warning_type ?? null,
+    userProduct.alternative_note ?? null,
+  ).run()
+  const productId = result.meta.last_row_id as number
+
+  try {
+    await c.env.DB.batch([
+      ...ingredients.map((ingredient) => buildProductIngredientInsert(c.env.DB, productId, ingredient)),
+      c.env.DB.prepare(`
+        UPDATE user_products
+        SET status = 'approved',
+            approved_at = COALESCE(approved_at, datetime('now')),
+            published_product_id = ?,
+            published_at = datetime('now')
+        WHERE id = ?
+      `).bind(productId, id),
+    ])
+  } catch (error) {
+    await c.env.DB.prepare('DELETE FROM products WHERE id = ?').bind(productId).run()
+    throw error
+  }
+
+  const product = await c.env.DB.prepare('SELECT * FROM products WHERE id = ?').bind(productId).first<ProductRow>()
+  const { results: productIngredients } = await c.env.DB.prepare(`
+    SELECT pi.*, i.name as ingredient_name, i.unit as ingredient_unit,
+           parent.name as parent_ingredient_name
+    FROM product_ingredients pi
+    JOIN ingredients i ON i.id = pi.ingredient_id
+    LEFT JOIN ingredients parent ON parent.id = pi.parent_ingredient_id
+    WHERE pi.product_id = ?
+    ORDER BY pi.is_main DESC, pi.search_relevant DESC, pi.id ASC
+  `).bind(productId).all()
+
+  await logAdminAction(c, {
+    action: 'publish_user_product',
+    entity_type: 'user_product',
+    entity_id: id,
+    changes: { published_product_id: productId, is_affiliate: affiliateValue },
+  })
+
+  return c.json({ ok: true, product, ingredients: productIngredients, idempotent: false }, 201)
 })
 
 // PUT /api/admin/user-products/:id/reject (admin)

@@ -16,6 +16,23 @@ import { ensureAuth } from '../lib/helpers'
 
 const stacks = new Hono<AppContext>()
 
+async function validatePublicCatalogProductIds(
+  db: D1Database,
+  productIds: number[],
+): Promise<boolean> {
+  const uniqueIds = [...new Set(productIds)]
+  if (uniqueIds.length === 0) return true
+  const placeholders = uniqueIds.map(() => '?').join(',')
+  const row = await db.prepare(`
+    SELECT COUNT(*) as count
+    FROM products
+    WHERE id IN (${placeholders})
+      AND moderation_status = 'approved'
+      AND visibility = 'public'
+  `).bind(...uniqueIds).first<{ count: number }>()
+  return (row?.count ?? 0) === uniqueIds.length
+}
+
 // GET /api/stacks
 stacks.get('/', async (c) => {
   const authErr = await ensureAuth(c)
@@ -44,16 +61,23 @@ stacks.post('/', async (c) => {
     return c.json({ error: 'Invalid JSON' }, 400)
   }
   if (!data.name) return c.json({ error: 'Stack-Name ist erforderlich' }, 400)
-  const stackResult = await c.env.DB.prepare(
-    'INSERT INTO stacks (user_id, name) VALUES (?, ?)'
-  ).bind(user.userId, data.name).run()
-  const stackId = stackResult.meta.last_row_id
-
   const items: Array<Record<string, unknown>> = Array.isArray(data.product_ids)
     ? (data.product_ids as Array<Record<string, unknown>>)
     : Array.isArray(data.products)
       ? (data.products as number[]).map(id => ({ id, quantity: 1 }))
       : []
+  const productIds = items.map((item) => Number(item.id))
+  if (productIds.some((id) => !Number.isInteger(id) || id <= 0)) {
+    return c.json({ error: 'product_ids must reference catalog products' }, 400)
+  }
+  if (!(await validatePublicCatalogProductIds(c.env.DB, productIds))) {
+    return c.json({ error: 'Only approved public catalog products can be used in stacks' }, 400)
+  }
+
+  const stackResult = await c.env.DB.prepare(
+    'INSERT INTO stacks (user_id, name) VALUES (?, ?)'
+  ).bind(user.userId, data.name).run()
+  const stackId = stackResult.meta.last_row_id
 
   for (const item of items) {
     await c.env.DB.prepare(
@@ -113,6 +137,13 @@ stacks.put('/:id', async (c) => {
     await c.env.DB.prepare('UPDATE stacks SET name = ? WHERE id = ?').bind(data.name, id).run()
   }
   if (data.product_ids !== undefined) {
+    const productIds = data.product_ids.map((item) => Number(item.id))
+    if (productIds.some((productId) => !Number.isInteger(productId) || productId <= 0)) {
+      return c.json({ error: 'product_ids must reference catalog products' }, 400)
+    }
+    if (!(await validatePublicCatalogProductIds(c.env.DB, productIds))) {
+      return c.json({ error: 'Only approved public catalog products can be used in stacks' }, 400)
+    }
     await c.env.DB.prepare('DELETE FROM stack_items WHERE stack_id = ?').bind(id).run()
     for (const item of data.product_ids) {
       await c.env.DB.prepare(
@@ -152,7 +183,11 @@ stackWarningsApp.get('/:id', async (c) => {
   if (!stack) return c.json({ error: 'Not found' }, 404)
   if (stack.user_id !== user.userId && user.role !== 'admin') return c.json({ error: 'Forbidden' }, 403)
   const { results: items } = await c.env.DB.prepare(
-    'SELECT pi.ingredient_id FROM stack_items si JOIN product_ingredients pi ON pi.product_id = si.product_id WHERE si.stack_id = ?'
+    `SELECT pi.ingredient_id
+     FROM stack_items si
+     JOIN product_ingredients pi ON pi.product_id = si.product_id
+     WHERE si.stack_id = ?
+       AND pi.search_relevant = 1`
   ).bind(id).all<{ ingredient_id: number }>()
   const ingredientIds = [...new Set(items.map(i => i.ingredient_id))]
   if (ingredientIds.length < 2) return c.json({ warnings: [] })

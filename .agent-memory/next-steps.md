@@ -95,6 +95,27 @@ user-products with trusted auto-approval, approved-product user edit/delete
 locks, admin trusted toggles, product creation rate limits, and parsed
 hostname-based shop-domain matching.
 
+Product-model follow-up is implemented locally and needs review/migration/deploy:
+
+- Migration `0039_product_ingredient_model.sql` extends catalog
+  `product_ingredients`, adds `user_product_ingredients`, adds
+  `ingredient_sub_ingredients`, and adds `user_products.published_product_id`
+  plus `published_at`.
+- User-product APIs accept optional ingredient rows and return them.
+- Admin has idempotent `PUT /api/admin/user-products/:id/publish` to convert a
+  user product to approved/public catalog `products` plus
+  `product_ingredients`.
+- Public ingredient product lists, product recommendations, and stack-warning
+  interaction lookup now require `product_ingredients.search_relevant = 1`.
+- Stacks and Wishlist now accept only approved/public catalog products, not raw
+  `user_products.id` values.
+- Trusted submitters remain auto-approved but not auto-published; admin publish
+  enforces complete search-relevant ingredient amount and basis metadata.
+- Backend checks passed locally: `npx tsc -p tsconfig.json` in `functions/`;
+  `git diff --check` passed with CRLF warnings only.
+- Important deploy order: apply remote D1 migration 0039 first, then deploy
+  code, because several routes query the new columns.
+
 ## Open Cross-Agent TODOs (top of the queue)
 
 Pick from this list first when you have an open slot. These are the highest-
@@ -115,6 +136,8 @@ signal items any agent — Claude, Codex, anyone — can pick up directly.
    - Needed before approved/trusted user products can correctly appear in
      ingredient-specific public product lists for everyone.
    - Effort: M.
+   - Superseded by local WIP in migration 0039 and backend modules; still
+     open until reviewed, migrated, deployed, and smoke-tested.
 
 The longer audit backlog is below in "Additional Open Items"; treat that as the secondary queue.
 
@@ -123,6 +146,9 @@ The longer audit backlog is below in "Additional Open Items"; treat that as the 
 - User-Produkte need a real ingredient mapping or must be handled separately
   in ingredient-specific product selection. Open question for the product
   track, not a launch blocker.
+- Superseded by local WIP for real ingredient mapping and catalog conversion.
+  Remaining work is review, migration/deploy, frontend wiring if needed, and
+  smoke QA.
 
 ## Audit Top-7 Bugfix Sprint Status
 

@@ -13,6 +13,18 @@ import { checkRateLimit, ensureAuth } from '../lib/helpers'
 
 const userProducts = new Hono<AppContext>()
 
+type UserProductIngredientInput = {
+  ingredient_id: number
+  form_id: number | null
+  quantity: number | null
+  unit: string | null
+  basis_quantity: number | null
+  basis_unit: string | null
+  search_relevant: number
+  parent_ingredient_id: number | null
+  is_main: boolean
+}
+
 function parseJsonBodyError(): Response {
   return new Response(JSON.stringify({ error: 'Invalid JSON' }), {
     status: 400,
@@ -38,6 +50,20 @@ function normalizeOptionalPositiveInteger(value: unknown): number | undefined {
   return parsed !== undefined && Number.isInteger(parsed) ? parsed : undefined
 }
 
+function normalizeOptionalPositiveIntegerOrNull(value: unknown): number | null | undefined {
+  if (value === undefined) return undefined
+  if (value === null || value === '') return null
+  const parsed = normalizeOptionalPositiveInteger(value)
+  return parsed === undefined ? undefined : parsed
+}
+
+function normalizeOptionalPositiveNumberOrNull(value: unknown): number | null | undefined {
+  if (value === undefined) return undefined
+  if (value === null || value === '') return null
+  const parsed = normalizeOptionalPositiveNumber(value)
+  return parsed === undefined ? undefined : parsed
+}
+
 function hasOwnKey(data: Record<string, unknown>, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(data, key)
 }
@@ -45,6 +71,116 @@ function hasOwnKey(data: Record<string, unknown>, key: string): boolean {
 function requireNonEmptyText(body: Record<string, unknown>, key: string): string | undefined {
   const value = normalizeOptionalText(body[key])
   return typeof value === 'string' && value.length > 0 ? value : undefined
+}
+
+function normalizeSearchRelevant(value: unknown): number | undefined {
+  if (value === undefined) return 1
+  if (value === true || value === 1) return 1
+  if (value === false || value === 0) return 0
+  return undefined
+}
+
+function validateIngredients(value: unknown): { ingredients?: UserProductIngredientInput[]; error?: string } {
+  if (!Array.isArray(value) || value.length === 0) {
+    return { error: 'Mindestens ein Wirkstoff ist erforderlich.' }
+  }
+
+  const ingredients: UserProductIngredientInput[] = []
+
+  for (const row of value) {
+    if (!row || typeof row !== 'object') return { error: 'Ungueltige Wirkstoffdaten.' }
+    const ingredient = row as Record<string, unknown>
+    const ingredientId = normalizeOptionalPositiveInteger(ingredient.ingredient_id)
+    const formId = normalizeOptionalPositiveIntegerOrNull(ingredient.form_id)
+    const quantity = normalizeOptionalPositiveNumber(ingredient.quantity)
+    const unit = normalizeOptionalText(ingredient.unit)
+    const basisQuantity = normalizeOptionalPositiveNumberOrNull(ingredient.basis_quantity)
+    const basisUnit = normalizeOptionalText(ingredient.basis_unit)
+    const searchRelevant = normalizeSearchRelevant(ingredient.search_relevant)
+    const parentIngredientId = normalizeOptionalPositiveIntegerOrNull(ingredient.parent_ingredient_id)
+    const isMain = ingredient.is_main === true || ingredient.is_main === 1
+
+    if (ingredientId === undefined) return { error: 'Jeder Wirkstoff braucht eine gueltige ingredient_id.' }
+    if (formId === undefined && hasOwnKey(ingredient, 'form_id')) return { error: 'form_id muss eine positive Ganzzahl sein.' }
+    if (quantity === undefined && hasOwnKey(ingredient, 'quantity')) return { error: 'quantity muss groesser als 0 sein.' }
+    if ((unit === undefined || unit === '') && hasOwnKey(ingredient, 'unit')) return { error: 'unit darf nicht leer sein.' }
+    if (basisQuantity === undefined && hasOwnKey(ingredient, 'basis_quantity')) return { error: 'basis_quantity muss groesser als 0 sein.' }
+    if (parentIngredientId === undefined && hasOwnKey(ingredient, 'parent_ingredient_id')) return { error: 'parent_ingredient_id muss eine positive Ganzzahl sein.' }
+    if (searchRelevant === undefined) return { error: 'search_relevant muss true/false oder 1/0 sein.' }
+
+    ingredients.push({
+      ingredient_id: ingredientId,
+      form_id: formId ?? null,
+      quantity: quantity ?? null,
+      unit: unit ?? null,
+      basis_quantity: basisQuantity ?? null,
+      basis_unit: basisUnit ?? null,
+      search_relevant: searchRelevant,
+      parent_ingredient_id: parentIngredientId ?? null,
+      is_main: isMain,
+    })
+  }
+
+  return { ingredients }
+}
+
+async function attachIngredients(
+  db: D1Database,
+  products: Record<string, unknown>[],
+): Promise<Array<Record<string, unknown> & { ingredients: unknown[] }>> {
+  if (products.length === 0) return []
+  const ids = products
+    .map((product) => Number(product.id))
+    .filter((id) => Number.isInteger(id) && id > 0)
+  if (ids.length === 0) return products.map((product) => ({ ...product, ingredients: [] }))
+
+  const placeholders = ids.map(() => '?').join(',')
+  const { results: rows } = await db.prepare(`
+    SELECT upi.*, i.name as ingredient_name, i.unit as ingredient_unit,
+           parent.name as parent_ingredient_name
+    FROM user_product_ingredients upi
+    JOIN ingredients i ON i.id = upi.ingredient_id
+    LEFT JOIN ingredients parent ON parent.id = upi.parent_ingredient_id
+    WHERE upi.user_product_id IN (${placeholders})
+    ORDER BY upi.user_product_id ASC, upi.is_main DESC, upi.search_relevant DESC, upi.id ASC
+  `).bind(...ids).all<Record<string, unknown>>()
+
+  const byProduct = new Map<number, Record<string, unknown>[]>()
+  for (const row of rows) {
+    const productId = Number(row.user_product_id)
+    const list = byProduct.get(productId) ?? []
+    list.push(row)
+    byProduct.set(productId, list)
+  }
+
+  return products.map((product) => ({
+    ...product,
+    ingredients: byProduct.get(Number(product.id)) ?? [],
+  }))
+}
+
+function buildIngredientInsert(
+  db: D1Database,
+  userProductId: number | string,
+  ingredient: UserProductIngredientInput,
+): D1PreparedStatement {
+  return db.prepare(`
+    INSERT INTO user_product_ingredients (
+      user_product_id, ingredient_id, form_id, quantity, unit,
+      basis_quantity, basis_unit, search_relevant, parent_ingredient_id, is_main
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    userProductId,
+    ingredient.ingredient_id,
+    ingredient.form_id,
+    ingredient.quantity,
+    ingredient.unit,
+    ingredient.basis_quantity,
+    ingredient.basis_unit,
+    ingredient.search_relevant,
+    ingredient.parent_ingredient_id,
+    ingredient.is_main ? 1 : 0,
+  )
 }
 
 // GET /api/user-products
@@ -55,7 +191,8 @@ userProducts.get('/', async (c) => {
   const { results } = await c.env.DB.prepare(
     'SELECT * FROM user_products WHERE user_id = ? ORDER BY created_at DESC'
   ).bind(user.userId).all()
-  return c.json({ products: results })
+  const products = await attachIngredients(c.env.DB, results as Record<string, unknown>[])
+  return c.json({ products })
 })
 
 // POST /api/user-products
@@ -102,6 +239,11 @@ userProducts.post('/', async (c) => {
     is_affiliate: body.is_affiliate === 1 || body.is_affiliate === true ? 1 : 0,
     notes: normalizeOptionalText(body.notes),
   }
+  const ingredientsValidation = hasOwnKey(body, 'ingredients')
+    ? validateIngredients(body.ingredients)
+    : { ingredients: undefined }
+  if (ingredientsValidation.error) return c.json({ error: ingredientsValidation.error }, 400)
+  const ingredients = ingredientsValidation.ingredients ?? []
   const submitter = await c.env.DB.prepare(
     'SELECT is_trusted_product_submitter FROM users WHERE id = ?'
   ).bind(user.userId).first<{ is_trusted_product_submitter: number }>()
@@ -130,10 +272,16 @@ userProducts.post('/', async (c) => {
     autoApproved ? 'approved' : 'pending',
     autoApproved ? new Date().toISOString() : null,
   ).run()
+  if (ingredients.length > 0) {
+    await c.env.DB.batch(ingredients.map((ingredient) =>
+      buildIngredientInsert(c.env.DB, result.meta.last_row_id as number, ingredient)
+    ))
+  }
   const created = await c.env.DB.prepare('SELECT * FROM user_products WHERE id = ?')
     .bind(result.meta.last_row_id)
-    .first()
-  return c.json({ id: result.meta.last_row_id, product: created }, 201)
+    .first<Record<string, unknown>>()
+  const product = created ? (await attachIngredients(c.env.DB, [created]))[0] : null
+  return c.json({ id: result.meta.last_row_id, product }, 201)
 })
 
 // PUT /api/user-products/:id
@@ -190,13 +338,17 @@ userProducts.put('/:id', async (c) => {
     is_affiliate: body.is_affiliate === undefined ? undefined : body.is_affiliate === 1 || body.is_affiliate === true ? 1 : 0,
     notes: normalizeOptionalText(body.notes),
   }
+  const ingredientsValidation = hasOwnKey(body, 'ingredients')
+    ? validateIngredients(body.ingredients)
+    : { ingredients: undefined }
+  if (ingredientsValidation.error) return c.json({ error: ingredientsValidation.error }, 400)
   const submitter = await c.env.DB.prepare(
     'SELECT is_trusted_product_submitter FROM users WHERE id = ?'
   ).bind(user.userId).first<{ is_trusted_product_submitter: number }>()
   const autoApproved = submitter?.is_trusted_product_submitter === 1
   const imageUrlProvided = hasOwnKey(body, 'image_url')
   const imageUrlValue = data.image_url === '' ? null : data.image_url ?? null
-  await c.env.DB.prepare(`
+  const updateStatement = c.env.DB.prepare(`
     UPDATE user_products SET
       name = COALESCE(?, name),
       brand = COALESCE(?, brand),
@@ -222,9 +374,19 @@ userProducts.put('/:id', async (c) => {
     autoApproved ? 'approved' : 'pending',
     autoApproved ? 1 : 0,
     id, user.userId,
-  ).run()
-  const updated = await c.env.DB.prepare('SELECT * FROM user_products WHERE id = ?').bind(id).first()
-  return c.json({ product: updated })
+  )
+  if (ingredientsValidation.ingredients) {
+    await c.env.DB.batch([
+      updateStatement,
+      c.env.DB.prepare('DELETE FROM user_product_ingredients WHERE user_product_id = ?').bind(id),
+      ...ingredientsValidation.ingredients.map((ingredient) => buildIngredientInsert(c.env.DB, id, ingredient)),
+    ])
+  } else {
+    await updateStatement.run()
+  }
+  const updated = await c.env.DB.prepare('SELECT * FROM user_products WHERE id = ?').bind(id).first<Record<string, unknown>>()
+  const product = updated ? (await attachIngredients(c.env.DB, [updated]))[0] : null
+  return c.json({ product })
 })
 
 // DELETE /api/user-products/:id

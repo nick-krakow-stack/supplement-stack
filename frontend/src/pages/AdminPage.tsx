@@ -63,6 +63,17 @@ interface AdminUserProduct {
   status: 'pending' | 'approved' | 'rejected';
   approved_at?: string | null;
   user_is_trusted_product_submitter?: number;
+  published_product_id?: number | null;
+  ingredients?: Array<{
+    ingredient_id: number;
+    ingredient_name?: string;
+    quantity?: number | null;
+    unit?: string | null;
+    basis_quantity?: number | null;
+    basis_unit?: string | null;
+    search_relevant?: number | boolean;
+    parent_ingredient_id?: number | null;
+  }>;
   created_at: string;
 }
 
@@ -152,7 +163,6 @@ function StatusBadge({ status }: { status?: string }) {
     </span>
   );
 }
-
 // ============================================================
 // Tab 1: Products
 // ============================================================
@@ -433,7 +443,7 @@ function ProductsTab() {
                 Nick Affiliate
               </label>
               {affiliateSavingId === product.id && (
-                <span className="text-xs text-gray-500">Speichere...</span>
+                <span className="text-xs text-gray-500">Speichere…</span>
               )}
             </div>
 
@@ -491,7 +501,7 @@ function ProductsTab() {
                 <textarea
                   value={product.warning_message ?? ''}
                   onChange={(e) => updateProductField(product.id, 'warning_message', e.target.value)}
-                  placeholder="Hinweistext, z.B. nicht direkt mit Kaffee kombinieren..."
+                  placeholder="Hinweistext, z.B. nicht direkt mit Kaffee kombinieren…"
                   rows={2}
                   className="md:col-span-2 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
                 />
@@ -763,7 +773,7 @@ function IngredientsTab() {
           disabled={creating}
           className="self-start bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold px-4 py-2 rounded-xl text-sm transition-all shadow-sm disabled:opacity-60"
         >
-          {creating ? 'Erstelle...' : 'Erstellen'}
+          {creating ? 'Erstelle…' : 'Erstellen'}
         </button>
       </div>
 
@@ -812,7 +822,7 @@ function IngredientsTab() {
           disabled={recSaving}
           className="self-start bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold px-4 py-2 rounded-xl text-sm transition-all shadow-sm disabled:opacity-60"
         >
-          {recSaving ? 'Speichere...' : 'Empfehlung speichern'}
+          {recSaving ? 'Speichere…' : 'Empfehlung speichern'}
         </button>
       </div>
 
@@ -1082,7 +1092,7 @@ function InteractionsTab() {
           disabled={creating}
           className="self-start bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold px-4 py-2 rounded-xl text-sm transition-all shadow-sm disabled:opacity-60"
         >
-          {creating ? 'Erstelle...' : 'Interaktion erstellen'}
+          {creating ? 'Erstelle…' : 'Interaktion erstellen'}
         </button>
       </div>
 
@@ -1257,7 +1267,7 @@ function ShopDomainsPanel() {
     load();
   };
 
-  if (loading) return <p className="text-gray-500 py-8 text-center">Lade...</p>;
+  if (loading) return <p className="text-gray-500 py-8 text-center">Lade…</p>;
 
   return (
     <div className="space-y-4">
@@ -1353,7 +1363,7 @@ function RankingsPanel() {
     });
   };
 
-  if (loading) return <p className="text-gray-500 py-8 text-center">Lade...</p>;
+  if (loading) return <p className="text-gray-500 py-8 text-center">Lade…</p>;
 
   return (
     <div className="space-y-4">
@@ -1415,21 +1425,37 @@ function UserProductsTab() {
     } catch (err) {
       console.error('Failed to load admin user products:', err);
       setError(err instanceof Error ? err.message : 'User-Produkte konnten nicht geladen werden.');
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   }, [statusFilter]);
 
   useEffect(() => { load(); }, [load]);
 
-  const runAction = async (id: number, url: string, method: 'PUT' | 'DELETE', message: string) => {
+  const runAction = async (
+    id: number,
+    url: string,
+    method: 'PUT' | 'DELETE',
+    message: string,
+    removeAfterSuccess = false,
+  ) => {
     setActionId(id);
     setError('');
     try {
       const res = await fetch(url, { method, headers: authHeaders() });
       if (!res.ok) {
         const data = await res.json().catch(() => ({})) as { error?: string };
+        if (res.status === 404 && method === 'PUT' && url.includes('/publish')) {
+          throw new Error('Publish-Endpunkt ist noch nicht verfügbar.');
+        }
         throw new Error(data.error ?? message);
       }
-      setProducts((prev) => prev.filter((p) => p.id !== id));
+
+      if (removeAfterSuccess) {
+        setProducts((prev) => prev.filter((p) => p.id !== id));
+      } else {
+        await load();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : message);
     } finally {
@@ -1442,7 +1468,8 @@ function UserProductsTab() {
       id,
       `/api/admin/user-products/${id}/approve`,
       'PUT',
-      'User-Produkt konnte nicht freigegeben werden.'
+      'User-Produkt konnte nicht freigegeben werden.',
+      true,
     );
   };
 
@@ -1451,7 +1478,8 @@ function UserProductsTab() {
       id,
       `/api/admin/user-products/${id}/reject`,
       'PUT',
-      'User-Produkt konnte nicht abgelehnt werden.'
+      'User-Produkt konnte nicht abgelehnt werden.',
+      true,
     );
   };
 
@@ -1461,8 +1489,57 @@ function UserProductsTab() {
       id,
       `/api/admin/user-products/${id}`,
       'DELETE',
-      'User-Produkt konnte nicht gelöscht werden.'
+      'User-Produkt konnte nicht gelöscht werden.',
+      true,
     );
+  };
+
+  const handlePublish = async (id: number) => {
+    setActionId(id);
+    setError('');
+
+    try {
+      const res = await fetch(`/api/admin/user-products/${id}/publish`, {
+        method: 'PUT',
+        headers: authHeaders(),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({})) as { error?: string };
+        if (res.status === 404) {
+          throw new Error('Publish-Endpunkt ist noch nicht verfügbar.');
+        }
+        throw new Error(data.error ?? 'User-Produkt konnte nicht als Katalogprodukt veröffentlicht werden.');
+      }
+
+      const payload = (await res.json().catch(() => ({}))) as {
+        published_product_id?: number | null;
+        product?: { published_product_id?: number | null; status?: 'pending' | 'approved' | 'rejected' };
+      };
+
+      const publishedProductId = payload.published_product_id ?? payload.product?.published_product_id ?? null;
+
+      setProducts((prev) =>
+        prev.map((p) =>
+          p.id === id
+            ? {
+                ...p,
+                ...payload.product,
+                published_product_id: publishedProductId ?? p.published_product_id,
+                status: 'approved',
+              }
+            : p,
+        ),
+      );
+
+      if (publishedProductId == null) {
+        await load();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'User-Produkt konnte nicht als Katalogprodukt veröffentlicht werden.');
+    } finally {
+      setActionId(null);
+    }
   };
 
   const handleTrustedToggle = async (product: AdminUserProduct) => {
@@ -1493,16 +1570,36 @@ function UserProductsTab() {
     }
   };
 
+  const getIngredientSummary = (product: AdminUserProduct): string => {
+    if (!product.ingredients || product.ingredients.length === 0) {
+      return 'Keine Wirkstoffangaben.';
+    }
+
+    const visible = product.ingredients.slice(0, 2).map((ingredient) => {
+      const name = ingredient.ingredient_name ?? `ID ${ingredient.ingredient_id}`;
+      const quantity = ingredient.quantity == null ? '' : `${ingredient.quantity}${ingredient.unit ?? ''}`;
+      const basis = ingredient.basis_quantity == null || !ingredient.basis_unit
+        ? ''
+        : `pro ${ingredient.basis_quantity} ${ingredient.basis_unit}`;
+      const suffix = ingredient.search_relevant ? '' : 'Zusatzstoff';
+      return [name, quantity, basis, suffix].filter(Boolean).join(' ');
+    });
+
+    const rest = product.ingredients.length - visible.length;
+    return `${visible.join(' | ')}${rest > 0 ? ` +${rest} weitere` : ''}`;
+  };
+
   return (
     <div className="space-y-4">
-      {/* Status filter pills */}
       <div className="flex flex-wrap gap-2">
         {(['pending', 'approved', 'rejected'] as const).map((s) => (
           <button
             key={s}
             onClick={() => setStatusFilter(s)}
             className={`min-h-11 px-3 py-2 text-xs font-medium rounded-full transition-all ${
-              statusFilter === s ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-600 hover:text-indigo-600'
+              statusFilter === s
+                ? 'bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-sm'
+                : 'bg-white border border-gray-200 text-gray-600 hover:text-indigo-600'
             }`}
           >
             {s === 'pending' ? 'Ausstehend' : s === 'approved' ? 'Freigegeben' : 'Abgelehnt'}
@@ -1516,7 +1613,7 @@ function UserProductsTab() {
         </div>
       )}
 
-      {loading && <p className="text-sm text-gray-500">Laden…</p>}
+      {loading && <p className="text-sm text-gray-500">Lade…</p>}
 
       {!loading && products.length === 0 && (
         <p className="text-sm text-gray-500 py-4 text-center">Keine Produkte in diesem Status.</p>
@@ -1524,82 +1621,128 @@ function UserProductsTab() {
 
       {!loading && products.length > 0 && (
         <ul className="space-y-3">
-          {products.map((p) => (
-            <li key={p.id} className="p-4 bg-white border border-gray-100 shadow-sm rounded-2xl flex flex-col gap-2">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="font-semibold text-gray-900 text-sm">{p.name}</p>
-                  {p.brand && <p className="text-xs text-gray-500">{p.brand}</p>}
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    von {p.user_email ?? `user_id=${p.user_id}`} · €{p.price.toFixed(2)}
-                    {p.shop_link && (
-                      <> · <a href={p.shop_link} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">User-Link</a></>
-                    )}
-                  </p>
-                  {p.serving_size && (
-                    <p className="text-xs text-gray-500">
-                      {p.serving_size}{p.serving_unit} · {p.servings_per_container ?? '?'} Portionen · {p.container_count ?? 1} Packung(en)
+          {products.map((p) => {
+            const isPublished = p.published_product_id != null;
+            const needsPublish = p.status === 'approved' && !isPublished;
+            const statusBadgeClass =
+              p.status === 'approved'
+                ? needsPublish
+                  ? 'bg-amber-100 text-amber-700'
+                  : 'bg-emerald-100 text-emerald-700'
+                : p.status === 'rejected'
+                  ? 'bg-red-100 text-red-700'
+                  : 'bg-sky-100 text-sky-700';
+            const statusText =
+              p.status === 'approved'
+                ? needsPublish
+                  ? 'Freigegeben (noch nicht im Katalog)'
+                  : 'Freigegeben'
+                : p.status === 'rejected'
+                  ? 'Abgelehnt'
+                  : 'Ausstehend';
+
+            return (
+              <li key={p.id} className="p-4 bg-white border border-gray-100 shadow-sm rounded-2xl flex flex-col gap-2">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-gray-900 text-sm">{p.name}</p>
+                    {p.brand && <p className="text-xs text-gray-500">{p.brand}</p>}
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      von {p.user_email ?? `user_id=${p.user_id}`} · €{p.price.toFixed(2)}
+                      {p.shop_link && (
+                        <> · <a href={p.shop_link} target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">User-Link</a></>
+                      )}
                     </p>
-                  )}
-                  {p.notes && <p className="text-xs text-gray-500 italic mt-1">{p.notes}</p>}
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${
-                      p.user_is_trusted_product_submitter
-                        ? 'bg-emerald-50 text-emerald-700'
-                        : 'bg-gray-100 text-gray-600'
-                    }`}>
-                      {p.user_is_trusted_product_submitter ? 'Trusted User' : 'Nicht trusted'}
-                    </span>
+                    {p.serving_size && (
+                      <p className="text-xs text-gray-500">
+                        {p.serving_size}{p.serving_unit} · {p.servings_per_container ?? '?'} Portionen · {p.container_count ?? 1} Packung(en)
+                      </p>
+                    )}
+                    <p className="text-xs text-gray-500 italic mt-1">
+                      {getIngredientSummary(p)}
+                    </p>
+                    {needsPublish && (
+                      <p className="text-xs text-amber-700 mt-1">Noch kein Katalog-Eintrag verknüpft.</p>
+                    )}
+                    {isPublished && <p className="text-xs text-gray-500 mt-1">Katalog-ID: {p.published_product_id}</p>}
+
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${statusBadgeClass}`}>
+                        {statusText}
+                      </span>
+
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${
+                        p.user_is_trusted_product_submitter
+                          ? 'bg-emerald-50 text-emerald-700'
+                          : 'bg-gray-100 text-gray-600'
+                      }`}>
+                        {p.user_is_trusted_product_submitter ? 'Trusted User' : 'Nicht trusted'}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleTrustedToggle(p)}
+                        disabled={trustedUserActionId === p.user_id}
+                        className="min-h-9 rounded-lg border border-gray-200 px-3 py-1 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        {p.user_is_trusted_product_submitter ? 'Trusted entfernen' : 'Als trusted markieren'}
+                      </button>
+                    </div>
+                  </div>
+                  {p.shop_link ? (
+                    <span className="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full flex-shrink-0">User-Link</span>
+                  ) : null}
+                </div>
+
+                {statusFilter === 'pending' && (
+                  <div className="flex flex-col sm:flex-row gap-2 mt-1">
                     <button
-                      type="button"
-                      onClick={() => handleTrustedToggle(p)}
-                      disabled={trustedUserActionId === p.user_id}
-                      className="min-h-9 rounded-lg border border-gray-200 px-3 py-1 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50"
+                      onClick={() => handleApprove(p.id)}
+                      disabled={actionId === p.id}
+                      className="flex-1 min-h-11 px-3 py-2 text-xs font-semibold bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white rounded-xl transition-all shadow-sm disabled:opacity-50"
                     >
-                      {p.user_is_trusted_product_submitter ? 'Trusted entfernen' : 'Als trusted markieren'}
+                      Freigeben
+                    </button>
+                    <button
+                      onClick={() => handleReject(p.id)}
+                      disabled={actionId === p.id}
+                      className="flex-1 min-h-11 px-3 py-2 text-xs font-semibold bg-red-500 hover:bg-red-600 text-white rounded-xl transition-colors disabled:opacity-50"
+                    >
+                      Ablehnen
+                    </button>
+                    <button
+                      onClick={() => handleDelete(p.id)}
+                      disabled={actionId === p.id}
+                      className="min-h-11 px-3 py-2 text-xs font-medium text-red-600 border border-red-200 hover:bg-red-50 rounded-xl transition-colors disabled:opacity-50"
+                    >
+                    Löschen
                     </button>
                   </div>
-                </div>
-                {p.shop_link ? (
-                  <span className="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded-full flex-shrink-0">User-Link</span>
-                ) : null}
-              </div>
-              {statusFilter === 'pending' && (
-                <div className="flex flex-col sm:flex-row gap-2 mt-1">
-                  <button
-                    onClick={() => handleApprove(p.id)}
-                    disabled={actionId === p.id}
-                    className="flex-1 min-h-11 px-3 py-2 text-xs font-semibold bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white rounded-xl transition-all shadow-sm disabled:opacity-50"
-                  >
-                    Freigeben
-                  </button>
-                  <button
-                    onClick={() => handleReject(p.id)}
-                    disabled={actionId === p.id}
-                    className="flex-1 min-h-11 px-3 py-2 text-xs font-semibold bg-red-500 hover:bg-red-600 text-white rounded-xl transition-colors disabled:opacity-50"
-                  >
-                    Ablehnen
-                  </button>
-                  <button
-                    onClick={() => handleDelete(p.id)}
-                    disabled={actionId === p.id}
-                    className="min-h-11 px-3 py-2 text-xs font-medium text-red-600 border border-red-200 hover:bg-red-50 rounded-xl transition-colors disabled:opacity-50"
-                  >
-                    Löschen
-                  </button>
-                </div>
-              )}
-              {statusFilter !== 'pending' && (
-                <button
-                  onClick={() => handleDelete(p.id)}
-                  disabled={actionId === p.id}
-                  className="self-start min-h-11 px-3 py-2 text-xs font-medium text-red-600 border border-red-200 hover:bg-red-50 rounded-xl transition-colors disabled:opacity-50"
-                >
-                  Löschen
-                </button>
-              )}
-            </li>
-          ))}
+                )}
+
+                {statusFilter !== 'pending' && (
+                  <div className="flex flex-col sm:flex-row gap-2 mt-1">
+                    {p.status === 'approved' && !isPublished && (
+                      <button
+                        onClick={() => handlePublish(p.id)}
+                        disabled={actionId === p.id}
+                        className="flex-1 min-h-11 px-3 py-2 text-xs font-semibold bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white rounded-xl transition-all shadow-sm disabled:opacity-50"
+                      >
+                        Als Katalogprodukt veröffentlichen
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => handleDelete(p.id)}
+                      disabled={actionId === p.id}
+                      className="self-start min-h-11 px-3 py-2 text-xs font-medium text-red-600 border border-red-200 hover:bg-red-50 rounded-xl transition-colors disabled:opacity-50"
+                    >
+                      Löschen
+                    </button>
+                  </div>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>

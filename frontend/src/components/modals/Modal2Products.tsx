@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ChevronLeft, Heart, Package, ShoppingCart, Star, X } from 'lucide-react';
 import ModalWrapper from './ModalWrapper';
-import type { Product, Recommendation } from '../../types/local';
+import type { Product, Recommendation, UserProductIngredient } from '../../types/local';
 
 interface Modal2ProductsProps {
   ingredientId: number;
@@ -23,6 +23,7 @@ interface ProductWithRec {
 
 interface UserProduct {
   id: number;
+  status?: 'pending' | 'approved' | 'rejected';
   name: string;
   brand?: string;
   form?: string;
@@ -35,6 +36,15 @@ interface UserProduct {
   container_count?: number;
   is_affiliate?: number;
   notes?: string;
+  published_product_id?: number | null;
+  ingredients?: UserProductIngredient[];
+}
+
+interface UserProductRow {
+  product: Product;
+  canSelect: boolean;
+  statusHint: string;
+  badgeText: string;
 }
 
 function BadgeRec({ type }: { type: RecommendationType }) {
@@ -141,17 +151,20 @@ function ProductRow({
   recommendedDose,
   onSelect,
   onAddToWishlist,
+  statusHint,
 }: {
   product: Product;
   badge?: ReactNode;
   ingredientId: number;
   recommendedDose?: { value: number; unit: string };
-  onSelect: (product: Product) => void;
+  onSelect?: (product: Product) => void;
   onAddToWishlist?: (productId: number) => Promise<void>;
+  statusHint?: string;
 }) {
   const [wishlistState, setWishlistState] = useState<'idle' | 'loading' | 'done'>('idle');
   const mainIng = product.ingredients?.find((i) => i.ingredient_id === ingredientId);
   const monthlyPrice = calcMonthlyPrice(product.price, product.servings_per_container, product.container_count);
+  const isSelectable = Boolean(onSelect);
 
   return (
     <li className="group flex flex-col items-stretch gap-3 rounded-3xl border border-transparent bg-white px-2 py-3 transition-all hover:border-slate-100 hover:bg-slate-50/80 min-[431px]:flex-row min-[431px]:items-center min-[431px]:gap-4 sm:gap-6 sm:px-4">
@@ -195,16 +208,25 @@ function ProductRow({
             ) : null;
           })()}
         </div>
+        {statusHint && (
+          <p className="mt-2 text-xs font-semibold text-slate-500">{statusHint}</p>
+        )}
       </div>
 
       <div className="flex w-full flex-shrink-0 flex-col items-stretch gap-2 min-[431px]:w-auto min-[431px]:items-end">
+        {isSelectable ? (
         <button
-          onClick={() => onSelect(product)}
-          className="min-h-11 rounded-2xl bg-gradient-to-r from-blue-600 to-violet-700 px-5 py-3 text-sm font-black text-white shadow-lg shadow-violet-600/20 transition-all hover:-translate-y-0.5 hover:shadow-xl sm:px-8 sm:py-4 sm:text-lg"
-        >
-          Hinzufügen
-        </button>
-        {onAddToWishlist && (
+            onClick={() => onSelect?.(product)}
+            className="min-h-11 rounded-2xl bg-gradient-to-r from-blue-600 to-violet-700 px-5 py-3 text-sm font-black text-white shadow-lg shadow-violet-600/20 transition-all hover:-translate-y-0.5 hover:shadow-xl sm:px-8 sm:py-4 sm:text-lg"
+          >
+            Hinzufügen
+          </button>
+        ) : (
+          <span className="flex min-h-11 items-center justify-center rounded-2xl border border-slate-200 bg-slate-100 px-5 py-3 text-xs font-semibold text-slate-500 sm:text-sm">
+            Nicht im Katalog
+          </span>
+        )}
+        {isSelectable && onAddToWishlist && (
           <button
             disabled={wishlistState !== 'idle'}
             onClick={async () => {
@@ -361,6 +383,71 @@ export default function Modal2Products({
     };
   }, [loadProducts]);
 
+  const catalogProductIds = new Set(items.map(({ product }) => product.id));
+
+  const userProductRows: UserProductRow[] = userProducts
+    .map((userProd): UserProductRow | null => {
+      const publishedId = userProd.published_product_id ?? null;
+      const hasSearchRelevantIngredient = userProd.ingredients?.some(
+        (ingredient) => ingredient.ingredient_id === ingredientId && Boolean(ingredient.search_relevant)
+      );
+      if (!hasSearchRelevantIngredient) return null;
+
+      const hasPublishedMapping = publishedId != null;
+      const duplicateInCatalog = hasPublishedMapping && catalogProductIds.has(publishedId);
+      const userStatus: 'pending' | 'approved' | 'rejected' | 'unknown' = userProd.status ?? 'unknown';
+      const isApproved = userStatus === 'approved';
+
+      const canSelect = isApproved && hasPublishedMapping && !duplicateInCatalog;
+      const productId = hasPublishedMapping ? publishedId : userProd.id;
+
+      const statusHint =
+        userStatus === 'pending'
+          ? 'In Prüfung (privat)'
+          : userStatus === 'rejected'
+            ? 'Abgelehnt (nicht nutzbar)'
+            : hasPublishedMapping
+              ? duplicateInCatalog
+                ? 'Bereits im Katalog vorhanden'
+                : isApproved
+                  ? 'Freigegeben'
+                  : 'Status unklar'
+              : isApproved
+                ? 'Freigegeben, aber noch nicht im Katalog'
+                : userStatus === 'unknown'
+                  ? 'Status nicht geliefert'
+                  : 'Privat';
+
+      const badgeText = hasPublishedMapping
+        ? duplicateInCatalog
+          ? 'Bereits vorhanden'
+          : 'Öffentlich'
+        : 'Eigenes';
+
+      const asProduct: Product = {
+        id: productId,
+        name: userProd.name,
+        brand: userProd.brand,
+        price: userProd.price,
+        shop_link: userProd.shop_link,
+        image_url: userProd.image_url,
+        form: userProd.form,
+        serving_size: userProd.serving_size,
+        serving_unit: userProd.serving_unit,
+        servings_per_container: userProd.servings_per_container,
+        container_count: userProd.container_count,
+        is_affiliate: userProd.is_affiliate,
+      };
+
+      return {
+        product: asProduct,
+        canSelect,
+        statusHint,
+        badgeText,
+      };
+    })
+    .filter((row): row is UserProductRow => row != null);
+
   return (
     <ModalWrapper onClose={onClose} size="lg" padded={false}>
       <div className="sticky top-0 z-10 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-700 px-4 py-5 text-white sm:px-9 sm:py-8">
@@ -412,7 +499,7 @@ export default function Modal2Products({
           </div>
         )}
 
-        {!loading && !error && items.length === 0 && userProducts.length === 0 && (
+        {!loading && !error && items.length === 0 && userProductRows.length === 0 && (
           <div className="py-12 text-center">
             <ShoppingCart size={40} className="mx-auto mb-3 text-gray-200" />
             <p className="text-sm font-semibold text-gray-400">
@@ -429,37 +516,27 @@ export default function Modal2Products({
               </p>
             )}
 
-            {userProducts.length > 0 && (
+            {userProductRows.length > 0 && (
               <section>
                 <p className="mb-3 text-xs font-black uppercase tracking-[0.2em] text-slate-400">
                   Meine Produkte
                 </p>
                 <ul className="space-y-3">
-                  {userProducts.map((userProd) => {
-                    const asProduct: Product = {
-                      id: userProd.id,
-                      name: userProd.name,
-                      brand: userProd.brand,
-                      price: userProd.price,
-                      shop_link: userProd.shop_link,
-                      image_url: userProd.image_url,
-                      form: userProd.form,
-                      serving_size: userProd.serving_size,
-                      serving_unit: userProd.serving_unit,
-                      servings_per_container: userProd.servings_per_container,
-                      container_count: userProd.container_count,
-                      is_affiliate: userProd.is_affiliate,
-                    };
-
+                  {userProductRows.map((row) => {
                     return (
                       <ProductRow
-                        key={`user-${userProd.id}`}
-                        product={asProduct}
-                        badge={<span className="flex-shrink-0 rounded-full bg-purple-100 px-2.5 py-1 text-xs font-black text-purple-700">Eigenes</span>}
+                        key={`user-${row.product.id}-${userProdKey(row.product)}`}
+                        product={row.product}
+                        badge={
+                          <span className="flex-shrink-0 rounded-full bg-purple-100 px-2.5 py-1 text-xs font-black text-purple-700">
+                            {row.badgeText}
+                          </span>
+                        }
                         ingredientId={ingredientId}
                         recommendedDose={recommendedDose}
-                        onSelect={onSelect}
-                        onAddToWishlist={onAddToWishlist}
+                        onSelect={row.canSelect ? onSelect : undefined}
+                        onAddToWishlist={row.canSelect ? onAddToWishlist : undefined}
+                        statusHint={row.statusHint}
                       />
                     );
                   })}
@@ -469,7 +546,7 @@ export default function Modal2Products({
 
             {items.length > 0 && (
               <section>
-                {userProducts.length > 0 && (
+                {userProductRows.length > 0 && (
                   <p className="mb-3 text-xs font-black uppercase tracking-[0.2em] text-slate-400">
                     Empfohlene Produkte
                   </p>
@@ -494,4 +571,8 @@ export default function Modal2Products({
       </div>
     </ModalWrapper>
   );
+}
+
+function userProdKey(product: Product) {
+  return `${product.id}-${product.name}`;
 }
