@@ -17,10 +17,35 @@ Continue from `main` using the top queue in this file.
 
 ## Git / Worktree
 
-- Latest committed baseline before this handoff: `1272e11` -
-  Feature: Add product ingredient publishing model.
-- Product-model follow-up is no longer local WIP: migration 0039 was applied
-  remotely and the code was deployed to preview/live.
+- Latest committed/deployed baseline before this handoff: `29dcde5` -
+  Feature: Add sub-ingredient product workflow.
+- Sub-ingredient backend/schema work is committed, remote-migrated, and
+  deployed.
+- Remote D1 migration `0040_seed_ingredient_sub_ingredients.sql` was applied
+  successfully to `supplementstack-production`.
+- Migration control confirmed six `ingredient_sub_ingredients` rows:
+  L-Carnitin children ALCAR/Tartrat/Fumarat and Omega-3 children EPA/DHA/DPA.
+- Migration control confirmed `products.source_user_product_id` exists
+  (`source_col=1`).
+- Pages deploy succeeded. Preview:
+  `https://421f79ea.supplementstack.pages.dev`; live:
+  `https://supplementstack.de`.
+- Local checks passed: functions `npx tsc -p tsconfig.json`; frontend
+  `npm run lint --if-present`; frontend
+  `npm run test --if-present -- --run` with no test files via
+  passWithNoTests; frontend `npm run build`; `git diff --check`; mojibake scan
+  for touched frontend/backend files.
+- Smoke checks passed on live and preview:
+  `/api/ingredients/10/sub-ingredients` 200 count 3 EPA/DHA/DPA;
+  `/api/ingredients/13/sub-ingredients` 200 count 3 ALCAR/Tartrat/Fumarat;
+  `/api/ingredients/10/products` 200 count 1 on live;
+  `/api/demo/products` 200 count 7; `/api/admin/user-products`
+  unauthenticated 401.
+- Demo mode note: current `StackWorkspace` demo flow creates fresh client-side
+  demo state on load and does not persist stack edits via `/api/stacks`; demo
+  products come from `/api/demo/products`.
+- Product-model and sub-ingredient backend follow-ups are deployed; remaining
+  launch work is UI/admin management, manual QA, and policy/legal review.
 - `.agent-memory/current-state.md`, `.agent-memory/next-steps.md`,
   `.agent-memory/handoff.md`, `.agent-memory/decisions.md`, and
   `.agent-memory/deploy-log.md` were updated for the completed deploy.
@@ -42,8 +67,28 @@ Continue from `main` using the top queue in this file.
 
 1. Final legal/compliance review (DSB/AVV/provider checks) before SEO indexing.
 2. Manual authenticated browser/mobile QA.
-3. Seed/manage `ingredient_sub_ingredients` and add smart UI prompts for
-   sub-ingredients such as L-Carnitin forms and Omega-3 EPA/DHA/DPA.
+3. Build a dedicated admin UI for managing sub-ingredient mappings; backend
+   APIs already exist.
+4. Manual browser QA of product submission flow on desktop/mobile, including
+   sub-ingredient prompts and validation errors.
+5. Affiliate/domain final policy review before Go-Live.
+
+## Deployed Sub-Ingredient Product Workflow
+
+- Commit: `29dcde5` - Feature: Add sub-ingredient product workflow.
+- Remote D1 migration `0040_seed_ingredient_sub_ingredients.sql` applied to
+  `supplementstack-production`.
+- Seeded mappings: `L-Carnitin` -> `Acetyl-L-Carnitin`,
+  `L-Carnitin Tartrat`, `L-Carnitin Fumarat`; `Omega-3` -> `EPA`, `DHA`,
+  `DPA`.
+- Public API exposes `GET /api/ingredients/:id/sub-ingredients`; ingredient
+  detail may include `sub_ingredients`.
+- Admin mapping API exists with audit logging, but no dedicated admin UI exists
+  yet.
+- Product and user-product saves validate parent/sub relations and max 50
+  ingredient rows.
+- Parent/child-aware product lookup, stack-warning dedupe, and admin publish
+  race guard are live.
 
 ## Deployed Product Ingredient Publishing Model
 

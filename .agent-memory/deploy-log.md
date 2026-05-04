@@ -34,11 +34,14 @@ remote-migrated, and deployed to Cloudflare Pages preview and live custom
 domain.
 Product ingredient publishing model is committed, remote-migrated, and
 deployed to Cloudflare Pages preview and live custom domain.
+Sub-ingredient product workflow is committed, remote-migrated, and deployed to
+Cloudflare Pages preview and live custom domain.
 GitHub Actions D1 backup has run successfully both manually and automatically;
 token scopes are verified.
 
 Latest relevant commits:
 
+- `29dcde5` - Feature: Add sub-ingredient product workflow.
 - `1272e11` - Feature: Add product ingredient publishing model.
 - `18a4141` - Security: Harden demo and user product moderation.
 - `9c2c627` - Legal: Add imprint privacy and terms pages.
@@ -60,6 +63,56 @@ Latest relevant commits:
 - `9a5f523` - DB: Phase B complete (migrations 0028-0035).
 
 ## Product Ingredient Publishing Model
+
+### 2026-05-04 - D1 + Cloudflare Pages: sub-ingredient product workflow
+
+- Commit: `29dcde5` - Feature: Add sub-ingredient product workflow.
+- Remote D1 migration:
+  - Applied `d1-migrations/0040_seed_ingredient_sub_ingredients.sql` to
+    `supplementstack-production`.
+  - Control query confirmed `ingredient_sub_ingredients` count = 6.
+  - Control query confirmed mappings:
+    `L-Carnitin` -> `Acetyl-L-Carnitin`, `L-Carnitin Tartrat`,
+    `L-Carnitin Fumarat`; `Omega-3` -> `EPA`, `DHA`, `DPA`.
+  - Control query confirmed `products.source_user_product_id` exists
+    (`source_col=1`).
+- Scope:
+  - Seeded launch mappings for L-Carnitin and Omega-3 sub-ingredients.
+  - Public sub-ingredient prompt endpoint is live.
+  - Admin sub-ingredient mapping API is live with validation and audit logging.
+  - Product and user-product saves validate parent/sub relations before storage
+    and cap ingredient arrays at 50 rows.
+  - Ingredient product lookup and recommendations are parent/child-aware.
+  - Stack warnings dedupe parent/child rows per product.
+  - Admin publish uses `products.source_user_product_id` as a unique source
+    guard for idempotent publish races.
+- Local validation:
+  - `npx tsc -p tsconfig.json` in `functions/` passed.
+  - `npm run lint --if-present` in `frontend/` passed.
+  - `npm run test --if-present -- --run` in `frontend/` passed with no test
+    files via passWithNoTests.
+  - `npm run build` in `frontend/` passed.
+  - `git diff --check` passed.
+  - Mojibake scan for touched frontend/backend files passed.
+- Preview URL: `https://421f79ea.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`.
+- Smoke checks on live and preview:
+  - `/api/ingredients/10/sub-ingredients` returned HTTP 200 with count 3:
+    EPA/DHA/DPA.
+  - `/api/ingredients/13/sub-ingredients` returned HTTP 200 with count 3:
+    ALCAR/Tartrat/Fumarat.
+  - `/api/ingredients/10/products` returned HTTP 200 with count 1 on live.
+  - `/api/demo/products` returned HTTP 200 with count 7.
+  - `/api/admin/user-products` unauthenticated returned HTTP 401.
+- Demo mode note:
+  - Current `StackWorkspace` demo flow creates fresh client-side demo state on
+    load and does not persist stack edits via `/api/stacks`; demo products come
+    from `/api/demo/products`.
+- Remaining launch follow-up:
+  - Dedicated admin UI for managing sub-ingredient mappings.
+  - Legal/compliance wording review before Go-Live.
+  - Manual browser QA of product submission flow on desktop/mobile.
+  - Affiliate/domain final policy review.
 
 ### 2026-05-04 - D1 + Cloudflare Pages: product ingredient publishing model
 
@@ -108,10 +161,9 @@ Latest relevant commits:
   - Preview/live `/api/ingredients/1/recommendations` returned HTTP 200 with
     count 4.
 - Remaining follow-up:
-  - Seed/manage `ingredient_sub_ingredients` and add smart UI prompts for
-    sub-ingredients such as L-Carnitin forms and Omega-3 EPA/DHA/DPA.
-  - Final legal/compliance review and authenticated browser/mobile QA remain
-    open.
+  - Dedicated admin UI for sub-ingredient mapping management.
+  - Final legal/compliance review, authenticated browser/mobile QA, and
+    affiliate/domain policy review remain open.
 - Workspace note:
   - `.claude/SESSION.md` and `.claude/settings.json` remain dirty and were
     intentionally untouched.

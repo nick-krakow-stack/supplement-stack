@@ -2,6 +2,56 @@
 
 Last updated: 2026-05-04
 
+## Sub-Ingredient Prompt Mapping
+
+Decision: product and user-product ingredient rows may reference a
+`parent_ingredient_id` only when the pair exists in
+`ingredient_sub_ingredients`.
+
+Deployment status:
+
+- Implemented, committed, remote-migrated, and deployed in `29dcde5`
+  (`Feature: Add sub-ingredient product workflow`).
+- Remote D1 migration `0040_seed_ingredient_sub_ingredients.sql` is applied to
+  `supplementstack-production`.
+- Remote verification confirmed `ingredient_sub_ingredients` count = 6:
+  L-Carnitin children ALCAR/Tartrat/Fumarat and Omega-3 children EPA/DHA/DPA.
+- Remote verification confirmed `products.source_user_product_id` exists
+  (`source_col=1`).
+
+Operational rule:
+
+- The public prompt API is `GET /api/ingredients/:id/sub-ingredients` and
+  returns the parent plus sorted child prompt rows.
+- `GET /api/ingredients/:id` may include the same `sub_ingredients` array for
+  efficient UI hydration.
+- Admin-only management uses
+  `GET /api/admin/ingredient-sub-ingredients`,
+  `PUT /api/admin/ingredient-sub-ingredients`, and
+  `DELETE /api/admin/ingredient-sub-ingredients/:parentId/:childId`.
+- `POST/PUT /api/products` and `POST/PUT /api/user-products` validate
+  ingredient existence, form ownership, parent existence, parent != child, and
+  allowed parent/sub relation before saving.
+- Sub-ingredient mappings are prompt and validation metadata only. They do not
+  imply automatic quantity calculation.
+- Parent product lookup treats matching child rows with
+  `parent_ingredient_id = :id` as matches for the parent, dedupes products, and
+  prefers an explicit parent row when both parent and child rows are present.
+- Stack-warning ingredient evaluation is per product: child rows win over a
+  simultaneous parent row for the same parent in the same product, then
+  effective ingredient IDs are deduped across the stack.
+- Admin publish has a source guard through `products.source_user_product_id`
+  with a unique partial index, so concurrent publish attempts for one
+  user-product return the existing catalog product instead of creating a
+  duplicate.
+
+Rationale:
+
+- Bad private product data should not enter moderation storage and then fail
+  only later during admin publish.
+- Mapping-based validation keeps parent prompts configurable without encoding
+  supplement-specific logic in product save handlers.
+
 ## User Product Publication And Catalog Conversion
 
 Decision: `user_products.status = 'approved'` remains the user-edit lock, but

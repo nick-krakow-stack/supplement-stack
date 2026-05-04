@@ -121,6 +121,28 @@ Product-model follow-up is closed in `1272e11`
   D3 products count 3, D3 recommendations count 4, and unauth product/admin
   product endpoints returning 401.
 
+## Latest Closed Backend Work
+
+Sub-ingredient product workflow is closed in `29dcde5`
+(`Feature: Add sub-ingredient product workflow`) and deployed:
+
+- Remote D1 migration `0040_seed_ingredient_sub_ingredients.sql` applied
+  successfully to `supplementstack-production`.
+- Migration control confirmed `ingredient_sub_ingredients` count = 6:
+  L-Carnitin children ALCAR/Tartrat/Fumarat and Omega-3 children EPA/DHA/DPA.
+- Migration control confirmed `products.source_user_product_id` exists
+  (`source_col=1`).
+- Public/admin backend APIs, parent/sub validation, parent/child-aware product
+  lookup, stack-warning dedupe, publish race guard, and 50-row save limits are
+  live.
+- Preview: `https://421f79ea.supplementstack.pages.dev`; live:
+  `https://supplementstack.de`.
+- Smoke checks passed on live and preview for sub-ingredient endpoints, Omega-3
+  products, demo products count 7, and unauthenticated admin 401.
+- Demo mode note: current `StackWorkspace` demo flow creates fresh client-side
+  demo state on load and does not persist stack edits via `/api/stacks`; demo
+  products come from `/api/demo/products`.
+
 ## Open Cross-Agent TODOs (top of the queue)
 
 Pick from this list first when you have an open slot. These are the highest-
@@ -134,12 +156,24 @@ signal items any agent — Claude, Codex, anyone — can pick up directly.
      GitHub, Google Analytics property/settings before indexing.
    - Effort: Legal review dependent.
 
-2. ❌ **Seed/manage ingredient sub-ingredients and guided prompts**
-   - `ingredient_sub_ingredients` is schema-ready, but no guided UI/admin flow
-     exists yet for sub-ingredient prompts such as L-Carnitin forms or Omega-3
-     EPA/DHA/DPA.
-   - Needed for smarter user-product ingredient entry and validation.
+2. ❌ **Admin UI for sub-ingredient mappings**
+   - Backend APIs exist and migration 0040 seeded launch mappings, but there is
+     no dedicated admin UI yet for creating/removing parent/child prompt
+     mappings.
+   - Needed for non-technical management of L-Carnitin forms, Omega-3
+     EPA/DHA/DPA, and future mappings.
    - Effort: M.
+
+3. ❌ **Manual product-submission browser QA**
+   - Run product submission and moderation/publish flows on desktop and mobile,
+     including sub-ingredient prompts, parent/sub validation errors, and 50-row
+     ingredient limit behavior.
+   - Effort: S/M.
+
+4. ❌ **Affiliate/domain final policy review**
+   - Review affiliate disclosure, shop-domain matching assumptions, and final
+     domain/policy wording before Go-Live.
+   - Effort: S.
 
 The longer audit backlog is below in "Additional Open Items"; treat that as the secondary queue.
 
@@ -147,9 +181,10 @@ The longer audit backlog is below in "Additional Open Items"; treat that as the 
 
 - User-product ingredient mapping and catalog conversion are deployed in
   `1272e11`.
-- Remaining product-model work: seed/manage `ingredient_sub_ingredients` and
-  add smart UI prompts for sub-ingredients, especially L-Carnitin forms and
-  Omega-3 EPA/DHA/DPA.
+- Sub-ingredient backend/schema work is deployed in `29dcde5`.
+- Remaining product-model work: dedicated admin UI for managing
+  `ingredient_sub_ingredients`, manual product-submission QA on desktop/mobile,
+  and final affiliate/domain policy review.
 
 ## Audit Top-7 Bugfix Sprint Status
 
