@@ -1,3 +1,28 @@
 # Pre-launch: indexing intentionally disabled until legal/compliance clears.
+# NOTE: Cloudflare prepends a managed AI-bot block with `User-agent: *` `Allow: /`.
+# Search crawlers are listed explicitly here so a name-specific Disallow takes
+# precedence over Cloudflare's wildcard Allow.
+
+User-agent: Googlebot
+Disallow: /
+
+User-agent: Googlebot-Image
+Disallow: /
+
+User-agent: Bingbot
+Disallow: /
+
+User-agent: DuckDuckBot
+Disallow: /
+
+User-agent: YandexBot
+Disallow: /
+
+User-agent: Baiduspider
+Disallow: /
+
+User-agent: Slurp
+Disallow: /
+
 User-agent: *
 Disallow: /
