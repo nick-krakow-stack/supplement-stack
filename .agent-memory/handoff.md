@@ -55,7 +55,8 @@ smokes after applying migration `0041_stack_item_product_sources.sql`.
   touched.
 - Branch: `main`.
 - Current local implementation:
-  - `PUT /api/me` validates profile payloads and batches update+reload.
+  - `PUT /api/me` validates profile payloads and uses one
+    `UPDATE ... RETURNING` statement.
   - `d1-migrations/0041_stack_item_product_sources.sql` rebuilds
     `stack_items` with explicit `catalog_product_id` and `user_product_id`
     plus a CHECK requiring exactly one reference. Legacy `product_id` is only
@@ -65,7 +66,9 @@ smokes after applying migration `0041_stack_item_product_sources.sql`.
     `stack.user_id` for user-product ownership, and returns `product_type` in
     stack item responses.
   - Stack warnings UNION `product_ingredients` and
-    `user_product_ingredients`.
+    `user_product_ingredients`, constrain user-product rows to the stack
+    owner, and query the live `interactions.ingredient_id` /
+    `partner_ingredient_id` schema with compatibility aliases.
   - `StackWorkspace` uses `catalog:id` / `user_product:id` keys, loads own
     pending/approved user products in add-product selection, and persists
     `product_type`.
@@ -75,7 +78,7 @@ smokes after applying migration `0041_stack_item_product_sources.sql`.
 - Checks already passed locally: functions `npx tsc -p tsconfig.json`;
   frontend `npm run lint --if-present`; frontend `npm run build`;
   `git diff --check` with CRLF warnings only; isolated Python/SQLite migration
-  0041 schema check.
+  0041 schema check; remote D1 syntax probe for the interactions query.
 - Local `wrangler d1 migrations apply supplementstack-production --local`
   failed before 0041 at old migration `0009_auth_profile_extensions.sql`
   because the existing local Wrangler state lacks `google_id`.

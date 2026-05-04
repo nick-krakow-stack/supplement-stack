@@ -412,11 +412,19 @@ stackWarningsApp.get('/:id', async (c) => {
 
   const placeholders = ingredientIds.map(() => '?').join(',')
   const { results: warnings } = await c.env.DB.prepare(`
-    SELECT *
+    SELECT
+      id,
+      ingredient_id AS ingredient_a_id,
+      partner_ingredient_id AS ingredient_b_id,
+      type,
+      comment
     FROM interactions
-    WHERE ingredient_a_id IN (${placeholders})
-      AND ingredient_b_id IN (${placeholders})
-      AND ingredient_a_id <> ingredient_b_id
+    WHERE is_active = 1
+      AND partner_type = 'ingredient'
+      AND partner_ingredient_id IS NOT NULL
+      AND ingredient_id IN (${placeholders})
+      AND partner_ingredient_id IN (${placeholders})
+      AND ingredient_id <> partner_ingredient_id
     ORDER BY id
   `).bind(...ingredientIds, ...ingredientIds).all<InteractionRow>()
   return c.json({ warnings })

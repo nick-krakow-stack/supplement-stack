@@ -50,9 +50,9 @@ remote-migrated, and deployed to Cloudflare Pages preview.
 Launch QA fixes are implemented locally but not yet committed, remote-migrated,
 or deployed:
 
-- `PUT /api/me` now validates profile payloads and runs profile update plus
-  reload through one D1 `batch`, so a reload failure cannot leave a
-  partial-success 500 response after persistence.
+- `PUT /api/me` now validates profile payloads and uses one
+  `UPDATE ... RETURNING` statement so response generation does not depend on
+  fragile D1 batch result parsing and `is_smoker: 0` returns normally.
 - New migration `0041_stack_item_product_sources.sql` rebuilds `stack_items`
   from ambiguous `product_id` to explicit nullable `catalog_product_id` and
   `user_product_id` columns with a CHECK requiring exactly one reference.
@@ -63,8 +63,11 @@ or deployed:
   `products`, and user products against the stack owner with status
   `pending` or `approved`.
 - `GET /api/stacks/:id` returns a UNION of catalog products and user products
-  with `product_type` in each item. `GET /api/stack-warnings/:id` evaluates
-  both `product_ingredients` and `user_product_ingredients`.
+  with `product_type` in each item. User-product joins are constrained to the
+  stack owner. `GET /api/stack-warnings/:id` evaluates both
+  `product_ingredients` and `user_product_ingredients`, uses the live
+  `interactions.ingredient_id` / `partner_ingredient_id` schema, and aliases
+  results back to `ingredient_a_id` / `ingredient_b_id`.
 - `StackWorkspace` keeps string keys `catalog:id` and `user_product:id`,
   loads own pending/approved user products into the add-product modal, and
   persists the source discriminator in stack payloads.
@@ -72,9 +75,11 @@ or deployed:
   seed and migration 0041 backfill for existing databases.
 - Route/header check found no active `/search` or `/wishlist` App/Layout routes
   or nav links; un-routed page files remain untouched.
-- Checks passed locally: functions `npx tsc -p tsconfig.json`; frontend
-  `npm run lint --if-present`; frontend `npm run build`; `git diff --check`
-  with CRLF warnings only; isolated Python/SQLite check for migration 0041.
+- Checks passed locally after the live-smoke follow-up: functions
+  `npx tsc -p tsconfig.json`; frontend `npm run lint --if-present`; frontend
+  `npm run build`; `git diff --check` with CRLF warnings only; isolated
+  Python/SQLite check for migration 0041. A remote D1 syntax probe for the new
+  interactions query returned the D3/K2 row successfully.
 - `wrangler d1 migrations apply supplementstack-production --local` could not
   reach 0041 because the existing local Wrangler state fails earlier at
   `0009_auth_profile_extensions.sql` with missing `google_id`; this is a local

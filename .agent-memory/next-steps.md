@@ -22,13 +22,15 @@ Phase C is complete. The integrated Phase D rollout is complete:
 - SearchPage/Wishlist werden als normale Fallback-/404-Routen behandelt; `raw`-Flags
   von SearchPage-Eingaben zählen nicht mehr zu den Launch-Blockern.
 - Launch QA fixes are implemented locally but not yet committed/deployed:
-  `PUT /api/me` uses validated D1 batch update+reload, migration
+  `PUT /api/me` uses validated `UPDATE ... RETURNING`, migration
   `0041_stack_item_product_sources.sql` rebuilds `stack_items` with explicit
   `catalog_product_id` and `user_product_id` plus exactly-one CHECK,
   Stack API accepts legacy `{ id }` catalog payloads and new `product_type`
   payloads, own pending/approved user products are selectable in
   `StackWorkspace`, stack warnings read catalog and user-product ingredient
-  rows, and Demo D3/K2 seed/backfill now uses 2,000 IU instead of 10,000 IU.
+  rows through the live `interactions.ingredient_id` /
+  `partner_ingredient_id` schema, and Demo D3/K2 seed/backfill now uses
+  2,000 IU instead of 10,000 IU.
   Local checks passed: functions TypeScript, frontend lint, frontend build,
   `git diff --check`, and isolated migration 0041 schema check. Local Wrangler
   migration apply is blocked before 0041 by the existing local state failing

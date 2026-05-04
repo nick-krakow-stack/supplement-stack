@@ -372,8 +372,7 @@ meApp.put('/', async (c) => {
     return c.json({ error: 'is_smoker must be true/false or 1/0' }, 400)
   }
 
-  const [updateResult, selectResult] = await c.env.DB.batch([
-    c.env.DB.prepare(`
+  const updated = await c.env.DB.prepare(`
     UPDATE users SET
       age = COALESCE(?, age),
       gender = COALESCE(?, gender),
@@ -383,6 +382,8 @@ meApp.put('/', async (c) => {
       guideline_source = COALESCE(?, guideline_source),
       is_smoker = COALESCE(?, is_smoker)
     WHERE id = ?
+    RETURNING id, email, age, gender, weight, diet_type, personal_goals,
+      guideline_source, is_smoker, health_consent, health_consent_at, role
   `).bind(
     age,
     gender,
@@ -392,13 +393,7 @@ meApp.put('/', async (c) => {
     guidelineSource,
     isSmoker,
     user.userId,
-  ),
-    c.env.DB.prepare(
-    'SELECT id, email, age, gender, weight, diet_type, personal_goals, guideline_source, is_smoker, health_consent, health_consent_at, role FROM users WHERE id = ?'
-    ).bind(user.userId),
-  ])
-  if (!updateResult.success) return c.json({ error: 'Profile update failed' }, 500)
-  const updated = selectResult.results?.[0] as UserRow | undefined
+  ).first<UserRow>()
   if (!updated) return c.json({ error: 'User not found' }, 404)
   return c.json({ profile: {
     id: updated.id, email: updated.email, age: updated.age, gender: updated.gender, weight: updated.weight,
