@@ -42,6 +42,27 @@ Latest relevant commits:
 - `b1fd347` - Refactor: Split Pages API into Hono modules.
 - `9a5f523` - DB: Phase B complete (migrations 0028-0035).
 
+## Profile Self-Service (DSGVO Art. 16 + 17)
+
+### 2026-05-04 - Cloudflare Pages: profile password change + account deletion
+
+- Commit: `78d8925` - Feature: Profile self-service for password change and account deletion.
+- Scope:
+  - `functions/api/modules/auth.ts`: new `PATCH /api/me/password` and `DELETE /api/me` mounted on the existing `meApp`. Both require `ensureAuth`, re-authenticate via the current password (`verifyPassword`), and are rate-limited (`pwchange:<userId>` 5/15min, `accdel:<userId>` 3/60min).
+  - Account deletion runs `c.env.DB.batch([...])` to hard-delete dependent rows in order (`stack_items` via subselect on `stacks`, then `stacks`, `wishlist`, `user_products`, `consent_log`, `users`). Best-effort cleanup loop covers tables from later migrations (`admin_audit_log`, `dose_recommendations`, `share_links`, `blog_posts`, `api_tokens`) — silently skipped if the table doesn't exist in the live DB.
+  - `frontend/src/api/auth.ts`: `changePassword`, `deleteAccount`, plus a `preserveTokenOn401` helper. The axios response interceptor in `client.ts:19-21` strips the auth token on any 401; without the helper a wrong-current-password attempt would log the user out.
+  - `frontend/src/pages/ProfilePage.tsx`: two new sections. Password-change with current/new/repeat fields and inline success/error messaging. Account-deletion with red warning, confirmation phrase `LÖSCHEN`, password re-entry, disabled red button until both match. On success: `logout()` + `navigate('/', { replace: true })`. No `window.alert`. 44px touch targets.
+- Local validation: `npx tsc -p tsconfig.json` (functions/) clean; `npm run build` (frontend/) clean.
+- Deploy command: `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://16edb9e2.supplementstack.pages.dev`
+- Build assets: JS `index-Dkeio0yL.js`, CSS `index-RAoQ0gyV.css`.
+- Smoke checks:
+  - Preview root + live `https://supplementstack.de/` returned HTTP 200.
+  - Unauthenticated `PATCH /api/me/password` → HTTP 401 `{"error":"Unauthorized"}`.
+  - Unauthenticated `DELETE /api/me` → HTTP 401 `{"error":"Unauthorized"}`.
+  - Full end-to-end (login → change password → delete account) deferred to avoid creating or deleting real users in production D1.
+- Note: live DB is at migration 0022; the optional-cleanup loop in `DELETE /api/me` is intentionally tolerant of missing tables, so this deploy works against the current schema and stays correct after future migrations are applied.
+
 ## Pre-Launch Indexing Block
 
 ### 2026-05-04 - Cloudflare Pages: robots.txt disallowing search crawlers

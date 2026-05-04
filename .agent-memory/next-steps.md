@@ -35,8 +35,23 @@ Phase C is complete. The integrated Phase D rollout is complete:
   deployed in `1d8b288`. Cloudflare prepends a managed AI-bot block on the
   live domain; specific Disallows take precedence over Cloudflare's wildcard
   Allow.
+- Profile self-service (DSGVO Art. 16 + 17) closed in `78d8925`: new
+  `PATCH /api/me/password` and `DELETE /api/me` endpoints with re-auth and
+  rate limits, plus matching ProfilePage sections with `LÖSCHEN` confirmation
+  phrase. Account deletion is hard-delete in a batch transaction with
+  best-effort cleanup for later-migration tables.
 
 D1 backup is done and is not a next step. Production-domain promotion is done and is not a next step.
+
+## Current Local Follow-up
+
+- Review and commit the uncommitted product-data hardening bundle when ready.
+- Before deploying it, apply migration
+  `d1-migrations/0037_backfill_product_required_metadata.sql` to the target D1
+  database and smoke-check catalog product cards plus own-product create/edit.
+- No deploy was run for this bundle.
+- Later product-model follow-up: User-Produkte need a real ingredient mapping
+  or must be handled separately in ingredient-specific product selection.
 
 ## Audit Top-7 Bugfix Sprint Status
 
@@ -50,7 +65,7 @@ Pick up the next ❌ item when continuing work.
 4. ⚠️ **`stack-warnings/:id` Auth + N+1** — Auth/IDOR closed in `fcb1a6b`. **N+1 still open**: `functions/api/modules/stacks.ts:159-166` uses an O(n²) double-loop firing one DB query per ingredient pair. Replace with a single `IN (...)` query joining the interactions table. M-effort.
 5. ✅ **`ingredients/:id/products` moderation filter** — closed in `fcb1a6b` (`functions/api/modules/ingredients.ts:427`).
 6. ✅ **`robots.txt` blocking indexing pre-launch** — closed in `1d8b288`. Note: Cloudflare auto-prepends a managed AI-bot block; if Cloudflare ever changes that prepend or if a new search-crawler user-agent emerges, revisit `frontend/public/robots.txt`.
-7. ❌ **Profile self-service (DSGVO Art. 17)** — `frontend/src/pages/ProfilePage.tsx` has no password change and no account deletion. Email is read-only. Required for German launch (DSGVO right to erasure). M-effort: needs new backend endpoints (`PATCH /api/me/password`, `DELETE /api/me`) plus frontend UI with confirmation flow.
+7. ✅ **Profile self-service (DSGVO Art. 16 + 17)** — closed in `78d8925`. New endpoints `PATCH /api/me/password` and `DELETE /api/me` require re-auth via current password and are rate-limited. Account deletion hard-deletes via `db.batch([...])` for `stack_items`/`stacks`/`wishlist`/`user_products`/`consent_log`/`users` plus a best-effort cleanup loop for tables from later migrations. ProfilePage has two new sections; deletion requires typing `LÖSCHEN` plus password.
 
 ## Additional Open Items From The Audit (Beyond Top-7)
 
