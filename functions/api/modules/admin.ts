@@ -13,6 +13,9 @@
 //   PUT /user-products/:id/publish  (admin)
 //   PUT /user-products/:id/reject  (admin)
 //   DELETE /user-products/:id      (admin)
+//   GET /ingredient-sub-ingredients (admin)
+//   PUT /ingredient-sub-ingredients (admin)
+//   DELETE /ingredient-sub-ingredients/:parentId/:childId (admin)
 //   GET /translations/ingredients — ingredient translations list (admin)
 //   PUT /translations/ingredients/:ingredientId/:language — upsert ingredient translation (admin)
 //   GET /translations/dose-recommendations — dose recommendation translations list (admin)
@@ -116,6 +119,19 @@ type UserProductIngredientRow = {
   parent_ingredient_name: string | null
 }
 
+type IngredientSubIngredientAdminRow = {
+  parent_ingredient_id: number
+  parent_name: string
+  parent_unit: string | null
+  child_ingredient_id: number
+  child_name: string
+  child_unit: string | null
+  prompt_label: string | null
+  is_default_prompt: number
+  sort_order: number
+  created_at: string
+}
+
 function normalizeTranslationLanguage(value: string | undefined): string | null {
   if (!value) return null
   const normalized = value.trim().toLowerCase().replace(/_/g, '-')
@@ -181,6 +197,36 @@ function booleanFlag(value: unknown): number | undefined {
   return undefined
 }
 
+function normalizeInteger(value: unknown): number | undefined {
+  if (value === undefined) return undefined
+  const parsed = typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value) : Number.NaN
+  return Number.isInteger(parsed) ? parsed : undefined
+}
+
+async function getSubIngredientMapping(
+  db: D1Database,
+  parentIngredientId: number,
+  childIngredientId: number,
+): Promise<IngredientSubIngredientAdminRow | null> {
+  return await db.prepare(`
+    SELECT
+      isi.parent_ingredient_id,
+      parent.name AS parent_name,
+      parent.unit AS parent_unit,
+      isi.child_ingredient_id,
+      child.name AS child_name,
+      child.unit AS child_unit,
+      isi.prompt_label,
+      isi.is_default_prompt,
+      isi.sort_order,
+      isi.created_at
+    FROM ingredient_sub_ingredients isi
+    JOIN ingredients parent ON parent.id = isi.parent_ingredient_id
+    JOIN ingredients child ON child.id = isi.child_ingredient_id
+    WHERE isi.parent_ingredient_id = ? AND isi.child_ingredient_id = ?
+  `).bind(parentIngredientId, childIngredientId).first<IngredientSubIngredientAdminRow>()
+}
+
 async function attachUserProductIngredients(
   db: D1Database,
   products: Record<string, unknown>[],
@@ -237,6 +283,35 @@ function buildProductIngredientInsert(
     ingredient.search_relevant,
     ingredient.parent_ingredient_id,
   )
+}
+
+async function getProductPublishPayloadByProductId(
+  db: D1Database,
+  productId: number,
+): Promise<{ product: ProductRow; ingredients: unknown[] } | null> {
+  const product = await db.prepare('SELECT * FROM products WHERE id = ?').bind(productId).first<ProductRow>()
+  if (!product) return null
+  const { results: ingredients } = await db.prepare(`
+    SELECT pi.*, i.name as ingredient_name, i.unit as ingredient_unit,
+           parent.name as parent_ingredient_name
+    FROM product_ingredients pi
+    JOIN ingredients i ON i.id = pi.ingredient_id
+    LEFT JOIN ingredients parent ON parent.id = pi.parent_ingredient_id
+    WHERE pi.product_id = ?
+    ORDER BY pi.is_main DESC, pi.search_relevant DESC, pi.id ASC
+  `).bind(productId).all()
+  return { product, ingredients }
+}
+
+async function getProductPublishPayloadBySourceUserProductId(
+  db: D1Database,
+  userProductId: number,
+): Promise<{ product: ProductRow; ingredients: unknown[] } | null> {
+  const product = await db.prepare(
+    'SELECT * FROM products WHERE source_user_product_id = ?'
+  ).bind(userProductId).first<ProductRow>()
+  if (!product) return null
+  return getProductPublishPayloadByProductId(db, product.id)
 }
 
 async function validateUserProductPublish(
@@ -511,21 +586,23 @@ admin.put('/user-products/:id/publish', async (c) => {
 
   const existingPublishedId = Number(userProduct.published_product_id)
   if (Number.isInteger(existingPublishedId) && existingPublishedId > 0) {
-    const existingProduct = await c.env.DB.prepare(
-      'SELECT * FROM products WHERE id = ?'
-    ).bind(existingPublishedId).first<ProductRow>()
-    if (existingProduct) {
-      const { results: productIngredients } = await c.env.DB.prepare(`
-        SELECT pi.*, i.name as ingredient_name, i.unit as ingredient_unit,
-               parent.name as parent_ingredient_name
-        FROM product_ingredients pi
-        JOIN ingredients i ON i.id = pi.ingredient_id
-        LEFT JOIN ingredients parent ON parent.id = pi.parent_ingredient_id
-        WHERE pi.product_id = ?
-        ORDER BY pi.is_main DESC, pi.search_relevant DESC, pi.id ASC
-      `).bind(existingPublishedId).all()
-      return c.json({ ok: true, product: existingProduct, ingredients: productIngredients, idempotent: true })
+    const existingPayload = await getProductPublishPayloadByProductId(c.env.DB, existingPublishedId)
+    if (existingPayload) {
+      return c.json({ ok: true, product: existingPayload.product, ingredients: existingPayload.ingredients, idempotent: true })
     }
+  }
+
+  const existingSourcePayload = await getProductPublishPayloadBySourceUserProductId(c.env.DB, id)
+  if (existingSourcePayload) {
+    await c.env.DB.prepare(`
+      UPDATE user_products
+      SET status = 'approved',
+          approved_at = COALESCE(approved_at, datetime('now')),
+          published_product_id = ?,
+          published_at = COALESCE(published_at, datetime('now'))
+      WHERE id = ?
+    `).bind(existingSourcePayload.product.id, id).run()
+    return c.json({ ok: true, product: existingSourcePayload.product, ingredients: existingSourcePayload.ingredients, idempotent: true })
   }
 
   const { results: ingredients } = await c.env.DB.prepare(`
@@ -542,34 +619,54 @@ admin.put('/user-products/:id/publish', async (c) => {
   if (validationError) return c.json({ error: validationError }, 400)
 
   const affiliateValue = isAffiliate ?? (userProduct.is_affiliate === 1 ? 1 : 0)
-  const result = await c.env.DB.prepare(`
-    INSERT INTO products (
-      name, brand, form, price, shop_link, image_url, moderation_status, visibility,
-      is_affiliate, serving_size, serving_unit, servings_per_container, container_count,
-      timing, dosage_text, effect_summary, warning_title, warning_message,
-      warning_type, alternative_note
-    ) VALUES (?, ?, ?, ?, ?, ?, 'approved', 'public', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(
-    userProduct.name,
-    userProduct.brand,
-    userProduct.form,
-    userProduct.price,
-    userProduct.shop_link ?? null,
-    userProduct.image_url ?? null,
-    affiliateValue,
-    userProduct.serving_size,
-    userProduct.serving_unit,
-    userProduct.servings_per_container,
-    userProduct.container_count,
-    userProduct.timing ?? null,
-    userProduct.dosage_text ?? null,
-    userProduct.effect_summary ?? null,
-    userProduct.warning_title ?? null,
-    userProduct.warning_message ?? null,
-    userProduct.warning_type ?? null,
-    userProduct.alternative_note ?? null,
-  ).run()
-  const productId = result.meta.last_row_id as number
+  let productId: number
+  try {
+    const result = await c.env.DB.prepare(`
+      INSERT INTO products (
+        name, brand, form, price, shop_link, image_url, moderation_status, visibility,
+        is_affiliate, serving_size, serving_unit, servings_per_container, container_count,
+        timing, dosage_text, effect_summary, warning_title, warning_message,
+        warning_type, alternative_note, source_user_product_id
+      ) VALUES (?, ?, ?, ?, ?, ?, 'approved', 'public', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      userProduct.name,
+      userProduct.brand,
+      userProduct.form,
+      userProduct.price,
+      userProduct.shop_link ?? null,
+      userProduct.image_url ?? null,
+      affiliateValue,
+      userProduct.serving_size,
+      userProduct.serving_unit,
+      userProduct.servings_per_container,
+      userProduct.container_count,
+      userProduct.timing ?? null,
+      userProduct.dosage_text ?? null,
+      userProduct.effect_summary ?? null,
+      userProduct.warning_title ?? null,
+      userProduct.warning_message ?? null,
+      userProduct.warning_type ?? null,
+      userProduct.alternative_note ?? null,
+      id,
+    ).run()
+    productId = result.meta.last_row_id as number
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      const payload = await getProductPublishPayloadBySourceUserProductId(c.env.DB, id)
+      if (payload) {
+        await c.env.DB.prepare(`
+          UPDATE user_products
+          SET status = 'approved',
+              approved_at = COALESCE(approved_at, datetime('now')),
+              published_product_id = ?,
+              published_at = COALESCE(published_at, datetime('now'))
+          WHERE id = ?
+        `).bind(payload.product.id, id).run()
+        return c.json({ ok: true, product: payload.product, ingredients: payload.ingredients, idempotent: true })
+      }
+    }
+    throw error
+  }
 
   try {
     await c.env.DB.batch([
@@ -588,16 +685,7 @@ admin.put('/user-products/:id/publish', async (c) => {
     throw error
   }
 
-  const product = await c.env.DB.prepare('SELECT * FROM products WHERE id = ?').bind(productId).first<ProductRow>()
-  const { results: productIngredients } = await c.env.DB.prepare(`
-    SELECT pi.*, i.name as ingredient_name, i.unit as ingredient_unit,
-           parent.name as parent_ingredient_name
-    FROM product_ingredients pi
-    JOIN ingredients i ON i.id = pi.ingredient_id
-    LEFT JOIN ingredients parent ON parent.id = pi.parent_ingredient_id
-    WHERE pi.product_id = ?
-    ORDER BY pi.is_main DESC, pi.search_relevant DESC, pi.id ASC
-  `).bind(productId).all()
+  const payload = await getProductPublishPayloadByProductId(c.env.DB, productId)
 
   await logAdminAction(c, {
     action: 'publish_user_product',
@@ -606,7 +694,7 @@ admin.put('/user-products/:id/publish', async (c) => {
     changes: { published_product_id: productId, is_affiliate: affiliateValue },
   })
 
-  return c.json({ ok: true, product, ingredients: productIngredients, idempotent: false }, 201)
+  return c.json({ ok: true, product: payload?.product ?? null, ingredients: payload?.ingredients ?? [], idempotent: false }, 201)
 })
 
 // PUT /api/admin/user-products/:id/reject (admin)
@@ -670,6 +758,148 @@ admin.put('/users/:id/trusted-product-submitter', async (c) => {
   })
 
   return c.json({ ok: true, user_id: userId, is_trusted_product_submitter: trusted })
+})
+
+// GET /api/admin/ingredient-sub-ingredients?parent_ingredient_id=123 (admin)
+admin.get('/ingredient-sub-ingredients', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const parentIngredientIdParam = c.req.query('parent_ingredient_id')
+  const parentIngredientId = parentIngredientIdParam ? parsePositiveId(parentIngredientIdParam) : null
+  if (parentIngredientIdParam && parentIngredientId === null) {
+    return c.json({ error: 'Invalid parent_ingredient_id' }, 400)
+  }
+
+  const baseQuery = `
+    SELECT
+      isi.parent_ingredient_id,
+      parent.name AS parent_name,
+      parent.unit AS parent_unit,
+      isi.child_ingredient_id,
+      child.name AS child_name,
+      child.unit AS child_unit,
+      isi.prompt_label,
+      isi.is_default_prompt,
+      isi.sort_order,
+      isi.created_at
+    FROM ingredient_sub_ingredients isi
+    JOIN ingredients parent ON parent.id = isi.parent_ingredient_id
+    JOIN ingredients child ON child.id = isi.child_ingredient_id
+    WHERE (? IS NULL OR isi.parent_ingredient_id = ?)
+    ORDER BY parent.name ASC, isi.sort_order ASC, child.name ASC, isi.child_ingredient_id ASC
+  `
+
+  const { results } = await c.env.DB.prepare(baseQuery)
+    .bind(parentIngredientId, parentIngredientId)
+    .all<IngredientSubIngredientAdminRow>()
+
+  return c.json({ mappings: results })
+})
+
+// PUT /api/admin/ingredient-sub-ingredients (admin)
+admin.put('/ingredient-sub-ingredients', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const parentIngredientId = normalizeInteger(body.parent_ingredient_id)
+  const childIngredientId = normalizeInteger(body.child_ingredient_id)
+  if (!parentIngredientId || parentIngredientId <= 0) return c.json({ error: 'parent_ingredient_id must be a positive integer' }, 400)
+  if (!childIngredientId || childIngredientId <= 0) return c.json({ error: 'child_ingredient_id must be a positive integer' }, 400)
+  if (parentIngredientId === childIngredientId) return c.json({ error: 'parent_ingredient_id and child_ingredient_id must differ' }, 400)
+
+  const sortOrder = hasOwnKey(body, 'sort_order') ? normalizeInteger(body.sort_order) : 0
+  if (sortOrder === undefined) return c.json({ error: 'sort_order must be an integer' }, 400)
+
+  const defaultPrompt = hasOwnKey(body, 'is_default_prompt') ? booleanFlag(body.is_default_prompt) : 0
+  if (defaultPrompt === undefined) return c.json({ error: 'is_default_prompt must be true/false or 1/0' }, 400)
+
+  const promptLabel = optionalText(body.prompt_label)
+
+  const placeholders = '?,?'
+  const ingredientCount = await c.env.DB.prepare(
+    `SELECT COUNT(*) AS count FROM ingredients WHERE id IN (${placeholders})`
+  ).bind(parentIngredientId, childIngredientId).first<CountRow>()
+  if ((ingredientCount?.count ?? 0) !== 2) return c.json({ error: 'Parent or child ingredient not found' }, 404)
+
+  await c.env.DB.prepare(`
+    INSERT INTO ingredient_sub_ingredients (
+      parent_ingredient_id,
+      child_ingredient_id,
+      sort_order,
+      prompt_label,
+      is_default_prompt
+    )
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(parent_ingredient_id, child_ingredient_id) DO UPDATE SET
+      sort_order = excluded.sort_order,
+      prompt_label = excluded.prompt_label,
+      is_default_prompt = excluded.is_default_prompt
+  `).bind(
+    parentIngredientId,
+    childIngredientId,
+    sortOrder,
+    promptLabel,
+    defaultPrompt,
+  ).run()
+
+  const mapping = await getSubIngredientMapping(c.env.DB, parentIngredientId, childIngredientId)
+
+  await logAdminAction(c, {
+    action: 'upsert_ingredient_sub_ingredient',
+    entity_type: 'ingredient_sub_ingredient',
+    entity_id: parentIngredientId,
+    changes: {
+      parent_ingredient_id: parentIngredientId,
+      child_ingredient_id: childIngredientId,
+      sort_order: sortOrder,
+      prompt_label: promptLabel,
+      is_default_prompt: defaultPrompt,
+    },
+  })
+
+  return c.json({ mapping })
+})
+
+// DELETE /api/admin/ingredient-sub-ingredients/:parentId/:childId (admin)
+admin.delete('/ingredient-sub-ingredients/:parentId/:childId', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const parentIngredientId = parsePositiveId(c.req.param('parentId'))
+  const childIngredientId = parsePositiveId(c.req.param('childId'))
+  if (parentIngredientId === null || childIngredientId === null) {
+    return c.json({ error: 'Invalid mapping ids' }, 400)
+  }
+
+  const existing = await getSubIngredientMapping(c.env.DB, parentIngredientId, childIngredientId)
+  if (!existing) return c.json({ error: 'Mapping not found' }, 404)
+
+  await c.env.DB.prepare(
+    'DELETE FROM ingredient_sub_ingredients WHERE parent_ingredient_id = ? AND child_ingredient_id = ?'
+  ).bind(parentIngredientId, childIngredientId).run()
+
+  await logAdminAction(c, {
+    action: 'delete_ingredient_sub_ingredient',
+    entity_type: 'ingredient_sub_ingredient',
+    entity_id: parentIngredientId,
+    changes: {
+      parent_ingredient_id: parentIngredientId,
+      child_ingredient_id: childIngredientId,
+      prompt_label: existing.prompt_label,
+      is_default_prompt: existing.is_default_prompt,
+      sort_order: existing.sort_order,
+    },
+  })
+
+  return c.json({ ok: true })
 })
 
 // GET /api/admin/translations/ingredients?language=de&q=&limit=50&offset=0 (admin)

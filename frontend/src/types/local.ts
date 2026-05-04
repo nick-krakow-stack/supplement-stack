@@ -1,5 +1,5 @@
 // Local types for the ingredient search + stack Modal-Flow
-// DB/Admin types live in types/index.ts — import from there for backend-facing code
+// DB/Admin types live in types/index.ts - import from there for backend-facing code
 
 export interface IngredientSynonym {
   synonym: string;
@@ -38,6 +38,15 @@ export interface Ingredient {
   hypo_symptoms?: string;
   hyper_symptoms?: string;
   external_url?: string;
+}
+
+export interface IngredientSubIngredient {
+  parent_ingredient_id: number;
+  child_ingredient_id: number;
+  child_name: string;
+  child_unit?: string;
+  prompt_label?: string;
+  sort_order?: number;
 }
 
 export interface ProductIngredient {

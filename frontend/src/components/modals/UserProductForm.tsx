@@ -1,9 +1,14 @@
-import { useState, type FormEvent } from 'react';
+import { type FormEvent, useState } from 'react';
 import ModalWrapper from './ModalWrapper';
 import ImageCropModal from '../ImageCropModal';
 import SearchBar from '../SearchBar';
 import { Camera, ChevronDown, ChevronUp, Plus, X } from 'lucide-react';
-import type { Ingredient, UserProductIngredient as UserProductIngredientType } from '../../types/local';
+import { getSubIngredients } from '../../api/ingredients';
+import type {
+  Ingredient,
+  IngredientSubIngredient,
+  UserProductIngredient as UserProductIngredientType,
+} from '../../types/local';
 
 export interface UserProduct {
   id: number;
@@ -33,6 +38,25 @@ interface UserProductFormProps {
   initialProduct?: UserProduct;
 }
 
+interface IngredientSubIngredientState {
+  items: IngredientSubIngredient[];
+  loading: boolean;
+}
+
+interface IngredientFormRow {
+  clientId: string;
+  ingredientId: number | null;
+  ingredientName: string;
+  formId: number | null;
+  quantity: string;
+  unit: string;
+  basisQuantity: string;
+  basisUnit: string;
+  searchRelevant: boolean;
+  parentIngredientId: number | null;
+  parentIngredientName?: string;
+}
+
 function getToken(): string | null {
   return localStorage.getItem('ss_token');
 }
@@ -47,25 +71,15 @@ function authHeaders(): Record<string, string> {
 
 const FORM_OPTIONS = ['Kapsel', 'Tablette', 'Pulver', 'Tropfen', 'Gel', 'Sonstige'];
 
-interface IngredientFormRow {
-  clientId: string;
-  ingredientId: number | null;
-  ingredientName: string;
-  formId: number | null;
-  quantity: string;
-  unit: string;
-  basisQuantity: string;
-  basisUnit: string;
-  searchRelevant: boolean;
-  parentIngredientId: number | null;
-}
-
-const makeClientId = () => `ingredient_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+const MAX_INGREDIENT_ROWS = 50;
+const ROW_LIMIT_MESSAGE = 'Maximal 50 Wirkstoffe sind erlaubt.';
 
 const labelClass = 'block text-sm font-medium text-gray-700 mb-1';
 const inputClass =
   'w-full border border-gray-200 rounded-xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent text-sm';
 const fieldHintClass = 'text-xs text-gray-500 mt-1';
+
+const makeClientId = () => `ingredient_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 
 export default function UserProductForm({ onClose, onSaved, initialProduct }: UserProductFormProps) {
   const isEdit = initialProduct !== undefined;
@@ -88,9 +102,7 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
   const [shopLink, setShopLink] = useState(initialProduct?.shop_link ?? '');
   const [isAffiliate, setIsAffiliate] = useState(Boolean(initialProduct?.is_affiliate));
   const [notes, setNotes] = useState(initialProduct?.notes ?? '');
-  const [showIngredientSection, setShowIngredientSection] = useState(
-    (initialProduct?.ingredients ?? []).length > 0
-  );
+  const [showIngredientSection, setShowIngredientSection] = useState(true);
   const [ingredientRows, setIngredientRows] = useState<IngredientFormRow[]>(() => {
     const mapped = (initialProduct?.ingredients ?? []).map((ingredient) => ({
       clientId: makeClientId(),
@@ -100,12 +112,24 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
       quantity: ingredient.quantity == null ? '' : String(ingredient.quantity),
       unit: ingredient.unit ?? '',
       basisQuantity: ingredient.basis_quantity == null ? '1' : String(ingredient.basis_quantity),
-      basisUnit: ingredient.basis_unit ?? 'Kapsel',
+      basisUnit: ingredient.basis_unit ?? '',
       searchRelevant: Boolean(ingredient.search_relevant),
       parentIngredientId: ingredient.parent_ingredient_id ?? null,
+      parentIngredientName: undefined,
     }));
 
     if (mapped.length > 0) {
+      const ingredientNameById = new Map<number, string>();
+      for (const row of mapped) {
+        if (row.ingredientId != null && row.ingredientName) {
+          ingredientNameById.set(row.ingredientId, row.ingredientName);
+        }
+      }
+      mapped.forEach((row) => {
+        if (row.parentIngredientId != null && row.parentIngredientName == null) {
+          row.parentIngredientName = ingredientNameById.get(row.parentIngredientId);
+        }
+      });
       return mapped;
     }
 
@@ -117,36 +141,86 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
         formId: null,
         quantity: '',
         unit: '',
-        basisQuantity: '1',
-        basisUnit: 'Kapsel',
+        basisQuantity: '',
+        basisUnit: initialProduct?.serving_unit ?? '',
         searchRelevant: true,
         parentIngredientId: null,
       },
     ];
   });
+  const [rowSubIngredients, setRowSubIngredients] = useState<Record<string, IngredientSubIngredientState>>({});
 
   const [showCrop, setShowCrop] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  const createIngredientRow = (): IngredientFormRow => ({
+  const isIngredientLimitReached = ingredientRows.length >= MAX_INGREDIENT_ROWS;
+
+  const defaultBasisUnit = () => servingUnit.trim();
+
+  const createIngredientRow = (overrides: Partial<IngredientFormRow> = {}): IngredientFormRow => ({
     clientId: makeClientId(),
     ingredientId: null,
     ingredientName: '',
     formId: null,
     quantity: '',
     unit: '',
-    basisQuantity: '1',
-    basisUnit: 'Kapsel',
+    basisQuantity: '',
+    basisUnit: defaultBasisUnit(),
     searchRelevant: true,
     parentIngredientId: null,
+    parentIngredientName: undefined,
+    ...overrides,
   });
 
   const updateIngredientRow = (clientId: string, patch: Partial<IngredientFormRow>) => {
     setIngredientRows((rows) => rows.map((row) => (row.clientId === clientId ? { ...row, ...patch } : row)));
   };
 
+  const clearSubIngredientState = (clientId: string) => {
+    setRowSubIngredients((state) => {
+      const next = { ...state };
+      delete next[clientId];
+      return next;
+    });
+  };
+
+  const loadSubIngredients = async (clientId: string, ingredientId: number) => {
+    setRowSubIngredients((state) => ({
+      ...state,
+      [clientId]: {
+        items: [],
+        loading: true,
+      },
+    }));
+
+    try {
+      const subIngredients = await getSubIngredients(ingredientId);
+      setRowSubIngredients((state) => ({
+        ...state,
+        [clientId]: {
+          items: subIngredients,
+          loading: false,
+        },
+      }));
+    } catch {
+      setRowSubIngredients((state) => ({
+        ...state,
+        [clientId]: {
+          items: [],
+          loading: false,
+        },
+      }));
+    }
+  };
+
   const addIngredientRow = () => {
+    if (isIngredientLimitReached) {
+      setError(ROW_LIMIT_MESSAGE);
+      setShowIngredientSection(true);
+      return;
+    }
+    setError('');
     setIngredientRows((rows) => [...rows, createIngredientRow()]);
   };
 
@@ -156,15 +230,18 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
       if (next.length > 0) return next;
       return [createIngredientRow()];
     });
+    clearSubIngredientState(clientId);
   };
 
-  const handleSelectIngredient = (clientId: string, ingredient: Ingredient) => {
+  const handleSelectIngredient = async (clientId: string, ingredient: Ingredient) => {
     updateIngredientRow(clientId, {
       ingredientId: ingredient.id,
       ingredientName: ingredient.name,
       formId: null,
       parentIngredientId: null,
+      parentIngredientName: undefined,
     });
+    await loadSubIngredients(clientId, ingredient.id);
   };
 
   const clearIngredientSelection = (clientId: string) => {
@@ -172,13 +249,15 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
       ingredientId: null,
       ingredientName: '',
       formId: null,
-      parentIngredientId: null,
       quantity: '',
       unit: '',
-      basisQuantity: '1',
-      basisUnit: 'Kapsel',
+      basisQuantity: '',
+      basisUnit: defaultBasisUnit(),
       searchRelevant: true,
+      parentIngredientId: null,
+      parentIngredientName: undefined,
     });
+    clearSubIngredientState(clientId);
   };
 
   const parseDecimal = (value: string): number | null => {
@@ -188,12 +267,60 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
     return Number.isFinite(parsed) ? parsed : null;
   };
 
-  const buildIngredientRows = (): string => {
-    let missingIngredientText = '';
+  const getSubIngredientState = (clientId: string) => rowSubIngredients[clientId];
+
+  const handleAddSubIngredient = (parentClientId: string, subIngredient: IngredientSubIngredient) => {
+    if (isIngredientLimitReached) {
+      setError(ROW_LIMIT_MESSAGE);
+      setShowIngredientSection(true);
+      return;
+    }
+
+    setIngredientRows((rows) => {
+      const parentRow = rows.find((row) => row.clientId === parentClientId);
+      if (!parentRow || parentRow.ingredientId == null) {
+        return rows;
+      }
+
+      const alreadyAdded = rows.some(
+        (row) =>
+          row.parentIngredientId === parentRow.ingredientId &&
+          row.ingredientId === subIngredient.child_ingredient_id
+      );
+      if (alreadyAdded) {
+        setError('Dieser Unterwirkstoff wurde bereits hinzugefügt.');
+        return rows;
+      }
+
+      setError('');
+      return [
+        ...rows,
+        createIngredientRow({
+          ingredientId: subIngredient.child_ingredient_id,
+          ingredientName: subIngredient.child_name,
+          unit: subIngredient.child_unit ?? '',
+          quantity: '',
+          basisQuantity: parentRow.basisQuantity,
+          basisUnit: parentRow.basisUnit || defaultBasisUnit(),
+          searchRelevant: true,
+          parentIngredientId: parentRow.ingredientId,
+          parentIngredientName: parentRow.ingredientName,
+        }),
+      ];
+    });
+  };
+
+  interface BuiltIngredientsResult {
+    ingredients: UserProductIngredientType[];
+    error?: string;
+  }
+
+  const buildIngredientRows = (): BuiltIngredientsResult => {
     const normalized: UserProductIngredientType[] = [];
 
     for (let index = 0; index < ingredientRows.length; index += 1) {
       const row = ingredientRows[index];
+      const line = index + 1;
       const hasIngredient = row.ingredientId !== null;
       const hasQuantity = row.quantity.trim().length > 0;
       const hasUnit = row.unit.trim().length > 0;
@@ -202,8 +329,10 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
 
       if (!hasIngredient) {
         if (hasQuantity || hasUnit || hasBasisQuantity || hasBasisUnit) {
-          missingIngredientText = `Bitte wähle in Zeile ${index + 1} einen Wirkstoff aus.`;
-          return missingIngredientText;
+          return {
+            ingredients: [],
+            error: `Bitte wähle in Zeile ${line} einen Wirkstoff aus.`,
+          };
         }
         continue;
       }
@@ -214,26 +343,47 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
 
       if (row.searchRelevant) {
         if (!hasQuantity || !hasUnit) {
-          return `Wirkstoff ${index + 1}: Menge und Einheit sind für die Suche erforderlich.`;
+          return {
+            ingredients: [],
+            error: `Wirkstoff ${line}: Für die Suche und Empfehlung sind Menge und Einheit erforderlich.`,
+          };
         }
-        if (parsedQuantity == null || parsedQuantity < 0) {
-          return `Wirkstoff ${index + 1}: Gültige Menge eingeben.`;
+        if (parsedQuantity == null || parsedQuantity <= 0) {
+          return {
+            ingredients: [],
+            error: `Wirkstoff ${line}: Die Menge muss größer als 0 sein.`,
+          };
         }
         if (parsedBasisQuantity == null || parsedBasisQuantity <= 0) {
-          return `Wirkstoff ${index + 1}: Bezugsgröße ist für die Suche erforderlich.`;
+          return {
+            ingredients: [],
+            error: `Wirkstoff ${line}: Bezugsgröße ist für die Suche erforderlich und muss größer als 0 sein.`,
+          };
         }
         if (!trimmedBasisUnit) {
-          return `Wirkstoff ${index + 1}: Bezugs-Einheit eingeben.`;
+          return {
+            ingredients: [],
+            error: `Wirkstoff ${line}: Bezugsgröße braucht eine Einheit.`,
+          };
         }
       } else {
-        if (hasQuantity && (parsedQuantity == null || parsedQuantity < 0)) {
-          return `Wirkstoff ${index + 1}: Gültige Menge eingeben.`;
+        if (hasQuantity && (parsedQuantity == null || parsedQuantity <= 0)) {
+          return {
+            ingredients: [],
+            error: `Wirkstoff ${line}: Die Menge muss größer als 0 sein, falls angegeben.`,
+          };
         }
-        if (parsedBasisQuantity != null && (parsedBasisQuantity <= 0)) {
-          return `Wirkstoff ${index + 1}: Bezugsgröße muss positiv sein, falls angegeben.`;
+        if (parsedBasisQuantity != null && parsedBasisQuantity <= 0) {
+          return {
+            ingredients: [],
+            error: `Wirkstoff ${line}: Bezugsgröße muss positiv sein, falls angegeben.`,
+          };
         }
         if (parsedBasisQuantity != null && !trimmedBasisUnit) {
-          return `Wirkstoff ${index + 1}: Bezugs-Einheit eingeben.`;
+          return {
+            ingredients: [],
+            error: `Wirkstoff ${line}: Bezugsgröße braucht eine Einheit, falls angegeben.`,
+          };
         }
       }
 
@@ -243,17 +393,20 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
         quantity: hasQuantity ? parsedQuantity : null,
         unit: hasUnit ? row.unit.trim() : null,
         basis_quantity: parsedBasisQuantity == null ? 1 : parsedBasisQuantity,
-        basis_unit: hasBasisUnit ? trimmedBasisUnit : row.basisUnit.trim() || 'Stück',
+        basis_unit: hasBasisUnit ? trimmedBasisUnit : row.basisUnit.trim(),
         search_relevant: row.searchRelevant ? 1 : 0,
         parent_ingredient_id: row.parentIngredientId,
       });
     }
 
     if (normalized.length === 0) {
-      return 'Bitte mindestens einen Wirkstoff hinzufügen.';
+      return {
+        ingredients: [],
+        error: 'Bitte mindestens einen Wirkstoff hinzufügen.',
+      };
     }
 
-    return JSON.stringify(normalized);
+    return { ingredients: normalized };
   };
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
@@ -307,13 +460,20 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
       return;
     }
 
-    const ingredientPayloadText = buildIngredientRows();
-    if (!ingredientPayloadText.startsWith('[')) {
-      setError(ingredientPayloadText);
+    if (ingredientRows.length > MAX_INGREDIENT_ROWS) {
+      setError(`${ROW_LIMIT_MESSAGE} Bitte entferne zuerst überzählige Einträge.`);
+      setShowIngredientSection(true);
       return;
     }
 
-    const normalizedIngredients = JSON.parse(ingredientPayloadText) as UserProductIngredientType[];
+    const ingredientBuild = buildIngredientRows();
+    if (ingredientBuild.error) {
+      setError(ingredientBuild.error);
+      setShowIngredientSection(true);
+      return;
+    }
+
+    const normalizedIngredients = ingredientBuild.ingredients;
 
     const body: {
       name: string;
@@ -373,10 +533,45 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
 
       onSaved(saved);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Unbekannter Fehler.');
+      const message = err instanceof Error ? err.message : 'Unbekannter Fehler.';
+      setError(message);
+      if (message.includes('Wirkstoff') || message.includes('Menge') || message.includes('Bezugs') || message.includes('ingredient')) {
+        setShowIngredientSection(true);
+      }
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const renderSubIngredientHint = (row: IngredientFormRow) => {
+    const state = getSubIngredientState(row.clientId);
+    if (!state || (!state.loading && state.items.length === 0)) return null;
+
+    if (state.loading) {
+      return <p className="text-xs text-gray-500">Weitere Details werden geladen…</p>;
+    }
+
+    if (!state.items.length) return null;
+
+    return (
+      <div className="rounded-lg border border-indigo-100 bg-indigo-50/60 p-2 text-sm">
+        <p className="text-xs text-gray-700">Für diesen Wirkstoff können Details erfasst werden:</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {state.items.map((subIngredient) => (
+            <button
+              key={`${row.clientId}-${subIngredient.child_ingredient_id}`}
+              type="button"
+              onClick={() => handleAddSubIngredient(row.clientId, subIngredient)}
+              disabled={isIngredientLimitReached}
+              className="inline-flex items-center gap-1 rounded-md border border-indigo-200 bg-white px-2 py-1 text-xs text-indigo-700 transition hover:bg-indigo-50 disabled:cursor-not-allowed disabled:border-gray-200 disabled:text-gray-400"
+            >
+              <Plus size={12} />
+              {isIngredientLimitReached ? 'Limit erreicht' : `+ ${subIngredient.child_name} hinzufügen`}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
   };
 
   const renderIngredientSection = () => (
@@ -400,7 +595,10 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
           </p>
 
           {ingredientRows.map((row, index) => (
-            <div key={row.clientId} className="border border-gray-100 rounded-xl bg-white p-3 space-y-3">
+            <div
+              key={row.clientId}
+              className="border border-gray-100 rounded-xl bg-white p-3 space-y-3"
+            >
               <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 space-y-1">
                   <label className={labelClass}>Wirkstoff {index + 1}</label>
@@ -420,6 +618,11 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
                       Auswahl löschen
                     </button>
                   )}
+                  {row.parentIngredientId ? (
+                    <p className="text-xs text-gray-500">
+                      Teil von: {row.parentIngredientName ?? `Wirkstoff ${row.parentIngredientId}`}
+                    </p>
+                  ) : null}
                 </div>
                 <button
                   type="button"
@@ -445,7 +648,7 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
                     className={inputClass}
                     placeholder="z.B. 1000"
                     step="any"
-                    min="0"
+                    min="0.000001"
                   />
                   <input
                     type="text"
@@ -454,9 +657,7 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
                     className={inputClass}
                     placeholder="z.B. mg"
                   />
-                  <label className="text-xs text-gray-500 self-end">
-                    pro
-                  </label>
+                  <label className="text-xs text-gray-500 self-end">pro</label>
                   <input
                     type="number"
                     value={row.basisQuantity}
@@ -464,14 +665,14 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
                     className={inputClass}
                     placeholder="z.B. 4"
                     step="any"
-                    min="0.001"
+                    min="0.000001"
                   />
                   <input
                     type="text"
                     value={row.basisUnit}
                     onChange={(e) => updateIngredientRow(row.clientId, { basisUnit: e.target.value })}
                     className={inputClass}
-                    placeholder="z.B. Kapseln"
+                    placeholder={`z.B. ${defaultBasisUnit() || 'Stück'}`}
                   />
                   <div />
                 </div>
@@ -492,13 +693,20 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
                 />
                 Für Suche und Empfehlungen berücksichtigen
               </label>
+
+              {renderSubIngredientHint(row)}
             </div>
           ))}
+
+          {isIngredientLimitReached && (
+            <p className="text-sm text-amber-700">{`${ROW_LIMIT_MESSAGE} Entferne zuerst einen Eintrag, um weitere hinzufügen zu können.`}</p>
+          )}
 
           <button
             type="button"
             onClick={addIngredientRow}
-            className="inline-flex items-center gap-2 rounded-lg border border-dashed border-gray-300 px-3 py-2 text-sm text-gray-600 hover:border-gray-400 hover:text-gray-900"
+            disabled={isIngredientLimitReached}
+            className="inline-flex items-center gap-2 rounded-lg border border-dashed border-gray-300 px-3 py-2 text-sm text-gray-600 hover:border-gray-400 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Plus size={14} /> Wirkstoff hinzufügen
           </button>
@@ -525,8 +733,8 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
                     }}
                   />
                 ) : (
-                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center text-2xl select-none">
-                    💊
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center text-xs text-slate-500 select-none">
+                    IMG
                   </div>
                 )}
                 {imageUrl && (
@@ -570,7 +778,7 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
               value={name}
               onChange={(e) => setName(e.target.value)}
               className={inputClass}
-              placeholder="z.B. Omega-3 Fischol"
+              placeholder="z.B. Omega-3 Fischöl"
               required
               autoFocus={!isEdit}
             />
@@ -613,7 +821,7 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
               value={price}
               onChange={(e) => setPrice(e.target.value)}
               className={inputClass}
-              placeholder="€ Preis pro Packung"
+              placeholder="z.B. 29.99 €"
               step="0.01"
               min="0.01"
               required
@@ -708,7 +916,7 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
               onChange={(e) => setNotes(e.target.value)}
               className={inputClass}
               rows={3}
-              placeholder="Persönliche Notizen zum Produkt…"
+              placeholder="Persönliche Notizen zum Produkt."
             />
           </div>
 

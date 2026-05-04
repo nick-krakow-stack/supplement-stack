@@ -17,6 +17,8 @@ import { checkRateLimit, ensureAuth, requireAdmin, logAdminAction } from '../lib
 
 const products = new Hono<AppContext>()
 
+const MAX_PRODUCT_INGREDIENT_ROWS = 50
+
 type ProductIngredientInput = {
   ingredient_id: number
   is_main: boolean
@@ -121,6 +123,9 @@ function validateIngredients(value: unknown): { ingredients?: ProductIngredientI
   if (!Array.isArray(value) || value.length === 0) {
     return { error: 'Mindestens ein Wirkstoff ist erforderlich.' }
   }
+  if (value.length > MAX_PRODUCT_INGREDIENT_ROWS) {
+    return { error: `Maximal ${MAX_PRODUCT_INGREDIENT_ROWS} Wirkstoffzeilen sind erlaubt.` }
+  }
 
   const ingredients: ProductIngredientInput[] = []
 
@@ -173,6 +178,71 @@ function validateIngredients(value: unknown): { ingredients?: ProductIngredientI
   }
 
   return { ingredients }
+}
+
+async function validateProductIngredientReferences(
+  db: D1Database,
+  ingredients: ProductIngredientInput[],
+): Promise<string | null> {
+  if (ingredients.length === 0) return null
+
+  const ingredientIds = [...new Set(ingredients.map((row) => row.ingredient_id))]
+  const ingredientPlaceholders = ingredientIds.map(() => '?').join(',')
+  const ingredientCount = await db.prepare(
+    `SELECT COUNT(*) as count FROM ingredients WHERE id IN (${ingredientPlaceholders})`
+  ).bind(...ingredientIds).first<{ count: number }>()
+  if ((ingredientCount?.count ?? 0) !== ingredientIds.length) {
+    return 'Mindestens ein Wirkstoff existiert nicht.'
+  }
+
+  const formRows = ingredients.filter((row) => row.form_id !== null)
+  if (formRows.length > 0) {
+    const formIds = [...new Set(formRows.map((row) => row.form_id as number))]
+    const formPlaceholders = formIds.map(() => '?').join(',')
+    const { results: forms } = await db.prepare(
+      `SELECT id, ingredient_id FROM ingredient_forms WHERE id IN (${formPlaceholders})`
+    ).bind(...formIds).all<{ id: number; ingredient_id: number }>()
+    const formMap = new Map(forms.map((row) => [row.id, row.ingredient_id]))
+    for (const row of formRows) {
+      if (formMap.get(row.form_id as number) !== row.ingredient_id) {
+        return 'Mindestens eine form_id gehoert nicht zum angegebenen Wirkstoff.'
+      }
+    }
+  }
+
+  const parentRows = ingredients.filter((row) => row.parent_ingredient_id !== null)
+  if (parentRows.length === 0) return null
+
+  for (const row of parentRows) {
+    if (row.parent_ingredient_id === row.ingredient_id) {
+      return 'Parent- und Sub-Wirkstoff duerfen nicht identisch sein.'
+    }
+  }
+
+  const parentIds = [...new Set(parentRows.map((row) => row.parent_ingredient_id as number))]
+  const parentPlaceholders = parentIds.map(() => '?').join(',')
+  const parentCount = await db.prepare(
+    `SELECT COUNT(*) as count FROM ingredients WHERE id IN (${parentPlaceholders})`
+  ).bind(...parentIds).first<{ count: number }>()
+  if ((parentCount?.count ?? 0) !== parentIds.length) {
+    return 'Mindestens ein Parent-Wirkstoff existiert nicht.'
+  }
+
+  const relationClauses = parentRows.map(() => '(parent_ingredient_id = ? AND child_ingredient_id = ?)').join(' OR ')
+  const relationBindings = parentRows.flatMap((row) => [row.parent_ingredient_id as number, row.ingredient_id])
+  const { results: relations } = await db.prepare(
+    `SELECT parent_ingredient_id, child_ingredient_id
+     FROM ingredient_sub_ingredients
+     WHERE ${relationClauses}`
+  ).bind(...relationBindings).all<{ parent_ingredient_id: number; child_ingredient_id: number }>()
+  const allowedRelations = new Set(relations.map((row) => `${row.parent_ingredient_id}:${row.child_ingredient_id}`))
+  for (const row of parentRows) {
+    if (!allowedRelations.has(`${row.parent_ingredient_id}:${row.ingredient_id}`)) {
+      return 'Mindestens eine Parent/Sub-Wirkstoff-Beziehung ist nicht zugelassen.'
+    }
+  }
+
+  return null
 }
 
 function validateProductPayload(
@@ -302,6 +372,8 @@ products.post('/', async (c) => {
   }
   const data = validation.data
   const ingredients = data.ingredients!
+  const ingredientReferenceError = await validateProductIngredientReferences(c.env.DB, ingredients)
+  if (ingredientReferenceError) return c.json({ error: ingredientReferenceError }, 400)
 
   const dup = await c.env.DB.prepare(
     'SELECT id FROM products WHERE name = ? AND brand = ?'
@@ -372,6 +444,10 @@ products.put('/:id', async (c) => {
     return c.json({ error: validation.error ?? 'Ungültige Produktdaten.' }, 400)
   }
   const data = validation.data
+  if (data.ingredients) {
+    const ingredientReferenceError = await validateProductIngredientReferences(c.env.DB, data.ingredients)
+    if (ingredientReferenceError) return c.json({ error: ingredientReferenceError }, 400)
+  }
   await c.env.DB.prepare(`
     UPDATE products SET
       name = COALESCE(?, name),

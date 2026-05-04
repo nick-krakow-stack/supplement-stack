@@ -13,6 +13,8 @@ import { checkRateLimit, ensureAuth } from '../lib/helpers'
 
 const userProducts = new Hono<AppContext>()
 
+const MAX_USER_PRODUCT_INGREDIENT_ROWS = 50
+
 type UserProductIngredientInput = {
   ingredient_id: number
   form_id: number | null
@@ -84,6 +86,9 @@ function validateIngredients(value: unknown): { ingredients?: UserProductIngredi
   if (!Array.isArray(value) || value.length === 0) {
     return { error: 'Mindestens ein Wirkstoff ist erforderlich.' }
   }
+  if (value.length > MAX_USER_PRODUCT_INGREDIENT_ROWS) {
+    return { error: `Maximal ${MAX_USER_PRODUCT_INGREDIENT_ROWS} Wirkstoffzeilen sind erlaubt.` }
+  }
 
   const ingredients: UserProductIngredientInput[] = []
 
@@ -122,6 +127,71 @@ function validateIngredients(value: unknown): { ingredients?: UserProductIngredi
   }
 
   return { ingredients }
+}
+
+async function validateUserProductIngredientReferences(
+  db: D1Database,
+  ingredients: UserProductIngredientInput[],
+): Promise<string | null> {
+  if (ingredients.length === 0) return null
+
+  const ingredientIds = [...new Set(ingredients.map((row) => row.ingredient_id))]
+  const ingredientPlaceholders = ingredientIds.map(() => '?').join(',')
+  const ingredientCount = await db.prepare(
+    `SELECT COUNT(*) as count FROM ingredients WHERE id IN (${ingredientPlaceholders})`
+  ).bind(...ingredientIds).first<{ count: number }>()
+  if ((ingredientCount?.count ?? 0) !== ingredientIds.length) {
+    return 'Mindestens ein Wirkstoff existiert nicht.'
+  }
+
+  const formRows = ingredients.filter((row) => row.form_id !== null)
+  if (formRows.length > 0) {
+    const formIds = [...new Set(formRows.map((row) => row.form_id as number))]
+    const formPlaceholders = formIds.map(() => '?').join(',')
+    const { results: forms } = await db.prepare(
+      `SELECT id, ingredient_id FROM ingredient_forms WHERE id IN (${formPlaceholders})`
+    ).bind(...formIds).all<{ id: number; ingredient_id: number }>()
+    const formMap = new Map(forms.map((row) => [row.id, row.ingredient_id]))
+    for (const row of formRows) {
+      if (formMap.get(row.form_id as number) !== row.ingredient_id) {
+        return 'Mindestens eine form_id gehoert nicht zum angegebenen Wirkstoff.'
+      }
+    }
+  }
+
+  const parentRows = ingredients.filter((row) => row.parent_ingredient_id !== null)
+  if (parentRows.length === 0) return null
+
+  for (const row of parentRows) {
+    if (row.parent_ingredient_id === row.ingredient_id) {
+      return 'Parent- und Sub-Wirkstoff duerfen nicht identisch sein.'
+    }
+  }
+
+  const parentIds = [...new Set(parentRows.map((row) => row.parent_ingredient_id as number))]
+  const parentPlaceholders = parentIds.map(() => '?').join(',')
+  const parentCount = await db.prepare(
+    `SELECT COUNT(*) as count FROM ingredients WHERE id IN (${parentPlaceholders})`
+  ).bind(...parentIds).first<{ count: number }>()
+  if ((parentCount?.count ?? 0) !== parentIds.length) {
+    return 'Mindestens ein Parent-Wirkstoff existiert nicht.'
+  }
+
+  const relationClauses = parentRows.map(() => '(parent_ingredient_id = ? AND child_ingredient_id = ?)').join(' OR ')
+  const relationBindings = parentRows.flatMap((row) => [row.parent_ingredient_id as number, row.ingredient_id])
+  const { results: relations } = await db.prepare(
+    `SELECT parent_ingredient_id, child_ingredient_id
+     FROM ingredient_sub_ingredients
+     WHERE ${relationClauses}`
+  ).bind(...relationBindings).all<{ parent_ingredient_id: number; child_ingredient_id: number }>()
+  const allowedRelations = new Set(relations.map((row) => `${row.parent_ingredient_id}:${row.child_ingredient_id}`))
+  for (const row of parentRows) {
+    if (!allowedRelations.has(`${row.parent_ingredient_id}:${row.ingredient_id}`)) {
+      return 'Mindestens eine Parent/Sub-Wirkstoff-Beziehung ist nicht zugelassen.'
+    }
+  }
+
+  return null
 }
 
 async function attachIngredients(
@@ -244,6 +314,8 @@ userProducts.post('/', async (c) => {
     : { ingredients: undefined }
   if (ingredientsValidation.error) return c.json({ error: ingredientsValidation.error }, 400)
   const ingredients = ingredientsValidation.ingredients ?? []
+  const ingredientReferenceError = await validateUserProductIngredientReferences(c.env.DB, ingredients)
+  if (ingredientReferenceError) return c.json({ error: ingredientReferenceError }, 400)
   const submitter = await c.env.DB.prepare(
     'SELECT is_trusted_product_submitter FROM users WHERE id = ?'
   ).bind(user.userId).first<{ is_trusted_product_submitter: number }>()
@@ -342,6 +414,10 @@ userProducts.put('/:id', async (c) => {
     ? validateIngredients(body.ingredients)
     : { ingredients: undefined }
   if (ingredientsValidation.error) return c.json({ error: ingredientsValidation.error }, 400)
+  if (ingredientsValidation.ingredients) {
+    const ingredientReferenceError = await validateUserProductIngredientReferences(c.env.DB, ingredientsValidation.ingredients)
+    if (ingredientReferenceError) return c.json({ error: ingredientReferenceError }, 400)
+  }
   const submitter = await c.env.DB.prepare(
     'SELECT is_trusted_product_submitter FROM users WHERE id = ?'
   ).bind(user.userId).first<{ is_trusted_product_submitter: number }>()

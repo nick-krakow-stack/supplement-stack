@@ -4,6 +4,7 @@
 //   GET /           — list all
 //   GET /search     — search by name/synonym
 //   GET /:id        — single ingredient + synonyms + forms
+//   GET /:id/sub-ingredients
 //   GET /:id/recommendations
 //   GET /:id/dosage-guidelines
 //   GET /:id/products
@@ -72,11 +73,42 @@ type DoseRecommendationQueryRow = {
   upper_limit_unit: string | null
 }
 
+type SubIngredientPromptRow = {
+  parent_ingredient_id: number
+  child_ingredient_id: number
+  child_name: string
+  child_unit: string | null
+  prompt_label: string | null
+  is_default_prompt: number
+  sort_order: number
+}
+
 
 function parsePositiveInteger(value: string): number | null {
   if (!/^\d+$/.test(value)) return null
   const parsed = Number(value)
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null
+}
+
+async function getSubIngredientsForParent(
+  db: D1Database,
+  parentIngredientId: number | string,
+): Promise<SubIngredientPromptRow[]> {
+  const { results } = await db.prepare(`
+    SELECT
+      isi.parent_ingredient_id,
+      isi.child_ingredient_id,
+      child.name AS child_name,
+      child.unit AS child_unit,
+      isi.prompt_label,
+      isi.is_default_prompt,
+      isi.sort_order
+    FROM ingredient_sub_ingredients isi
+    JOIN ingredients child ON child.id = isi.child_ingredient_id
+    WHERE isi.parent_ingredient_id = ?
+    ORDER BY isi.sort_order ASC, child.name ASC, isi.child_ingredient_id ASC
+  `).bind(parentIngredientId).all<SubIngredientPromptRow>()
+  return results
 }
 
 function getUpperLimitStatus(
@@ -184,6 +216,25 @@ ingredients.get('/search', async (c) => {
   return c.json({ ingredients: ingredientsResult })
 })
 
+// GET /api/ingredients/:id/sub-ingredients
+ingredients.get('/:id/sub-ingredients', async (c) => {
+  const ingredientId = parsePositiveInteger(c.req.param('id'))
+  if (ingredientId === null) return c.json({ error: 'id must be a positive integer' }, 400)
+
+  const parent = await c.env.DB.prepare(
+    'SELECT id, name, unit, description FROM ingredients WHERE id = ?'
+  ).bind(ingredientId).first<{
+    id: number
+    name: string
+    unit: string | null
+    description: string | null
+  }>()
+  if (!parent) return c.json({ error: 'Not found' }, 404)
+
+  const subIngredients = await getSubIngredientsForParent(c.env.DB, ingredientId)
+  return c.json({ parent, sub_ingredients: subIngredients })
+})
+
 // GET /api/ingredients/:id
 ingredients.get('/:id', async (c) => {
   const id = c.req.param('id')
@@ -195,7 +246,8 @@ ingredients.get('/:id', async (c) => {
   const { results: forms } = await c.env.DB.prepare(
     'SELECT * FROM ingredient_forms WHERE ingredient_id = ?'
   ).bind(id).all()
-  return c.json({ ingredient, synonyms, forms })
+  const subIngredients = await getSubIngredientsForParent(c.env.DB, id)
+  return c.json({ ingredient, synonyms, forms, sub_ingredients: subIngredients })
 })
 
 // GET /api/ingredients/:id/recommendations
@@ -421,22 +473,36 @@ ingredients.get('/:id/dosage-guidelines', async (c) => {
 ingredients.get('/:id/products', async (c) => {
   const id = c.req.param('id')
   const { results: products } = await c.env.DB.prepare(`
-    SELECT p.*,
-           pi.quantity,
-           pi.unit,
-           pi.is_main,
-           pi.basis_quantity,
-           pi.basis_unit,
-           pi.search_relevant,
-           pi.parent_ingredient_id
-    FROM products p
-    JOIN product_ingredients pi ON pi.product_id = p.id
-    WHERE pi.ingredient_id = ?
-      AND pi.search_relevant = 1
-      AND p.visibility = 'public'
-      AND p.moderation_status = 'approved'
-    ORDER BY pi.is_main DESC, p.name ASC
-  `).bind(id).all()
+    WITH matching_rows AS (
+      SELECT
+        p.*,
+        pi.quantity,
+        pi.unit,
+        pi.is_main,
+        pi.basis_quantity,
+        pi.basis_unit,
+        pi.search_relevant,
+        pi.parent_ingredient_id,
+        pi.ingredient_id AS matched_ingredient_id,
+        ROW_NUMBER() OVER (
+          PARTITION BY p.id
+          ORDER BY
+            CASE WHEN pi.ingredient_id = ? THEN 0 ELSE 1 END ASC,
+            pi.is_main DESC,
+            pi.id ASC
+        ) AS row_rank
+      FROM products p
+      JOIN product_ingredients pi ON pi.product_id = p.id
+      WHERE (pi.ingredient_id = ? OR pi.parent_ingredient_id = ?)
+        AND pi.search_relevant = 1
+        AND p.visibility = 'public'
+        AND p.moderation_status = 'approved'
+    )
+    SELECT *
+    FROM matching_rows
+    WHERE row_rank = 1
+    ORDER BY is_main DESC, name ASC
+  `).bind(id, id, id).all()
   return c.json({ products })
 })
 
@@ -620,18 +686,29 @@ recommendationsApp.get('/', async (c) => {
     return c.json({ error: 'ingredient_id must be a positive integer' }, 400)
   try {
     const { results: recommendations } = await c.env.DB.prepare(`
-      SELECT DISTINCT r.product_id, r.type
-      FROM product_recommendations r
-      JOIN products p ON p.id = r.product_id
+      WITH target_recommendations AS (
+        SELECT r.*
+        FROM product_recommendations r
+        WHERE r.ingredient_id = ?
+
+        UNION
+
+        SELECT r.*
+        FROM product_recommendations r
+        JOIN ingredient_sub_ingredients isi ON isi.child_ingredient_id = r.ingredient_id
+        WHERE isi.parent_ingredient_id = ?
+      )
+      SELECT DISTINCT tr.product_id, tr.type
+      FROM target_recommendations tr
+      JOIN products p ON p.id = tr.product_id
       JOIN product_ingredients pi
         ON pi.product_id = p.id
-       AND pi.ingredient_id = r.ingredient_id
        AND pi.search_relevant = 1
-      WHERE r.ingredient_id = ?
-        AND p.moderation_status = 'approved'
+       AND (pi.ingredient_id = tr.ingredient_id OR pi.parent_ingredient_id = tr.ingredient_id)
+      WHERE p.moderation_status = 'approved'
         AND p.visibility = 'public'
-      ORDER BY CASE r.type WHEN 'recommended' THEN 0 ELSE 1 END ASC
-    `).bind(ingredientId).all<{ product_id: number; type: string }>()
+      ORDER BY CASE tr.type WHEN 'recommended' THEN 0 ELSE 1 END ASC
+    `).bind(ingredientId, ingredientId).all<{ product_id: number; type: string }>()
     return c.json({ recommendations })
   } catch {
     return c.json({ error: 'Failed to fetch recommendations' }, 500)

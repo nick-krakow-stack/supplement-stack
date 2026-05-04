@@ -183,13 +183,40 @@ stackWarningsApp.get('/:id', async (c) => {
   if (!stack) return c.json({ error: 'Not found' }, 404)
   if (stack.user_id !== user.userId && user.role !== 'admin') return c.json({ error: 'Forbidden' }, 403)
   const { results: items } = await c.env.DB.prepare(
-    `SELECT pi.ingredient_id
+    `SELECT si.product_id, pi.ingredient_id, pi.parent_ingredient_id
      FROM stack_items si
      JOIN product_ingredients pi ON pi.product_id = si.product_id
      WHERE si.stack_id = ?
        AND pi.search_relevant = 1`
-  ).bind(id).all<{ ingredient_id: number }>()
-  const ingredientIds = [...new Set(items.map(i => i.ingredient_id))]
+  ).bind(id).all<{ product_id: number; ingredient_id: number; parent_ingredient_id: number | null }>()
+
+  const rowsByProduct = new Map<number, typeof items>()
+  for (const item of items) {
+    const rows = rowsByProduct.get(item.product_id) ?? []
+    rows.push(item)
+    rowsByProduct.set(item.product_id, rows)
+  }
+
+  const effectiveIngredientIds = new Set<number>()
+  for (const rows of rowsByProduct.values()) {
+    const parentIdsWithChildRows = new Set(
+      rows
+        .map((row) => row.parent_ingredient_id)
+        .filter((parentId): parentId is number => parentId !== null),
+    )
+
+    for (const row of rows) {
+      if (row.parent_ingredient_id !== null) {
+        effectiveIngredientIds.add(row.ingredient_id)
+        continue
+      }
+      if (!parentIdsWithChildRows.has(row.ingredient_id)) {
+        effectiveIngredientIds.add(row.ingredient_id)
+      }
+    }
+  }
+
+  const ingredientIds = [...effectiveIngredientIds]
   if (ingredientIds.length < 2) return c.json({ warnings: [] })
 
   const placeholders = ingredientIds.map(() => '?').join(',')
