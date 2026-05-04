@@ -47,13 +47,21 @@ Decision: Codex remains Orchestrator and applies an explicit model-routing polic
 Operational rule:
 
 - Codex is the default Orchestrator and selects model variants per task.
-- For simple, clearly scoped tasks, assign `gpt-5.3-codex-spark` to Sub-Agents.
-- For complex, risky, architectural, security, legal, or product-critical tasks, assign `gpt-5.5`
-  (high-reasoning profile).
+- Use `gpt-5.3-codex-spark` with explicit reasoning mode:
+  - `medium` for simple, routine tasks.
+  - `high` for bounded tasks that need more caution.
+  - `xhigh` for more difficult tasks that are still suitable for Spark.
+- Use `gpt-5.5` (high-reasoning profile) for complex, risky, architectural, security,
+  legal, product-critical, or hard-to-test tasks.
 - Orchestrator review remains mandatory for all tasks:
   - validate outputs,
   - test and verify quality,
   - escalate or rerun any Spark assignment if risk, ambiguity, or quality concerns appear.
+
+Decision: Initial Codex model-routing policy was recorded in commit `2457345`.
+
+- This handoff extends it with Spark `medium/high/xhigh` mode guidance and keeps the
+  rule to use `gpt-5.5` for high-stakes, hard-to-test, or high-risk tasks.
 
 ## Automatic Handoff Snapshots
 

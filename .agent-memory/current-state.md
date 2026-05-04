@@ -2,6 +2,10 @@
 
 Last updated: 2026-05-04
 
+Model-routing workflow policy for Codex/Sub-Agent delegation is initially recorded in
+commit `2457345`; this restart handoff extends it with Spark
+`medium/high/xhigh` mode guidance.
+
 ## Project
 
 Supplement Stack is a Cloudflare-native supplement management app.

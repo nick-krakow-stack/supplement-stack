@@ -4,60 +4,46 @@ Last updated: 2026-05-04
 
 ## Continuation Point
 
-Legal pages are committed and deployed. Use `.agent-memory/next-steps.md` for
-the current queue.
+Continue from `main` using the top queue in this file.
+
+## Restart Startup (exact)
+
+1. `AGENTS.md`
+2. `CLAUDE.md`
+3. `.agent-memory/current-state.md`
+4. `.agent-memory/handoff.md`
+5. `.agent-memory/next-steps.md`
+6. `git status --short`
 
 ## Git / Worktree
 
+- Latest committed baseline before this restart handoff: `2457345` — Docs: Record
+  Codex model routing policy. A later memory-hand-off commit only snapshots this
+  restart state.
+- Worktree is expected dirty only in `.claude/SESSION.md` and `.claude/settings.json`
+  (do not modify `.claude/*`).
 - Branch: `main`.
-- Current last code commit: `9c2c627` - Legal: Add imprint privacy and terms
-  pages.
-- Worktree is expected to be dirty from `.claude/SESSION.md` and
-  `.claude/settings.json`; memory files may also be dirty from this cleanup.
-- Do not treat `.claude/*` as part of the current implementation task.
 
 ## Closed Baseline
 
-- Profile DSGVO self-service is closed in `78d8925`, deployed, and recorded in
-  `808f228`.
-- Product required package metadata hardening is live: data migration 0037 and
-  API/frontend validation from `52ead1f` are both live per
-  `.agent-memory/next-steps.md`.
-- Stack-warnings N+1 is closed in `5905a20`: `GET /api/stack-warnings/:id`
-  now fetches interactions with one batched SQL `IN (...)` lookup and preserves
-  existing auth/ownership/404/403 semantics.
-- GA4 consent implementation is closed in `a18136d` and deployed to
-  `https://f876ad10.supplementstack.pages.dev`: no static GA script, lazy
-  `gtag.js` after consent, localStorage choice persistence, SPA pageviews after
-  consent, footer `Datenschutz` / `Cookie-Einstellungen`, and a minimal
-  `/datenschutz` page. Live `/datenschutz` returns HTTP 200.
-- Robots pre-launch indexing block is closed.
-- Footer legal links/pages are closed in `9c2c627` and deployed to
-  `https://d6e92688.supplementstack.pages.dev`: `/impressum`, `/datenschutz`,
-  `/nutzungsbedingungen`, and `/agb` alias. External Google Fonts import is
-  removed; no Apple/OAuth/Social-Login active-processing wording is present.
-  Live legal routes returned HTTP 200.
-- D1 backup verification is done.
+- Legal/legal-pages deploy is live: `/impressum`, `/datenschutz`, `/nutzungsbedingungen`, `/agb` (via
+  `https://d6e92688.supplementstack.pages.dev` and `supplementstack.de`) with HTTP 200.
+- GA4 consent implementation is live with Measurement ID `G-QVHTTK2CNP`; no static GA tag; gtag loads only after consent.
+- Google Fonts import removed; system fonts only.
+- D1 backup is verified and not an open action.
+- Domain and core launch blockers in code already closed (profile DSGVO, product metadata, stack warning N+1,
+  legal/footer pages, GA consent, mobile core flows, auth/session UX fixes, etc.).
 
 ## Open Top Queue
 
-Pick from `.agent-memory/next-steps.md` first:
-
 1. Demo session DoS rate limit in `functions/api/modules/demo.ts`.
-2. Final legal/compliance review plus DSB/AVV/provider settings review before
-   SEO indexing.
-3. Continue with the remaining audit backlog in `.agent-memory/next-steps.md`.
+2. Product POST rate limit in product write path.
+3. `shop-domains/resolve` exact host matching in `functions/api/modules/admin.ts`.
+4. Final legal/compliance review (DSB/AVV/provider checks) before SEO indexing.
+5. Manual authenticated browser/mobile QA.
 
-## Still Open
+## Model-Routing Reminder
 
-- Manual authenticated browser/mobile QA remains open.
-- Legal/compliance review remains open and gates SEO indexing/public launch.
-
-## Required Startup For Next Agent
-
-1. Read `AGENTS.md`.
-2. Read `CLAUDE.md`.
-3. Read `.agent-memory/current-state.md`.
-4. Read `.agent-memory/handoff.md`.
-5. Read `.agent-memory/next-steps.md`.
-6. Run `git status --short`.
+- `Codex` remains Orchestrator and assigns Sub-Agent models.
+- `gpt-5.3-codex-spark` reasoning modes: `medium` (simple), `high` (bounded careful), `xhigh` (more difficult but non-blocker).
+- Escalate to `gpt-5.5` (high reasoning) for complex/risky/architectural/security/legal/product-critical or hard-to-test work.

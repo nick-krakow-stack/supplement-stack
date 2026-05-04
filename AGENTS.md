@@ -52,9 +52,12 @@ The Orchestrator does not implement code and does not edit files directly. The O
 
 - Codex remains Orchestrator and delegates tasks to Sub-Agents.
 - The Orchestrator chooses which model each Sub-Agent should use.
-- Use `gpt-5.3-codex-spark` for simple, clearly scoped tasks.
-- Use `gpt-5.5` with higher reasoning for complex, risky, architectural, security, legal, or
-  product-critical tasks.
+- Use `gpt-5.3-codex-spark` with the appropriate reasoning mode:
+  - `medium`: simple, routine, clearly scoped tasks.
+  - `high`: bounded tasks that need more caution (policy text, structured review, low-risk refactors).
+  - `xhigh`: trickier tasks that need stronger reasoning depth but are still suitable for Spark.
+- Use `gpt-5.5` with high-reasoning profile for complex, risky, architectural, security,
+  legal, product-critical, or hard-to-test tasks.
 - Quality cannot drop on lower-cost runs: the Orchestrator reviews outputs, tests and
   validates assumptions, and escalates Spark-tasks to stronger models when risk, ambiguity, or
   quality concerns appear.
