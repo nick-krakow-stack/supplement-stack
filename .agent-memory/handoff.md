@@ -1,96 +1,73 @@
 # Handoff
 
 Last updated: 2026-05-04
-Update mode: Manual memory-worker cleanup
+Update mode: Manual memory correction
 
-## Current State
+## Latest Notes
 
-Supplement Stack is on the Cloudflare-native line:
+Product required package metadata hardening final status:
 
-- Frontend: React, Vite, TypeScript, Tailwind CSS.
-- Backend: Cloudflare Pages Functions with Hono.
-- Database: Cloudflare D1.
-- Storage: Cloudflare R2 for product images.
-- Deployment: Wrangler CLI / Cloudflare Pages.
+- Code commit exists: `52ead1f` - Data: Require complete product package
+  metadata.
+- Remote D1 migration `0037_backfill_product_required_metadata.sql` was applied
+  to `supplementstack-production`.
+- Remote D1 control query for old products 1-21 returned `missing_count = 0`
+  for missing brand, serving size/unit, servings per container, container
+  count, and main ingredient quantity/unit.
+- Live `/api/demo/products` returned HTTP 200 and shows new DB data, e.g.
+  `Vitamin D3/K2 Tropfen` with brand `Supplement Stack Demo`,
+  `serving_size=1`, `serving_unit=Tropfen`, and
+  `servings_per_container=30`.
+- Frontend lint, frontend build, functions `npx tsc -p tsconfig.json`, and
+  `git diff --check` passed before commit; diff check only reported CRLF
+  warnings.
+- No Cloudflare Pages deploy was run after `52ead1f` because Claude's ongoing
+  `auth/Profile` files were dirty and must not be published accidentally.
+- DB backfill data is live. API/frontend validation changes from `52ead1f` are
+  committed, but become live only with the next safe Pages deploy.
 
-Phase B, Phase C, and the integrated Phase D rollout are complete. Production
-custom domain `https://supplementstack.de/` is live in parallel with Pages
-preview URLs. Public SEO indexing remains intentionally blocked until legal and
-compliance sign-off.
+## Git Snapshot
 
-## Latest Relevant Work
+- Branch: main.
+- Latest git commit at memory correction time:
+  `808f228` - Memory: Record profile DSGVO deploy and close Top-7 sprint.
+- Relevant code commit:
+  `52ead1f` - Data: Require complete product package metadata.
 
-Mobile core-flow polish is no longer local-only. It is committed and deployed:
+## Current Local Follow-up
 
-- Commit: `c76bcf4` - UX: Improve mobile core flows.
-- Preview URL: `https://d5b331fd.supplementstack.pages.dev`.
-- Live domain `https://supplementstack.de/` returned HTTP 200 after deploy with
-  JS `assets/index-Bl-g6o41.js` and CSS `assets/index-Cf3yP80d.css`.
-- Checks passed: frontend `npm run lint --if-present`, frontend
-  `npm run build`, and `git diff --check` with only LF/CRLF warnings.
+- Do not deploy blindly. Before the next Pages deploy, verify the intended diff
+  so unrelated Claude `auth/Profile` work is not published accidentally.
+- Next safe Pages deploy should publish the committed validation changes from
+  `52ead1f`.
+- DB backfill data from migration 0037 is already live on
+  `supplementstack-production`.
+- Later product-model follow-up: user products need real ingredient mapping or
+  must be handled separately in ingredient-specific product selection.
 
-Mobile polish scope completed for core flows: responsive header/nav, product
-cards, SearchPage stack footer/chips, modal bottom sheets and touch targets,
-product selection modal, dosage modal, user product form, and My Products
-mobile rows.
+## Current Open Work
 
-P1 mobile collision fix is included: `ModalWrapper` uses `z-[60]`, and the
-SearchPage fixed footer is hidden while a modal is open.
+- Manual authenticated browser QA remains open for register/login, stack,
+  wishlist, own products, profile, and admin flows.
+- Mobile browser/device QA at 375px, 390px, and 430px remains open for demo,
+  logged-in, and admin flows.
+- Legal/compliance review remains a blocker for public SEO indexing.
+- Launch hardening items from `.agent-memory/next-steps.md` remain the source
+  of truth for prioritization.
 
-Claude has since committed robots and memory changes. Recent commits include:
+## Required Startup For Next Agent
 
-- `1df7616` - Memory: Record robots.txt deploy and Top-7 sprint status.
-- `1d8b288` - Fix: Disallow search crawlers by name in robots.txt.
-- `70aa1f9` - Fix: Add robots.txt blocking all indexing pre-launch.
-- `c76bcf4` - UX: Improve mobile core flows.
+1. Read `AGENTS.md`.
+2. Read `CLAUDE.md`.
+3. Read `.agent-memory/current-state.md`.
+4. Read this handoff.
+5. Read `.agent-memory/next-steps.md`.
+6. Run `git status --short`.
 
-D1 backup verification is complete and must not be listed as an active next
-step.
+## Constraints
 
-## Dirty Worktree
-
-Expected unrelated dirty files from Claude/Profile work must remain dirty:
-
-```text
-M .claude/SESSION.md
-M .claude/settings.json
-M frontend/src/api/auth.ts
-M frontend/src/pages/ProfilePage.tsx
-M functions/api/modules/auth.ts
-```
-
-Memory files may also be dirty from this cleanup:
-
-```text
-M .agent-memory/current-state.md
-M .agent-memory/handoff.md
-M .agent-memory/next-steps.md
-```
-
-Do not undo, restage, or rework Claude's robots commits or unrelated dirty
-Profile/auth files.
-
-## Next Step
-
-Run real-device/browser QA at 375px, 390px, and 430px for:
-
-- Demo flow.
-- Logged-in user flow.
-- Admin flow.
-
-Continue usability polish only if QA finds issues. Current focus is validation,
-not deployment.
-
-## Constraints For Next Agent
-
-- Required startup: read `AGENTS.md`, `CLAUDE.md`,
-  `.agent-memory/current-state.md`, this handoff, and
-  `.agent-memory/next-steps.md`, then run `git status --short`.
 - Do not write secrets, tokens, passwords, or raw credential values into memory
   files.
-- Do not touch `.claude/SESSION.md`, `.claude/settings.json`,
-  `frontend/src/api/auth.ts`, `frontend/src/pages/ProfilePage.tsx`,
-  `functions/api/modules/auth.ts`, or robots/public files unless Nick
-  explicitly asks.
 - Keep implementation compatible with Cloudflare Workers / Pages Functions.
+- Review untracked files before deleting or committing them.
 - Use code and migrations as source of truth when docs conflict.

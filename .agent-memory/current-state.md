@@ -39,6 +39,30 @@ unless verified against code.
 Phase B is complete. Phase C is complete. Phase D bundle is committed,
 remote-migrated, and deployed to Cloudflare Pages preview.
 
+Product required package metadata hardening is committed and remote-migrated,
+but not yet deployed to Cloudflare Pages:
+
+- Code commit: `52ead1f` - Data: Require complete product package metadata.
+- Remote D1 migration
+  `d1-migrations/0037_backfill_product_required_metadata.sql` was applied to
+  `supplementstack-production`.
+- Remote D1 control query for legacy products 1-21 returned
+  `missing_count = 0` for missing required fields: brand, serving size/unit,
+  servings per container, container count, and main ingredient quantity/unit.
+- Live `/api/demo/products` returned HTTP 200 from the remote database and
+  shows the backfilled data, e.g. `Vitamin D3/K2 Tropfen` with brand
+  `Supplement Stack Demo`, `serving_size=1`, `serving_unit=Tropfen`, and
+  `servings_per_container=30`.
+- The committed API/frontend validation changes from `52ead1f` are not live
+  yet because no Cloudflare Pages deploy was run after the commit.
+- No Cloudflare Pages deploy was run intentionally because Claude's ongoing
+  `auth/Profile` files were dirty and must not be published accidentally.
+- Checks before commit passed: frontend `npm run lint --if-present`, frontend
+  `npm run build`, functions `npx tsc -p tsconfig.json`, and
+  `git diff --check` with CRLF warnings only.
+- Later product-model follow-up: user products need real ingredient mapping or
+  separate handling in ingredient-specific product selection.
+
 Production custom domain `supplementstack.de` is live in parallel to the
 Cloudflare Pages preview URLs. All recent deploys have been published to both
 the subdomain and live domain. Public SEO indexing is intentionally deferred
@@ -155,6 +179,7 @@ the SearchPage footer while a modal is open.
 
 Last relevant commits on `main`:
 
+- `52ead1f` - Data: Require complete product package metadata.
 - `1df7616` - Memory: Record robots.txt deploy and Top-7 sprint status.
 - `1d8b288` - Fix: Disallow search crawlers by name in robots.txt.
 - `70aa1f9` - Fix: Add robots.txt blocking all indexing pre-launch.

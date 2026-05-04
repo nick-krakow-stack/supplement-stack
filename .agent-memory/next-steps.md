@@ -41,15 +41,25 @@ Phase C is complete. The integrated Phase D rollout is complete:
   phrase. Account deletion is hard-delete in a batch transaction with
   best-effort cleanup for later-migration tables.
 
+Product required package metadata hardening is committed in `52ead1f`
+(`Data: Require complete product package metadata`). Remote D1 migration
+`0037_backfill_product_required_metadata.sql` has been applied to
+`supplementstack-production`; DB backfill data is live. The API/frontend
+validation changes from `52ead1f` are committed but will only become live with
+the next Cloudflare Pages deploy.
+
 D1 backup is done and is not a next step. Production-domain promotion is done and is not a next step.
 
 ## Current Local Follow-up
 
-- Review and commit the uncommitted product-data hardening bundle when ready.
-- Before deploying it, apply migration
-  `d1-migrations/0037_backfill_product_required_metadata.sql` to the target D1
-  database and smoke-check catalog product cards plus own-product create/edit.
-- No deploy was run for this bundle.
+- Do not redeploy until the unrelated dirty Claude `auth/Profile` files are
+  either committed, stashed, or explicitly excluded from deploy prep.
+- Next safe deploy should publish the committed validation changes from
+  `52ead1f` after checking the intended deploy diff.
+- DB backfill data is already live. Live `/api/demo/products` returned HTTP
+  200 and showed updated remote data, including `Vitamin D3/K2 Tropfen` with
+  brand `Supplement Stack Demo`, `serving_size=1`, `serving_unit=Tropfen`, and
+  `servings_per_container=30`.
 - Later product-model follow-up: User-Produkte need a real ingredient mapping
   or must be handled separately in ingredient-specific product selection.
 
