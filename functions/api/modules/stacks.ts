@@ -155,14 +155,16 @@ stackWarningsApp.get('/:id', async (c) => {
     'SELECT pi.ingredient_id FROM stack_items si JOIN product_ingredients pi ON pi.product_id = si.product_id WHERE si.stack_id = ?'
   ).bind(id).all<{ ingredient_id: number }>()
   const ingredientIds = [...new Set(items.map(i => i.ingredient_id))]
-  const warnings = []
-  for (let a = 0; a < ingredientIds.length; a++) {
-    for (let b = a + 1; b < ingredientIds.length; b++) {
-      const inter = await c.env.DB.prepare(
-        'SELECT * FROM interactions WHERE (ingredient_a_id = ? AND ingredient_b_id = ?) OR (ingredient_a_id = ? AND ingredient_b_id = ?)'
-      ).bind(ingredientIds[a], ingredientIds[b], ingredientIds[b], ingredientIds[a]).first<InteractionRow>()
-      if (inter) warnings.push(inter)
-    }
-  }
+  if (ingredientIds.length < 2) return c.json({ warnings: [] })
+
+  const placeholders = ingredientIds.map(() => '?').join(',')
+  const { results: warnings } = await c.env.DB.prepare(`
+    SELECT *
+    FROM interactions
+    WHERE ingredient_a_id IN (${placeholders})
+      AND ingredient_b_id IN (${placeholders})
+      AND ingredient_a_id <> ingredient_b_id
+    ORDER BY id
+  `).bind(...ingredientIds, ...ingredientIds).all<InteractionRow>()
   return c.json({ warnings })
 })
