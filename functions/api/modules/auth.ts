@@ -389,7 +389,7 @@ meApp.put('/', async (c) => {
     is_smoker: hasKey('is_smoker') ? isSmoker as number : existing.is_smoker,
   }
 
-  const result = await c.env.DB.prepare(`
+  await c.env.DB.prepare(`
     UPDATE users SET
       age = ?,
       gender = ?,
@@ -409,7 +409,6 @@ meApp.put('/', async (c) => {
     target.is_smoker,
     user.userId,
   ).run()
-  if (!result.success) return c.json({ error: 'Profile update failed' }, 500)
 
   return c.json({ profile: {
     id: existing.id, email: existing.email, age: target.age, gender: target.gender, weight: target.weight,
