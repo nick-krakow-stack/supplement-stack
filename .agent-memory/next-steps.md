@@ -477,3 +477,37 @@ Still open:
 - Authenticated browser QA of the new admin tab on desktop and mobile, including creating/editing/deleting one test source row and one test warning row.
 - Admin UI for full `knowledge_articles` article/body editing is still not built; the cockpit links warnings to existing article slugs.
 - Product data and dosage data scientific validation can now use the new cockpit as the working surface, but content still needs to be entered/reviewed ingredient by ingredient.
+
+## 2026-05-05 Admin Usability Backend Follow-Up
+
+Closed locally:
+- Backend endpoints for knowledge article editing, ops dashboard counts, product QA listing, and ingredient research JSON export are implemented in `functions/api/modules/admin.ts`.
+- No D1 migration is required for this backend bundle.
+
+Next:
+- Review or continue the concurrent frontend admin UI work against these response shapes.
+- Run authenticated admin browser/API QA for the new endpoints after frontend integration.
+- Commit/deploy only after coordinating with the concurrent frontend admin files currently present in the worktree.
+
+## 2026-05-05 Admin Usability Frontend Follow-Up
+
+Closed locally:
+- Frontend admin UI for the new backend usability routes is implemented: Admin-Uebersicht ops cards, Wissen article CRUD/archive editor, and Produkt-QA listing/filtering.
+- Typed frontend API helpers exist for `/api/admin/knowledge-articles`, `/api/admin/ops-dashboard`, `/api/admin/product-qa`, and optional `/api/admin/ingredient-research/export`.
+
+Next:
+- Coordinate commit/deploy with the concurrent backend admin route changes in `functions/api/modules/admin.ts`.
+- Run authenticated admin browser QA on desktop and mobile for `Admin-Uebersicht`, `Wissen`, and `Produkt-QA`, including creating/saving/archiving a test knowledge article and checking product QA filters.
+- If the export route is absent in an environment, the frontend button should show the unavailable state and not block the tab.
+## 2026-05-05 Admin Ops And Knowledge Tools Follow-Up
+
+Closed in the latest deployed bundle:
+- Admin `Admin-Uebersicht` with operational counts and ingredient research JSON export.
+- Admin `Wissen` editor for knowledge article create/edit/archive flows.
+- Admin `Produkt-QA` for missing/suspicious product data review.
+- Backend routes for knowledge article CRUD/archive, ops dashboard, product QA, and research export.
+
+Still open:
+- Authenticated browser QA of `Admin-Uebersicht`, `Wissen`, and `Produkt-QA` on desktop and mobile, including creating/editing/archiving one harmless test knowledge article.
+- Product data and dosage data scientific validation remains a content workstream; the admin tools now provide the maintenance surface.
+- Later enhancement: promotion/review workflow that copies vetted research rows into live `dose_recommendations` only after explicit review.

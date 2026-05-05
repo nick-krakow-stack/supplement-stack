@@ -14,6 +14,8 @@ import {
   Pill,
   History,
   ClipboardList,
+  FileText,
+  PackageSearch,
   ChevronLeft,
   Menu,
   X,
@@ -30,6 +32,8 @@ type TabId =
   | 'stats'
   | 'products'
   | 'ingredients'
+  | 'knowledge_articles'
+  | 'product_qa'
   | 'translations'
   | 'ingredient_sub_ingredients'
   | 'dose_recommendations'
@@ -47,9 +51,12 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { id: 'stats', label: 'Statistiken', icon: <BarChart3 size={18} /> },
+  { id: 'stats', label: 'Admin-Übersicht', icon: <BarChart3 size={18} /> },
   { id: 'products', label: 'Produkte', icon: <Package size={18} /> },
+  { id: 'product_qa', label: 'Produkt-QA', icon: <PackageSearch size={18} /> },
   { id: 'ingredients', label: 'Zutaten', icon: <FlaskConical size={18} /> },
+  { id: 'knowledge_articles', label: 'Wissen', icon: <FileText size={18} /> },
+  { id: 'ingredient_research', label: 'Wirkstoff-Recherche', icon: <ClipboardList size={18} /> },
   { id: 'translations', label: 'Translations', icon: <Languages size={18} /> },
   { id: 'ingredient_sub_ingredients', label: 'Sub-Ingredients', icon: <Link2 size={18} /> },
   { id: 'dose_recommendations', label: 'Dose-Richtwerte', icon: <Pill size={18} /> },
@@ -58,13 +65,14 @@ const navItems: NavItem[] = [
   { id: 'shop_domains', label: 'Shop-Domains', icon: <ShoppingBag size={18} /> },
   { id: 'rankings', label: 'Rankings', icon: <Trophy size={18} /> },
   { id: 'user_products', label: 'User-Produkte', icon: <UserCheck size={18} /> },
-  { id: 'ingredient_research', label: 'Wirkstoff-Recherche', icon: <ClipboardList size={18} /> },
 ];
 
 const TAB_LABELS: Record<TabId, string> = {
-  stats: 'Statistiken',
+  stats: 'Admin-Übersicht',
   products: 'Produkte',
+  product_qa: 'Produkt-QA',
   ingredients: 'Zutaten',
+  knowledge_articles: 'Wissen',
   translations: 'Translations',
   ingredient_sub_ingredients: 'Sub-Ingredients',
   dose_recommendations: 'Dose-Richtwerte',

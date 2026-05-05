@@ -1016,3 +1016,19 @@ When a future agent deploys or applies migrations, append the exact date, commit
 - Validation passed: frontend `npm run lint`, frontend `npm run build`, functions `npx tsc -p tsconfig.json --noEmit`, and `git diff --check` with CRLF warnings only.
 - Smoke checks passed: remote D1 confirms `ingredient_research_status` and `ingredient_research_sources`, production ingredient count is 66, preview/live root 200 with `assets/index-DTMpE7Sg.js`, and preview/live unauthenticated `/api/admin/ingredient-research` returns 401.
 - Commit after deploy: `7dd9a6b` - Feature: Add ingredient research admin cockpit.
+
+## 2026-05-05 - Admin Ops And Knowledge Tools
+
+- Deploy command: `npx wrangler pages deploy frontend/dist --project-name supplementstack` after loading local Cloudflare context.
+- Correct production Pages project: `supplementstack`.
+- Preview URL: `https://f74b20b0.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`.
+- Build asset: `assets/index-DVbWbGLx.js`.
+- Scope:
+  - Added admin knowledge article list/detail/create/update/archive routes and responsive `Wissen` editor.
+  - Added admin ops dashboard counts and responsive `Admin-Uebersicht` cards.
+  - Added admin product QA endpoint and responsive `Produkt-QA` card/table review surface.
+  - Added ingredient research JSON export endpoint.
+  - No D1 migration required.
+- Validation passed: functions TypeScript, frontend TypeScript, frontend lint, frontend build, and `git diff --check` with CRLF warnings only.
+- Smoke checks passed: preview/live root 200 with `assets/index-DVbWbGLx.js`; preview/live unauthenticated `/api/admin/ops-dashboard`, `/api/admin/knowledge-articles`, and `/api/admin/product-qa` return 401.

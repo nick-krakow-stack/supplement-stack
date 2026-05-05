@@ -10,11 +10,14 @@ import {
   Plus,
 } from 'lucide-react';
 import ImageCropModal from '../components/ImageCropModal';
+import AdminKnowledgeArticlesTab from './admin/AdminKnowledgeArticlesTab';
+import AdminOpsDashboardTab from './admin/AdminOpsDashboardTab';
 import AuditLogTab from './admin/AuditLogTab';
 import DoseRecommendationsTab from './admin/DoseRecommendationsTab';
 import TranslationsTab from './admin/TranslationsTab';
 import IngredientSubIngredientsTab from './admin/IngredientSubIngredientsTab';
 import IngredientResearchTab from './admin/IngredientResearchTab';
+import ProductQATab from './admin/ProductQATab';
 
 // ---- Local types ----
 interface AdminProduct {
@@ -146,6 +149,8 @@ function getShopHost(shopLink?: string): string | null {
 type Tab =
   | 'products'
   | 'ingredients'
+  | 'knowledge_articles'
+  | 'product_qa'
   | 'translations'
   | 'interactions'
   | 'stats'
@@ -1166,6 +1171,8 @@ function InteractionsTab() {
 // ============================================================
 // Tab 4: Stats
 // ============================================================
+// Kept only as a fallback reference for the previous stats response shape.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function StatsTab() {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1235,14 +1242,16 @@ export default function AdminPage() {
   return (
     <div className="flex flex-col gap-6">
       {activeTab === 'products' && <ProductsTab />}
+      {activeTab === 'product_qa' && <ProductQATab />}
       {activeTab === 'ingredients' && <IngredientsTab />}
+      {activeTab === 'knowledge_articles' && <AdminKnowledgeArticlesTab />}
       {activeTab === 'translations' && <TranslationsTab />}
       {activeTab === 'ingredient_sub_ingredients' && <IngredientSubIngredientsTab />}
       {activeTab === 'dose_recommendations' && <DoseRecommendationsTab />}
       {activeTab === 'ingredient_research' && <IngredientResearchTab />}
       {activeTab === 'audit_log' && <AuditLogTab />}
       {activeTab === 'interactions' && <InteractionsTab />}
-      {activeTab === 'stats' && <StatsTab />}
+      {activeTab === 'stats' && <AdminOpsDashboardTab />}
       {activeTab === 'shop_domains' && <ShopDomainsPanel />}
       {activeTab === 'rankings' && <RankingsPanel />}
       {activeTab === 'user_products' && <UserProductsTab />}

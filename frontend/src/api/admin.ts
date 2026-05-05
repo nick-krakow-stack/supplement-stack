@@ -139,7 +139,7 @@ export interface AdminIngredientResearchListItem {
   official_source_count: number;
   study_source_count: number;
   warning_count: number;
-  no_recommendation_count?: number;
+  no_recommendation_count: number;
   raw?: Record<string, unknown>;
 }
 
@@ -161,7 +161,7 @@ export interface AdminIngredientResearchSource {
   region: string | null;
   population: string | null;
   recommendation_type: string | null;
-  no_recommendation: number | null;
+  no_recommendation: boolean | null;
   notes: string | null;
   dose_min: number | null;
   dose_max: number | null;
@@ -244,6 +244,77 @@ export interface AdminIngredientResearchWarningPayload {
   min_amount?: number | null;
   unit?: string | null;
   active?: boolean | number | null;
+}
+
+export interface AdminKnowledgeArticle {
+  slug: string;
+  title: string;
+  summary: string | null;
+  body: string | null;
+  status: string;
+  reviewed_at: string | null;
+  sources_json: unknown;
+  created_at?: string | null;
+  updated_at?: string | null;
+  archived_at?: string | null;
+  raw?: Record<string, unknown>;
+}
+
+export interface AdminKnowledgeArticlePayload {
+  slug?: string;
+  title: string;
+  summary?: string | null;
+  body?: string | null;
+  status?: string | null;
+  reviewed_at?: string | null;
+  sources_json?: unknown;
+}
+
+export interface AdminKnowledgeArticlesResponse {
+  articles: AdminKnowledgeArticle[];
+  total?: number | null;
+}
+
+export interface AdminOpsDashboard {
+  research: {
+    due_reviews: number;
+    unreviewed: number;
+    researching: number;
+    stale: number;
+  };
+  knowledge: {
+    drafts: number;
+  };
+  warnings: {
+    without_article: number;
+  };
+  product_qa: {
+    issues: number;
+  };
+  totals: Record<string, number>;
+  raw?: Record<string, unknown>;
+}
+
+export interface AdminProductQAProduct {
+  id: number;
+  name: string;
+  brand: string | null;
+  price: number | null;
+  shop_link: string | null;
+  image_url: string | null;
+  is_affiliate: number | null;
+  serving_size: number | null;
+  serving_unit: string | null;
+  servings_per_container: number | null;
+  container_count: number | null;
+  ingredient_count: number;
+  main_ingredient_count: number;
+  issues: string[];
+  raw?: Record<string, unknown>;
+}
+
+export interface AdminProductQAResponse {
+  products: AdminProductQAProduct[];
 }
 
 interface AuditFilterParams {
@@ -363,6 +434,16 @@ function toBooleanOrNull(value: unknown): boolean | null {
   return null;
 }
 
+function toNumberOrNull(value: unknown): number | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value === 'string') {
+    const parsed = Number(value.trim().replace(',', '.'));
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
 function toDateOrNull(value: unknown): string | null {
   if (value === undefined || value === null) return null;
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -375,6 +456,152 @@ function toDateOrNull(value: unknown): string | null {
     return next.length === 0 ? null : next;
   }
   return null;
+}
+
+function readCount(raw: Record<string, unknown>, keys: string[]): number {
+  for (const key of keys) {
+    const value = toNumberOrNull(raw[key]);
+    if (value !== null) return value;
+  }
+  return 0;
+}
+
+function parseCountMap(value: unknown): Record<string, number> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return Object.entries(value as Record<string, unknown>).reduce<Record<string, number>>((acc, [key, entry]) => {
+    const parsed = toNumberOrNull(entry);
+    if (parsed !== null) acc[key] = parsed;
+    return acc;
+  }, {});
+}
+
+function parseTotals(payload: Record<string, unknown>): Record<string, number> {
+  const totals = parseCountMap(payload.totals);
+  Object.entries(payload).forEach(([key, value]) => {
+    if (!key.endsWith('_total')) return;
+    const parsed = toNumberOrNull(value);
+    if (parsed !== null) totals[key] = parsed;
+  });
+  return totals;
+}
+
+function parseKnowledgeArticle(raw: Record<string, unknown>): AdminKnowledgeArticle {
+  const slug = toTextOrNull(raw.slug) || '';
+  return {
+    slug,
+    title: toTextOrNull(raw.title) || slug || 'Unbenannter Artikel',
+    summary: toTextOrNull(raw.summary),
+    body: toTextOrNull(raw.body),
+    status: toTextOrNull(raw.status) || 'draft',
+    reviewed_at: toDateOrNull(raw.reviewed_at),
+    sources_json: raw.sources_json ?? raw.sources ?? null,
+    created_at: toDateOrNull(raw.created_at),
+    updated_at: toDateOrNull(raw.updated_at),
+    archived_at: toDateOrNull(raw.archived_at),
+    raw,
+  };
+}
+
+function normalizeKnowledgeArticlePayload(
+  payload: AdminKnowledgeArticlePayload,
+): AdminKnowledgeArticlePayload {
+  return {
+    slug: payload.slug !== undefined ? toTextOrNull(payload.slug) ?? '' : undefined,
+    title: toTextOrNull(payload.title) ?? '',
+    summary: toTextOrNull(payload.summary),
+    body: toTextOrNull(payload.body),
+    status: toTextOrNull(payload.status) ?? 'draft',
+    reviewed_at: payload.reviewed_at !== undefined ? toDateOrNull(payload.reviewed_at) : null,
+    sources_json: payload.sources_json ?? null,
+  };
+}
+
+function normalizeOpsDashboard(raw: unknown): AdminOpsDashboard {
+  const root = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const payload = (root.dashboard && typeof root.dashboard === 'object'
+    ? root.dashboard
+    : root) as Record<string, unknown>;
+  const researchStatus = parseCountMap(payload.research_status ?? payload.researchStatus);
+  const dueReviews = (payload.due_reviews && typeof payload.due_reviews === 'object')
+    ? payload.due_reviews as Record<string, unknown>
+    : {};
+  const warnings = (payload.warnings && typeof payload.warnings === 'object')
+    ? payload.warnings as Record<string, unknown>
+    : {};
+  const knowledge = (payload.knowledge && typeof payload.knowledge === 'object')
+    ? payload.knowledge as Record<string, unknown>
+    : {};
+  const productQa = (payload.product_qa && typeof payload.product_qa === 'object')
+    ? payload.product_qa as Record<string, unknown>
+    : {};
+
+  return {
+    research: {
+      due_reviews: readCount(payload, [
+        'research_review_due_count',
+        'due_reviews',
+        'research_due_reviews',
+        'review_due_count',
+      ]) ||
+        readCount(dueReviews, ['count', 'total', 'ingredients']),
+      unreviewed: researchStatus.unreviewed ?? readCount(payload, [
+        'ingredient_research_unreviewed',
+        'unreviewed',
+        'research_unreviewed',
+      ]),
+      researching: researchStatus.researching ?? readCount(payload, [
+        'ingredient_research_researching',
+        'researching',
+        'research_status_researching',
+      ]),
+      stale: researchStatus.stale ?? readCount(payload, [
+        'ingredient_research_stale',
+        'stale',
+        'research_stale',
+      ]),
+    },
+    knowledge: {
+      drafts: readCount(payload, ['knowledge_draft_count', 'knowledge_drafts', 'draft_articles']) ||
+        readCount(knowledge, ['drafts', 'draft']),
+    },
+    warnings: {
+      without_article: readCount(payload, [
+        'warnings_without_article_count',
+        'warnings_without_article',
+        'warnings_missing_article',
+      ]) ||
+        readCount(warnings, ['without_article', 'missing_article']),
+    },
+    product_qa: {
+      issues: readCount(payload, ['product_qa_issue_count', 'product_qa_issues', 'products_with_issues']) ||
+        readCount(productQa, ['issues', 'products']),
+    },
+    totals: parseTotals(payload),
+    raw: payload,
+  };
+}
+
+function parseProductQAProduct(raw: Record<string, unknown>): AdminProductQAProduct {
+  const issues = Array.isArray(raw.issues)
+    ? raw.issues.map((issue) => toTextOrNull(issue)).filter((issue): issue is string => Boolean(issue))
+    : [];
+  return {
+    id: toIntOrNull(raw.id) ?? 0,
+    name: toTextOrNull(raw.name) || `Produkt ${toIntOrNull(raw.id) ?? ''}`,
+    brand: toTextOrNull(raw.brand),
+    price: toNumberOrNull(raw.price),
+    shop_link: toTextOrNull(raw.shop_link),
+    image_url: toTextOrNull(raw.image_url),
+    is_affiliate: toIntOrNull(raw.is_affiliate),
+    serving_size: toNumberOrNull(raw.serving_size),
+    serving_unit: toTextOrNull(raw.serving_unit),
+    servings_per_container: toNumberOrNull(raw.servings_per_container),
+    container_count: toNumberOrNull(raw.container_count),
+    ingredient_count: toIntOrNull(raw.ingredient_count) ?? 0,
+    main_ingredient_count: toIntOrNull(raw.main_ingredient_count) ?? 0,
+    issues,
+    raw,
+  };
 }
 
 function parseIngredientResearchListItem(raw: Record<string, unknown>): AdminIngredientResearchListItem {
@@ -713,6 +940,93 @@ function normalizeDosePayload(payload: AdminDoseRecommendationPayload): AdminDos
 
 export async function getAdminStats(): Promise<AdminStats> {
   const res = await apiClient.get('/admin/stats');
+  return res.data;
+}
+
+export async function getOpsDashboard(): Promise<AdminOpsDashboard> {
+  const res = await apiClient.get('/admin/ops-dashboard');
+  return normalizeOpsDashboard(res.data);
+}
+
+export async function getKnowledgeArticles(params: {
+  q?: string;
+  status?: string;
+} = {}): Promise<AdminKnowledgeArticlesResponse> {
+  const query = toQueryParams({
+    q: params.q,
+    status: params.status,
+  });
+  const res = await apiClient.get<{
+    articles?: unknown;
+    total?: number | null;
+    count?: number | null;
+  }>('/admin/knowledge-articles', { params: query });
+  const list = Array.isArray(res.data.articles) ? res.data.articles : [];
+  return {
+    articles: list.map((article) => parseKnowledgeArticle(article as Record<string, unknown>)),
+    total: res.data.total ?? res.data.count ?? null,
+  };
+}
+
+export async function getKnowledgeArticle(slug: string): Promise<AdminKnowledgeArticle> {
+  const res = await apiClient.get<{ article?: unknown }>(
+    `/admin/knowledge-articles/${encodeURIComponent(slug)}`,
+  );
+  const article = (res.data.article ?? res.data) as Record<string, unknown>;
+  return parseKnowledgeArticle(article);
+}
+
+export async function createKnowledgeArticle(
+  payload: AdminKnowledgeArticlePayload,
+): Promise<AdminKnowledgeArticle> {
+  const res = await apiClient.post<{ article?: unknown }>(
+    '/admin/knowledge-articles',
+    normalizeKnowledgeArticlePayload(payload),
+  );
+  const article = (res.data.article ?? res.data) as Record<string, unknown>;
+  return parseKnowledgeArticle(article);
+}
+
+export async function updateKnowledgeArticle(
+  slug: string,
+  payload: AdminKnowledgeArticlePayload,
+): Promise<AdminKnowledgeArticle> {
+  const normalized = normalizeKnowledgeArticlePayload(payload);
+  const res = await apiClient.put<{ article?: unknown }>(
+    `/admin/knowledge-articles/${encodeURIComponent(slug)}`,
+    normalized,
+  );
+  const article = (res.data.article ?? res.data) as Record<string, unknown>;
+  return parseKnowledgeArticle(article);
+}
+
+export async function archiveKnowledgeArticle(slug: string): Promise<AdminKnowledgeArticle> {
+  const res = await apiClient.delete<{ ok?: boolean; article?: unknown }>(
+    `/admin/knowledge-articles/${encodeURIComponent(slug)}`,
+  );
+  const article = (res.data.article ?? {}) as Record<string, unknown>;
+  return parseKnowledgeArticle(article);
+}
+
+export async function getProductQA(params: {
+  q?: string;
+  issue?: string;
+  limit?: number;
+} = {}): Promise<AdminProductQAResponse> {
+  const query = toQueryParams({
+    q: params.q,
+    issue: params.issue,
+    limit: params.limit ?? 100,
+  });
+  const res = await apiClient.get<{ products?: unknown }>('/admin/product-qa', { params: query });
+  const products = Array.isArray(res.data.products) ? res.data.products : [];
+  return {
+    products: products.map((product) => parseProductQAProduct(product as Record<string, unknown>)),
+  };
+}
+
+export async function getIngredientResearchExport(): Promise<unknown> {
+  const res = await apiClient.get('/admin/ingredient-research/export');
   return res.data;
 }
 

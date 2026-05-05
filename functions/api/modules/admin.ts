@@ -17,6 +17,7 @@
 //   PUT /ingredient-sub-ingredients (admin)
 //   DELETE /ingredient-sub-ingredients/:parentId/:childId (admin)
 //   GET /ingredient-research (admin)
+//   GET /ingredient-research/export (admin)
 //   GET /ingredient-research/:ingredientId (admin)
 //   PUT /ingredient-research/:ingredientId/status (admin)
 //   POST /ingredient-research/:ingredientId/sources (admin)
@@ -336,6 +337,83 @@ type IngredientSafetyWarningAdminRow = {
 type IngredientResearchSourceMutation = Omit<IngredientResearchSourceRow, 'id' | 'created_at' | 'updated_at'>
 type IngredientSafetyWarningMutation = Omit<IngredientSafetyWarningAdminRow, 'id' | 'ingredient_name' | 'form_name' | 'article_title' | 'created_at'>
 
+type KnowledgeArticleStatus = typeof KNOWLEDGE_ARTICLE_STATUSES[number]
+
+type KnowledgeArticleDbRow = {
+  slug: string
+  title: string
+  summary: string
+  body: string
+  status: KnowledgeArticleStatus
+  reviewed_at: string | null
+  sources_json: string
+  created_at: string
+  updated_at: string
+}
+
+type KnowledgeArticleListDbRow = Omit<KnowledgeArticleDbRow, 'body' | 'created_at'>
+
+type KnowledgeArticlePayload = {
+  slug: string
+  title: string
+  summary: string
+  body: string
+  status: KnowledgeArticleStatus
+  reviewed_at: string | null
+  sources_json: string
+}
+
+type ParsedKnowledgeArticle<T extends KnowledgeArticleDbRow | KnowledgeArticleListDbRow> =
+  Omit<T, 'sources_json'> & {
+    sources_json: unknown[]
+  }
+
+type ProductQaIssue = typeof PRODUCT_QA_ISSUES[number]
+
+type ProductQaRow = {
+  id: number
+  name: string
+  brand: string | null
+  form: string | null
+  price: number
+  shop_link: string | null
+  image_url: string | null
+  image_r2_key: string | null
+  is_affiliate: number
+  serving_size: number | null
+  serving_unit: string | null
+  servings_per_container: number | null
+  container_count: number | null
+  moderation_status: string
+  visibility: string
+  created_at: string
+  ingredient_count: number
+  main_ingredient_count: number
+  missing_image: number
+  missing_shop_link: number
+  missing_serving_data: number
+  suspicious_price_zero_or_high: number
+  missing_ingredient_rows: number
+  no_affiliate_flag_on_shop_link: number
+}
+
+type IngredientResearchExportRow = {
+  ingredient_id: number
+  name: string
+  category: string | null
+  unit: string | null
+  research_status: IngredientResearchStatusValue
+  calculation_status: IngredientCalculationStatusValue
+  reviewed_at: string | null
+  review_due_at: string | null
+  source_count: number
+  official_source_count: number
+  study_source_count: number
+  no_recommendation_count: number
+  warning_count: number
+  warning_slugs: string | null
+}
+
 const DOSE_RECOMMENDATION_SOURCE_TYPES = ['official', 'study', 'profile', 'user_private', 'user_public'] as const
 type DoseRecommendationSourceType = typeof DOSE_RECOMMENDATION_SOURCE_TYPES[number]
 
@@ -349,6 +427,15 @@ const INGREDIENT_RESEARCH_STATUSES = ['unreviewed', 'researching', 'needs_review
 const INGREDIENT_CALCULATION_STATUSES = ['not_started', 'in_progress', 'needs_review', 'ready', 'not_applicable', 'blocked'] as const
 const INGREDIENT_RESEARCH_SOURCE_KINDS = ['official', 'study'] as const
 const INGREDIENT_WARNING_SEVERITIES = ['info', 'caution', 'danger'] as const
+const KNOWLEDGE_ARTICLE_STATUSES = ['draft', 'published', 'archived'] as const
+const PRODUCT_QA_ISSUES = [
+  'missing_image',
+  'missing_shop_link',
+  'missing_serving_data',
+  'suspicious_price_zero_or_high',
+  'missing_ingredient_rows',
+  'no_affiliate_flag_on_shop_link',
+] as const
 
 const SENSITIVE_AUDIT_KEY_PARTS = [
   'password',
@@ -531,6 +618,104 @@ function optionalDateTextField(data: Record<string, unknown>, key: string): Vali
   return result
 }
 
+function parseKnowledgeSourcesJson(value: string): unknown[] {
+  try {
+    const parsed = JSON.parse(value)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function serializeKnowledgeSources(value: unknown): ValidationResult<string> {
+  if (value === undefined || value === null || value === '') return { ok: true, value: '[]' }
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value)
+      if (!Array.isArray(parsed)) return validationError('sources_json must be a JSON array')
+      return { ok: true, value: JSON.stringify(parsed) }
+    } catch {
+      return validationError('sources_json must be a valid JSON array')
+    }
+  }
+  if (!Array.isArray(value)) return validationError('sources_json must be a JSON array')
+  return { ok: true, value: JSON.stringify(value) }
+}
+
+function parseKnowledgeArticle<T extends KnowledgeArticleDbRow | KnowledgeArticleListDbRow>(
+  row: T,
+): ParsedKnowledgeArticle<T> {
+  return {
+    ...row,
+    sources_json: parseKnowledgeSourcesJson(row.sources_json),
+  }
+}
+
+function productQaIssues(row: ProductQaRow): ProductQaIssue[] {
+  return PRODUCT_QA_ISSUES.filter((issue) => row[issue] === 1)
+}
+
+function parseWarningSlugs(value: string | null): string[] {
+  if (!value) return []
+  return value.split('||').filter((slug) => slug.length > 0)
+}
+
+function validateKnowledgeArticlePayload(
+  body: Record<string, unknown>,
+  existing: KnowledgeArticleDbRow | null,
+): ValidationResult<KnowledgeArticlePayload> {
+  const rawSlug = hasOwnKey(body, 'slug') ? body.slug : existing?.slug
+  const slug = normalizeSlug(rawSlug)
+  if (!slug) return validationError('slug must use lowercase letters, numbers, and single hyphens only')
+  if (slug.length > 160) return validationError('slug must be at most 160 characters')
+
+  const title = hasOwnKey(body, 'title')
+    ? requiredTextField(body, 'title', 240)
+    : existing
+      ? { ok: true as const, value: existing.title }
+      : validationError('title is required')
+  if (!title.ok) return title
+
+  const summary = hasOwnKey(body, 'summary')
+    ? requiredTextField(body, 'summary', 2000)
+    : existing
+      ? { ok: true as const, value: existing.summary }
+      : validationError('summary is required')
+  if (!summary.ok) return summary
+
+  const bodyText = hasOwnKey(body, 'body')
+    ? requiredTextField(body, 'body', 200000)
+    : existing
+      ? { ok: true as const, value: existing.body }
+      : validationError('body is required')
+  if (!bodyText.ok) return bodyText
+
+  const statusInput = hasOwnKey(body, 'status') ? body.status : existing?.status ?? 'draft'
+  const status = enumValue(statusInput, KNOWLEDGE_ARTICLE_STATUSES)
+  if (!status) return validationError(`status must be one of ${KNOWLEDGE_ARTICLE_STATUSES.join(', ')}`)
+
+  const reviewedAt = optionalDateTextField(body, 'reviewed_at')
+  if (!reviewedAt.ok) return reviewedAt
+
+  const sources = serializeKnowledgeSources(
+    hasOwnKey(body, 'sources_json') ? body.sources_json : existing?.sources_json ?? undefined,
+  )
+  if (!sources.ok) return sources
+
+  return {
+    ok: true,
+    value: {
+      slug,
+      title: title.value,
+      summary: summary.value,
+      body: bodyText.value,
+      status,
+      reviewed_at: reviewedAt.value === undefined ? existing?.reviewed_at ?? null : reviewedAt.value,
+      sources_json: sources.value,
+    },
+  }
+}
+
 function redactAuditSecrets(value: unknown, depth = 0): unknown {
   if (depth > 8) return '[redacted: max depth]'
   if (Array.isArray(value)) return value.map((item) => redactAuditSecrets(item, depth + 1))
@@ -589,6 +774,23 @@ async function articleSlugExists(db: D1Database, articleSlug: string): Promise<b
     .bind(articleSlug)
     .first<{ slug: string }>()
   return Boolean(row)
+}
+
+async function getKnowledgeArticleRow(db: D1Database, slug: string): Promise<KnowledgeArticleDbRow | null> {
+  return await db.prepare(`
+    SELECT
+      slug,
+      title,
+      summary,
+      body,
+      status,
+      reviewed_at,
+      sources_json,
+      created_at,
+      updated_at
+    FROM knowledge_articles
+    WHERE slug = ?
+  `).bind(slug).first<KnowledgeArticleDbRow>()
 }
 
 async function getIngredientResearchStatusRow(db: D1Database, ingredientId: number): Promise<IngredientResearchStatusRow | null> {
@@ -1513,6 +1715,398 @@ admin.get('/audit-log', async (c) => {
   })
 })
 
+// GET /api/admin/knowledge-articles?q=&status= (admin only)
+admin.get('/knowledge-articles', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const q = c.req.query('q')?.trim() ?? ''
+  const statusParam = c.req.query('status')?.trim() ?? ''
+  const where: string[] = []
+  const bindings: Array<string | number> = []
+
+  if (q) {
+    const like = `%${q}%`
+    where.push('(slug LIKE ? OR title LIKE ? OR summary LIKE ?)')
+    bindings.push(like, like, like)
+  }
+
+  if (statusParam) {
+    const status = enumValue(statusParam, KNOWLEDGE_ARTICLE_STATUSES)
+    if (!status) return c.json({ error: `status must be one of ${KNOWLEDGE_ARTICLE_STATUSES.join(', ')}` }, 400)
+    where.push('status = ?')
+    bindings.push(status)
+  }
+
+  const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''
+  const { results } = await c.env.DB.prepare(`
+    SELECT
+      slug,
+      title,
+      summary,
+      status,
+      reviewed_at,
+      sources_json,
+      updated_at
+    FROM knowledge_articles
+    ${whereSql}
+    ORDER BY updated_at DESC, slug ASC
+  `).bind(...bindings).all<KnowledgeArticleListDbRow>()
+
+  return c.json({
+    articles: results.map((row) => parseKnowledgeArticle(row)),
+    total: results.length,
+  })
+})
+
+// POST /api/admin/knowledge-articles (admin only)
+admin.post('/knowledge-articles', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const validation = validateKnowledgeArticlePayload(body, null)
+  if (!validation.ok) return c.json({ error: validation.error }, validation.status ?? 400)
+
+  const data = validation.value
+  try {
+    await c.env.DB.prepare(`
+      INSERT INTO knowledge_articles (
+        slug,
+        title,
+        summary,
+        body,
+        status,
+        reviewed_at,
+        sources_json,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+    `).bind(
+      data.slug,
+      data.title,
+      data.summary,
+      data.body,
+      data.status,
+      data.reviewed_at,
+      data.sources_json,
+    ).run()
+  } catch (error) {
+    if (isUniqueConstraintError(error)) return c.json({ error: `Knowledge article "${data.slug}" already exists` }, 409)
+    throw error
+  }
+
+  const article = await getKnowledgeArticleRow(c.env.DB, data.slug)
+  await logAdminAction(c, {
+    action: 'create_knowledge_article',
+    entity_type: 'knowledge_article',
+    entity_id: null,
+    changes: { slug: data.slug, article },
+  })
+
+  return c.json({ article: article ? parseKnowledgeArticle(article) : null }, 201)
+})
+
+// GET /api/admin/knowledge-articles/:slug (admin only)
+admin.get('/knowledge-articles/:slug', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const slug = normalizeSlug(c.req.param('slug'))
+  if (!slug) return c.json({ error: 'Invalid article slug' }, 400)
+
+  const article = await getKnowledgeArticleRow(c.env.DB, slug)
+  if (!article) return c.json({ error: 'Knowledge article not found' }, 404)
+  return c.json({ article: parseKnowledgeArticle(article) })
+})
+
+// PUT /api/admin/knowledge-articles/:slug (admin only; slug is immutable)
+admin.put('/knowledge-articles/:slug', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const slug = normalizeSlug(c.req.param('slug'))
+  if (!slug) return c.json({ error: 'Invalid article slug' }, 400)
+
+  const existing = await getKnowledgeArticleRow(c.env.DB, slug)
+  if (!existing) return c.json({ error: 'Knowledge article not found' }, 404)
+
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  if (hasOwnKey(body, 'slug')) {
+    const bodySlug = normalizeSlug(body.slug)
+    if (!bodySlug || bodySlug !== slug) return c.json({ error: 'slug is immutable' }, 400)
+  }
+
+  const validation = validateKnowledgeArticlePayload(body, existing)
+  if (!validation.ok) return c.json({ error: validation.error }, validation.status ?? 400)
+  const data = validation.value
+
+  await c.env.DB.prepare(`
+    UPDATE knowledge_articles
+    SET
+      title = ?,
+      summary = ?,
+      body = ?,
+      status = ?,
+      reviewed_at = ?,
+      sources_json = ?,
+      updated_at = datetime('now')
+    WHERE slug = ?
+  `).bind(
+    data.title,
+    data.summary,
+    data.body,
+    data.status,
+    data.reviewed_at,
+    data.sources_json,
+    slug,
+  ).run()
+
+  const article = await getKnowledgeArticleRow(c.env.DB, slug)
+  await logAdminAction(c, {
+    action: 'update_knowledge_article',
+    entity_type: 'knowledge_article',
+    entity_id: null,
+    changes: { slug, before: existing, after: article },
+  })
+
+  return c.json({ article: article ? parseKnowledgeArticle(article) : null })
+})
+
+// DELETE /api/admin/knowledge-articles/:slug (admin only; archive instead of hard delete)
+admin.delete('/knowledge-articles/:slug', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const slug = normalizeSlug(c.req.param('slug'))
+  if (!slug) return c.json({ error: 'Invalid article slug' }, 400)
+
+  const existing = await getKnowledgeArticleRow(c.env.DB, slug)
+  if (!existing) return c.json({ error: 'Knowledge article not found' }, 404)
+
+  await c.env.DB.prepare(`
+    UPDATE knowledge_articles
+    SET status = 'archived',
+        updated_at = datetime('now')
+    WHERE slug = ?
+  `).bind(slug).run()
+
+  const article = await getKnowledgeArticleRow(c.env.DB, slug)
+  await logAdminAction(c, {
+    action: 'archive_knowledge_article',
+    entity_type: 'knowledge_article',
+    entity_id: null,
+    changes: { slug, before: { status: existing.status }, after: { status: article?.status ?? 'archived' } },
+  })
+
+  return c.json({ ok: true, article: article ? parseKnowledgeArticle(article) : null })
+})
+
+// GET /api/admin/ops-dashboard (admin only)
+admin.get('/ops-dashboard', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const [
+    ingredientsTotal,
+    researchStatusCounts,
+    researchDue,
+    sourcesTotal,
+    sourcesNoRecommendation,
+    warningsActive,
+    warningsWithoutArticle,
+    knowledgeDrafts,
+    productsTotal,
+    productQaIssues,
+  ] = await c.env.DB.batch([
+    c.env.DB.prepare('SELECT COUNT(*) AS count FROM ingredients'),
+    c.env.DB.prepare(`
+      SELECT COALESCE(rs.research_status, 'unreviewed') AS status, COUNT(*) AS count
+      FROM ingredients i
+      LEFT JOIN ingredient_research_status rs ON rs.ingredient_id = i.id
+      GROUP BY COALESCE(rs.research_status, 'unreviewed')
+    `),
+    c.env.DB.prepare(`
+      SELECT COUNT(*) AS count
+      FROM ingredient_research_status
+      WHERE review_due_at IS NOT NULL
+        AND review_due_at <= date('now')
+    `),
+    c.env.DB.prepare('SELECT COUNT(*) AS count FROM ingredient_research_sources'),
+    c.env.DB.prepare('SELECT COUNT(*) AS count FROM ingredient_research_sources WHERE no_recommendation = 1'),
+    c.env.DB.prepare('SELECT COUNT(*) AS count FROM ingredient_safety_warnings WHERE active = 1'),
+    c.env.DB.prepare(`
+      SELECT COUNT(*) AS count
+      FROM ingredient_safety_warnings w
+      LEFT JOIN knowledge_articles a ON a.slug = w.article_slug
+      WHERE w.active = 1
+        AND (w.article_slug IS NULL OR a.slug IS NULL)
+    `),
+    c.env.DB.prepare("SELECT COUNT(*) AS count FROM knowledge_articles WHERE status = 'draft'"),
+    c.env.DB.prepare('SELECT COUNT(*) AS count FROM products'),
+    c.env.DB.prepare(`
+      WITH ingredient_counts AS (
+        SELECT
+          product_id,
+          COUNT(*) AS ingredient_count,
+          SUM(CASE WHEN is_main = 1 THEN 1 ELSE 0 END) AS main_ingredient_count
+        FROM product_ingredients
+        GROUP BY product_id
+      )
+      SELECT COUNT(*) AS count
+      FROM products p
+      LEFT JOIN ingredient_counts ic ON ic.product_id = p.id
+      WHERE (COALESCE(p.image_url, '') = '' AND COALESCE(p.image_r2_key, '') = '')
+         OR COALESCE(p.shop_link, '') = ''
+         OR p.serving_size IS NULL
+         OR p.serving_size <= 0
+         OR COALESCE(p.serving_unit, '') = ''
+         OR p.servings_per_container IS NULL
+         OR p.servings_per_container <= 0
+         OR p.container_count IS NULL
+         OR p.container_count <= 0
+         OR p.price <= 0
+         OR p.price > 300
+         OR COALESCE(ic.ingredient_count, 0) = 0
+         OR (COALESCE(p.shop_link, '') <> '' AND COALESCE(p.is_affiliate, 0) = 0)
+    `),
+  ])
+
+  const researchCounts = new Map<string, number>()
+  for (const row of (researchStatusCounts.results ?? []) as Array<{ status: string; count: number }>) {
+    researchCounts.set(row.status, row.count)
+  }
+
+  return c.json({
+    ingredients_total: ((ingredientsTotal.results?.[0] as CountRow | undefined)?.count) ?? 0,
+    ingredient_research_unreviewed: researchCounts.get('unreviewed') ?? 0,
+    ingredient_research_researching: researchCounts.get('researching') ?? 0,
+    ingredient_research_needs_review: researchCounts.get('needs_review') ?? 0,
+    ingredient_research_reviewed: researchCounts.get('reviewed') ?? 0,
+    ingredient_research_stale: researchCounts.get('stale') ?? 0,
+    ingredient_research_blocked: researchCounts.get('blocked') ?? 0,
+    research_review_due_count: ((researchDue.results?.[0] as CountRow | undefined)?.count) ?? 0,
+    sources_total: ((sourcesTotal.results?.[0] as CountRow | undefined)?.count) ?? 0,
+    sources_no_recommendation_count: ((sourcesNoRecommendation.results?.[0] as CountRow | undefined)?.count) ?? 0,
+    warnings_active_count: ((warningsActive.results?.[0] as CountRow | undefined)?.count) ?? 0,
+    warnings_without_article_count: ((warningsWithoutArticle.results?.[0] as CountRow | undefined)?.count) ?? 0,
+    knowledge_draft_count: ((knowledgeDrafts.results?.[0] as CountRow | undefined)?.count) ?? 0,
+    products_total: ((productsTotal.results?.[0] as CountRow | undefined)?.count) ?? 0,
+    product_qa_issue_count: ((productQaIssues.results?.[0] as CountRow | undefined)?.count) ?? 0,
+  })
+})
+
+// GET /api/admin/product-qa?q=&issue=&limit=100 (admin only)
+admin.get('/product-qa', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const q = c.req.query('q')?.trim() ?? ''
+  const issueParam = c.req.query('issue')?.trim() ?? ''
+  const issue = issueParam ? enumValue(issueParam, PRODUCT_QA_ISSUES) : null
+  if (issueParam && !issue) return c.json({ error: `issue must be one of ${PRODUCT_QA_ISSUES.join(', ')}` }, 400)
+
+  const limit = parsePagination(c.req.query('limit'), 100, 250)
+  const where: string[] = []
+  const bindings: Array<string | number> = []
+
+  if (q) {
+    const like = `%${q}%`
+    where.push('(name LIKE ? OR COALESCE(brand, \'\') LIKE ? OR COALESCE(form, \'\') LIKE ?)')
+    bindings.push(like, like, like)
+  }
+
+  if (issue) {
+    where.push(`${issue} = 1`)
+  }
+
+  const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''
+  const { results } = await c.env.DB.prepare(`
+    WITH ingredient_counts AS (
+      SELECT
+        product_id,
+        COUNT(*) AS ingredient_count,
+        SUM(CASE WHEN is_main = 1 THEN 1 ELSE 0 END) AS main_ingredient_count
+      FROM product_ingredients
+      GROUP BY product_id
+    ),
+    qa AS (
+      SELECT
+        p.id,
+        p.name,
+        p.brand,
+        p.form,
+        p.price,
+        p.shop_link,
+        p.image_url,
+        p.image_r2_key,
+        COALESCE(p.is_affiliate, 0) AS is_affiliate,
+        p.serving_size,
+        p.serving_unit,
+        p.servings_per_container,
+        p.container_count,
+        p.moderation_status,
+        p.visibility,
+        p.created_at,
+        COALESCE(ic.ingredient_count, 0) AS ingredient_count,
+        COALESCE(ic.main_ingredient_count, 0) AS main_ingredient_count,
+        CASE WHEN COALESCE(p.image_url, '') = '' AND COALESCE(p.image_r2_key, '') = '' THEN 1 ELSE 0 END AS missing_image,
+        CASE WHEN COALESCE(p.shop_link, '') = '' THEN 1 ELSE 0 END AS missing_shop_link,
+        CASE
+          WHEN p.serving_size IS NULL
+            OR p.serving_size <= 0
+            OR COALESCE(p.serving_unit, '') = ''
+            OR p.servings_per_container IS NULL
+            OR p.servings_per_container <= 0
+            OR p.container_count IS NULL
+            OR p.container_count <= 0
+          THEN 1 ELSE 0
+        END AS missing_serving_data,
+        CASE WHEN p.price <= 0 OR p.price > 300 THEN 1 ELSE 0 END AS suspicious_price_zero_or_high,
+        CASE WHEN COALESCE(ic.ingredient_count, 0) = 0 THEN 1 ELSE 0 END AS missing_ingredient_rows,
+        CASE WHEN COALESCE(p.shop_link, '') <> '' AND COALESCE(p.is_affiliate, 0) = 0 THEN 1 ELSE 0 END AS no_affiliate_flag_on_shop_link
+      FROM products p
+      LEFT JOIN ingredient_counts ic ON ic.product_id = p.id
+    )
+    SELECT *
+    FROM qa
+    ${whereSql}
+    ORDER BY
+      missing_image DESC,
+      missing_shop_link DESC,
+      missing_serving_data DESC,
+      suspicious_price_zero_or_high DESC,
+      missing_ingredient_rows DESC,
+      no_affiliate_flag_on_shop_link DESC,
+      created_at DESC,
+      id DESC
+    LIMIT ?
+  `).bind(...bindings, limit).all<ProductQaRow>()
+
+  return c.json({
+    products: results.map((row) => ({
+      ...row,
+      issues: productQaIssues(row),
+    })),
+    total: results.length,
+    limit,
+    available_issues: PRODUCT_QA_ISSUES,
+  })
+})
+
 // GET /api/admin/dose-recommendations?ingredient_id=&q=&active=&public=&source_type=&page=1&limit=50 (admin only)
 admin.get('/dose-recommendations', async (c) => {
   const authErr = await ensureAdmin(c)
@@ -1961,6 +2555,61 @@ admin.get('/ingredient-research', async (c) => {
   `).bind(...bindings).all<IngredientResearchListRow>()
 
   return c.json({ ingredients: results, items: results, total: results.length })
+})
+
+// GET /api/admin/ingredient-research/export (admin only)
+admin.get('/ingredient-research/export', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const { results } = await c.env.DB.prepare(`
+    SELECT
+      i.id AS ingredient_id,
+      i.name,
+      i.category,
+      i.unit,
+      COALESCE(rs.research_status, 'unreviewed') AS research_status,
+      COALESCE(rs.calculation_status, 'not_started') AS calculation_status,
+      rs.reviewed_at,
+      rs.review_due_at,
+      COALESCE(source_counts.source_count, 0) AS source_count,
+      COALESCE(source_counts.official_source_count, 0) AS official_source_count,
+      COALESCE(source_counts.study_source_count, 0) AS study_source_count,
+      COALESCE(source_counts.no_recommendation_count, 0) AS no_recommendation_count,
+      COALESCE(warning_counts.warning_count, 0) AS warning_count,
+      warning_counts.warning_slugs
+    FROM ingredients i
+    LEFT JOIN ingredient_research_status rs ON rs.ingredient_id = i.id
+    LEFT JOIN (
+      SELECT
+        ingredient_id,
+        COUNT(*) AS source_count,
+        SUM(CASE WHEN source_kind = 'official' THEN 1 ELSE 0 END) AS official_source_count,
+        SUM(CASE WHEN source_kind = 'study' THEN 1 ELSE 0 END) AS study_source_count,
+        SUM(CASE WHEN no_recommendation = 1 THEN 1 ELSE 0 END) AS no_recommendation_count
+      FROM ingredient_research_sources
+      GROUP BY ingredient_id
+    ) source_counts ON source_counts.ingredient_id = i.id
+    LEFT JOIN (
+      SELECT
+        ingredient_id,
+        COUNT(*) AS warning_count,
+        group_concat(COALESCE(article_slug, ''), '||') AS warning_slugs
+      FROM ingredient_safety_warnings
+      WHERE active = 1
+      GROUP BY ingredient_id
+    ) warning_counts ON warning_counts.ingredient_id = i.id
+    ORDER BY COALESCE(i.category, '') ASC, i.name ASC
+  `).all<IngredientResearchExportRow>()
+
+  return c.json({
+    exported_at: new Date().toISOString(),
+    ingredients: results.map((row) => ({
+      ...row,
+      warning_slugs: parseWarningSlugs(row.warning_slugs),
+    })),
+    total: results.length,
+  })
 })
 
 // GET /api/admin/ingredient-research/:ingredientId (admin only)

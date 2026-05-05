@@ -1115,3 +1115,36 @@ Do not assume untracked files are disposable. Review before deleting or committi
 - Backend admin routes under `/api/admin/ingredient-research` are admin-only and audit-logged. The list route returns both `ingredients` and `items` aliases for frontend compatibility.
 - Validation passed: frontend `npm run lint`, frontend `npm run build`, functions `npx tsc -p tsconfig.json --noEmit`, and `git diff --check` with CRLF warnings only.
 - Smoke checks passed: remote D1 contains `ingredient_research_status` and `ingredient_research_sources`, production has 66 ingredients, preview/live root return 200 with `assets/index-DTMpE7Sg.js`, and unauthenticated preview/live `/api/admin/ingredient-research` returns 401.
+
+## 2026-05-05 Admin Usability Backend Bundle - Local
+
+- Backend-only admin usability routes are implemented locally in `functions/api/modules/admin.ts`; not committed, deployed, or live-smoked.
+- No migration was added. Existing `knowledge_articles`, `ingredient_research_status`, `ingredient_research_sources`, `ingredient_safety_warnings`, `products`, and `product_ingredients` tables were sufficient.
+- New admin-only routes under `/api/admin`: `GET /knowledge-articles`, `GET /knowledge-articles/:slug`, `POST /knowledge-articles`, `PUT /knowledge-articles/:slug`, `DELETE /knowledge-articles/:slug`, `GET /ops-dashboard`, `GET /product-qa`, and `GET /ingredient-research/export`.
+- Knowledge article writes validate conservative slugs, `draft|published|archived` status, ISO-like `reviewed_at`, and `sources_json` as an array or JSON array string. Article slug is intentionally immutable on update because warnings may reference it. Delete archives instead of hard-deleting.
+- Product QA computes issue flags for missing image, missing shop link, missing serving data, suspicious zero/high price, missing ingredient rows, and shop links without the affiliate flag. It also returns ingredient/main-ingredient counts.
+- Validation passed: `npx tsc -p tsconfig.json --noEmit` in `functions/` and `git diff --check -- functions/api/modules/admin.ts` with CRLF warning only.
+- Concurrent unrelated worktree changes appeared during the session: `.claude/SESSION.md`, `.claude/settings.json`, `frontend/src/api/admin.ts`, untracked frontend admin tab files, and root `logo.png`. Do not revert them unless explicitly requested.
+
+## 2026-05-05 Admin Usability Frontend Bundle - Local
+
+- Frontend/admin half of the admin usability bundle is implemented locally; not committed, deployed, or authenticated-browser-smoked.
+- `frontend/src/api/admin.ts` now has typed helpers for admin knowledge articles, ops dashboard counts, product QA listing, and optional ingredient research JSON export.
+- Admin navigation keeps `/admin?tab=stats` as the landing route but labels it `Admin-Uebersicht`; it also adds `Wissen` and `Produkt-QA`.
+- New tabs:
+  - `AdminOpsDashboardTab` shows compact cards for due research, unreviewed/researching/stale research status, knowledge drafts, warnings without article, and product QA issues, with links to related admin tabs and a non-blocking `Recherche-JSON` button.
+  - `AdminKnowledgeArticlesTab` provides a responsive two-pane/stacked editor for searching/filtering articles, editing title/summary/body/status/reviewed date/sources JSON, creating new slugs, saving, and archiving.
+  - `ProductQATab` provides search, issue filtering, responsive card/table layouts, and issue chips for suspicious product records.
+- Validation passed: frontend `npx tsc --noEmit`, `npm run lint --if-present`, and `npm run build` (Vite chunk-size warning only).
+- Concurrent non-owned work remains in the worktree, including backend `functions/api/modules/admin.ts`, `.claude/*`, `.agent-memory/*`, and root `logo.png`; do not revert it.
+## 2026-05-05 Admin Ops And Knowledge Tools Deployed
+
+- Admin usability bundle is deployed to Cloudflare Pages project `supplementstack`.
+- Preview URL: `https://f74b20b0.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`, asset `assets/index-DVbWbGLx.js`.
+- No D1 migration was required; the bundle uses existing `knowledge_articles`, `ingredient_research_status`, `ingredient_research_sources`, `ingredient_safety_warnings`, `products`, and `product_ingredients` tables.
+- New admin backend routes are live: `/api/admin/knowledge-articles`, `/api/admin/knowledge-articles/:slug`, `/api/admin/ops-dashboard`, `/api/admin/product-qa`, and `/api/admin/ingredient-research/export`.
+- Admin UI now has `Admin-Uebersicht`, `Wissen`, and `Produkt-QA` tabs. The article editor supports search/filter, create, edit, save, source JSON, status/review date, and archive. Product QA supports search, issue filters, mobile cards, and desktop table view.
+- Integration fix: Product-QA frontend issue filters now match backend issue keys, and the ops dashboard reads the flat backend count keys.
+- Validation passed: functions `npx tsc -p tsconfig.json --noEmit`, frontend `npx tsc --noEmit`, frontend `npm run lint --if-present`, frontend `npm run build`, and `git diff --check` with CRLF warnings only.
+- Smoke checks passed: preview/live root return 200 with `assets/index-DVbWbGLx.js`; preview/live unauthenticated `/api/admin/ops-dashboard`, `/api/admin/knowledge-articles`, and `/api/admin/product-qa` return 401.

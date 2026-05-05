@@ -483,3 +483,64 @@ Validation:
 Workspace notes:
 - Existing unrelated `.claude/SESSION.md`, `.claude/settings.json`, and root `logo.png` remain out of scope.
 - Next practical check: authenticated admin browser QA for the new tab on desktop and mobile.
+
+## 2026-05-05 - Admin Usability Backend Bundle Local Handoff
+
+Continue from `main` with backend-only admin usability routes implemented locally in `functions/api/modules/admin.ts`.
+
+Completed:
+- Added admin-only knowledge article CRUD for existing `knowledge_articles` table under `/api/admin/knowledge-articles`.
+- `POST`/`PUT` validate conservative slugs, status `draft|published|archived`, ISO-like `reviewed_at`, and `sources_json` as an array or JSON array string.
+- Slug changes are not allowed on update. `DELETE /knowledge-articles/:slug` archives by setting `status='archived'` because warnings may reference article slugs.
+- Added `GET /api/admin/ops-dashboard` with compact counts for ingredients, research workflow states, review due rows, sources, warnings, drafts, products, and product QA issues.
+- Added `GET /api/admin/product-qa?q=&issue=&limit=100` with computed issue flags and ingredient/main-ingredient counts.
+- Added `GET /api/admin/ingredient-research/export`, ordered before the dynamic ingredient research route.
+- No migration was created; existing schema is sufficient.
+
+Validation:
+- `npx tsc -p tsconfig.json --noEmit` in `functions/` passed.
+- `git diff --check -- functions/api/modules/admin.ts` passed with CRLF warning only.
+
+Workspace notes:
+- Do not revert unrelated concurrent changes: `.claude/SESSION.md`, `.claude/settings.json`, `frontend/src/api/admin.ts`, untracked `frontend/src/pages/admin/AdminKnowledgeArticlesTab.tsx`, untracked `frontend/src/pages/admin/AdminOpsDashboardTab.tsx`, and root `logo.png`.
+- Only intentional backend source change from this session is `functions/api/modules/admin.ts`; memory files were appended per repo handoff protocol.
+
+## 2026-05-05 - Admin Usability Frontend Bundle Local Handoff
+
+Continue from `main` with frontend/admin usability UI implemented locally.
+
+Completed:
+- Added typed admin API helpers in `frontend/src/api/admin.ts` for knowledge article list/detail/create/update/archive, ops dashboard counts, product QA listing, and optional ingredient research JSON export.
+- Added `frontend/src/pages/admin/AdminOpsDashboardTab.tsx` for the `Admin-Uebersicht` landing cards and JSON export button.
+- Added `frontend/src/pages/admin/AdminKnowledgeArticlesTab.tsx` for responsive knowledge article search/filter/list/editor/create/archive flows.
+- Added `frontend/src/pages/admin/ProductQATab.tsx` for responsive product QA cards/table, search, issue filter, and issue chips.
+- Wired `Wissen`, `Produkt-QA`, and `Admin-Uebersicht` labels/tabs through `frontend/src/components/AdminLayout.tsx` and `frontend/src/pages/AdminPage.tsx`.
+
+Validation:
+- `npx tsc --noEmit` in `frontend/` passed.
+- `npm run lint --if-present` in `frontend/` passed.
+- `npm run build` in `frontend/` passed with the existing Vite chunk-size warning only.
+
+Workspace notes:
+- Do not revert unrelated concurrent changes: `.claude/SESSION.md`, `.claude/settings.json`, root `logo.png`, memory file edits, or backend `functions/api/modules/admin.ts`.
+- This frontend bundle expects the concurrent backend routes under `/api/admin` described in the task.
+## 2026-05-05 - Admin Ops And Knowledge Tools Deployed Handoff
+
+Continue from `main` after deployed admin usability bundle.
+
+Completed:
+- Backend admin routes for knowledge article CRUD/archive, ops dashboard counts, product QA listing, and ingredient research JSON export are implemented in `functions/api/modules/admin.ts`.
+- Frontend admin tabs are implemented: `Admin-Uebersicht`, `Wissen`, and `Produkt-QA`.
+- Frontend integration fixes were applied so Product-QA issue filters match backend issue keys and ops dashboard cards read the flat backend response keys.
+- No migration was needed.
+- Deployed to Cloudflare Pages project `supplementstack`.
+
+Validation:
+- Functions `npx tsc -p tsconfig.json --noEmit` passed.
+- Frontend `npx tsc --noEmit`, `npm run lint --if-present`, and `npm run build` passed; Vite chunk-size warning only.
+- `git diff --check` passed with CRLF warnings only.
+- Smoke checks: preview/live root 200 with `assets/index-DVbWbGLx.js`; preview/live unauthenticated admin routes `/api/admin/ops-dashboard`, `/api/admin/knowledge-articles`, and `/api/admin/product-qa` return 401.
+
+Workspace notes:
+- Unrelated `.claude/SESSION.md`, `.claude/settings.json`, and root `logo.png` remain out of scope and should not be committed unless explicitly requested.
+- Next practical check is authenticated admin browser QA on desktop and mobile.

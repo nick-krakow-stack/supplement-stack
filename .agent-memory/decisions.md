@@ -469,3 +469,16 @@ Operational rule:
 - Use `ingredient_research_sources` for official and study evidence, including country, organization, recommendation type, no-recommendation marker, dose ranges, findings/outcomes, and source links.
 - Use `ingredient_safety_warnings` for short product-card warnings. Longer context and source detail should live in knowledge articles linked by `article_slug`.
 - Do not treat research rows as live dosage calculation rows until a future promotion/review workflow writes the vetted data into `dose_recommendations`.
+
+## 2026-05-05 - Admin Knowledge Article Slugs
+
+Decision: admin knowledge article updates keep `knowledge_articles.slug` immutable; delete archives by status instead of hard-deleting.
+
+Rationale:
+- `ingredient_safety_warnings.article_slug` may reference article slugs.
+- Immutable slugs avoid broken warning/article links and avoid needing cascading slug migration logic in the first admin editor API.
+- Archiving preserves historical warning context while removing articles from published use.
+
+Operational rule:
+- To change a slug, create a new article and explicitly relink warnings in a separate reviewed operation.
+- `DELETE /api/admin/knowledge-articles/:slug` should remain a soft archive operation unless a future maintenance task explicitly handles reference migration.
