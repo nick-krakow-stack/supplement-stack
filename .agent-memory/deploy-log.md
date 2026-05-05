@@ -1070,3 +1070,14 @@ When a future agent deploys or applies migrations, append the exact date, commit
 - Smoke checks passed: preview/live root 200 with `assets/index-BmvNNsmY.js`; unauthenticated preview `/api/admin/link-reports` and `/api/admin/ops-dashboard`, plus live `/api/admin/link-reports`, return 401.
 - DNS check: SPF and MX present; DMARC missing; common DKIM selectors not found.
 - Commit after deploy: `d0b878b` - Feature: Add launch checks and print routine.
+
+## 2026-05-05 - DMARC DNS Update
+
+- Cloudflare DNS change: created `_dmarc.supplementstack.de` TXT.
+- Value: `v=DMARC1; p=none; rua=mailto:email@nickkrakow.de; adkim=s; aspf=s; pct=100`.
+- Verification: Cloudflare DNS-over-HTTPS returns the TXT record with status 0.
+- Deploy command: `npx wrangler pages deploy frontend/dist --project-name supplementstack` after updating Admin Go-Live checklist.
+- Preview URL: `https://4a2e4ba7.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`.
+- Build asset: `assets/index-BeN1jbtz.js`.
+- Commit after deploy: `55e44f4` - Update launch checklist DMARC status.

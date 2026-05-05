@@ -1201,3 +1201,15 @@ Do not assume untracked files are disposable. Review before deleting or committi
 - DNS check via Cloudflare DNS on 2026-05-05: SPF TXT and MX are present; `_dmarc.supplementstack.de` TXT is missing; common DKIM selectors were not found, so DKIM must be enabled/confirmed in the mail provider.
 - Validation passed: functions `npx tsc -p tsconfig.json --noEmit`, frontend `npx tsc --noEmit`, frontend `npm run lint --if-present`, frontend `npm run build`, and `git diff --check` with CRLF warnings only.
 - Smoke checks passed: preview/live root 200 with `assets/index-BmvNNsmY.js`; unauthenticated preview `/api/admin/link-reports` and `/api/admin/ops-dashboard`, plus live `/api/admin/link-reports`, return 401.
+
+## 2026-05-05 DMARC Record Set
+
+- Cloudflare DNS zone `supplementstack.de` updated via API.
+- Created TXT record `_dmarc.supplementstack.de` with `v=DMARC1; p=none; rua=mailto:email@nickkrakow.de; adkim=s; aspf=s; pct=100`.
+- Verified through Cloudflare API and public Cloudflare DNS-over-HTTPS: record resolves successfully.
+- Admin `Go-Live Checks` tab updated to mark DMARC as set; DKIM remains manual/provider-side.
+- Deployed updated frontend checklist to Cloudflare Pages project `supplementstack`.
+- Preview URL: `https://4a2e4ba7.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`, asset `assets/index-BeN1jbtz.js`.
+- Validation passed: frontend `npx tsc --noEmit`, frontend `npm run lint --if-present`, frontend `npm run build`, and scoped `git diff --check` with CRLF warnings only.
+- Commit: `55e44f4` - Update launch checklist DMARC status.

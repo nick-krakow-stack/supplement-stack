@@ -639,3 +639,15 @@ DNS notes:
 Workspace notes:
 - Unrelated `.claude/SESSION.md`, `.claude/settings.json`, and root `logo.png` remain out of scope.
 - User wants Google OAuth next before launch.
+
+## 2026-05-05 - DMARC Handoff
+
+Completed:
+- Set `_dmarc.supplementstack.de` TXT in Cloudflare DNS.
+- Record: `v=DMARC1; p=none; rua=mailto:email@nickkrakow.de; adkim=s; aspf=s; pct=100`.
+- Verified DNS propagation via Cloudflare DNS-over-HTTPS.
+- Updated and deployed Admin `Go-Live Checks` so DMARC is marked OK and only DKIM remains manual.
+
+Next:
+- Enable/confirm DKIM in All-Inkl/Kasserver and set the provided DKIM DNS record.
+- After DKIM is active and mail tests are stable, consider raising DMARC from `p=none` to `p=quarantine`, later `p=reject`.

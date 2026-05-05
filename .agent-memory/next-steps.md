@@ -560,3 +560,14 @@ Still open before launch:
 - After DNS propagation, send real registration, verification, password reset, and stack emails to external inboxes and check spam placement.
 - Run authenticated admin browser QA for `Linkmeldungen`, `Go-Live Checks`, and the print/PDF routine on desktop and mobile.
 - Next requested engineering task: Google OAuth before launch.
+
+## 2026-05-05 DMARC Follow-Up
+
+Closed:
+- DMARC TXT for `_dmarc.supplementstack.de` is set and publicly resolving.
+- Admin Go-Live checklist reflects DMARC as OK.
+
+Still open before launch:
+- DKIM provider setup/verification.
+- External inbox mail tests for registration, verification, password reset, and stack mail.
+- Later DMARC hardening from `p=none` to `p=quarantine`/`p=reject` after mail alignment is confirmed.
