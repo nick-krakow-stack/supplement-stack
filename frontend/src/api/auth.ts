@@ -6,13 +6,22 @@ interface AuthResponse {
   user: User;
 }
 
+export interface RegisterResponse extends AuthResponse {
+  emailVerificationEmailSent: boolean;
+  message?: string;
+}
+
 export async function register(
   email: string,
   password: string,
   extra?: { health_consent?: boolean } & Partial<Pick<User, 'age' | 'gender' | 'guideline_source'>>
-): Promise<AuthResponse> {
-  // Backend returns only { token } on register — fetch profile separately
-  const res = await apiClient.post<{ token: string }>('/auth/register', {
+): Promise<RegisterResponse> {
+  // Backend returns { token, email_verification_email_sent, message } on register.
+  const res = await apiClient.post<{
+    token: string;
+    email_verification_email_sent?: boolean;
+    message?: string;
+  }>('/auth/register', {
     email,
     password,
     ...extra,
@@ -21,7 +30,12 @@ export async function register(
   // Temporarily set token so getMe() works
   localStorage.setItem('ss_token', token);
   const user = await getMe();
-  return { token, user };
+  return {
+    token,
+    user,
+    emailVerificationEmailSent: res.data.email_verification_email_sent ?? false,
+    message: res.data.message,
+  };
 }
 
 export async function login(email: string, password: string): Promise<AuthResponse> {
@@ -83,5 +97,28 @@ export async function deleteAccount(payload: { password: string }): Promise<{ ok
     return res.data;
   } catch (err) {
     throw extractError(err, 'Account konnte nicht gelöscht werden.');
+  }
+}
+
+export async function verifyEmail(token: string): Promise<{ message: string }> {
+  try {
+    const res = await apiClient.post<{ message: string }>('/auth/verify-email', { token });
+    return res.data;
+  } catch (err) {
+    throw extractError(err, 'E-Mail-Adresse konnte nicht bestätigt werden.');
+  }
+}
+
+export async function resendVerificationEmail(): Promise<{
+  message: string;
+  already_verified?: boolean;
+}> {
+  try {
+    const res = await apiClient.post<{ message: string; already_verified?: boolean }>(
+      '/auth/resend-verification',
+    );
+    return res.data;
+  } catch (err) {
+    throw extractError(err, 'Bestätigungs-E-Mail konnte nicht gesendet werden.');
   }
 }

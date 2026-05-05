@@ -4,8 +4,19 @@ Last updated: 2026-05-05
 
 ## Current Baseline
 
+## Health-Claims Audit Follow-Up
+
+- Local cleanup is implemented in `0044_health_claim_content_audit.sql` plus focused frontend copy edits, but it is not committed, deployed, or remote-migrated yet.
+- Before deployment: coordinate with the owner of `0043_email_verification.sql`; apply migrations in numeric order and keep `0044` after `0043`.
+- Remaining content/data risk: this was a conservative wording pass, not a full legal sign-off or scientific dosing validation. A final German legal/compliance review and fachliche dose/source validation are still open before SEO indexing/public launch.
 Phase C is complete. The integrated Phase D rollout is complete:
 
+- Email verification is implemented locally but not committed, migrated remotely,
+  or deployed. New owned migration is `d1-migrations/0043_email_verification.sql`;
+  existing users are backfilled as verified, new registrations store only a
+  SHA-256 token hash in `email_verification_tokens`, SMTP sends the raw token, `/verify-email` handles token
+  verification, and authenticated resend is rate-limited. Normal login/app usage
+  remains allowed for unverified accounts with visible nudges.
 - Launch-readiness bundle is committed, deployed, and smoke-checked in
   `6a639cd` (`Feature: Close launch readiness gaps`). It includes stack/product
   calculation hardening, selected-dose product preview costs, basis-quantity and
@@ -407,3 +418,16 @@ Priority 7 - Auth/OAuth track (later, not a launch blocker):
   - `8fb5431` - UX: Improve stack and admin usability flows.
   - `e8f2bbc` - UX: Auto-focus name field when opening 'Produkt hinzufuegen' modal.
   - `078fc31` - UX: Auto-focus search field in 'Produkt hinzufuegen' modal (Demo + Stack-Workspace).
+
+## 2026-05-05 Update
+
+Closed in the latest deployed bundle:
+- Email verification on registration and resend/verify flow.
+- Health-claims/content wording cleanup.
+- Remote D1 migrations 0043/0044.
+- Live deploy to `supplementstack` Pages project and smoke checks.
+
+Still open:
+- Set/verify DMARC and DKIM with the mail provider/DNS.
+- Product data and dosage data scientific validation: check which recommendations, dose ranges, sources, and visible wording are correct and how they should be corrected.
+- Final legal/compliance sign-off before SEO indexing.

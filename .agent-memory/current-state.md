@@ -40,6 +40,46 @@ unless verified against code.
 
 ## Current Phase
 
+## Email Verification - Local
+
+Email verification is implemented locally but not committed, migrated remotely,
+or deployed:
+
+- New owned migration: `d1-migrations/0043_email_verification.sql`.
+- Migration 0043 adds `users.email_verified_at`, backfills existing users as
+  verified, and creates `email_verification_tokens` for hashed token storage
+  with expiry metadata. It intentionally does not add duplicate legacy token
+  columns to `users`.
+- Registration creates a 48-hour verification token, stores only its SHA-256
+  hash in `email_verification_tokens`, sends the raw token through the existing SMTP helper, and still returns
+  a login token if SMTP sending fails. The frontend then routes the user to
+  `/verify-email` with a clear status.
+- New backend routes:
+  - `POST /api/auth/verify-email` verifies a raw token and clears token fields.
+  - `POST /api/auth/resend-verification` is authenticated and rate-limited to
+    3 sends/hour/user.
+- `/api/auth/login`, `/api/me`, and `PUT /api/me` now expose
+  `email_verified_at` to the frontend.
+- Frontend adds `VerifyEmailPage`, `/verify-email`, resend actions, login and
+  registration nudges, and an unobtrusive profile status. Normal login and app
+  usage are not blocked for unverified accounts.
+- Validation passed locally: functions `npx tsc -p tsconfig.json`, frontend
+  `npx tsc --noEmit`, frontend `npm run lint --if-present`, frontend
+  `npm run build`, frontend `npm test -- --run` (5 tests), and
+  `git diff --check` with CRLF warnings only.
+- Coordination note: unrelated health-claims audit work is also present in the
+  same worktree, including untracked `d1-migrations/0044_health_claim_content_audit.sql`.
+## Health-Claims Content Audit - Local
+
+Health-claims/content audit cleanup is implemented locally but not committed or deployed:
+
+- New migration: `d1-migrations/0044_health_claim_content_audit.sql`.
+- Scope: conservative German wording cleanup only. No dose numbers, units, source URLs, product prices, or product-recommendation relationships changed.
+- Frontend wording now avoids stronger health-claim language in the landing page, profile goals placeholder, stack dose-selection labels, ProductCard fallback warnings, admin dose wording, product-ranking/admin labels, user-product ingredient hints, privacy wording, and affiliate disclaimer.
+- Seed/live-data cleanup in 0044 targets high-risk wording in current `ingredients`, `ingredient_forms`, `dose_recommendations`, `interactions`, `products`, and German `ingredient_translations` fields. Examples include replacing detox/heavy-metal wording, Goldstandard/therapeutic wording, disease-context notes, and strong outcome verbs with source/context language.
+- Official audit baseline used: EU Commission Nutrition and Health Claims page, EU Register page, and Regulation (EC) No 1924/2006 principle that claims in EU labelling/presentation/advertising must be clear, accurate, evidence-based, non-misleading, and authorized/condition-bound where used.
+- Local validation passed: frontend `npx tsc --noEmit`, frontend `npm run lint --if-present`, frontend `npm run build`, frontend `npm test -- --run` (5 tests), functions `npx tsc -p tsconfig.json`, minimal SQLite execution of migration 0044, targeted frontend risk-term scan, and `git diff --check` with CRLF warnings only.
+- Concurrent unrelated email-verification work is present in the worktree, including owned migration `d1-migrations/0043_email_verification.sql`. Migration 0043 was not edited by this audit pass.
 Launch-readiness implementation bundle is committed, deployed, and smoke-checked:
 
 - Commit: `6a639cd` - Feature: Close launch readiness gaps.
@@ -1007,3 +1047,15 @@ Remaining notable local paths typically include:
 `.agent-memory/handoff.md` is regenerated on every PreCompact and after every Bash tool use by `scripts/update-agent-handoff.ps1`. Treat it as a transient snapshot — never store unique information only there.
 
 Do not assume untracked files are disposable. Review before deleting or committing.
+
+## 2026-05-05 Email Verification And Health-Claims Audit Deployed
+
+- Remote D1 migrations `0043_email_verification.sql` and `0044_health_claim_content_audit.sql` are applied to `supplementstack-production`.
+- Email verification is live: new registrations get a 48-hour verification link, only the SHA-256 token hash is stored in `email_verification_tokens.token`, `/verify-email` verifies tokens, and authenticated resend is rate-limited. Existing users were backfilled as verified via `users.email_verified_at`.
+- Health-claims/content cleanup is live: frontend wording and selected seeded/live DB text were softened to conservative source/context wording. This was a wording risk pass, not final legal sign-off and not scientific dose validation.
+- Deployment target: Cloudflare Pages project `supplementstack`.
+- Preview: `https://42cd17dd.supplementstack.pages.dev`.
+- Live: `https://supplementstack.de`, asset `assets/index-uekEwu_R.js`.
+- Validation passed: functions `npx tsc -p tsconfig.json`, frontend `npx tsc --noEmit`, frontend `npm run lint --if-present`, frontend `npm run build`, frontend `npm test -- --run` (5 tests), and `git diff --check`.
+- Live smokes passed: root 200, `/verify-email` 200, invalid `POST /api/auth/verify-email` 400, unauthenticated `POST /api/auth/resend-verification` 401, `/api/demo/products` 200 with 7 products, D1 migration log shows 0043/0044, token table exists, and existing users have no `email_verified_at IS NULL` rows.
+- DNS check: MX/SPF are present for All-Inkl/Kasserver; `_dmarc.supplementstack.de` is not set; `default._domainkey.supplementstack.de` was not found.

@@ -367,7 +367,7 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
         if (!hasQuantity || !hasUnit) {
           return {
             ingredients: [],
-            error: `Wirkstoff ${line}: Für die Suche und Empfehlung sind Menge und Einheit erforderlich.`,
+            error: `Wirkstoff ${line}: Für Suche und Produktvergleich sind Menge und Einheit erforderlich.`,
           };
         }
         if (parsedQuantity == null || parsedQuantity <= 0) {
@@ -621,7 +621,7 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
       {showIngredientSection && (
         <div className="p-3 space-y-3">
           <p className="text-xs text-gray-500">
-            Tipp: Markiere den Haken nur bei Wirkstoffen, die für Suche und Empfehlung genutzt werden sollen.
+            Tipp: Markiere den Haken nur bei Wirkstoffen, die für Suche und Produktvergleich genutzt werden sollen.
           </p>
 
           {ingredientRows.map((row, index) => (
@@ -709,7 +709,7 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
                 <p className={fieldHintClass}>Beispiel: 1000 mg pro 4 Kapseln</p>
                 {row.searchRelevant && (
                   <p className={fieldHintClass}>
-                    Für Such- und Empfehlungsauswertung bitte Menge, Einheit und Bezugsgröße ausfüllen.
+                    Für Such- und Vergleichsauswertung bitte Menge, Einheit und Bezugsgröße ausfüllen.
                   </p>
                 )}
               </div>
@@ -721,7 +721,7 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
                   onChange={(e) => updateIngredientRow(row.clientId, { searchRelevant: e.target.checked })}
                   className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                 />
-                Für Suche und Empfehlungen berücksichtigen
+                Für Suche und Produktvergleich berücksichtigen
               </label>
 
               {renderSubIngredientHint(row)}

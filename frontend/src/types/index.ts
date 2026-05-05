@@ -10,6 +10,7 @@ export interface User {
   is_smoker?: number;        // 0 or 1
   health_consent?: number;   // 0 or 1
   health_consent_at?: string;
+  email_verified_at?: string | null;
   role: 'user' | 'admin';
 }
 

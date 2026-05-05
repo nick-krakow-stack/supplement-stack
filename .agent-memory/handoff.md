@@ -4,8 +4,12 @@ Last updated: 2026-05-05
 
 ## Continuation Point
 
-Continue from `main` after launch-readiness implementation bundle was
-committed, deployed, and smoke-checked. No DB migrations changed in this pass.
+Continue from `main` with local email-verification implementation complete but
+not committed, remote-migrated, deployed, or live-smoked. Apply/commit only
+`d1-migrations/0043_email_verification.sql` for this feature; it uses a separate
+`email_verification_tokens` table to avoid legacy user-column collisions; unrelated local
+health-claims audit work includes untracked `d1-migrations/0044_health_claim_content_audit.sql`
+and must be coordinated separately.
 
 ## Restart Startup (exact)
 
@@ -18,6 +22,22 @@ committed, deployed, and smoke-checked. No DB migrations changed in this pass.
 
 ## Git / Worktree
 
+- Local email-verification implementation is present and validated:
+  - Owned files: `d1-migrations/0043_email_verification.sql`,
+    `functions/api/modules/auth.ts`, `functions/api/lib/mail.ts`,
+    `functions/api/lib/types.ts`, `frontend/src/api/auth.ts`,
+    `frontend/src/contexts/AuthContext.tsx`, `frontend/src/App.tsx`,
+    `frontend/src/pages/RegisterPage.tsx`, `frontend/src/pages/LoginPage.tsx`,
+    `frontend/src/pages/ProfilePage.tsx`, `frontend/src/pages/VerifyEmailPage.tsx`,
+    and `frontend/src/types/index.ts`.
+  - Behavior: registration creates a 48-hour verification token, stores its
+    SHA-256 hash in `email_verification_tokens`, and sends the raw token via SMTP; mail failure does not block account creation; verify and
+    authenticated resend endpoints are rate-limited; frontend has `/verify-email`,
+    resend action, and profile/login/register nudges; normal login is not blocked.
+  - Checks passed: functions `npx tsc -p tsconfig.json`, frontend
+    `npx tsc --noEmit`, frontend lint/build/Vitest, and `git diff --check`
+    with CRLF warnings only.
+  - Not done: no remote D1 migration, deploy, or live SMTP smoke in this pass.
 - Latest committed/deployed launch-readiness bundle:
   - `6a639cd` - Feature: Close launch readiness gaps.
   - Preview URL: `https://d8e1340c.supplementstack.pages.dev`.
@@ -330,3 +350,18 @@ committed, deployed, and smoke-checked. No DB migrations changed in this pass.
 - `Codex` remains Orchestrator and assigns Sub-Agent models.
 - `gpt-5.3-codex-spark` reasoning modes: `medium` (simple), `high` (bounded careful), `xhigh` (more difficult but non-blocker).
 - Escalate to `gpt-5.5` (high reasoning) for complex/risky/architectural/security/legal/product-critical or hard-to-test work.
+
+## 2026-05-05 - Email Verification And Health-Claims Audit Deployed
+
+Continue from `main` after the email-verification and health-claims audit bundle. Code is implemented and deployed; commit still needs to be created if not already present in git history.
+
+Completed:
+- Remote D1 migrations `0043_email_verification.sql` and `0044_health_claim_content_audit.sql` applied to `supplementstack-production`.
+- Correct Cloudflare Pages project `supplementstack` deployed. Preview: `https://42cd17dd.supplementstack.pages.dev`; live `https://supplementstack.de` uses `assets/index-uekEwu_R.js`.
+- Validation passed: functions TypeScript, frontend TypeScript, lint, build, Vitest 5 tests, and diff-check.
+- Live smokes passed for root, `/verify-email`, invalid verify API 400, unauth resend 401, demo products count 7, migration journal 0043/0044, token table presence, and zero existing unverified users.
+
+Workspace notes:
+- Do not commit unrelated `.claude/SESSION.md`, `.claude/settings.json`, or root `logo.png` unless explicitly requested.
+- Health-claims audit is only a conservative wording pass. Final legal sign-off and scientific dose/source validation remain separate work.
+- DMARC is not set yet for `_dmarc.supplementstack.de`; MX/SPF point to All-Inkl/Kasserver and default DKIM selector was not found.

@@ -20,12 +20,13 @@ import {
   ensureAuth,
   checkRateLimit,
 } from '../lib/helpers'
-import { sendPasswordResetEmail } from '../lib/mail'
+import { sendEmailVerificationEmail, sendPasswordResetEmail } from '../lib/mail'
 
 const auth = new Hono<AppContext>()
 
 const ALLOWED_GENDERS = ['männlich', 'weiblich', 'divers'] as const
 const ALLOWED_DIETS = ['omnivore', 'vegetarisch', 'vegan'] as const
+const EMAIL_VERIFICATION_TTL_MS = 48 * 60 * 60 * 1000
 
 function normalizeGuidelineSource(value: unknown): string | null | undefined {
   if (value === undefined) return undefined
@@ -38,6 +39,52 @@ function normalizeGuidelineSource(value: unknown): string | null | undefined {
   if (trimmed === 'Studien' || trimmed === 'studien') return 'studien'
   if (trimmed === 'Influencer' || trimmed === 'influencer') return 'influencer'
   return undefined
+}
+
+function frontendUrl(env: AppContext['Bindings']): string {
+  return env.FRONTEND_URL ?? 'https://supplementstack.de'
+}
+
+function publicProfile(user: UserRow) {
+  return {
+    id: user.id,
+    email: user.email,
+    age: user.age,
+    gender: user.gender,
+    weight: user.weight,
+    diet: user.diet_type,
+    goals: user.personal_goals,
+    guideline_source: user.guideline_source,
+    is_smoker: user.is_smoker,
+    health_consent: user.health_consent,
+    health_consent_at: user.health_consent_at,
+    email_verified_at: user.email_verified_at,
+    role: user.role ?? 'user',
+  }
+}
+
+function parseVerificationExpiry(value: number | string): number {
+  if (typeof value === 'number') return value
+  const numeric = Number(value)
+  if (Number.isFinite(numeric)) return numeric
+  const parsed = Date.parse(value)
+  return Number.isFinite(parsed) ? parsed : Number.NaN
+}
+
+async function createEmailVerificationToken(
+  db: D1Database,
+  userId: number,
+): Promise<string> {
+  const rawToken = generateRawResetToken()
+  const tokenHash = await hashResetToken(rawToken)
+  const expiresAt = Date.now() + EMAIL_VERIFICATION_TTL_MS
+  await db.prepare(
+    'DELETE FROM email_verification_tokens WHERE user_id = ?'
+  ).bind(userId).run()
+  await db.prepare(
+    'INSERT INTO email_verification_tokens (user_id, token, expires_at) VALUES (?, ?, ?)'
+  ).bind(userId, tokenHash, expiresAt).run()
+  return rawToken
 }
 
 // POST /api/auth/register
@@ -98,14 +145,23 @@ auth.post('/register', async (c) => {
   ).run()
 
   const userId = result.meta.last_row_id
+  const verificationToken = await createEmailVerificationToken(c.env.DB, userId)
   await c.env.DB.prepare(
     `INSERT INTO consent_log (user_id, consent_type, granted) VALUES (?, 'health_data', 1)`
   ).bind(userId).run()
+
+  const mailResult = await sendEmailVerificationEmail(c.env, frontendUrl(c.env), data.email, verificationToken)
   const token = await sign(
     { userId, email: data.email, role: 'user', exp: Math.floor(Date.now() / 1000) + 7 * 24 * 3600 },
     c.env.JWT_SECRET,
   )
-  return c.json({ token })
+  return c.json({
+    token,
+    email_verification_email_sent: mailResult.ok,
+    message: mailResult.ok
+      ? 'Konto erstellt. Bitte bestätige deine E-Mail-Adresse über den Link in deinem Postfach.'
+      : 'Konto erstellt. Die Bestätigungs-E-Mail konnte gerade nicht gesendet werden. Du kannst sie im Profil erneut anfordern.',
+  })
 })
 
 // GET /api/auth/google (stub — Phase 5)
@@ -130,6 +186,69 @@ auth.post('/logout', async (_c) => {
   return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } })
 })
 
+// POST /api/auth/verify-email
+auth.post('/verify-email', async (c) => {
+  const ip = c.req.header('CF-Connecting-IP') ?? c.req.header('X-Forwarded-For') ?? 'unknown'
+  const allowed = await checkRateLimit(c.env.RATE_LIMITER, `verify-email:${ip}`, 20, 15 * 60)
+  if (!allowed) return c.json({ error: 'Zu viele Versuche. Bitte warte kurz.' }, 429)
+
+  const body = await c.req.json().catch(() => null) as { token?: unknown } | null
+  const rawToken = body && typeof body.token === 'string' ? body.token.trim() : ''
+  if (!rawToken) return c.json({ error: 'Ungültiger oder abgelaufener Bestätigungslink.' }, 400)
+
+  const tokenHash = await hashResetToken(rawToken)
+  const row = await c.env.DB.prepare(
+    'SELECT user_id, expires_at FROM email_verification_tokens WHERE token = ? AND used_at IS NULL'
+  ).bind(tokenHash).first<{ user_id: number; expires_at: number | string }>()
+
+  const expiresAt = row ? parseVerificationExpiry(row.expires_at) : Number.NaN
+  if (!row || !Number.isFinite(expiresAt) || expiresAt < Date.now()) {
+    if (row) {
+      await c.env.DB.prepare(
+        'DELETE FROM email_verification_tokens WHERE user_id = ?'
+      ).bind(row.user_id).run()
+    }
+    return c.json({ error: 'Ungültiger oder abgelaufener Bestätigungslink.' }, 400)
+  }
+
+  await c.env.DB.prepare(
+    `UPDATE users
+     SET email_verified_at = datetime('now')
+     WHERE id = ?`
+  ).bind(row.user_id).run()
+  await c.env.DB.prepare(
+    'DELETE FROM email_verification_tokens WHERE user_id = ?'
+  ).bind(row.user_id).run()
+
+  return c.json({ message: 'E-Mail-Adresse erfolgreich bestätigt.' })
+})
+
+// POST /api/auth/resend-verification
+auth.post('/resend-verification', async (c) => {
+  const authErr = await ensureAuth(c)
+  if (authErr) return authErr
+  const currentUser = c.get('user')
+
+  const allowed = await checkRateLimit(c.env.RATE_LIMITER, `resend-verification:${currentUser.userId}`, 3, 60 * 60)
+  if (!allowed) return c.json({ error: 'Zu viele Versuche. Bitte warte vor dem erneuten Versand.' }, 429)
+
+  const user = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?')
+    .bind(currentUser.userId)
+    .first<UserRow>()
+  if (!user) return c.json({ error: 'User not found' }, 404)
+  if (user.email_verified_at) {
+    return c.json({ message: 'Deine E-Mail-Adresse ist bereits bestätigt.', already_verified: true })
+  }
+
+  const rawToken = await createEmailVerificationToken(c.env.DB, user.id)
+  const result = await sendEmailVerificationEmail(c.env, frontendUrl(c.env), user.email, rawToken)
+  if (!result.ok) {
+    return c.json({ error: 'Bestätigungs-E-Mail konnte nicht gesendet werden.' }, 500)
+  }
+
+  return c.json({ message: 'Bestätigungs-E-Mail wurde erneut gesendet.' })
+})
+
 // POST /api/auth/forgot-password
 auth.post('/forgot-password', async (c) => {
   const body = await c.req.json()
@@ -151,8 +270,7 @@ auth.post('/forgot-password', async (c) => {
     'UPDATE users SET reset_token = ?, reset_token_expires_at = ? WHERE id = ?'
   ).bind(tokenHash, expiresAt, user.id).run()
 
-  const frontendUrl = c.env.FRONTEND_URL ?? 'https://supplementstack.pages.dev'
-  const result = await sendPasswordResetEmail(c.env, frontendUrl, user.email, rawToken)
+  const result = await sendPasswordResetEmail(c.env, frontendUrl(c.env), user.email, rawToken)
   if (!result.ok) {
     return c.json({ error: 'E-Mail konnte nicht gesendet werden.', debug: result.error }, 500)
   }
@@ -211,17 +329,7 @@ auth.post('/login', async (c) => {
   )
   return c.json({
     token,
-    profile: {
-      id: user.id,
-      email: user.email,
-      age: user.age,
-      gender: user.gender,
-      weight: user.weight,
-      diet: user.diet_type,
-      goals: user.personal_goals,
-      guideline_source: user.guideline_source,
-      role: user.role ?? 'user',
-    },
+    profile: publicProfile(user),
   })
 })
 
@@ -237,15 +345,10 @@ meApp.get('/', async (c) => {
   if (authErr) return authErr
   const user = c.get('user')
   const row = await c.env.DB.prepare(
-    'SELECT id, email, age, gender, weight, diet_type, personal_goals, guideline_source, is_smoker, health_consent, health_consent_at, role FROM users WHERE id = ?'
+    'SELECT id, email, age, gender, weight, diet_type, personal_goals, guideline_source, is_smoker, health_consent, health_consent_at, email_verified_at, role FROM users WHERE id = ?'
   ).bind(user.userId).first<UserRow>()
   if (!row) return c.json({ error: 'User not found' }, 404)
-  const profile = {
-    id: row.id, email: row.email, age: row.age, gender: row.gender, weight: row.weight,
-    diet: row.diet_type, goals: row.personal_goals, guideline_source: row.guideline_source,
-    is_smoker: row.is_smoker, health_consent: row.health_consent, health_consent_at: row.health_consent_at,
-    role: row.role ?? 'user',
-  }
+  const profile = publicProfile(row)
   return c.json({ profile })
 })
 
@@ -395,7 +498,7 @@ meApp.put('/', async (c) => {
   }
 
   const existing = await c.env.DB.prepare(
-    'SELECT id, email, age, gender, weight, diet_type, personal_goals, guideline_source, is_smoker, health_consent, health_consent_at, role FROM users WHERE id = ?'
+    'SELECT id, email, age, gender, weight, diet_type, personal_goals, guideline_source, is_smoker, health_consent, health_consent_at, email_verified_at, role FROM users WHERE id = ?'
   ).bind(user.userId).first<UserRow>()
   if (!existing) return c.json({ error: 'User not found' }, 404)
 
@@ -434,6 +537,7 @@ meApp.put('/', async (c) => {
     id: existing.id, email: existing.email, age: target.age, gender: target.gender, weight: target.weight,
     diet: target.diet, goals: target.goals, guideline_source: target.guideline_source,
     is_smoker: target.is_smoker, health_consent: existing.health_consent, health_consent_at: existing.health_consent_at,
+    email_verified_at: existing.email_verified_at,
     role: existing.role ?? 'user',
   }})
 })

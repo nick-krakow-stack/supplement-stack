@@ -171,7 +171,7 @@ export async function sendPasswordResetEmail(
   toEmail: string,
   resetToken: string,
 ): Promise<MailResult> {
-  const resetUrl = `${frontendUrl}/reset-password?token=${resetToken}`
+  const resetUrl = `${frontendUrl.replace(/\/$/, '')}/reset-password?token=${encodeURIComponent(resetToken)}`
   return sendMail(env, {
     to: toEmail,
     subject: 'Passwort zurücksetzen',
@@ -181,6 +181,26 @@ export async function sendPasswordResetEmail(
       <p><a href="${resetUrl}" style="background:#2563eb;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;">Passwort zurücksetzen</a></p>
       <p>Oder kopiere diesen Link: ${resetUrl}</p>
       <p>Der Link ist 1 Stunde gültig. Falls du keine Anfrage gestellt hast, ignoriere diese Mail.</p>
+    `,
+  })
+}
+
+export async function sendEmailVerificationEmail(
+  env: Env,
+  frontendUrl: string,
+  toEmail: string,
+  verificationToken: string,
+): Promise<MailResult> {
+  const verifyUrl = `${frontendUrl.replace(/\/$/, '')}/verify-email?token=${encodeURIComponent(verificationToken)}`
+  return sendMail(env, {
+    to: toEmail,
+    subject: 'E-Mail-Adresse bestätigen',
+    html: `
+      <p>Hallo,</p>
+      <p>bitte bestätige deine E-Mail-Adresse für Supplement Stack.</p>
+      <p><a href="${verifyUrl}" style="background:#2563eb;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;">E-Mail bestätigen</a></p>
+      <p>Oder kopiere diesen Link: ${verifyUrl}</p>
+      <p>Der Link ist 48 Stunden gültig. Falls du kein Konto erstellt hast, ignoriere diese Mail.</p>
     `,
   })
 }

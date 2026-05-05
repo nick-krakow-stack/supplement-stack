@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { updateMe, changePassword, deleteAccount } from '../api/auth';
+import { updateMe, changePassword, deleteAccount, resendVerificationEmail } from '../api/auth';
 
 const DELETE_CONFIRM_PHRASE = 'LÖSCHEN';
 
@@ -19,6 +19,9 @@ export default function ProfilePage() {
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [verifyMessage, setVerifyMessage] = useState<string | null>(null);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
+  const [verifySubmitting, setVerifySubmitting] = useState(false);
 
   // Passwort-Änderung
   const [pwCurrent, setPwCurrent] = useState('');
@@ -105,6 +108,23 @@ export default function ProfilePage() {
     }
   };
 
+  const handleResendVerification = async () => {
+    setVerifyMessage(null);
+    setVerifyError(null);
+    setVerifySubmitting(true);
+    try {
+      const res = await resendVerificationEmail();
+      setVerifyMessage(res.message);
+      if (res.already_verified) {
+        await refreshUser();
+      }
+    } catch (err) {
+      setVerifyError(err instanceof Error ? err.message : 'Bestätigungs-E-Mail konnte nicht gesendet werden.');
+    } finally {
+      setVerifySubmitting(false);
+    }
+  };
+
   const deleteAllowed =
     delConfirmPhrase === DELETE_CONFIRM_PHRASE && delPassword.length > 0 && !delSubmitting;
 
@@ -131,6 +151,31 @@ export default function ProfilePage() {
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-4">
         <p className="text-sm text-gray-500 mb-1">E-Mail-Adresse</p>
         <p className="font-medium text-gray-900">{user?.email}</p>
+        {user?.email_verified_at ? (
+          <p className="mt-2 inline-flex rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
+            E-Mail bestätigt
+          </p>
+        ) : (
+          <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3">
+            <p className="text-sm font-medium text-amber-800">
+              E-Mail-Adresse noch nicht bestätigt.
+            </p>
+            <button
+              type="button"
+              onClick={handleResendVerification}
+              disabled={verifySubmitting}
+              className="mt-2 min-h-11 rounded-xl bg-white px-4 py-2 text-sm font-bold text-amber-800 ring-1 ring-amber-200 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {verifySubmitting ? 'Wird gesendet...' : 'Bestätigungs-E-Mail erneut senden'}
+            </button>
+            {verifyMessage && (
+              <p className="mt-2 text-sm font-medium text-emerald-700">{verifyMessage}</p>
+            )}
+            {verifyError && (
+              <p className="mt-2 text-sm font-medium text-red-700">{verifyError}</p>
+            )}
+          </div>
+        )}
         <p className="text-xs text-gray-400 mt-1">Rolle: {user?.role}</p>
       </div>
 

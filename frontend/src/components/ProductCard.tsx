@@ -123,8 +123,8 @@ const CATEGORY_EMOJI: Record<CategoryKey, string> = {
 
 function getFallbackWarning(product: ProductCardProduct): ProductWarning | null {
   const t = product.name.toLowerCase();
-  if (t.includes('b12')) return { type: 'caution', title: 'Nicht mit Kaffee direkt danach', message: 'Kaffee-Polyphenole können die B12-Absorption beeinträchtigen. Mindestens 1 h Abstand einhalten.' };
-  if (t.includes('jod')) return { type: 'danger', title: 'Nicht mit Fluor, Brom oder Chlorella', message: 'Halogene konkurrieren um Schilddrüsenrezeptoren.' };
+  if (t.includes('b12')) return { type: 'caution', title: 'Einnahmeabstand prüfen', message: 'Kaffee oder Tee werden in Quellen im Zusammenhang mit möglicher geringerer Aufnahme einzelner Nährstoffe diskutiert. Ein zeitlicher Abstand kann sinnvoll sein.' };
+  if (t.includes('jod')) return { type: 'danger', title: 'Schilddrüsenkontext beachten', message: 'Bei Schilddrüsenerkrankungen, Jodmedikation oder unklarer Versorgung sollte Jod nur nach ärztlicher Rücksprache ergänzt werden.' };
   return null;
 }
 

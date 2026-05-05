@@ -213,7 +213,7 @@ interface CategoryMeta {
 
 const CATEGORY_META: Record<CategoryKey, CategoryMeta> = {
   general:   { label: 'Allgemeine Versorgung', cls: 'cat-general', order: 1 },
-  detox:     { label: 'Entgiftung', cls: 'cat-detox', order: 2 },
+  detox:     { label: 'Pflanzen & Algen', cls: 'cat-detox', order: 2 },
   sports:    { label: 'Sport', cls: 'cat-sports', order: 3 },
   cognition: { label: 'Kognition', cls: 'cat-cognition', order: 4 },
 };
@@ -227,7 +227,7 @@ const CATEGORY_ICONS: Record<CategoryKey, string> = {
 
 function categorize(product: DemoProduct): CategoryKey {
   const hay = `${product.ingredient_category ?? ''} ${product.form ?? ''} ${product.name ?? ''} ${product.effect_summary ?? ''}`.toLowerCase();
-  if (/(chlorella|spirulina|detox|entgiftung|zeolith|mariendistel|leber|gluta|ala)/i.test(hay)) return 'detox';
+  if (/(chlorella|spirulina|zeolith|mariendistel|leber|gluta|ala)/i.test(hay)) return 'detox';
   if (/(creatin|kreatin|bcaa|protein|whey|beta-alanin|citrullin|arginin|pump|pre-workout|preworkout)/i.test(hay)) return 'sports';
   if (/(ashwagandha|rhodiola|ginkgo|nootrop|kogniti|fokus|gehirn|l-theanin|bacopa)/i.test(hay)) return 'cognition';
   return 'general';
@@ -436,20 +436,20 @@ function AddProductModal({
                       }}
                       className="rounded-2xl border border-blue-200 bg-white/80 p-4 text-left transition hover:border-blue-400 hover:bg-blue-50"
                     >
-                      <p className="text-base font-black text-blue-700">DGE-Empfehlung</p>
+                      <p className="text-base font-black text-blue-700">DGE-Referenzwert</p>
                       <p className="mt-2 text-2xl font-black text-blue-600">
                         {primaryDose(dgeGuideline)!.value}
                         {primaryDose(dgeGuideline)!.unit}
                       </p>
                       <span className="mt-4 flex justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-black text-white">
-                        DGE verwenden
+                        Referenzwert übernehmen
                       </span>
                     </button>
                   ) : (
                     <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left cursor-default">
-                      <p className="text-base font-black text-slate-500">DGE-Empfehlung</p>
+                      <p className="text-base font-black text-slate-500">DGE-Referenzwert</p>
                       <p className="mt-2 text-sm font-semibold text-slate-400">
-                        Keine offizielle Empfehlung verfügbar
+                        Kein offizieller Referenzwert verfügbar
                       </p>
                     </div>
                   )}
@@ -462,18 +462,18 @@ function AddProductModal({
                       }}
                       className="rounded-2xl border border-violet-200 bg-white/80 p-4 text-left transition hover:border-violet-400 hover:bg-violet-50"
                     >
-                      <p className="text-base font-black text-violet-700">Studien-Empfehlung</p>
+                      <p className="text-base font-black text-violet-700">Studienbasierter Richtwert</p>
                       <p className="mt-2 text-2xl font-black text-violet-600">
                         {primaryDose(studyGuideline)!.value}
                         {primaryDose(studyGuideline)!.unit}
                       </p>
                       <span className="mt-4 flex justify-center rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-black text-white">
-                        Dosierung aus Studienquelle
+                        Richtwert aus Studienquelle
                       </span>
                     </button>
                   ) : (
                     <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left cursor-default">
-                      <p className="text-base font-black text-slate-500">Studien-Empfehlung</p>
+                      <p className="text-base font-black text-slate-500">Studienbasierter Richtwert</p>
                       <p className="mt-2 text-sm font-semibold text-slate-400">
                         Keine Studiendaten hinterlegt
                       </p>
@@ -483,7 +483,7 @@ function AddProductModal({
               )}
 
               <label className="mt-5 block text-base font-black text-slate-700">
-                Gewünschte Tagesdosis ({dose.unit || normalizeUnitToGerman(ingredient.unit) || 'Einheit'})
+                Geplante Tagesmenge ({dose.unit || normalizeUnitToGerman(ingredient.unit) || 'Einheit'})
               </label>
               <input
                 type="number"
@@ -493,16 +493,16 @@ function AddProductModal({
                 className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-xl font-semibold text-slate-950 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-4 focus:ring-blue-100"
               />
               <p className="mt-2 text-sm font-semibold text-slate-500">
-                Geben Sie Ihre gewünschte tägliche Menge ein.
+                Geben Sie die Menge ein, mit der gerechnet werden soll.
               </p>
 
               {dosePercent != null && (
                 <div className="mt-5 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-800">
                   <AlertTriangle size={24} className="mt-0.5 flex-shrink-0" />
                   <div>
-                    <p className="font-black">Innerhalb DGE-Empfehlung</p>
+                    <p className="font-black">Im Bereich des DGE-Referenzwerts</p>
                     <p className="mt-1 text-sm font-semibold">
-                      Diese Dosierung entspricht {dosePercent}% der DGE-Empfehlung.
+                      Diese Menge entspricht {dosePercent}% des DGE-Referenzwerts.
                     </p>
                   </div>
                 </div>

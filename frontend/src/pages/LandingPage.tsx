@@ -51,7 +51,7 @@ function HeroSection({ isLoggedIn }: { isLoggedIn: boolean }) {
 
         {/* Subheadline */}
         <p className="text-lg md:text-xl text-gray-600 max-w-2xl mx-auto mb-10 leading-relaxed">
-          Finde geeignete Wirkstoffe, vergleiche Produktinformationen und nutze
+          Recherchiere Wirkstoffe, vergleiche Produktinformationen und nutze
           wissenschaftlich orientierte Ausgangswerte aus anerkannten Quellen mit
           transparentem Preisvergleich.
         </p>
@@ -118,14 +118,14 @@ const steps = [
     step: '01',
     title: 'Wirkstoff suchen',
     description:
-      'Gib einen Wirkstoff ein – zum Beispiel Magnesium, Vitamin D oder Omega-3. Unsere Datenbank liefert dir wissenschaftlich belegte Grundlagenwerte.',
+      'Gib einen Wirkstoff ein – zum Beispiel Magnesium, Vitamin D oder Omega-3. Unsere Datenbank liefert dir quellenbasierte Grundlagenwerte.',
   },
   {
     icon: <Star size={28} className="text-purple-500" />,
     step: '02',
-    title: 'Empfehlung erhalten',
+    title: 'Richtwert einordnen',
     description:
-      'Sieh auf einen Blick die berechneten Richtwerte, wie viele Kapseln oder Tropfen das in der Regel entspricht – und welche Produkte nach Preis-Leistung gut passen.',
+      'Sieh auf einen Blick berechnete Richtwerte, wie viele Kapseln oder Tropfen das in der Regel entspricht – und welche Produkte nach Preis-Leistung dazu passen.',
   },
   {
     icon: <Layers size={28} className="text-emerald-500" />,
@@ -176,9 +176,9 @@ function HowItWorksSection() {
 const features = [
   {
     icon: <FlaskConical size={24} className="text-indigo-500" />,
-    title: 'Evidenzbasierte Dosierungen',
+    title: 'Quellenbasierte Richtwerte',
     description:
-      'Die Auswertung orientiert sich an veröffentlichten Datenquellen wie der Deutschen Gesellschaft für Ernährung (DGE), der European Food Safety Authority (EFSA) und den National Institutes of Health (NIH).',
+      'Die Auswertung orientiert sich an veröffentlichten Datenquellen wie der Deutschen Gesellschaft für Ernährung (DGE), der European Food Safety Authority (EFSA) und den National Institutes of Health (NIH). Sie ist als Orientierung gedacht.',
     tag: 'DGE · EFSA · NIH',
     tagColor: 'bg-indigo-50 text-indigo-600',
   },
@@ -194,7 +194,7 @@ const features = [
     icon: <ShoppingBag size={24} className="text-purple-500" />,
     title: 'Passende Produktauswahl',
     description:
-      'Filtere Produkte nach Wirkstoff, Gehalt und Zielrichtung. Die Sortierung nach Preis-Leistung hilft dir, passende Produkte für deinen Bedarf zu finden.',
+      'Filtere Produkte nach Wirkstoff, Gehalt und Kontext. Die Sortierung nach Preis-Leistung hilft dir, Produktdaten vergleichbar einzuordnen.',
     tag: 'Automatisch gefiltert',
     tagColor: 'bg-purple-50 text-purple-600',
   },
@@ -218,7 +218,7 @@ function FeaturesSection() {
             Alles, was du für deinen Stack brauchst
           </h2>
           <p className="text-gray-500 max-w-xl mx-auto">
-            Supplement Stack verbindet wissenschaftliche Referenzdaten mit praktischer Nutzbarkeit – kostenlos und ohne Anmeldung.
+            Supplement Stack verbindet veröffentlichte Referenzdaten mit praktischer Nutzbarkeit – kostenlos und ohne Anmeldung.
           </p>
         </div>
 
@@ -365,7 +365,7 @@ function RegisterCtaSection({ isLoggedIn }: { isLoggedIn: boolean }) {
         </div>
 
         <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4 leading-tight">
-          Bereit für deinen optimalen Stack?
+          Bereit für deinen übersichtlichen Stack?
         </h2>
         <p className="text-gray-500 text-base md:text-lg max-w-xl mx-auto mb-10">
           Registriere dich kostenlos, um deinen Stack zu speichern, Produkte zu verwalten und jederzeit auf deine Daten zuzugreifen.

@@ -959,3 +959,21 @@ Latest relevant commits:
 - `pages_build_output_dir = "frontend/dist"` is already present in `wrangler.toml`; no deploy-log follow-up remains for that warning.
 
 When a future agent deploys or applies migrations, append the exact date, commit, command summary, and verification result here.
+
+## 2026-05-05 - Email Verification And Health-Claims Audit
+
+- Remote D1 migrations:
+  - `0043_email_verification.sql` applied successfully to `supplementstack-production`.
+  - `0044_health_claim_content_audit.sql` applied successfully to `supplementstack-production`.
+- Deploy command: `npx wrangler pages deploy frontend/dist --project-name supplementstack`.
+- Correct production Pages project: `supplementstack`.
+- Preview URL: `https://42cd17dd.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`.
+- Build asset: `assets/index-uekEwu_R.js`.
+- Scope:
+  - Added email verification with `/verify-email`, `POST /api/auth/verify-email`, authenticated `POST /api/auth/resend-verification`, SMTP verification mails, `email_verified_at`, and hashed token storage in `email_verification_tokens.token`.
+  - Existing users were backfilled as verified.
+  - Health-claims/content wording was softened across focused frontend copy and live/seed DB text via migration 0044.
+- Validation passed: functions `npx tsc -p tsconfig.json`, frontend `npx tsc --noEmit`, frontend `npm run lint --if-present`, frontend `npm run build`, frontend `npm test -- --run` (5 tests), and `git diff --check`.
+- Smoke checks passed: preview/live root 200, preview/live `/verify-email` 200, preview/live unauthenticated resend endpoint 401, live invalid verify endpoint 400, live `/api/demo/products` 200 with 7 products, D1 migration journal shows 0043/0044, `email_verification_tokens` table exists, and existing users have no `email_verified_at IS NULL` rows.
+- DNS note: `_dmarc.supplementstack.de` has no TXT record yet; MX/SPF are present for All-Inkl/Kasserver, and `default._domainkey.supplementstack.de` was not found.

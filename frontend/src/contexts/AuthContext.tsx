@@ -9,7 +9,7 @@ interface AuthContextValue {
   token: string | null;
   isAdmin: boolean;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<User>;
   register: (
     email: string,
     password: string,
@@ -19,7 +19,7 @@ interface AuthContextValue {
       gender?: string;
       guideline_source?: string;
     },
-  ) => Promise<void>;
+  ) => Promise<authApi.RegisterResponse>;
   logout: () => void;
   refreshUser: () => Promise<void>;
 }
@@ -47,11 +47,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const login = async (email: string, password: string): Promise<void> => {
+  const login = async (email: string, password: string): Promise<User> => {
     const { token: newToken, user: newUser } = await authApi.login(email, password);
     localStorage.setItem(TOKEN_KEY, newToken);
     setToken(newToken);
     setUser(newUser);
+    return newUser;
   };
 
   const register = async (
@@ -63,11 +64,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       gender?: string;
       guideline_source?: string;
     },
-  ): Promise<void> => {
-    const { token: newToken, user: newUser } = await authApi.register(email, password, extra);
+  ): Promise<authApi.RegisterResponse> => {
+    const result = await authApi.register(email, password, extra);
+    const { token: newToken, user: newUser } = result;
     localStorage.setItem(TOKEN_KEY, newToken);
     setToken(newToken);
     setUser(newUser);
+    return result;
   };
 
   const logout = (): void => {

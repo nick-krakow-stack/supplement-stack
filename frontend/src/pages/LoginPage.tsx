@@ -24,8 +24,13 @@ export default function LoginPage() {
     setError(null);
     setSubmitting(true);
     try {
-      await login(email, password);
-      navigate(getAuthRedirect(location), { replace: true });
+      const user = await login(email, password);
+      const redirect = getAuthRedirect(location);
+      if (!user.email_verified_at) {
+        navigate('/verify-email', { replace: true, state: { redirect } });
+      } else {
+        navigate(redirect, { replace: true });
+      }
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??

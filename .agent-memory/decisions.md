@@ -2,6 +2,29 @@
 
 Last updated: 2026-05-05
 
+## Email Verification Flow
+
+Decision: email verification is a trust/account-integrity nudge, not a hard
+login gate for the current product surface.
+
+Implementation status:
+
+- Implemented locally in the email-verification worktree; not yet committed,
+  remote-migrated, deployed, or live-smoked.
+- New accounts get `email_verified_at = NULL` and a 48-hour verification token stored in `email_verification_tokens`.
+- Existing accounts are backfilled as verified in migration 0043 to avoid
+  suddenly warning or degrading already-created accounts.
+- Only a SHA-256 hash of the verification token is stored in D1, in the dedicated token table. The raw token
+  is sent only in the SMTP email link.
+- Resend requires authentication and is rate-limited per user.
+
+Rationale:
+
+- Blocking login immediately would add friction and could strand users if SMTP
+  is temporarily unavailable.
+- The product currently has no high-risk action that must be blocked solely by
+  email verification; visible nudges plus resend preserve UX while improving
+  account trust.
 ## Stack Item Product References
 
 ## Legal-Text Preflight Scope Boundaries
@@ -378,3 +401,16 @@ Operational rule:
   should not be part of the default table view.
 - Legal copy updates are technical preflight improvements only. External legal
   sign-off remains required before SEO indexing/public launch.
+
+## 2026-05-05 - Email Verification Storage
+
+Decision: use the existing remote-compatible `email_verification_tokens` table shape and store the SHA-256 token hash in its `token` column.
+
+Rationale:
+- Production D1 already had legacy email-verification columns/table from an older schema shape.
+- Using the compatible `token` column avoids duplicate-column migration failures while still ensuring the raw verification token is never stored.
+- Existing users are backfilled as verified through `users.email_verified_at` to avoid suddenly warning active accounts.
+
+Operational rule:
+- New verification tokens delete any existing row for that user, insert a new hash into `email_verification_tokens.token`, and set an expiry timestamp.
+- Verification looks up the hash, checks expiry and `used_at IS NULL`, sets `users.email_verified_at`, and deletes the consumed token row.

@@ -30,13 +30,20 @@ export default function RegisterPage() {
     try {
       const ageTrimmed = age.trim();
       const ageNum = ageTrimmed === '' ? undefined : Number.parseInt(ageTrimmed, 10);
-      await register(email, password, {
+      const result = await register(email, password, {
         health_consent: healthConsent,
         age: Number.isFinite(ageNum) ? (ageNum as number) : undefined,
         gender: gender === '' ? undefined : gender,
         guideline_source: guidelineSource === '' ? undefined : guidelineSource,
       });
-      navigate(getAuthRedirect(location), { replace: true });
+      navigate('/verify-email', {
+        replace: true,
+        state: {
+          redirect: getAuthRedirect(location),
+          message: result.message,
+          emailVerificationEmailSent: result.emailVerificationEmailSent,
+        },
+      });
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??

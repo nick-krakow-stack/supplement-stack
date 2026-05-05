@@ -494,7 +494,7 @@ function ProductsTab() {
                 <input
                   value={product.effect_summary ?? ''}
                   onChange={(e) => updateProductField(product.id, 'effect_summary', e.target.value)}
-                  placeholder="Wirkung, z.B. Muskel- & Nervenfunktion"
+                  placeholder="Einordnung, z.B. Muskel- & Nervenfunktion"
                   className="md:col-span-2 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
                 />
                 <input
@@ -731,8 +731,8 @@ function IngredientsTab() {
           type: recType === 'empfohlen' ? 'recommended' : 'alternative',
         }),
       });
-      if (!res.ok) throw new Error('Empfehlung konnte nicht gespeichert werden.');
-      setRecSuccess('Empfehlung gespeichert.');
+      if (!res.ok) throw new Error('Produktzuordnung konnte nicht gespeichert werden.');
+      setRecSuccess('Produktzuordnung gespeichert.');
       setRecIngredientId('');
       setRecProductId('');
     } catch (e: unknown) {
@@ -793,7 +793,7 @@ function IngredientsTab() {
 
       {/* Recommendation form */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 flex flex-col gap-3">
-        <h3 className="font-semibold text-gray-900">Empfehlung hinzufügen</h3>
+        <h3 className="font-semibold text-gray-900">Produktzuordnung hinzufügen</h3>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <select
             value={recIngredientId}
@@ -836,7 +836,7 @@ function IngredientsTab() {
           disabled={recSaving}
           className="self-start bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold px-4 py-2 rounded-xl text-sm transition-all shadow-sm disabled:opacity-60"
         >
-          {recSaving ? 'Speichere…' : 'Empfehlung speichern'}
+          {recSaving ? 'Speichere…' : 'Produktzuordnung speichern'}
         </button>
       </div>
 
@@ -1386,7 +1386,7 @@ function RankingsPanel() {
     <div className="space-y-4">
       <h2 className="text-lg font-semibold">Produkt-Rankings</h2>
       <p className="text-sm text-gray-500">
-        Höherer Score = weiter oben in Empfehlungslisten. Änderungen werden beim Verlassen des Feldes gespeichert.
+        Höherer Score = weiter oben in Produktlisten. Änderungen werden beim Verlassen des Feldes gespeichert.
       </p>
       <table className="w-full text-sm border-collapse">
         <thead>

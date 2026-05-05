@@ -51,9 +51,9 @@ const SOURCE_TYPES = [
 ];
 
 const PURPOSES = [
-  { value: 'maintenance', label: 'maintenance' },
-  { value: 'deficiency_correction', label: 'deficiency_correction' },
-  { value: 'therapeutic', label: 'therapeutic' },
+  { value: 'maintenance', label: 'Erhaltung / Orientierung' },
+  { value: 'deficiency_correction', label: 'Mangel-Kontext' },
+  { value: 'therapeutic', label: 'Ärztlich begleiteter Kontext' },
 ];
 
 const SEX_FILTERS = [
@@ -427,7 +427,7 @@ export default function DoseRecommendationsTab() {
         ...prev,
         [id]: draftFromRow(saved),
       }));
-      setSavedInfo(`Empfehlung #${id} gespeichert.`);
+      setSavedInfo(`Richtwert #${id} gespeichert.`);
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -436,7 +436,7 @@ export default function DoseRecommendationsTab() {
   };
 
   const deleteItem = async (id: number) => {
-    if (!window.confirm('Empfehlung wirklich loeschen?')) return;
+    if (!window.confirm('Richtwert wirklich loeschen?')) return;
     setSubmittingId(id);
     setError('');
 
@@ -448,7 +448,7 @@ export default function DoseRecommendationsTab() {
         delete next[id];
         return next;
       });
-      setSavedInfo(`Empfehlung #${id} entfernt.`);
+      setSavedInfo(`Richtwert #${id} entfernt.`);
       if (items.length <= 1 && page > 1) {
         setPage((prev) => prev - 1);
       } else {
@@ -485,7 +485,7 @@ export default function DoseRecommendationsTab() {
         [saved.id]: draftFromRow(saved),
       }));
       resetCreateDraft();
-      setSavedInfo(`Empfehlung #${saved.id} erstellt.`);
+      setSavedInfo(`Richtwert #${saved.id} erstellt.`);
       await loadItems();
     } catch (err) {
       setCreateError(getErrorMessage(err));
@@ -503,9 +503,9 @@ export default function DoseRecommendationsTab() {
     <div className="space-y-5">
       <div className="bg-white border border-gray-100 shadow-sm rounded-2xl p-5 space-y-4">
         <div className="flex flex-col gap-1">
-          <h2 className="text-lg font-semibold text-gray-900">Dose-Empfehlungen verwalten</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Dose-Richtwerte verwalten</h2>
           <p className="text-sm text-gray-600">
-            Diese Ansicht erlaubt das Erstellen, Ändern und Entfernen von Dose-Empfehlungen.
+            Diese Ansicht erlaubt das Erstellen, Ändern und Entfernen von quellenbasierten Dose-Richtwerten.
           </p>
         </div>
 
@@ -525,7 +525,7 @@ export default function DoseRecommendationsTab() {
                 setQuery(value);
                 setPage(1);
               }}
-              placeholder="Textsuche in Empfehlung/Dose/Quelle"
+              placeholder="Textsuche in Richtwert/Dose/Quelle"
             />
             <SelectField
               label="Source Type"
@@ -621,7 +621,7 @@ export default function DoseRecommendationsTab() {
       <section className="bg-white border border-gray-100 shadow-sm rounded-2xl p-5 space-y-3">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h3 className="text-base font-semibold text-gray-900">Neue Dose-Empfehlung erstellen</h3>
+            <h3 className="text-base font-semibold text-gray-900">Neuen Dose-Richtwert erstellen</h3>
             <p className="text-sm text-gray-500">Nur die Felder mit * sind Pflichtfelder.</p>
           </div>
           <button
@@ -832,7 +832,7 @@ export default function DoseRecommendationsTab() {
 
         {!loading && items.length === 0 && (
           <p className="text-sm text-gray-500 text-center p-8 border border-gray-200 rounded-2xl bg-white">
-            Keine Dose-Empfehlungen fuer diese Filter.
+            Keine Dose-Richtwerte fuer diese Filter.
           </p>
         )}
 
