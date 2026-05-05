@@ -613,3 +613,29 @@ Validation:
 Workspace notes:
 - Unrelated `.claude/SESSION.md`, `.claude/settings.json`, and root `logo.png` remain out of scope.
 - Next practical check is authenticated browser QA for the new user/admin workflows.
+
+## 2026-05-05 - Launch Checks And Print Routine Handoff
+
+Continue from `main` after deployed launch-check/print bundle.
+
+Completed:
+- Commit `d0b878b` deployed to Cloudflare Pages project `supplementstack`.
+- Added admin `Linkmeldungen` tab backed by `/api/admin/link-reports` GET/PATCH for `product_link_reports` status management.
+- Added open link report counts and top queue items to `/api/admin/ops-dashboard` and `AdminOpsDashboardTab`.
+- Added admin `Go-Live Checks` tab documenting Mail/DNS, legal/trust, monitoring/logs, backups, and remaining manual DNS tasks.
+- Added `Plan drucken/PDF` to `StackWorkspace`; print CSS hides app chrome/product cards and prints the cockpit plus Einnahmeplan.
+- Fixed small trust copy issues in `LegalDisclaimer` and `ImprintPage`.
+
+Validation:
+- Functions TypeScript, frontend TypeScript, frontend lint, frontend build, and `git diff --check` passed.
+- Build warning: Vite chunk-size warning remains.
+- Smoke checks: preview/live root 200 with `assets/index-BmvNNsmY.js`; unauthenticated protected admin routes return 401.
+
+DNS notes:
+- Current DNS check found SPF and MX present.
+- `_dmarc.supplementstack.de` TXT is missing.
+- Common DKIM selectors were not found; enable/confirm DKIM in All-Inkl/Kasserver and set the provider's DKIM record.
+
+Workspace notes:
+- Unrelated `.claude/SESSION.md`, `.claude/settings.json`, and root `logo.png` remain out of scope.
+- User wants Google OAuth next before launch.

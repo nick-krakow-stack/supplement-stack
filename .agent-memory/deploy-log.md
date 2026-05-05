@@ -1052,3 +1052,21 @@ When a future agent deploys or applies migrations, append the exact date, commit
 - Validation passed: functions TypeScript, frontend TypeScript, frontend lint, frontend build, and `git diff --check` with CRLF warnings only.
 - Smoke checks passed: preview/live root 200 with `assets/index-CmCtPS8l.js`; preview/live unauthenticated `/api/family`, `/api/stacks/link-report`, `/api/admin/product-qa/1`, and `/api/admin/ops-dashboard` return 401; remote D1 confirms `family_profiles`, `product_link_reports`, `idx_stacks_family_member_id`, and migration 0048 applied.
 - Commit after deploy: `00ec3d4` - Feature: Add round stack and admin workflows.
+
+## 2026-05-05 - Launch Checks And Print Routine
+
+- Deploy command: `npx wrangler pages deploy frontend/dist --project-name supplementstack` after loading local Cloudflare context.
+- Correct production Pages project: `supplementstack`.
+- Preview URL: `https://f97becf1.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`.
+- Build asset: `assets/index-BmvNNsmY.js`.
+- Scope:
+  - Added admin `Linkmeldungen` tab and `/api/admin/link-reports` GET/PATCH.
+  - Added link report counts/top queue items to admin ops dashboard.
+  - Added admin `Go-Live Checks` tab for Mail/DNS, legal/trust, monitoring, and backups.
+  - Added StackWorkspace `Plan drucken/PDF` plus print CSS for cockpit/Einnahmeplan.
+  - Fixed small affiliate/trust copy typos.
+- Validation passed: functions TypeScript, frontend TypeScript, frontend lint, frontend build, and `git diff --check` with CRLF warnings only.
+- Smoke checks passed: preview/live root 200 with `assets/index-BmvNNsmY.js`; unauthenticated preview `/api/admin/link-reports` and `/api/admin/ops-dashboard`, plus live `/api/admin/link-reports`, return 401.
+- DNS check: SPF and MX present; DMARC missing; common DKIM selectors not found.
+- Commit after deploy: `d0b878b` - Feature: Add launch checks and print routine.

@@ -546,3 +546,17 @@ Still open:
 - Authenticated browser QA on desktop and mobile for family profile create/delete, stack assignment, link reporting, Product-QA inline save, and knowledge article publish validation.
 - Product/dosage scientific validation remains a content workflow; the admin surfaces now make it easier to work through.
 - Later: deeper family-specific dosage logic, review assignments, QA pagination/deep links, routine export/print, and promotion workflow from research rows into live dose recommendations.
+
+## 2026-05-05 Launch Checks And Print Follow-Up
+
+Closed in the latest deployed bundle:
+- Admin `Linkmeldungen` queue for reported missing/broken product purchase links.
+- Admin `Go-Live Checks` tab for Mail/DNS, trust/legal visibility, monitoring, and backup checklist.
+- Stack `Plan drucken/PDF` print routine using browser print/save-as-PDF.
+- Live deploy on `supplementstack.de` with asset `assets/index-BmvNNsmY.js`.
+
+Still open before launch:
+- Set DNS manually: add DMARC TXT for `_dmarc.supplementstack.de` and enable/confirm DKIM through the mail provider.
+- After DNS propagation, send real registration, verification, password reset, and stack emails to external inboxes and check spam placement.
+- Run authenticated admin browser QA for `Linkmeldungen`, `Go-Live Checks`, and the print/PDF routine on desktop and mobile.
+- Next requested engineering task: Google OAuth before launch.

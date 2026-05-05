@@ -496,3 +496,17 @@ Operational rule:
 - Family profiles store only `first_name`, `age`, and optional `weight`; do not add diagnoses, medications, goals, or other sensitive health fields for this MVP.
 - Stack conflict display should use `/api/stack-warnings/:id` for authenticated stacks and a simple local fallback for demo.
 - Preserving dosage during product replacement must remain explicit when product form/serving/ingredient strength changes.
+
+## 2026-05-05 - Launch Print And DNS Scope
+
+Decision: implement PDF output as a browser print/save-as-PDF routine for the stack cockpit and Einnahmeplan, and treat mail authentication records as manual DNS/provider tasks documented in the admin Go-Live checklist.
+
+Rationale:
+- Browser print/PDF is enough for launch and avoids adding a PDF rendering dependency or server-side document generation surface.
+- The printable user value is the current stack summary and intake plan; product cards and app navigation are intentionally hidden in print CSS.
+- DMARC/DKIM/SPF live outside the codebase. The app can document and verify expected state, but DNS records must be set in the domain/mail-provider control panels.
+
+Operational rule:
+- Keep `Plan drucken/PDF` as a client-side `window.print()` flow until users need branded PDFs, sharing, or server-generated documents.
+- Before launch, manually set `_dmarc.supplementstack.de` and enable/confirm DKIM in the mail provider; then retest registration, verification, reset, and stack emails against external inboxes.
+- Product link reports should be worked from Admin `Linkmeldungen`; do not silently accept products without purchase links.

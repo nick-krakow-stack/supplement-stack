@@ -1187,3 +1187,17 @@ Do not assume untracked files are disposable. Review before deleting or committi
 - New backend routes/modules: `/api/family`, `/api/stacks/link-report`, and `PATCH /api/admin/product-qa/:id`.
 - Validation passed: functions `npx tsc -p tsconfig.json --noEmit`, frontend `npx tsc --noEmit`, frontend `npm run lint --if-present`, frontend `npm run build`, and `git diff --check` with CRLF warnings only.
 - Smoke checks passed: preview/live root 200 with `assets/index-CmCtPS8l.js`; preview/live unauthenticated `/api/family`, `/api/stacks/link-report`, `/api/admin/product-qa/1`, and `/api/admin/ops-dashboard` return 401; remote D1 confirms `family_profiles`, `product_link_reports`, `idx_stacks_family_member_id`, and migration 0048 applied.
+
+## 2026-05-05 Launch Checks And Print Routine Deployed
+
+- Commit `d0b878b` is deployed to Cloudflare Pages project `supplementstack`.
+- Preview URL: `https://f97becf1.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`, asset `assets/index-BmvNNsmY.js`.
+- Admin now has `Linkmeldungen` for `product_link_reports`, including search/filter, current vs reported shop link, and status updates (`open`, `reviewed`, `closed`) via audited `/api/admin/link-reports`.
+- Admin `Admin-Uebersicht` now counts open link reports and shows the top link-report queue items.
+- Admin now has `Go-Live Checks` with launch notes for Mail/DNS, legal/trust visibility, Cloudflare log checks, D1 backups, and remaining manual DNS tasks.
+- StackWorkspace now has `Plan drucken/PDF`, using browser print/save-as-PDF with print-specific CSS that focuses on the stack cockpit and Einnahmeplan.
+- Trust copy cleanup: fixed affiliate disclaimer grammar and Impressum product-area typo.
+- DNS check via Cloudflare DNS on 2026-05-05: SPF TXT and MX are present; `_dmarc.supplementstack.de` TXT is missing; common DKIM selectors were not found, so DKIM must be enabled/confirmed in the mail provider.
+- Validation passed: functions `npx tsc -p tsconfig.json --noEmit`, frontend `npx tsc --noEmit`, frontend `npm run lint --if-present`, frontend `npm run build`, and `git diff --check` with CRLF warnings only.
+- Smoke checks passed: preview/live root 200 with `assets/index-BmvNNsmY.js`; unauthenticated preview `/api/admin/link-reports` and `/api/admin/ops-dashboard`, plus live `/api/admin/link-reports`, return 401.
