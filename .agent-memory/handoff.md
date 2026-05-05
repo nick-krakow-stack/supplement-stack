@@ -651,3 +651,15 @@ Completed:
 Next:
 - Enable/confirm DKIM in All-Inkl/Kasserver and set the provided DKIM DNS record.
 - After DKIM is active and mail tests are stable, consider raising DMARC from `p=none` to `p=quarantine`, later `p=reject`.
+
+## 2026-05-05 - DKIM Handoff
+
+Completed:
+- Set `kas202508251337._domainkey.supplementstack.de` TXT in Cloudflare DNS using the All-Inkl/Kasserver DKIM public key.
+- Verified DNS propagation via Cloudflare DNS-over-HTTPS.
+- Updated and deployed Admin `Go-Live Checks` so DKIM is marked OK.
+
+Next:
+- Send real registration, verification, password reset, and stack emails to external inboxes.
+- Check message headers for `DKIM-Signature` with `d=supplementstack.de` and `s=kas202508251337`.
+- If SPF/DKIM/DMARC alignment is stable for a while, later consider raising DMARC from `p=none` to `p=quarantine`, then `p=reject`.

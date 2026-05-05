@@ -1081,3 +1081,14 @@ When a future agent deploys or applies migrations, append the exact date, commit
 - Live URL: `https://supplementstack.de`.
 - Build asset: `assets/index-BeN1jbtz.js`.
 - Commit after deploy: `55e44f4` - Update launch checklist DMARC status.
+
+## 2026-05-05 - DKIM DNS Update
+
+- Cloudflare DNS change: created `kas202508251337._domainkey.supplementstack.de` TXT.
+- Value: All-Inkl/Kasserver DKIM public key supplied by owner, beginning `v=DKIM1; k=rsa; p=MIIB...`.
+- Verification: Cloudflare DNS-over-HTTPS returns the TXT record with status 0.
+- Deploy command: `npx wrangler pages deploy frontend/dist --project-name supplementstack` after updating Admin Go-Live checklist.
+- Preview URL: `https://eb099bd2.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`.
+- Build asset: `assets/index-Bsg3uhC-.js`.
+- Commit after deploy: `7f9c67a` - Update launch checklist DKIM status.

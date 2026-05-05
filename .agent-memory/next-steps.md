@@ -571,3 +571,14 @@ Still open before launch:
 - DKIM provider setup/verification.
 - External inbox mail tests for registration, verification, password reset, and stack mail.
 - Later DMARC hardening from `p=none` to `p=quarantine`/`p=reject` after mail alignment is confirmed.
+
+## 2026-05-05 DKIM Follow-Up
+
+Closed:
+- DKIM TXT for `kas202508251337._domainkey.supplementstack.de` is set and publicly resolving.
+- Admin Go-Live checklist reflects DKIM as OK.
+
+Still open before launch:
+- External inbox mail tests for registration, verification, password reset, and stack mail.
+- Verify outbound headers include `DKIM-Signature: ... d=supplementstack.de; s=kas202508251337`.
+- Later DMARC hardening after mail alignment is confirmed.

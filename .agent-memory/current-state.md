@@ -1213,3 +1213,15 @@ Do not assume untracked files are disposable. Review before deleting or committi
 - Live URL: `https://supplementstack.de`, asset `assets/index-BeN1jbtz.js`.
 - Validation passed: frontend `npx tsc --noEmit`, frontend `npm run lint --if-present`, frontend `npm run build`, and scoped `git diff --check` with CRLF warnings only.
 - Commit: `55e44f4` - Update launch checklist DMARC status.
+
+## 2026-05-05 DKIM Record Set
+
+- Cloudflare DNS zone `supplementstack.de` updated via API.
+- Created TXT record `kas202508251337._domainkey.supplementstack.de` with the All-Inkl/Kasserver DKIM public key supplied by the owner.
+- Verified through public Cloudflare DNS-over-HTTPS: DKIM TXT resolves successfully.
+- Admin `Go-Live Checks` tab updated to mark DKIM as set; the remaining manual mail task is real outbound mail testing.
+- Deployed updated frontend checklist to Cloudflare Pages project `supplementstack`.
+- Preview URL: `https://eb099bd2.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`, asset `assets/index-Bsg3uhC-.js`.
+- Validation passed: frontend `npx tsc --noEmit`, frontend `npm run lint --if-present`, frontend `npm run build`, and scoped `git diff --check` with CRLF warnings only.
+- Commit: `7f9c67a` - Update launch checklist DKIM status.
