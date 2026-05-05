@@ -1015,4 +1015,4 @@ When a future agent deploys or applies migrations, append the exact date, commit
   - Existing `ingredient_safety_warnings` remains the product-card warning source; the cockpit manages warning rows but not full knowledge article bodies.
 - Validation passed: frontend `npm run lint`, frontend `npm run build`, functions `npx tsc -p tsconfig.json --noEmit`, and `git diff --check` with CRLF warnings only.
 - Smoke checks passed: remote D1 confirms `ingredient_research_status` and `ingredient_research_sources`, production ingredient count is 66, preview/live root 200 with `assets/index-DTMpE7Sg.js`, and preview/live unauthenticated `/api/admin/ingredient-research` returns 401.
-- Commit after deploy: `900f95b` - Feature: Add ingredient research admin cockpit.
+- Commit after deploy: `7dd9a6b` - Feature: Add ingredient research admin cockpit.
