@@ -37,6 +37,8 @@
 //   GET /ops-dashboard    — operational queues and counts (admin)
 //   GET /product-qa       — suspicious product data list (admin)
 //   PATCH /product-qa/:id — update high-impact product QA fields (admin)
+//   GET /link-reports     — product link reports queue (admin)
+//   PATCH /link-reports/:id — update product link report status (admin)
 // Plus public shop-domain routes (mounted at /api/shop-domains):
 //   GET /resolve?url=       — resolve shop name from URL (public)
 //   GET /                   — list shop domains (public)
@@ -410,6 +412,24 @@ type ProductQaPatch = {
   container_count?: number | null
 }
 
+type ProductLinkReportStatus = typeof PRODUCT_LINK_REPORT_STATUSES[number]
+
+type ProductLinkReportRow = {
+  id: number
+  user_id: number
+  user_email: string | null
+  stack_id: number | null
+  stack_name: string | null
+  product_type: 'catalog' | 'user_product'
+  product_id: number
+  product_name: string | null
+  shop_link_snapshot: string | null
+  current_shop_link: string | null
+  reason: string
+  status: ProductLinkReportStatus
+  created_at: string
+}
+
 type IngredientResearchExportRow = {
   ingredient_id: number
   name: string
@@ -449,6 +469,7 @@ const PRODUCT_QA_ISSUES = [
   'missing_ingredient_rows',
   'no_affiliate_flag_on_shop_link',
 ] as const
+const PRODUCT_LINK_REPORT_STATUSES = ['open', 'reviewed', 'closed'] as const
 
 const SENSITIVE_AUDIT_KEY_PARTS = [
   'password',
@@ -2078,7 +2099,9 @@ admin.get('/ops-dashboard', async (c) => {
     knowledgeDrafts,
     productsTotal,
     productQaIssues,
+    linkReportsOpen,
     productQaTopItems,
+    linkReportTopItems,
     researchDueItems,
     researchLaterItems,
     warningsWithoutArticleItems,
@@ -2109,6 +2132,11 @@ admin.get('/ops-dashboard', async (c) => {
     `),
     c.env.DB.prepare("SELECT COUNT(*) AS count FROM knowledge_articles WHERE status = 'draft'"),
     c.env.DB.prepare('SELECT COUNT(*) AS count FROM products'),
+    c.env.DB.prepare(`
+      SELECT COUNT(*) AS count
+      FROM product_link_reports
+      WHERE status = 'open'
+    `),
     c.env.DB.prepare(`
       WITH ingredient_counts AS (
         SELECT
@@ -2203,6 +2231,33 @@ admin.get('/ops-dashboard', async (c) => {
     `),
     c.env.DB.prepare(`
       SELECT
+        r.id,
+        r.user_id,
+        u.email AS user_email,
+        r.stack_id,
+        s.name AS stack_name,
+        r.product_type,
+        r.product_id,
+        r.product_name,
+        r.shop_link_snapshot,
+        CASE
+          WHEN r.product_type = 'catalog' THEN p.shop_link
+          ELSE up.shop_link
+        END AS current_shop_link,
+        r.reason,
+        r.status,
+        r.created_at
+      FROM product_link_reports r
+      LEFT JOIN users u ON u.id = r.user_id
+      LEFT JOIN stacks s ON s.id = r.stack_id
+      LEFT JOIN products p ON r.product_type = 'catalog' AND p.id = r.product_id
+      LEFT JOIN user_products up ON r.product_type = 'user_product' AND up.id = r.product_id
+      WHERE r.status = 'open'
+      ORDER BY r.created_at ASC, r.id ASC
+      LIMIT 5
+    `),
+    c.env.DB.prepare(`
+      SELECT
         i.id AS ingredient_id,
         i.name AS ingredient_name,
         COALESCE(rs.research_status, 'unreviewed') AS research_status,
@@ -2284,8 +2339,10 @@ admin.get('/ops-dashboard', async (c) => {
     knowledge_draft_count: ((knowledgeDrafts.results?.[0] as CountRow | undefined)?.count) ?? 0,
     products_total: ((productsTotal.results?.[0] as CountRow | undefined)?.count) ?? 0,
     product_qa_issue_count: ((productQaIssues.results?.[0] as CountRow | undefined)?.count) ?? 0,
+    link_reports_open_count: ((linkReportsOpen.results?.[0] as CountRow | undefined)?.count) ?? 0,
     queues: {
       product_qa: ((productQaTopItems.results ?? []) as ProductQaRow[]).map((row) => formatProductQaRow(row)),
+      link_reports: linkReportTopItems.results ?? [],
       research_due: researchDueItems.results ?? [],
       research_later: researchLaterItems.results ?? [],
       warnings_without_article: warningsWithoutArticleItems.results ?? [],
@@ -2455,6 +2512,146 @@ admin.patch('/product-qa/:id', async (c) => {
   })
 
   return c.json({ product: formatProductQaRow(updated) })
+})
+
+// GET /api/admin/link-reports?status=&q=&limit=100 (admin only)
+admin.get('/link-reports', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const q = c.req.query('q')?.trim() ?? ''
+  const statusParam = c.req.query('status')?.trim() ?? ''
+  const status = statusParam ? enumValue(statusParam, PRODUCT_LINK_REPORT_STATUSES) : null
+  if (statusParam && !status) {
+    return c.json({ error: `status must be one of ${PRODUCT_LINK_REPORT_STATUSES.join(', ')}` }, 400)
+  }
+  const limit = parsePagination(c.req.query('limit'), 100, 250)
+  const where: string[] = []
+  const bindings: Array<string | number> = []
+
+  if (status) {
+    where.push('r.status = ?')
+    bindings.push(status)
+  }
+
+  if (q) {
+    const like = `%${q}%`
+    where.push(`(
+      COALESCE(r.product_name, '') LIKE ?
+      OR COALESCE(u.email, '') LIKE ?
+      OR COALESCE(s.name, '') LIKE ?
+      OR COALESCE(r.shop_link_snapshot, '') LIKE ?
+      OR COALESCE(p.shop_link, '') LIKE ?
+      OR COALESCE(up.shop_link, '') LIKE ?
+    )`)
+    bindings.push(like, like, like, like, like, like)
+  }
+
+  const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''
+  const { results } = await c.env.DB.prepare(`
+    SELECT
+      r.id,
+      r.user_id,
+      u.email AS user_email,
+      r.stack_id,
+      s.name AS stack_name,
+      r.product_type,
+      r.product_id,
+      r.product_name,
+      r.shop_link_snapshot,
+      CASE
+        WHEN r.product_type = 'catalog' THEN p.shop_link
+        ELSE up.shop_link
+      END AS current_shop_link,
+      r.reason,
+      r.status,
+      r.created_at
+    FROM product_link_reports r
+    LEFT JOIN users u ON u.id = r.user_id
+    LEFT JOIN stacks s ON s.id = r.stack_id
+    LEFT JOIN products p ON r.product_type = 'catalog' AND p.id = r.product_id
+    LEFT JOIN user_products up ON r.product_type = 'user_product' AND up.id = r.product_id
+    ${whereSql}
+    ORDER BY
+      CASE r.status WHEN 'open' THEN 0 WHEN 'reviewed' THEN 1 ELSE 2 END,
+      r.created_at ASC,
+      r.id ASC
+    LIMIT ?
+  `).bind(...bindings, limit).all<ProductLinkReportRow>()
+
+  return c.json({
+    reports: results,
+    total: results.length,
+    limit,
+    available_statuses: PRODUCT_LINK_REPORT_STATUSES,
+  })
+})
+
+// PATCH /api/admin/link-reports/:id (admin only)
+admin.patch('/link-reports/:id', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const id = parsePositiveId(c.req.param('id'))
+  if (id === null) return c.json({ error: 'Invalid link report id' }, 400)
+
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const status = enumValue(body.status, PRODUCT_LINK_REPORT_STATUSES)
+  if (!status) return c.json({ error: `status must be one of ${PRODUCT_LINK_REPORT_STATUSES.join(', ')}` }, 400)
+
+  const existing = await c.env.DB.prepare(`
+    SELECT *
+    FROM product_link_reports
+    WHERE id = ?
+  `).bind(id).first<ProductLinkReportRow>()
+  if (!existing) return c.json({ error: 'Link report not found' }, 404)
+
+  await c.env.DB.prepare(`
+    UPDATE product_link_reports
+    SET status = ?
+    WHERE id = ?
+  `).bind(status, id).run()
+
+  const updated = await c.env.DB.prepare(`
+    SELECT
+      r.id,
+      r.user_id,
+      u.email AS user_email,
+      r.stack_id,
+      s.name AS stack_name,
+      r.product_type,
+      r.product_id,
+      r.product_name,
+      r.shop_link_snapshot,
+      CASE
+        WHEN r.product_type = 'catalog' THEN p.shop_link
+        ELSE up.shop_link
+      END AS current_shop_link,
+      r.reason,
+      r.status,
+      r.created_at
+    FROM product_link_reports r
+    LEFT JOIN users u ON u.id = r.user_id
+    LEFT JOIN stacks s ON s.id = r.stack_id
+    LEFT JOIN products p ON r.product_type = 'catalog' AND p.id = r.product_id
+    LEFT JOIN user_products up ON r.product_type = 'user_product' AND up.id = r.product_id
+    WHERE r.id = ?
+  `).bind(id).first<ProductLinkReportRow>()
+
+  await logAdminAction(c, {
+    action: 'update_product_link_report_status',
+    entity_type: 'product_link_report',
+    entity_id: id,
+    changes: { before: { status: existing.status }, after: { status } },
+  })
+
+  return c.json({ report: updated })
 })
 
 // GET /api/admin/dose-recommendations?ingredient_id=&q=&active=&public=&source_type=&page=1&limit=50 (admin only)

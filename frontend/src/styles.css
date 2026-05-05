@@ -465,6 +465,9 @@ body {
   background: #fffbeb;
   padding: 6px 10px;
 }
+.print-sheet-heading {
+  display: none;
+}
 
 /* Category groups */
 .category-group { margin-bottom: 32px; }
@@ -695,6 +698,131 @@ body {
   .ss-modal-btn-save,
   .ss-modal-close {
     min-height: 44px;
+  }
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+
+  html,
+  body {
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  .site-header,
+  .ss-toolbar,
+  .info-banner,
+  .bottom-bar,
+  .family-switcher,
+  .family-form,
+  .family-member-list,
+  .link-report-status,
+  .ss-section-title,
+  .masonry-grid,
+  footer,
+  nav {
+    display: none !important;
+  }
+
+  .ss-page,
+  .ss-page-embedded {
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .stack-cockpit {
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    color: #0f172a !important;
+  }
+
+  .print-sheet-heading {
+    display: block !important;
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #0f172a;
+  }
+
+  .print-sheet-heading strong {
+    display: block;
+    font-size: 18px;
+    font-weight: 900;
+  }
+
+  .print-sheet-heading span {
+    display: block;
+    margin-top: 2px;
+    color: #475569;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .stack-cockpit-head {
+    margin-bottom: 10px !important;
+  }
+
+  .stack-cockpit-kicker,
+  .conflict-icon,
+  .cockpit-ampel {
+    display: none !important;
+  }
+
+  .stack-cockpit h2 {
+    font-size: 20px !important;
+    margin: 0 !important;
+  }
+
+  .conflict-card {
+    break-inside: avoid;
+    margin-bottom: 10px !important;
+    padding: 8px !important;
+    border-color: #cbd5e1 !important;
+    background: #fff !important;
+  }
+
+  .cockpit-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 6px !important;
+    margin-bottom: 12px !important;
+  }
+
+  .cockpit-tile,
+  .routine-column,
+  .routine-item {
+    break-inside: avoid;
+    border-color: #cbd5e1 !important;
+    background: #fff !important;
+    box-shadow: none !important;
+  }
+
+  .cockpit-tile {
+    padding: 7px !important;
+  }
+
+  .cockpit-tile strong {
+    font-size: 14px !important;
+  }
+
+  .routine-panel {
+    border-top: 1px solid #cbd5e1 !important;
+    padding-top: 10px !important;
+  }
+
+  .routine-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+
+  .routine-column > p {
+    min-height: 0 !important;
   }
 }
 

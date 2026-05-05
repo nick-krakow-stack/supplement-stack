@@ -17,7 +17,7 @@ export default function LegalDisclaimer({ variant }: Props) {
     <p className="text-xs text-gray-400 leading-relaxed">
       * Einige Produktlinks k&ouml;nnen Affiliate-Links sein. Wenn du dar&uuml;ber kaufst,
       erh&auml;lt der Betreiber ggf. eine Provision. Die Markierung ist im Interface klar sichtbar
-      und Produktreihung orientieren sich nicht am Provisionsmodell.
+      und die Produktreihung orientiert sich nicht am Provisionsmodell.
     </p>
   );
 }

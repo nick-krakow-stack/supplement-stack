@@ -18,6 +18,8 @@ import TranslationsTab from './admin/TranslationsTab';
 import IngredientSubIngredientsTab from './admin/IngredientSubIngredientsTab';
 import IngredientResearchTab from './admin/IngredientResearchTab';
 import ProductQATab from './admin/ProductQATab';
+import LinkReportsTab from './admin/LinkReportsTab';
+import LaunchChecklistTab from './admin/LaunchChecklistTab';
 
 // ---- Local types ----
 interface AdminProduct {
@@ -151,6 +153,8 @@ type Tab =
   | 'ingredients'
   | 'knowledge_articles'
   | 'product_qa'
+  | 'link_reports'
+  | 'launch_checks'
   | 'translations'
   | 'interactions'
   | 'stats'
@@ -1243,8 +1247,10 @@ export default function AdminPage() {
     <div className="flex flex-col gap-6">
       {activeTab === 'products' && <ProductsTab />}
       {activeTab === 'product_qa' && <ProductQATab />}
+      {activeTab === 'link_reports' && <LinkReportsTab />}
       {activeTab === 'ingredients' && <IngredientsTab />}
       {activeTab === 'knowledge_articles' && <AdminKnowledgeArticlesTab />}
+      {activeTab === 'launch_checks' && <LaunchChecklistTab />}
       {activeTab === 'translations' && <TranslationsTab />}
       {activeTab === 'ingredient_sub_ingredients' && <IngredientSubIngredientsTab />}
       {activeTab === 'dose_recommendations' && <DoseRecommendationsTab />}

@@ -5,6 +5,7 @@ import {
   ArrowRight,
   ClipboardList,
   Download,
+  Flag,
   FileText,
   PackageSearch,
   RefreshCw,
@@ -45,6 +46,10 @@ function issueLabel(issue: string): string {
     no_affiliate_flag_on_shop_link: 'Affiliate-Flag fehlt',
   };
   return labels[issue] ?? issue.replace(/[_-]+/g, ' ');
+}
+
+function reportReasonLabel(reason: string): string {
+  return reason === 'invalid_link' ? 'Link fehlerhaft' : 'Link fehlt';
 }
 
 interface QueuePanelProps {
@@ -182,6 +187,13 @@ export default function AdminOpsDashboardTab() {
       icon: <PackageSearch size={19} />,
       href: '/admin?tab=product_qa',
     },
+    {
+      label: 'Linkmeldungen',
+      value: dashboard.link_reports.open,
+      tone: 'bg-rose-50 text-rose-700 border-rose-100',
+      icon: <Flag size={19} />,
+      href: '/admin?tab=link_reports',
+    },
   ];
 
   return (
@@ -241,11 +253,27 @@ export default function AdminOpsDashboardTab() {
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
         <QueuePanel title="Heute bearbeiten" tone="text-amber-800 bg-amber-50/80">
           {dashboard.queues.product_qa.length === 0 &&
+            dashboard.queues.link_reports.length === 0 &&
             dashboard.queues.research_due.length === 0 &&
             dashboard.queues.warnings_without_article.length === 0 ? (
               <EmptyQueue />
             ) : (
               <>
+                {dashboard.queues.link_reports.map((report) => (
+                  <Link
+                    key={`link-report-${report.id}`}
+                    to={`/admin?tab=link_reports&q=${encodeURIComponent(report.product_name || String(report.product_id))}`}
+                    className="flex items-start justify-between gap-3 px-4 py-3 hover:bg-slate-50"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-900">
+                        {report.product_name || `Produkt ${report.product_id}`}
+                      </p>
+                      <p className="text-xs text-slate-500">{reportReasonLabel(report.reason)} · {report.user_email || 'User unbekannt'}</p>
+                    </div>
+                    <ArrowRight className="mt-0.5 shrink-0 text-slate-400" size={16} />
+                  </Link>
+                ))}
                 {dashboard.queues.product_qa.map((product) => (
                   <Link
                     key={`product-${product.id}`}

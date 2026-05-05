@@ -291,9 +291,13 @@ export interface AdminOpsDashboard {
   product_qa: {
     issues: number;
   };
+  link_reports: {
+    open: number;
+  };
   totals: Record<string, number>;
   queues: {
     product_qa: AdminProductQAProduct[];
+    link_reports: AdminProductLinkReport[];
     research_due: AdminOpsResearchQueueItem[];
     research_later: AdminOpsResearchQueueItem[];
     warnings_without_article: AdminOpsWarningQueueItem[];
@@ -363,6 +367,31 @@ export interface AdminProductQAPatch {
   serving_unit?: string | null;
   servings_per_container?: number | null;
   container_count?: number | null;
+}
+
+export type AdminProductLinkReportStatus = 'open' | 'reviewed' | 'closed';
+
+export interface AdminProductLinkReport {
+  id: number;
+  user_id: number;
+  user_email: string | null;
+  stack_id: number | null;
+  stack_name: string | null;
+  product_type: 'catalog' | 'user_product';
+  product_id: number;
+  product_name: string | null;
+  shop_link_snapshot: string | null;
+  current_shop_link: string | null;
+  reason: string;
+  status: AdminProductLinkReportStatus;
+  created_at: string | null;
+  raw?: Record<string, unknown>;
+}
+
+export interface AdminProductLinkReportsResponse {
+  reports: AdminProductLinkReport[];
+  total?: number | null;
+  limit?: number;
 }
 
 interface AuditFilterParams {
@@ -627,9 +656,13 @@ function normalizeOpsDashboard(raw: unknown): AdminOpsDashboard {
       issues: readCount(payload, ['product_qa_issue_count', 'product_qa_issues', 'products_with_issues']) ||
         readCount(productQa, ['issues', 'products']),
     },
+    link_reports: {
+      open: readCount(payload, ['link_reports_open_count', 'open_link_reports', 'link_reports_open']),
+    },
     totals: parseTotals(payload),
     queues: {
       product_qa: parseQueueList(queues.product_qa, parseProductQAProduct),
+      link_reports: parseQueueList(queues.link_reports, parseProductLinkReport),
       research_due: parseQueueList(queues.research_due, parseResearchQueueItem),
       research_later: parseQueueList(queues.research_later, parseResearchQueueItem),
       warnings_without_article: parseQueueList(queues.warnings_without_article, parseWarningQueueItem),
@@ -658,6 +691,27 @@ function parseProductQAProduct(raw: Record<string, unknown>): AdminProductQAProd
     ingredient_count: toIntOrNull(raw.ingredient_count) ?? 0,
     main_ingredient_count: toIntOrNull(raw.main_ingredient_count) ?? 0,
     issues,
+    raw,
+  };
+}
+
+function parseProductLinkReport(raw: Record<string, unknown>): AdminProductLinkReport {
+  const status = toTextOrNull(raw.status) as AdminProductLinkReportStatus | null;
+  const productType = toTextOrNull(raw.product_type);
+  return {
+    id: toIntOrNull(raw.id) ?? 0,
+    user_id: toIntOrNull(raw.user_id) ?? 0,
+    user_email: toTextOrNull(raw.user_email),
+    stack_id: toIntOrNull(raw.stack_id),
+    stack_name: toTextOrNull(raw.stack_name),
+    product_type: productType === 'user_product' ? 'user_product' : 'catalog',
+    product_id: toIntOrNull(raw.product_id) ?? 0,
+    product_name: toTextOrNull(raw.product_name),
+    shop_link_snapshot: toTextOrNull(raw.shop_link_snapshot),
+    current_shop_link: toTextOrNull(raw.current_shop_link),
+    reason: toTextOrNull(raw.reason) || 'missing_link',
+    status: status === 'reviewed' || status === 'closed' ? status : 'open',
+    created_at: toDateOrNull(raw.created_at),
     raw,
   };
 }
@@ -1141,6 +1195,40 @@ export async function updateProductQA(
   );
   const product = (res.data.product ?? res.data) as Record<string, unknown>;
   return parseProductQAProduct(product);
+}
+
+export async function getProductLinkReports(params: {
+  q?: string;
+  status?: AdminProductLinkReportStatus | '';
+  limit?: number;
+} = {}): Promise<AdminProductLinkReportsResponse> {
+  const query = toQueryParams({
+    q: params.q,
+    status: params.status,
+    limit: params.limit ?? 100,
+  });
+  const res = await apiClient.get<{ reports?: unknown; total?: number | null; limit?: number }>(
+    '/admin/link-reports',
+    { params: query },
+  );
+  const reports = Array.isArray(res.data.reports) ? res.data.reports : [];
+  return {
+    reports: reports.map((report) => parseProductLinkReport(report as Record<string, unknown>)),
+    total: res.data.total,
+    limit: res.data.limit,
+  };
+}
+
+export async function updateProductLinkReportStatus(
+  reportId: number,
+  status: AdminProductLinkReportStatus,
+): Promise<AdminProductLinkReport> {
+  const res = await apiClient.patch<{ report?: unknown }>(
+    `/admin/link-reports/${reportId}`,
+    { status },
+  );
+  const report = (res.data.report ?? res.data) as Record<string, unknown>;
+  return parseProductLinkReport(report);
 }
 
 export async function getIngredientResearchExport(): Promise<unknown> {

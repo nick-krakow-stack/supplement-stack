@@ -11,11 +11,13 @@ import {
   UserCheck,
   Languages,
   Link2,
+  Flag,
   Pill,
   History,
   ClipboardList,
   FileText,
   PackageSearch,
+  ShieldCheck,
   ChevronLeft,
   Menu,
   X,
@@ -34,6 +36,8 @@ type TabId =
   | 'ingredients'
   | 'knowledge_articles'
   | 'product_qa'
+  | 'link_reports'
+  | 'launch_checks'
   | 'translations'
   | 'ingredient_sub_ingredients'
   | 'dose_recommendations'
@@ -54,9 +58,11 @@ const navItems: NavItem[] = [
   { id: 'stats', label: 'Admin-Übersicht', icon: <BarChart3 size={18} /> },
   { id: 'products', label: 'Produkte', icon: <Package size={18} /> },
   { id: 'product_qa', label: 'Produkt-QA', icon: <PackageSearch size={18} /> },
+  { id: 'link_reports', label: 'Linkmeldungen', icon: <Flag size={18} /> },
   { id: 'ingredients', label: 'Zutaten', icon: <FlaskConical size={18} /> },
   { id: 'knowledge_articles', label: 'Wissen', icon: <FileText size={18} /> },
   { id: 'ingredient_research', label: 'Wirkstoff-Recherche', icon: <ClipboardList size={18} /> },
+  { id: 'launch_checks', label: 'Go-Live Checks', icon: <ShieldCheck size={18} /> },
   { id: 'translations', label: 'Translations', icon: <Languages size={18} /> },
   { id: 'ingredient_sub_ingredients', label: 'Sub-Ingredients', icon: <Link2 size={18} /> },
   { id: 'dose_recommendations', label: 'Dose-Richtwerte', icon: <Pill size={18} /> },
@@ -71,6 +77,8 @@ const TAB_LABELS: Record<TabId, string> = {
   stats: 'Admin-Übersicht',
   products: 'Produkte',
   product_qa: 'Produkt-QA',
+  link_reports: 'Linkmeldungen',
+  launch_checks: 'Go-Live Checks',
   ingredients: 'Zutaten',
   knowledge_articles: 'Wissen',
   translations: 'Translations',

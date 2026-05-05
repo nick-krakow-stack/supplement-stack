@@ -12,6 +12,7 @@ import {
   Info,
   Package,
   Plus,
+  Printer,
   Search,
   UserPlus,
   Users,
@@ -947,6 +948,9 @@ function IconMail() {
     </svg>
   );
 }
+function IconPrint() {
+  return <Printer size={14} />;
+}
 function IconTrash() {
   return (
     <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
@@ -1635,6 +1639,10 @@ export function StackWorkspace({
     }
   };
 
+  const handlePrintStack = () => {
+    window.print();
+  };
+
   const activeDescription = activeStack ? descriptions[activeStack.id] ?? '' : '';
   const editingProduct = activeStack?.products.find((product) => productStackKey(product) === editingProductKey) ?? null;
   const replacingStack = activeStack && replaceProductKey ? activeStack : null;
@@ -1818,6 +1826,15 @@ export function StackWorkspace({
             <IconMail />
             {emailSending ? 'Wird gesendet...' : 'Stack mailen'}
           </button>
+          <button
+            className="ss-btn ss-btn-outline print-action"
+            onClick={handlePrintStack}
+            disabled={!activeStack || productsCount === 0}
+            style={!activeStack || productsCount === 0 ? { opacity: 0.55, cursor: 'not-allowed' } : undefined}
+          >
+            <IconPrint />
+            Plan drucken/PDF
+          </button>
           {(isDemo || emailStatus) && (
             <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>
               {isDemo ? 'E-Mail-Versand ist nur angemeldet verfuegbar.' : emailStatus}
@@ -1851,6 +1868,10 @@ export function StackWorkspace({
         )}
 
         <section className="stack-cockpit" aria-label="Stack-Check">
+          <div className="print-sheet-heading">
+            <strong>Supplement Stack Einnahmeplan</strong>
+            <span>{activeStack?.name ?? 'Stack'} · {stackProfileLabel(activeStack)}</span>
+          </div>
           <div className="stack-cockpit-head">
             <div>
               <div className="stack-cockpit-kicker">
