@@ -1121,3 +1121,11 @@ When a future agent deploys or applies migrations, append the exact date, commit
 - Validation passed: functions TypeScript, frontend TypeScript, frontend lint, frontend build, frontend Vitest 5 tests, and `git diff --check` with CRLF warnings only.
 - Smoke checks passed: preview/live root returned 200 with `assets/index-BKappw8q.js`.
 - Commit before deploy: `8768854` - UX: Simplify stack cockpit and bottom summary.
+
+## 2026-05-05 - Whole-Unit Dosage And Footer Polish
+
+- Deployed Cloudflare Pages project `supplementstack`.
+- Preview URL: `https://972cb5fc.supplementstack.pages.dev`.
+- Preview root returned 200 with `assets/index-HwTaoKFr.js`.
+- Validation passed before deploy: frontend tests, frontend TypeScript, lint, build, functions TypeScript, and `git diff --check`.
+- Live-domain smoke was blocked by recursive DNS `SERVFAIL` for `supplementstack.de`; Cloudflare zone/project checks and authoritative nameserver checks look healthy.

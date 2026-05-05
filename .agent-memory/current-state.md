@@ -1251,3 +1251,18 @@ Do not assume untracked files are disposable. Review before deleting or committi
 - Duplicate products are blocked earlier in the add-product modal and are rejected by stack payload normalization on the backend.
 - Validation passed: functions `npx tsc -p tsconfig.json --noEmit`, frontend `npx tsc --noEmit`, frontend `npm run lint --if-present`, frontend `npm run build`, frontend `npm test -- --run` (5 tests), and `git diff --check` with CRLF warnings only.
 - Smoke checks passed: preview/live root return 200 with `assets/index-BKappw8q.js`.
+
+## 2026-05-05 Whole-Unit Dosage And Footer Polish Deployed
+
+- Cloudflare Pages project `supplementstack` deployed.
+- Preview URL: `https://972cb5fc.supplementstack.pages.dev`.
+- Preview asset: `assets/index-HwTaoKFr.js`.
+- Stack/product calculations now treat product ingredient potency as amount per physical intake unit when `basis_quantity` or multi-unit `serving_size` data exists. Example: `3 Tropfen = 2000 IE` becomes about `666.67 IE` per drop, so `800 IE` rounds up to `2 Tropfen` and `10000 IE` rounds up to `15 Tropfen`.
+- Package range and monthly costs now use total physical intake units (`servings_per_container * serving_size * container_count`) and floor the range in whole days.
+- The same calculation path is mirrored in frontend stack/product rendering and backend stack mail rendering. Print/PDF uses the frontend stack/routine rendering, so it inherits the whole-unit range/cost logic.
+- Product cards, routine fallback labels, and stack mail daily unit labels now pluralize common units such as Kapsel/Kapseln, Tablette/Tabletten, Portion/Portionen, and Softgel/Softgels.
+- Stack footer overlay is hidden while stack modals are open; the page footer receives extra desktop bottom spacing while the overlay is visible, and mobile uses an in-flow sticky footer bar to reduce overlap.
+- Visible ASCII fallback texts in the touched stack/product surfaces were corrected, including `Frühstück`, `wählbar`, `verfügbar`, and `öffnen`.
+- Validation passed: frontend `npm test -- --run` (6 tests), frontend `npx tsc --noEmit`, frontend `npm run lint --if-present`, frontend `npm run build`, functions `npx tsc -p tsconfig.json --noEmit`, and `git diff --check` with CRLF warnings only.
+- Preview smoke passed: preview root returned 200 with `assets/index-HwTaoKFr.js`; preview `/demo` rendered the updated stack UI and bottom bar. Browser-Harness screenshots were taken during QA and should be treated as temporary artifacts only.
+- Live-domain note: after deploy, public recursive DNS checks for `supplementstack.de` returned `SERVFAIL` from 1.1.1.1 and 8.8.8.8. The Cloudflare zone is active, Pages still lists `supplementstack.de`, Cloudflare DNS records exist, and direct queries against `piper.ns.cloudflare.com` / `sonny.ns.cloudflare.com` return the expected A records. This looks like a recursive DNS/delegation-resolution issue to recheck before relying on the live-domain smoke.

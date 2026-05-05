@@ -74,6 +74,27 @@ function formatEur(value: number): string {
   return value.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
 }
 
+function unitLabel(unit?: string, amount?: number): string {
+  const normalized = (unit ?? '').replace(/\bIU\b/gi, 'IE').replace(/\biu\b/g, 'IE').trim();
+  const singular = amount == null || Math.abs(amount - 1) < 0.001;
+  switch (normalized.toLowerCase()) {
+    case 'kapsel':
+    case 'kapseln':
+      return singular ? 'Kapsel' : 'Kapseln';
+    case 'tablette':
+    case 'tabletten':
+      return singular ? 'Tablette' : 'Tabletten';
+    case 'softgel':
+    case 'softgels':
+      return singular ? 'Softgel' : 'Softgels';
+    case 'portion':
+    case 'portionen':
+      return singular ? 'Portion' : 'Portionen';
+    default:
+      return normalized;
+  }
+}
+
 function calcMonthlyPrice(product: ProductCardProduct, price: number): number | null {
   return calculateProductUsage(product, price).monthlyCost;
 }
@@ -84,8 +105,8 @@ function getDaysSupply(product: ProductCardProduct): number | null {
 
 function getDose(product: ProductCardProduct): string {
   if (product.dosage_text) return product.dosage_text;
-  if (product.quantity && product.unit) return `${product.quantity} ${product.unit}`;
-  if (product.serving_size && product.serving_unit) return `${product.serving_size} ${product.serving_unit}`;
+  if (product.quantity && product.unit) return `${product.quantity} ${unitLabel(product.unit, product.quantity)}`;
+  if (product.serving_size && product.serving_unit) return `${product.serving_size} ${unitLabel(product.serving_unit, product.serving_size)}`;
   return '—';
 }
 
@@ -358,8 +379,8 @@ export default function ProductCard({
                 {safetyWarning.article_url && (
                   <Link
                     to={safetyWarning.article_url}
-                    aria-label={safetyWarning.article_title ?? 'Wissensartikel oeffnen'}
-                    title={safetyWarning.article_title ?? 'Wissensartikel oeffnen'}
+                    aria-label={safetyWarning.article_title ?? 'Wissensartikel öffnen'}
+                    title={safetyWarning.article_title ?? 'Wissensartikel öffnen'}
                     className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-white/70 focus:outline-none focus:ring-2 focus:ring-current focus:ring-offset-1"
                     onClick={(e) => e.stopPropagation()}
                   >

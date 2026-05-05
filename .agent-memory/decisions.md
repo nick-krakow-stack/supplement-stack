@@ -510,3 +510,7 @@ Operational rule:
 - Keep `Plan drucken/PDF` as a client-side `window.print()` flow until users need branded PDFs, sharing, or server-generated documents.
 - Before launch, manually set `_dmarc.supplementstack.de` and enable/confirm DKIM in the mail provider; then retest registration, verification, reset, and stack emails against external inboxes.
 - Product link reports should be worked from Admin `Linkmeldungen`; do not silently accept products without purchase links.
+
+## 2026-05-05 - Whole Physical Intake Units For Stack Calculations
+
+Decision: stack range, monthly cost, product preview, mail, and print/PDF must calculate from whole physical intake units, not abstract product portions. Product ingredient potency is derived per physical unit from `basis_quantity` where available, or from multi-unit `serving_size` as a fallback. Required units per intake day are always rounded up to whole units. Example: `3 Tropfen = 2000 IE` means one drop is about `666.67 IE`; therefore `800 IE` requires `2 Tropfen`, and `10000 IE` requires `15 Tropfen`.

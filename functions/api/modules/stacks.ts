@@ -136,9 +136,30 @@ function displayUnit(unit?: string | null): string {
   return (unit ?? '').replace(/\bIU\b/gi, 'IE')
 }
 
+function unitLabel(unit?: string | null, amount?: number): string {
+  const normalized = displayUnit(unit).trim()
+  const singular = amount == null || Math.abs(amount - 1) < 0.001
+  switch (normalized.toLowerCase()) {
+    case 'kapsel':
+    case 'kapseln':
+      return singular ? 'Kapsel' : 'Kapseln'
+    case 'tablette':
+    case 'tabletten':
+      return singular ? 'Tablette' : 'Tabletten'
+    case 'softgel':
+    case 'softgels':
+      return singular ? 'Softgel' : 'Softgels'
+    case 'portion':
+    case 'portionen':
+      return singular ? 'Portion' : 'Portionen'
+    default:
+      return normalized
+  }
+}
+
 function formatDailyUnit(value: number, unit?: string | null): string {
   const shown = Math.abs(value - Math.round(value)) < 0.001 ? Math.round(value) : value
-  return `${formatNumber(shown)} ${displayUnit(unit)}`
+  return `${formatNumber(shown)} ${unitLabel(unit, shown)}`
 }
 
 function normalizeIntakeIntervalDays(value: unknown): number | null {

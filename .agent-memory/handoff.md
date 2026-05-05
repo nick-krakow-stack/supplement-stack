@@ -692,3 +692,28 @@ Validation:
 
 Next:
 - Manual browser QA on the real stack page: open/close the clock intake plan, select/deselect products, verify footer cost changes, and confirm duplicate add attempts show `Bereits im Stack`.
+
+## 2026-05-05 - Whole-Unit Dosage And Footer Polish Handoff
+
+Completed:
+- Product/stack calculation now uses physical intake units for multi-unit portions. If product data says `3 Tropfen = 2000 IE`, calculations derive per-drop potency and round required intake up to whole drops/tablets/capsules.
+- D3 examples are covered by tests: `10000 IE täglich` -> `15 Tropfen`, `66` days with the existing package data; `800 IE täglich` -> `2 Tropfen`.
+- Frontend stack/product rendering, print/PDF routine, and backend stack mail use the same whole-unit semantics through their mirrored calculation helpers.
+- Stack mail daily amount labels and frontend fallback dose labels now pluralize common count units.
+- The footer overlay no longer stays visible on top of stack modals. Desktop legal footer gets extra bottom spacing when the overlay is visible; mobile uses an in-flow sticky bottom bar.
+- Touched visible ASCII fallback text was converted to proper German umlauts.
+- Deployed to Cloudflare Pages project `supplementstack`. Preview: `https://972cb5fc.supplementstack.pages.dev`.
+
+Validation:
+- Frontend `npm test -- --run` passed with 6 tests.
+- Frontend `npx tsc --noEmit`, `npm run lint --if-present`, and `npm run build` passed.
+- Functions `npx tsc -p tsconfig.json --noEmit` passed.
+- `git diff --check` passed with CRLF warnings only.
+- Preview root returned 200 with `assets/index-HwTaoKFr.js`.
+
+Important follow-up:
+- Live-domain DNS is currently not reliable from recursive resolvers: 1.1.1.1 and 8.8.8.8 returned `SERVFAIL` for `supplementstack.de` after deploy. Cloudflare API shows the zone active and Pages custom domain still attached; direct authoritative queries to Cloudflare nameservers return the expected A records. Recheck this before live-domain QA/launch.
+
+Workspace notes:
+- Existing unrelated `.claude/SESSION.md`, `.claude/settings.json`, and root `logo.png` remain out of scope.
+- Temporary Browser-Harness screenshots named `qa-*.png` may exist locally and can be deleted after final review.

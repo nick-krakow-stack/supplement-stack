@@ -603,3 +603,15 @@ Closed:
 
 Still open:
 - Manual authenticated browser QA on desktop and mobile for the simplified stack page and footer overlay.
+
+## 2026-05-05 Whole-Unit Dosage Follow-Up
+
+Closed:
+- Whole physical-unit calculation for stack/product range and monthly cost.
+- D3 multi-drop calculation tests for 10,000 IE and 800 IE.
+- Stack mail and print/PDF inherit the corrected calculation path.
+- Footer overlay/modal overlap and touched ASCII fallback text polish.
+
+Still open:
+- Recheck `supplementstack.de` DNS because recursive resolvers returned `SERVFAIL` while authoritative Cloudflare nameservers answered correctly.
+- Manual authenticated browser QA on the live domain once DNS resolves again: stack page, add/edit product, footer overlay, mail preview/send, and print/PDF.

@@ -21,10 +21,35 @@ describe('stackCalculations', () => {
       }],
     }, 27.5);
 
-    expect(usage.servingsPerIntake).toBe(5);
+    expect(usage.servingsPerIntake).toBe(15);
     expect(usage.intakeAmountPerDay).toBe(15);
     expect(usage.daysSupply).toBe(66);
     expect(usage.monthlyCost).toBeCloseTo(12.5, 2);
+  });
+
+  it('rounds multi-drop portions up to whole physical units', () => {
+    const usage = calculateProductUsage({
+      price: 12.5,
+      dosage_text: '800 IE täglich',
+      serving_size: 3,
+      serving_unit: 'Tropfen',
+      servings_per_container: 333,
+      container_count: 1,
+      intake_interval_days: 1,
+      ingredients: [{
+        ingredient_id: 1,
+        quantity: 2000,
+        unit: 'IU',
+        basis_quantity: 3,
+        basis_unit: 'Tropfen',
+        search_relevant: 1,
+      }],
+    }, 12.5);
+
+    expect(usage.servingsPerIntake).toBe(2);
+    expect(usage.intakeAmountPerDay).toBe(2);
+    expect(usage.daysSupply).toBe(499);
+    expect(usage.monthlyCost).toBeCloseTo(0.75, 2);
   });
 
   it('uses basis quantity for capsule potency', () => {

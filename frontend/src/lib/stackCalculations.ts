@@ -59,6 +59,12 @@ export function productTotalServings(product: CalculableProduct, fallback = 0): 
   return total > 0 ? total : fallback;
 }
 
+export function productTotalIntakeUnits(product: CalculableProduct, fallback = 0): number {
+  const totalServings = productTotalServings(product, 0);
+  const servingSize = positiveNumber(product.serving_size) ?? 1;
+  return totalServings > 0 ? totalServings * servingSize : fallback;
+}
+
 export function normalizeCalculationUnit(unit?: string | null): NormalizedUnit {
   const normalized = (unit ?? '')
     .trim()
@@ -154,15 +160,12 @@ export function ingredientAmountPerProductServing(
   if (quantity == null) return null;
 
   const basisQuantity = positiveNumber(ingredient.basis_quantity);
-  const basisUnit = ingredient.basis_unit;
-  if (basisQuantity == null || !basisUnit) return quantity;
+  if (basisQuantity != null) return quantity / basisQuantity;
 
   const servingSize = positiveNumber(product.serving_size);
-  if (servingSize != null && unitsAreCompatible(basisUnit, product.serving_unit)) {
-    return quantity * (servingSize / basisQuantity);
-  }
+  if (servingSize != null && servingSize > 1 && product.serving_unit) return quantity / servingSize;
 
-  return quantity / basisQuantity;
+  return quantity;
 }
 
 function bestDoseIngredient(product: CalculableProduct, dose: ParsedDose): { ingredient: CalculableIngredient; amountInDoseUnit: number } | null {
@@ -223,21 +226,20 @@ export function calculateProductUsage(
 
   const interval = intakeIntervalDays(product);
   const effectiveDailyUsage = servingsPerIntake / interval;
-  const totalServings = productTotalServings(product, options.fallbackTotalServings ?? 0);
-  const daysSupply = totalServings > 0 && effectiveDailyUsage > 0
-    ? Math.floor(totalServings / effectiveDailyUsage)
+  const totalIntakeUnits = productTotalIntakeUnits(product, options.fallbackTotalServings ?? 0);
+  const daysSupply = totalIntakeUnits > 0 && effectiveDailyUsage > 0
+    ? Math.floor(totalIntakeUnits / effectiveDailyUsage)
     : null;
   const monthlyCost = daysSupply && daysSupply > 0 && price != null
     ? (price / daysSupply) * 30
     : null;
-  const servingSize = positiveNumber(product.serving_size);
 
   return {
     servingsPerIntake,
     effectiveDailyUsage,
     daysSupply,
     monthlyCost,
-    intakeAmountPerDay: servingSize != null ? servingSize * servingsPerIntake : servingsPerIntake,
+    intakeAmountPerDay: servingsPerIntake,
     intakeUnit: product.serving_unit ?? 'Portionen',
     calculationSource,
     matchedIngredient,

@@ -181,6 +181,27 @@ function normalizeUnitToGerman(unit?: string): string {
   return (unit ?? '').replace(/\bIU\b/gi, 'IE').replace(/\biu\b/g, 'IE');
 }
 
+function unitLabel(unit?: string, amount?: number): string {
+  const normalized = normalizeUnitToGerman(unit).trim();
+  const singular = amount == null || Math.abs(amount - 1) < 0.001;
+  switch (normalized.toLowerCase()) {
+    case 'kapsel':
+    case 'kapseln':
+      return singular ? 'Kapsel' : 'Kapseln';
+    case 'tablette':
+    case 'tabletten':
+      return singular ? 'Tablette' : 'Tabletten';
+    case 'softgel':
+    case 'softgels':
+      return singular ? 'Softgel' : 'Softgels';
+    case 'portion':
+    case 'portionen':
+      return singular ? 'Portion' : 'Portionen';
+    default:
+      return normalized;
+  }
+}
+
 function primaryDose(guideline?: DosageGuideline): ManualDose | null {
   if (!guideline) return null;
   const value = guideline.dose_max ?? guideline.dose_min;
@@ -203,7 +224,8 @@ function productContentLabel(product: DemoProduct, previewProduct: DemoProduct):
   const daysLabel = usage.daysSupply ? ` (reicht für ${usage.daysSupply} Tage)` : '';
 
   if (totalServings > 0 && servingSize && unit) {
-    return `${formatContentAmount(totalServings * servingSize)} ${normalizeUnitToGerman(unit)}${daysLabel}`;
+    const totalUnits = totalServings * servingSize;
+    return `${formatContentAmount(totalUnits)} ${unitLabel(unit, totalUnits)}${daysLabel}`;
   }
   if (totalServings > 0) {
     return `${formatContentAmount(totalServings)} Einnahmen${daysLabel}`;
@@ -242,16 +264,16 @@ function formatDaysSupply(days: number | null): string {
 
 function stackProfileLabel(stack: DemoStack | undefined): string {
   if (!stack?.family_member_id) return 'Mein Stack';
-  return stack.family_member_first_name ? `Fuer ${stack.family_member_first_name}` : 'Familienprofil';
+  return stack.family_member_first_name ? `Für ${stack.family_member_first_name}` : 'Familienprofil';
 }
 
 type RoutineKey = 'morning' | 'noon' | 'evening' | 'flexible';
 
 const ROUTINE_META: Record<RoutineKey, { label: string; hint: string }> = {
-  morning: { label: 'Morgens', hint: 'Fruehstueck / Start in den Tag' },
+  morning: { label: 'Morgens', hint: 'Frühstück / Start in den Tag' },
   noon: { label: 'Mittags', hint: 'Mittag / nach dem Essen' },
   evening: { label: 'Abends', hint: 'Abendessen / vor dem Schlafen' },
-  flexible: { label: 'Flexibel', hint: 'Zeitpunkt frei waehlbar' },
+  flexible: { label: 'Flexibel', hint: 'Zeitpunkt frei wählbar' },
 };
 
 function routineKeyForTiming(timing?: string): RoutineKey {
@@ -1170,7 +1192,7 @@ export function StackWorkspace({
     async (familyMemberId: number | null) => {
       if (!activeStack) return;
       if (mode !== 'authenticated' || !token) {
-        setFamilyStatus('Familienprofile sind nur angemeldet verfuegbar.');
+        setFamilyStatus('Familienprofile sind nur angemeldet verfügbar.');
         return;
       }
       setFamilyStatus('');
@@ -1206,7 +1228,7 @@ export function StackWorkspace({
     async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
       if (mode !== 'authenticated' || !token) {
-        setFamilyStatus('Familienprofile sind nur angemeldet verfuegbar.');
+        setFamilyStatus('Familienprofile sind nur angemeldet verfügbar.');
         return;
       }
       const firstName = familyDraft.first_name.trim();
@@ -1498,7 +1520,7 @@ export function StackWorkspace({
         && productDoseSignature(previousProduct) !== productDoseSignature(replacement);
       if (preservesOldDosageOnDifferentProduct) {
         const confirmed = window.confirm(
-          'Die bisherige Dosierung wird fuer das neue Produkt uebernommen. Produktform oder Staerke koennen abweichen. Bitte pruefe die Dosierung nach dem Ersetzen. Trotzdem ersetzen?'
+          'Die bisherige Dosierung wird für das neue Produkt übernommen. Produktform oder Stärke können abweichen. Bitte prüfe die Dosierung nach dem Ersetzen. Trotzdem ersetzen?'
         );
         if (!confirmed) return;
       }
@@ -1563,6 +1585,15 @@ export function StackWorkspace({
   const totalMonthly = selectedProducts.reduce((sum, p) => sum + productMonthlyPrice(p), 0);
   const productsCount = activeProducts.length;
   const allSelected = productsCount > 0 && selectedIds.size === productsCount;
+  const hasOpenModal = addModalOpen || editModalOpen || editingProductKey !== null || replaceProductKey !== null;
+  const bottomBarVisible = productsCount > 0 && !hasOpenModal;
+
+  useEffect(() => {
+    document.body.classList.toggle('ss-stack-bottom-bar-active', bottomBarVisible);
+    return () => {
+      document.body.classList.remove('ss-stack-bottom-bar-active');
+    };
+  }, [bottomBarVisible]);
 
   const routineGroups = useMemo(() => {
     const groups: Record<RoutineKey, DemoProduct[]> = {
@@ -1757,7 +1788,7 @@ export function StackWorkspace({
           </button>
           {(isDemo || emailStatus) && (
             <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>
-              {isDemo ? 'E-Mail-Versand ist nur angemeldet verfuegbar.' : emailStatus}
+              {isDemo ? 'E-Mail-Versand ist nur angemeldet verfügbar.' : emailStatus}
             </span>
           )}
 
@@ -1906,7 +1937,7 @@ export function StackWorkspace({
                           return (
                             <div key={productStackKey(product)} className="routine-item">
                               <strong>{product.name}</strong>
-                              <span>{product.dosage_text || `${usage.servingsPerIntake} Portion`}</span>
+                              <span>{product.dosage_text || `${usage.servingsPerIntake} ${unitLabel(product.serving_unit ?? 'Portion', usage.servingsPerIntake)}`}</span>
                               <small>
                                 {formatIntakeInterval(productIntakeIntervalDays(product))}
                                 {' - '}
@@ -2016,7 +2047,7 @@ export function StackWorkspace({
       </div>
 
       {/* Bottom bar */}
-      {productsCount > 0 && (
+      {bottomBarVisible && (
       <div className="bottom-bar">
         <div>
           <div className="bb-title">Auswahl</div>
