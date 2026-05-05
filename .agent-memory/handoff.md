@@ -4,10 +4,9 @@ Last updated: 2026-05-05
 
 ## Continuation Point
 
-Continue from `main` after All-Inkl SMTP mail sending was committed and
-deployed in `eff1c6a`. Code deploy is done; the next required operational step
-is adding the Cloudflare Pages secret `SMTP_PASSWORD` manually, then testing
-forgot-password and logged-in `Stack mailen`.
+Continue from `main` after All-Inkl SMTP mail sending was committed, deployed,
+secret-configured, and live-smoked. No SMTP setup step is pending; DMARC and
+future password rotation remain pre-launch operations.
 
 ## Restart Startup (exact)
 
@@ -24,7 +23,7 @@ forgot-password and logged-in `Stack mailen`.
   - `eff1c6a` - Feature: Send stack emails via SMTP.
   - `ba92cd5` - UX: Align authenticated headers with app shell.
   - `03ae0f9` - Brand: Use uploaded logo in headers.
-- Latest preview URL: `https://76fde482.supplementstack.pages.dev`.
+- Latest preview URL: `https://71204e0a.supplementstack.pages.dev`.
 - Live URL: `https://supplementstack.de`.
 - Scope:
   - `functions/api/lib/mail.ts` adds a Worker SMTP-over-TLS helper via
@@ -32,8 +31,8 @@ forgot-password and logged-in `Stack mailen`.
   - `POST /api/stacks/:id/email` sends the authenticated user's stack summary
     to their own account email and is rate-limited to 5 sends/hour/user.
   - Forgot-password mail now uses SMTP instead of the Resend helper.
-  - Non-secret SMTP config is in `wrangler.toml`; `SMTP_PASSWORD` is not yet
-    present in Cloudflare Pages secrets and must be set before live send tests.
+  - Non-secret SMTP config is in `wrangler.toml`; encrypted `SMTP_PASSWORD` is
+    present in Cloudflare Pages production secrets.
   - `/stacks` now renders inside normal `Layout`; Demo still uses its standalone
     demo header.
   - `MyProductsPage` no longer uses an extra full-screen gradient shell.
@@ -49,6 +48,10 @@ forgot-password and logged-in `Stack mailen`.
   - `git diff --check`.
   - Cloudflare Pages deploy compiled/uploaded successfully.
   - Live unauthenticated `POST /api/stacks/test/email` returned HTTP 401.
+  - Live temporary-account smoke for logged-in `Stack mailen` returned
+    `{ ok: true }`; the temporary stack/account were deleted afterward.
+  - Live temporary-account forgot-password smoke returned the expected generic
+    success response; the temporary account was deleted afterward.
   - Preview/live root asset check for `index-DdLiBTCO.js`.
   - Browser-harness checks confirmed `/stacks`, `/my-products`, and `/profile`
     have normal nav, one `/logo.png`, and no `.site-header`.

@@ -12,9 +12,10 @@ Phase C is complete. The integrated Phase D rollout is complete:
   `https://supplementstack.de`. Stack email sending now uses
   `POST /api/stacks/:id/email` for authenticated users, and forgot-password
   mail uses the same Worker SMTP helper. Non-secret SMTP config is in
-  `wrangler.toml`; `SMTP_PASSWORD` must still be added as a Cloudflare Pages
-  secret before real mail can be sent. DNS MX/SPF checks passed; DMARC is still
-  deferred until pre-launch.
+  `wrangler.toml`; encrypted `SMTP_PASSWORD` is present in Cloudflare Pages
+  production secrets. DNS MX/SPF checks passed; DMARC is still deferred until
+  pre-launch. Live smoke tests passed for logged-in `Stack mailen` and
+  forgot-password using temporary users that were deleted afterward.
 - Logo/header branding is complete and deployed in `03ae0f9`
   (`Brand: Use uploaded logo in headers`). Preview:
   `https://47c4db46.supplementstack.pages.dev`; live:
@@ -194,16 +195,11 @@ signal items any agent — Claude, Codex, anyone — can pick up directly.
      GitHub, Google Analytics property/settings before indexing.
    - Effort: Legal review dependent.
 
-2. [ ] **Set and verify SMTP password secret**
-   - Add the All-Inkl mailbox password as Cloudflare Pages secret
-     `SMTP_PASSWORD`; do not store the raw value in repo files or memory.
-   - Command:
-     `. .\scripts\use-supplementstack-cloudflare.local.ps1` then
-     `npx wrangler pages secret put SMTP_PASSWORD --project-name supplementstack`.
-   - After the secret exists, test forgot-password and logged-in
-     `Stack mailen`. If SMTP auth returns 535, switch `SMTP_USERNAME` from the
-     email address to the All-Inkl account name and redeploy.
-   - Effort: S.
+2. [x] **Set and verify SMTP password secret**
+   - Cloudflare Pages production secret `SMTP_PASSWORD` exists.
+   - The Pages bundle was redeployed after the secret was set.
+   - Live smokes passed for logged-in `Stack mailen` and forgot-password using
+     temporary users that were deleted afterward.
 
 3. ❌ **Admin UI for sub-ingredient mappings**
    - Backend APIs exist and migration 0040 seeded launch mappings, but there is

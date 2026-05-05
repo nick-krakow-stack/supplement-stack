@@ -89,11 +89,10 @@ Latest relevant commits:
   - `wrangler.toml` stores non-secret All-Inkl SMTP config for
     `noreply@supplementstack.de`.
 - Secret status:
-  - Cloudflare Pages production secrets currently include `JWT_SECRET` and
-    `RESEND_API_KEY`.
-  - `SMTP_PASSWORD` is still missing and must be added manually before real
-    mail can be sent. The raw mailbox password was not stored in code, memory,
-    or command history.
+  - Cloudflare Pages production secrets include `JWT_SECRET`, `RESEND_API_KEY`,
+    and encrypted `SMTP_PASSWORD`.
+  - The raw mailbox password was not stored in code, memory, or command
+    history.
 - DNS status:
   - MX for `supplementstack.de` resolves to `w020a88d.kasserver.com`.
   - SPF TXT includes `spf.kasserver.com`.
@@ -112,14 +111,16 @@ Latest relevant commits:
 - Deploy command:
   - `. .\scripts\use-supplementstack-cloudflare.local.ps1`
   - `npx wrangler pages deploy frontend/dist --project-name supplementstack`
-- Preview URL: `https://76fde482.supplementstack.pages.dev`.
+- Initial preview URL: `https://76fde482.supplementstack.pages.dev`.
+- Redeploy after secret set: `https://71204e0a.supplementstack.pages.dev`.
 - Smoke checks:
   - Live unauthenticated `POST /api/stacks/test/email` returned HTTP 401,
     confirming the deployed route is present and protected.
-- Follow-up:
-  - Add Pages secret `SMTP_PASSWORD`, then test forgot-password and a logged-in
-    `Stack mailen` flow. If All-Inkl rejects SMTP auth, switch
-    `SMTP_USERNAME` to the All-Inkl mailbox account name and redeploy.
+  - Live temporary-account stack email smoke created a stack, called
+    `POST /api/stacks/:id/email`, received `{ ok: true }`, and deleted the
+    temporary stack/account afterward.
+  - Live temporary-account forgot-password smoke returned the expected generic
+    success response and deleted the temporary account afterward.
 
 ### 2026-05-05 - Cloudflare Pages: authenticated app-shell header alignment
 

@@ -57,15 +57,15 @@ All-Inkl SMTP mail sending is committed and deployed:
 - `wrangler.toml` contains non-secret All-Inkl SMTP settings for
   `noreply@supplementstack.de`; the raw mailbox password is intentionally not
   stored in code, memory, or command history.
-- Cloudflare Pages currently does not have the required `SMTP_PASSWORD` secret.
-  Set it with `npx wrangler pages secret put SMTP_PASSWORD --project-name supplementstack`
-  before live mail can be sent.
+- Cloudflare Pages has the required encrypted `SMTP_PASSWORD` secret.
 - DNS checks passed: MX points to `w020a88d.kasserver.com` and SPF includes
   `spf.kasserver.com`; DMARC remains a pre-launch follow-up.
 - Validation passed: functions TypeScript compile, frontend build, frontend
   lint, frontend Vitest no-test run, `git diff --check` with CRLF warnings
-  only, Pages deploy compile/upload, and live unauthenticated
-  `POST /api/stacks/test/email` returning HTTP 401.
+  only, Pages deploy compile/upload, live unauthenticated
+  `POST /api/stacks/test/email` returning HTTP 401, logged-in temporary stack
+  email smoke to the All-Inkl mailbox, and forgot-password smoke to the same
+  mailbox. Temporary smoke users/stacks were deleted afterward.
 
 - Logo/header branding is committed and deployed:
 
