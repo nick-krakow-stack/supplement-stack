@@ -6,6 +6,17 @@ Last updated: 2026-05-05
 
 Phase C is complete. The integrated Phase D rollout is complete:
 
+- Search/Wishlist dead-code cleanup is committed, deployed, and smoke-checked
+  in `ee273a9` (`Cleanup: Remove unused search and wishlist flows`). Removed
+  the un-routed Search/Wishlist pages, old
+  Search-only modal components, frontend wishlist API helper, backend wishlist
+  module mount/file, ProductCard wishlist props/action UI, unused wishlist/local
+  modal-flow types, and active PrivacyPage Wishlist wording. DB
+  tables/migrations and account-delete cleanup were intentionally left intact.
+  Checks passed: frontend lint, build, Vitest no-test run, and functions
+  TypeScript compile. Preview/live root return 200 with
+  `assets/index-BIAACOZy.js`; preview/live `GET /api/wishlist` returns 404.
+
 - Stack item intake intervals and stack product replacement are committed,
   remote-migrated where needed, deployed, and live-smoked in `6c22463`
   (`Feature: Add stack intake intervals`) and `f5dfa74` (`UX: Allow replacing
@@ -305,21 +316,21 @@ Priority 1 - Manual authenticated browser QA:
 - Once the rate-limit window clears, run one fresh browser/API registration
   smoke. A registration was tested successfully before deploy, but the final
   post-deploy fresh-register smoke hit HTTP 429 after repeated QA attempts.
-- Run logged-in browser QA for stack, wishlist, own products, and admin flows.
+- Run logged-in browser QA for stack, own products, profile, and admin flows.
   Code-level QA blockers are fixed and deployed; authenticated browser QA
   remains manual validation, not an implementation blocker.
 - Targeted user/demo/admin usability fixes are committed and deployed in
   `8fb5431`. Preview/live smoke checks passed; browser-level QA remains open.
 - Admin TranslationsTab draft preservation and pagination remain explicit follow-up
   work; they were intentionally not changed in the targeted admin usability pass.
-- Run the primary logged-in user flows end to end: register/login, search ingredient, open product modal, add product to stack, edit/remove stack items, wishlist, profile, and user product management.
+- Run the primary logged-in user flows end to end: register/login, add products to stack, edit/remove stack items, profile, and user product management.
 - Run the demo flows end to end without login, including ingredient search, product selection, add-to-stack, modal focus behavior, and empty/error states.
 - Run authenticated admin UI smoke tests, especially product management, dose recommendations, translation editing for Ingredients/Dose Recommendations/Verified Profiles/Blog Posts, affiliate/user link distinction, and moderation states.
 - Capture any additional UX polish findings from manual browser QA and decide
   whether they are launch blockers or later polish.
 - Prioritize mobile ergonomics and obvious next actions for Kevin, Sabine, and Marco before expanding scope.
 - Validate the deployed mobile-first polish in a browser or real device at
-  375px, 390px, and 430px for demo, logged-in, and admin flows. Cover Search,
+  375px, 390px, and 430px for demo, logged-in, and admin flows. Cover
   StackWorkspace, product modal, dosage modal, My Products, mobile nav, and
   admin touch/layout behavior.
 

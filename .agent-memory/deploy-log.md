@@ -41,8 +41,27 @@ D3/K2 dosage reduction, and guideline-source normalization are committed,
 remote-migrated, deployed, and live-smoked on preview/live.
 Stack item intake intervals and stack product replacement are committed,
 remote-migrated where needed, deployed, and live-smoked on preview/live.
+Search/Wishlist dead-code cleanup is committed, deployed, and smoke-checked on
+preview/live.
 GitHub Actions D1 backup has run successfully both manually and automatically;
 token scopes are verified.
+
+## 2026-05-05 - Search/Wishlist Dead-Code Cleanup
+
+- Commit: `ee273a9` - Cleanup: Remove unused search and wishlist flows.
+- No D1 migration.
+- Preview: `https://0e174354.supplementstack.pages.dev`.
+- Live: `https://supplementstack.de`.
+- Removed un-routed `SearchPage`/`WishlistPage`, the old Search-only modal
+  components, frontend wishlist API helper, backend wishlist module mount/file,
+  ProductCard wishlist props/action UI, unused wishlist/local modal-flow types,
+  and active PrivacyPage Wishlist wording.
+- Left wishlist DB tables/migrations and account-delete cleanup untouched.
+- Validation passed: frontend lint, frontend build, frontend Vitest no-test run,
+  functions TypeScript compile, and `git diff --check` with CRLF warnings only.
+- Smoke checks passed: preview/live root 200 with `assets/index-BIAACOZy.js`;
+  preview/live `GET /api/wishlist` 404; preview/live `/search` and `/wishlist`
+  serve the SPA fallback asset for generic React 404 handling.
 
 Latest relevant commits:
 

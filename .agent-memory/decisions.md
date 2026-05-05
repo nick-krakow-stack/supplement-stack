@@ -330,3 +330,15 @@ Operational rule:
 - Record the repair in `.agent-memory/deploy-log.md`.
 - Prefer normal `wrangler d1 migrations apply` after journal repair so the new
   migration itself is applied and recorded by Wrangler.
+
+## Search/Wishlist Source Cleanup
+
+Decision: SearchPage, WishlistPage, the old Search-only three-step modal flow,
+and the active Wishlist API/module surfaces are removed from source.
+
+Operational rule:
+
+- Keep existing wishlist database tables/migrations and account-delete cleanup
+  unless a separate DB cleanup task is explicitly scoped.
+- `/search` and `/wishlist` should continue to fall through to the generic SPA
+  fallback/404 behavior unless a new active flow is intentionally introduced.

@@ -43,6 +43,38 @@ unless verified against code.
 Phase B is complete. Phase C is complete. Phase D bundle is committed,
 remote-migrated, and deployed to Cloudflare Pages preview.
 
+Search/Wishlist dead-code cleanup is committed, deployed, and smoke-checked:
+
+- Commit: `ee273a9` - Cleanup: Remove unused search and wishlist flows.
+- Preview: `https://0e174354.supplementstack.pages.dev`.
+- Live: `https://supplementstack.de`.
+- Deleted `frontend/src/pages/SearchPage.tsx`,
+  `frontend/src/pages/WishlistPage.tsx`, `frontend/src/api/wishlist.ts`,
+  `frontend/src/components/modals/Modal1Ingredient.tsx`,
+  `frontend/src/components/modals/Modal2Products.tsx`,
+  `frontend/src/components/modals/Modal3Dosage.tsx`, and
+  `functions/api/modules/wishlist.ts`.
+- Removed the `/api/wishlist` Hono module import/mount from
+  `functions/api/[[path]].ts`.
+- Removed unused wishlist props/action UI from `ProductCard` and the stale
+  `showWishlistButton={false}` caller in `StackWorkspace`.
+- Removed unused wishlist/local modal-flow types and updated active privacy
+  wording so it no longer describes Wishlist as an app feature.
+- DB schema/migrations and account-delete cleanup for the existing wishlist
+  table were intentionally left untouched.
+- Reference scan passed: no remaining source references to deleted SearchPage,
+  WishlistPage, old modal components, wishlist frontend API, ProductCard
+  wishlist props, or wishlist backend module remain. The only remaining
+  `wishlist` source hit is the intentional account-delete cleanup in
+  `functions/api/modules/auth.ts`.
+- Validation passed: frontend `npm run lint --if-present`, frontend
+  `npm run build`, frontend `npm test -- --run` with no test files, and
+  functions `npx tsc -p tsconfig.json`.
+- Smoke checks passed: preview/live root return 200 with
+  `assets/index-BIAACOZy.js`; preview/live `GET /api/wishlist` returns 404;
+  preview/live `/search` and `/wishlist` return the SPA fallback asset and the
+  React app handles them through generic 404 routing.
+
 Stack item intake intervals and stack product replacement are committed,
 remote-migrated where needed, deployed, and live-smoked:
 
@@ -158,9 +190,10 @@ All-Inkl SMTP mail sending is committed and deployed:
     browser-harness checks confirming `/stacks`, `/my-products`, and
     `/profile` have one `/logo.png`, normal nav, and no `.site-header`.
 
-- Decision (2026-05-05): SearchPage and WishlistPage are now intentionally kept out of
-  explicit routes and navigation. They fall through to wildcard/404 handling, and any raw
-  SearchPage flags are no longer treated as launch blockers.
+- Decision update (2026-05-05): SearchPage/WishlistPage and the old
+  Search-only modal flow have been removed from active source. `/search` and
+  `/wishlist` now rely on the generic SPA fallback/404 behavior rather than
+  retained page files.
 
 Launch QA stack/profile fixes are committed, remote-migrated, deployed, and
 live-smoked:
@@ -195,7 +228,8 @@ live-smoked:
 - Demo D3/K2 seed was reduced from 10,000 IU to 2,000 IU D3 in both the fresh
   seed and migration 0041 backfill for existing databases.
 - Route/header check found no active `/search` or `/wishlist` App/Layout routes
-  or nav links; un-routed page files remain untouched.
+  or nav links; the previously un-routed page files were later removed in the
+  local Search/Wishlist dead-code cleanup.
 - Bundle commits: `0b29fe0` (launch QA stack/profile flows), `baa91a5` (live
   profile + stack warning smokes), `1a3b8e6` (profile response path),
   `cb76cf3` (D1 run handling), and `24b10b5` (guideline normalization).
@@ -900,9 +934,13 @@ Production D1 migrations 0026-0035 are considered live according to the previous
 
 ## Current Code Shape
 
-- Frontend routes and pages are already present: landing, demo, search, stacks, wishlist, admin, auth, profile, user products, forgot/reset password.
+- Frontend routes and pages are already present: landing, demo, stacks, admin,
+  auth, profile, user products, forgot/reset password, and legal pages.
 - Frontend API base is centralized in `frontend/src/api/base.ts`: production builds use same-origin `/api`; only Vite dev on localhost/127.0.0.1/::1 may use `VITE_API_BASE_URL`.
-- `functions/api/[[path]].ts` is now a Hono composition root with CORS setup and `app.route(...)` mounts for auth/me, ingredients/recommendations, products/r2, admin/shop-domains/interactions, stacks/stack-warnings, wishlist, user-products, and demo.
+- `functions/api/[[path]].ts` is now a Hono composition root with CORS setup
+  and `app.route(...)` mounts for auth/me, ingredients/recommendations,
+  products/r2, admin/shop-domains/interactions, stacks/stack-warnings,
+  user-products, and demo.
 - Business logic has moved out of the entry point into modules under `functions/api/modules/*`.
 - `functions/api/modules/user-products.ts` and `functions/api/modules/demo.ts` were added from the previous monolith behavior.
 - `GET /api/ingredients/:id/recommendations` now reads active public rows from `dose_recommendations`, joins `populations`, optionally joins `verified_profiles`, `dose_recommendation_translations`, and `verified_profile_translations`, and returns upper-limit comparison metadata.

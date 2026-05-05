@@ -4,10 +4,8 @@ Last updated: 2026-05-05
 
 ## Continuation Point
 
-Continue from `main` after stack item intake intervals and stack product
-replacement were committed, remote-migrated where needed, deployed, and
-live-smoked. No SMTP setup step is pending; DMARC and future password rotation
-remain pre-launch operations.
+Continue from `main` after Search/Wishlist dead-code cleanup was committed,
+deployed, and smoke-checked. No DB migrations were changed.
 
 ## Restart Startup (exact)
 
@@ -20,6 +18,39 @@ remain pre-launch operations.
 
 ## Git / Worktree
 
+- Latest committed/deployed cleanup:
+  - `ee273a9` - Cleanup: Remove unused search and wishlist flows.
+  - Preview URL: `https://0e174354.supplementstack.pages.dev`.
+  - Live URL: `https://supplementstack.de`.
+  - Deleted `frontend/src/pages/SearchPage.tsx`,
+    `frontend/src/pages/WishlistPage.tsx`, `frontend/src/api/wishlist.ts`,
+    `frontend/src/components/modals/Modal1Ingredient.tsx`,
+    `frontend/src/components/modals/Modal2Products.tsx`,
+    `frontend/src/components/modals/Modal3Dosage.tsx`, and
+    `functions/api/modules/wishlist.ts`.
+  - Removed wishlist import/mount from `functions/api/[[path]].ts`.
+  - Removed `ProductCard` wishlist props/action block and stale
+    `showWishlistButton={false}` use in `StackWorkspace`.
+  - Removed unused `WishlistItem` and `LocalStackItem`; updated the
+    `types/local.ts` file comment.
+  - Updated `PrivacyPage` to stop listing Wishlist as an active processing
+    purpose/data category.
+  - Left DB tables/migrations and `functions/api/modules/auth.ts` account-delete
+    wishlist cleanup untouched by request.
+  - Reference scan has no remaining source hits for deleted Search/Wishlist
+    pages, old modal components, frontend wishlist API, ProductCard wishlist
+    props, or backend wishlist module. The only remaining `wishlist` source hit
+    is `functions/api/modules/auth.ts:314`, the intentional account-delete
+    cleanup.
+  - Checks passed: frontend `npm run lint --if-present`; frontend
+    `npm run build`; frontend `npm test -- --run` with no test files; functions
+    `npx tsc -p tsconfig.json`.
+  - Smoke checks passed: preview/live root 200 with
+    `assets/index-BIAACOZy.js`; preview/live `GET /api/wishlist` 404;
+    preview/live `/search` and `/wishlist` serve the SPA fallback asset for
+    generic React 404 handling.
+  - Existing unrelated dirty/untracked files still not related to this task:
+    `.claude/SESSION.md`, `.claude/settings.json`, and root `logo.png`.
 - Latest committed/deployed stack interval work:
   - `6c22463` - Feature: Add stack intake intervals.
   - `f5dfa74` - UX: Allow replacing stack products.
@@ -125,8 +156,9 @@ remain pre-launch operations.
     2,000 IU.
   - Preview root and live root returned 200 with asset `index-BfFUmB15.js`;
     `/forgot-password` returned 200.
-  - `/search` and `/wishlist` remain SPA fallback only with no nav links and
-    no explicit App/Layout routes.
+  - `/search` and `/wishlist` were SPA fallback only with no nav links and
+    no explicit App/Layout routes before the local cleanup removed the page
+    source files.
 - Checks passed: functions `npx tsc -p tsconfig.json`; frontend
   `npm run lint --if-present`; frontend `npm run build`; frontend tests with
   no files passed earlier; `git diff --check`.
@@ -156,7 +188,7 @@ remain pre-launch operations.
     `product_type`.
   - Demo D3/K2 product seed/backfill now uses 2,000 IU D3 instead of 10,000 IU.
   - App/Layout route check found no active `/search` or `/wishlist` routes/nav
-    links. Do not revert existing dirty UI cleanup changes.
+    links; local cleanup now removes their un-routed source files.
 - Checks already passed locally: functions `npx tsc -p tsconfig.json`;
   frontend `npm run lint --if-present`; frontend `npm run build`;
   `git diff --check` with CRLF warnings only; isolated Python/SQLite migration
@@ -179,7 +211,7 @@ remain pre-launch operations.
 
 1. Entscheidung (2026-05-05): SearchPage und WishlistPage werden bewusst nur über
    Wildcard/404 erreicht; Roh-`raw`-Flags aus SearchPage-Daten gelten nicht mehr als
-   Launch-Blocker.
+   Launch-Blocker. (Superseded by local cleanup: the source files are now deleted.)
 
 1. Final legal/compliance review (DSB/AVV/provider checks) before SEO indexing.
 2. Manual authenticated browser/mobile QA.
