@@ -6,21 +6,26 @@ Last updated: 2026-05-05
 
 Phase C is complete. The integrated Phase D rollout is complete:
 
-- Stack item intake intervals are committed, remote-migrated, deployed, and
-  live-smoked in `6c22463` (`Feature: Add stack intake intervals`). Remote D1
-  migration `0042_stack_item_intake_interval.sql` applied successfully. Preview:
-  `https://df76b0f8.supplementstack.pages.dev`; live:
+- Stack item intake intervals and stack product replacement are committed,
+  remote-migrated where needed, deployed, and live-smoked in `6c22463`
+  (`Feature: Add stack intake intervals`) and `f5dfa74` (`UX: Allow replacing
+  stack products`). Remote D1 migration `0042_stack_item_intake_interval.sql`
+  applied successfully. Final preview:
+  `https://7abb76e8.supplementstack.pages.dev`; live:
   `https://supplementstack.de`. The bundle includes backend create/update/load
   support, stack email interval-aware package/monthly cost calculation, missing
   shop-link mail notice, `StackWorkspace` in-place product editing for
   dosage/timing/interval, stack detail/update ingredient rows per item,
-  ProductCard parsed-dosage cost/range calculation, and the amber icon-only
-  edit pencil. Validation passed: functions TypeScript, frontend lint,
-  frontend build, frontend Vitest no-test run, and `git diff --check` with CRLF
-  warnings only. Smokes passed: preview/live root 200 with
-  `assets/index-DGI7Na2W.js`, preview/live unauth stack email 401, remote
-  pragma `has_col=1`, and live temp stack interval/ingredient API smoke with
-  cleanup.
+  ProductCard parsed-dosage cost/range calculation, the amber icon-only edit
+  pencil, and product replacement through `EditProductModal` -> `Produkt
+  wechseln` -> `AddProductModal` replace mode for the same stack. Replacement
+  preserves `dosage_text`, `timing`, and `intake_interval_days`, replaces
+  instead of adding, and blocks duplicates in the same stack. Validation passed:
+  functions TypeScript, frontend lint, frontend build, frontend Vitest no-test
+  run, and `git diff --check` with CRLF warnings only. Smokes passed:
+  preview/live root 200 with `assets/index-BZB9HYiO.js`, preview/live unauth
+  stack email 401, remote pragma `has_col=1`, and live temp stack
+  interval/ingredient API smoke with cleanup.
 
 - All-Inkl SMTP mail sending is committed and deployed in `eff1c6a`
   (`Feature: Send stack emails via SMTP`). Preview:

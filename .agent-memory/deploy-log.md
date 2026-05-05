@@ -39,13 +39,14 @@ Cloudflare Pages preview and live custom domain.
 Launch QA stack/profile fixes, stack item explicit product references, demo
 D3/K2 dosage reduction, and guideline-source normalization are committed,
 remote-migrated, deployed, and live-smoked on preview/live.
-Stack item intake intervals are committed, remote-migrated, deployed, and
-live-smoked on preview/live.
+Stack item intake intervals and stack product replacement are committed,
+remote-migrated where needed, deployed, and live-smoked on preview/live.
 GitHub Actions D1 backup has run successfully both manually and automatically;
 token scopes are verified.
 
 Latest relevant commits:
 
+- `f5dfa74` - UX: Allow replacing stack products.
 - `6c22463` - Feature: Add stack intake intervals.
 - `9babeae` - Fix: Calculate stack email costs from daily dose.
 - `eff1c6a` - Feature: Send stack emails via SMTP.
@@ -77,14 +78,15 @@ Latest relevant commits:
 - `b1fd347` - Refactor: Split Pages API into Hono modules.
 - `9a5f523` - DB: Phase B complete (migrations 0028-0035).
 
-## Stack Intake Intervals
+## Stack Intake Intervals And Product Replacement
 
-### 2026-05-05 - Cloudflare Pages: stack intake intervals
+### 2026-05-05 - Cloudflare Pages: stack intake intervals and product replacement
 
 - Commit: `6c22463` - Feature: Add stack intake intervals.
+- Follow-up commit: `f5dfa74` - UX: Allow replacing stack products.
 - Remote D1 migration: `0042_stack_item_intake_interval.sql` applied
   successfully to `supplementstack-production`.
-- Preview URL: `https://df76b0f8.supplementstack.pages.dev`.
+- Final preview URL: `https://7abb76e8.supplementstack.pages.dev`.
 - Live URL: `https://supplementstack.de`.
 - Scope:
   - Added `stack_items.intake_interval_days` with default 1 and CHECK
@@ -99,6 +101,10 @@ Latest relevant commits:
     dosage plus ingredient rows before quantity fallback.
   - StackWorkspace supports in-place stack product editing for dosage, timing,
     and intake interval with an amber icon-only edit pencil.
+  - Stack product replacement is supported from `EditProductModal` via
+    `Produkt wechseln`, which opens `AddProductModal` in replace mode for the
+    same stack, replaces instead of adding, preserves `dosage_text`, `timing`,
+    and `intake_interval_days`, and blocks duplicate products in that stack.
 - Validation passed:
   - Functions `npx tsc -p tsconfig.json`.
   - Frontend `npm run lint --if-present`.
@@ -106,7 +112,7 @@ Latest relevant commits:
   - Frontend `npm test -- --run` with no test files.
   - `git diff --check` with CRLF warnings only.
 - Smoke checks passed:
-  - Preview and live root returned 200 with asset `assets/index-DGI7Na2W.js`.
+  - Preview and live root returned 200 with asset `assets/index-BZB9HYiO.js`.
   - Preview and live unauthenticated `POST /api/stacks/test/email` returned
     401.
   - Remote pragma confirmed `intake_interval_days` exists (`has_col=1`).

@@ -43,13 +43,14 @@ unless verified against code.
 Phase B is complete. Phase C is complete. Phase D bundle is committed,
 remote-migrated, and deployed to Cloudflare Pages preview.
 
-Stack item intake intervals are committed, remote-migrated, deployed, and
-live-smoked:
+Stack item intake intervals and stack product replacement are committed,
+remote-migrated where needed, deployed, and live-smoked:
 
 - Commit: `6c22463` - Feature: Add stack intake intervals.
+- Follow-up commit: `f5dfa74` - UX: Allow replacing stack products.
 - Remote D1 migration `0042_stack_item_intake_interval.sql` applied
   successfully to `supplementstack-production`.
-- Preview: `https://df76b0f8.supplementstack.pages.dev`.
+- Final preview: `https://7abb76e8.supplementstack.pages.dev`.
 - Live: `https://supplementstack.de`.
 - Migration 0042 adds
   `stack_items.intake_interval_days INTEGER NOT NULL DEFAULT 1 CHECK
@@ -72,12 +73,17 @@ live-smoked:
   D3 `quantity=2000` from corrupting range/monthly-cost calculations after
   reload. The product edit action is now an amber icon-only pencil button, and
   the manual amount field is labeled as fallback.
+- Product replacement is supported in the stack edit flow: `EditProductModal`
+  has `Produkt wechseln`, opens `AddProductModal` in replace mode for the same
+  stack, replaces the old product instead of adding another item, preserves
+  `dosage_text`, `timing`, and `intake_interval_days`, and blocks duplicates in
+  the same stack while exempting the replaced product itself.
 - Validation passed: functions `npx tsc -p tsconfig.json`, frontend
   `npm run lint --if-present`, frontend `npm run build`, frontend
   `npm test -- --run` with no test files, and `git diff --check` with CRLF
   warnings only.
 - Smoke checks passed: preview/live root returned 200 with asset
-  `assets/index-DGI7Na2W.js`; preview/live unauthenticated
+  `assets/index-BZB9HYiO.js`; preview/live unauthenticated
   `POST /api/stacks/test/email` returned 401; remote pragma confirmed
   `intake_interval_days` exists (`has_col=1`); live temporary API smoke created
   stack id 21 with `intake_interval_days=2` and one ingredient row, then

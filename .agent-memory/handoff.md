@@ -4,9 +4,10 @@ Last updated: 2026-05-05
 
 ## Continuation Point
 
-Continue from `main` after stack item intake intervals were committed,
-remote-migrated, deployed, and live-smoked. No SMTP setup step is pending;
-DMARC and future password rotation remain pre-launch operations.
+Continue from `main` after stack item intake intervals and stack product
+replacement were committed, remote-migrated where needed, deployed, and
+live-smoked. No SMTP setup step is pending; DMARC and future password rotation
+remain pre-launch operations.
 
 ## Restart Startup (exact)
 
@@ -21,33 +22,40 @@ DMARC and future password rotation remain pre-launch operations.
 
 - Latest committed/deployed stack interval work:
   - `6c22463` - Feature: Add stack intake intervals.
+  - `f5dfa74` - UX: Allow replacing stack products.
   - Remote D1 migration `0042_stack_item_intake_interval.sql` applied
     successfully to `supplementstack-production`.
-  - Preview URL: `https://df76b0f8.supplementstack.pages.dev`.
+  - Preview URL: `https://7abb76e8.supplementstack.pages.dev`.
   - Live URL: `https://supplementstack.de`.
   - Stack detail/update responses include ingredient rows on each item;
     ProductCard derives servings from parsed dosage plus product ingredient
     quantity before stack quantity fallback; the edit action is an amber
     icon-only pencil; the manual amount edit field is clearly marked as
     fallback.
+  - Product replacement is in the stack edit flow: `EditProductModal` has
+    `Produkt wechseln`, opens `AddProductModal` in replace mode for the same
+    stack, replaces instead of adding, preserves `dosage_text`, `timing`, and
+    `intake_interval_days`, and blocks duplicates in the same stack while
+    exempting the replaced item.
   - Checks passed: functions `npx tsc -p tsconfig.json`; frontend
     `npm run lint --if-present`; frontend `npm run build`; frontend
     `npm test -- --run` with no test files; `git diff --check` with CRLF
     warnings only.
   - Smokes passed: preview/live root 200 with asset
-    `assets/index-DGI7Na2W.js`; preview/live unauthenticated
+    `assets/index-BZB9HYiO.js`; preview/live unauthenticated
     `POST /api/stacks/test/email` 401; remote pragma `has_col=1`; live temp
     API smoke created stack id 21 with interval 2 and one ingredient row, then
     deleted the temporary account.
   - Existing dirty/untracked files still not related to this task:
     `.claude/SESSION.md`, `.claude/settings.json`, and root `logo.png`.
 - Latest committed/deployed work:
+  - `f5dfa74` - UX: Allow replacing stack products.
   - `6c22463` - Feature: Add stack intake intervals.
   - `9babeae` - Fix: Calculate stack email costs from daily dose.
   - `eff1c6a` - Feature: Send stack emails via SMTP.
   - `ba92cd5` - UX: Align authenticated headers with app shell.
   - `03ae0f9` - Brand: Use uploaded logo in headers.
-- Latest preview URL: `https://df76b0f8.supplementstack.pages.dev`.
+- Latest preview URL: `https://7abb76e8.supplementstack.pages.dev`.
 - Live URL: `https://supplementstack.de`.
 - Scope:
   - `functions/api/lib/mail.ts` adds a Worker SMTP-over-TLS helper via
