@@ -164,8 +164,73 @@ function productTotalServings(product: DemoProduct): number {
   return totalServings > 0 ? totalServings : 30;
 }
 
+function normalizeComparableUnit(unit?: string | null): string {
+  const normalized = (unit ?? '').trim().toLowerCase().replace(/μ/g, 'µ').replace(/\./g, '');
+  if (['iu', 'ie'].includes(normalized)) return 'iu';
+  if (['µg', 'ug', 'mcg'].includes(normalized)) return 'µg';
+  if (['kapsel', 'kapseln'].includes(normalized)) return 'kapsel';
+  if (['tablette', 'tabletten'].includes(normalized)) return 'tablette';
+  if (normalized === 'tropfen') return 'tropfen';
+  if (['softgel', 'softgels'].includes(normalized)) return 'softgel';
+  if (['portion', 'portionen'].includes(normalized)) return 'portion';
+  return normalized;
+}
+
+function parseGermanNumber(value: string): number | null {
+  const trimmed = value.trim();
+  const normalized = trimmed.includes(',')
+    ? trimmed.replace(/\./g, '').replace(',', '.')
+    : /^\d{1,3}(?:\.\d{3})+$/.test(trimmed)
+      ? trimmed.replace(/\./g, '')
+      : trimmed;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function parseDoseFromText(text?: string | null): { value: number; unit: string } | null {
+  if (!text) return null;
+  const match = /(\d+(?:[.,]\d{1,3})?(?:\.\d{3})*)\s*(IE|IU|µg|μg|ug|mcg|mg|g|Kapseln?|Tabletten?|Tropfen|Softgels?|Portionen?)/i.exec(text);
+  if (!match) return null;
+  const value = parseGermanNumber(match[1]);
+  return value ? { value, unit: match[2] } : null;
+}
+
+function productPrimaryQuantity(product: DemoProduct): { quantity: number; unit?: string | null } | null {
+  const fromIngredients = product.ingredients?.find((ingredient) => (
+    Boolean(ingredient.search_relevant ?? 1) && ingredient.quantity != null && ingredient.quantity > 0
+  ));
+  if (fromIngredients?.quantity) return { quantity: fromIngredients.quantity, unit: fromIngredients.unit };
+  if (product.quantity != null && product.quantity > 0 && product.unit) {
+    return { quantity: product.quantity, unit: product.unit };
+  }
+  return null;
+}
+
+function productServingsPerDay(product: DemoProduct): number {
+  const parsedDose = parseDoseFromText(product.dosage_text);
+  if (parsedDose) {
+    const doseUnit = normalizeComparableUnit(parsedDose.unit);
+    const ingredient = productPrimaryQuantity(product);
+    if (ingredient && normalizeComparableUnit(ingredient.unit) === doseUnit) {
+      return Math.max(1, Math.ceil(parsedDose.value / ingredient.quantity));
+    }
+    if (
+      product.serving_size != null &&
+      product.serving_size > 0 &&
+      normalizeComparableUnit(product.serving_unit) === doseUnit
+    ) {
+      return Math.max(1, Math.ceil(parsedDose.value / product.serving_size));
+    }
+  }
+
+  if (product.quantity != null && product.quantity > 0 && product.quantity <= 100) return product.quantity;
+  return 1;
+}
+
 function productMonthlyPrice(product: DemoProduct): number {
-  return (product.price / productTotalServings(product)) * 30;
+  const servingsPerDay = productServingsPerDay(product);
+  const daysSupply = Math.floor(productTotalServings(product) / servingsPerDay);
+  return daysSupply > 0 ? (product.price / daysSupply) * 30 : product.price;
 }
 
 function formatEuro(value: number): string {
@@ -802,7 +867,7 @@ export function StackWorkspace({
         product_ids: products.map((product) => ({
           id: product.id,
           product_type: product.product_type ?? 'catalog',
-          quantity: product.quantity ?? 1,
+          quantity: productServingsPerDay(product),
           dosage_text: product.dosage_text,
           timing: product.timing,
         })),

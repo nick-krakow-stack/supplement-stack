@@ -33,14 +33,39 @@ type StackProductValidation = {
 }
 
 type StackMailItem = {
+  stack_item_id: number
+  id: number
+  product_type: StackProductType
   name: string
   brand: string | null
   product_price: number
+  image_url: string | null
+  shop_link: string | null
   quantity: number
   serving_size: number | null
   serving_unit: string | null
+  servings_per_container: number | null
+  container_count: number | null
   timing: string | null
   dosage_text: string | null
+}
+
+type StackMailIngredient = {
+  stack_item_id: number
+  ingredient_id: number
+  ingredient_name: string
+  parent_ingredient_id: number | null
+  quantity: number | null
+  unit: string | null
+  search_relevant: number
+}
+
+type StackMailPreparedItem = StackMailItem & {
+  dailyAmountLabel: string
+  dailyIngredientLabels: string[]
+  daysSupply: number | null
+  monthlyCost: number | null
+  warningLabels: string[]
 }
 
 function escapeHtml(value: unknown): string {
@@ -56,21 +81,145 @@ function formatEuro(value: number): string {
   return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(value)
 }
 
-function buildStackEmailHtml(stack: StackRow, items: StackMailItem[], total: number): string {
+function normalizeComparableUnit(unit?: string | null): string {
+  const normalized = (unit ?? '').trim().toLowerCase().replace(/μ/g, 'µ').replace(/\./g, '')
+  if (['iu', 'ie'].includes(normalized)) return 'iu'
+  if (['µg', 'ug', 'mcg'].includes(normalized)) return 'µg'
+  if (['kapsel', 'kapseln'].includes(normalized)) return 'kapsel'
+  if (['tablette', 'tabletten'].includes(normalized)) return 'tablette'
+  if (normalized === 'tropfen') return 'tropfen'
+  if (['softgel', 'softgels'].includes(normalized)) return 'softgel'
+  if (['portion', 'portionen'].includes(normalized)) return 'portion'
+  return normalized
+}
+
+function parseGermanNumber(value: string): number | null {
+  const trimmed = value.trim()
+  const normalized = trimmed.includes(',')
+    ? trimmed.replace(/\./g, '').replace(',', '.')
+    : /^\d{1,3}(?:\.\d{3})+$/.test(trimmed)
+      ? trimmed.replace(/\./g, '')
+      : trimmed
+  const parsed = Number(normalized)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null
+}
+
+function parseDoseFromText(text?: string | null): { value: number; unit: string } | null {
+  if (!text) return null
+  const match = /(\d+(?:[.,]\d{1,3})?(?:\.\d{3})*)\s*(IE|IU|µg|μg|ug|mcg|mg|g|Kapseln?|Tabletten?|Tropfen|Softgels?|Portionen?)/i.exec(text)
+  if (!match) return null
+  const value = parseGermanNumber(match[1])
+  return value ? { value, unit: match[2] } : null
+}
+
+function formatNumber(value: number): string {
+  return new Intl.NumberFormat('de-DE', { maximumFractionDigits: 2 }).format(value)
+}
+
+function displayUnit(unit?: string | null): string {
+  return (unit ?? '').replace(/\bIU\b/gi, 'IE')
+}
+
+function formatDailyUnit(value: number, unit?: string | null): string {
+  const shown = Math.abs(value - Math.round(value)) < 0.001 ? Math.round(value) : value
+  return `${formatNumber(shown)} ${displayUnit(unit)}`
+}
+
+function computeServingsPerDay(item: StackMailItem, ingredients: StackMailIngredient[]): number {
+  const parsedDose = parseDoseFromText(item.dosage_text)
+  if (parsedDose) {
+    const doseUnit = normalizeComparableUnit(parsedDose.unit)
+    const matchingIngredient = ingredients.find((ingredient) => (
+      ingredient.search_relevant === 1 &&
+      ingredient.quantity != null &&
+      ingredient.quantity > 0 &&
+      normalizeComparableUnit(ingredient.unit) === doseUnit
+    ))
+    if (matchingIngredient?.quantity) {
+      return Math.max(1, Math.ceil(parsedDose.value / matchingIngredient.quantity))
+    }
+
+    if (
+      item.serving_size != null &&
+      item.serving_size > 0 &&
+      normalizeComparableUnit(item.serving_unit) === doseUnit
+    ) {
+      return Math.max(1, Math.ceil(parsedDose.value / item.serving_size))
+    }
+  }
+
+  if (item.quantity > 0 && item.quantity <= 100) return item.quantity
+  return 1
+}
+
+function prepareMailItems(
+  items: StackMailItem[],
+  ingredientsByItem: Map<number, StackMailIngredient[]>,
+  warningsByItem: Map<number, string[]>,
+): StackMailPreparedItem[] {
+  return items.map((item) => {
+    const ingredients = ingredientsByItem.get(item.stack_item_id) ?? []
+    const servingsPerDay = computeServingsPerDay(item, ingredients)
+    const totalServings = (item.servings_per_container ?? 0) * (item.container_count ?? 1)
+    const daysSupply = totalServings > 0 ? Math.floor(totalServings / servingsPerDay) : null
+    const monthlyCost = daysSupply && daysSupply > 0 ? (item.product_price / daysSupply) * 30 : null
+    const dailyUnitValue = item.serving_size != null && item.serving_size > 0
+      ? item.serving_size * servingsPerDay
+      : servingsPerDay
+    const dailyAmountLabel = item.serving_unit
+      ? `${formatDailyUnit(dailyUnitValue, item.serving_unit)}/Tag`
+      : `${formatDailyUnit(servingsPerDay, 'Portionen')}/Tag`
+    const dailyIngredientLabels = ingredients
+      .filter((ingredient) => ingredient.search_relevant === 1 && ingredient.quantity != null && ingredient.quantity > 0)
+      .map((ingredient) => (
+        `${ingredient.ingredient_name}: ${formatDailyUnit((ingredient.quantity ?? 0) * servingsPerDay, ingredient.unit)}/Tag`
+      ))
+
+    return {
+      ...item,
+      dailyAmountLabel,
+      dailyIngredientLabels,
+      daysSupply,
+      monthlyCost,
+      warningLabels: warningsByItem.get(item.stack_item_id) ?? [],
+    }
+  })
+}
+
+function buildStackEmailHtml(stack: StackRow, items: StackMailPreparedItem[], totalOnce: number, totalMonthly: number): string {
   const rows = items.map((item) => {
-    const serving = item.serving_size != null && item.serving_unit
-      ? `${item.serving_size} ${item.serving_unit}`
-      : null
+    const productImage = item.image_url
+      ? `<img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.name)}" width="56" height="56" style="width:56px;height:56px;object-fit:cover;border-radius:10px;border:1px solid #e5e7eb;background:#f8fafc;">`
+      : `<div style="width:56px;height:56px;border-radius:10px;border:1px solid #e5e7eb;background:#f8fafc;text-align:center;line-height:56px;color:#94a3b8;font-size:18px;font-weight:800;">SS</div>`
+    const buyButton = item.shop_link
+      ? `<a href="${escapeHtml(item.shop_link)}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;font-weight:700;border-radius:8px;padding:9px 12px;white-space:nowrap;">Jetzt kaufen</a>`
+      : '<span style="color:#94a3b8;">Kein Link</span>'
+    const ingredientText = item.dailyIngredientLabels.length > 0
+      ? item.dailyIngredientLabels.map(escapeHtml).join('<br>')
+      : '-'
+    const warnings = item.warningLabels.length > 0
+      ? item.warningLabels.map((warning) => `<div style="margin-top:4px;color:#9a3412;">${escapeHtml(warning)}</div>`).join('')
+      : '<span style="color:#64748b;">Keine bekannten Hinweise im Stack</span>'
     return `
       <tr>
-        <td style="padding:10px 8px;border-bottom:1px solid #e5e7eb;">
-          <strong>${escapeHtml(item.name)}</strong>
+        <td style="padding:14px 8px;border-bottom:1px solid #e5e7eb;">${productImage}</td>
+        <td style="padding:14px 8px;border-bottom:1px solid #e5e7eb;">
+          <strong style="font-size:15px;">${escapeHtml(item.name)}</strong>
           ${item.brand ? `<br><span style="color:#64748b;">${escapeHtml(item.brand)}</span>` : ''}
         </td>
-        <td style="padding:10px 8px;border-bottom:1px solid #e5e7eb;">${escapeHtml(serving ?? '-')}</td>
-        <td style="padding:10px 8px;border-bottom:1px solid #e5e7eb;">${escapeHtml(item.dosage_text ?? '-')}</td>
-        <td style="padding:10px 8px;border-bottom:1px solid #e5e7eb;">${escapeHtml(item.timing ?? '-')}</td>
-        <td style="padding:10px 8px;border-bottom:1px solid #e5e7eb;text-align:right;">${formatEuro(item.product_price * item.quantity)}</td>
+        <td style="padding:14px 8px;border-bottom:1px solid #e5e7eb;">${ingredientText}</td>
+        <td style="padding:14px 8px;border-bottom:1px solid #e5e7eb;">
+          <strong>${escapeHtml(item.dailyAmountLabel)}</strong>
+          ${item.dosage_text ? `<br><span style="color:#64748b;">Ziel: ${escapeHtml(item.dosage_text)}</span>` : ''}
+          ${item.daysSupply ? `<br><span style="color:#64748b;">reicht ca. ${item.daysSupply} Tage</span>` : ''}
+        </td>
+        <td style="padding:14px 8px;border-bottom:1px solid #e5e7eb;">${escapeHtml(item.timing ?? '-')}</td>
+        <td style="padding:14px 8px;border-bottom:1px solid #e5e7eb;">${warnings}</td>
+        <td style="padding:14px 8px;border-bottom:1px solid #e5e7eb;text-align:right;">
+          <strong>${formatEuro(item.product_price)}</strong>
+          <br><span style="color:#64748b;">${item.monthlyCost != null ? `${formatEuro(item.monthlyCost)}/Monat` : '-'}</span>
+          <br><br>${buyButton}
+        </td>
       </tr>
     `
   }).join('')
@@ -79,19 +228,24 @@ function buildStackEmailHtml(stack: StackRow, items: StackMailItem[], total: num
     <div style="font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#0f172a;line-height:1.5;">
       <h1 style="font-size:22px;margin:0 0 8px;">${escapeHtml(stack.name)}</h1>
       <p style="margin:0 0 18px;color:#64748b;">Dein Supplement-Stack aus Supplement Stack.</p>
+      <div style="margin:0 0 18px;padding:14px 16px;border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0;">
+        <strong>Einmaliger Kaufpreis:</strong> ${formatEuro(totalOnce)}
+        <br><strong>Geschätzte Monatskosten:</strong> ${formatEuro(totalMonthly)}
+      </div>
       <table style="width:100%;border-collapse:collapse;font-size:14px;">
         <thead>
           <tr style="background:#f8fafc;">
+            <th align="left" style="padding:10px 8px;">Foto</th>
             <th align="left" style="padding:10px 8px;">Produkt</th>
-            <th align="left" style="padding:10px 8px;">Portion</th>
-            <th align="left" style="padding:10px 8px;">Dosierung</th>
+            <th align="left" style="padding:10px 8px;">Wirkstoff</th>
+            <th align="left" style="padding:10px 8px;">Tagesdosis</th>
             <th align="left" style="padding:10px 8px;">Timing</th>
+            <th align="left" style="padding:10px 8px;">Wechselwirkung</th>
             <th align="right" style="padding:10px 8px;">Kosten</th>
           </tr>
         </thead>
-        <tbody>${rows || '<tr><td colspan="5" style="padding:12px 8px;color:#64748b;">Dieser Stack ist leer.</td></tr>'}</tbody>
+        <tbody>${rows || '<tr><td colspan="7" style="padding:12px 8px;color:#64748b;">Dieser Stack ist leer.</td></tr>'}</tbody>
       </table>
-      <p style="margin:18px 0 0;font-size:16px;"><strong>Gesamtkosten:</strong> ${formatEuro(total)}</p>
       <p style="margin:20px 0 0;color:#64748b;font-size:12px;">
         Diese E-Mail dient deiner persönlichen Übersicht und ersetzt keine medizinische Beratung.
       </p>
@@ -249,6 +403,133 @@ async function loadStackItems(
   return results
 }
 
+async function loadStackMailIngredients(
+  db: D1Database,
+  stackId: number | string,
+  ownerUserId: number,
+): Promise<StackMailIngredient[]> {
+  const { results } = await db.prepare(`
+    SELECT *
+    FROM (
+      SELECT
+        si.id AS stack_item_id,
+        pi.ingredient_id,
+        i.name AS ingredient_name,
+        pi.parent_ingredient_id,
+        pi.quantity,
+        pi.unit,
+        pi.search_relevant
+      FROM stack_items si
+      JOIN product_ingredients pi ON pi.product_id = si.catalog_product_id
+      JOIN ingredients i ON i.id = pi.ingredient_id
+      WHERE si.stack_id = ?
+        AND si.catalog_product_id IS NOT NULL
+
+      UNION ALL
+
+      SELECT
+        si.id AS stack_item_id,
+        upi.ingredient_id,
+        i.name AS ingredient_name,
+        upi.parent_ingredient_id,
+        upi.quantity,
+        upi.unit,
+        upi.search_relevant
+      FROM stack_items si
+      JOIN user_products up ON up.id = si.user_product_id AND up.user_id = ?
+      JOIN user_product_ingredients upi ON upi.user_product_id = up.id
+      JOIN ingredients i ON i.id = upi.ingredient_id
+      WHERE si.stack_id = ?
+        AND si.user_product_id IS NOT NULL
+    )
+    ORDER BY stack_item_id ASC, search_relevant DESC, ingredient_name ASC
+  `).bind(stackId, ownerUserId, stackId).all<StackMailIngredient>()
+  return results
+}
+
+function groupIngredientsByStackItem(ingredients: StackMailIngredient[]): Map<number, StackMailIngredient[]> {
+  const grouped = new Map<number, StackMailIngredient[]>()
+  for (const ingredient of ingredients) {
+    const rows = grouped.get(ingredient.stack_item_id) ?? []
+    rows.push(ingredient)
+    grouped.set(ingredient.stack_item_id, rows)
+  }
+  return grouped
+}
+
+function effectiveIngredientIdsByItem(
+  ingredientsByItem: Map<number, StackMailIngredient[]>,
+): Map<number, Set<number>> {
+  const effective = new Map<number, Set<number>>()
+  for (const [stackItemId, rows] of ingredientsByItem.entries()) {
+    const parentIdsWithChildRows = new Set(
+      rows
+        .map((row) => row.parent_ingredient_id)
+        .filter((parentId): parentId is number => parentId !== null),
+    )
+    const ids = new Set<number>()
+    for (const row of rows) {
+      if (row.search_relevant !== 1) continue
+      if (row.parent_ingredient_id !== null) {
+        ids.add(row.ingredient_id)
+      } else if (!parentIdsWithChildRows.has(row.ingredient_id)) {
+        ids.add(row.ingredient_id)
+      }
+    }
+    effective.set(stackItemId, ids)
+  }
+  return effective
+}
+
+async function loadStackMailWarnings(
+  db: D1Database,
+  ingredientsByItem: Map<number, StackMailIngredient[]>,
+): Promise<Map<number, string[]>> {
+  const effectiveByItem = effectiveIngredientIdsByItem(ingredientsByItem)
+  const allIds = [...new Set([...effectiveByItem.values()].flatMap((ids) => [...ids]))]
+  const warningsByItem = new Map<number, string[]>()
+  if (allIds.length < 2) return warningsByItem
+
+  const placeholders = allIds.map(() => '?').join(',')
+  const { results: warnings } = await db.prepare(`
+    SELECT
+      ia.name AS ingredient_a_name,
+      ib.name AS ingredient_b_name,
+      ingredient_id,
+      partner_ingredient_id,
+      comment
+    FROM interactions
+    JOIN ingredients ia ON ia.id = interactions.ingredient_id
+    JOIN ingredients ib ON ib.id = interactions.partner_ingredient_id
+    WHERE is_active = 1
+      AND partner_type = 'ingredient'
+      AND partner_ingredient_id IS NOT NULL
+      AND ingredient_id IN (${placeholders})
+      AND partner_ingredient_id IN (${placeholders})
+      AND ingredient_id <> partner_ingredient_id
+    ORDER BY interactions.id
+  `).bind(...allIds, ...allIds).all<{
+    ingredient_a_name: string
+    ingredient_b_name: string
+    ingredient_id: number
+    partner_ingredient_id: number
+    comment: string | null
+  }>()
+
+  for (const warning of warnings) {
+    const label = `${warning.ingredient_a_name} + ${warning.ingredient_b_name}: ${warning.comment ?? 'Hinweis beachten.'}`
+    for (const [stackItemId, ids] of effectiveByItem.entries()) {
+      if (ids.has(warning.ingredient_id) || ids.has(warning.partner_ingredient_id)) {
+        const rows = warningsByItem.get(stackItemId) ?? []
+        if (!rows.includes(label)) rows.push(label)
+        warningsByItem.set(stackItemId, rows)
+      }
+    }
+  }
+
+  return warningsByItem
+}
+
 // GET /api/stacks
 stacks.get('/', async (c) => {
   const authErr = await ensureAuth(c)
@@ -315,7 +596,7 @@ stacks.get('/:id', async (c) => {
   if (!stack) return c.json({ error: 'Not found' }, 404)
   if (stack.user_id !== user.userId && user.role !== 'admin') return c.json({ error: 'Forbidden' }, 403)
   const items = await loadStackItems(c.env.DB, stack.id, stack.user_id)
-  const total = items.reduce((sum, i) => sum + (i.product_price * i.quantity), 0)
+  const total = items.reduce((sum, i) => sum + i.product_price, 0)
   return c.json({ stack, items, total })
 })
 
@@ -333,11 +614,16 @@ stacks.post('/:id/email', async (c) => {
   if (stack.user_id !== user.userId && user.role !== 'admin') return c.json({ error: 'Forbidden' }, 403)
 
   const items = await loadStackItems(c.env.DB, stack.id, stack.user_id) as unknown as StackMailItem[]
-  const total = items.reduce((sum, item) => sum + (item.product_price * item.quantity), 0)
+  const ingredients = await loadStackMailIngredients(c.env.DB, stack.id, stack.user_id)
+  const ingredientsByItem = groupIngredientsByStackItem(ingredients)
+  const warningsByItem = await loadStackMailWarnings(c.env.DB, ingredientsByItem)
+  const preparedItems = prepareMailItems(items, ingredientsByItem, warningsByItem)
+  const totalOnce = preparedItems.reduce((sum, item) => sum + item.product_price, 0)
+  const totalMonthly = preparedItems.reduce((sum, item) => sum + (item.monthlyCost ?? 0), 0)
   const result = await sendMail(c.env, {
     to: user.email,
     subject: `Dein Supplement Stack: ${stack.name}`,
-    html: buildStackEmailHtml(stack, items, total),
+    html: buildStackEmailHtml(stack, preparedItems, totalOnce, totalMonthly),
   })
 
   if (!result.ok) return c.json({ error: 'E-Mail konnte nicht gesendet werden.', debug: result.error }, 500)
