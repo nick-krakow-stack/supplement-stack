@@ -1100,3 +1100,18 @@ Do not assume untracked files are disposable. Review before deleting or committi
 - Product cards can show a short warning label, an info popover, and a knowledge-base article icon link. No smoker status is stored or inferred.
 - Validation passed: functions `npx tsc -p tsconfig.json`, frontend `npx tsc --noEmit`, frontend `npm run lint --if-present`, frontend `npm run build`, frontend `npm test -- --run` (5 tests), and `git diff --check`.
 - Live/preview smokes passed: root 200, knowledge article route 200, knowledge API 200, demo products 200, D1 migration journal shows 0045/0046, article is published, warning row exists for Vitamin A + Beta-Carotin form, legacy profile-field residual count is 0, profile GET/PUT responses have no removed fields, and a temporary Beta-Carotin user product returned the warning plus `/wissen/beta-carotin-raucher-lungenkrebs`. Temporary smoke data was deleted.
+
+## 2026-05-05 Ingredient Research Admin Cockpit Deployed
+
+- Remote D1 migration `0047_ingredient_research_admin.sql` is applied to `supplementstack-production`.
+- Deployment target: Cloudflare Pages project `supplementstack`.
+- Preview: `https://52db1978.supplementstack.pages.dev`.
+- Live: `https://supplementstack.de`, asset `assets/index-DTMpE7Sg.js`.
+- Admin now has a `Wirkstoff-Recherche` tab. It lists all ingredients grouped by category and opens a detail editor per ingredient.
+- New research tables:
+  - `ingredient_research_status` tracks per-ingredient research/calculation status, internal notes, blog URL, reviewed date, and review due date.
+  - `ingredient_research_sources` tracks official and study sources with country/organization, population, recommendation type, no-recommendation marker, dose range/unit, study/finding/outcome metadata, source links, DOI/PubMed IDs, notes, and review dates.
+- Existing `ingredient_safety_warnings` are now manageable through the same cockpit for ingredient-linked short warning labels, popover text, severity, knowledge article slug, threshold amount, and unit.
+- Backend admin routes under `/api/admin/ingredient-research` are admin-only and audit-logged. The list route returns both `ingredients` and `items` aliases for frontend compatibility.
+- Validation passed: frontend `npm run lint`, frontend `npm run build`, functions `npx tsc -p tsconfig.json --noEmit`, and `git diff --check` with CRLF warnings only.
+- Smoke checks passed: remote D1 contains `ingredient_research_status` and `ingredient_research_sources`, production has 66 ingredients, preview/live root return 200 with `assets/index-DTMpE7Sg.js`, and unauthenticated preview/live `/api/admin/ingredient-research` returns 401.

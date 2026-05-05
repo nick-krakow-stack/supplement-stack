@@ -13,6 +13,7 @@ import {
   Link2,
   Pill,
   History,
+  ClipboardList,
   ChevronLeft,
   Menu,
   X,
@@ -32,6 +33,7 @@ type TabId =
   | 'translations'
   | 'ingredient_sub_ingredients'
   | 'dose_recommendations'
+  | 'ingredient_research'
   | 'audit_log'
   | 'interactions'
   | 'shop_domains'
@@ -56,6 +58,7 @@ const navItems: NavItem[] = [
   { id: 'shop_domains', label: 'Shop-Domains', icon: <ShoppingBag size={18} /> },
   { id: 'rankings', label: 'Rankings', icon: <Trophy size={18} /> },
   { id: 'user_products', label: 'User-Produkte', icon: <UserCheck size={18} /> },
+  { id: 'ingredient_research', label: 'Wirkstoff-Recherche', icon: <ClipboardList size={18} /> },
 ];
 
 const TAB_LABELS: Record<TabId, string> = {
@@ -67,6 +70,7 @@ const TAB_LABELS: Record<TabId, string> = {
   dose_recommendations: 'Dose-Richtwerte',
   audit_log: 'Audit-Log',
   interactions: 'Wechselwirkungen',
+  ingredient_research: 'Wirkstoff-Recherche',
   shop_domains: 'Shop-Domains',
   rankings: 'Rankings',
   user_products: 'User-Produkte',

@@ -998,3 +998,21 @@ When a future agent deploys or applies migrations, append the exact date, commit
   - Made the warning form-specific for the existing Vitamin A Beta-Carotin form.
 - Validation passed: functions TypeScript, frontend TypeScript, frontend lint, frontend build, frontend Vitest 5 tests, and `git diff --check`.
 - Smoke checks passed: preview/live root 200, preview/live knowledge article route 200, preview/live knowledge API 200, preview/live demo products 200, D1 migration journal shows 0045/0046, article is published, warning row exists for Vitamin A + Beta-Carotin form, legacy profile-field residual count is 0, live profile GET/PUT no longer returns removed fields, and a temporary Beta-Carotin user product returned the warning plus article link. Temporary smoke user/product data was deleted.
+
+## 2026-05-05 - Ingredient Research Admin Cockpit
+
+- Remote D1 migration:
+  - `0047_ingredient_research_admin.sql` applied successfully to `supplementstack-production`.
+- Deploy command: `npx wrangler pages deploy frontend/dist --project-name supplementstack`.
+- Correct production Pages project: `supplementstack`.
+- Preview URL: `https://52db1978.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`.
+- Build asset: `assets/index-DTMpE7Sg.js`.
+- Scope:
+  - Added `ingredient_research_status` and `ingredient_research_sources`.
+  - Added admin `/api/admin/ingredient-research` list/detail/status/source/warning routes.
+  - Added admin `Wirkstoff-Recherche` tab with category-grouped ingredient list, responsive detail editor, source management, and warning management.
+  - Existing `ingredient_safety_warnings` remains the product-card warning source; the cockpit manages warning rows but not full knowledge article bodies.
+- Validation passed: frontend `npm run lint`, frontend `npm run build`, functions `npx tsc -p tsconfig.json --noEmit`, and `git diff --check` with CRLF warnings only.
+- Smoke checks passed: remote D1 confirms `ingredient_research_status` and `ingredient_research_sources`, production ingredient count is 66, preview/live root 200 with `assets/index-DTMpE7Sg.js`, and preview/live unauthenticated `/api/admin/ingredient-research` returns 401.
+- Commit after deploy: `900f95b` - Feature: Add ingredient research admin cockpit.

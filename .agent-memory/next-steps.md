@@ -465,3 +465,15 @@ Still open:
 ## 2026-05-05 Purchase-Link Follow-Up
 
 - Later follow-up: if a product ever has no purchase link, product cards/stack surfaces should offer a simple report action so the missing or broken link can be corrected. Current production product data is expected to have purchase links; this is a resilience/maintenance flow, not a blocker for the deployed warning/data-minimization bundle.
+
+## 2026-05-05 Ingredient Research Admin Cockpit Update
+
+Closed in the latest deployed bundle:
+- Admin `Wirkstoff-Recherche` tab for category-grouped ingredient research management.
+- Remote D1 migration 0047 for `ingredient_research_status` and `ingredient_research_sources`.
+- Admin CRUD routes for research status, official/study source rows, and ingredient safety warnings.
+
+Still open:
+- Authenticated browser QA of the new admin tab on desktop and mobile, including creating/editing/deleting one test source row and one test warning row.
+- Admin UI for full `knowledge_articles` article/body editing is still not built; the cockpit links warnings to existing article slugs.
+- Product data and dosage data scientific validation can now use the new cockpit as the working surface, but content still needs to be entered/reviewed ingredient by ingredient.

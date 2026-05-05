@@ -458,3 +458,28 @@ Workspace notes:
 - Commit the current feature if not already committed in git history.
 - Do not commit unrelated `.claude/SESSION.md`, `.claude/settings.json`, or root `logo.png`.
 - Remaining follow-up: manual browser QA for the warning popover on hover, keyboard focus, and mobile tap; later admin UI for knowledge/warning content.
+
+## 2026-05-05 - Ingredient Research Admin Cockpit Deployed
+
+Continue from the committed/deployed admin research cockpit work.
+
+Completed:
+- Remote D1 migration `0047_ingredient_research_admin.sql` applied to `supplementstack-production`.
+- Cloudflare Pages project `supplementstack` deployed. Preview: `https://52db1978.supplementstack.pages.dev`; live `https://supplementstack.de` uses `assets/index-DTMpE7Sg.js`.
+- Admin `Wirkstoff-Recherche` tab is wired into `AdminLayout` and `AdminPage`.
+- Backend admin routes under `/api/admin/ingredient-research` support list/detail, status upsert, source create/update/delete, and safety-warning create/update/soft-delete.
+- Source records hold country/organization, recommendation/no-recommendation data, dose ranges, study findings/outcomes, source links, DOI/PubMed IDs, notes, and review dates.
+- Safety warnings reuse existing `ingredient_safety_warnings`; full knowledge article body editing remains separate future work.
+
+Validation:
+- `npm run lint` in `frontend/`
+- `npm run build` in `frontend/`
+- `npx tsc -p tsconfig.json --noEmit` in `functions/`
+- `git diff --check`
+- Remote D1 table existence check for `ingredient_research_status` and `ingredient_research_sources`
+- Preview/live root 200 with asset `assets/index-DTMpE7Sg.js`
+- Preview/live unauthenticated `/api/admin/ingredient-research` 401
+
+Workspace notes:
+- Existing unrelated `.claude/SESSION.md`, `.claude/settings.json`, and root `logo.png` remain out of scope.
+- Next practical check: authenticated admin browser QA for the new tab on desktop and mobile.

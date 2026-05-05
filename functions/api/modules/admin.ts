@@ -16,6 +16,15 @@
 //   GET /ingredient-sub-ingredients (admin)
 //   PUT /ingredient-sub-ingredients (admin)
 //   DELETE /ingredient-sub-ingredients/:parentId/:childId (admin)
+//   GET /ingredient-research (admin)
+//   GET /ingredient-research/:ingredientId (admin)
+//   PUT /ingredient-research/:ingredientId/status (admin)
+//   POST /ingredient-research/:ingredientId/sources (admin)
+//   PUT /ingredient-research/sources/:sourceId (admin)
+//   DELETE /ingredient-research/sources/:sourceId (admin)
+//   POST /ingredient-research/:ingredientId/warnings (admin)
+//   PUT /ingredient-research/warnings/:warningId (admin)
+//   DELETE /ingredient-research/warnings/:warningId (admin)
 //   GET /translations/ingredients — ingredient translations list (admin)
 //   PUT /translations/ingredients/:ingredientId/:language — upsert ingredient translation (admin)
 //   GET /translations/dose-recommendations — dose recommendation translations list (admin)
@@ -240,6 +249,93 @@ type AuditLogDbRow = {
   created_at: number
 }
 
+type IngredientResearchStatusValue = typeof INGREDIENT_RESEARCH_STATUSES[number]
+type IngredientCalculationStatusValue = typeof INGREDIENT_CALCULATION_STATUSES[number]
+type IngredientResearchSourceKind = typeof INGREDIENT_RESEARCH_SOURCE_KINDS[number]
+type IngredientWarningSeverity = typeof INGREDIENT_WARNING_SEVERITIES[number]
+
+type IngredientResearchListRow = {
+  ingredient_id: number
+  name: string
+  category: string | null
+  unit: string | null
+  research_status: IngredientResearchStatusValue
+  calculation_status: IngredientCalculationStatusValue
+  internal_notes: string | null
+  blog_url: string | null
+  status_reviewed_at: string | null
+  review_due_at: string | null
+  status_updated_at: string | null
+  official_source_count: number
+  study_source_count: number
+  warning_count: number
+  no_recommendation_count: number
+  latest_source_reviewed_at: string | null
+}
+
+type IngredientResearchStatusRow = {
+  ingredient_id: number
+  research_status: IngredientResearchStatusValue
+  calculation_status: IngredientCalculationStatusValue
+  internal_notes: string | null
+  blog_url: string | null
+  reviewed_at: string | null
+  review_due_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+type IngredientResearchSourceRow = {
+  id: number
+  ingredient_id: number
+  source_kind: IngredientResearchSourceKind
+  organization: string | null
+  country: string | null
+  region: string | null
+  population: string | null
+  recommendation_type: string | null
+  no_recommendation: number
+  dose_min: number | null
+  dose_max: number | null
+  dose_unit: string | null
+  per_kg_body_weight: number
+  frequency: string | null
+  study_type: string | null
+  evidence_quality: string | null
+  duration: string | null
+  outcome: string | null
+  finding: string | null
+  source_title: string | null
+  source_url: string | null
+  doi: string | null
+  pubmed_id: string | null
+  notes: string | null
+  source_date: string | null
+  reviewed_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+type IngredientSafetyWarningAdminRow = {
+  id: number
+  ingredient_id: number
+  ingredient_name: string | null
+  form_id: number | null
+  form_name: string | null
+  short_label: string
+  popover_text: string
+  severity: IngredientWarningSeverity
+  article_slug: string | null
+  article_title: string | null
+  min_amount: number | null
+  unit: string | null
+  active: number
+  created_at: string
+}
+
+type IngredientResearchSourceMutation = Omit<IngredientResearchSourceRow, 'id' | 'created_at' | 'updated_at'>
+type IngredientSafetyWarningMutation = Omit<IngredientSafetyWarningAdminRow, 'id' | 'ingredient_name' | 'form_name' | 'article_title' | 'created_at'>
+
 const DOSE_RECOMMENDATION_SOURCE_TYPES = ['official', 'study', 'profile', 'user_private', 'user_public'] as const
 type DoseRecommendationSourceType = typeof DOSE_RECOMMENDATION_SOURCE_TYPES[number]
 
@@ -248,6 +344,11 @@ type DoseRecommendationPurpose = typeof DOSE_RECOMMENDATION_PURPOSES[number]
 
 const DOSE_RECOMMENDATION_SEX_FILTERS = ['male', 'female'] as const
 type DoseRecommendationSexFilter = typeof DOSE_RECOMMENDATION_SEX_FILTERS[number] | null
+
+const INGREDIENT_RESEARCH_STATUSES = ['unreviewed', 'researching', 'needs_review', 'reviewed', 'stale', 'blocked'] as const
+const INGREDIENT_CALCULATION_STATUSES = ['not_started', 'in_progress', 'needs_review', 'ready', 'not_applicable', 'blocked'] as const
+const INGREDIENT_RESEARCH_SOURCE_KINDS = ['official', 'study'] as const
+const INGREDIENT_WARNING_SEVERITIES = ['info', 'caution', 'danger'] as const
 
 const SENSITIVE_AUDIT_KEY_PARTS = [
   'password',
@@ -414,6 +515,22 @@ function normalizeSourceUrl(value: unknown): ValidationResult<string | null | un
   }
 }
 
+function normalizeHttpUrlField(data: Record<string, unknown>, key: string): ValidationResult<string | null | undefined> {
+  if (!hasOwnKey(data, key)) return { ok: true, value: undefined }
+  const result = normalizeSourceUrl(data[key])
+  if (!result.ok) return validationError(result.error.replace('source_url', key), result.status)
+  return result
+}
+
+function optionalDateTextField(data: Record<string, unknown>, key: string): ValidationResult<string | null | undefined> {
+  const result = optionalTextField(data, key, 40)
+  if (!result.ok || result.value === undefined || result.value === null) return result
+  if (!/^\d{4}(?:-\d{2}(?:-\d{2})?)?(?:[T ][0-9:.+-Z]+)?$/.test(result.value)) {
+    return validationError(`${key} must be an ISO-like date string`)
+  }
+  return result
+}
+
 function redactAuditSecrets(value: unknown, depth = 0): unknown {
   if (depth > 8) return '[redacted: max depth]'
   if (Array.isArray(value)) return value.map((item) => redactAuditSecrets(item, depth + 1))
@@ -451,6 +568,349 @@ function parseAuditDate(value: string | undefined, endOfDay: boolean): number | 
 
 function formatDoseRecommendationValidation(error: ValidationFailure): { error: string; status: 400 | 404 | 409 } {
   return { error: error.error, status: error.status ?? 400 }
+}
+
+async function ingredientExists(db: D1Database, ingredientId: number): Promise<boolean> {
+  const row = await db.prepare('SELECT id FROM ingredients WHERE id = ?')
+    .bind(ingredientId)
+    .first<{ id: number }>()
+  return Boolean(row)
+}
+
+async function formBelongsToIngredient(db: D1Database, formId: number, ingredientId: number): Promise<boolean> {
+  const row = await db.prepare('SELECT id FROM ingredient_forms WHERE id = ? AND ingredient_id = ?')
+    .bind(formId, ingredientId)
+    .first<{ id: number }>()
+  return Boolean(row)
+}
+
+async function articleSlugExists(db: D1Database, articleSlug: string): Promise<boolean> {
+  const row = await db.prepare('SELECT slug FROM knowledge_articles WHERE slug = ?')
+    .bind(articleSlug)
+    .first<{ slug: string }>()
+  return Boolean(row)
+}
+
+async function getIngredientResearchStatusRow(db: D1Database, ingredientId: number): Promise<IngredientResearchStatusRow | null> {
+  return await db.prepare(`
+    SELECT
+      ingredient_id,
+      research_status,
+      calculation_status,
+      internal_notes,
+      blog_url,
+      reviewed_at,
+      review_due_at,
+      created_at,
+      updated_at
+    FROM ingredient_research_status
+    WHERE ingredient_id = ?
+  `).bind(ingredientId).first<IngredientResearchStatusRow>()
+}
+
+async function getIngredientResearchSourceRow(db: D1Database, sourceId: number): Promise<IngredientResearchSourceRow | null> {
+  return await db.prepare(`
+    SELECT
+      id,
+      ingredient_id,
+      source_kind,
+      organization,
+      country,
+      region,
+      population,
+      recommendation_type,
+      no_recommendation,
+      dose_min,
+      dose_max,
+      dose_unit,
+      per_kg_body_weight,
+      frequency,
+      study_type,
+      evidence_quality,
+      duration,
+      outcome,
+      finding,
+      source_title,
+      source_url,
+      doi,
+      pubmed_id,
+      notes,
+      source_date,
+      reviewed_at,
+      created_at,
+      updated_at
+    FROM ingredient_research_sources
+    WHERE id = ?
+  `).bind(sourceId).first<IngredientResearchSourceRow>()
+}
+
+async function getIngredientSafetyWarningAdminRow(db: D1Database, warningId: number): Promise<IngredientSafetyWarningAdminRow | null> {
+  return await db.prepare(`
+    SELECT
+      w.id,
+      w.ingredient_id,
+      i.name AS ingredient_name,
+      w.form_id,
+      f.name AS form_name,
+      w.short_label,
+      w.popover_text,
+      w.severity,
+      w.article_slug,
+      a.title AS article_title,
+      w.min_amount,
+      w.unit,
+      w.active,
+      w.created_at
+    FROM ingredient_safety_warnings w
+    LEFT JOIN ingredients i ON i.id = w.ingredient_id
+    LEFT JOIN ingredient_forms f ON f.id = w.form_id
+    LEFT JOIN knowledge_articles a ON a.slug = w.article_slug
+    WHERE w.id = ?
+  `).bind(warningId).first<IngredientSafetyWarningAdminRow>()
+}
+
+async function validateIngredientResearchStatusPayload(
+  body: Record<string, unknown>,
+  existing: IngredientResearchStatusRow | null,
+): Promise<ValidationResult<Omit<IngredientResearchStatusRow, 'ingredient_id' | 'created_at' | 'updated_at'>>> {
+  const researchStatusInput = hasOwnKey(body, 'research_status')
+    ? body.research_status
+    : hasOwnKey(body, 'status')
+      ? body.status
+      : undefined
+  const researchStatus =
+    enumValue(researchStatusInput, INGREDIENT_RESEARCH_STATUSES) ??
+    existing?.research_status ??
+    'unreviewed'
+  if (!researchStatus) return validationError(`research_status must be one of ${INGREDIENT_RESEARCH_STATUSES.join(', ')}`)
+
+  const calculationStatus = hasOwnKey(body, 'calculation_status')
+    ? enumValue(body.calculation_status, INGREDIENT_CALCULATION_STATUSES)
+    : existing?.calculation_status ?? 'not_started'
+  if (!calculationStatus) return validationError(`calculation_status must be one of ${INGREDIENT_CALCULATION_STATUSES.join(', ')}`)
+
+  const internalNotes = optionalTextField(body, 'internal_notes', 10000)
+  if (!internalNotes.ok) return internalNotes
+
+  const blogUrl = normalizeHttpUrlField(body, 'blog_url')
+  if (!blogUrl.ok) return blogUrl
+
+  const reviewedAt = optionalDateTextField(body, 'reviewed_at')
+  if (!reviewedAt.ok) return reviewedAt
+
+  const reviewDueAt = optionalDateTextField(body, 'review_due_at')
+  if (!reviewDueAt.ok) return reviewDueAt
+
+  return {
+    ok: true,
+    value: {
+      research_status: researchStatus,
+      calculation_status: calculationStatus,
+      internal_notes: internalNotes.value === undefined ? existing?.internal_notes ?? null : internalNotes.value,
+      blog_url: blogUrl.value === undefined ? existing?.blog_url ?? null : blogUrl.value,
+      reviewed_at: reviewedAt.value === undefined ? existing?.reviewed_at ?? null : reviewedAt.value,
+      review_due_at: reviewDueAt.value === undefined ? existing?.review_due_at ?? null : reviewDueAt.value,
+    },
+  }
+}
+
+async function validateIngredientResearchSourcePayload(
+  db: D1Database,
+  body: Record<string, unknown>,
+  ingredientId: number,
+  existing: IngredientResearchSourceRow | null,
+): Promise<ValidationResult<IngredientResearchSourceMutation>> {
+  const sourceKindInput = hasOwnKey(body, 'source_kind')
+    ? body.source_kind
+    : hasOwnKey(body, 'source_type')
+      ? body.source_type
+      : undefined
+  const sourceKind =
+    enumValue(sourceKindInput, INGREDIENT_RESEARCH_SOURCE_KINDS) ??
+    existing?.source_kind ??
+    null
+  if (!sourceKind) return validationError(`source_kind must be one of ${INGREDIENT_RESEARCH_SOURCE_KINDS.join(', ')}`)
+
+  const fields = [
+    ['organization', 255],
+    ['country', 100],
+    ['region', 100],
+    ['population', 255],
+    ['recommendation_type', 255],
+    ['dose_unit', 50],
+    ['frequency', 255],
+    ['study_type', 255],
+    ['evidence_quality', 100],
+    ['duration', 255],
+    ['outcome', 1000],
+    ['finding', 10000],
+    ['doi', 255],
+    ['pubmed_id', 100],
+    ['notes', 10000],
+  ] as const
+
+  const textValues: Record<string, string | null> = {}
+  for (const [key, maxLength] of fields) {
+    const result = optionalTextField(body, key, maxLength)
+    if (!result.ok) return result
+    textValues[key] = result.value === undefined
+      ? (existing?.[key as keyof IngredientResearchSourceRow] as string | null | undefined) ?? null
+      : result.value
+  }
+
+  const sourceTitle = hasOwnKey(body, 'source_title')
+    ? optionalTextField(body, 'source_title', 1000)
+    : hasOwnKey(body, 'title')
+      ? optionalTextField(body, 'title', 1000)
+      : existing
+        ? { ok: true as const, value: existing.source_title }
+        : { ok: true as const, value: undefined }
+  if (!sourceTitle.ok) return sourceTitle
+  const finalSourceTitle = sourceTitle.value === undefined ? existing?.source_title ?? null : sourceTitle.value
+
+  const doseUnit = hasOwnKey(body, 'dose_unit')
+    ? optionalTextField(body, 'dose_unit', 50)
+    : hasOwnKey(body, 'unit')
+      ? optionalTextField(body, 'unit', 50)
+      : existing
+        ? { ok: true as const, value: existing.dose_unit }
+        : { ok: true as const, value: undefined }
+  if (!doseUnit.ok) return doseUnit
+  const finalDoseUnit = doseUnit.value === undefined ? existing?.dose_unit ?? null : doseUnit.value
+
+  const noRecommendation = optionalBooleanField(body, 'no_recommendation')
+  if (!noRecommendation.ok) return noRecommendation
+
+  const perKgBodyWeight = optionalBooleanField(body, 'per_kg_body_weight')
+  if (!perKgBodyWeight.ok) return perKgBodyWeight
+
+  const doseMin = optionalNumberField(body, 'dose_min', { min: 0 })
+  if (!doseMin.ok) return doseMin
+
+  const doseMax = optionalNumberField(body, 'dose_max', { min: 0 })
+  if (!doseMax.ok) return doseMax
+
+  const sourceUrl = normalizeHttpUrlField(body, 'source_url')
+  if (!sourceUrl.ok) return sourceUrl
+
+  const sourceDate = optionalDateTextField(body, 'source_date')
+  if (!sourceDate.ok) return sourceDate
+
+  const reviewedAt = optionalDateTextField(body, 'reviewed_at')
+  if (!reviewedAt.ok) return reviewedAt
+
+  const finalDoseMin = doseMin.value === undefined ? existing?.dose_min ?? null : doseMin.value
+  const finalDoseMax = doseMax.value === undefined ? existing?.dose_max ?? null : doseMax.value
+  if (finalDoseMin !== null && finalDoseMax !== null && finalDoseMin > finalDoseMax) {
+    return validationError('dose_min must be <= dose_max')
+  }
+
+  if (!(await ingredientExists(db, ingredientId))) return validationError('Ingredient not found', 404)
+
+  return {
+    ok: true,
+    value: {
+      ingredient_id: ingredientId,
+      source_kind: sourceKind,
+      organization: textValues.organization,
+      country: textValues.country,
+      region: textValues.region,
+      population: textValues.population,
+      recommendation_type: textValues.recommendation_type,
+      no_recommendation: noRecommendation.value === undefined ? existing?.no_recommendation ?? 0 : noRecommendation.value,
+      dose_min: finalDoseMin,
+      dose_max: finalDoseMax,
+      dose_unit: finalDoseUnit,
+      per_kg_body_weight: perKgBodyWeight.value === undefined ? existing?.per_kg_body_weight ?? 0 : perKgBodyWeight.value,
+      frequency: textValues.frequency,
+      study_type: textValues.study_type,
+      evidence_quality: textValues.evidence_quality,
+      duration: textValues.duration,
+      outcome: textValues.outcome,
+      finding: textValues.finding,
+      source_title: finalSourceTitle,
+      source_url: sourceUrl.value === undefined ? existing?.source_url ?? null : sourceUrl.value,
+      doi: textValues.doi,
+      pubmed_id: textValues.pubmed_id,
+      notes: textValues.notes,
+      source_date: sourceDate.value === undefined ? existing?.source_date ?? null : sourceDate.value,
+      reviewed_at: reviewedAt.value === undefined ? existing?.reviewed_at ?? null : reviewedAt.value,
+    },
+  }
+}
+
+async function validateIngredientWarningPayload(
+  db: D1Database,
+  body: Record<string, unknown>,
+  ingredientId: number,
+  existing: IngredientSafetyWarningAdminRow | null,
+): Promise<ValidationResult<IngredientSafetyWarningMutation>> {
+  const targetIngredientId = hasOwnKey(body, 'ingredient_id')
+    ? normalizeInteger(body.ingredient_id)
+    : ingredientId
+  if (!targetIngredientId || targetIngredientId <= 0) return validationError('ingredient_id must be a positive integer')
+  if (!(await ingredientExists(db, targetIngredientId))) return validationError('Ingredient not found', 404)
+
+  const formId = optionalPositiveIntegerField(body, 'form_id')
+  if (!formId.ok) return formId
+  const finalFormId = formId.value === undefined ? existing?.form_id ?? null : formId.value
+  if (finalFormId !== null && !(await formBelongsToIngredient(db, finalFormId, targetIngredientId))) {
+    return validationError('form_id must belong to the warning ingredient')
+  }
+
+  const shortLabel = hasOwnKey(body, 'short_label')
+    ? requiredTextField(body, 'short_label', 255)
+    : hasOwnKey(body, 'title')
+      ? requiredTextField(body, 'title', 255)
+      : existing
+        ? { ok: true as const, value: existing.short_label }
+        : requiredTextField(body, 'short_label', 255)
+  if (!shortLabel.ok) return shortLabel
+
+  const popoverText = hasOwnKey(body, 'popover_text')
+    ? requiredTextField(body, 'popover_text', 2000)
+    : hasOwnKey(body, 'message')
+      ? requiredTextField(body, 'message', 2000)
+      : existing
+        ? { ok: true as const, value: existing.popover_text }
+        : requiredTextField(body, 'popover_text', 2000)
+  if (!popoverText.ok) return popoverText
+
+  const severity = hasOwnKey(body, 'severity')
+    ? enumValue(body.severity, INGREDIENT_WARNING_SEVERITIES)
+    : existing?.severity ?? 'caution'
+  if (!severity) return validationError(`severity must be one of ${INGREDIENT_WARNING_SEVERITIES.join(', ')}`)
+
+  const articleSlug = optionalTextField(body, 'article_slug', 255)
+  if (!articleSlug.ok) return articleSlug
+  const finalArticleSlug = articleSlug.value === undefined ? existing?.article_slug ?? null : articleSlug.value
+  if (finalArticleSlug && !(await articleSlugExists(db, finalArticleSlug))) {
+    return validationError('article_slug not found', 404)
+  }
+
+  const minAmount = optionalNumberField(body, 'min_amount', { min: 0 })
+  if (!minAmount.ok) return minAmount
+
+  const unit = optionalTextField(body, 'unit', 50)
+  if (!unit.ok) return unit
+
+  const active = optionalBooleanField(body, 'active')
+  if (!active.ok) return active
+
+  return {
+    ok: true,
+    value: {
+      ingredient_id: targetIngredientId,
+      form_id: finalFormId,
+      short_label: shortLabel.value,
+      popover_text: popoverText.value,
+      severity,
+      article_slug: finalArticleSlug,
+      min_amount: minAmount.value === undefined ? existing?.min_amount ?? null : minAmount.value,
+      unit: unit.value === undefined ? existing?.unit ?? null : unit.value,
+      active: active.value === undefined ? existing?.active ?? 1 : active.value,
+    },
+  }
 }
 
 async function getDoseRecommendationAdminRow(db: D1Database, id: number): Promise<DoseRecommendationAdminRow | null> {
@@ -1426,6 +1886,594 @@ admin.delete('/dose-recommendations/:id', async (c) => {
   })
 
   return c.json({ ok: true, recommendation })
+})
+
+// GET /api/admin/ingredient-research?q=&category=&status= (admin only)
+admin.get('/ingredient-research', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const q = c.req.query('q')?.trim() ?? ''
+  const category = c.req.query('category')?.trim() ?? ''
+  const statusParam = c.req.query('status')?.trim() ?? ''
+  const like = `%${q}%`
+
+  const where: string[] = []
+  const bindings: Array<string | number> = []
+
+  if (q) {
+    where.push('(i.name LIKE ? OR COALESCE(i.category, \'\') LIKE ?)')
+    bindings.push(like, like)
+  }
+
+  if (category) {
+    where.push('COALESCE(i.category, \'\') = ?')
+    bindings.push(category)
+  }
+
+  if (statusParam) {
+    const status = enumValue(statusParam, INGREDIENT_RESEARCH_STATUSES)
+    if (!status) return c.json({ error: `status must be one of ${INGREDIENT_RESEARCH_STATUSES.join(', ')}` }, 400)
+    where.push('COALESCE(rs.research_status, \'unreviewed\') = ?')
+    bindings.push(status)
+  }
+
+  const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''
+
+  const { results } = await c.env.DB.prepare(`
+    SELECT
+      i.id AS ingredient_id,
+      i.name,
+      i.category,
+      i.unit,
+      COALESCE(rs.research_status, 'unreviewed') AS research_status,
+      COALESCE(rs.calculation_status, 'not_started') AS calculation_status,
+      rs.internal_notes,
+      rs.blog_url,
+      rs.reviewed_at AS status_reviewed_at,
+      rs.review_due_at,
+      rs.updated_at AS status_updated_at,
+      COALESCE(source_counts.official_source_count, 0) AS official_source_count,
+      COALESCE(source_counts.study_source_count, 0) AS study_source_count,
+      COALESCE(warning_counts.warning_count, 0) AS warning_count,
+      COALESCE(source_counts.no_recommendation_count, 0) AS no_recommendation_count,
+      source_counts.latest_source_reviewed_at
+    FROM ingredients i
+    LEFT JOIN ingredient_research_status rs ON rs.ingredient_id = i.id
+    LEFT JOIN (
+      SELECT
+        ingredient_id,
+        SUM(CASE WHEN source_kind = 'official' THEN 1 ELSE 0 END) AS official_source_count,
+        SUM(CASE WHEN source_kind = 'study' THEN 1 ELSE 0 END) AS study_source_count,
+        SUM(CASE WHEN no_recommendation = 1 THEN 1 ELSE 0 END) AS no_recommendation_count,
+        MAX(reviewed_at) AS latest_source_reviewed_at
+      FROM ingredient_research_sources
+      GROUP BY ingredient_id
+    ) source_counts ON source_counts.ingredient_id = i.id
+    LEFT JOIN (
+      SELECT ingredient_id, COUNT(*) AS warning_count
+      FROM ingredient_safety_warnings
+      WHERE active = 1
+      GROUP BY ingredient_id
+    ) warning_counts ON warning_counts.ingredient_id = i.id
+    ${whereSql}
+    ORDER BY COALESCE(i.category, '') ASC, i.name ASC
+  `).bind(...bindings).all<IngredientResearchListRow>()
+
+  return c.json({ ingredients: results, items: results, total: results.length })
+})
+
+// GET /api/admin/ingredient-research/:ingredientId (admin only)
+admin.get('/ingredient-research/:ingredientId', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const ingredientId = parsePositiveId(c.req.param('ingredientId'))
+  if (ingredientId === null) return c.json({ error: 'Invalid ingredient id' }, 400)
+
+  const ingredient = await c.env.DB.prepare(`
+    SELECT id, name, category, unit, description, external_url
+    FROM ingredients
+    WHERE id = ?
+  `).bind(ingredientId).first()
+  if (!ingredient) return c.json({ error: 'Ingredient not found' }, 404)
+
+  const status = await getIngredientResearchStatusRow(c.env.DB, ingredientId)
+
+  const { results: sources } = await c.env.DB.prepare(`
+    SELECT
+      id,
+      ingredient_id,
+      source_kind,
+      organization,
+      country,
+      region,
+      population,
+      recommendation_type,
+      no_recommendation,
+      dose_min,
+      dose_max,
+      dose_unit,
+      per_kg_body_weight,
+      frequency,
+      study_type,
+      evidence_quality,
+      duration,
+      outcome,
+      finding,
+      source_title,
+      source_url,
+      doi,
+      pubmed_id,
+      notes,
+      source_date,
+      reviewed_at,
+      created_at,
+      updated_at
+    FROM ingredient_research_sources
+    WHERE ingredient_id = ?
+    ORDER BY source_kind ASC, COALESCE(reviewed_at, source_date, created_at) DESC, id DESC
+  `).bind(ingredientId).all<IngredientResearchSourceRow>()
+
+  const { results: warnings } = await c.env.DB.prepare(`
+    SELECT
+      w.id,
+      w.ingredient_id,
+      i.name AS ingredient_name,
+      w.form_id,
+      f.name AS form_name,
+      w.short_label,
+      w.popover_text,
+      w.severity,
+      w.article_slug,
+      a.title AS article_title,
+      w.min_amount,
+      w.unit,
+      w.active,
+      w.created_at
+    FROM ingredient_safety_warnings w
+    LEFT JOIN ingredients i ON i.id = w.ingredient_id
+    LEFT JOIN ingredient_forms f ON f.id = w.form_id
+    LEFT JOIN knowledge_articles a ON a.slug = w.article_slug
+    WHERE w.ingredient_id = ?
+    ORDER BY w.active DESC, w.severity DESC, w.id DESC
+  `).bind(ingredientId).all<IngredientSafetyWarningAdminRow>()
+
+  return c.json({
+    ingredient,
+    status: status ?? {
+      ingredient_id: ingredientId,
+      research_status: 'unreviewed',
+      calculation_status: 'not_started',
+      internal_notes: null,
+      blog_url: null,
+      reviewed_at: null,
+      review_due_at: null,
+      created_at: null,
+      updated_at: null,
+    },
+    sources,
+    warnings,
+  })
+})
+
+// PUT /api/admin/ingredient-research/:ingredientId/status (admin only)
+admin.put('/ingredient-research/:ingredientId/status', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const ingredientId = parsePositiveId(c.req.param('ingredientId'))
+  if (ingredientId === null) return c.json({ error: 'Invalid ingredient id' }, 400)
+  if (!(await ingredientExists(c.env.DB, ingredientId))) return c.json({ error: 'Ingredient not found' }, 404)
+
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const existing = await getIngredientResearchStatusRow(c.env.DB, ingredientId)
+  const validation = await validateIngredientResearchStatusPayload(body, existing)
+  if (!validation.ok) return c.json({ error: validation.error }, validation.status ?? 400)
+
+  const data = validation.value
+  await c.env.DB.prepare(`
+    INSERT INTO ingredient_research_status (
+      ingredient_id,
+      research_status,
+      calculation_status,
+      internal_notes,
+      blog_url,
+      reviewed_at,
+      review_due_at,
+      created_at,
+      updated_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+    ON CONFLICT(ingredient_id) DO UPDATE SET
+      research_status = excluded.research_status,
+      calculation_status = excluded.calculation_status,
+      internal_notes = excluded.internal_notes,
+      blog_url = excluded.blog_url,
+      reviewed_at = excluded.reviewed_at,
+      review_due_at = excluded.review_due_at,
+      updated_at = datetime('now')
+  `).bind(
+    ingredientId,
+    data.research_status,
+    data.calculation_status,
+    data.internal_notes,
+    data.blog_url,
+    data.reviewed_at,
+    data.review_due_at,
+  ).run()
+
+  const status = await getIngredientResearchStatusRow(c.env.DB, ingredientId)
+  await logAdminAction(c, {
+    action: 'upsert_ingredient_research_status',
+    entity_type: 'ingredient_research_status',
+    entity_id: ingredientId,
+    changes: { before: existing, after: status },
+  })
+
+  return c.json({ status })
+})
+
+// POST /api/admin/ingredient-research/:ingredientId/sources (admin only)
+admin.post('/ingredient-research/:ingredientId/sources', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const ingredientId = parsePositiveId(c.req.param('ingredientId'))
+  if (ingredientId === null) return c.json({ error: 'Invalid ingredient id' }, 400)
+
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const validation = await validateIngredientResearchSourcePayload(c.env.DB, body, ingredientId, null)
+  if (!validation.ok) return c.json({ error: validation.error }, validation.status ?? 400)
+
+  const data = validation.value
+  const result = await c.env.DB.prepare(`
+    INSERT INTO ingredient_research_sources (
+      ingredient_id,
+      source_kind,
+      organization,
+      country,
+      region,
+      population,
+      recommendation_type,
+      no_recommendation,
+      dose_min,
+      dose_max,
+      dose_unit,
+      per_kg_body_weight,
+      frequency,
+      study_type,
+      evidence_quality,
+      duration,
+      outcome,
+      finding,
+      source_title,
+      source_url,
+      doi,
+      pubmed_id,
+      notes,
+      source_date,
+      reviewed_at,
+      created_at,
+      updated_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+  `).bind(
+    data.ingredient_id,
+    data.source_kind,
+    data.organization,
+    data.country,
+    data.region,
+    data.population,
+    data.recommendation_type,
+    data.no_recommendation,
+    data.dose_min,
+    data.dose_max,
+    data.dose_unit,
+    data.per_kg_body_weight,
+    data.frequency,
+    data.study_type,
+    data.evidence_quality,
+    data.duration,
+    data.outcome,
+    data.finding,
+    data.source_title,
+    data.source_url,
+    data.doi,
+    data.pubmed_id,
+    data.notes,
+    data.source_date,
+    data.reviewed_at,
+  ).run()
+
+  const sourceId = result.meta.last_row_id as number
+  const source = await getIngredientResearchSourceRow(c.env.DB, sourceId)
+  await logAdminAction(c, {
+    action: 'create_ingredient_research_source',
+    entity_type: 'ingredient_research_source',
+    entity_id: sourceId,
+    changes: data,
+  })
+
+  return c.json({ source }, 201)
+})
+
+// PUT /api/admin/ingredient-research/sources/:sourceId (admin only)
+admin.put('/ingredient-research/sources/:sourceId', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const sourceId = parsePositiveId(c.req.param('sourceId'))
+  if (sourceId === null) return c.json({ error: 'Invalid source id' }, 400)
+
+  const existing = await getIngredientResearchSourceRow(c.env.DB, sourceId)
+  if (!existing) return c.json({ error: 'Source not found' }, 404)
+
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const ingredientId = hasOwnKey(body, 'ingredient_id')
+    ? normalizeInteger(body.ingredient_id)
+    : existing.ingredient_id
+  if (!ingredientId || ingredientId <= 0) return c.json({ error: 'ingredient_id must be a positive integer' }, 400)
+
+  const validation = await validateIngredientResearchSourcePayload(c.env.DB, body, ingredientId, existing)
+  if (!validation.ok) return c.json({ error: validation.error }, validation.status ?? 400)
+
+  const data = validation.value
+  await c.env.DB.prepare(`
+    UPDATE ingredient_research_sources
+    SET
+      ingredient_id = ?,
+      source_kind = ?,
+      organization = ?,
+      country = ?,
+      region = ?,
+      population = ?,
+      recommendation_type = ?,
+      no_recommendation = ?,
+      dose_min = ?,
+      dose_max = ?,
+      dose_unit = ?,
+      per_kg_body_weight = ?,
+      frequency = ?,
+      study_type = ?,
+      evidence_quality = ?,
+      duration = ?,
+      outcome = ?,
+      finding = ?,
+      source_title = ?,
+      source_url = ?,
+      doi = ?,
+      pubmed_id = ?,
+      notes = ?,
+      source_date = ?,
+      reviewed_at = ?,
+      updated_at = datetime('now')
+    WHERE id = ?
+  `).bind(
+    data.ingredient_id,
+    data.source_kind,
+    data.organization,
+    data.country,
+    data.region,
+    data.population,
+    data.recommendation_type,
+    data.no_recommendation,
+    data.dose_min,
+    data.dose_max,
+    data.dose_unit,
+    data.per_kg_body_weight,
+    data.frequency,
+    data.study_type,
+    data.evidence_quality,
+    data.duration,
+    data.outcome,
+    data.finding,
+    data.source_title,
+    data.source_url,
+    data.doi,
+    data.pubmed_id,
+    data.notes,
+    data.source_date,
+    data.reviewed_at,
+    sourceId,
+  ).run()
+
+  const source = await getIngredientResearchSourceRow(c.env.DB, sourceId)
+  await logAdminAction(c, {
+    action: 'update_ingredient_research_source',
+    entity_type: 'ingredient_research_source',
+    entity_id: sourceId,
+    changes: { before: existing, after: source },
+  })
+
+  return c.json({ source })
+})
+
+// DELETE /api/admin/ingredient-research/sources/:sourceId (admin only)
+admin.delete('/ingredient-research/sources/:sourceId', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const sourceId = parsePositiveId(c.req.param('sourceId'))
+  if (sourceId === null) return c.json({ error: 'Invalid source id' }, 400)
+
+  const existing = await getIngredientResearchSourceRow(c.env.DB, sourceId)
+  if (!existing) return c.json({ error: 'Source not found' }, 404)
+
+  await c.env.DB.prepare('DELETE FROM ingredient_research_sources WHERE id = ?')
+    .bind(sourceId)
+    .run()
+
+  await logAdminAction(c, {
+    action: 'delete_ingredient_research_source',
+    entity_type: 'ingredient_research_source',
+    entity_id: sourceId,
+    changes: existing,
+  })
+
+  return c.json({ ok: true })
+})
+
+// POST /api/admin/ingredient-research/:ingredientId/warnings (admin only)
+admin.post('/ingredient-research/:ingredientId/warnings', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const ingredientId = parsePositiveId(c.req.param('ingredientId'))
+  if (ingredientId === null) return c.json({ error: 'Invalid ingredient id' }, 400)
+
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const validation = await validateIngredientWarningPayload(c.env.DB, body, ingredientId, null)
+  if (!validation.ok) return c.json({ error: validation.error }, validation.status ?? 400)
+
+  const data = validation.value
+  const result = await c.env.DB.prepare(`
+    INSERT INTO ingredient_safety_warnings (
+      ingredient_id,
+      form_id,
+      short_label,
+      popover_text,
+      severity,
+      article_slug,
+      min_amount,
+      unit,
+      active
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    data.ingredient_id,
+    data.form_id,
+    data.short_label,
+    data.popover_text,
+    data.severity,
+    data.article_slug,
+    data.min_amount,
+    data.unit,
+    data.active,
+  ).run()
+
+  const warningId = result.meta.last_row_id as number
+  const warning = await getIngredientSafetyWarningAdminRow(c.env.DB, warningId)
+  await logAdminAction(c, {
+    action: 'create_ingredient_safety_warning',
+    entity_type: 'ingredient_safety_warning',
+    entity_id: warningId,
+    changes: data,
+  })
+
+  return c.json({ warning }, 201)
+})
+
+// PUT /api/admin/ingredient-research/warnings/:warningId (admin only)
+admin.put('/ingredient-research/warnings/:warningId', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const warningId = parsePositiveId(c.req.param('warningId'))
+  if (warningId === null) return c.json({ error: 'Invalid warning id' }, 400)
+
+  const existing = await getIngredientSafetyWarningAdminRow(c.env.DB, warningId)
+  if (!existing) return c.json({ error: 'Warning not found' }, 404)
+
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const validation = await validateIngredientWarningPayload(c.env.DB, body, existing.ingredient_id, existing)
+  if (!validation.ok) return c.json({ error: validation.error }, validation.status ?? 400)
+
+  const data = validation.value
+  await c.env.DB.prepare(`
+    UPDATE ingredient_safety_warnings
+    SET
+      ingredient_id = ?,
+      form_id = ?,
+      short_label = ?,
+      popover_text = ?,
+      severity = ?,
+      article_slug = ?,
+      min_amount = ?,
+      unit = ?,
+      active = ?
+    WHERE id = ?
+  `).bind(
+    data.ingredient_id,
+    data.form_id,
+    data.short_label,
+    data.popover_text,
+    data.severity,
+    data.article_slug,
+    data.min_amount,
+    data.unit,
+    data.active,
+    warningId,
+  ).run()
+
+  const warning = await getIngredientSafetyWarningAdminRow(c.env.DB, warningId)
+  await logAdminAction(c, {
+    action: 'update_ingredient_safety_warning',
+    entity_type: 'ingredient_safety_warning',
+    entity_id: warningId,
+    changes: { before: existing, after: warning },
+  })
+
+  return c.json({ warning })
+})
+
+// DELETE /api/admin/ingredient-research/warnings/:warningId (admin only; soft delete via active=0)
+admin.delete('/ingredient-research/warnings/:warningId', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const warningId = parsePositiveId(c.req.param('warningId'))
+  if (warningId === null) return c.json({ error: 'Invalid warning id' }, 400)
+
+  const existing = await getIngredientSafetyWarningAdminRow(c.env.DB, warningId)
+  if (!existing) return c.json({ error: 'Warning not found' }, 404)
+
+  await c.env.DB.prepare('UPDATE ingredient_safety_warnings SET active = 0 WHERE id = ?')
+    .bind(warningId)
+    .run()
+
+  const warning = await getIngredientSafetyWarningAdminRow(c.env.DB, warningId)
+  await logAdminAction(c, {
+    action: 'deactivate_ingredient_safety_warning',
+    entity_type: 'ingredient_safety_warning',
+    entity_id: warningId,
+    changes: {
+      before: { active: existing.active },
+      after: { active: warning?.active ?? 0 },
+    },
+  })
+
+  return c.json({ ok: true, warning })
 })
 
 // GET /api/admin/shop-domains (admin only)

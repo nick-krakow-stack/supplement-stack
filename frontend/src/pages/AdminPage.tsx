@@ -14,6 +14,7 @@ import AuditLogTab from './admin/AuditLogTab';
 import DoseRecommendationsTab from './admin/DoseRecommendationsTab';
 import TranslationsTab from './admin/TranslationsTab';
 import IngredientSubIngredientsTab from './admin/IngredientSubIngredientsTab';
+import IngredientResearchTab from './admin/IngredientResearchTab';
 
 // ---- Local types ----
 interface AdminProduct {
@@ -153,6 +154,7 @@ type Tab =
   | 'user_products'
   | 'ingredient_sub_ingredients'
   | 'dose_recommendations'
+  | 'ingredient_research'
   | 'audit_log';
 
 // ---- Status badge ----
@@ -1237,6 +1239,7 @@ export default function AdminPage() {
       {activeTab === 'translations' && <TranslationsTab />}
       {activeTab === 'ingredient_sub_ingredients' && <IngredientSubIngredientsTab />}
       {activeTab === 'dose_recommendations' && <DoseRecommendationsTab />}
+      {activeTab === 'ingredient_research' && <IngredientResearchTab />}
       {activeTab === 'audit_log' && <AuditLogTab />}
       {activeTab === 'interactions' && <InteractionsTab />}
       {activeTab === 'stats' && <StatsTab />}

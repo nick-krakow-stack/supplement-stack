@@ -454,3 +454,18 @@ Rationale:
 Operational rule:
 - For form-specific safety risks, set `ingredient_safety_warnings.form_id` and match warnings only when the product ingredient row uses the same form.
 - Use `form_id IS NULL` only for warnings that apply to the whole ingredient.
+
+## 2026-05-05 - Ingredient Research Admin Data Model
+
+Decision: ingredient research data is managed in dedicated admin tables, while public-facing dose recommendations remain in `dose_recommendations` until reviewed content is intentionally promoted.
+
+Rationale:
+- The owner needs a working cockpit for research status, official recommendations, study findings, notes, and warning maintenance before those values become calculation truth.
+- Official/no-recommendation metadata belongs to source rows, because country and organization differ per source.
+- Safety warnings should continue to use `ingredient_safety_warnings`, so product-card warnings and admin maintenance share one table.
+
+Operational rule:
+- Use `ingredient_research_status` for per-ingredient workflow state only.
+- Use `ingredient_research_sources` for official and study evidence, including country, organization, recommendation type, no-recommendation marker, dose ranges, findings/outcomes, and source links.
+- Use `ingredient_safety_warnings` for short product-card warnings. Longer context and source detail should live in knowledge articles linked by `article_slug`.
+- Do not treat research rows as live dosage calculation rows until a future promotion/review workflow writes the vetted data into `dose_recommendations`.
