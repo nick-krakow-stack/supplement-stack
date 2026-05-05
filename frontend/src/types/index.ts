@@ -126,10 +126,3 @@ export interface DemoSession {
   stack_json: string;
   expires_at: string;
 }
-
-export interface WishlistItem {
-  id: number;
-  user_id: number;
-  product_id: number;
-  product?: Product;
-}

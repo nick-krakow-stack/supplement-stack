@@ -9,7 +9,6 @@ import ingredients, { recommendationsApp } from './modules/ingredients'
 import products, { r2App } from './modules/products'
 import stacks, { stackWarningsApp } from './modules/stacks'
 import userProducts from './modules/user-products'
-import wishlist from './modules/wishlist'
 import type { AppContext } from './lib/types'
 
 const app = new Hono<AppContext>()
@@ -40,7 +39,6 @@ app.route('/api/admin', admin)
 app.route('/api/shop-domains', shopDomainsPublicApp)
 app.route('/api/stacks', stacks)
 app.route('/api/stack-warnings', stackWarningsApp)
-app.route('/api/wishlist', wishlist)
 app.route('/api/interactions', interactionsApp)
 app.route('/api/user-products', userProducts)
 app.route('/api/demo', demo)

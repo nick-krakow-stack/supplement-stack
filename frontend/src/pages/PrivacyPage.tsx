@@ -25,7 +25,7 @@ export default function PrivacyPage() {
           Je nach Nutzung verarbeitet Supplement Stack Account-Daten wie E-Mail-Adresse,
           Login-Informationen und Passwort-Hash, optionale Profil- und Pr&auml;ferenzdaten
           wie Alter, Geschlecht und Empfehlungsquelle, Health-Consent-Status, gespeicherte
-          Stacks, Wishlist-Eintr&auml;ge und eigene Produktdaten.
+          Stacks und eigene Produktdaten.
         </p>
         <p>
           Au&szlig;erdem werden technische Sicherheits- und Serverlogdaten verarbeitet, etwa
@@ -43,7 +43,7 @@ export default function PrivacyPage() {
         <h2 className="text-xl font-black text-slate-900">Zwecke und Rechtsgrundlagen</h2>
         <p>
           Die Verarbeitung erfolgt zur Bereitstellung von Account, Login, Stack-Verwaltung,
-          Wishlist, eigenen Produkten und App-Sicherheit auf Grundlage von Art. 6 Abs. 1 lit. b
+          eigenen Produkten und App-Sicherheit auf Grundlage von Art. 6 Abs. 1 lit. b
           DSGVO, soweit sie f&uuml;r die Nutzung des Dienstes erforderlich ist.
         </p>
         <p>

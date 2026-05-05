@@ -47,13 +47,11 @@ interface ProductWarning {
 
 interface ProductCardProps {
   product: ProductCardProduct;
-  onAddToWishlist?: () => void;
   onSelect?: () => void;
   onToggleSelected?: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
   recommendationType?: 'recommended' | 'alternative' | null;
-  showWishlistButton?: boolean;
   showSelectButton?: boolean;
   shopDomains?: ShopDomain[];
   selected?: boolean;
@@ -219,8 +217,8 @@ function shopHostMatchesDomain(hostname: string, domain: string): boolean {
 }
 
 export default function ProductCard({
-  product, onAddToWishlist, onSelect, onToggleSelected, onEdit, onDelete,
-  recommendationType, showWishlistButton = false, showSelectButton = false,
+  product, onSelect, onToggleSelected, onEdit, onDelete,
+  recommendationType, showSelectButton = false,
   shopDomains, selected = false, warning,
 }: ProductCardProps) {
   const price = product.product_price ?? product.price;
@@ -440,14 +438,6 @@ export default function ProductCard({
             className="min-h-11 flex-1 rounded-[10px] border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-50"
           >
             Alternative
-          </button>
-        )}
-        {showWishlistButton && onAddToWishlist && (
-          <button
-            onClick={(e) => { e.stopPropagation(); onAddToWishlist(); }}
-            className="min-h-11 flex-1 rounded-[10px] border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-600 transition-colors hover:bg-rose-100"
-          >
-            ♡ Merken
           </button>
         )}
       </div>

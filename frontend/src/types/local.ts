@@ -1,4 +1,4 @@
-// Local types for the ingredient search + stack Modal-Flow
+// Local frontend-facing types for ingredient, product, and stack UI flows.
 // DB/Admin types live in types/index.ts - import from there for backend-facing code
 
 export interface IngredientSynonym {
@@ -121,15 +121,4 @@ export interface ShopDomain {
 export interface Stack {
   id: number;
   name: string;
-}
-
-/**
- * UI-only stack item used in the Modal-Flow (SearchPage / DemoPage).
- * Renamed from StackItem to avoid collision with the DB type in types/index.ts.
- */
-export interface LocalStackItem {
-  product: Product;
-  portions: number;
-  daysSupply?: number;
-  monthlyPrice?: number;
 }

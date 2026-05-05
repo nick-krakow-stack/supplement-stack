@@ -1588,7 +1588,6 @@ export function StackWorkspace({
                       onToggleSelected={() => toggleSelected(key)}
                       onEdit={() => setEditingProductKey(key)}
                       onDelete={() => void handleRemoveProduct(key)}
-                      showWishlistButton={false}
                       showSelectButton={false}
                     />
                   </div>
