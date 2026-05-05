@@ -12,7 +12,8 @@
 
 import { Hono } from 'hono'
 import type { AppContext, StackRow, StackItemRow, InteractionRow } from '../lib/types'
-import { ensureAuth } from '../lib/helpers'
+import { checkRateLimit, ensureAuth } from '../lib/helpers'
+import { sendMail } from '../lib/mail'
 
 const stacks = new Hono<AppContext>()
 
@@ -29,6 +30,73 @@ type StackProductInput = {
 type StackProductValidation = {
   items?: StackProductInput[]
   error?: string
+}
+
+type StackMailItem = {
+  name: string
+  brand: string | null
+  product_price: number
+  quantity: number
+  serving_size: number | null
+  serving_unit: string | null
+  timing: string | null
+  dosage_text: string | null
+}
+
+function escapeHtml(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
+
+function formatEuro(value: number): string {
+  return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(value)
+}
+
+function buildStackEmailHtml(stack: StackRow, items: StackMailItem[], total: number): string {
+  const rows = items.map((item) => {
+    const serving = item.serving_size != null && item.serving_unit
+      ? `${item.serving_size} ${item.serving_unit}`
+      : null
+    return `
+      <tr>
+        <td style="padding:10px 8px;border-bottom:1px solid #e5e7eb;">
+          <strong>${escapeHtml(item.name)}</strong>
+          ${item.brand ? `<br><span style="color:#64748b;">${escapeHtml(item.brand)}</span>` : ''}
+        </td>
+        <td style="padding:10px 8px;border-bottom:1px solid #e5e7eb;">${escapeHtml(serving ?? '-')}</td>
+        <td style="padding:10px 8px;border-bottom:1px solid #e5e7eb;">${escapeHtml(item.dosage_text ?? '-')}</td>
+        <td style="padding:10px 8px;border-bottom:1px solid #e5e7eb;">${escapeHtml(item.timing ?? '-')}</td>
+        <td style="padding:10px 8px;border-bottom:1px solid #e5e7eb;text-align:right;">${formatEuro(item.product_price * item.quantity)}</td>
+      </tr>
+    `
+  }).join('')
+
+  return `
+    <div style="font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#0f172a;line-height:1.5;">
+      <h1 style="font-size:22px;margin:0 0 8px;">${escapeHtml(stack.name)}</h1>
+      <p style="margin:0 0 18px;color:#64748b;">Dein Supplement-Stack aus Supplement Stack.</p>
+      <table style="width:100%;border-collapse:collapse;font-size:14px;">
+        <thead>
+          <tr style="background:#f8fafc;">
+            <th align="left" style="padding:10px 8px;">Produkt</th>
+            <th align="left" style="padding:10px 8px;">Portion</th>
+            <th align="left" style="padding:10px 8px;">Dosierung</th>
+            <th align="left" style="padding:10px 8px;">Timing</th>
+            <th align="right" style="padding:10px 8px;">Kosten</th>
+          </tr>
+        </thead>
+        <tbody>${rows || '<tr><td colspan="5" style="padding:12px 8px;color:#64748b;">Dieser Stack ist leer.</td></tr>'}</tbody>
+      </table>
+      <p style="margin:18px 0 0;font-size:16px;"><strong>Gesamtkosten:</strong> ${formatEuro(total)}</p>
+      <p style="margin:20px 0 0;color:#64748b;font-size:12px;">
+        Diese E-Mail dient deiner persönlichen Übersicht und ersetzt keine medizinische Beratung.
+      </p>
+    </div>
+  `
 }
 
 function normalizeStackProductType(value: unknown): StackProductType | null {
@@ -249,6 +317,31 @@ stacks.get('/:id', async (c) => {
   const items = await loadStackItems(c.env.DB, stack.id, stack.user_id)
   const total = items.reduce((sum, i) => sum + (i.product_price * i.quantity), 0)
   return c.json({ stack, items, total })
+})
+
+// POST /api/stacks/:id/email
+stacks.post('/:id/email', async (c) => {
+  const authErr = await ensureAuth(c)
+  if (authErr) return authErr
+  const user = c.get('user')
+  const allowed = await checkRateLimit(c.env.RATE_LIMITER, `stack-email:${user.userId}`, 5, 3600)
+  if (!allowed) return c.json({ error: 'Bitte warte kurz, bevor du weitere Stack-Mails versendest.' }, 429)
+
+  const id = c.req.param('id')
+  const stack = await c.env.DB.prepare('SELECT * FROM stacks WHERE id = ?').bind(id).first<StackRow>()
+  if (!stack) return c.json({ error: 'Not found' }, 404)
+  if (stack.user_id !== user.userId && user.role !== 'admin') return c.json({ error: 'Forbidden' }, 403)
+
+  const items = await loadStackItems(c.env.DB, stack.id, stack.user_id) as unknown as StackMailItem[]
+  const total = items.reduce((sum, item) => sum + (item.product_price * item.quantity), 0)
+  const result = await sendMail(c.env, {
+    to: user.email,
+    subject: `Dein Supplement Stack: ${stack.name}`,
+    html: buildStackEmailHtml(stack, items, total),
+  })
+
+  if (!result.ok) return c.json({ error: 'E-Mail konnte nicht gesendet werden.', debug: result.error }, 500)
+  return c.json({ ok: true })
 })
 
 // DELETE /api/stacks/:id

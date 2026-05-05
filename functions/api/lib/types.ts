@@ -10,6 +10,12 @@ export type Env = {
   GOOGLE_CLIENT_SECRET: string
   FRONTEND_URL: string
   CF_IMAGES_ACCOUNT_HASH: string
+  SMTP_HOST?: string
+  SMTP_PORT?: string
+  SMTP_USERNAME?: string
+  SMTP_PASSWORD?: string
+  SMTP_FROM_EMAIL?: string
+  SMTP_FROM_NAME?: string
   PRODUCT_IMAGES?: R2Bucket
   RATE_LIMITER?: KVNamespace
   RESEND_API_KEY?: string

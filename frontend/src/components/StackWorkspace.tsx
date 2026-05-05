@@ -698,6 +698,8 @@ export function StackWorkspace({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(mode === 'authenticated');
   const [error, setError] = useState('');
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailStatus, setEmailStatus] = useState('');
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -1009,6 +1011,27 @@ export function StackWorkspace({
     navigate('/login');
   };
 
+  const handleEmailStack = async () => {
+    if (isDemo || !activeStack || !token) return;
+    setEmailSending(true);
+    setEmailStatus('');
+    try {
+      const res = await fetch(apiPath(`/stacks/${activeStack.id}/email`), {
+        method: 'POST',
+        headers: authHeaders(token),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error ?? 'Stack-Mail konnte nicht gesendet werden.');
+      }
+      setEmailStatus('Stack wurde an deine E-Mail-Adresse gesendet.');
+    } catch (err) {
+      setEmailStatus(err instanceof Error ? err.message : 'Stack-Mail konnte nicht gesendet werden.');
+    } finally {
+      setEmailSending(false);
+    }
+  };
+
   const activeDescription = activeStack ? descriptions[activeStack.id] ?? '' : '';
 
   const rightSlot = isDemo ? (
@@ -1117,15 +1140,18 @@ export function StackWorkspace({
 
           <button
             className="ss-btn ss-btn-outline"
-            disabled
-            style={{ opacity: 0.55, cursor: 'not-allowed' }}
+            onClick={() => void handleEmailStack()}
+            disabled={isDemo || !activeStack || emailSending}
+            style={isDemo || !activeStack || emailSending ? { opacity: 0.55, cursor: 'not-allowed' } : undefined}
           >
             <IconMail />
-            Stack mailen
+            {emailSending ? 'Wird gesendet...' : 'Stack mailen'}
           </button>
-          <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>
-            E-Mail-Versand folgt bald.
-          </span>
+          {(isDemo || emailStatus) && (
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>
+              {isDemo ? 'E-Mail-Versand ist nur angemeldet verfÃ¼gbar.' : emailStatus}
+            </span>
+          )}
 
           <button
             className="ss-btn ss-btn-red-soft"

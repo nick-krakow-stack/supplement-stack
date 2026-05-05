@@ -8,6 +8,11 @@ GOOGLE_CLIENT_ID = ""
 GOOGLE_CLIENT_SECRET = ""
 FRONTEND_URL = "https://supplementstack.de"
 CF_IMAGES_ACCOUNT_HASH = ""
+SMTP_HOST = "w020a88d.kasserver.com"
+SMTP_PORT = "465"
+SMTP_USERNAME = "noreply@supplementstack.de"
+SMTP_FROM_EMAIL = "noreply@supplementstack.de"
+SMTP_FROM_NAME = "Supplement Stack"
 
 [[d1_databases]]
 binding = "DB"

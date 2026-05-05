@@ -19,8 +19,8 @@ import {
   hashResetToken,
   ensureAuth,
   checkRateLimit,
-  sendPasswordResetEmail,
 } from '../lib/helpers'
+import { sendPasswordResetEmail } from '../lib/mail'
 
 const auth = new Hono<AppContext>()
 
@@ -151,11 +151,8 @@ auth.post('/forgot-password', async (c) => {
     'UPDATE users SET reset_token = ?, reset_token_expires_at = ? WHERE id = ?'
   ).bind(tokenHash, expiresAt, user.id).run()
 
-  const apiKey = c.env.RESEND_API_KEY
-  if (!apiKey) return ok()
-
   const frontendUrl = c.env.FRONTEND_URL ?? 'https://supplementstack.pages.dev'
-  const result = await sendPasswordResetEmail(apiKey, frontendUrl, user.email, rawToken)
+  const result = await sendPasswordResetEmail(c.env, frontendUrl, user.email, rawToken)
   if (!result.ok) {
     return c.json({ error: 'E-Mail konnte nicht gesendet werden.', debug: result.error }, 500)
   }
