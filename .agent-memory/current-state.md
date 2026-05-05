@@ -43,6 +43,24 @@ unless verified against code.
 Phase B is complete. Phase C is complete. Phase D bundle is committed,
 remote-migrated, and deployed to Cloudflare Pages preview.
 
+- Logo/header branding is committed and deployed:
+
+  - Commit: `03ae0f9` - Brand: Use uploaded logo in headers.
+  - The user-supplied root `logo.png` was cleaned into
+    `frontend/public/logo.png` by removing the baked checkerboard background
+    and cropping transparent padding.
+  - New shared `frontend/src/components/AppLogo.tsx` centralizes logo usage.
+  - Normal app header, Stacks/Demo standalone header, and Admin sidebar now use
+    the same `/logo.png` asset with responsive sizing.
+  - Preview: `https://47c4db46.supplementstack.pages.dev`.
+  - Live: `https://supplementstack.de`.
+  - Validation passed: frontend `npm run build`, frontend `npm run lint`,
+    frontend `npm test -- --run` with no test files, `git diff --check`, HTTP
+    checks for preview/live `/` and `/logo.png`, and browser-harness checks for
+    root, `/demo`, and `/forgot-password` logo rendering on the live domain.
+  - The original root-level `logo.png` remains untracked and intentionally
+    untouched as the source file supplied by the user.
+
 - Decision (2026-05-05): SearchPage and WishlistPage are now intentionally kept out of
   explicit routes and navigation. They fall through to wildcard/404 handling, and any raw
   SearchPage flags are no longer treated as launch blockers.
@@ -506,6 +524,18 @@ Last relevant commits on `main`:
 - `9a5f523` - DB: Phase B abgeschlossen, migrations 0028-0035, `dosage_guidelines` migrated to `dose_recommendations`.
 
 ## Latest Deployed Work
+
+Logo/header branding is committed and deployed:
+
+- Commit: `03ae0f9` - Brand: Use uploaded logo in headers.
+- Preview URL: `https://47c4db46.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`.
+- `frontend/public/logo.png` is the cleaned deployed logo asset.
+- `frontend/src/components/AppLogo.tsx` is the shared logo component used by
+  the normal app header, Stacks/Demo header, and Admin sidebar.
+- Checks passed: frontend build, lint, Vitest no-test run, diff-check, HTTP
+  `/logo.png` checks on preview/live, and browser-harness logo rendering checks
+  for root, demo, and forgot-password pages.
 
 Launch QA stack/profile fixes are committed, remote-migrated, deployed, and
 live-smoked:

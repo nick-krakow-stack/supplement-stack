@@ -6,6 +6,13 @@ Last updated: 2026-05-05
 
 Phase C is complete. The integrated Phase D rollout is complete:
 
+- Logo/header branding is complete and deployed in `03ae0f9`
+  (`Brand: Use uploaded logo in headers`). Preview:
+  `https://47c4db46.supplementstack.pages.dev`; live:
+  `https://supplementstack.de`. The normal header, Stacks/Demo standalone
+  header, and Admin sidebar all use the shared `AppLogo` component and
+  deployed `/logo.png`. Browser-harness rendering checks passed on root,
+  `/demo`, and `/forgot-password`.
 - Product recommendations rename and temporary compatibility layer are deployed.
 - Admin translations MVP and expansion are committed and deployed to Cloudflare Pages preview.
 - D1 backup verification is complete: GitHub Actions backup has run manually and automatically, and token scopes are verified.

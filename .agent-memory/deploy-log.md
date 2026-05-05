@@ -44,6 +44,7 @@ token scopes are verified.
 
 Latest relevant commits:
 
+- `03ae0f9` - Brand: Use uploaded logo in headers.
 - `24b10b5` - Fix: Normalize guideline source values.
 - `cb76cf3` - Fix: Remove D1 run success check from profile update.
 - `1a3b8e6` - Fix: Build profile response from target values.
@@ -71,6 +72,38 @@ Latest relevant commits:
 - `9a5f523` - DB: Phase B complete (migrations 0028-0035).
 
 ## Product Ingredient Publishing Model
+
+### 2026-05-05 - Cloudflare Pages: logo/header branding
+
+- Commit: `03ae0f9` - Brand: Use uploaded logo in headers.
+- Scope:
+  - Cleaned user-provided root `logo.png` into
+    `frontend/public/logo.png` by removing the baked checkerboard background
+    and cropping transparent padding.
+  - Added shared `frontend/src/components/AppLogo.tsx`.
+  - Replaced the normal app header logo, Stacks/Demo standalone header logo,
+    and Admin sidebar logo with the shared deployed asset.
+- Local validation:
+  - `npm run build` in `frontend/` passed.
+  - `npm run lint` in `frontend/` passed.
+  - `npm test -- --run` in `frontend/` passed with no test files.
+  - `git diff --check` passed with CRLF warnings only.
+- Build assets: JS `assets/index-DtO4pi6t.js`, CSS
+  `assets/index-DwT9aRyA.css`.
+- Deploy prep:
+  - Copied `functions/api` to `frontend/dist/functions/api`.
+  - Verified `frontend/dist/functions/api/[[path]].ts` exists.
+- Deploy command:
+  - `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://47c4db46.supplementstack.pages.dev`.
+- Smoke checks:
+  - Preview/live `/` returned HTTP 200.
+  - Preview/live `/logo.png` returned HTTP 200 with `image/png`.
+  - Browser-harness confirmed `/logo.png` rendering in root, `/demo`, and
+    `/forgot-password` headers on the live domain.
+- Workspace note:
+  - Root `logo.png` remains untracked and intentionally untouched as the
+    user-supplied source asset.
 
 ### 2026-05-05 - D1 + Cloudflare Pages: launch QA stack/profile bundle
 

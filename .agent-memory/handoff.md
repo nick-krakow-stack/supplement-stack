@@ -4,10 +4,9 @@ Last updated: 2026-05-05
 
 ## Continuation Point
 
-Continue from `main` after the Launch-QA stack/profile bundle was committed,
-remote-migrated, deployed, and live-smoked. Next implementation work should
-start from the open queue below; no launch-QA stack/profile deploy step is
-pending.
+Continue from `main` after the logo/header branding update was committed and
+deployed. Next implementation work should start from the open queue below; no
+branding deploy step is pending.
 
 ## Restart Startup (exact)
 
@@ -20,7 +19,28 @@ pending.
 
 ## Git / Worktree
 
-- Latest committed/deployed bundle:
+- Latest committed/deployed work:
+  - `03ae0f9` - Brand: Use uploaded logo in headers.
+- Preview URL: `https://47c4db46.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`.
+- Scope:
+  - Cleaned the user-supplied logo into `frontend/public/logo.png`.
+  - Added shared `frontend/src/components/AppLogo.tsx`.
+  - Normal app header, Stacks/Demo header, and Admin sidebar now use the same
+    responsive logo asset.
+- Checks passed:
+  - Frontend `npm run build`.
+  - Frontend `npm run lint`.
+  - Frontend `npm test -- --run` with no test files.
+  - `git diff --check`.
+  - Preview/live HTTP checks for `/` and `/logo.png`.
+  - Browser-harness checks on live root, `/demo`, and `/forgot-password`.
+- Workspace note:
+  - Root `logo.png` remains untracked and intentionally untouched as the
+    source file supplied by the user.
+  - `.claude/SESSION.md` and `.claude/settings.json` remain dirty and must not
+    be touched.
+- Prior launch-QA bundle:
   - `0b29fe0` - launch QA stack/profile flows.
   - `baa91a5` - live profile + stack warning smokes.
   - `1a3b8e6` - profile response path.
