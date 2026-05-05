@@ -1033,3 +1033,21 @@ When a future agent deploys or applies migrations, append the exact date, commit
 - Validation passed: functions TypeScript, frontend TypeScript, frontend lint, frontend build, and `git diff --check` with CRLF warnings only.
 - Smoke checks passed: preview/live root 200 with `assets/index-DVbWbGLx.js`; preview/live unauthenticated `/api/admin/ops-dashboard`, `/api/admin/knowledge-articles`, and `/api/admin/product-qa` return 401.
 - Commit after deploy: `2908e8f` - Feature: Add admin ops and knowledge tools.
+
+## 2026-05-05 - Round Experience V1
+
+- Remote D1 migration:
+  - `0048_user_stack_rounding.sql` applied successfully to `supplementstack-production`.
+- Deploy command: `npx wrangler pages deploy frontend/dist --project-name supplementstack` after loading local Cloudflare context.
+- Correct production Pages project: `supplementstack`.
+- Preview URL: `https://f9870d82.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`.
+- Build asset: `assets/index-CmCtPS8l.js`.
+- Scope:
+  - Added family profile MVP and stack assignment.
+  - Added visible stack cockpit/check and grouped Einnahmeplan.
+  - Added product replacement confirmation for preserved dosage assumptions.
+  - Added missing/invalid product link reporting.
+  - Added admin work queues, inline Product-QA editing, and knowledge article publish guardrails.
+- Validation passed: functions TypeScript, frontend TypeScript, frontend lint, frontend build, and `git diff --check` with CRLF warnings only.
+- Smoke checks passed: preview/live root 200 with `assets/index-CmCtPS8l.js`; preview/live unauthenticated `/api/family`, `/api/stacks/link-report`, `/api/admin/product-qa/1`, and `/api/admin/ops-dashboard` return 401; remote D1 confirms `family_profiles`, `product_link_reports`, `idx_stacks_family_member_id`, and migration 0048 applied.

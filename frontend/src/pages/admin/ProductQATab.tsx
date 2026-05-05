@@ -1,6 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ExternalLink, PackageSearch, Search } from 'lucide-react';
-import { getProductQA, type AdminProductQAProduct } from '../../api/admin';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
+import { ExternalLink, PackageSearch, Save, Search } from 'lucide-react';
+import {
+  getProductQA,
+  updateProductQA,
+  type AdminProductQAProduct,
+  type AdminProductQAPatch,
+} from '../../api/admin';
 
 const ISSUE_OPTIONS = [
   { value: '', label: 'Alle Issues' },
@@ -40,7 +46,179 @@ function productMeta(product: AdminProductQAProduct): string {
   return parts.filter(Boolean).join(' · ');
 }
 
-function ProductQACard({ product }: { product: AdminProductQAProduct }) {
+interface ProductQAForm {
+  price: string;
+  shop_link: string;
+  is_affiliate: boolean;
+  serving_size: string;
+  serving_unit: string;
+  servings_per_container: string;
+  container_count: string;
+}
+
+function formFromProduct(product: AdminProductQAProduct): ProductQAForm {
+  return {
+    price: product.price !== null ? String(product.price) : '',
+    shop_link: product.shop_link ?? '',
+    is_affiliate: Boolean(product.is_affiliate),
+    serving_size: product.serving_size !== null ? String(product.serving_size) : '',
+    serving_unit: product.serving_unit ?? '',
+    servings_per_container: product.servings_per_container !== null ? String(product.servings_per_container) : '',
+    container_count: product.container_count !== null ? String(product.container_count) : '1',
+  };
+}
+
+function parsePositiveNumber(value: string, label: string): number {
+  const parsed = Number(value.trim().replace(',', '.'));
+  if (!Number.isFinite(parsed) || parsed <= 0) throw new Error(`${label} muss groesser als 0 sein.`);
+  return parsed;
+}
+
+function parsePositiveInteger(value: string, label: string): number {
+  const parsed = parsePositiveNumber(value, label);
+  if (!Number.isInteger(parsed)) throw new Error(`${label} muss eine ganze Zahl sein.`);
+  return parsed;
+}
+
+function buildPatch(form: ProductQAForm): AdminProductQAPatch {
+  const price = parsePositiveNumber(form.price, 'Preis');
+  if (price > 300) throw new Error('Preis muss fuer Produkt-QA bei maximal 300 EUR liegen.');
+  const servingUnit = form.serving_unit.trim();
+  if (!servingUnit) throw new Error('Portionseinheit darf nicht leer sein.');
+  return {
+    price,
+    shop_link: form.shop_link.trim() || null,
+    is_affiliate: form.is_affiliate ? 1 : 0,
+    serving_size: parsePositiveNumber(form.serving_size, 'Portionsgroesse'),
+    serving_unit: servingUnit,
+    servings_per_container: parsePositiveInteger(form.servings_per_container, 'Portionen pro Packung'),
+    container_count: parsePositiveInteger(form.container_count, 'Packungsanzahl'),
+  };
+}
+
+function ProductQAEditor({
+  product,
+  onSaved,
+}: {
+  product: AdminProductQAProduct;
+  onSaved: (product: AdminProductQAProduct) => void;
+}) {
+  const [form, setForm] = useState<ProductQAForm>(() => formFromProduct(product));
+  const [saving, setSaving] = useState(false);
+  const [status, setStatus] = useState('');
+
+  useEffect(() => {
+    setForm(formFromProduct(product));
+    setStatus('');
+  }, [product]);
+
+  const updateField = (field: keyof ProductQAForm, value: string | boolean) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setStatus('');
+    try {
+      const updated = await updateProductQA(product.id, buildPatch(form));
+      onSaved(updated);
+      setStatus('Gespeichert.');
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : 'Speichern fehlgeschlagen.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+      <div className="grid grid-cols-1 gap-2 md:grid-cols-3 xl:grid-cols-7">
+        <label className="text-xs font-medium text-slate-600">
+          Preis
+          <input
+            value={form.price}
+            onChange={(event) => updateField('price', event.target.value)}
+            inputMode="decimal"
+            className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
+          />
+        </label>
+        <label className="text-xs font-medium text-slate-600 md:col-span-2 xl:col-span-2">
+          Shop-Link
+          <input
+            value={form.shop_link}
+            onChange={(event) => updateField('shop_link', event.target.value)}
+            className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
+          />
+        </label>
+        <label className="text-xs font-medium text-slate-600">
+          Portion
+          <input
+            value={form.serving_size}
+            onChange={(event) => updateField('serving_size', event.target.value)}
+            inputMode="decimal"
+            className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
+          />
+        </label>
+        <label className="text-xs font-medium text-slate-600">
+          Einheit
+          <input
+            value={form.serving_unit}
+            onChange={(event) => updateField('serving_unit', event.target.value)}
+            className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
+          />
+        </label>
+        <label className="text-xs font-medium text-slate-600">
+          Portionen
+          <input
+            value={form.servings_per_container}
+            onChange={(event) => updateField('servings_per_container', event.target.value)}
+            inputMode="numeric"
+            className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
+          />
+        </label>
+        <label className="text-xs font-medium text-slate-600">
+          Packungen
+          <input
+            value={form.container_count}
+            onChange={(event) => updateField('container_count', event.target.value)}
+            inputMode="numeric"
+            className="mt-1 min-h-10 w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm outline-none focus:border-indigo-300 focus:ring-2 focus:ring-indigo-100"
+          />
+        </label>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+        <label className="inline-flex min-h-10 items-center gap-2 text-sm font-medium text-slate-700">
+          <input
+            type="checkbox"
+            checked={form.is_affiliate}
+            onChange={(event) => updateField('is_affiliate', event.target.checked)}
+          />
+          Nick Affiliate
+        </label>
+        <div className="flex items-center gap-2">
+          {status && <span className="text-xs text-slate-500">{status}</span>}
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-indigo-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:opacity-50"
+          >
+            <Save size={15} />
+            {saving ? 'Speichert...' : 'Speichern'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProductQACard({
+  product,
+  onSaved,
+}: {
+  product: AdminProductQAProduct;
+  onSaved: (product: AdminProductQAProduct) => void;
+}) {
   return (
     <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex gap-3">
@@ -84,16 +262,26 @@ function ProductQACard({ product }: { product: AdminProductQAProduct }) {
           </a>
         )}
       </div>
+
+      <div className="mt-3">
+        <ProductQAEditor product={product} onSaved={onSaved} />
+      </div>
     </article>
   );
 }
 
 export default function ProductQATab() {
+  const location = useLocation();
   const [products, setProducts] = useState<AdminProductQAProduct[]>([]);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(() => new URLSearchParams(window.location.search).get('q') ?? '');
   const [issue, setIssue] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    const nextQuery = new URLSearchParams(location.search).get('q') ?? '';
+    setQuery((current) => (current === nextQuery ? current : nextQuery));
+  }, [location.search]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -111,6 +299,10 @@ export default function ProductQATab() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const handleSaved = useCallback((updated: AdminProductQAProduct) => {
+    setProducts((prev) => prev.map((product) => (product.id === updated.id ? updated : product)));
+  }, []);
 
   const issueCounts = useMemo(() => {
     return products.reduce<Record<string, number>>((acc, product) => {
@@ -192,7 +384,7 @@ export default function ProductQATab() {
         <>
           <div className="grid grid-cols-1 gap-3 lg:hidden">
             {products.map((product) => (
-              <ProductQACard key={product.id} product={product} />
+              <ProductQACard key={product.id} product={product} onSaved={handleSaved} />
             ))}
           </div>
 
@@ -208,7 +400,8 @@ export default function ProductQATab() {
               </thead>
               <tbody>
                 {products.map((product) => (
-                  <tr key={product.id} className="border-b border-slate-100 last:border-0">
+                  <Fragment key={product.id}>
+                  <tr key={`${product.id}-summary`} className="border-b border-slate-100">
                     <td className="px-4 py-3 align-top">
                       <a href="/admin?tab=products" className="font-semibold text-slate-900 hover:text-indigo-700">
                         #{product.id} {product.name}
@@ -236,6 +429,12 @@ export default function ProductQATab() {
                       )}
                     </td>
                   </tr>
+                  <tr key={`${product.id}-editor`} className="border-b border-slate-100 last:border-0">
+                    <td colSpan={4} className="px-4 pb-4 pt-0">
+                      <ProductQAEditor product={product} onSaved={handleSaved} />
+                    </td>
+                  </tr>
+                  </Fragment>
                 ))}
               </tbody>
             </table>

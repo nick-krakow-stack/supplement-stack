@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { CheckCircle, Loader2, Plus, Search, Save, Trash2, Pencil, X } from 'lucide-react';
 import {
   createIngredientResearchSource,
@@ -210,13 +211,14 @@ const DEFAULT_SOURCE_TYPES = ['official', 'study'];
 const DEFAULT_WARNING_SEVERITIES = ['info', 'caution', 'danger'];
 
 export default function IngredientResearchTab() {
+  const location = useLocation();
   const [items, setItems] = useState<AdminIngredientResearchListItem[]>([]);
   const [loadingItems, setLoadingItems] = useState(true);
   const [loadingState, setLoadingState] = useState<DetailPanelMode>('idle');
   const [listError, setListError] = useState('');
   const [detailError, setDetailError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(() => new URLSearchParams(window.location.search).get('q') ?? '');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [selectedIngredientId, setSelectedIngredientId] = useState<number | null>(null);
@@ -242,6 +244,11 @@ export default function IngredientResearchTab() {
   const [editingWarningForm, setEditingWarningForm] = useState<WarningFormState>(EMPTY_WARNING_FORM);
   const [warningSaving, setWarningSaving] = useState<number | null>(null);
   const [warningDeleting, setWarningDeleting] = useState<number | null>(null);
+
+  useEffect(() => {
+    const nextQuery = new URLSearchParams(location.search).get('q') ?? '';
+    setSearch((current) => (current === nextQuery ? current : nextQuery));
+  }, [location.search]);
 
   const sourceCounts = useMemo(
     () => countBySourceType(selectedDetail?.sources ?? []),

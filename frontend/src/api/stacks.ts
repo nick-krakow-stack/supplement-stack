@@ -10,6 +10,13 @@ interface StackProductInput {
   timing?: string;
 }
 
+interface ProductLinkReportInput {
+  product_id: number;
+  product_type?: 'catalog' | 'user_product';
+  stack_id?: number | string | null;
+  reason?: 'missing_link' | 'invalid_link';
+}
+
 export async function getStacks(): Promise<{ stacks: Stack[] }> {
   const res = await apiClient.get<{ stacks: Stack[] }>('/stacks');
   return res.data;
@@ -35,6 +42,10 @@ export async function deleteStack(id: number): Promise<void> {
 export async function updateStack(id: number, data: { name?: string; product_ids?: StackProductInput[] }): Promise<Stack> {
   const res = await apiClient.put<Stack>(`/stacks/${id}`, data);
   return res.data;
+}
+
+export async function reportProductLink(input: ProductLinkReportInput): Promise<void> {
+  await apiClient.post('/stacks/link-report', input);
 }
 
 export async function getStackWarnings(id: number): Promise<Interaction[]> {

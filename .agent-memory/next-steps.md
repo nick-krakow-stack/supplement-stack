@@ -511,3 +511,38 @@ Still open:
 - Authenticated browser QA of `Admin-Uebersicht`, `Wissen`, and `Produkt-QA` on desktop and mobile, including creating/editing/archiving one harmless test knowledge article.
 - Product data and dosage data scientific validation remains a content workstream; the admin tools now provide the maintenance surface.
 - Later enhancement: promotion/review workflow that copies vetted research rows into live `dose_recommendations` only after explicit review.
+
+## 2026-05-05 Admin Arbeitsplatz V1 Follow-Up
+
+Closed locally:
+- Admin overview now includes actionable top work queues, not only count cards.
+- Product-QA now supports inline editing for the high-impact package/link fields and persists through a new admin-only audited backend route.
+- Knowledge article publish guardrail is enforced in backend and frontend.
+
+Next:
+- Run authenticated admin browser QA on desktop and mobile for `Admin-Uebersicht`, `Produkt-QA`, `Wissen`, and `Wirkstoff-Recherche` queue links.
+- In Product-QA, test saving one harmless product change and confirm audit-log entry `update_product_qa_fields` appears.
+- In Wissen, verify a draft without sources cannot be published and a sourced article can be saved as published.
+
+## 2026-05-05 User-Rundung V1 Follow-Up
+
+Closed locally:
+- Stack cockpit/check panel, grouped routine plan, missing-link report affordance, dosage-preservation confirmation on replacement, and minimal family profile assignment are implemented.
+- Migration 0048 is ready but not applied remotely.
+
+Next:
+- Review migration 0048 before remote apply because it adds new user-side tables and a nullable column on `stacks`.
+- Run browser QA for StackWorkspace on desktop and 375px mobile: cockpit wrapping, family selector/create/remove, routine grouping, replacement confirmation, `Link melden`, and authenticated stack warning display.
+- Decide whether family profile editing beyond create/remove is needed later; current MVP intentionally avoids sensitive health data and keeps only first name, age, optional weight.
+
+## 2026-05-05 Round Experience V1 Follow-Up
+
+Closed in the latest deployed bundle:
+- User stack cockpit/check, simple Einnahmeplan, product replacement confirmation, missing-link reporting, and family profile MVP.
+- Admin operational queues, inline Product-QA fixes, and knowledge article publish guardrails.
+- Remote D1 migration 0048 and Cloudflare Pages deploy.
+
+Still open:
+- Authenticated browser QA on desktop and mobile for family profile create/delete, stack assignment, link reporting, Product-QA inline save, and knowledge article publish validation.
+- Product/dosage scientific validation remains a content workflow; the admin surfaces now make it easier to work through.
+- Later: deeper family-specific dosage logic, review assignments, QA pagination/deep links, routine export/print, and promotion workflow from research rows into live dose recommendations.

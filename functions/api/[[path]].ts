@@ -5,6 +5,7 @@ import { cors } from 'hono/cors'
 import admin, { interactionsApp, shopDomainsPublicApp } from './modules/admin'
 import auth, { meApp } from './modules/auth'
 import demo from './modules/demo'
+import family from './modules/family'
 import ingredients, { recommendationsApp } from './modules/ingredients'
 import knowledge from './modules/knowledge'
 import products, { r2App } from './modules/products'
@@ -43,6 +44,7 @@ app.route('/api/stack-warnings', stackWarningsApp)
 app.route('/api/interactions', interactionsApp)
 app.route('/api/user-products', userProducts)
 app.route('/api/demo', demo)
+app.route('/api/family', family)
 app.route('/api/knowledge', knowledge)
 
 export const onRequest = handle(app)

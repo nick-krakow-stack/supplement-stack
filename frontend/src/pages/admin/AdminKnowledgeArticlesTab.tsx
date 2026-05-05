@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Archive, FilePlus, Save, Search } from 'lucide-react';
 import {
   archiveKnowledgeArticle,
@@ -84,17 +85,20 @@ function articleToDraft(article: AdminKnowledgeArticle): ArticleDraft {
   };
 }
 
-function parseSources(text: string): unknown {
+function parseSources(text: string): unknown[] {
   const trimmed = text.trim();
-  if (!trimmed) return null;
-  return JSON.parse(trimmed);
+  if (!trimmed) return [];
+  const parsed = JSON.parse(trimmed);
+  if (!Array.isArray(parsed)) throw new SyntaxError('sources must be an array');
+  return parsed;
 }
 
 export default function AdminKnowledgeArticlesTab() {
+  const location = useLocation();
   const [articles, setArticles] = useState<AdminKnowledgeArticle[]>([]);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [draft, setDraft] = useState<ArticleDraft>(() => emptyDraft());
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(() => new URLSearchParams(window.location.search).get('q') ?? '');
   const [status, setStatus] = useState('');
   const [loadingList, setLoadingList] = useState(true);
   const [loadingArticle, setLoadingArticle] = useState(false);
@@ -105,6 +109,11 @@ export default function AdminKnowledgeArticlesTab() {
   const createModeRequestedRef = useRef(false);
 
   const isCreateMode = selectedSlug === null;
+
+  useEffect(() => {
+    const nextQuery = new URLSearchParams(location.search).get('q') ?? '';
+    setQuery((current) => (current === nextQuery ? current : nextQuery));
+  }, [location.search]);
 
   const loadList = useCallback(async () => {
     setLoadingList(true);
@@ -173,6 +182,7 @@ export default function AdminKnowledgeArticlesTab() {
     setError('');
     setNotice('');
     try {
+      const sources = parseSources(draft.sources_text);
       const payload: AdminKnowledgeArticlePayload = {
         ...(isCreateMode ? { slug: draft.slug.trim() } : {}),
         title: draft.title.trim(),
@@ -180,11 +190,17 @@ export default function AdminKnowledgeArticlesTab() {
         body: draft.body.trim() || null,
         status: draft.status,
         reviewed_at: draft.reviewed_at || null,
-        sources_json: parseSources(draft.sources_text),
+        sources_json: sources,
       };
 
       if (!payload.title) throw new Error('Titel ist erforderlich.');
       if (isCreateMode && !payload.slug) throw new Error('Slug ist beim Erstellen erforderlich.');
+      if (payload.status === 'published' && !payload.body) {
+        throw new Error('Veröffentlichte Wissensartikel brauchen einen Artikeltext.');
+      }
+      if (payload.status === 'published' && sources.length === 0) {
+        throw new Error('Veröffentlichte Wissensartikel brauchen mindestens eine Quelle.');
+      }
 
       const saved = isCreateMode
         ? await createKnowledgeArticle(payload)

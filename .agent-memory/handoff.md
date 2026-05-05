@@ -544,3 +544,72 @@ Validation:
 Workspace notes:
 - Unrelated `.claude/SESSION.md`, `.claude/settings.json`, and root `logo.png` remain out of scope and should not be committed unless explicitly requested.
 - Next practical check is authenticated admin browser QA on desktop and mobile.
+
+## 2026-05-05 - Admin Arbeitsplatz V1 Local Handoff
+
+Continue from `main` with Admin Arbeitsplatz v1 implemented locally but not committed, deployed, or authenticated-browser-smoked.
+
+Completed:
+- Extended `GET /api/admin/ops-dashboard` with limited top queue items for product QA, research due, stale/unreviewed research, warnings without article, and draft knowledge articles.
+- Added admin-only `PATCH /api/admin/product-qa/:id` for `price`, `shop_link`, `is_affiliate`, `serving_size`, `serving_unit`, `servings_per_container`, and `container_count`, with `ensureAdmin`, validation, and audit logging.
+- Added backend and frontend guardrails so knowledge articles cannot be published without non-empty body and at least one source array entry.
+- Added frontend admin queue panels for "Heute bearbeiten" and "Spaeter einplanen" with contextual links.
+- Added inline Product-QA editing in mobile cards and desktop rows.
+- Added `q=` context support to `ProductQATab`, `AdminKnowledgeArticlesTab`, and `IngredientResearchTab`.
+
+Validation:
+- `npx tsc -p tsconfig.json --noEmit` in `functions/` passed.
+- `npx tsc --noEmit` in `frontend/` passed.
+- `npm run lint --if-present` in `frontend/` passed with two unrelated `StackWorkspace.tsx` hook dependency warnings.
+- `npm run build` in `frontend/` passed with Vite chunk-size warning only.
+- Scoped `git diff --check` passed with CRLF warnings only.
+
+Workspace notes:
+- Intentional admin changes: `functions/api/modules/admin.ts`, `frontend/src/api/admin.ts`, `frontend/src/pages/admin/AdminOpsDashboardTab.tsx`, `frontend/src/pages/admin/ProductQATab.tsx`, `frontend/src/pages/admin/AdminKnowledgeArticlesTab.tsx`, and `frontend/src/pages/admin/IngredientResearchTab.tsx`.
+- Concurrent unrelated changes are present in stack/family files, `.claude/*`, `frontend/src/styles.css`, `frontend/src/types/index.ts`, `functions/api/[[path]].ts`, `functions/api/lib/types.ts`, `functions/api/modules/stacks.ts`, `d1-migrations/0048_user_stack_rounding.sql`, and root `logo.png`; do not revert them.
+
+## 2026-05-05 - User-Rundung V1 Local Handoff
+
+Continue from `main` with User-Rundung v1 implemented locally but not committed, remote-migrated, deployed, or browser-smoked.
+
+Completed:
+- Added migration `d1-migrations/0048_user_stack_rounding.sql` for `family_profiles`, nullable `stacks.family_member_id`, and `product_link_reports`.
+- Added authenticated `/api/family` CRUD in `functions/api/modules/family.ts` and mounted it in `functions/api/[[path]].ts`.
+- Extended stack list/detail/create/update with family assignment fields and ownership validation.
+- Added authenticated rate-limited `POST /api/stacks/link-report` for missing/invalid shop links.
+- Added typed frontend `frontend/src/api/family.ts` and `reportProductLink` in `frontend/src/api/stacks.ts`.
+- `StackWorkspace` now renders a visible stack cockpit/check panel and real routine grouping by timing. Authenticated conflict status loads `/api/stack-warnings/:id`; demo uses local duplicate effective ingredient checks.
+- Product replacement now asks for confirmation before preserving an old dosage onto a product with a different form/serving/ingredient strength signature.
+- `ProductCard` now suppresses invalid buy links and shows `Link melden` in stack context.
+- Family profile UI is deliberately minimal in `StackWorkspace`: assign self/family member, create member, remove member.
+
+Validation:
+- `npx tsc -p tsconfig.json --noEmit` in `functions/` passed.
+- `npx tsc --noEmit` in `frontend/` passed.
+- `npm run lint --if-present` in `frontend/` passed.
+- `npm run build` in `frontend/` passed with Vite chunk-size warning only.
+- Path-scoped `git diff --check` over user-stack touched files passed with CRLF warnings only.
+
+Workspace notes:
+- Intentional User-Rundung files: `d1-migrations/0048_user_stack_rounding.sql`, `functions/api/modules/family.ts`, `functions/api/modules/stacks.ts`, `functions/api/[[path]].ts`, `functions/api/lib/types.ts`, `frontend/src/api/family.ts`, `frontend/src/api/stacks.ts`, `frontend/src/components/StackWorkspace.tsx`, `frontend/src/components/ProductCard.tsx`, `frontend/src/types/index.ts`, and `frontend/src/styles.css`.
+- Concurrent unrelated admin work is dirty in admin files. `.claude/*` and root `logo.png` are also dirty/untracked. Do not revert them.
+
+## 2026-05-05 - Round Experience V1 Deployed Handoff
+
+Continue from `main` after deployed round-experience bundle.
+
+Completed:
+- Migration `0048_user_stack_rounding.sql` added and applied remotely. It creates `family_profiles`, adds nullable `stacks.family_member_id`, and creates `product_link_reports`.
+- Backend adds `/api/family`, `/api/stacks/link-report`, and `PATCH /api/admin/product-qa/:id`.
+- StackWorkspace now includes stack cockpit/check, grouped Einnahmeplan, family profile assignment, link reporting, and replacement confirmation when preserving dosage/timing across a different product signature.
+- Admin dashboard includes actionable queues; Product-QA supports inline editing; published knowledge articles require body and at least one source.
+- Deployed to Cloudflare Pages project `supplementstack`.
+
+Validation:
+- Functions TypeScript, frontend TypeScript, frontend lint, frontend build, and `git diff --check` passed.
+- Build warning: Vite chunk-size warning remains.
+- Smoke checks: preview/live root 200 with `assets/index-CmCtPS8l.js`; unauthenticated new protected routes return 401; remote D1 confirms 0048 objects and migration journal row.
+
+Workspace notes:
+- Unrelated `.claude/SESSION.md`, `.claude/settings.json`, and root `logo.png` remain out of scope.
+- Next practical check is authenticated browser QA for the new user/admin workflows.

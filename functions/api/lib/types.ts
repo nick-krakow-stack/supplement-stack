@@ -95,6 +95,8 @@ export type StackRow = {
   id: number
   user_id: number
   name: string
+  family_member_id: number | null
+  family_member_first_name?: string | null
   created_at: string
 }
 

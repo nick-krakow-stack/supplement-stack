@@ -72,6 +72,16 @@ export interface ProductSafetyWarning {
   article_url?: string | null;
 }
 
+export interface FamilyMember {
+  id: number;
+  user_id?: number;
+  first_name: string;
+  age?: number | null;
+  weight?: number | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface Product {
   id: number;
   product_type?: 'catalog' | 'user_product';
@@ -120,6 +130,8 @@ export interface Stack {
   id: number;
   user_id?: number;
   name: string;
+  family_member_id?: number | null;
+  family_member_first_name?: string | null;
   created_at: string;
   items?: StackItem[];
 }

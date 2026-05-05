@@ -35,6 +35,12 @@ type StackProductValidation = {
   error?: string
 }
 
+type StackLinkReportProduct = {
+  id: number
+  name: string
+  shop_link: string | null
+}
+
 type StackMailItem = {
   stack_item_id: number
   id: number
@@ -140,6 +146,13 @@ function normalizeIntakeIntervalDays(value: unknown): number | null {
   const parsed = Number(value)
   if (!Number.isInteger(parsed) || parsed < 1) return null
   return parsed
+}
+
+function normalizeFamilyMemberId(value: unknown): number | null | undefined {
+  if (value === undefined) return undefined
+  if (value === null || value === '') return null
+  const parsed = Number(value)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined
 }
 
 function formatIntakeInterval(days: number): string {
@@ -324,6 +337,14 @@ async function validateStackProductReferences(
   }
 
   return true
+}
+
+async function familyMemberBelongsToUser(db: D1Database, userId: number, familyMemberId: number | null): Promise<boolean> {
+  if (familyMemberId === null) return true
+  const row = await db.prepare(
+    'SELECT id FROM family_profiles WHERE id = ? AND user_id = ?'
+  ).bind(familyMemberId, userId).first<{ id: number }>()
+  return Boolean(row)
 }
 
 async function loadStackItems(
@@ -578,9 +599,13 @@ stacks.get('/', async (c) => {
   if (authErr) return authErr
   const user = c.get('user')
   const { results } = await c.env.DB.prepare(`
-    SELECT s.*, COUNT(si.id) as items_count
+    SELECT
+      s.*,
+      fp.first_name AS family_member_first_name,
+      COUNT(si.id) as items_count
     FROM stacks s
     LEFT JOIN stack_items si ON si.stack_id = s.id
+    LEFT JOIN family_profiles fp ON fp.id = s.family_member_id AND fp.user_id = s.user_id
     WHERE s.user_id = ?
     GROUP BY s.id
     ORDER BY s.created_at DESC
@@ -600,6 +625,11 @@ stacks.post('/', async (c) => {
     return c.json({ error: 'Invalid JSON' }, 400)
   }
   if (!data.name) return c.json({ error: 'Stack-Name ist erforderlich' }, 400)
+  const familyMemberId = normalizeFamilyMemberId(data.family_member_id ?? data.familyMemberId)
+  if (familyMemberId === undefined) return c.json({ error: 'family_member_id must be null or a valid family profile id' }, 400)
+  if (!(await familyMemberBelongsToUser(c.env.DB, user.userId, familyMemberId))) {
+    return c.json({ error: 'Family profile not found' }, 404)
+  }
   const rawItems = Array.isArray(data.product_ids) ? data.product_ids : data.products
   const normalized = normalizeStackProductItems(rawItems)
   if (normalized.error || !normalized.items) {
@@ -610,8 +640,8 @@ stacks.post('/', async (c) => {
   }
 
   const stackResult = await c.env.DB.prepare(
-    'INSERT INTO stacks (user_id, name) VALUES (?, ?)'
-  ).bind(user.userId, data.name).run()
+    'INSERT INTO stacks (user_id, name, family_member_id) VALUES (?, ?, ?)'
+  ).bind(user.userId, data.name, familyMemberId).run()
   const stackId = stackResult.meta.last_row_id
 
   for (const item of normalized.items) {
@@ -627,7 +657,77 @@ stacks.post('/', async (c) => {
       item.timing,
     ).run()
   }
-  return c.json({ id: stackId, name: data.name })
+  return c.json({ id: stackId, name: data.name, family_member_id: familyMemberId })
+})
+
+// POST /api/stacks/link-report
+stacks.post('/link-report', async (c) => {
+  const authErr = await ensureAuth(c)
+  if (authErr) return authErr
+  const user = c.get('user')
+  const allowed = await checkRateLimit(c.env.RATE_LIMITER, `product-link-report:${user.userId}`, 10, 3600)
+  if (!allowed) return c.json({ error: 'Bitte warte kurz, bevor du weitere Links meldest.' }, 429)
+
+  let data: Record<string, unknown>
+  try {
+    const parsed = await c.req.json()
+    data = parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : {}
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const productId = Number(data.product_id ?? data.productId)
+  const productType = normalizeStackProductType(data.product_type ?? data.productType)
+  const stackIdRaw = data.stack_id ?? data.stackId
+  const stackId = stackIdRaw === undefined || stackIdRaw === null || stackIdRaw === '' ? null : Number(stackIdRaw)
+  const reasonRaw = typeof data.reason === 'string' ? data.reason.trim() : 'missing_link'
+  const reason = reasonRaw === 'invalid_link' ? 'invalid_link' : 'missing_link'
+
+  if (!Number.isInteger(productId) || productId <= 0 || !productType) {
+    return c.json({ error: 'product_id and product_type are required' }, 400)
+  }
+  if (stackId !== null && (!Number.isInteger(stackId) || stackId <= 0)) {
+    return c.json({ error: 'stack_id must be a valid stack id' }, 400)
+  }
+  if (stackId !== null) {
+    const stack = await c.env.DB.prepare(
+      'SELECT id FROM stacks WHERE id = ? AND user_id = ?'
+    ).bind(stackId, user.userId).first<{ id: number }>()
+    if (!stack) return c.json({ error: 'Stack not found' }, 404)
+  }
+
+  const product = productType === 'user_product'
+    ? await c.env.DB.prepare(`
+        SELECT id, name, shop_link
+        FROM user_products
+        WHERE id = ? AND user_id = ? AND status IN ('pending', 'approved')
+      `).bind(productId, user.userId).first<StackLinkReportProduct>()
+    : await c.env.DB.prepare(`
+        SELECT id, name, shop_link
+        FROM products
+        WHERE id = ?
+          AND moderation_status = 'approved'
+          AND visibility = 'public'
+      `).bind(productId).first<StackLinkReportProduct>()
+
+  if (!product) return c.json({ error: 'Product not found' }, 404)
+
+  await c.env.DB.prepare(`
+    INSERT INTO product_link_reports (
+      user_id, stack_id, product_type, product_id, product_name, shop_link_snapshot, reason
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    user.userId,
+    stackId,
+    productType,
+    product.id,
+    product.name,
+    product.shop_link,
+    reason,
+  ).run()
+
+  return c.json({ ok: true })
 })
 
 // GET /api/stacks/:id
@@ -635,7 +735,12 @@ stacks.get('/:id', async (c) => {
   const authErr = await ensureAuth(c)
   if (authErr) return authErr
   const user = c.get('user')
-  const stack = await c.env.DB.prepare('SELECT * FROM stacks WHERE id = ?').bind(c.req.param('id')).first<StackRow>()
+  const stack = await c.env.DB.prepare(`
+    SELECT s.*, fp.first_name AS family_member_first_name
+    FROM stacks s
+    LEFT JOIN family_profiles fp ON fp.id = s.family_member_id AND fp.user_id = s.user_id
+    WHERE s.id = ?
+  `).bind(c.req.param('id')).first<StackRow>()
   if (!stack) return c.json({ error: 'Not found' }, 404)
   if (stack.user_id !== user.userId && user.role !== 'admin') return c.json({ error: 'Forbidden' }, 403)
   const items = await loadStackItemsWithIngredients(c.env.DB, stack.id, stack.user_id)
@@ -706,6 +811,16 @@ stacks.put('/:id', async (c) => {
   if (data.name !== undefined && name === null) {
     return c.json({ error: 'Stack-Name darf nicht leer sein' }, 400)
   }
+  const hasFamilyMemberUpdate = data.family_member_id !== undefined || data.familyMemberId !== undefined
+  const familyMemberId = hasFamilyMemberUpdate
+    ? normalizeFamilyMemberId(data.family_member_id ?? data.familyMemberId)
+    : undefined
+  if (hasFamilyMemberUpdate && familyMemberId === undefined) {
+    return c.json({ error: 'family_member_id must be null or a valid family profile id' }, 400)
+  }
+  if (familyMemberId !== undefined && !(await familyMemberBelongsToUser(c.env.DB, stack.user_id, familyMemberId))) {
+    return c.json({ error: 'Family profile not found' }, 404)
+  }
 
   let normalizedItems: StackProductInput[] | null = null
   if (data.product_ids !== undefined) {
@@ -722,6 +837,9 @@ stacks.put('/:id', async (c) => {
   const statements: D1PreparedStatement[] = []
   if (name !== null) {
     statements.push(c.env.DB.prepare('UPDATE stacks SET name = ? WHERE id = ?').bind(name, id))
+  }
+  if (familyMemberId !== undefined) {
+    statements.push(c.env.DB.prepare('UPDATE stacks SET family_member_id = ? WHERE id = ?').bind(familyMemberId, id))
   }
   if (normalizedItems !== null) {
     statements.push(c.env.DB.prepare('DELETE FROM stack_items WHERE stack_id = ?').bind(id))
@@ -742,7 +860,12 @@ stacks.put('/:id', async (c) => {
   if (statements.length > 0) {
     await c.env.DB.batch(statements)
   }
-  const updated = await c.env.DB.prepare('SELECT * FROM stacks WHERE id = ?').bind(id).first()
+  const updated = await c.env.DB.prepare(`
+    SELECT s.*, fp.first_name AS family_member_first_name
+    FROM stacks s
+    LEFT JOIN family_profiles fp ON fp.id = s.family_member_id AND fp.user_id = s.user_id
+    WHERE s.id = ?
+  `).bind(id).first()
   const items = await loadStackItemsWithIngredients(c.env.DB, id, stack.user_id)
   return c.json({ stack: updated, items })
 })

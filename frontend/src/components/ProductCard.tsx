@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BookOpen, ExternalLink, Info, Pencil, RefreshCcw, Trash2 } from 'lucide-react';
+import { BookOpen, ExternalLink, Flag, Info, Pencil, RefreshCcw, Trash2 } from 'lucide-react';
 import type { ShopDomain } from '../types/local';
 import type { ProductSafetyWarning } from '../types';
 import { calculateProductUsage, intakeIntervalDays as getIntakeIntervalDays } from '../lib/stackCalculations';
 
 interface ProductCardProduct {
   id: number;
+  product_type?: 'catalog' | 'user_product';
   name: string;
   brand?: string;
   price: number;
@@ -60,6 +61,7 @@ interface ProductCardProps {
   onToggleSelected?: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
+  onReportMissingLink?: (product: ProductCardProduct, reason: 'missing_link' | 'invalid_link') => void;
   recommendationType?: 'recommended' | 'alternative' | null;
   showSelectButton?: boolean;
   shopDomains?: ShopDomain[];
@@ -152,12 +154,27 @@ function normalizeShopHostname(value?: string): string | null {
   }
 }
 
+function normalizeShopHref(value?: string): string | null {
+  const raw = value?.trim();
+  if (!raw) return null;
+  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`;
+  try {
+    const url = new URL(withScheme);
+    if (!['http:', 'https:'].includes(url.protocol)) return null;
+    if (!url.hostname || url.hostname.includes('..')) return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
 function shopHostMatchesDomain(hostname: string, domain: string): boolean {
   return hostname === domain || hostname.endsWith(`.${domain}`);
 }
 
 export default function ProductCard({
   product, onSelect, onToggleSelected, onEdit, onDelete,
+  onReportMissingLink,
   recommendationType, showSelectButton = false,
   shopDomains, selected = false, warning,
 }: ProductCardProps) {
@@ -172,6 +189,7 @@ export default function ProductCard({
   const timing = TIMING_STYLES[timingKey];
 
   const productHost = normalizeShopHostname(product.shop_link);
+  const shopHref = normalizeShopHref(product.shop_link);
   const matchedShop = productHost
     ? shopDomains?.find((s) => {
         const domain = normalizeShopHostname(s.domain);
@@ -183,6 +201,7 @@ export default function ProductCard({
   const buttonText = isAffiliate
     ? (shopName ? `Bei ${shopName} kaufen (Affiliate-Link)` : 'Kaufen (Affiliate-Link)')
     : (shopName ? `Bei ${shopName} kaufen` : 'Jetzt kaufen');
+  const reportReason: 'missing_link' | 'invalid_link' = product.shop_link ? 'invalid_link' : 'missing_link';
 
   const monthlyPrice = calcMonthlyPrice(product, price);
   const daysSupply = getDaysSupply(product);
@@ -395,9 +414,9 @@ export default function ProductCard({
 
       {/* Actions */}
       <div className="flex gap-[7px]">
-        {product.shop_link && (
+        {shopHref && (
           <a
-            href={product.shop_link}
+            href={shopHref}
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
@@ -409,6 +428,15 @@ export default function ProductCard({
             <ExternalLink size={13} />
             {buttonText}
           </a>
+        )}
+        {!shopHref && onReportMissingLink && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onReportMissingLink(product, reportReason); }}
+            className="flex-1 inline-flex min-h-11 items-center justify-center gap-1.5 rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2 text-[12.5px] font-bold text-amber-700 transition-colors hover:bg-amber-100"
+          >
+            <Flag size={13} />
+            Link melden
+          </button>
         )}
         {onEdit && (
           <button

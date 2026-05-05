@@ -6,10 +6,15 @@ import {
   ArrowLeft,
   ArrowRight,
   Calculator,
+  CheckCircle2,
+  Clock3,
+  Flag,
   Info,
   Package,
   Plus,
   Search,
+  UserPlus,
+  Users,
   X,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -18,7 +23,9 @@ import SearchBar from './SearchBar';
 import ProductCard from './ProductCard';
 import StacksHeader, { type StacksHeaderVariant } from './StacksHeader';
 import EditStackModal from './EditStackModal';
-import type { ProductSafetyWarning } from '../types';
+import { createFamilyMember, deleteFamilyMember, getFamilyMembers } from '../api/family';
+import { reportProductLink } from '../api/stacks';
+import type { FamilyMember, Interaction, ProductSafetyWarning } from '../types';
 import type { DosageGuideline, Ingredient, ShopDomain } from '../types/local';
 import {
   calculateProductUsage,
@@ -77,6 +84,8 @@ export interface DemoStack {
   name: string;
   products: DemoProduct[];
   description?: string;
+  family_member_id?: number | null;
+  family_member_first_name?: string | null;
 }
 
 interface DemoState {
@@ -119,14 +128,21 @@ function demoRestrictedNotice() {
 }
 
 function mapStackDetail(
-  stack: { id: number | string; name: string },
+  stack: { id: number | string; name: string; family_member_id?: number | null; family_member_first_name?: string | null },
   detail?: Record<string, unknown>,
 ): DemoStack {
   const products = (detail?.products ?? detail?.items ?? []) as DemoProduct[];
+  const stackDetail = detail?.stack as {
+    name?: string;
+    family_member_id?: number | null;
+    family_member_first_name?: string | null;
+  } | undefined;
   return {
     id: String(stack.id),
-    name: (detail?.stack as { name?: string } | undefined)?.name ?? stack.name,
+    name: stackDetail?.name ?? stack.name,
     products,
+    family_member_id: stackDetail?.family_member_id ?? stack.family_member_id ?? null,
+    family_member_first_name: stackDetail?.family_member_first_name ?? stack.family_member_first_name ?? null,
   };
 }
 
@@ -199,6 +215,79 @@ function productMonthlyPrice(product: DemoProduct): number {
 
 function formatEuro(value: number): string {
   return value.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function formatDaysSupply(days: number | null): string {
+  return days ? `${days} Tage` : 'unbekannt';
+}
+
+function normalizeShopHref(value?: string): string | null {
+  const raw = value?.trim();
+  if (!raw) return null;
+  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`;
+  try {
+    const url = new URL(withScheme);
+    if (!['http:', 'https:'].includes(url.protocol)) return null;
+    if (!url.hostname || url.hostname.includes('..')) return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+function shopLinkNeedsReport(product: DemoProduct): boolean {
+  return !normalizeShopHref(product.shop_link);
+}
+
+function stackProfileLabel(stack: DemoStack | undefined): string {
+  if (!stack?.family_member_id) return 'Mein Stack';
+  return stack.family_member_first_name ? `Fuer ${stack.family_member_first_name}` : 'Familienprofil';
+}
+
+type RoutineKey = 'morning' | 'noon' | 'evening' | 'flexible';
+
+const ROUTINE_META: Record<RoutineKey, { label: string; hint: string }> = {
+  morning: { label: 'Morgens', hint: 'Fruehstueck / Start in den Tag' },
+  noon: { label: 'Mittags', hint: 'Mittag / nach dem Essen' },
+  evening: { label: 'Abends', hint: 'Abendessen / vor dem Schlafen' },
+  flexible: { label: 'Flexibel', hint: 'Zeitpunkt frei waehlbar' },
+};
+
+function routineKeyForTiming(timing?: string): RoutineKey {
+  const normalized = (timing ?? '').toLowerCase();
+  if (normalized.includes('morgen') || normalized.includes('frueh') || normalized.includes('früh') || normalized.includes('morning')) return 'morning';
+  if (normalized.includes('mittag') || normalized.includes('noon')) return 'noon';
+  if (normalized.includes('abend') || normalized.includes('nacht') || normalized.includes('evening')) return 'evening';
+  return 'flexible';
+}
+
+function effectiveIngredientIds(product: DemoProduct): number[] {
+  return (product.ingredients ?? [])
+    .filter((ingredient) => ingredient.search_relevant === undefined || ingredient.search_relevant === true || ingredient.search_relevant === 1)
+    .map((ingredient) => ingredient.ingredient_id)
+    .filter((id) => Number.isInteger(id));
+}
+
+function productDoseSignature(product: DemoProduct): string {
+  const ingredientParts = (product.ingredients ?? [])
+    .filter((ingredient) => ingredient.search_relevant === undefined || ingredient.search_relevant === true || ingredient.search_relevant === 1)
+    .map((ingredient) => [
+      ingredient.ingredient_id,
+      ingredient.quantity ?? '',
+      ingredient.unit ?? '',
+      ingredient.basis_quantity ?? '',
+      ingredient.basis_unit ?? '',
+    ].join(':'))
+    .sort()
+    .join('|');
+  return [
+    product.form ?? '',
+    product.serving_size ?? '',
+    product.serving_unit ?? '',
+    product.servings_per_container ?? '',
+    product.container_count ?? '',
+    ingredientParts,
+  ].join('#').toLowerCase();
 }
 
 // ---------------------------------------------------------------------------
@@ -910,6 +999,14 @@ export function StackWorkspace({
   const [error, setError] = useState('');
   const [emailSending, setEmailSending] = useState(false);
   const [emailStatus, setEmailStatus] = useState('');
+  const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
+  const [familyFormOpen, setFamilyFormOpen] = useState(false);
+  const [familyDraft, setFamilyDraft] = useState({ first_name: '', age: '', weight: '' });
+  const [familySaving, setFamilySaving] = useState(false);
+  const [familyStatus, setFamilyStatus] = useState('');
+  const [linkReportStatus, setLinkReportStatus] = useState('');
+  const [stackWarnings, setStackWarnings] = useState<Interaction[]>([]);
+  const [stackWarningsLoading, setStackWarningsLoading] = useState(false);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -924,6 +1021,16 @@ export function StackWorkspace({
       .catch(() => { /* ignore */ });
   }, []);
 
+  const loadFamilyProfiles = useCallback(async () => {
+    if (mode !== 'authenticated' || !token) return;
+    try {
+      const members = await getFamilyMembers();
+      setFamilyMembers(members);
+    } catch {
+      setFamilyStatus('Familienprofile konnten nicht geladen werden.');
+    }
+  }, [mode, token]);
+
   const loadAuthenticatedStacks = useCallback(async () => {
     if (mode !== 'authenticated' || !token) return;
     setLoading(true);
@@ -932,7 +1039,12 @@ export function StackWorkspace({
       const res = await fetch(apiPath('/stacks'), { headers: authHeaders(token) });
       if (!res.ok) throw new Error('Stacks konnten nicht geladen werden.');
       const data = await res.json();
-      const stackList: Array<{ id: number; name: string }> = data.stacks ?? data ?? [];
+      const stackList: Array<{
+        id: number;
+        name: string;
+        family_member_id?: number | null;
+        family_member_first_name?: string | null;
+      }> = data.stacks ?? data ?? [];
       if (stackList.length === 0) {
         const createRes = await fetch(apiPath('/stacks'), {
           method: 'POST',
@@ -971,6 +1083,7 @@ export function StackWorkspace({
   useEffect(() => {
     if (mode === 'authenticated') {
       void loadAuthenticatedStacks();
+      void loadFamilyProfiles();
       return;
     }
 
@@ -988,7 +1101,7 @@ export function StackWorkspace({
         });
       })
       .catch(() => setState(fresh));
-  }, [loadAuthenticatedStacks, mode]);
+  }, [loadAuthenticatedStacks, loadFamilyProfiles, mode]);
 
   const activeStack = state.stacks.find((s) => s.id === state.activeStackId) ?? state.stacks[0];
 
@@ -1006,6 +1119,21 @@ export function StackWorkspace({
       return valid;
     });
   }, [activeStack]);
+
+  useEffect(() => {
+    if (!activeStack || isDemo || !token) {
+      setStackWarnings([]);
+      setStackWarningsLoading(false);
+      return;
+    }
+    setStackWarnings([]);
+    setStackWarningsLoading(true);
+    fetch(apiPath(`/stack-warnings/${activeStack.id}`), { headers: authHeaders(token) })
+      .then((response) => (response.ok ? response.json() : { warnings: [] }))
+      .then((data) => setStackWarnings(data.warnings ?? data.interactions ?? []))
+      .catch(() => setStackWarnings([]))
+      .finally(() => setStackWarningsLoading(false));
+  }, [activeStack, isDemo, token]);
 
   const persistStackProducts = useCallback(
     async (stackId: string, products: DemoProduct[], name?: string) => {
@@ -1029,6 +1157,138 @@ export function StackWorkspace({
       if (!res.ok) throw new Error('Stack konnte nicht gespeichert werden.');
     },
     [mode, token],
+  );
+
+  const handleAssignFamilyMember = useCallback(
+    async (familyMemberId: number | null) => {
+      if (!activeStack) return;
+      if (mode !== 'authenticated' || !token) {
+        setFamilyStatus('Familienprofile sind nur angemeldet verfuegbar.');
+        return;
+      }
+      setFamilyStatus('');
+      try {
+        const res = await fetch(apiPath(`/stacks/${activeStack.id}`), {
+          method: 'PUT',
+          headers: authHeaders(token),
+          body: JSON.stringify({ family_member_id: familyMemberId }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error ?? 'Profil konnte nicht zugeordnet werden.');
+        const selectedMember = familyMembers.find((member) => member.id === familyMemberId);
+        setState((prev) => ({
+          ...prev,
+          stacks: prev.stacks.map((stack) => (
+            stack.id === activeStack.id
+              ? {
+                  ...stack,
+                  family_member_id: familyMemberId,
+                  family_member_first_name: selectedMember?.first_name ?? null,
+                }
+              : stack
+          )),
+        }));
+      } catch (err) {
+        setFamilyStatus(err instanceof Error ? err.message : 'Profil konnte nicht zugeordnet werden.');
+      }
+    },
+    [activeStack, familyMembers, mode, token],
+  );
+
+  const handleCreateFamilyMember = useCallback(
+    async (event: FormEvent<HTMLFormElement>) => {
+      event.preventDefault();
+      if (mode !== 'authenticated' || !token) {
+        setFamilyStatus('Familienprofile sind nur angemeldet verfuegbar.');
+        return;
+      }
+      const firstName = familyDraft.first_name.trim();
+      const age = familyDraft.age.trim() ? Number(familyDraft.age) : null;
+      const weight = familyDraft.weight.trim() ? Number(familyDraft.weight) : null;
+      if (!firstName) {
+        setFamilyStatus('Bitte gib einen Vornamen ein.');
+        return;
+      }
+      if (age !== null && (!Number.isInteger(age) || age < 0 || age > 120)) {
+        setFamilyStatus('Alter muss zwischen 0 und 120 liegen.');
+        return;
+      }
+      if (weight !== null && (!Number.isFinite(weight) || weight <= 0 || weight > 300)) {
+        setFamilyStatus('Gewicht muss zwischen 1 und 300 kg liegen.');
+        return;
+      }
+
+      setFamilySaving(true);
+      setFamilyStatus('');
+      try {
+        const member = await createFamilyMember({ first_name: firstName, age, weight });
+        setFamilyMembers((prev) => [...prev, member]);
+        setFamilyDraft({ first_name: '', age: '', weight: '' });
+        setFamilyFormOpen(false);
+        if (activeStack) {
+          await handleAssignFamilyMember(member.id);
+          setState((prev) => ({
+            ...prev,
+            stacks: prev.stacks.map((stack) => (
+              stack.id === activeStack.id
+                ? { ...stack, family_member_id: member.id, family_member_first_name: member.first_name }
+                : stack
+            )),
+          }));
+        }
+      } catch (err) {
+        setFamilyStatus(err instanceof Error ? err.message : 'Familienprofil konnte nicht gespeichert werden.');
+      } finally {
+        setFamilySaving(false);
+      }
+    },
+    [activeStack, familyDraft, handleAssignFamilyMember, mode, token],
+  );
+
+  const handleDeleteFamilyMember = useCallback(
+    async (memberId: number) => {
+      if (mode !== 'authenticated' || !token) return;
+      const member = familyMembers.find((item) => item.id === memberId);
+      if (!member || !window.confirm(`Profil "${member.first_name}" entfernen?`)) return;
+      setFamilyStatus('');
+      try {
+        await deleteFamilyMember(memberId);
+        setFamilyMembers((prev) => prev.filter((item) => item.id !== memberId));
+        setState((prev) => ({
+          ...prev,
+          stacks: prev.stacks.map((stack) => (
+            stack.family_member_id === memberId
+              ? { ...stack, family_member_id: null, family_member_first_name: null }
+              : stack
+          )),
+        }));
+      } catch (err) {
+        setFamilyStatus(err instanceof Error ? err.message : 'Familienprofil konnte nicht entfernt werden.');
+      }
+    },
+    [familyMembers, mode, token],
+  );
+
+  const handleReportMissingLink = useCallback(
+    async (product: DemoProduct, reason: 'missing_link' | 'invalid_link') => {
+      if (isDemo || !token || !activeStack) {
+        setLinkReportStatus('Danke. In der Vollversion wird die Meldung direkt an die Produktpflege gesendet.');
+        return;
+      }
+      setLinkReportStatus('');
+      try {
+        await reportProductLink({
+          product_id: product.id,
+          product_type: product.product_type ?? 'catalog',
+          stack_id: activeStack.id,
+          reason,
+        });
+        setLinkReportStatus('Danke, der fehlende Link wurde gemeldet.');
+      } catch (err) {
+        setLinkReportStatus(err instanceof Error ? err.message : 'Link konnte nicht gemeldet werden.');
+      }
+    },
+    [activeStack, isDemo, token],
   );
 
   // ---- Stack management ----
@@ -1222,6 +1482,14 @@ export function StackWorkspace({
       const preservedDosage = previousProduct.dosage_text ?? replacement.dosage_text;
       const preservedTiming = previousProduct.timing ?? replacement.timing;
       const preservedInterval = productIntakeIntervalDays(previousProduct);
+      const preservesOldDosageOnDifferentProduct = Boolean(previousProduct.dosage_text)
+        && productDoseSignature(previousProduct) !== productDoseSignature(replacement);
+      if (preservesOldDosageOnDifferentProduct) {
+        const confirmed = window.confirm(
+          'Die bisherige Dosierung wird fuer das neue Produkt uebernommen. Produktform oder Staerke koennen abweichen. Bitte pruefe die Dosierung nach dem Ersetzen. Trotzdem ersetzen?'
+        );
+        if (!confirmed) return;
+      }
       const candidate: DemoProduct = {
         ...replacement,
         dosage_text: preservedDosage,
@@ -1271,10 +1539,53 @@ export function StackWorkspace({
     () => (activeStack?.products.filter((p) => selectedIds.has(productStackKey(p))) ?? []),
     [activeStack, selectedIds],
   );
+  const activeProducts = useMemo(() => activeStack?.products ?? [], [activeStack]);
   const totalOnce = selectedProducts.reduce((sum, p) => sum + (p.price ?? 0), 0);
   const totalMonthly = selectedProducts.reduce((sum, p) => sum + productMonthlyPrice(p), 0);
-  const productsCount = activeStack?.products.length ?? 0;
+  const stackTotalOnce = activeProducts.reduce((sum, product) => sum + (product.price ?? 0), 0);
+  const stackTotalMonthly = activeProducts.reduce((sum, product) => sum + productMonthlyPrice(product), 0);
+  const productsCount = activeProducts.length;
   const allSelected = productsCount > 0 && selectedIds.size === productsCount;
+
+  const stackCockpit = useMemo(() => {
+    const ingredientCounts = new Map<number, number>();
+    for (const product of activeProducts) {
+      for (const ingredientId of new Set(effectiveIngredientIds(product))) {
+        ingredientCounts.set(ingredientId, (ingredientCounts.get(ingredientId) ?? 0) + 1);
+      }
+    }
+    const duplicateIngredientCount = [...ingredientCounts.values()].filter((count) => count > 1).length;
+    const effectiveIngredientCount = ingredientCounts.size;
+    const missingLinkCount = activeProducts.filter(shopLinkNeedsReport).length;
+    const runningOutSoonCount = activeProducts.filter((product) => {
+      const days = calculateProductUsage(product, product.price, { fallbackTotalServings: 30 }).daysSupply;
+      return days !== null && days <= 14;
+    }).length;
+    const warningCount = activeProducts.reduce((sum, product) => (
+      sum + (product.warnings?.length ?? 0) + (product.warning_message ? 1 : 0)
+    ), 0);
+
+    return {
+      duplicateIngredientCount,
+      effectiveIngredientCount,
+      missingLinkCount,
+      runningOutSoonCount,
+      warningCount,
+    };
+  }, [activeProducts]);
+
+  const routineGroups = useMemo(() => {
+    const groups: Record<RoutineKey, DemoProduct[]> = {
+      morning: [],
+      noon: [],
+      evening: [],
+      flexible: [],
+    };
+    for (const product of activeProducts) {
+      groups[routineKeyForTiming(product.timing)].push(product);
+    }
+    return groups;
+  }, [activeProducts]);
 
   const handleSelectAll = () => {
     if (!activeStack) return;
@@ -1347,6 +1658,72 @@ export function StackWorkspace({
       </button>
     </>
   );
+
+  const cockpitTiles = [
+    {
+      label: 'Monat',
+      value: `${formatEuro(stackTotalMonthly)} EUR`,
+      tone: stackTotalMonthly > 80 ? 'bad' : stackTotalMonthly > 40 ? 'warn' : 'good',
+      detail: 'geschaetzt',
+    },
+    {
+      label: 'Einmal',
+      value: `${formatEuro(stackTotalOnce)} EUR`,
+      tone: stackTotalOnce > 200 ? 'bad' : stackTotalOnce > 100 ? 'warn' : 'good',
+      detail: 'Packungskauf',
+    },
+    {
+      label: 'Produkte',
+      value: String(productsCount),
+      tone: productsCount > 12 ? 'warn' : 'good',
+      detail: productsCount === 1 ? 'Produkt' : 'Produkte',
+    },
+    {
+      label: 'Hinweise',
+      value: String(stackCockpit.warningCount),
+      tone: stackCockpit.warningCount > 0 ? 'warn' : 'good',
+      detail: 'Warnungen',
+    },
+    {
+      label: 'Doppelt',
+      value: String(stackCockpit.duplicateIngredientCount),
+      tone: stackCockpit.duplicateIngredientCount > 0 ? 'warn' : 'good',
+      detail: 'Wirkstoffe',
+    },
+    {
+      label: 'Links',
+      value: String(stackCockpit.missingLinkCount),
+      tone: stackCockpit.missingLinkCount > 0 ? 'warn' : 'good',
+      detail: 'fehlen',
+    },
+    {
+      label: 'Vorrat',
+      value: String(stackCockpit.runningOutSoonCount),
+      tone: stackCockpit.runningOutSoonCount > 0 ? 'bad' : 'good',
+      detail: 'bald leer',
+    },
+  ];
+
+  const conflictCount = isDemo ? stackCockpit.duplicateIngredientCount : stackWarnings.length;
+  const conflictState = stackCockpit.effectiveIngredientCount < 2
+    ? {
+        tone: 'unknown',
+        title: 'Nicht genug Daten',
+        text: 'Mindestens zwei eindeutig zugeordnete Wirkstoffe sind fuer einen Stack-Check noetig.',
+      }
+    : conflictCount > 0
+      ? {
+          tone: 'bad',
+          title: `${conflictCount} Konflikt${conflictCount === 1 ? '' : 'e'}`,
+          text: isDemo
+            ? 'Demo-Check: doppelte Wirkstoffe im Stack pruefen.'
+            : 'Bekannte Wechselwirkungs- oder Kombinationshinweise im Stack pruefen.',
+        }
+      : {
+          tone: 'good',
+          title: stackWarningsLoading ? 'Check laeuft...' : 'Keine bekannten Konflikte',
+          text: 'Fuer die aktuell erkannten Wirkstoffe liegen keine aktiven Stack-Konflikte vor.',
+        };
 
   return (
     <>
@@ -1443,7 +1820,7 @@ export function StackWorkspace({
           </button>
           {(isDemo || emailStatus) && (
             <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>
-              {isDemo ? 'E-Mail-Versand ist nur angemeldet verfÃ¼gbar.' : emailStatus}
+              {isDemo ? 'E-Mail-Versand ist nur angemeldet verfuegbar.' : emailStatus}
             </span>
           )}
 
@@ -1472,6 +1849,172 @@ export function StackWorkspace({
             {activeDescription}
           </div>
         )}
+
+        <section className="stack-cockpit" aria-label="Stack-Check">
+          <div className="stack-cockpit-head">
+            <div>
+              <div className="stack-cockpit-kicker">
+                <CheckCircle2 size={16} />
+                Stack-Check
+              </div>
+              <h2>{activeStack?.name ?? 'Stack'}</h2>
+              <p>{stackProfileLabel(activeStack)}</p>
+            </div>
+            <div className="family-switcher">
+              <label>
+                <Users size={15} />
+                Profil
+              </label>
+              <div className="family-switcher-row">
+                <select
+                  value={activeStack?.family_member_id ?? ''}
+                  disabled={isDemo || !activeStack}
+                  onChange={(event) => {
+                    const nextValue = event.target.value ? Number(event.target.value) : null;
+                    void handleAssignFamilyMember(nextValue);
+                  }}
+                >
+                  <option value="">Ich selbst</option>
+                  {familyMembers.map((member) => (
+                    <option key={member.id} value={member.id}>
+                      {member.first_name}{member.age != null ? `, ${member.age}` : ''}
+                    </option>
+                  ))}
+                </select>
+                {!isDemo && (
+                  <button
+                    type="button"
+                    className="family-add-btn"
+                    onClick={() => setFamilyFormOpen((open) => !open)}
+                  >
+                    <UserPlus size={15} />
+                    Profil
+                  </button>
+                )}
+              </div>
+              {familyStatus && <p className="family-status">{familyStatus}</p>}
+            </div>
+          </div>
+
+          {familyFormOpen && !isDemo && (
+            <form className="family-form" onSubmit={(event) => void handleCreateFamilyMember(event)}>
+              <input
+                value={familyDraft.first_name}
+                onChange={(event) => setFamilyDraft((prev) => ({ ...prev, first_name: event.target.value }))}
+                placeholder="Vorname"
+              />
+              <input
+                value={familyDraft.age}
+                onChange={(event) => setFamilyDraft((prev) => ({ ...prev, age: event.target.value }))}
+                inputMode="numeric"
+                placeholder="Alter"
+              />
+              <input
+                value={familyDraft.weight}
+                onChange={(event) => setFamilyDraft((prev) => ({ ...prev, weight: event.target.value }))}
+                inputMode="decimal"
+                placeholder="Gewicht optional"
+              />
+              <button type="submit" disabled={familySaving}>
+                {familySaving ? 'Speichert...' : 'Anlegen'}
+              </button>
+            </form>
+          )}
+
+          {!isDemo && familyMembers.length > 0 && (
+            <div className="family-member-list">
+              {familyMembers.map((member) => (
+                <span key={member.id}>
+                  {member.first_name}
+                  <button type="button" onClick={() => void handleDeleteFamilyMember(member.id)}>
+                    Entfernen
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+
+          <div className={`conflict-card conflict-${conflictState.tone}`}>
+            <div className="conflict-icon">
+              {conflictState.tone === 'good' ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
+            </div>
+            <div>
+              <strong>{conflictState.title}</strong>
+              <p>{conflictState.text}</p>
+              {!isDemo && stackWarnings.length > 0 && (
+                <ul>
+                  {stackWarnings.slice(0, 3).map((warningItem) => (
+                    <li key={warningItem.id}>{warningItem.comment ?? warningItem.type ?? 'Hinweis pruefen'}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+
+          <div className="cockpit-grid">
+            {cockpitTiles.map((tile) => (
+              <div key={tile.label} className={`cockpit-tile cockpit-${tile.tone}`}>
+                <span className="cockpit-ampel" aria-hidden="true" />
+                <div>
+                  <p>{tile.label}</p>
+                  <strong>{tile.value}</strong>
+                  <small>{tile.detail}</small>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="routine-panel">
+            <div className="routine-panel-title">
+              <Clock3 size={17} />
+              Einnahmeplan
+            </div>
+            <div className="routine-grid">
+              {(Object.keys(ROUTINE_META) as RoutineKey[]).map((routineKey) => {
+                const products = routineGroups[routineKey];
+                const meta = ROUTINE_META[routineKey];
+                return (
+                  <div key={routineKey} className="routine-column">
+                    <div className="routine-column-head">
+                      <strong>{meta.label}</strong>
+                      <span>{products.length}</span>
+                    </div>
+                    <p>{meta.hint}</p>
+                    {products.length === 0 ? (
+                      <div className="routine-empty">Keine Produkte</div>
+                    ) : (
+                      <div className="routine-list">
+                        {products.map((product) => {
+                          const usage = calculateProductUsage(product, product.price, { fallbackTotalServings: 30 });
+                          return (
+                            <div key={productStackKey(product)} className="routine-item">
+                              <strong>{product.name}</strong>
+                              <span>{product.dosage_text || `${usage.servingsPerIntake} Portion`}</span>
+                              <small>
+                                {formatIntakeInterval(productIntakeIntervalDays(product))}
+                                {' - '}
+                                {formatEuro(usage.monthlyCost ?? product.price)} EUR/Monat
+                                {' - '}
+                                {formatDaysSupply(usage.daysSupply)}
+                              </small>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {linkReportStatus && (
+            <div className="link-report-status">
+              <Flag size={14} />
+              {linkReportStatus}
+            </div>
+          )}
+        </section>
 
         <div className="ss-section-title">
           <span>🚀</span>
@@ -1543,6 +2086,7 @@ export function StackWorkspace({
                       onToggleSelected={() => toggleSelected(key)}
                       onEdit={() => setEditingProductKey(key)}
                       onDelete={() => void handleRemoveProduct(key)}
+                      onReportMissingLink={(product, reason) => void handleReportMissingLink(product as DemoProduct, reason)}
                       showSelectButton={false}
                     />
                   </div>

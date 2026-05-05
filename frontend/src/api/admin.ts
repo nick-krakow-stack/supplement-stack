@@ -292,6 +292,44 @@ export interface AdminOpsDashboard {
     issues: number;
   };
   totals: Record<string, number>;
+  queues: {
+    product_qa: AdminProductQAProduct[];
+    research_due: AdminOpsResearchQueueItem[];
+    research_later: AdminOpsResearchQueueItem[];
+    warnings_without_article: AdminOpsWarningQueueItem[];
+    knowledge_drafts: AdminOpsKnowledgeDraftItem[];
+  };
+  raw?: Record<string, unknown>;
+}
+
+export interface AdminOpsResearchQueueItem {
+  ingredient_id: number;
+  ingredient_name: string;
+  research_status: string;
+  review_due_at: string | null;
+  reviewed_at: string | null;
+  calculation_status: string | null;
+  raw?: Record<string, unknown>;
+}
+
+export interface AdminOpsWarningQueueItem {
+  id: number;
+  ingredient_id: number | null;
+  ingredient_name: string | null;
+  form_id: number | null;
+  form_name: string | null;
+  short_label: string | null;
+  article_slug: string | null;
+  severity: string | null;
+  raw?: Record<string, unknown>;
+}
+
+export interface AdminOpsKnowledgeDraftItem {
+  slug: string;
+  title: string;
+  status: string;
+  reviewed_at: string | null;
+  updated_at: string | null;
   raw?: Record<string, unknown>;
 }
 
@@ -315,6 +353,16 @@ export interface AdminProductQAProduct {
 
 export interface AdminProductQAResponse {
   products: AdminProductQAProduct[];
+}
+
+export interface AdminProductQAPatch {
+  price?: number | null;
+  shop_link?: string | null;
+  is_affiliate?: number | boolean | null;
+  serving_size?: number | null;
+  serving_unit?: string | null;
+  servings_per_container?: number | null;
+  container_count?: number | null;
 }
 
 interface AuditFilterParams {
@@ -534,6 +582,9 @@ function normalizeOpsDashboard(raw: unknown): AdminOpsDashboard {
   const productQa = (payload.product_qa && typeof payload.product_qa === 'object')
     ? payload.product_qa as Record<string, unknown>
     : {};
+  const queues = (payload.queues && typeof payload.queues === 'object')
+    ? payload.queues as Record<string, unknown>
+    : {};
 
   return {
     research: {
@@ -577,6 +628,13 @@ function normalizeOpsDashboard(raw: unknown): AdminOpsDashboard {
         readCount(productQa, ['issues', 'products']),
     },
     totals: parseTotals(payload),
+    queues: {
+      product_qa: parseQueueList(queues.product_qa, parseProductQAProduct),
+      research_due: parseQueueList(queues.research_due, parseResearchQueueItem),
+      research_later: parseQueueList(queues.research_later, parseResearchQueueItem),
+      warnings_without_article: parseQueueList(queues.warnings_without_article, parseWarningQueueItem),
+      knowledge_drafts: parseQueueList(queues.knowledge_drafts, parseKnowledgeDraftItem),
+    },
     raw: payload,
   };
 }
@@ -602,6 +660,54 @@ function parseProductQAProduct(raw: Record<string, unknown>): AdminProductQAProd
     issues,
     raw,
   };
+}
+
+function parseResearchQueueItem(raw: Record<string, unknown>): AdminOpsResearchQueueItem {
+  return {
+    ingredient_id: toIntOrNull(raw.ingredient_id) ?? 0,
+    ingredient_name: toTextOrNull(raw.ingredient_name) || `Wirkstoff ${toIntOrNull(raw.ingredient_id) ?? ''}`,
+    research_status: toTextOrNull(raw.research_status) || 'unreviewed',
+    review_due_at: toDateOrNull(raw.review_due_at),
+    reviewed_at: toDateOrNull(raw.reviewed_at),
+    calculation_status: toTextOrNull(raw.calculation_status),
+    raw,
+  };
+}
+
+function parseWarningQueueItem(raw: Record<string, unknown>): AdminOpsWarningQueueItem {
+  return {
+    id: toIntOrNull(raw.id) ?? 0,
+    ingredient_id: toIntOrNull(raw.ingredient_id),
+    ingredient_name: toTextOrNull(raw.ingredient_name),
+    form_id: toIntOrNull(raw.form_id),
+    form_name: toTextOrNull(raw.form_name),
+    short_label: toTextOrNull(raw.short_label),
+    article_slug: toTextOrNull(raw.article_slug),
+    severity: toTextOrNull(raw.severity),
+    raw,
+  };
+}
+
+function parseKnowledgeDraftItem(raw: Record<string, unknown>): AdminOpsKnowledgeDraftItem {
+  const slug = toTextOrNull(raw.slug) || '';
+  return {
+    slug,
+    title: toTextOrNull(raw.title) || slug || 'Unbenannter Entwurf',
+    status: toTextOrNull(raw.status) || 'draft',
+    reviewed_at: toDateOrNull(raw.reviewed_at),
+    updated_at: toDateOrNull(raw.updated_at),
+    raw,
+  };
+}
+
+function parseQueueList<T>(
+  value: unknown,
+  parser: (raw: Record<string, unknown>) => T,
+): T[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object')
+    .map((entry) => parser(entry));
 }
 
 function parseIngredientResearchListItem(raw: Record<string, unknown>): AdminIngredientResearchListItem {
@@ -1023,6 +1129,18 @@ export async function getProductQA(params: {
   return {
     products: products.map((product) => parseProductQAProduct(product as Record<string, unknown>)),
   };
+}
+
+export async function updateProductQA(
+  productId: number,
+  payload: AdminProductQAPatch,
+): Promise<AdminProductQAProduct> {
+  const res = await apiClient.patch<{ product?: unknown }>(
+    `/admin/product-qa/${productId}`,
+    payload,
+  );
+  const product = (res.data.product ?? res.data) as Record<string, unknown>;
+  return parseProductQAProduct(product);
 }
 
 export async function getIngredientResearchExport(): Promise<unknown> {

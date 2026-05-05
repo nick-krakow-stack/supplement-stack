@@ -34,6 +34,9 @@
 //   PUT /translations/verified-profiles/:verifiedProfileId/:language — upsert verified profile translation (admin)
 //   GET /translations/blog-posts — blog translations list (admin)
 //   PUT /translations/blog-posts/:blogPostId/:language — upsert blog translation (admin)
+//   GET /ops-dashboard    — operational queues and counts (admin)
+//   GET /product-qa       — suspicious product data list (admin)
+//   PATCH /product-qa/:id — update high-impact product QA fields (admin)
 // Plus public shop-domain routes (mounted at /api/shop-domains):
 //   GET /resolve?url=       — resolve shop name from URL (public)
 //   GET /                   — list shop domains (public)
@@ -397,6 +400,16 @@ type ProductQaRow = {
   no_affiliate_flag_on_shop_link: number
 }
 
+type ProductQaPatch = {
+  price?: number | null
+  shop_link?: string | null
+  is_affiliate?: number
+  serving_size?: number | null
+  serving_unit?: string | null
+  servings_per_container?: number | null
+  container_count?: number | null
+}
+
 type IngredientResearchExportRow = {
   ingredient_id: number
   name: string
@@ -655,6 +668,135 @@ function productQaIssues(row: ProductQaRow): ProductQaIssue[] {
   return PRODUCT_QA_ISSUES.filter((issue) => row[issue] === 1)
 }
 
+async function getProductQaRow(db: D1Database, productId: number): Promise<ProductQaRow | null> {
+  return db.prepare(`
+    WITH ingredient_counts AS (
+      SELECT
+        product_id,
+        COUNT(*) AS ingredient_count,
+        SUM(CASE WHEN is_main = 1 THEN 1 ELSE 0 END) AS main_ingredient_count
+      FROM product_ingredients
+      GROUP BY product_id
+    ),
+    qa AS (
+      SELECT
+        p.id,
+        p.name,
+        p.brand,
+        p.form,
+        p.price,
+        p.shop_link,
+        p.image_url,
+        p.image_r2_key,
+        COALESCE(p.is_affiliate, 0) AS is_affiliate,
+        p.serving_size,
+        p.serving_unit,
+        p.servings_per_container,
+        p.container_count,
+        p.moderation_status,
+        p.visibility,
+        p.created_at,
+        COALESCE(ic.ingredient_count, 0) AS ingredient_count,
+        COALESCE(ic.main_ingredient_count, 0) AS main_ingredient_count,
+        CASE WHEN COALESCE(p.image_url, '') = '' AND COALESCE(p.image_r2_key, '') = '' THEN 1 ELSE 0 END AS missing_image,
+        CASE WHEN COALESCE(p.shop_link, '') = '' THEN 1 ELSE 0 END AS missing_shop_link,
+        CASE
+          WHEN p.serving_size IS NULL
+            OR p.serving_size <= 0
+            OR COALESCE(p.serving_unit, '') = ''
+            OR p.servings_per_container IS NULL
+            OR p.servings_per_container <= 0
+            OR p.container_count IS NULL
+            OR p.container_count <= 0
+          THEN 1 ELSE 0
+        END AS missing_serving_data,
+        CASE WHEN p.price <= 0 OR p.price > 300 THEN 1 ELSE 0 END AS suspicious_price_zero_or_high,
+        CASE WHEN COALESCE(ic.ingredient_count, 0) = 0 THEN 1 ELSE 0 END AS missing_ingredient_rows,
+        CASE WHEN COALESCE(p.shop_link, '') <> '' AND COALESCE(p.is_affiliate, 0) = 0 THEN 1 ELSE 0 END AS no_affiliate_flag_on_shop_link
+      FROM products p
+      LEFT JOIN ingredient_counts ic ON ic.product_id = p.id
+      WHERE p.id = ?
+    )
+    SELECT *
+    FROM qa
+  `).bind(productId).first<ProductQaRow>()
+}
+
+function formatProductQaRow(row: ProductQaRow) {
+  return {
+    ...row,
+    issues: productQaIssues(row),
+  }
+}
+
+function validateProductQaPatch(body: Record<string, unknown>): ValidationResult<ProductQaPatch> {
+  const allowedFields = new Set([
+    'price',
+    'shop_link',
+    'is_affiliate',
+    'serving_size',
+    'serving_unit',
+    'servings_per_container',
+    'container_count',
+  ])
+  for (const key of Object.keys(body)) {
+    if (!allowedFields.has(key)) return validationError(`${key} cannot be updated from product QA`)
+  }
+  if (Object.keys(body).length === 0) return validationError('At least one product QA field is required')
+
+  const data: ProductQaPatch = {}
+
+  const price = optionalNumberField(body, 'price', { min: 0, minExclusive: true, max: 300 })
+  if (!price.ok) return price
+  if (price.value === null) return validationError('price is required')
+  if (price.value !== undefined) data.price = price.value
+
+  const shopLink = normalizeHttpUrlField(body, 'shop_link')
+  if (!shopLink.ok) return shopLink
+  if (shopLink.value !== undefined) data.shop_link = shopLink.value
+
+  const isAffiliate = optionalBooleanField(body, 'is_affiliate')
+  if (!isAffiliate.ok) return isAffiliate
+  if (isAffiliate.value !== undefined) data.is_affiliate = isAffiliate.value
+
+  const servingSize = optionalNumberField(body, 'serving_size', { min: 0, minExclusive: true, max: 100000 })
+  if (!servingSize.ok) return servingSize
+  if (servingSize.value === null) return validationError('serving_size is required')
+  if (servingSize.value !== undefined) data.serving_size = servingSize.value
+
+  const servingUnit = optionalTextField(body, 'serving_unit', 40)
+  if (!servingUnit.ok) return servingUnit
+  if (servingUnit.value !== undefined) {
+    if (servingUnit.value === null) return validationError('serving_unit is required')
+    if (servingUnit.value !== null && !/^[\p{L}\p{N}µ%/(). -]+$/u.test(servingUnit.value)) {
+      return validationError('serving_unit contains unsupported characters')
+    }
+    data.serving_unit = servingUnit.value
+  }
+
+  const servingsPerContainer = optionalNumberField(body, 'servings_per_container', {
+    min: 0,
+    minExclusive: true,
+    max: 10000,
+    integer: true,
+  })
+  if (!servingsPerContainer.ok) return servingsPerContainer
+  if (servingsPerContainer.value === null) return validationError('servings_per_container is required')
+  if (servingsPerContainer.value !== undefined) data.servings_per_container = servingsPerContainer.value
+
+  const containerCount = optionalNumberField(body, 'container_count', {
+    min: 0,
+    minExclusive: true,
+    max: 1000,
+    integer: true,
+  })
+  if (!containerCount.ok) return containerCount
+  if (containerCount.value === null) return validationError('container_count is required')
+  if (containerCount.value !== undefined) data.container_count = containerCount.value
+
+  return { ok: true, value: data }
+}
+
 function parseWarningSlugs(value: string | null): string[] {
   if (!value) return []
   return value.split('||').filter((slug) => slug.length > 0)
@@ -701,6 +843,11 @@ function validateKnowledgeArticlePayload(
     hasOwnKey(body, 'sources_json') ? body.sources_json : existing?.sources_json ?? undefined,
   )
   if (!sources.ok) return sources
+  const parsedSources = parseKnowledgeSourcesJson(sources.value)
+  if (status === 'published') {
+    if (!bodyText.value.trim()) return validationError('Published knowledge articles need a non-empty body')
+    if (parsedSources.length === 0) return validationError('Published knowledge articles need at least one source')
+  }
 
   return {
     ok: true,
@@ -1931,6 +2078,11 @@ admin.get('/ops-dashboard', async (c) => {
     knowledgeDrafts,
     productsTotal,
     productQaIssues,
+    productQaTopItems,
+    researchDueItems,
+    researchLaterItems,
+    warningsWithoutArticleItems,
+    knowledgeDraftItems,
   ] = await c.env.DB.batch([
     c.env.DB.prepare('SELECT COUNT(*) AS count FROM ingredients'),
     c.env.DB.prepare(`
@@ -1983,6 +2135,132 @@ admin.get('/ops-dashboard', async (c) => {
          OR COALESCE(ic.ingredient_count, 0) = 0
          OR (COALESCE(p.shop_link, '') <> '' AND COALESCE(p.is_affiliate, 0) = 0)
     `),
+    c.env.DB.prepare(`
+      WITH ingredient_counts AS (
+        SELECT
+          product_id,
+          COUNT(*) AS ingredient_count,
+          SUM(CASE WHEN is_main = 1 THEN 1 ELSE 0 END) AS main_ingredient_count
+        FROM product_ingredients
+        GROUP BY product_id
+      ),
+      qa AS (
+        SELECT
+          p.id,
+          p.name,
+          p.brand,
+          p.form,
+          p.price,
+          p.shop_link,
+          p.image_url,
+          p.image_r2_key,
+          COALESCE(p.is_affiliate, 0) AS is_affiliate,
+          p.serving_size,
+          p.serving_unit,
+          p.servings_per_container,
+          p.container_count,
+          p.moderation_status,
+          p.visibility,
+          p.created_at,
+          COALESCE(ic.ingredient_count, 0) AS ingredient_count,
+          COALESCE(ic.main_ingredient_count, 0) AS main_ingredient_count,
+          CASE WHEN COALESCE(p.image_url, '') = '' AND COALESCE(p.image_r2_key, '') = '' THEN 1 ELSE 0 END AS missing_image,
+          CASE WHEN COALESCE(p.shop_link, '') = '' THEN 1 ELSE 0 END AS missing_shop_link,
+          CASE
+            WHEN p.serving_size IS NULL
+              OR p.serving_size <= 0
+              OR COALESCE(p.serving_unit, '') = ''
+              OR p.servings_per_container IS NULL
+              OR p.servings_per_container <= 0
+              OR p.container_count IS NULL
+              OR p.container_count <= 0
+            THEN 1 ELSE 0
+          END AS missing_serving_data,
+          CASE WHEN p.price <= 0 OR p.price > 300 THEN 1 ELSE 0 END AS suspicious_price_zero_or_high,
+          CASE WHEN COALESCE(ic.ingredient_count, 0) = 0 THEN 1 ELSE 0 END AS missing_ingredient_rows,
+          CASE WHEN COALESCE(p.shop_link, '') <> '' AND COALESCE(p.is_affiliate, 0) = 0 THEN 1 ELSE 0 END AS no_affiliate_flag_on_shop_link
+        FROM products p
+        LEFT JOIN ingredient_counts ic ON ic.product_id = p.id
+      )
+      SELECT *
+      FROM qa
+      WHERE missing_image = 1
+         OR missing_shop_link = 1
+         OR missing_serving_data = 1
+         OR suspicious_price_zero_or_high = 1
+         OR missing_ingredient_rows = 1
+         OR no_affiliate_flag_on_shop_link = 1
+      ORDER BY
+        missing_shop_link DESC,
+        missing_serving_data DESC,
+        suspicious_price_zero_or_high DESC,
+        no_affiliate_flag_on_shop_link DESC,
+        missing_ingredient_rows DESC,
+        missing_image DESC,
+        created_at DESC,
+        id DESC
+      LIMIT 5
+    `),
+    c.env.DB.prepare(`
+      SELECT
+        i.id AS ingredient_id,
+        i.name AS ingredient_name,
+        COALESCE(rs.research_status, 'unreviewed') AS research_status,
+        rs.review_due_at,
+        rs.reviewed_at,
+        rs.calculation_status
+      FROM ingredient_research_status rs
+      JOIN ingredients i ON i.id = rs.ingredient_id
+      WHERE rs.review_due_at IS NOT NULL
+        AND rs.review_due_at <= date('now')
+      ORDER BY rs.review_due_at ASC, i.name ASC
+      LIMIT 5
+    `),
+    c.env.DB.prepare(`
+      SELECT
+        i.id AS ingredient_id,
+        i.name AS ingredient_name,
+        COALESCE(rs.research_status, 'unreviewed') AS research_status,
+        rs.review_due_at,
+        rs.reviewed_at,
+        rs.calculation_status
+      FROM ingredients i
+      LEFT JOIN ingredient_research_status rs ON rs.ingredient_id = i.id
+      WHERE COALESCE(rs.research_status, 'unreviewed') IN ('stale', 'unreviewed')
+      ORDER BY
+        CASE COALESCE(rs.research_status, 'unreviewed') WHEN 'stale' THEN 0 ELSE 1 END,
+        COALESCE(rs.review_due_at, '9999-12-31') ASC,
+        i.name ASC
+      LIMIT 5
+    `),
+    c.env.DB.prepare(`
+      SELECT
+        w.id,
+        w.ingredient_id,
+        i.name AS ingredient_name,
+        w.form_id,
+        f.name AS form_name,
+        w.short_label,
+        w.article_slug,
+        w.severity
+      FROM ingredient_safety_warnings w
+      LEFT JOIN ingredients i ON i.id = w.ingredient_id
+      LEFT JOIN ingredient_forms f ON f.id = w.form_id
+      LEFT JOIN knowledge_articles a ON a.slug = w.article_slug
+      WHERE w.active = 1
+        AND (w.article_slug IS NULL OR a.slug IS NULL)
+      ORDER BY
+        CASE w.severity WHEN 'danger' THEN 0 WHEN 'caution' THEN 1 ELSE 2 END,
+        w.id DESC
+      LIMIT 5
+    `),
+    c.env.DB.prepare(`
+      SELECT slug, title, status, reviewed_at, updated_at
+      FROM knowledge_articles
+      WHERE status = 'draft'
+      ORDER BY updated_at DESC, slug ASC
+      LIMIT 5
+    `),
   ])
 
   const researchCounts = new Map<string, number>()
@@ -2006,6 +2284,13 @@ admin.get('/ops-dashboard', async (c) => {
     knowledge_draft_count: ((knowledgeDrafts.results?.[0] as CountRow | undefined)?.count) ?? 0,
     products_total: ((productsTotal.results?.[0] as CountRow | undefined)?.count) ?? 0,
     product_qa_issue_count: ((productQaIssues.results?.[0] as CountRow | undefined)?.count) ?? 0,
+    queues: {
+      product_qa: ((productQaTopItems.results ?? []) as ProductQaRow[]).map((row) => formatProductQaRow(row)),
+      research_due: researchDueItems.results ?? [],
+      research_later: researchLaterItems.results ?? [],
+      warnings_without_article: warningsWithoutArticleItems.results ?? [],
+      knowledge_drafts: knowledgeDraftItems.results ?? [],
+    },
   })
 })
 
@@ -2105,6 +2390,71 @@ admin.get('/product-qa', async (c) => {
     limit,
     available_issues: PRODUCT_QA_ISSUES,
   })
+})
+
+// PATCH /api/admin/product-qa/:id (admin only)
+admin.patch('/product-qa/:id', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const id = parsePositiveId(c.req.param('id'))
+  if (id === null) return c.json({ error: 'Invalid product id' }, 400)
+
+  const existing = await getProductQaRow(c.env.DB, id)
+  if (!existing) return c.json({ error: 'Product not found' }, 404)
+
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const validation = validateProductQaPatch(body)
+  if (!validation.ok) return c.json({ error: validation.error }, validation.status)
+  const data = validation.value
+
+  const fields = [
+    'price',
+    'shop_link',
+    'is_affiliate',
+    'serving_size',
+    'serving_unit',
+    'servings_per_container',
+    'container_count',
+  ] as const
+  const setClauses: string[] = []
+  const bindings: Array<string | number | null> = []
+  const before: Record<string, unknown> = {}
+  const after: Record<string, unknown> = {}
+
+  for (const field of fields) {
+    if (!hasOwnKey(data, field)) continue
+    setClauses.push(`${field} = ?`)
+    bindings.push(data[field] ?? null)
+    before[field] = existing[field]
+    after[field] = data[field] ?? null
+  }
+
+  if (setClauses.length === 0) return c.json({ error: 'At least one product QA field is required' }, 400)
+
+  await c.env.DB.prepare(`
+    UPDATE products
+    SET ${setClauses.join(', ')}
+    WHERE id = ?
+  `).bind(...bindings, id).run()
+
+  const updated = await getProductQaRow(c.env.DB, id)
+  if (!updated) return c.json({ error: 'Product not found after update' }, 404)
+
+  await logAdminAction(c, {
+    action: 'update_product_qa_fields',
+    entity_type: 'product',
+    entity_id: id,
+    changes: { before, after },
+  })
+
+  return c.json({ product: formatProductQaRow(updated) })
 })
 
 // GET /api/admin/dose-recommendations?ingredient_id=&q=&active=&public=&source_type=&page=1&limit=50 (admin only)

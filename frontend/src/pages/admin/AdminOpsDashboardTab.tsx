@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   AlertTriangle,
+  ArrowRight,
   ClipboardList,
   Download,
   FileText,
@@ -25,6 +26,48 @@ interface OpsCard {
 
 function formatCount(value: number): string {
   return new Intl.NumberFormat('de-DE').format(value);
+}
+
+function formatDate(value: string | null): string {
+  if (!value) return 'kein Datum';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(date);
+}
+
+function issueLabel(issue: string): string {
+  const labels: Record<string, string> = {
+    missing_image: 'Bild fehlt',
+    missing_shop_link: 'Shop-Link fehlt',
+    missing_serving_data: 'Portionsdaten fehlen',
+    suspicious_price_zero_or_high: 'Preis auffaellig',
+    missing_ingredient_rows: 'Wirkstoffzeilen fehlen',
+    no_affiliate_flag_on_shop_link: 'Affiliate-Flag fehlt',
+  };
+  return labels[issue] ?? issue.replace(/[_-]+/g, ' ');
+}
+
+interface QueuePanelProps {
+  title: string;
+  tone: string;
+  children: React.ReactNode;
+}
+
+function QueuePanel({ title, tone, children }: QueuePanelProps) {
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className={`border-b border-slate-100 px-4 py-3 text-sm font-semibold ${tone}`}>
+        {title}
+      </div>
+      <div className="divide-y divide-slate-100">
+        {children}
+      </div>
+    </section>
+  );
+}
+
+function EmptyQueue() {
+  return <p className="px-4 py-5 text-sm text-slate-500">Keine offenen Eintraege.</p>;
 }
 
 export default function AdminOpsDashboardTab() {
@@ -193,6 +236,97 @@ export default function AdminOpsDashboardTab() {
             </div>
           );
         })}
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        <QueuePanel title="Heute bearbeiten" tone="text-amber-800 bg-amber-50/80">
+          {dashboard.queues.product_qa.length === 0 &&
+            dashboard.queues.research_due.length === 0 &&
+            dashboard.queues.warnings_without_article.length === 0 ? (
+              <EmptyQueue />
+            ) : (
+              <>
+                {dashboard.queues.product_qa.map((product) => (
+                  <Link
+                    key={`product-${product.id}`}
+                    to={`/admin?tab=product_qa&q=${encodeURIComponent(product.name)}`}
+                    className="flex items-start justify-between gap-3 px-4 py-3 hover:bg-slate-50"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-900">#{product.id} {product.name}</p>
+                      <p className="text-xs text-slate-500">{product.brand || 'Ohne Marke'} · {product.issues.slice(0, 2).map(issueLabel).join(', ')}</p>
+                    </div>
+                    <ArrowRight className="mt-0.5 shrink-0 text-slate-400" size={16} />
+                  </Link>
+                ))}
+                {dashboard.queues.research_due.map((item) => (
+                  <Link
+                    key={`research-due-${item.ingredient_id}`}
+                    to={`/admin?tab=ingredient_research&q=${encodeURIComponent(item.ingredient_name)}`}
+                    className="flex items-start justify-between gap-3 px-4 py-3 hover:bg-slate-50"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-900">{item.ingredient_name}</p>
+                      <p className="text-xs text-slate-500">Review faellig: {formatDate(item.review_due_at)}</p>
+                    </div>
+                    <ArrowRight className="mt-0.5 shrink-0 text-slate-400" size={16} />
+                  </Link>
+                ))}
+                {dashboard.queues.warnings_without_article.map((warning) => (
+                  <Link
+                    key={`warning-${warning.id}`}
+                    to="/admin?tab=ingredient_research"
+                    className="flex items-start justify-between gap-3 px-4 py-3 hover:bg-slate-50"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-900">{warning.short_label || 'Warnung ohne Artikel'}</p>
+                      <p className="text-xs text-slate-500">
+                        {[warning.ingredient_name, warning.form_name, warning.article_slug || 'Artikel-Slug fehlt'].filter(Boolean).join(' · ')}
+                      </p>
+                    </div>
+                    <ArrowRight className="mt-0.5 shrink-0 text-slate-400" size={16} />
+                  </Link>
+                ))}
+              </>
+            )}
+        </QueuePanel>
+
+        <QueuePanel title="Spaeter einplanen" tone="text-slate-800 bg-slate-50">
+          {dashboard.queues.knowledge_drafts.length === 0 && dashboard.queues.research_later.length === 0 ? (
+            <EmptyQueue />
+          ) : (
+            <>
+              {dashboard.queues.knowledge_drafts.map((article) => (
+                <Link
+                  key={`draft-${article.slug}`}
+                  to={`/admin?tab=knowledge_articles&q=${encodeURIComponent(article.slug)}`}
+                  className="flex items-start justify-between gap-3 px-4 py-3 hover:bg-slate-50"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-slate-900">{article.title}</p>
+                    <p className="text-xs text-slate-500">Entwurf · aktualisiert {formatDate(article.updated_at)}</p>
+                  </div>
+                  <ArrowRight className="mt-0.5 shrink-0 text-slate-400" size={16} />
+                </Link>
+              ))}
+              {dashboard.queues.research_later.map((item) => (
+                <Link
+                  key={`research-later-${item.ingredient_id}`}
+                  to={`/admin?tab=ingredient_research&q=${encodeURIComponent(item.ingredient_name)}`}
+                  className="flex items-start justify-between gap-3 px-4 py-3 hover:bg-slate-50"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-slate-900">{item.ingredient_name}</p>
+                    <p className="text-xs text-slate-500">
+                      {item.research_status === 'stale' ? 'Veraltet' : 'Ungeprueft'} · Review {formatDate(item.review_due_at)}
+                    </p>
+                  </div>
+                  <ArrowRight className="mt-0.5 shrink-0 text-slate-400" size={16} />
+                </Link>
+              ))}
+            </>
+          )}
+        </QueuePanel>
       </div>
     </div>
   );

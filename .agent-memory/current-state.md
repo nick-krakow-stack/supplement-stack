@@ -1148,3 +1148,42 @@ Do not assume untracked files are disposable. Review before deleting or committi
 - Integration fix: Product-QA frontend issue filters now match backend issue keys, and the ops dashboard reads the flat backend count keys.
 - Validation passed: functions `npx tsc -p tsconfig.json --noEmit`, frontend `npx tsc --noEmit`, frontend `npm run lint --if-present`, frontend `npm run build`, and `git diff --check` with CRLF warnings only.
 - Smoke checks passed: preview/live root return 200 with `assets/index-DVbWbGLx.js`; preview/live unauthenticated `/api/admin/ops-dashboard`, `/api/admin/knowledge-articles`, and `/api/admin/product-qa` return 401.
+
+## 2026-05-05 Admin Arbeitsplatz V1 - Local
+
+- Admin Arbeitsplatz v1 is implemented locally; not committed, deployed, or authenticated-browser-smoked.
+- Backend `functions/api/modules/admin.ts` now extends `/api/admin/ops-dashboard` with limited top queue items for product QA, due research, stale/unreviewed research, warnings without article, and knowledge drafts.
+- Backend adds admin-only `PATCH /api/admin/product-qa/:id` for high-impact QA fields only: `price`, `shop_link`, `is_affiliate`, `serving_size`, `serving_unit`, `servings_per_container`, and `container_count`. It uses `ensureAdmin`, conservative validation, and `logAdminAction` audit logging.
+- Backend knowledge article validation now blocks `status='published'` unless body is non-empty and `sources_json` contains at least one source array entry.
+- Frontend admin API types/helpers cover the new queue payloads and Product-QA patch helper.
+- `AdminOpsDashboardTab` now separates "Heute bearbeiten" and "Spaeter einplanen" with actionable top items and contextual admin-tab links.
+- `ProductQATab` now has compact inline editing in mobile cards and desktop rows for shop link, affiliate flag, price, serving size/unit, servings per container, and container count.
+- `AdminKnowledgeArticlesTab`, `IngredientResearchTab`, and `ProductQATab` read `q=` from admin links so queue links open with relevant context where those tabs support search.
+- Validation passed: functions `npx tsc -p tsconfig.json --noEmit`, frontend `npx tsc --noEmit`, frontend `npm run lint --if-present` (two unrelated warnings in `frontend/src/components/StackWorkspace.tsx`), frontend `npm run build` (Vite chunk-size warning only), and scoped `git diff --check` with CRLF warnings only.
+- Concurrent unrelated worktree changes are present in stack/family files and `.claude/*`; do not revert them.
+
+## 2026-05-05 User-Rundung V1 - Local
+
+- User-side stack rounding v1 is implemented locally; not committed, remote-migrated, deployed, or browser-smoked.
+- New migration `d1-migrations/0048_user_stack_rounding.sql` adds `family_profiles`, nullable `stacks.family_member_id`, and `product_link_reports` for missing/broken link reports.
+- Backend adds `functions/api/modules/family.ts`, mounted at `/api/family`, with authenticated CRUD for first name, age, and optional weight only.
+- Stack backend now returns/updates `family_member_id` and `family_member_first_name`, validates member ownership, and adds authenticated rate-limited `POST /api/stacks/link-report`.
+- `StackWorkspace` now shows a compact stack cockpit with monthly cost, one-time cost, product count, product warning count, duplicate effective ingredients, missing links, products running out soon, and a visible conflict state. Authenticated stacks load `/api/stack-warnings/:id`; demo stacks use simple local duplicate-ingredient checks.
+- `StackWorkspace` now includes a grouped `Einnahmeplan` by morning/noon/evening/flexible with dosage, interval label, monthly cost, and days supply.
+- Product replacement now prompts for confirmation when preserving an old dosage across a product with different form/serving/ingredient strength signature.
+- `ProductCard` now validates shop links before rendering a buy link and shows `Link melden` for missing/invalid links in stack context. Demo uses a friendly placeholder; authenticated stacks submit to the new backend route.
+- Family profiles are intentionally MVP-level: selector, create form, and remove action in `StackWorkspace`; no sensitive health data beyond optional age/weight.
+- Validation passed: functions `npx tsc -p tsconfig.json --noEmit`, frontend `npx tsc --noEmit`, frontend `npm run lint --if-present`, frontend `npm run build` (Vite chunk-size warning only), and path-scoped `git diff --check` with CRLF warnings only.
+- Concurrent unrelated admin work remains dirty in admin files, plus `.claude/*` and root `logo.png`; do not revert it.
+
+## 2026-05-05 Round Experience V1 Deployed
+
+- Remote D1 migration `0048_user_stack_rounding.sql` applied successfully to `supplementstack-production`.
+- Cloudflare Pages project `supplementstack` deployed.
+- Preview URL: `https://f9870d82.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`, asset `assets/index-CmCtPS8l.js`.
+- User stack experience now has a visible stack cockpit/check, grouped Einnahmeplan, product replacement confirmation for preserved dosage assumptions, missing-link reporting, and a minimal family profile MVP with stack assignment.
+- Admin workspace now has expanded work queues, inline Product-QA editing for high-impact fields, and publish guardrails for knowledge articles requiring body plus at least one source.
+- New backend routes/modules: `/api/family`, `/api/stacks/link-report`, and `PATCH /api/admin/product-qa/:id`.
+- Validation passed: functions `npx tsc -p tsconfig.json --noEmit`, frontend `npx tsc --noEmit`, frontend `npm run lint --if-present`, frontend `npm run build`, and `git diff --check` with CRLF warnings only.
+- Smoke checks passed: preview/live root 200 with `assets/index-CmCtPS8l.js`; preview/live unauthenticated `/api/family`, `/api/stacks/link-report`, `/api/admin/product-qa/1`, and `/api/admin/ops-dashboard` return 401; remote D1 confirms `family_profiles`, `product_link_reports`, `idx_stacks_family_member_id`, and migration 0048 applied.

@@ -482,3 +482,17 @@ Rationale:
 Operational rule:
 - To change a slug, create a new article and explicitly relink warnings in a separate reviewed operation.
 - `DELETE /api/admin/knowledge-articles/:slug` should remain a soft archive operation unless a future maintenance task explicitly handles reference migration.
+
+## 2026-05-05 - User-Rundung V1 Scope
+
+Decision: User-Rundung v1 keeps stack rounding pragmatic and user-side only: cockpit/routine/link reports are immediate UX features, while family profiles are a minimal stack-assignment MVP.
+
+Rationale:
+- The must-have UX gaps are stack-level clarity, timing routine, missing-link reporting, and safer product replacement assumptions.
+- Family support is useful but should avoid sensitive health data and broad profile modelling in v1.
+- Link reports need a small authenticated backend record so missing affiliate/user links can be corrected later without blocking the user flow.
+
+Operational rule:
+- Family profiles store only `first_name`, `age`, and optional `weight`; do not add diagnoses, medications, goals, or other sensitive health fields for this MVP.
+- Stack conflict display should use `/api/stack-warnings/:id` for authenticated stacks and a simple local fallback for demo.
+- Preserving dosage during product replacement must remain explicit when product form/serving/ingredient strength changes.
