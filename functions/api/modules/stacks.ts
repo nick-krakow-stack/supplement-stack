@@ -625,7 +625,10 @@ stacks.post('/', async (c) => {
     return c.json({ error: 'Invalid JSON' }, 400)
   }
   if (!data.name) return c.json({ error: 'Stack-Name ist erforderlich' }, 400)
-  const familyMemberId = normalizeFamilyMemberId(data.family_member_id ?? data.familyMemberId)
+  const hasFamilyMemberInput = data.family_member_id !== undefined || data.familyMemberId !== undefined
+  const familyMemberId = hasFamilyMemberInput
+    ? normalizeFamilyMemberId(data.family_member_id ?? data.familyMemberId)
+    : null
   if (familyMemberId === undefined) return c.json({ error: 'family_member_id must be null or a valid family profile id' }, 400)
   if (!(await familyMemberBelongsToUser(c.env.DB, user.userId, familyMemberId))) {
     return c.json({ error: 'Family profile not found' }, 404)

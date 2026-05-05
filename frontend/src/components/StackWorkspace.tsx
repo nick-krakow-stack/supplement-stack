@@ -189,8 +189,27 @@ function primaryDose(guideline?: DosageGuideline): ManualDose | null {
   return { value, unit: normalizeUnitToGerman(guideline.unit) };
 }
 
-function productTotalServings(product: DemoProduct): number {
-  return calculateTotalServings(product, 30);
+function formatContentAmount(value: number): string {
+  const rounded = value >= 100 ? Math.round(value / 10) * 10 : Math.round(value);
+  return rounded.toLocaleString('de-DE', { maximumFractionDigits: 0 });
+}
+
+function productContentLabel(product: DemoProduct, previewProduct: DemoProduct): string {
+  const totalServings = calculateTotalServings(product, 0);
+  const servingSize = typeof product.serving_size === 'number' && Number.isFinite(product.serving_size)
+    ? product.serving_size
+    : null;
+  const unit = product.serving_unit?.trim();
+  const usage = calculateProductUsage(previewProduct, previewProduct.price, { fallbackTotalServings: 30 });
+  const daysLabel = usage.daysSupply ? ` (reicht für ${usage.daysSupply} Tage)` : '';
+
+  if (totalServings > 0 && servingSize && unit) {
+    return `${formatContentAmount(totalServings * servingSize)} ${normalizeUnitToGerman(unit)}${daysLabel}`;
+  }
+  if (totalServings > 0) {
+    return `${formatContentAmount(totalServings)} Einnahmen${daysLabel}`;
+  }
+  return `Inhalt unbekannt${daysLabel}`;
 }
 
 function productServingsFromDose(product: DemoProduct): number | null {
@@ -697,9 +716,9 @@ function AddProductModal({
                         </p>
                       </div>
                       <div>
-                        <p className="text-sm font-semibold text-slate-500">Packung:</p>
+                        <p className="text-sm font-semibold text-slate-500">Inhalt:</p>
                         <p className="mt-1 text-base font-black text-slate-950">
-                          {`${productTotalServings(product)} Portionen`}
+                          {productContentLabel(product, previewProduct)}
                         </p>
                       </div>
                     </div>
@@ -1055,9 +1074,16 @@ export function StackWorkspace({
           headers: authHeaders(token),
           body: JSON.stringify({ name: 'Mein Stack', product_ids: [] }),
         });
-        if (!createRes.ok) throw new Error('Start-Stack konnte nicht erstellt werden.');
-        const created = await createRes.json();
-        const createdStack = created.stack ?? created;
+        const createData = await createRes.json().catch(() => ({})) as Record<string, unknown>;
+        if (!createRes.ok) {
+          throw new Error(typeof createData.error === 'string' ? createData.error : 'Start-Stack konnte nicht erstellt werden.');
+        }
+        const createdStack = (createData.stack ?? createData) as {
+          id: number | string;
+          name: string;
+          family_member_id?: number | null;
+          family_member_first_name?: string | null;
+        };
         setState({ stacks: [mapStackDetail(createdStack)], activeStackId: String(createdStack.id) });
         return;
       }
@@ -1158,7 +1184,8 @@ export function StackWorkspace({
         headers: authHeaders(token),
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error('Stack konnte nicht gespeichert werden.');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? 'Stack konnte nicht gespeichert werden.');
     },
     [mode, token],
   );
@@ -1307,8 +1334,8 @@ export function StackWorkspace({
           headers: authHeaders(token),
           body: JSON.stringify({ name, product_ids: [] }),
         });
-        if (!res.ok) throw new Error('Stack konnte nicht erstellt werden.');
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error ?? 'Stack konnte nicht erstellt werden.');
         const created = data.stack ?? data;
         const createdStack = mapStackDetail(created);
         setState((prev) => ({
