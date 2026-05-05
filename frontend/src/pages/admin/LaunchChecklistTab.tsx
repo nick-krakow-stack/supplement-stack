@@ -27,9 +27,9 @@ const mailItems: ChecklistItem[] = [
   },
   {
     title: 'DKIM',
-    status: 'manual',
-    details: 'Kein gängiger DKIM-Selector gefunden. Der korrekte Selector kommt vom Mailanbieter.',
-    action: 'Im All-Inkl/Kasserver-Mailbereich DKIM aktivieren und den angezeigten TXT/CNAME Record im DNS setzen.',
+    status: 'ok',
+    details: 'Aktuell gesetzt: kas202508251337._domainkey.supplementstack.de TXT mit All-Inkl/Kasserver DKIM-Key.',
+    action: 'Nach echten Mailtests prüfen, ob die ausgehenden Mails eine DKIM-Signature mit d=supplementstack.de und s=kas202508251337 tragen.',
   },
 ];
 
@@ -143,7 +143,7 @@ export default function LaunchChecklistTab() {
           </div>
           <div className="inline-flex items-center gap-2 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700">
             <AlertTriangle size={16} />
-            DKIM noch manuell
+            Mailtests noch manuell
           </div>
         </div>
       </div>
