@@ -1051,3 +1051,4 @@ When a future agent deploys or applies migrations, append the exact date, commit
   - Added admin work queues, inline Product-QA editing, and knowledge article publish guardrails.
 - Validation passed: functions TypeScript, frontend TypeScript, frontend lint, frontend build, and `git diff --check` with CRLF warnings only.
 - Smoke checks passed: preview/live root 200 with `assets/index-CmCtPS8l.js`; preview/live unauthenticated `/api/family`, `/api/stacks/link-report`, `/api/admin/product-qa/1`, and `/api/admin/ops-dashboard` return 401; remote D1 confirms `family_profiles`, `product_link_reports`, `idx_stacks_family_member_id`, and migration 0048 applied.
+- Commit after deploy: `00ec3d4` - Feature: Add round stack and admin workflows.
