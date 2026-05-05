@@ -663,3 +663,15 @@ Next:
 - Send real registration, verification, password reset, and stack emails to external inboxes.
 - Check message headers for `DKIM-Signature` with `d=supplementstack.de` and `s=kas202508251337`.
 - If SPF/DKIM/DMARC alignment is stable for a while, later consider raising DMARC from `p=none` to `p=quarantine`, then `p=reject`.
+
+## 2026-05-05 - Stack Creation Hotfix Handoff
+
+Completed:
+- Fixed stack creation for new accounts by making omitted `family_member_id` default to `null` on `POST /api/stacks`.
+- Deployed live and verified with a fresh test account: empty stack creation works, and saving Vitamin D3 2000 IU drops at 10,000 IE daily creates one stack item with `quantity=5`.
+- Product selection preview now uses `Inhalt` and contained units/days supply instead of `Packung: X Portionen`.
+- Temporary production test accounts matching `qa-stack-%@example.com` were cleaned up.
+
+Next:
+- User should hard-refresh/reopen `supplementstack.de`, then retry `Meine Stacks` and adding Vitamin D3.
+- If a user still has an old failed in-memory stack state in the tab, reloading the page should force the fixed start-stack creation path.

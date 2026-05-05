@@ -582,3 +582,13 @@ Still open before launch:
 - External inbox mail tests for registration, verification, password reset, and stack mail.
 - Verify outbound headers include `DKIM-Signature: ... d=supplementstack.de; s=kas202508251337`.
 - Later DMARC hardening after mail alignment is confirmed.
+
+## 2026-05-05 Stack Creation Hotfix Follow-Up
+
+Closed:
+- New-account stack creation regression fixed and live-smoked.
+- Product selection modal no longer shows `Packung: X Portionen`; it shows `Inhalt` with contained units and calculated days supply.
+
+Still open:
+- Manual browser QA with the real newly verified account after hard refresh.
+- Later data-model improvement: add a true `content_count/content_unit` field instead of deriving total content from `serving_size * servings_per_container`.

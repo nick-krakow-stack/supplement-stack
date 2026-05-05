@@ -1225,3 +1225,15 @@ Do not assume untracked files are disposable. Review before deleting or committi
 - Live URL: `https://supplementstack.de`, asset `assets/index-Bsg3uhC-.js`.
 - Validation passed: frontend `npx tsc --noEmit`, frontend `npm run lint --if-present`, frontend `npm run build`, and scoped `git diff --check` with CRLF warnings only.
 - Commit: `7f9c67a` - Update launch checklist DKIM status.
+
+## 2026-05-05 Stack Creation And Content Preview Hotfix Deployed
+
+- Commit `6d0cff4` deployed to Cloudflare Pages project `supplementstack`.
+- Preview URL: `https://a9ed6e3e.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`, asset `assets/index-CTRHry5S.js`.
+- Fixed `POST /api/stacks`: omitted `family_member_id` is now treated as `null` / self profile instead of invalid input. This unblocks first-stack creation for new accounts.
+- Frontend stack create/update paths now surface backend error messages instead of always showing generic stack save/create text.
+- Product selection preview now shows product `Inhalt` instead of `Packung`/`Portionen`, using total contained units plus calculated days supply for the selected target dose. Example: D3 drops at 10,000 IE display as roughly `1.000 Tropfen (reicht für 66 Tage)`.
+- Validation passed: functions `npx tsc -p tsconfig.json --noEmit`, frontend `npx tsc --noEmit`, frontend `npm run lint --if-present`, frontend `npm run build`, and `git diff --check` with CRLF warnings only.
+- Smoke checks passed: fresh test account could create an empty stack and save Vitamin D3 2000 IU drops at 10,000 IE daily (`quantity=5`). Preview/live root 200 with `assets/index-CTRHry5S.js`.
+- Temporary `qa-stack-%@example.com` test users/stacks/tokens/consents were deleted from production after verification; remaining count is 0.

@@ -1092,3 +1092,17 @@ When a future agent deploys or applies migrations, append the exact date, commit
 - Live URL: `https://supplementstack.de`.
 - Build asset: `assets/index-Bsg3uhC-.js`.
 - Commit after deploy: `7f9c67a` - Update launch checklist DKIM status.
+
+## 2026-05-05 - Stack Creation And Content Preview Hotfix
+
+- Deploy command: `npx wrangler pages deploy frontend/dist --project-name supplementstack`.
+- Preview URL: `https://a9ed6e3e.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`.
+- Build asset: `assets/index-CTRHry5S.js`.
+- Scope:
+  - Fixed `POST /api/stacks` omitted `family_member_id` handling.
+  - Improved frontend stack error propagation.
+  - Changed add-product preview from `Packung`/`Portionen` to `Inhalt` with contained units and days supply.
+- Validation passed: functions TypeScript, frontend TypeScript, frontend lint, frontend build, and `git diff --check` with CRLF warnings only.
+- Smoke checks passed: fresh test account created stack and saved D3 stack item; temporary test data was deleted afterward.
+- Commit after deploy: `6d0cff4` - Fix stack creation and content preview.
