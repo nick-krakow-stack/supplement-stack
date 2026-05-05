@@ -14,6 +14,7 @@
 import { Hono } from 'hono'
 import type { AppContext, ProductRow } from '../lib/types'
 import { checkRateLimit, ensureAuth, requireAdmin, logAdminAction } from '../lib/helpers'
+import { attachWarningsToProducts, loadCatalogProductSafetyWarnings } from './knowledge'
 
 const products = new Hono<AppContext>()
 
@@ -328,7 +329,8 @@ products.get('/', async (c) => {
   const { results } = await c.env.DB.prepare(
     `SELECT * FROM products WHERE visibility = 'public' AND moderation_status = 'approved'`
   ).all<ProductRow>()
-  return c.json({ products: results })
+  const warningsByProduct = await loadCatalogProductSafetyWarnings(c.env.DB, results.map((product) => product.id))
+  return c.json({ products: attachWarningsToProducts(results, warningsByProduct) })
 })
 
 // GET /api/products/:id
@@ -349,7 +351,9 @@ products.get('/:id', async (c) => {
   const { results: recommendations } = await c.env.DB.prepare(
     'SELECT r.* FROM product_recommendations r WHERE r.product_id = ?'
   ).bind(id).all()
-  return c.json({ product, ingredients, recommendations })
+  const warningsByProduct = await loadCatalogProductSafetyWarnings(c.env.DB, [Number(id)])
+  const [productWithWarnings] = attachWarningsToProducts([product], warningsByProduct)
+  return c.json({ product: productWithWarnings, ingredients, recommendations })
 })
 
 // POST /api/products

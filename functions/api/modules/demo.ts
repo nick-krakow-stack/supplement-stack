@@ -11,10 +11,16 @@ import { Hono } from 'hono'
 import type { Context } from 'hono'
 import { checkRateLimit } from '../lib/helpers'
 import type { AppContext } from '../lib/types'
+import { attachWarningsToProducts, loadCatalogProductSafetyWarnings } from './knowledge'
 
 const demo = new Hono<AppContext>()
 const DEMO_SESSION_RATE_LIMIT = 10
 const DEMO_SESSION_RATE_WINDOW_SECONDS = 15 * 60
+
+type DemoProductRow = {
+  id: number
+  [key: string]: unknown
+}
 
 function clientIp(c: Context<AppContext>): string {
   return (
@@ -53,8 +59,9 @@ demo.get('/products', async (c) => {
       CASE WHEN p.discontinued_at IS NULL THEN 0 ELSE 1 END,
       p.id ASC
     LIMIT 7
-  `).all()
-  return c.json({ products })
+  `).all<DemoProductRow>()
+  const warningsByProduct = await loadCatalogProductSafetyWarnings(c.env.DB, products.map((product) => product.id))
+  return c.json({ products: attachWarningsToProducts(products, warningsByProduct) })
 })
 
 // POST /api/demo/sessions

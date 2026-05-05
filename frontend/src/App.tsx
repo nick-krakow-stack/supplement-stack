@@ -19,6 +19,7 @@ import VerifyEmailPage from './pages/VerifyEmailPage';
 import PrivacyPage from './pages/PrivacyPage';
 import ImprintPage from './pages/ImprintPage';
 import TermsPage from './pages/TermsPage';
+import KnowledgeArticlePage from './pages/KnowledgeArticlePage';
 
 function NotFoundPage() {
   return (
@@ -92,6 +93,7 @@ export default function App() {
                 <Route path="/datenschutz" element={<PrivacyPage />} />
                 <Route path="/nutzungsbedingungen" element={<TermsPage />} />
                 <Route path="/agb" element={<TermsPage />} />
+                <Route path="/wissen/:slug" element={<KnowledgeArticlePage />} />
                 <Route
                   path="/my-products"
                   element={

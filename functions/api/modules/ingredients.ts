@@ -24,6 +24,7 @@ import { Hono } from 'hono'
 import type { AppContext, IngredientRow } from '../lib/types'
 import { ensureAuth, requireAdmin, logAdminAction } from '../lib/helpers'
 import { convertAmount, normalizeUnit } from '../lib/units'
+import { attachWarningsToProducts, loadCatalogProductSafetyWarnings } from './knowledge'
 
 const ingredients = new Hono<AppContext>()
 
@@ -81,6 +82,11 @@ type SubIngredientPromptRow = {
   prompt_label: string | null
   is_default_prompt: number
   sort_order: number
+}
+
+type IngredientProductRow = {
+  id: number
+  [key: string]: unknown
 }
 
 
@@ -502,8 +508,9 @@ ingredients.get('/:id/products', async (c) => {
     FROM matching_rows
     WHERE row_rank = 1
     ORDER BY is_main DESC, name ASC
-  `).bind(id, id, id).all()
-  return c.json({ products })
+  `).bind(id, id, id).all<IngredientProductRow>()
+  const warningsByProduct = await loadCatalogProductSafetyWarnings(c.env.DB, products.map((product) => product.id))
+  return c.json({ products: attachWarningsToProducts(products, warningsByProduct) })
 })
 
 // POST /api/ingredients (admin only)

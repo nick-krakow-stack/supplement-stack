@@ -2,12 +2,7 @@ export interface User {
   id: number;
   email: string;
   age?: number;
-  gender?: string;
-  weight?: number;
-  diet?: string;
-  goals?: string;
   guideline_source?: string;
-  is_smoker?: number;        // 0 or 1
   health_consent?: number;   // 0 or 1
   health_consent_at?: string;
   email_verified_at?: string | null;
@@ -66,6 +61,17 @@ export interface ProductIngredient {
   search_relevant?: number | boolean;
 }
 
+export interface ProductSafetyWarning {
+  id: number;
+  ingredient_id: number;
+  short_label: string;
+  popover_text: string;
+  severity: 'info' | 'caution' | 'danger';
+  article_slug?: string | null;
+  article_title?: string | null;
+  article_url?: string | null;
+}
+
 export interface Product {
   id: number;
   product_type?: 'catalog' | 'user_product';
@@ -94,6 +100,7 @@ export interface Product {
   warning_message?: string;
   warning_type?: string;
   alternative_note?: string;
+  warnings?: ProductSafetyWarning[];
 }
 
 export interface StackItem {
@@ -139,4 +146,20 @@ export interface DemoSession {
   key: string;
   stack_json: string;
   expires_at: string;
+}
+
+export interface KnowledgeArticleSource {
+  label: string;
+  url: string;
+}
+
+export interface KnowledgeArticle {
+  slug: string;
+  title: string;
+  summary: string;
+  body: string;
+  reviewed_at?: string | null;
+  sources: KnowledgeArticleSource[];
+  created_at?: string;
+  updated_at?: string;
 }

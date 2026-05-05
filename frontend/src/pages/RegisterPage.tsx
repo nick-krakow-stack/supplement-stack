@@ -17,7 +17,6 @@ export default function RegisterPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [age, setAge] = useState('');
-  const [gender, setGender] = useState('');
   const [guidelineSource, setGuidelineSource] = useState('');
   const [healthConsent, setHealthConsent] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +32,6 @@ export default function RegisterPage() {
       const result = await register(email, password, {
         health_consent: healthConsent,
         age: Number.isFinite(ageNum) ? (ageNum as number) : undefined,
-        gender: gender === '' ? undefined : gender,
         guideline_source: guidelineSource === '' ? undefined : guidelineSource,
       });
       navigate('/verify-email', {
@@ -91,7 +89,9 @@ export default function RegisterPage() {
           </div>
 
           <div className="border-t border-gray-100 pt-4">
-            <p className="text-xs text-gray-500 mb-3">Optional – kann später geändert werden</p>
+            <p className="text-xs text-gray-500 mb-3">
+              Optional: Alter und bevorzugte Quellenpraeferenz koennen spaeter geaendert werden.
+            </p>
 
             <div className="flex flex-col gap-4">
               <div>
@@ -107,23 +107,6 @@ export default function RegisterPage() {
                   onChange={(e) => setAge(e.target.value)}
                   placeholder="z. B. 30"
                 />
-              </div>
-
-              <div>
-                <label htmlFor="gender" className="block text-sm font-medium text-gray-700 mb-1">
-                  Geschlecht
-                </label>
-                <select
-                  id="gender"
-                  value={gender}
-                  onChange={(e) => setGender(e.target.value)}
-                  className="input"
-                >
-                  <option value="">Keine Angabe</option>
-                  <option value="männlich">Männlich</option>
-                  <option value="weiblich">Weiblich</option>
-                  <option value="divers">Divers</option>
-                </select>
               </div>
 
               <div>
@@ -154,10 +137,11 @@ export default function RegisterPage() {
                 className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
               />
               <span className="text-sm text-gray-700">
-                Ich stimme der Verarbeitung folgender Daten zu: Alter, Geschlecht,
-                Leitlinienquelle, Profilangaben sowie Supplement-/Stack-Daten, Dosierungen,
-                eigene Produktdaten und weitere Gesundheitsprofileingaben. Diese Angaben werden für
-                personalisierte Stack- und Dosierungsfunktionen genutzt.
+                Ich stimme der Verarbeitung von Accountdaten, optionalem Alter, optionaler
+                Leitlinienquelle sowie gespeicherten Stack-, Produkt-, Dosierungs-, Einnahmeintervall-
+                und Kostendaten zu. Diese Angaben koennen gesundheitsnah sein, enthalten aber keine
+                Diagnose-, Krankheits-, Medikamenten-, Geschlechts-, Ernaehrungs-, Ziel- oder
+                Raucherstatus-Felder.
                 <span className="text-xs text-gray-500"> (DSGVO Art. 9 erforderlich)</span>
               </span>
             </label>

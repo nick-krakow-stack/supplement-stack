@@ -1059,3 +1059,44 @@ Do not assume untracked files are disposable. Review before deleting or committi
 - Validation passed: functions `npx tsc -p tsconfig.json`, frontend `npx tsc --noEmit`, frontend `npm run lint --if-present`, frontend `npm run build`, frontend `npm test -- --run` (5 tests), and `git diff --check`.
 - Live smokes passed: root 200, `/verify-email` 200, invalid `POST /api/auth/verify-email` 400, unauthenticated `POST /api/auth/resend-verification` 401, `/api/demo/products` 200 with 7 products, D1 migration log shows 0043/0044, token table exists, and existing users have no `email_verified_at IS NULL` rows.
 - DNS check: MX/SPF are present for All-Inkl/Kasserver; `_dmarc.supplementstack.de` is not set; `default._domainkey.supplementstack.de` was not found.
+
+## 2026-05-05 Product Safety Warnings - Local
+
+- First version of product/ingredient safety warnings is implemented locally, not committed, remote-migrated, deployed, or smoke-checked.
+- New owned migration: `d1-migrations/0046_knowledge_warnings.sql`. Do not use 0045; another agent owns that slot.
+- Migration 0046 creates `knowledge_articles` and `ingredient_safety_warnings`, seeds the published article slug `beta-carotin-raucher-lungenkrebs`, and conditionally seeds the Beta-Carotin smoker warning only when a matching ingredient exists.
+- Backend adds `functions/api/modules/knowledge.ts`, mounted at `/api/knowledge`, with `GET /api/knowledge/:slug` and shared warning attachment helpers.
+- Product warning attachment is wired into public catalog products, ingredient product lists, demo products, authenticated stack detail items, and user product loading.
+- Frontend adds `/wissen/:slug` via `KnowledgeArticlePage`; `ProductCard` now renders concise warning labels with an info popover and a knowledge-article icon link.
+- No user smoker status is stored or used. Warnings are general product/ingredient warnings.
+- Source basis checked against official pages: EFSA Journal 2012 beta-carotene heavy-smoker statement, NIH ODS Vitamin A and Carotenoids fact sheet, and NCI Lung Cancer Prevention PDQ.
+- Validation passed: functions `npx tsc -p tsconfig.json`, frontend `npx tsc --noEmit`, frontend build, frontend Vitest 5 tests, focused ESLint on touched frontend files, migration 0046 in-memory SQLite probe, and `git diff --check` with CRLF warnings only.
+- Full frontend lint is currently blocked by unrelated `PrivacyPage.tsx` `react/no-unescaped-entities` errors.
+
+## 2026-05-05 Data Minimization - Local
+
+- Account/profile/consent data minimization is implemented locally, not committed, remote-migrated, deployed, or live-smoked.
+- New owned migration: `d1-migrations/0045_data_minimization_profile_fields.sql`.
+- Registration UI no longer asks for gender. It keeps email/password, optional age, optional guideline source, email verification, and narrowed consent wording.
+- Profile UI no longer shows or sends gender, weight, diet, goals, or smoker status. It only edits age and guideline source, plus existing email verification/password/delete-account sections.
+- Frontend auth/user types no longer expose gender, weight, diet, goals, or `is_smoker`.
+- Backend register ignores removed profile fields and inserts `NULL` for legacy `gender`, `weight`, `diet_type`, and `personal_goals` columns. `GET /api/me`, login profile, and `PUT /api/me` no longer return removed profile fields. `PUT /api/me` only updates age and guideline source.
+- Migration 0045 nulls existing `gender`, `weight`, `diet_type`, and `personal_goals`. Because `users.is_smoker` is `NOT NULL` from migration 0009, migration 0045 resets it to `0` instead of rebuilding `users`.
+- Privacy and registration consent wording now describe account, optional age, guideline source, saved stacks/products, dosage/intake interval/cost data, and user-submitted product data; they explicitly avoid diagnosis/illness/medication/gender/diet/goals/smoker fields while noting stack/dosage data can be health-adjacent.
+- Validation passed: functions `npx tsc -p tsconfig.json`, frontend `npx tsc --noEmit`, frontend `npm run lint --if-present`, frontend `npm run build`, frontend `npm test -- --run` (5 tests), targeted removed-field scans, and `git diff --check` with CRLF warnings only.
+- SQLite CLI was not available locally, so migration 0045 was not executed in a local SQLite probe.
+- Concurrent unrelated product-safety-warning work remains in the worktree, including migration `0046_knowledge_warnings.sql` and knowledge/product warning files. Do not revert it.
+
+## 2026-05-05 Data Minimization And Safety Warnings Deployed
+
+- Remote D1 migrations `0045_data_minimization_profile_fields.sql` and `0046_knowledge_warnings.sql` are applied to `supplementstack-production`.
+- Deployment target: Cloudflare Pages project `supplementstack`.
+- Preview: `https://33f76fe5.supplementstack.pages.dev`.
+- Live: `https://supplementstack.de`, asset `assets/index-BG4hesq7.js`.
+- Registration/profile data minimization is live: registration asks for email/password, consent, optional age, and optional guideline source only. Profile editing only updates age and guideline source.
+- Auth/profile responses no longer expose gender, account weight, diet, goals, or `is_smoker`. Migration 0045 cleared legacy gender/weight/diet/goals data and reset `is_smoker` to 0 because the existing schema column is NOT NULL.
+- Product safety warnings are live through `knowledge_articles` and `ingredient_safety_warnings`. The first article is `/wissen/beta-carotin-raucher-lungenkrebs`.
+- The Beta-Carotin warning is form-specific: current production data models Beta-Carotin as `ingredient_forms.name='Beta-Carotin'` under Vitamin A (`ingredient_id=32`, production `form_id=79`), so the warning matches product ingredient rows only when their `form_id` is the Beta-Carotin form. A fallback remains for future standalone Beta-Carotin ingredients.
+- Product cards can show a short warning label, an info popover, and a knowledge-base article icon link. No smoker status is stored or inferred.
+- Validation passed: functions `npx tsc -p tsconfig.json`, frontend `npx tsc --noEmit`, frontend `npm run lint --if-present`, frontend `npm run build`, frontend `npm test -- --run` (5 tests), and `git diff --check`.
+- Live/preview smokes passed: root 200, knowledge article route 200, knowledge API 200, demo products 200, D1 migration journal shows 0045/0046, article is published, warning row exists for Vitamin A + Beta-Carotin form, legacy profile-field residual count is 0, profile GET/PUT responses have no removed fields, and a temporary Beta-Carotin user product returned the warning plus `/wissen/beta-carotin-raucher-lungenkrebs`. Temporary smoke data was deleted.

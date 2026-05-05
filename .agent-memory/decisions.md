@@ -414,3 +414,43 @@ Rationale:
 Operational rule:
 - New verification tokens delete any existing row for that user, insert a new hash into `email_verification_tokens.token`, and set an expiry timestamp.
 - Verification looks up the hash, checks expiry and `used_at IS NULL`, sets `users.email_verified_at`, and deletes the consumed token row.
+
+## 2026-05-05 - Product Safety Warning Model
+
+Decision: model safety warnings as ingredient-linked records with optional knowledge-base article links, and attach them to product response objects as a lightweight `warnings` array.
+
+Rationale:
+- Warnings are general product/ingredient safety notices, not personalized user state.
+- Ingredient-based matching works for catalog products, user products, demo products, and stack items without storing smoker status.
+- Knowledge articles keep longer context and source links out of compact product cards.
+
+Operational rule:
+- Do not store or infer smoker status for this feature.
+- Use migration `0046_knowledge_warnings.sql`; do not use migration 0045.
+- Keep product card labels short, with concise popover context and a `/wissen/:slug` article link for sources/details.
+
+## 2026-05-05 - Account/Profile Data Minimization
+
+Decision: stop collecting and returning gender, diet, goals, smoker status, and account-level weight.
+
+Rationale:
+- Product direction is data minimization: keep only email/password, email verification, optional age, optional guideline source, and app data needed for stacks/products/dosage/intake interval/cost behavior.
+- Account-level weight has no active dependency in the current stack/dose calculations; per-kg dose recommendation metadata remains an admin/content field, not a user profile field.
+- Stack/product/dosage data can still be health-adjacent, so consent/privacy wording should be narrow rather than claiming no health-related processing at all.
+
+Operational rule:
+- Do not reintroduce gender, diet, goals, smoker status, or profile weight into registration/profile payloads without a new explicit product/legal decision.
+- Keep legacy DB columns for compatibility. Migration 0045 clears old values, but `users.is_smoker` currently remains schema-level `NOT NULL`; reset stored values rather than rebuilding `users` unless a future migration explicitly scopes that rebuild.
+
+## 2026-05-05 - Form-Specific Beta-Carotin Warnings
+
+Decision: Beta-Carotin warnings are attached by ingredient plus optional `form_id`, not just by ingredient name.
+
+Rationale:
+- Current production data models Beta-Carotin as a form/synonym under Vitamin A, not as a standalone ingredient.
+- A Vitamin A ingredient-level warning would incorrectly flag Retinol products.
+- Matching on `form_id` lets the product card warn only for Beta-Carotin rows, while retaining a fallback for future standalone Beta-Carotin ingredients.
+
+Operational rule:
+- For form-specific safety risks, set `ingredient_safety_warnings.form_id` and match warnings only when the product ingredient row uses the same form.
+- Use `form_id IS NULL` only for warnings that apply to the whole ingredient.

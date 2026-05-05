@@ -15,6 +15,7 @@ import type { AppContext, StackRow, StackItemRow, InteractionRow } from '../lib/
 import { checkRateLimit, ensureAuth } from '../lib/helpers'
 import { sendMail } from '../lib/mail'
 import { calculateProductUsage, ingredientAmountPerProductServing } from '../lib/stack-calculations'
+import { loadCatalogProductSafetyWarnings, loadUserProductSafetyWarnings } from './knowledge'
 
 const stacks = new Hono<AppContext>()
 
@@ -466,11 +467,26 @@ async function loadStackItemsWithIngredients(
   const items = await loadStackItems(db, stackId, ownerUserId)
   const ingredients = await loadStackMailIngredients(db, stackId, ownerUserId)
   const ingredientsByItem = groupIngredientsByStackItem(ingredients)
+  const catalogProductIds = items
+    .filter((item) => (item as StackItemRow & { product_type?: StackProductType }).product_type !== 'user_product')
+    .map((item) => item.id)
+  const userProductIds = items
+    .filter((item) => (item as StackItemRow & { product_type?: StackProductType }).product_type === 'user_product')
+    .map((item) => item.id)
+  const [catalogWarnings, userWarnings] = await Promise.all([
+    loadCatalogProductSafetyWarnings(db, catalogProductIds),
+    loadUserProductSafetyWarnings(db, userProductIds),
+  ])
 
   return items.map((item) => {
-    const stackItemId = (item as StackItemRow & { stack_item_id: number }).stack_item_id
+    const typedItem = item as StackItemRow & { stack_item_id: number; product_type?: StackProductType }
+    const stackItemId = typedItem.stack_item_id
+    const warnings = typedItem.product_type === 'user_product'
+      ? userWarnings.get(item.id) ?? []
+      : catalogWarnings.get(item.id) ?? []
     return {
       ...item,
+      warnings,
       ingredients: (ingredientsByItem.get(stackItemId) ?? []).map((ingredient) => ({
         ingredient_id: ingredient.ingredient_id,
         quantity: ingredient.quantity,

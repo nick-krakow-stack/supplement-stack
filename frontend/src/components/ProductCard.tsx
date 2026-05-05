@@ -1,5 +1,8 @@
-import { ExternalLink, Pencil, RefreshCcw, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { BookOpen, ExternalLink, Info, Pencil, RefreshCcw, Trash2 } from 'lucide-react';
 import type { ShopDomain } from '../types/local';
+import type { ProductSafetyWarning } from '../types';
 import { calculateProductUsage, intakeIntervalDays as getIntakeIntervalDays } from '../lib/stackCalculations';
 
 interface ProductCardProduct {
@@ -41,6 +44,7 @@ interface ProductCardProduct {
   warning_message?: string;
   warning_type?: string;
   alternative_note?: string;
+  warnings?: ProductSafetyWarning[];
   ingredient_category?: string;
 }
 
@@ -121,6 +125,12 @@ const CATEGORY_EMOJI: Record<CategoryKey, string> = {
   default: '🌿',
 };
 
+const SAFETY_WARNING_STYLES: Record<ProductSafetyWarning['severity'], string> = {
+  danger: 'border-red-200 bg-red-50 text-red-700',
+  caution: 'border-amber-200 bg-amber-50 text-amber-700',
+  info: 'border-sky-200 bg-sky-50 text-sky-700',
+};
+
 function getFallbackWarning(product: ProductCardProduct): ProductWarning | null {
   const t = product.name.toLowerCase();
   if (t.includes('b12')) return { type: 'caution', title: 'Einnahmeabstand prüfen', message: 'Kaffee oder Tee werden in Quellen im Zusammenhang mit möglicher geringerer Aufnahme einzelner Nährstoffe diskutiert. Ein zeitlicher Abstand kann sinnvoll sein.' };
@@ -151,6 +161,7 @@ export default function ProductCard({
   recommendationType, showSelectButton = false,
   shopDomains, selected = false, warning,
 }: ProductCardProps) {
+  const [openSafetyWarningId, setOpenSafetyWarningId] = useState<number | null>(null);
   const price = product.product_price ?? product.price;
   const brand = product.product_brand ?? product.brand;
   const name = product.product_name ?? product.name;
@@ -290,6 +301,64 @@ export default function ProductCard({
       {product.alternative_note && (
         <div className="rounded-lg border border-indigo-100 bg-indigo-50 px-2.5 py-1.5 text-xs leading-relaxed text-indigo-700 mb-2.5">
           <span className="font-bold">Alternative:</span> {product.alternative_note}
+        </div>
+      )}
+
+      {/* Ingredient safety warnings */}
+      {product.warnings && product.warnings.length > 0 && (
+        <div className="mb-2.5 flex flex-wrap gap-1.5">
+          {product.warnings.map((safetyWarning) => {
+            const isOpen = openSafetyWarningId === safetyWarning.id;
+            const popoverId = `safety-warning-${product.id}-${safetyWarning.id}`;
+            return (
+              <span
+                key={safetyWarning.id}
+                className={`group relative inline-flex max-w-full items-center gap-1.5 rounded-full border px-2 py-1 text-[11px] font-extrabold ${SAFETY_WARNING_STYLES[safetyWarning.severity]}`}
+                onClick={(e) => e.stopPropagation()}
+                onBlur={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+                    setOpenSafetyWarningId(null);
+                  }
+                }}
+              >
+                <span className="truncate">{safetyWarning.short_label}</span>
+                <button
+                  type="button"
+                  aria-label={`Mehr Informationen: ${safetyWarning.short_label}`}
+                  aria-expanded={isOpen}
+                  aria-describedby={popoverId}
+                  className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-white/70 focus:outline-none focus:ring-2 focus:ring-current focus:ring-offset-1"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setOpenSafetyWarningId(isOpen ? null : safetyWarning.id);
+                  }}
+                  onFocus={() => setOpenSafetyWarningId(safetyWarning.id)}
+                >
+                  <Info size={13} />
+                </button>
+                {safetyWarning.article_url && (
+                  <Link
+                    to={safetyWarning.article_url}
+                    aria-label={safetyWarning.article_title ?? 'Wissensartikel oeffnen'}
+                    title={safetyWarning.article_title ?? 'Wissensartikel oeffnen'}
+                    className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-white/70 focus:outline-none focus:ring-2 focus:ring-current focus:ring-offset-1"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <BookOpen size={13} />
+                  </Link>
+                )}
+                <span
+                  id={popoverId}
+                  role="tooltip"
+                  className={`absolute left-0 top-full z-30 mt-2 w-[260px] max-w-[calc(100vw-3rem)] rounded-xl border border-slate-200 bg-white p-3 text-left text-[12px] font-semibold leading-relaxed text-slate-700 shadow-xl transition-all group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100 ${
+                    isOpen ? 'pointer-events-auto translate-y-0 opacity-100' : 'pointer-events-none translate-y-1 opacity-0'
+                  }`}
+                >
+                  {safetyWarning.popover_text}
+                </span>
+              </span>
+            );
+          })}
         </div>
       )}
 

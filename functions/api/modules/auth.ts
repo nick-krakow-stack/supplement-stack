@@ -24,8 +24,6 @@ import { sendEmailVerificationEmail, sendPasswordResetEmail } from '../lib/mail'
 
 const auth = new Hono<AppContext>()
 
-const ALLOWED_GENDERS = ['männlich', 'weiblich', 'divers'] as const
-const ALLOWED_DIETS = ['omnivore', 'vegetarisch', 'vegan'] as const
 const EMAIL_VERIFICATION_TTL_MS = 48 * 60 * 60 * 1000
 
 function normalizeGuidelineSource(value: unknown): string | null | undefined {
@@ -50,12 +48,7 @@ function publicProfile(user: UserRow) {
     id: user.id,
     email: user.email,
     age: user.age,
-    gender: user.gender,
-    weight: user.weight,
-    diet: user.diet_type,
-    goals: user.personal_goals,
     guideline_source: user.guideline_source,
-    is_smoker: user.is_smoker,
     health_consent: user.health_consent,
     health_consent_at: user.health_consent_at,
     email_verified_at: user.email_verified_at,
@@ -100,11 +93,10 @@ auth.post('/register', async (c) => {
     return c.json({ error: 'Password must be at least 8 characters' }, 400)
   if (!body.health_consent)
     return c.json({ error: 'Gesundheits-Einwilligung erforderlich (DSGVO Art. 9)' }, 400)
-  const data = body as { email: string; password: string; age?: number; gender?: string; weight?: number; diet?: string; goals?: string; guideline_source?: string }
+  const data = body as { email: string; password: string; age?: number; guideline_source?: string }
 
   // Normalize: empty strings → undefined (treat as not provided)
   const ageRaw = data.age
-  const genderRaw = typeof data.gender === 'string' ? data.gender.trim() : data.gender
   const guidelineValue = normalizeGuidelineSource(data.guideline_source)
 
   let ageValue: number | null = null
@@ -113,14 +105,6 @@ auth.post('/register', async (c) => {
       return c.json({ error: 'Alter muss eine ganze Zahl zwischen 1 und 120 sein.' }, 400)
     }
     ageValue = ageRaw
-  }
-
-  let genderValue: string | null = null
-  if (genderRaw !== undefined && genderRaw !== null && genderRaw !== '') {
-    if (!ALLOWED_GENDERS.includes(genderRaw as typeof ALLOWED_GENDERS[number])) {
-      return c.json({ error: 'Geschlecht muss "männlich", "weiblich" oder "divers" sein.' }, 400)
-    }
-    genderValue = genderRaw
   }
 
   if (data.guideline_source !== undefined && guidelineValue === undefined) {
@@ -137,10 +121,10 @@ auth.post('/register', async (c) => {
     data.email,
     password_hash,
     ageValue,
-    genderValue,
-    data.weight ?? null,
-    data.diet ?? null,
-    data.goals ?? null,
+    null,
+    null,
+    null,
+    null,
     guidelineValue ?? null,
   ).run()
 
@@ -345,7 +329,7 @@ meApp.get('/', async (c) => {
   if (authErr) return authErr
   const user = c.get('user')
   const row = await c.env.DB.prepare(
-    'SELECT id, email, age, gender, weight, diet_type, personal_goals, guideline_source, is_smoker, health_consent, health_consent_at, email_verified_at, role FROM users WHERE id = ?'
+    'SELECT id, email, age, guideline_source, health_consent, health_consent_at, email_verified_at, role FROM users WHERE id = ?'
   ).bind(user.userId).first<UserRow>()
   if (!row) return c.json({ error: 'User not found' }, 404)
   const profile = publicProfile(row)
@@ -461,85 +445,41 @@ meApp.put('/', async (c) => {
     : typeof body.age === 'number'
       ? body.age
       : Number.NaN
-  const weight = !hasKey('weight') || body.weight === null || body.weight === ''
-    ? null
-    : typeof body.weight === 'number'
-      ? body.weight
-      : Number.NaN
-  const gender = hasKey('gender') && typeof body.gender === 'string' && body.gender.trim() !== '' ? body.gender.trim() : null
-  const diet = hasKey('diet') && typeof body.diet === 'string' && body.diet.trim() !== '' ? body.diet.trim() : null
-  const goals = hasKey('goals') && typeof body.goals === 'string' && body.goals.trim() !== '' ? body.goals.trim() : null
   const guidelineSource = hasKey('guideline_source') ? normalizeGuidelineSource(body.guideline_source) : undefined
-  const isSmoker = body.is_smoker === true || body.is_smoker === 1 ? 1 : body.is_smoker === false || body.is_smoker === 0 ? 0 : null
 
   if (hasKey('age') && age !== null && (!Number.isInteger(age) || age < 1 || age > 120)) {
     return c.json({ error: 'age must be an integer between 1 and 120' }, 400)
   }
-  if (hasKey('weight') && weight !== null && (!Number.isFinite(weight) || weight <= 0 || weight > 500)) {
-    return c.json({ error: 'weight must be greater than 0' }, 400)
-  }
-  if (hasKey('gender') && body.gender !== null && body.gender !== '' && typeof body.gender !== 'string') {
-    return c.json({ error: 'gender must be männlich, weiblich, or divers' }, 400)
-  }
-  if (hasKey('gender') && gender !== null && !ALLOWED_GENDERS.includes(gender as typeof ALLOWED_GENDERS[number])) {
-    return c.json({ error: 'gender must be männlich, weiblich, or divers' }, 400)
-  }
-  if (hasKey('diet') && body.diet !== null && body.diet !== '' && typeof body.diet !== 'string') {
-    return c.json({ error: 'diet must be omnivore, vegetarisch, or vegan' }, 400)
-  }
-  if (hasKey('diet') && diet !== null && !ALLOWED_DIETS.includes(diet as typeof ALLOWED_DIETS[number])) {
-    return c.json({ error: 'diet must be omnivore, vegetarisch, or vegan' }, 400)
-  }
   if (hasKey('guideline_source') && guidelineSource === undefined) {
     return c.json({ error: 'guideline_source must be DGE, studien, or influencer' }, 400)
   }
-  if (hasKey('is_smoker') && isSmoker === null) {
-    return c.json({ error: 'is_smoker must be true/false or 1/0' }, 400)
-  }
 
   const existing = await c.env.DB.prepare(
-    'SELECT id, email, age, gender, weight, diet_type, personal_goals, guideline_source, is_smoker, health_consent, health_consent_at, email_verified_at, role FROM users WHERE id = ?'
+    'SELECT id, email, age, guideline_source, health_consent, health_consent_at, email_verified_at, role FROM users WHERE id = ?'
   ).bind(user.userId).first<UserRow>()
   if (!existing) return c.json({ error: 'User not found' }, 404)
 
   const target = {
     age: hasKey('age') ? age : existing.age,
-    gender: hasKey('gender') ? gender : existing.gender,
-    weight: hasKey('weight') ? weight : existing.weight,
-    diet: hasKey('diet') ? diet : existing.diet_type,
-    goals: hasKey('goals') ? goals : existing.personal_goals,
     guideline_source: hasKey('guideline_source') ? guidelineSource ?? null : existing.guideline_source,
-    is_smoker: hasKey('is_smoker') ? isSmoker as number : existing.is_smoker,
   }
 
   await c.env.DB.prepare(`
     UPDATE users SET
       age = ?,
-      gender = ?,
-      weight = ?,
-      diet_type = ?,
-      personal_goals = ?,
-      guideline_source = ?,
-      is_smoker = ?
+      guideline_source = ?
     WHERE id = ?
   `).bind(
     target.age,
-    target.gender,
-    target.weight,
-    target.diet,
-    target.goals,
     target.guideline_source,
-    target.is_smoker,
     user.userId,
   ).run()
 
-  return c.json({ profile: {
-    id: existing.id, email: existing.email, age: target.age, gender: target.gender, weight: target.weight,
-    diet: target.diet, goals: target.goals, guideline_source: target.guideline_source,
-    is_smoker: target.is_smoker, health_consent: existing.health_consent, health_consent_at: existing.health_consent_at,
-    email_verified_at: existing.email_verified_at,
-    role: existing.role ?? 'user',
-  }})
+  return c.json({ profile: publicProfile({
+    ...existing,
+    age: target.age,
+    guideline_source: target.guideline_source,
+  }) })
 })
 
 export default auth

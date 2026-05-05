@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { updateMe, changePassword, deleteAccount, resendVerificationEmail } from '../api/auth';
@@ -10,12 +10,7 @@ export default function ProfilePage() {
   const navigate = useNavigate();
 
   const [age, setAge] = useState('');
-  const [gender, setGender] = useState('');
-  const [weight, setWeight] = useState('');
-  const [diet, setDiet] = useState('');
-  const [goals, setGoals] = useState('');
   const [guidelineSource, setGuidelineSource] = useState('');
-  const [isSmoker, setIsSmoker] = useState<boolean>(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -23,7 +18,6 @@ export default function ProfilePage() {
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [verifySubmitting, setVerifySubmitting] = useState(false);
 
-  // Passwort-Änderung
   const [pwCurrent, setPwCurrent] = useState('');
   const [pwNew, setPwNew] = useState('');
   const [pwRepeat, setPwRepeat] = useState('');
@@ -31,7 +25,6 @@ export default function ProfilePage() {
   const [pwError, setPwError] = useState<string | null>(null);
   const [pwSubmitting, setPwSubmitting] = useState(false);
 
-  // Account-Löschung
   const [delConfirmPhrase, setDelConfirmPhrase] = useState('');
   const [delPassword, setDelPassword] = useState('');
   const [delError, setDelError] = useState<string | null>(null);
@@ -40,12 +33,7 @@ export default function ProfilePage() {
   useEffect(() => {
     if (user) {
       setAge(user.age != null ? String(user.age) : '');
-      setGender(user.gender ?? '');
-      setWeight(user.weight != null ? String(user.weight) : '');
-      setDiet(user.diet ?? '');
-      setGoals(user.goals ?? '');
       setGuidelineSource(user.guideline_source ?? '');
-      setIsSmoker(user.is_smoker === 1);
     }
   }, [user]);
 
@@ -57,12 +45,7 @@ export default function ProfilePage() {
     try {
       await updateMe({
         age: age ? Number(age) : undefined,
-        gender: gender || undefined,
-        weight: weight ? Number(weight) : undefined,
-        diet: diet || undefined,
-        goals: goals || undefined,
         guideline_source: guidelineSource || undefined,
-        is_smoker: isSmoker ? 1 : 0,
       });
       await refreshUser();
       setSuccess(true);
@@ -183,79 +166,18 @@ export default function ProfilePage() {
         <h2>Profil bearbeiten</h2>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="age" className="block text-sm font-medium text-gray-700 mb-1">
-                Alter
-              </label>
-              <input
-                id="age"
-                type="number"
-                min={1}
-                max={120}
-                value={age}
-                onChange={(e) => setAge(e.target.value)}
-                placeholder="z. B. 30"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="weight" className="block text-sm font-medium text-gray-700 mb-1">
-                Gewicht (kg)
-              </label>
-              <input
-                id="weight"
-                type="number"
-                min={1}
-                step="0.1"
-                value={weight}
-                onChange={(e) => setWeight(e.target.value)}
-                placeholder="z. B. 75"
-              />
-            </div>
-          </div>
-
           <div>
-            <label htmlFor="gender" className="block text-sm font-medium text-gray-700 mb-1">
-              Geschlecht
-            </label>
-            <select
-              id="gender"
-              value={gender}
-              onChange={(e) => setGender(e.target.value)}
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 bg-white"
-            >
-              <option value="">Keine Angabe</option>
-              <option value="männlich">Männlich</option>
-              <option value="weiblich">Weiblich</option>
-              <option value="divers">Divers</option>
-            </select>
-          </div>
-
-          <div>
-            <label htmlFor="diet" className="block text-sm font-medium text-gray-700 mb-1">
-              Ernährungsweise
+            <label htmlFor="age" className="block text-sm font-medium text-gray-700 mb-1">
+              Alter
             </label>
             <input
-              id="diet"
-              type="text"
-              value={diet}
-              onChange={(e) => setDiet(e.target.value)}
-              placeholder="z. B. vegan, vegetarisch, omnivor"
-            />
-          </div>
-
-          <div>
-            <label htmlFor="goals" className="block text-sm font-medium text-gray-700 mb-1">
-              Ziele
-            </label>
-            <textarea
-              id="goals"
-              value={goals}
-              onChange={(e) => setGoals(e.target.value)}
-              rows={3}
-              placeholder="z. B. Energie steigern, Immunsystem stärken"
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400 bg-white resize-none"
+              id="age"
+              type="number"
+              min={1}
+              max={120}
+              value={age}
+              onChange={(e) => setAge(e.target.value)}
+              placeholder="z. B. 30"
             />
           </div>
 
@@ -276,37 +198,6 @@ export default function ProfilePage() {
             </select>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Raucherstatus
-            </label>
-            <div className="flex gap-4">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="smoker"
-                  checked={!isSmoker}
-                  onChange={() => setIsSmoker(false)}
-                  className="text-blue-600"
-                />
-                <span className="text-sm text-gray-700">Nichtraucher</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="radio"
-                  name="smoker"
-                  checked={isSmoker}
-                  onChange={() => setIsSmoker(true)}
-                  className="text-blue-600"
-                />
-                <span className="text-sm text-gray-700">Raucher</span>
-              </label>
-            </div>
-            <p className="text-xs text-gray-400 mt-1">
-              Wird für Sicherheitshinweise verwendet (z. B. Beta-Carotin bei Rauchern).
-            </p>
-          </div>
-
           {error && (
             <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
               {error}
@@ -325,7 +216,6 @@ export default function ProfilePage() {
         </form>
       </div>
 
-      {/* Sektion: Passwort ändern */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mt-4">
         <h2>Passwort ändern</h2>
 
@@ -400,14 +290,13 @@ export default function ProfilePage() {
         </form>
       </div>
 
-      {/* Sektion: Account löschen (DSGVO Art. 17) */}
       <div className="bg-white rounded-2xl border border-red-200 shadow-sm p-6 mt-4 mb-8">
         <h2 className="text-red-700">Account löschen</h2>
 
         <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mt-2">
           <p className="font-medium mb-1">Diese Aktion ist endgültig.</p>
           <p>
-            Alle deine Stacks, eigenen Produkte, deine gespeicherten Daten und deine Profildaten werden
+            Alle deine Stacks, eigenen Produkte, gespeicherten App-Daten und Accountdaten werden
             unwiderruflich gelöscht. Die Löschung erfolgt sofort und kann nicht rückgängig gemacht
             werden.
           </p>

@@ -365,3 +365,96 @@ Workspace notes:
 - Do not commit unrelated `.claude/SESSION.md`, `.claude/settings.json`, or root `logo.png` unless explicitly requested.
 - Health-claims audit is only a conservative wording pass. Final legal sign-off and scientific dose/source validation remain separate work.
 - DMARC is not set yet for `_dmarc.supplementstack.de`; MX/SPF point to All-Inkl/Kasserver and default DKIM selector was not found.
+
+## 2026-05-05 - Product Safety Warnings Local Handoff
+
+Continue from `main` with product/ingredient safety warnings implemented locally but not committed, migrated remotely, deployed, or live-smoked.
+
+Owned warning files added/changed:
+- `d1-migrations/0046_knowledge_warnings.sql`
+- `functions/api/modules/knowledge.ts`
+- `functions/api/[[path]].ts`
+- `functions/api/modules/products.ts`
+- `functions/api/modules/ingredients.ts`
+- `functions/api/modules/demo.ts`
+- `functions/api/modules/stacks.ts`
+- `functions/api/modules/user-products.ts`
+- `frontend/src/components/ProductCard.tsx`
+- `frontend/src/components/StackWorkspace.tsx`
+- `frontend/src/pages/KnowledgeArticlePage.tsx`
+- `frontend/src/App.tsx`
+- `frontend/src/types/index.ts`
+
+Behavior:
+- Product cards show concise ingredient safety labels with an info icon popover and a knowledge-base article link.
+- Seeded first warning/article is Beta-Carotin + smokers/high-dose lung cancer risk, based on EFSA, NIH ODS, and NCI sources.
+- Warnings are general product/ingredient warnings; no smoker status is stored or used.
+- Warning helper suppresses the seeded threshold warning when a comparable per-serving amount is known and below 15 mg; it still attaches when threshold comparison is unavailable.
+
+Validation passed:
+- `npx tsc -p tsconfig.json` in `functions/`
+- `npx tsc --noEmit` in `frontend/`
+- `npm run build` in `frontend/`
+- `npm test -- --run` in `frontend/` (5 tests)
+- Focused frontend ESLint on touched files
+- In-memory SQLite probe for migration 0046 with dummy `ingredients` table and `Beta-Carotin` row
+- `git diff --check` with CRLF warnings only
+
+Known blockers/notes:
+- Full frontend `npm run lint --if-present` is blocked by unrelated `PrivacyPage.tsx` `react/no-unescaped-entities` errors.
+- Concurrent unrelated data-minimization edits are present in auth/profile/type files. Do not revert them.
+- Existing unrelated `.claude/SESSION.md`, `.claude/settings.json`, and root `logo.png` remain out of scope.
+
+## 2026-05-05 - Data Minimization Local Handoff
+
+Continue from `main` with account/profile/consent data minimization implemented locally but not committed, remote-migrated, deployed, or live-smoked.
+
+Owned data-minimization files changed/added:
+- `d1-migrations/0045_data_minimization_profile_fields.sql`
+- `functions/api/modules/auth.ts`
+- `frontend/src/api/auth.ts`
+- `frontend/src/contexts/AuthContext.tsx`
+- `frontend/src/pages/RegisterPage.tsx`
+- `frontend/src/pages/ProfilePage.tsx`
+- `frontend/src/pages/PrivacyPage.tsx`
+- `frontend/src/types/index.ts` (also contains concurrent unrelated safety-warning type additions; do not revert them)
+
+Behavior:
+- Registration collects email/password, consent, optional numeric age, and optional guideline source only; gender was removed.
+- Profile edit only sends age and guideline source. Gender, weight, diet, goals, and smoker status UI/state/payloads were removed.
+- Backend register ignores removed fields and inserts `NULL` into legacy profile columns. Login, `GET /api/me`, and `PUT /api/me` no longer return gender, weight, diet, goals, or `is_smoker`. `PUT /api/me` only updates age and guideline source.
+- Privacy and registration consent copy were narrowed to account, optional age, guideline source, saved stacks/products, dosage/intake interval/cost data, and user-submitted product data. It does not claim there is no health-adjacent data.
+- Migration 0045 nulls `gender`, `weight`, `diet_type`, and `personal_goals`; `is_smoker` is reset to `0` because existing schema makes it `NOT NULL`.
+
+Validation passed:
+- `npx tsc -p tsconfig.json` in `functions/`
+- `npx tsc --noEmit` in `frontend/`
+- `npm run lint --if-present` in `frontend/`
+- `npm run build` in `frontend/`
+- `npm test -- --run` in `frontend/` (5 tests)
+- Targeted removed-field scans
+- `git diff --check` with CRLF warnings only
+
+Known notes:
+- `sqlite3` is not installed locally, so migration 0045 was not executed in a SQLite syntax probe.
+- Concurrent unrelated product-safety-warning work is present in the same worktree: migration `0046_knowledge_warnings.sql`, knowledge route/page, warning changes in product/demo/stack files, and type additions. Keep it separate from data-minimization commits.
+- Existing unrelated `.claude/SESSION.md`, `.claude/settings.json`, and root `logo.png` remain out of scope.
+
+## 2026-05-05 - Data Minimization And Safety Warnings Deployed
+
+Continue from `main` after deploying the data-minimization and product safety-warning bundle.
+
+Completed:
+- Remote D1 migrations `0045_data_minimization_profile_fields.sql` and `0046_knowledge_warnings.sql` applied to `supplementstack-production`.
+- Cloudflare Pages project `supplementstack` deployed. Preview: `https://33f76fe5.supplementstack.pages.dev`; live `https://supplementstack.de` uses `assets/index-BG4hesq7.js`.
+- Registration/profile now collect only email/password, consent, optional age, and optional guideline source. Auth/profile responses no longer expose gender, profile weight, diet, goals, or `is_smoker`.
+- Legacy stored values were cleared/reset by migration 0045.
+- Product safety warnings and knowledge articles are live, with the first Beta-Carotin article at `/wissen/beta-carotin-raucher-lungenkrebs`.
+- The Beta-Carotin warning is form-specific for the existing Vitamin A Beta-Carotin form and does not store smoker status.
+- Checks passed: functions TypeScript, frontend TypeScript, frontend lint, frontend build, frontend Vitest 5 tests, and `git diff --check`.
+- Smokes passed for root, knowledge article/API, demo products, migration journal, warning seed, profile-field cleanup, profile GET/PUT response shape, and temporary Beta-Carotin user-product warning display. Temporary smoke data was deleted.
+
+Workspace notes:
+- Commit the current feature if not already committed in git history.
+- Do not commit unrelated `.claude/SESSION.md`, `.claude/settings.json`, or root `logo.png`.
+- Remaining follow-up: manual browser QA for the warning popover on hover, keyboard focus, and mobile tap; later admin UI for knowledge/warning content.

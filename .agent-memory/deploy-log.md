@@ -977,3 +977,24 @@ When a future agent deploys or applies migrations, append the exact date, commit
 - Validation passed: functions `npx tsc -p tsconfig.json`, frontend `npx tsc --noEmit`, frontend `npm run lint --if-present`, frontend `npm run build`, frontend `npm test -- --run` (5 tests), and `git diff --check`.
 - Smoke checks passed: preview/live root 200, preview/live `/verify-email` 200, preview/live unauthenticated resend endpoint 401, live invalid verify endpoint 400, live `/api/demo/products` 200 with 7 products, D1 migration journal shows 0043/0044, `email_verification_tokens` table exists, and existing users have no `email_verified_at IS NULL` rows.
 - DNS note: `_dmarc.supplementstack.de` has no TXT record yet; MX/SPF are present for All-Inkl/Kasserver, and `default._domainkey.supplementstack.de` was not found.
+
+## 2026-05-05 - Data Minimization And Product Safety Warnings
+
+- Remote D1 migrations:
+  - `0045_data_minimization_profile_fields.sql` applied successfully to `supplementstack-production`.
+  - `0046_knowledge_warnings.sql` applied successfully to `supplementstack-production`.
+- Deploy command: `npx wrangler pages deploy frontend/dist --project-name supplementstack`.
+- Correct production Pages project: `supplementstack`.
+- Preview URL: `https://33f76fe5.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`.
+- Build asset: `assets/index-BG4hesq7.js`.
+- Scope:
+  - Removed gender, profile weight, diet, goals, and smoker status from registration/profile/auth response surfaces.
+  - Cleared legacy stored values for those removed profile fields.
+  - Added `knowledge_articles` and `ingredient_safety_warnings`.
+  - Added `/api/knowledge/:slug` and frontend `/wissen/:slug`.
+  - Added product-card safety warning labels with info popover and article link.
+  - Seeded first source-backed warning/article for high-dose Beta-Carotin and lung-cancer risk in smokers/high-risk groups.
+  - Made the warning form-specific for the existing Vitamin A Beta-Carotin form.
+- Validation passed: functions TypeScript, frontend TypeScript, frontend lint, frontend build, frontend Vitest 5 tests, and `git diff --check`.
+- Smoke checks passed: preview/live root 200, preview/live knowledge article route 200, preview/live knowledge API 200, preview/live demo products 200, D1 migration journal shows 0045/0046, article is published, warning row exists for Vitamin A + Beta-Carotin form, legacy profile-field residual count is 0, live profile GET/PUT no longer returns removed fields, and a temporary Beta-Carotin user product returned the warning plus article link. Temporary smoke user/product data was deleted.

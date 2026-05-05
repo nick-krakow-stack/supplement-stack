@@ -431,3 +431,33 @@ Still open:
 - Set/verify DMARC and DKIM with the mail provider/DNS.
 - Product data and dosage data scientific validation: check which recommendations, dose ranges, sources, and visible wording are correct and how they should be corrected.
 - Final legal/compliance sign-off before SEO indexing.
+
+## 2026-05-05 Product Safety Warnings Follow-Up
+
+- Apply remote D1 migration `0046_knowledge_warnings.sql` after the owner of migration 0045 completes their work and migration order is clear.
+- Deploy the safety-warning bundle and smoke-check `/api/knowledge/beta-carotin-raucher-lungenkrebs`, `/wissen/beta-carotin-raucher-lungenkrebs`, `/api/demo/products`, and a Beta-Carotin product card.
+- Add follow-up UX/browser QA for the ProductCard warning popover on desktop hover, keyboard focus, and mobile tap.
+- Consider a later admin UI for managing `knowledge_articles` and `ingredient_safety_warnings`; the first version is seeded by migration only.
+- Full frontend lint still needs unrelated `PrivacyPage.tsx` unescaped quote cleanup.
+
+## 2026-05-05 Data Minimization Follow-Up
+
+- Apply remote D1 migration `0045_data_minimization_profile_fields.sql` before any later migration such as `0046_knowledge_warnings.sql`.
+- Deploy and smoke-check registration, `/api/auth/login`, `/api/me`, and `PUT /api/me` to confirm responses no longer include gender, weight, diet, goals, or `is_smoker`.
+- Note for migration review: `users.is_smoker` is `NOT NULL` in the existing schema, so 0045 resets it to `0` instead of nulling it. A future table rebuild can make it nullable if strict null retention is required.
+- Full frontend lint now passes after the PrivacyPage quote cleanup that also unblocked the product-safety-warning lint note.
+
+## 2026-05-05 Data Minimization And Warnings Update
+
+Closed in the latest deployed bundle:
+- Account/profile data minimization.
+- Remote D1 migrations 0045/0046.
+- Product safety-warning model plus first Beta-Carotin knowledge article.
+- Form-specific Beta-Carotin warning matching under Vitamin A.
+- Live deploy to `supplementstack` Pages project and smoke checks.
+
+Still open:
+- UX/browser QA for the warning popover on hover, keyboard focus, and mobile tap during the next manual browser QA pass.
+- Admin UI for maintaining `knowledge_articles` and `ingredient_safety_warnings` later; first version is migration-seeded only.
+- Product data and dosage data scientific validation remains a separate content workstream.
+- DMARC/DKIM and final legal/compliance sign-off remain pre-indexing tasks.

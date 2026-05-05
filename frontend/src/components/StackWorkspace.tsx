@@ -18,6 +18,7 @@ import SearchBar from './SearchBar';
 import ProductCard from './ProductCard';
 import StacksHeader, { type StacksHeaderVariant } from './StacksHeader';
 import EditStackModal from './EditStackModal';
+import type { ProductSafetyWarning } from '../types';
 import type { DosageGuideline, Ingredient, ShopDomain } from '../types/local';
 import {
   calculateProductUsage,
@@ -56,6 +57,7 @@ export interface DemoProduct {
   warning_message?: string;
   warning_type?: string;
   alternative_note?: string;
+  warnings?: ProductSafetyWarning[];
   ingredient_category?: string;
   status?: 'pending' | 'approved' | 'rejected';
   user_product_status?: 'pending' | 'approved' | 'rejected';

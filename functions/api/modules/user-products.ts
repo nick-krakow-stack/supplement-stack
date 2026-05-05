@@ -10,6 +10,7 @@
 import { Hono } from 'hono'
 import type { AppContext } from '../lib/types'
 import { checkRateLimit, ensureAuth } from '../lib/helpers'
+import { loadUserProductSafetyWarnings } from './knowledge'
 
 const userProducts = new Hono<AppContext>()
 
@@ -223,9 +224,12 @@ async function attachIngredients(
     byProduct.set(productId, list)
   }
 
+  const warningsByProduct = await loadUserProductSafetyWarnings(db, ids)
+
   return products.map((product) => ({
     ...product,
     ingredients: byProduct.get(Number(product.id)) ?? [],
+    warnings: warningsByProduct.get(Number(product.id)) ?? [],
   }))
 }
 

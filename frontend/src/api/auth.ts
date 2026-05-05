@@ -14,7 +14,7 @@ export interface RegisterResponse extends AuthResponse {
 export async function register(
   email: string,
   password: string,
-  extra?: { health_consent?: boolean } & Partial<Pick<User, 'age' | 'gender' | 'guideline_source'>>
+  extra?: { health_consent?: boolean } & Partial<Pick<User, 'age' | 'guideline_source'>>
 ): Promise<RegisterResponse> {
   // Backend returns { token, email_verification_email_sent, message } on register.
   const res = await apiClient.post<{
@@ -50,7 +50,9 @@ export async function getMe(): Promise<User> {
   return res.data.profile;
 }
 
-export async function updateMe(data: Partial<Omit<User, 'id' | 'email' | 'role'>>): Promise<User> {
+export async function updateMe(
+  data: Partial<Pick<User, 'age' | 'guideline_source'>>
+): Promise<User> {
   // Backend returns { profile: {...} }
   const res = await apiClient.put<{ profile: User }>('/me', data);
   return res.data.profile;
