@@ -21,9 +21,9 @@ const mailItems: ChecklistItem[] = [
   },
   {
     title: 'DMARC',
-    status: 'missing',
-    details: '_dmarc.supplementstack.de war beim letzten Check nicht gesetzt.',
-    action: 'DNS TXT setzen: v=DMARC1; p=none; rua=mailto:email@nickkrakow.de; adkim=s; aspf=s',
+    status: 'ok',
+    details: 'Aktuell gesetzt: v=DMARC1; p=none; rua=mailto:email@nickkrakow.de; adkim=s; aspf=s; pct=100',
+    action: 'Nach stabiler Zustellung später auf p=quarantine und danach p=reject verschärfen.',
   },
   {
     title: 'DKIM',
@@ -143,7 +143,7 @@ export default function LaunchChecklistTab() {
           </div>
           <div className="inline-flex items-center gap-2 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-700">
             <AlertTriangle size={16} />
-            DMARC/DKIM noch manuell
+            DKIM noch manuell
           </div>
         </div>
       </div>
