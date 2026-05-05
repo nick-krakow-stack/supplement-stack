@@ -4,9 +4,10 @@ Last updated: 2026-05-05
 
 ## Continuation Point
 
-Continue from `main` after the authenticated app-shell header alignment was
-committed and deployed. Next implementation work should start from the open
-queue below; no header/branding deploy step is pending.
+Continue from `main` after All-Inkl SMTP mail sending was committed and
+deployed in `eff1c6a`. Code deploy is done; the next required operational step
+is adding the Cloudflare Pages secret `SMTP_PASSWORD` manually, then testing
+forgot-password and logged-in `Stack mailen`.
 
 ## Restart Startup (exact)
 
@@ -20,11 +21,19 @@ queue below; no header/branding deploy step is pending.
 ## Git / Worktree
 
 - Latest committed/deployed work:
+  - `eff1c6a` - Feature: Send stack emails via SMTP.
   - `ba92cd5` - UX: Align authenticated headers with app shell.
   - `03ae0f9` - Brand: Use uploaded logo in headers.
-- Latest preview URL: `https://3c09e165.supplementstack.pages.dev`.
+- Latest preview URL: `https://76fde482.supplementstack.pages.dev`.
 - Live URL: `https://supplementstack.de`.
 - Scope:
+  - `functions/api/lib/mail.ts` adds a Worker SMTP-over-TLS helper via
+    `cloudflare:sockets`.
+  - `POST /api/stacks/:id/email` sends the authenticated user's stack summary
+    to their own account email and is rate-limited to 5 sends/hour/user.
+  - Forgot-password mail now uses SMTP instead of the Resend helper.
+  - Non-secret SMTP config is in `wrangler.toml`; `SMTP_PASSWORD` is not yet
+    present in Cloudflare Pages secrets and must be set before live send tests.
   - `/stacks` now renders inside normal `Layout`; Demo still uses its standalone
     demo header.
   - `MyProductsPage` no longer uses an extra full-screen gradient shell.
@@ -33,10 +42,13 @@ queue below; no header/branding deploy step is pending.
   - Normal app header, Stacks/Demo header, and Admin sidebar now use the same
     responsive logo asset.
 - Checks passed:
+  - Functions `npx tsc -p tsconfig.json`.
   - Frontend `npm run build`.
   - Frontend `npm run lint`.
   - Frontend `npm test -- --run` with no test files.
   - `git diff --check`.
+  - Cloudflare Pages deploy compiled/uploaded successfully.
+  - Live unauthenticated `POST /api/stacks/test/email` returned HTTP 401.
   - Preview/live root asset check for `index-DdLiBTCO.js`.
   - Browser-harness checks confirmed `/stacks`, `/my-products`, and `/profile`
     have normal nav, one `/logo.png`, and no `.site-header`.

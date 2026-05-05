@@ -44,6 +44,7 @@ token scopes are verified.
 
 Latest relevant commits:
 
+- `eff1c6a` - Feature: Send stack emails via SMTP.
 - `ba92cd5` - UX: Align authenticated headers with app shell.
 - `03ae0f9` - Brand: Use uploaded logo in headers.
 - `24b10b5` - Fix: Normalize guideline source values.
@@ -73,6 +74,52 @@ Latest relevant commits:
 - `9a5f523` - DB: Phase B complete (migrations 0028-0035).
 
 ## Product Ingredient Publishing Model
+
+### 2026-05-05 - Cloudflare Pages: All-Inkl SMTP stack email sending
+
+- Commit: `eff1c6a` - Feature: Send stack emails via SMTP.
+- Scope:
+  - Added `functions/api/lib/mail.ts`, a Worker-compatible SMTP-over-TLS mail
+    helper using `cloudflare:sockets`.
+  - Added `POST /api/stacks/:id/email` to send a stack summary to the
+    authenticated user's own email address.
+  - Stack email sends are rate-limited to 5 per hour per authenticated user.
+  - Forgot-password mail now uses the SMTP helper instead of the old Resend
+    route.
+  - `wrangler.toml` stores non-secret All-Inkl SMTP config for
+    `noreply@supplementstack.de`.
+- Secret status:
+  - Cloudflare Pages production secrets currently include `JWT_SECRET` and
+    `RESEND_API_KEY`.
+  - `SMTP_PASSWORD` is still missing and must be added manually before real
+    mail can be sent. The raw mailbox password was not stored in code, memory,
+    or command history.
+- DNS status:
+  - MX for `supplementstack.de` resolves to `w020a88d.kasserver.com`.
+  - SPF TXT includes `spf.kasserver.com`.
+  - DMARC remains deferred until pre-launch.
+- Local validation:
+  - `npx tsc -p tsconfig.json` in `functions/` passed.
+  - `npm run build`, `npm run lint`, and `npm test -- --run` in `frontend/`
+    passed; Vitest has no test files.
+  - `git diff --check` passed with CRLF warnings only.
+- Build assets: JS `assets/index-DzSpIHA6.js`, CSS
+  `assets/index-CtyPP7gA.css`.
+- Deploy prep:
+  - Rebuilt `frontend/dist`.
+  - Copied `functions/api` to `frontend/dist/functions/api`.
+  - Verified `frontend/dist/functions/api/[[path]].ts` exists.
+- Deploy command:
+  - `. .\scripts\use-supplementstack-cloudflare.local.ps1`
+  - `npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://76fde482.supplementstack.pages.dev`.
+- Smoke checks:
+  - Live unauthenticated `POST /api/stacks/test/email` returned HTTP 401,
+    confirming the deployed route is present and protected.
+- Follow-up:
+  - Add Pages secret `SMTP_PASSWORD`, then test forgot-password and a logged-in
+    `Stack mailen` flow. If All-Inkl rejects SMTP auth, switch
+    `SMTP_USERNAME` to the All-Inkl mailbox account name and redeploy.
 
 ### 2026-05-05 - Cloudflare Pages: authenticated app-shell header alignment
 

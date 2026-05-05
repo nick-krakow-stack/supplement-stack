@@ -43,6 +43,30 @@ unless verified against code.
 Phase B is complete. Phase C is complete. Phase D bundle is committed,
 remote-migrated, and deployed to Cloudflare Pages preview.
 
+All-Inkl SMTP mail sending is committed and deployed:
+
+- Commit: `eff1c6a` - Feature: Send stack emails via SMTP.
+- Preview: `https://76fde482.supplementstack.pages.dev`.
+- Live: `https://supplementstack.de`.
+- `functions/api/lib/mail.ts` implements a Cloudflare Worker SMTP-over-TLS
+  helper via `cloudflare:sockets`.
+- `POST /api/stacks/:id/email` sends the authenticated user's stack summary to
+  their own account email and is rate-limited to 5 sends per hour per user.
+- Forgot-password mail now uses the same SMTP helper instead of the old Resend
+  path.
+- `wrangler.toml` contains non-secret All-Inkl SMTP settings for
+  `noreply@supplementstack.de`; the raw mailbox password is intentionally not
+  stored in code, memory, or command history.
+- Cloudflare Pages currently does not have the required `SMTP_PASSWORD` secret.
+  Set it with `npx wrangler pages secret put SMTP_PASSWORD --project-name supplementstack`
+  before live mail can be sent.
+- DNS checks passed: MX points to `w020a88d.kasserver.com` and SPF includes
+  `spf.kasserver.com`; DMARC remains a pre-launch follow-up.
+- Validation passed: functions TypeScript compile, frontend build, frontend
+  lint, frontend Vitest no-test run, `git diff --check` with CRLF warnings
+  only, Pages deploy compile/upload, and live unauthenticated
+  `POST /api/stacks/test/email` returning HTTP 401.
+
 - Logo/header branding is committed and deployed:
 
   - Commit: `03ae0f9` - Brand: Use uploaded logo in headers.

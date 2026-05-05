@@ -6,6 +6,15 @@ Last updated: 2026-05-05
 
 Phase C is complete. The integrated Phase D rollout is complete:
 
+- All-Inkl SMTP mail sending is committed and deployed in `eff1c6a`
+  (`Feature: Send stack emails via SMTP`). Preview:
+  `https://76fde482.supplementstack.pages.dev`; live:
+  `https://supplementstack.de`. Stack email sending now uses
+  `POST /api/stacks/:id/email` for authenticated users, and forgot-password
+  mail uses the same Worker SMTP helper. Non-secret SMTP config is in
+  `wrangler.toml`; `SMTP_PASSWORD` must still be added as a Cloudflare Pages
+  secret before real mail can be sent. DNS MX/SPF checks passed; DMARC is still
+  deferred until pre-launch.
 - Logo/header branding is complete and deployed in `03ae0f9`
   (`Brand: Use uploaded logo in headers`). Preview:
   `https://47c4db46.supplementstack.pages.dev`; live:
@@ -185,7 +194,18 @@ signal items any agent — Claude, Codex, anyone — can pick up directly.
      GitHub, Google Analytics property/settings before indexing.
    - Effort: Legal review dependent.
 
-2. ❌ **Admin UI for sub-ingredient mappings**
+2. [ ] **Set and verify SMTP password secret**
+   - Add the All-Inkl mailbox password as Cloudflare Pages secret
+     `SMTP_PASSWORD`; do not store the raw value in repo files or memory.
+   - Command:
+     `. .\scripts\use-supplementstack-cloudflare.local.ps1` then
+     `npx wrangler pages secret put SMTP_PASSWORD --project-name supplementstack`.
+   - After the secret exists, test forgot-password and logged-in
+     `Stack mailen`. If SMTP auth returns 535, switch `SMTP_USERNAME` from the
+     email address to the All-Inkl account name and redeploy.
+   - Effort: S.
+
+3. ❌ **Admin UI for sub-ingredient mappings**
    - Backend APIs exist and migration 0040 seeded launch mappings, but there is
      no dedicated admin UI yet for creating/removing parent/child prompt
      mappings.
@@ -193,13 +213,13 @@ signal items any agent — Claude, Codex, anyone — can pick up directly.
      EPA/DHA/DPA, and future mappings.
    - Effort: M.
 
-3. ❌ **Manual product-submission browser QA**
+4. ❌ **Manual product-submission browser QA**
    - Run product submission and moderation/publish flows on desktop and mobile,
      including sub-ingredient prompts, parent/sub validation errors, and 50-row
      ingredient limit behavior.
    - Effort: S/M.
 
-4. ❌ **Affiliate/domain final policy review**
+5. ❌ **Affiliate/domain final policy review**
    - Review affiliate disclosure, shop-domain matching assumptions, and final
      domain/policy wording before Go-Live.
    - Effort: S.
