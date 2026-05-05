@@ -19,6 +19,11 @@ import ProductCard from './ProductCard';
 import StacksHeader, { type StacksHeaderVariant } from './StacksHeader';
 import EditStackModal from './EditStackModal';
 import type { DosageGuideline, Ingredient, ShopDomain } from '../types/local';
+import {
+  calculateProductUsage,
+  intakeIntervalDays as calculateIntakeIntervalDays,
+  productTotalServings as calculateTotalServings,
+} from '../lib/stackCalculations';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -39,6 +44,8 @@ export interface DemoProduct {
   servings_per_container?: number;
   container_count?: number;
   quantity?: number;
+  basis_quantity?: number | null;
+  basis_unit?: string | null;
   intake_interval_days?: number;
   unit?: string;
   form?: string;
@@ -57,6 +64,8 @@ export interface DemoProduct {
     ingredient_id: number;
     quantity?: number | null;
     unit?: string | null;
+    basis_quantity?: number | null;
+    basis_unit?: string | null;
     search_relevant?: number | boolean;
   }>;
 }
@@ -162,83 +171,20 @@ function primaryDose(guideline?: DosageGuideline): ManualDose | null {
 }
 
 function productTotalServings(product: DemoProduct): number {
-  const totalServings = (product.servings_per_container ?? 0) * (product.container_count ?? 1);
-  return totalServings > 0 ? totalServings : 30;
-}
-
-function normalizeComparableUnit(unit?: string | null): string {
-  const normalized = (unit ?? '').trim().toLowerCase().replace(/μ/g, 'µ').replace(/\./g, '');
-  if (['iu', 'ie'].includes(normalized)) return 'iu';
-  if (['µg', 'ug', 'mcg'].includes(normalized)) return 'µg';
-  if (['kapsel', 'kapseln'].includes(normalized)) return 'kapsel';
-  if (['tablette', 'tabletten'].includes(normalized)) return 'tablette';
-  if (normalized === 'tropfen') return 'tropfen';
-  if (['softgel', 'softgels'].includes(normalized)) return 'softgel';
-  if (['portion', 'portionen'].includes(normalized)) return 'portion';
-  return normalized;
-}
-
-function parseGermanNumber(value: string): number | null {
-  const trimmed = value.trim();
-  const normalized = trimmed.includes(',')
-    ? trimmed.replace(/\./g, '').replace(',', '.')
-    : /^\d{1,3}(?:\.\d{3})+$/.test(trimmed)
-      ? trimmed.replace(/\./g, '')
-      : trimmed;
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-}
-
-function parseDoseFromText(text?: string | null): { value: number; unit: string } | null {
-  if (!text) return null;
-  const match = /(\d+(?:[.,]\d{1,3})?(?:\.\d{3})*)\s*(IE|IU|µg|μg|ug|mcg|mg|g|Kapseln?|Tabletten?|Tropfen|Softgels?|Portionen?)/i.exec(text);
-  if (!match) return null;
-  const value = parseGermanNumber(match[1]);
-  return value ? { value, unit: match[2] } : null;
-}
-
-function productPrimaryQuantity(product: DemoProduct): { quantity: number; unit?: string | null } | null {
-  const fromIngredients = product.ingredients?.find((ingredient) => (
-    Boolean(ingredient.search_relevant ?? 1) && ingredient.quantity != null && ingredient.quantity > 0
-  ));
-  if (fromIngredients?.quantity) return { quantity: fromIngredients.quantity, unit: fromIngredients.unit };
-  if (product.quantity != null && product.quantity > 0 && product.unit) {
-    return { quantity: product.quantity, unit: product.unit };
-  }
-  return null;
+  return calculateTotalServings(product, 30);
 }
 
 function productServingsFromDose(product: DemoProduct): number | null {
-  const parsedDose = parseDoseFromText(product.dosage_text);
-  if (parsedDose) {
-    const doseUnit = normalizeComparableUnit(parsedDose.unit);
-    const ingredient = productPrimaryQuantity(product);
-    if (ingredient && normalizeComparableUnit(ingredient.unit) === doseUnit) {
-      return Math.max(1, Math.ceil(parsedDose.value / ingredient.quantity));
-    }
-    if (
-      product.serving_size != null &&
-      product.serving_size > 0 &&
-      normalizeComparableUnit(product.serving_unit) === doseUnit
-    ) {
-      return Math.max(1, Math.ceil(parsedDose.value / product.serving_size));
-    }
-  }
-
-  return null;
+  const usage = calculateProductUsage(product, product.price, { fallbackTotalServings: 30 });
+  return usage.calculationSource === 'target_dose' ? usage.servingsPerIntake : null;
 }
 
 function productServingsPerDay(product: DemoProduct): number {
-  const servingsFromDose = productServingsFromDose(product);
-  if (servingsFromDose != null) return servingsFromDose;
-
-  if (product.quantity != null && product.quantity > 0 && product.quantity <= 100) return product.quantity;
-  return 1;
+  return calculateProductUsage(product, product.price, { fallbackTotalServings: 30 }).servingsPerIntake;
 }
 
 function productIntakeIntervalDays(product: DemoProduct): number {
-  const interval = product.intake_interval_days ?? 1;
-  return Number.isInteger(interval) && interval >= 1 ? interval : 1;
+  return calculateIntakeIntervalDays(product);
 }
 
 function formatIntakeInterval(days: number): string {
@@ -246,9 +192,7 @@ function formatIntakeInterval(days: number): string {
 }
 
 function productMonthlyPrice(product: DemoProduct): number {
-  const effectiveDailyUsage = productServingsPerDay(product) / productIntakeIntervalDays(product);
-  const daysSupply = effectiveDailyUsage > 0 ? Math.floor(productTotalServings(product) / effectiveDailyUsage) : 0;
-  return daysSupply > 0 ? (product.price / daysSupply) * 30 : product.price;
+  return calculateProductUsage(product, product.price, { fallbackTotalServings: 30 }).monthlyCost ?? product.price;
 }
 
 function formatEuro(value: number): string {
@@ -401,9 +345,12 @@ function AddProductModal({
   };
 
   const addProduct = async (product: DemoProduct) => {
+    const targetDosageText = dose.value > 0 && dose.unit
+      ? `${dose.value} ${dose.unit} täglich`
+      : product.dosage_text || '1 Portion täglich';
     const enhanced: DemoProduct = {
       ...product,
-      dosage_text: product.dosage_text || `${dose.value || 1} ${dose.unit || 'Portion'} täglich`,
+      dosage_text: targetDosageText,
       timing: product.timing || 'Zum Frühstück',
       intake_interval_days: product.intake_interval_days ?? 1,
     };
@@ -521,7 +468,7 @@ function AddProductModal({
                         {primaryDose(studyGuideline)!.unit}
                       </p>
                       <span className="mt-4 flex justify-center rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-black text-white">
-                        Studien-Dosierung
+                        Dosierung aus Studienquelle
                       </span>
                     </button>
                   ) : (
@@ -618,6 +565,12 @@ function AddProductModal({
               <div className="grid gap-4">
                 {products.map((product) => {
                   const key = productStackKey(product);
+                  const previewProduct: DemoProduct = {
+                    ...product,
+                    dosage_text: dose.value > 0 && dose.unit
+                      ? `${dose.value} ${dose.unit} täglich`
+                      : product.dosage_text,
+                  };
                   return (
                   <div key={key} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                     <div className="flex items-start justify-between gap-4">
@@ -639,7 +592,7 @@ function AddProductModal({
                       </div>
                       <div className="shrink-0 text-right">
                         <p className="text-xl font-black text-emerald-600">
-                          €{formatEuro(productMonthlyPrice(product))}
+                          €{formatEuro(productMonthlyPrice(previewProduct))}
                         </p>
                         <p className="text-xs font-semibold text-slate-500">pro Monat</p>
                       </div>
@@ -648,7 +601,7 @@ function AddProductModal({
                       <div>
                         <p className="text-sm font-semibold text-slate-500">Dosierung:</p>
                         <p className="mt-1 text-base font-black text-slate-950">
-                          {product.dosage_text || `${dose.value || 1} ${dose.unit || 'Portion'}`}
+                          {previewProduct.dosage_text || `${dose.value || 1} ${dose.unit || 'Portion'}`}
                         </p>
                       </div>
                       <div>
@@ -666,7 +619,7 @@ function AddProductModal({
                       <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3">
                         <p className="text-xs font-semibold text-emerald-700">Pro Monat</p>
                         <p className="mt-1 text-lg font-black text-emerald-700">
-                          €{formatEuro(productMonthlyPrice(product))}
+                          €{formatEuro(productMonthlyPrice(previewProduct))}
                         </p>
                       </div>
                     </div>

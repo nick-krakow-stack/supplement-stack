@@ -14,6 +14,7 @@ import { Hono } from 'hono'
 import type { AppContext, StackRow, StackItemRow, InteractionRow } from '../lib/types'
 import { checkRateLimit, ensureAuth } from '../lib/helpers'
 import { sendMail } from '../lib/mail'
+import { calculateProductUsage, ingredientAmountPerProductServing } from '../lib/stack-calculations'
 
 const stacks = new Hono<AppContext>()
 
@@ -42,6 +43,7 @@ type StackMailItem = {
   product_price: number
   image_url: string | null
   shop_link: string | null
+  is_affiliate: number | null
   quantity: number
   intake_interval_days: number
   serving_size: number | null
@@ -59,10 +61,12 @@ type StackMailIngredient = {
   parent_ingredient_id: number | null
   quantity: number | null
   unit: string | null
+  basis_quantity: number | null
+  basis_unit: string | null
   search_relevant: number
 }
 
-type StackItemResponseIngredient = Pick<StackMailIngredient, 'ingredient_id' | 'quantity' | 'unit' | 'search_relevant'>
+type StackItemResponseIngredient = Pick<StackMailIngredient, 'ingredient_id' | 'quantity' | 'unit' | 'basis_quantity' | 'basis_unit' | 'search_relevant'>
 
 type StackMailPreparedItem = StackMailItem & {
   dailyAmountLabel: string
@@ -141,33 +145,6 @@ function formatIntakeInterval(days: number): string {
   return days <= 1 ? 'täglich' : `alle ${days} Tage`
 }
 
-function computeServingsPerIntake(item: StackMailItem, ingredients: StackMailIngredient[]): number {
-  const parsedDose = parseDoseFromText(item.dosage_text)
-  if (parsedDose) {
-    const doseUnit = normalizeComparableUnit(parsedDose.unit)
-    const matchingIngredient = ingredients.find((ingredient) => (
-      ingredient.search_relevant === 1 &&
-      ingredient.quantity != null &&
-      ingredient.quantity > 0 &&
-      normalizeComparableUnit(ingredient.unit) === doseUnit
-    ))
-    if (matchingIngredient?.quantity) {
-      return Math.max(1, Math.ceil(parsedDose.value / matchingIngredient.quantity))
-    }
-
-    if (
-      item.serving_size != null &&
-      item.serving_size > 0 &&
-      normalizeComparableUnit(item.serving_unit) === doseUnit
-    ) {
-      return Math.max(1, Math.ceil(parsedDose.value / item.serving_size))
-    }
-  }
-
-  if (item.quantity > 0 && item.quantity <= 100) return item.quantity
-  return 1
-}
-
 function prepareMailItems(
   items: StackMailItem[],
   ingredientsByItem: Map<number, StackMailIngredient[]>,
@@ -175,33 +152,25 @@ function prepareMailItems(
 ): StackMailPreparedItem[] {
   return items.map((item) => {
     const ingredients = ingredientsByItem.get(item.stack_item_id) ?? []
-    const servingsPerIntake = computeServingsPerIntake(item, ingredients)
-    const intakeIntervalDays = Math.max(1, item.intake_interval_days || 1)
-    const effectiveDailyUsage = servingsPerIntake / intakeIntervalDays
-    const totalServings = (item.servings_per_container ?? 0) * (item.container_count ?? 1)
-    const daysSupply = totalServings > 0 && effectiveDailyUsage > 0
-      ? Math.floor(totalServings / effectiveDailyUsage)
-      : null
-    const monthlyCost = daysSupply && daysSupply > 0 ? (item.product_price / daysSupply) * 30 : null
-    const dailyUnitValue = item.serving_size != null && item.serving_size > 0
-      ? item.serving_size * servingsPerIntake
-      : servingsPerIntake
+    const usage = calculateProductUsage({ ...item, ingredients }, item.product_price)
+    const dailyUnitValue = usage.intakeAmountPerDay
     const dailyAmountLabel = item.serving_unit
       ? `${formatDailyUnit(dailyUnitValue, item.serving_unit)}/Einnahmetag`
-      : `${formatDailyUnit(servingsPerIntake, 'Portionen')}/Einnahmetag`
+      : `${formatDailyUnit(usage.servingsPerIntake, 'Portionen')}/Einnahmetag`
     const dailyIngredientLabels = ingredients
       .filter((ingredient) => ingredient.search_relevant === 1 && ingredient.quantity != null && ingredient.quantity > 0)
-      .map((ingredient) => (
-        `${ingredient.ingredient_name}: ${formatDailyUnit((ingredient.quantity ?? 0) * servingsPerIntake, ingredient.unit)}/Einnahmetag`
-      ))
+      .map((ingredient) => {
+        const amountPerServing = ingredientAmountPerProductServing(ingredient, item) ?? ingredient.quantity ?? 0
+        return `${ingredient.ingredient_name}: ${formatDailyUnit(amountPerServing * usage.servingsPerIntake, ingredient.unit)}/Einnahmetag`
+      })
 
     return {
       ...item,
       dailyAmountLabel,
       dailyIngredientLabels,
-      intakeIntervalLabel: formatIntakeInterval(intakeIntervalDays),
-      daysSupply,
-      monthlyCost,
+      intakeIntervalLabel: formatIntakeInterval(Math.max(1, item.intake_interval_days || 1)),
+      daysSupply: usage.daysSupply,
+      monthlyCost: usage.monthlyCost,
       warningLabels: warningsByItem.get(item.stack_item_id) ?? [],
     }
   })
@@ -213,7 +182,7 @@ function buildStackEmailHtml(stack: StackRow, items: StackMailPreparedItem[], to
       ? `<img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.name)}" width="56" height="56" style="width:56px;height:56px;object-fit:cover;border-radius:10px;border:1px solid #e5e7eb;background:#f8fafc;">`
       : `<div style="width:56px;height:56px;border-radius:10px;border:1px solid #e5e7eb;background:#f8fafc;text-align:center;line-height:56px;color:#94a3b8;font-size:18px;font-weight:800;">SS</div>`
     const buyButton = item.shop_link
-      ? `<a href="${escapeHtml(item.shop_link)}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;font-weight:700;border-radius:8px;padding:9px 12px;white-space:nowrap;">Jetzt kaufen</a>`
+      ? `<a href="${escapeHtml(item.shop_link)}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;font-weight:700;border-radius:8px;padding:9px 12px;white-space:nowrap;">${item.is_affiliate ? 'Kaufen (Affiliate-Link)' : 'Jetzt kaufen'}</a>${item.is_affiliate ? '<br><span style="display:inline-block;margin-top:4px;color:#64748b;font-size:12px;">Affiliate-Link</span>' : ''}`
       : '<span style="display:inline-block;color:#9a3412;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:8px 10px;font-weight:700;">Kauf-Link fehlt - bitte Produkt melden</span>'
     const ingredientText = item.dailyIngredientLabels.length > 0
       ? item.dailyIngredientLabels.map(escapeHtml).join('<br>')
@@ -446,6 +415,8 @@ async function loadStackMailIngredients(
         pi.parent_ingredient_id,
         pi.quantity,
         pi.unit,
+        pi.basis_quantity,
+        pi.basis_unit,
         pi.search_relevant
       FROM stack_items si
       JOIN product_ingredients pi ON pi.product_id = si.catalog_product_id
@@ -462,6 +433,8 @@ async function loadStackMailIngredients(
         upi.parent_ingredient_id,
         upi.quantity,
         upi.unit,
+        upi.basis_quantity,
+        upi.basis_unit,
         upi.search_relevant
       FROM stack_items si
       JOIN user_products up ON up.id = si.user_product_id AND up.user_id = ?
@@ -502,6 +475,8 @@ async function loadStackItemsWithIngredients(
         ingredient_id: ingredient.ingredient_id,
         quantity: ingredient.quantity,
         unit: ingredient.unit,
+        basis_quantity: ingredient.basis_quantity,
+        basis_unit: ingredient.basis_unit,
         search_relevant: ingredient.search_relevant,
       })),
     }

@@ -54,6 +54,8 @@ export interface ProductIngredient {
   ingredient_name?: string;
   quantity?: number;
   unit?: string;
+  basis_quantity?: number | null;
+  basis_unit?: string | null;
   is_main?: number;
   search_relevant?: number | boolean;
 }
@@ -95,6 +97,8 @@ export interface Product {
   ingredient_name?: string;
   quantity?: number;
   unit?: string;
+  basis_quantity?: number | null;
+  basis_unit?: string | null;
   is_main?: number;
   timing?: string;
   dosage_text?: string;

@@ -10,6 +10,9 @@ import {
   Trophy,
   UserCheck,
   Languages,
+  Link2,
+  Pill,
+  History,
   ChevronLeft,
   Menu,
   X,
@@ -22,7 +25,18 @@ interface AdminLayoutProps {
   children?: React.ReactNode;
 }
 
-type TabId = 'stats' | 'products' | 'ingredients' | 'translations' | 'interactions' | 'shop_domains' | 'rankings' | 'user_products';
+type TabId =
+  | 'stats'
+  | 'products'
+  | 'ingredients'
+  | 'translations'
+  | 'ingredient_sub_ingredients'
+  | 'dose_recommendations'
+  | 'audit_log'
+  | 'interactions'
+  | 'shop_domains'
+  | 'rankings'
+  | 'user_products';
 
 interface NavItem {
   id: TabId;
@@ -35,6 +49,9 @@ const navItems: NavItem[] = [
   { id: 'products', label: 'Produkte', icon: <Package size={18} /> },
   { id: 'ingredients', label: 'Zutaten', icon: <FlaskConical size={18} /> },
   { id: 'translations', label: 'Translations', icon: <Languages size={18} /> },
+  { id: 'ingredient_sub_ingredients', label: 'Sub-Ingredients', icon: <Link2 size={18} /> },
+  { id: 'dose_recommendations', label: 'Dose-Empfehlungen', icon: <Pill size={18} /> },
+  { id: 'audit_log', label: 'Audit-Log', icon: <History size={18} /> },
   { id: 'interactions', label: 'Wechselwirkungen', icon: <AlertTriangle size={18} /> },
   { id: 'shop_domains', label: 'Shop-Domains', icon: <ShoppingBag size={18} /> },
   { id: 'rankings', label: 'Rankings', icon: <Trophy size={18} /> },
@@ -46,6 +63,9 @@ const TAB_LABELS: Record<TabId, string> = {
   products: 'Produkte',
   ingredients: 'Zutaten',
   translations: 'Translations',
+  ingredient_sub_ingredients: 'Sub-Ingredients',
+  dose_recommendations: 'Dose-Empfehlungen',
+  audit_log: 'Audit-Log',
   interactions: 'Wechselwirkungen',
   shop_domains: 'Shop-Domains',
   rankings: 'Rankings',

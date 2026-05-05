@@ -36,7 +36,7 @@ interface DoseRecommendationTranslationRow {
   base_timing: string | null;
   base_context_note: string | null;
   dose_min: number | null;
-  dose_max: number;
+  dose_max: number | null;
   unit: string;
   per_kg_body_weight: number | null;
   per_kg_cap: number | null;
@@ -143,11 +143,13 @@ interface SavedBlogTranslation {
   meta_description: string | null;
 }
 
+const DEFAULT_PAGE_LIMIT = 25;
+
 const LANGUAGE_OPTIONS = [
   { value: 'de', label: 'Deutsch' },
-  { value: 'en', label: 'Englisch' },
-  { value: 'fr', label: 'Franzoesisch' },
-  { value: 'es', label: 'Spanisch' },
+  { value: 'en', label: 'English' },
+  { value: 'fr', label: 'FranÃ§ais' },
+  { value: 'es', label: 'EspaÃ±ol' },
 ];
 
 const ENTITY_CONFIG: Record<EntityKey, EntityConfig> = {
@@ -211,6 +213,13 @@ function isCanceledRequest(error: unknown): boolean {
   return candidate.code === 'ERR_CANCELED' || candidate.name === 'CanceledError' || candidate.name === 'AbortError';
 }
 
+function rowKey(entity: EntityKey, row: TranslationRow): string {
+  if ('ingredient_id' in row) return `ingredients:${row.ingredient_id}`;
+  if ('dose_recommendation_id' in row) return `dose-recommendations:${row.dose_recommendation_id}`;
+  if ('verified_profile_id' in row) return `verified-profiles:${row.verified_profile_id}`;
+  return `blog-posts:${row.blog_post_id}`;
+}
+
 function toDraft(row: TranslationRow): TranslationDraft {
   if ('ingredient_id' in row) {
     return {
@@ -244,18 +253,11 @@ function toDraft(row: TranslationRow): TranslationDraft {
   };
 }
 
-function rowKey(row: TranslationRow): string {
-  if ('ingredient_id' in row) return String(row.ingredient_id);
-  if ('dose_recommendation_id' in row) return String(row.dose_recommendation_id);
-  if ('verified_profile_id' in row) return String(row.verified_profile_id);
-  return String(row.blog_post_id);
-}
-
 function formatDose(row: DoseRecommendationTranslationRow): string {
   const min = row.dose_min !== null ? `${row.dose_min}-` : '';
   const perKg = row.per_kg_body_weight !== null ? `, ${row.per_kg_body_weight} ${row.unit}/kg` : '';
   const cap = row.per_kg_cap !== null ? `, cap ${row.per_kg_cap} ${row.unit}` : '';
-  return `${min}${row.dose_max} ${row.unit}${perKg}${cap}`;
+  return `${min}${row.dose_max ?? ''} ${row.unit}${perKg}${cap}`;
 }
 
 function formatTimestamp(value: number | null): string {
@@ -335,8 +337,10 @@ export default function TranslationsTab() {
   const [entity, setEntity] = useState<EntityKey>('ingredients');
   const [language, setLanguage] = useState('de');
   const [query, setQuery] = useState('');
+  const [page, setPage] = useState(1);
   const [rows, setRows] = useState<TranslationRow[]>([]);
   const [drafts, setDrafts] = useState<Record<string, TranslationDraft>>({});
+  const [total, setTotal] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [savingKey, setSavingKey] = useState<string | null>(null);
@@ -346,6 +350,11 @@ export default function TranslationsTab() {
 
   const normalizedLanguage = useMemo(() => normalizeLanguage(language), [language]);
   const config = ENTITY_CONFIG[entity];
+  const pageLimit = DEFAULT_PAGE_LIMIT;
+
+  const totalPages = total != null ? Math.max(1, Math.ceil(total / pageLimit)) : null;
+  const hasNext = totalPages != null ? page < totalPages : rows.length === pageLimit;
+  const hasPrevious = page > 1;
 
   const loadTranslations = useCallback(async () => {
     const requestId = loadRequestIdRef.current + 1;
@@ -353,6 +362,7 @@ export default function TranslationsTab() {
     loadAbortControllerRef.current?.abort();
     const abortController = new AbortController();
     loadAbortControllerRef.current = abortController;
+    const offset = (page - 1) * pageLimit;
 
     setLoading(true);
     setError('');
@@ -362,12 +372,15 @@ export default function TranslationsTab() {
       const res = await apiClient.get<{
         language: string;
         translations: TranslationRow[];
+        total?: number;
+        count?: number;
+        limit?: number;
       }>(config.endpoint, {
         params: {
           language: normalizedLanguage,
           q: query.trim(),
-          limit: 50,
-          offset: 0,
+          limit: pageLimit,
+          offset,
         },
         signal: abortController.signal,
       });
@@ -375,11 +388,25 @@ export default function TranslationsTab() {
       if (requestId !== loadRequestIdRef.current || abortController.signal.aborted) return;
 
       const nextRows = res.data.translations ?? [];
+      const nextTotal = typeof res.data.total === 'number' ? res.data.total : typeof res.data.count === 'number' ? res.data.count : null;
+
       setRows(nextRows);
-      setDrafts(Object.fromEntries(nextRows.map((row) => [rowKey(row), toDraft(row)])));
+      setTotal(nextTotal);
+      setDrafts((prev) => {
+        const nextDrafts = { ...prev };
+        for (const row of nextRows) {
+          const key = rowKey(entity, row);
+          if (!nextDrafts[key]) {
+            nextDrafts[key] = toDraft(row);
+          }
+        }
+        return nextDrafts;
+      });
     } catch (err) {
       if (isCanceledRequest(err) || requestId !== loadRequestIdRef.current) return;
       setError(getErrorMessage(err));
+      setRows([]);
+      setTotal(null);
     } finally {
       if (requestId === loadRequestIdRef.current) {
         setLoading(false);
@@ -388,7 +415,7 @@ export default function TranslationsTab() {
         }
       }
     }
-  }, [config.endpoint, normalizedLanguage, query]);
+  }, [config.endpoint, entity, normalizedLanguage, page, pageLimit, query]);
 
   useEffect(() => {
     loadTranslations();
@@ -413,7 +440,7 @@ export default function TranslationsTab() {
   };
 
   const saveTranslation = async (row: TranslationRow) => {
-    const key = rowKey(row);
+    const key = rowKey(entity, row);
     const draft = drafts[key] ?? toDraft(row);
 
     setSavingKey(key);
@@ -462,16 +489,15 @@ export default function TranslationsTab() {
           timing: doseDraft.timing.trim() || null,
           context_note: doseDraft.context_note.trim() || null,
         };
-        const res = await apiClient.put<{
-          translation: SavedDoseRecommendationTranslation;
-        }>(
+        const res = await apiClient.put<{ translation: SavedDoseRecommendationTranslation }>(
           `${ENTITY_CONFIG['dose-recommendations'].endpoint}/${row.dose_recommendation_id}/${normalizedLanguage}`,
           payload,
         );
         const translation = res.data.translation;
         setRows((prev) =>
           prev.map((item) =>
-            'dose_recommendation_id' in item && item.dose_recommendation_id === row.dose_recommendation_id
+            'dose_recommendation_id' in item &&
+            item.dose_recommendation_id === row.dose_recommendation_id
               ? { ...item, ...translation, status: 'translated' }
               : item,
           ),
@@ -490,9 +516,7 @@ export default function TranslationsTab() {
           credentials: profileDraft.credentials.trim() || null,
           bio: profileDraft.bio.trim() || null,
         };
-        const res = await apiClient.put<{
-          translation: SavedVerifiedProfileTranslation;
-        }>(
+        const res = await apiClient.put<{ translation: SavedVerifiedProfileTranslation }>(
           `${ENTITY_CONFIG['verified-profiles'].endpoint}/${row.verified_profile_id}/${normalizedLanguage}`,
           payload,
         );
@@ -560,7 +584,7 @@ export default function TranslationsTab() {
   };
 
   const renderFields = (row: TranslationRow) => {
-    const key = rowKey(row);
+    const key = rowKey(entity, row);
     const draft = drafts[key] ?? toDraft(row);
 
     if ('ingredient_id' in row) {
@@ -710,6 +734,8 @@ export default function TranslationsTab() {
     );
   };
 
+  const displayTotal = total != null ? `${total}` : 'unbekannt';
+
   return (
     <div className="space-y-5">
       <div className="bg-white border border-gray-100 shadow-sm rounded-2xl p-5">
@@ -738,7 +764,10 @@ export default function TranslationsTab() {
               <button
                 key={key}
                 type="button"
-                onClick={() => setEntity(key)}
+                onClick={() => {
+                  setEntity(key);
+                  setPage(1);
+                }}
                 className={`rounded-xl border px-3 py-2 text-sm font-semibold transition-colors ${
                   entity === key
                     ? 'border-indigo-600 bg-indigo-600 text-white'
@@ -755,7 +784,10 @@ export default function TranslationsTab() {
               Sprache
               <select
                 value={language}
-                onChange={(event) => setLanguage(event.target.value)}
+                onChange={(event) => {
+                  setLanguage(event.target.value);
+                  setPage(1);
+                }}
                 className="border border-gray-200 rounded-xl px-3 py-2 text-sm font-normal normal-case tracking-normal text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
               >
                 {LANGUAGE_OPTIONS.map((option) => (
@@ -772,7 +804,10 @@ export default function TranslationsTab() {
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
                   value={query}
-                  onChange={(event) => setQuery(event.target.value)}
+                  onChange={(event) => {
+                    setQuery(event.target.value);
+                    setPage(1);
+                  }}
                   placeholder={config.searchPlaceholder}
                   className="w-full border border-gray-200 rounded-xl pl-9 pr-3 py-2 text-sm font-normal normal-case tracking-normal text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
                 />
@@ -781,13 +816,42 @@ export default function TranslationsTab() {
 
             <button
               type="button"
-              onClick={loadTranslations}
+              onClick={() => {
+                setPage(1);
+                loadTranslations();
+              }}
               disabled={loading}
               className="self-end inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-700 disabled:opacity-60"
             >
               {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
               Laden
             </button>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+            <span className="text-gray-500">
+              Seite {page}
+              {totalPages ? ` / ${totalPages}` : ''}
+              {total === null ? ' von unbek. Seiten' : ` · ${displayTotal} Treffer`}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                disabled={!hasPrevious || loading}
+                className="min-h-10 px-3 py-2 rounded-lg border border-gray-200 text-sm font-medium disabled:opacity-50"
+              >
+                Zurueck
+              </button>
+              <button
+                type="button"
+                onClick={() => setPage((prev) => prev + 1)}
+                disabled={!hasNext || loading}
+                className="min-h-10 px-3 py-2 rounded-lg border border-gray-200 text-sm font-medium disabled:opacity-50"
+              >
+                Weiter
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -814,11 +878,14 @@ export default function TranslationsTab() {
       {!loading && rows.length > 0 && (
         <div className="space-y-4">
           {rows.map((row) => {
-            const key = rowKey(row);
+            const key = rowKey(entity, row);
             const isSaving = savingKey === key;
 
             return (
-              <section key={`${entity}-${key}`} className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+              <section
+                key={key}
+                className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm"
+              >
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -834,6 +901,12 @@ export default function TranslationsTab() {
                       {statusBadge(row.status)}
                       <span className="text-xs text-gray-400">ID {key}</span>
                     </div>
+                    {'dose_recommendation_id' in row && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        {row.source_type} · Dose {row.dose_max ?? '-'} {row.unit}
+                      </p>
+                    )}
+                    {'ingredient_id' in row && <p className="text-xs text-gray-500 mt-1">Sprache {row.language}</p>}
                   </div>
                   <button
                     type="button"

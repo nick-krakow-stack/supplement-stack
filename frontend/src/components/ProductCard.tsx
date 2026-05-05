@@ -1,5 +1,6 @@
 import { ExternalLink, Pencil, RefreshCcw, Trash2 } from 'lucide-react';
 import type { ShopDomain } from '../types/local';
+import { calculateProductUsage, intakeIntervalDays as getIntakeIntervalDays } from '../lib/stackCalculations';
 
 interface ProductCardProduct {
   id: number;
@@ -19,6 +20,8 @@ interface ProductCardProduct {
   form?: string;
   quantity?: number;
   unit?: string;
+  basis_quantity?: number | null;
+  basis_unit?: string | null;
   product_price?: number;
   product_name?: string;
   product_brand?: string;
@@ -29,6 +32,8 @@ interface ProductCardProduct {
     ingredient_id: number;
     quantity?: number | null;
     unit?: string | null;
+    basis_quantity?: number | null;
+    basis_unit?: string | null;
     search_relevant?: number | boolean;
   }>;
   effect_summary?: string;
@@ -63,87 +68,12 @@ function formatEur(value: number): string {
   return value.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
 }
 
-function intakeIntervalDays(product: ProductCardProduct): number {
-  const interval = product.intake_interval_days ?? 1;
-  return Number.isInteger(interval) && interval >= 1 ? interval : 1;
-}
-
-function normalizeComparableUnit(unit?: string | null): string {
-  const normalized = (unit ?? '').trim().toLowerCase().replace(/Î¼/g, 'Âµ').replace(/\./g, '');
-  if (['iu', 'ie'].includes(normalized)) return 'iu';
-  if (['Âµg', 'ug', 'mcg'].includes(normalized)) return 'Âµg';
-  if (['kapsel', 'kapseln'].includes(normalized)) return 'kapsel';
-  if (['tablette', 'tabletten'].includes(normalized)) return 'tablette';
-  if (normalized === 'tropfen') return 'tropfen';
-  if (['softgel', 'softgels'].includes(normalized)) return 'softgel';
-  if (['portion', 'portionen'].includes(normalized)) return 'portion';
-  return normalized;
-}
-
-function parseGermanNumber(value: string): number | null {
-  const trimmed = value.trim();
-  const normalized = trimmed.includes(',')
-    ? trimmed.replace(/\./g, '').replace(',', '.')
-    : /^\d{1,3}(?:\.\d{3})+$/.test(trimmed)
-      ? trimmed.replace(/\./g, '')
-      : trimmed;
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-}
-
-function parseDoseFromText(text?: string | null): { value: number; unit: string } | null {
-  if (!text) return null;
-  const match = /(\d+(?:[.,]\d{1,3})?(?:\.\d{3})*)\s*(IE|IU|Âµg|Î¼g|ug|mcg|mg|g|Kapseln?|Tabletten?|Tropfen|Softgels?|Portionen?)/i.exec(text);
-  if (!match) return null;
-  const value = parseGermanNumber(match[1]);
-  return value ? { value, unit: match[2] } : null;
-}
-
-function productPrimaryQuantity(product: ProductCardProduct): { quantity: number; unit?: string | null } | null {
-  const fromIngredients = product.ingredients?.find((ingredient) => (
-    Boolean(ingredient.search_relevant ?? 1) && ingredient.quantity != null && ingredient.quantity > 0
-  ));
-  if (fromIngredients?.quantity) return { quantity: fromIngredients.quantity, unit: fromIngredients.unit };
-  if (product.quantity != null && product.quantity > 0 && product.unit) {
-    return { quantity: product.quantity, unit: product.unit };
-  }
-  return null;
-}
-
-function servingsPerIntake(product: ProductCardProduct): number {
-  const parsedDose = parseDoseFromText(product.dosage_text);
-  if (parsedDose) {
-    const doseUnit = normalizeComparableUnit(parsedDose.unit);
-    const ingredient = productPrimaryQuantity(product);
-    if (ingredient && normalizeComparableUnit(ingredient.unit) === doseUnit) {
-      return Math.max(1, Math.ceil(parsedDose.value / ingredient.quantity));
-    }
-    if (
-      product.serving_size != null &&
-      product.serving_size > 0 &&
-      normalizeComparableUnit(product.serving_unit) === doseUnit
-    ) {
-      return Math.max(1, Math.ceil(parsedDose.value / product.serving_size));
-    }
-  }
-
-  if (product.quantity && product.quantity > 0 && product.quantity <= 100) return product.quantity;
-  return 1;
-}
-
 function calcMonthlyPrice(product: ProductCardProduct, price: number): number | null {
-  const total = (product.servings_per_container ?? 0) * (product.container_count ?? 1);
-  const effectiveDailyUsage = servingsPerIntake(product) / intakeIntervalDays(product);
-  if (total <= 0 || effectiveDailyUsage <= 0) return null;
-  const daysSupply = Math.floor(total / effectiveDailyUsage);
-  return daysSupply > 0 ? (price / daysSupply) * 30 : null;
+  return calculateProductUsage(product, price).monthlyCost;
 }
 
 function getDaysSupply(product: ProductCardProduct): number | null {
-  const total = (product.servings_per_container ?? 0) * (product.container_count ?? 1);
-  const effectiveDailyUsage = servingsPerIntake(product) / intakeIntervalDays(product);
-  if (total <= 0 || effectiveDailyUsage <= 0) return null;
-  return Math.floor(total / effectiveDailyUsage);
+  return calculateProductUsage(product).daysSupply;
 }
 
 function getDose(product: ProductCardProduct): string {
@@ -238,12 +168,15 @@ export default function ProductCard({
       })
     : undefined;
   const shopName = matchedShop?.display_name ?? null;
-  const buttonText = shopName ? `Bei ${shopName} kaufen` : 'Jetzt kaufen';
+  const isAffiliate = Boolean(product.is_affiliate);
+  const buttonText = isAffiliate
+    ? (shopName ? `Bei ${shopName} kaufen (Affiliate-Link)` : 'Kaufen (Affiliate-Link)')
+    : (shopName ? `Bei ${shopName} kaufen` : 'Jetzt kaufen');
 
   const monthlyPrice = calcMonthlyPrice(product, price);
   const daysSupply = getDaysSupply(product);
   const dose = getDose(product);
-  const intervalDays = intakeIntervalDays(product);
+  const intervalDays = getIntakeIntervalDays(product);
   const intervalLabel = intervalDays === 1 ? 'täglich' : `alle ${intervalDays} Tage`;
   const showInterval = product.intake_interval_days != null;
 
@@ -314,7 +247,7 @@ export default function ProductCard({
             <span className={`ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-extrabold ${
               recommendationType === 'recommended' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
             }`}>
-              {recommendationType === 'recommended' ? '★ Empfohlen' : 'Alternative'}
+              {recommendationType === 'recommended' ? 'Passend' : 'Alternative'}
             </span>
           )}
         </div>
@@ -338,7 +271,7 @@ export default function ProductCard({
       {/* Effect */}
       {(product.effect_summary ?? product.form) && (
         <div className="mb-2.5">
-          <div className="text-[10px] font-bold uppercase tracking-[0.4px] text-slate-400 mb-1">Wirkung</div>
+          <div className="text-[10px] font-bold uppercase tracking-[0.4px] text-slate-400 mb-1">Einordnung</div>
           <div className="text-[12px] text-slate-500 leading-relaxed font-medium">
             {product.effect_summary ?? product.form}
           </div>

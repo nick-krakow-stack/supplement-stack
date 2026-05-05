@@ -13,6 +13,17 @@ export interface User {
   role: 'user' | 'admin';
 }
 
+export interface AdminStats {
+  users?: number;
+  ingredients?: number;
+  products_total?: number;
+  products_pending?: number;
+  products?: number;
+  pending_products?: number;
+  stacks?: number;
+  [key: string]: number | undefined;
+}
+
 export interface IngredientSynonym {
   id: number;
   ingredient_id: number;
@@ -47,6 +58,8 @@ export interface ProductIngredient {
   is_main: boolean;
   quantity?: number;
   unit?: string;
+  basis_quantity?: number | null;
+  basis_unit?: string | null;
   form_id?: number;
   ingredient_name?: string;
   search_relevant?: number | boolean;
@@ -91,7 +104,7 @@ export interface StackItem {
   intake_interval_days?: number;
   dosage_text?: string;
   timing?: string;
-  ingredients?: Array<Pick<ProductIngredient, 'ingredient_id' | 'quantity' | 'unit' | 'search_relevant'>>;
+  ingredients?: Array<Pick<ProductIngredient, 'ingredient_id' | 'quantity' | 'unit' | 'basis_quantity' | 'basis_unit' | 'search_relevant'>>;
   product?: Product;
 }
 

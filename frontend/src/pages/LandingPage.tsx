@@ -51,8 +51,9 @@ function HeroSection({ isLoggedIn }: { isLoggedIn: boolean }) {
 
         {/* Subheadline */}
         <p className="text-lg md:text-xl text-gray-600 max-w-2xl mx-auto mb-10 leading-relaxed">
-          Finde die richtigen Wirkstoffe, erhalte evidenzbasierte Dosierungsempfehlungen von DGE, EFSA und NIH –
-          und baue deinen optimalen Stack mit transparentem Preisvergleich.
+          Finde geeignete Wirkstoffe, vergleiche Produktinformationen und nutze
+          wissenschaftlich orientierte Ausgangswerte aus anerkannten Quellen mit
+          transparentem Preisvergleich.
         </p>
 
         {/* CTAs */}
@@ -117,21 +118,21 @@ const steps = [
     step: '01',
     title: 'Wirkstoff suchen',
     description:
-      'Gib einen Wirkstoff ein – zum Beispiel Magnesium, Vitamin D oder Omega-3. Unsere Datenbank liefert dir sofort evidenzbasierte Informationen.',
+      'Gib einen Wirkstoff ein – zum Beispiel Magnesium, Vitamin D oder Omega-3. Unsere Datenbank liefert dir wissenschaftlich belegte Grundlagenwerte.',
   },
   {
     icon: <Star size={28} className="text-purple-500" />,
     step: '02',
     title: 'Empfehlung erhalten',
     description:
-      'Sieh auf einen Blick, wie viele Milligramm du täglich brauchst, wie viele Kapseln oder Tropfen das entspricht – und welche Produkte am besten passen.',
+      'Sieh auf einen Blick die berechneten Richtwerte, wie viele Kapseln oder Tropfen das in der Regel entspricht – und welche Produkte nach Preis-Leistung gut passen.',
   },
   {
     icon: <Layers size={28} className="text-emerald-500" />,
     step: '03',
     title: 'Stack aufbauen',
     description:
-      'Füge Produkte deinem persönlichen Stack hinzu, beobachte die monatlichen Gesamtkosten und optimiere deinen Stack in Echtzeit.',
+      'Erstelle einen persönlichen Stack, beobachte monatliche Gesamtkosten und passe deinen Stack in Ruhe iterativ an.',
   },
 ];
 
@@ -145,7 +146,7 @@ function HowItWorksSection() {
             In drei Schritten zu deinem Stack
           </h2>
           <p className="text-gray-500 max-w-xl mx-auto">
-            Keine Vorkenntnisse nötig. Supplement Stack führt dich Schritt für Schritt zu einem wissenschaftlich fundierten Ergebnis.
+            Keine Vorkenntnisse nötig. Supplement Stack führt dich Schritt für Schritt zu einer transparenten Orientierung.
           </p>
         </div>
 
@@ -177,7 +178,7 @@ const features = [
     icon: <FlaskConical size={24} className="text-indigo-500" />,
     title: 'Evidenzbasierte Dosierungen',
     description:
-      'Jede Empfehlung basiert auf anerkannten wissenschaftlichen Quellen: Deutsche Gesellschaft für Ernährung (DGE), European Food Safety Authority (EFSA) und den National Institutes of Health (NIH).',
+      'Die Auswertung orientiert sich an veröffentlichten Datenquellen wie der Deutschen Gesellschaft für Ernährung (DGE), der European Food Safety Authority (EFSA) und den National Institutes of Health (NIH).',
     tag: 'DGE · EFSA · NIH',
     tagColor: 'bg-indigo-50 text-indigo-600',
   },
@@ -185,7 +186,7 @@ const features = [
     icon: <TrendingDown size={24} className="text-emerald-500" />,
     title: 'Transparenter Kostenvergleich',
     description:
-      'Vergleiche Produkte anhand des Preises pro Portion – nicht anhand des Packungspreises. Sieh sofort, was dein Stack dich pro Monat kostet.',
+      'Vergleiche Produkte anhand des Preises pro Portion – nicht nur anhand des Packungspreises. So siehst du sofort die monatlichen Gesamtkosten deines Stacks.',
     tag: 'Preis pro Portion',
     tagColor: 'bg-emerald-50 text-emerald-600',
   },
@@ -193,7 +194,7 @@ const features = [
     icon: <ShoppingBag size={24} className="text-purple-500" />,
     title: 'Passende Produktauswahl',
     description:
-      'Filtere Produkte nach Wirkstoff, Gehalt und Eignung. Die Sortierung nach Preis-Leistung hilft dir, das beste Produkt für deinen Bedarf zu finden.',
+      'Filtere Produkte nach Wirkstoff, Gehalt und Zielrichtung. Die Sortierung nach Preis-Leistung hilft dir, passende Produkte für deinen Bedarf zu finden.',
     tag: 'Automatisch gefiltert',
     tagColor: 'bg-purple-50 text-purple-600',
   },
@@ -201,7 +202,7 @@ const features = [
     icon: <PlusCircle size={24} className="text-orange-500" />,
     title: 'Eigene Produkte hinzufügen',
     description:
-      'Du verwendest bereits ein Produkt, das nicht in unserer Datenbank ist? Füge es einfach selbst hinzu und integriere es nahtlos in deinen Stack.',
+      'Du verwendest ein Produkt, das nicht in unserer Datenbank ist? Du kannst es hinzufügen und transparent im eigenen Stack weiterverwenden.',
     tag: 'Vollständig anpassbar',
     tagColor: 'bg-orange-50 text-orange-600',
   },
@@ -217,7 +218,7 @@ function FeaturesSection() {
             Alles, was du für deinen Stack brauchst
           </h2>
           <p className="text-gray-500 max-w-xl mx-auto">
-            Supplement Stack vereint wissenschaftliche Grundlagen mit praktischer Nutzbarkeit – kostenlos und ohne Anmeldung.
+            Supplement Stack verbindet wissenschaftliche Referenzdaten mit praktischer Nutzbarkeit – kostenlos und ohne Anmeldung.
           </p>
         </div>
 
@@ -256,10 +257,10 @@ const trustStats = [
 ];
 
 const trustPoints = [
-  'Empfehlungen ausschließlich aus wissenschaftlich anerkannten Quellen',
+  'Keine Heilversprechen: Inhalte sind als Orientierung und Entscheidungshilfe gedacht.',
   'Transparente Preisvergleiche ohne versteckte Kosten',
-  'Keine Werbung, keine Affiliate-Intransparenz – klar gekennzeichnet',
-  'DSGVO-konform, keine Datenweitergabe an Dritte',
+  'Werbliche Hinweise, Affiliate-Hinweise und Produktvergleichslogik sind klar abgegrenzt.',
+  'Datenschutzbezug ist transparent geregelt (siehe Datenschutzerklärung); personenbezogene Daten werden nur wie beschrieben verarbeitet.',
 ];
 
 function TrustSection() {
@@ -269,10 +270,11 @@ function TrustSection() {
         <div className="text-center mb-14">
           <p className="text-sm font-semibold uppercase tracking-widest text-indigo-500 mb-3">Vertrauen & Transparenz</p>
           <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-            Wissenschaft statt Marketing-Versprechen
+            Wissenschaft statt Heilversprechen
           </h2>
           <p className="text-gray-500 max-w-xl mx-auto">
-            Supplement Stack verzichtet bewusst auf Übertreibungen. Nur was belegt ist, wird empfohlen.
+            Supplement Stack verzichtet bewusst auf Übertreibungen. Inhalte sind auf
+            allgemeine Orientierung ausgelegt und ersetzen keine ärztliche Beratung.
           </p>
         </div>
 

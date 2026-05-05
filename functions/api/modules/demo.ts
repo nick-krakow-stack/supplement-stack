@@ -34,6 +34,9 @@ demo.get('/products', async (c) => {
       i.category AS ingredient_category,
       pi.quantity,
       pi.unit,
+      pi.basis_quantity,
+      pi.basis_unit,
+      pi.search_relevant,
       pi.is_main
     FROM products p
     LEFT JOIN product_ingredients pi ON pi.id = (

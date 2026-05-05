@@ -54,8 +54,9 @@ export default function ImprintPage() {
         <h2 className="text-xl font-black text-slate-900">Affiliate-Hinweis</h2>
         <p>
           Supplement Stack kann Affiliate-Links zu Amazon und weiteren Partnern enthalten. Wenn
-          du &uuml;ber solche Links einkaufst, kann der Betreiber eine Provision erhalten. Die
-          Nutzung der App bleibt kostenlos.
+          du &uuml;ber solche Links einkaufst, kann der Betreiber eine Provision erhalten.
+          Die Markierung erfolgt transparent im Produkbereich. Die Nutzung der App bleibt
+          kostenlos.
         </p>
       </section>
     </article>

@@ -132,6 +132,135 @@ type IngredientSubIngredientAdminRow = {
   created_at: string
 }
 
+type DoseRecommendationAdminRow = {
+  id: number
+  ingredient_id: number
+  ingredient_name: string
+  population_id: number
+  population_slug: string | null
+  population_name_de: string | null
+  source_type: DoseRecommendationSourceType
+  source_label: string
+  source_url: string | null
+  dose_min: number | null
+  dose_max: number
+  unit: string
+  per_kg_body_weight: number | null
+  per_kg_cap: number | null
+  timing: string | null
+  context_note: string | null
+  sex_filter: DoseRecommendationSexFilter
+  is_athlete: number
+  purpose: DoseRecommendationPurpose
+  is_default: number
+  is_active: number
+  relevance_score: number
+  created_by_user_id: number | null
+  created_by_email: string | null
+  is_public: number
+  verified_profile_id: number | null
+  verified_profile_slug: string | null
+  verified_profile_name: string | null
+  category_name: string | null
+  published_at: number | null
+  verified_at: number | null
+  review_due_at: number | null
+  superseded_by_id: number | null
+  created_at: number
+  updated_at: number
+}
+
+type DoseRecommendationMutation = {
+  ingredient_id: number
+  population_id: number
+  source_type: DoseRecommendationSourceType
+  source_label: string
+  source_url: string | null
+  dose_min: number | null
+  dose_max: number
+  unit: string
+  per_kg_body_weight: number | null
+  per_kg_cap: number | null
+  timing: string | null
+  context_note: string | null
+  sex_filter: DoseRecommendationSexFilter
+  is_athlete: number
+  purpose: DoseRecommendationPurpose
+  is_default: number
+  is_active: number
+  relevance_score: number
+  created_by_user_id: number | null
+  is_public: number
+  verified_profile_id: number | null
+  category_name: string | null
+  population_slug: string
+  verified_profile_name: string | null
+  published_at: number | null
+  verified_at: number | null
+  review_due_at: number | null
+  superseded_by_id: number | null
+}
+
+type ValidationFailure = {
+  ok: false
+  error: string
+  status?: 400 | 404 | 409
+}
+
+type ValidationSuccess<T> = {
+  ok: true
+  value: T
+}
+
+type ValidationResult<T> = ValidationSuccess<T> | ValidationFailure
+
+type PopulationLookupRow = {
+  id: number
+  slug: string
+  name_de: string
+}
+
+type VerifiedProfileLookupRow = {
+  id: number
+  slug: string
+  name: string
+}
+
+type AuditLogDbRow = {
+  id: number
+  user_id: number | null
+  user_email: string | null
+  action: string
+  entity_type: string
+  entity_id: number | null
+  changes: string | null
+  reason: string | null
+  ip_address: string | null
+  user_agent: string | null
+  created_at: number
+}
+
+const DOSE_RECOMMENDATION_SOURCE_TYPES = ['official', 'study', 'profile', 'user_private', 'user_public'] as const
+type DoseRecommendationSourceType = typeof DOSE_RECOMMENDATION_SOURCE_TYPES[number]
+
+const DOSE_RECOMMENDATION_PURPOSES = ['maintenance', 'deficiency_correction', 'therapeutic'] as const
+type DoseRecommendationPurpose = typeof DOSE_RECOMMENDATION_PURPOSES[number]
+
+const DOSE_RECOMMENDATION_SEX_FILTERS = ['male', 'female'] as const
+type DoseRecommendationSexFilter = typeof DOSE_RECOMMENDATION_SEX_FILTERS[number] | null
+
+const SENSITIVE_AUDIT_KEY_PARTS = [
+  'password',
+  'token',
+  'secret',
+  'authorization',
+  'cookie',
+  'jwt',
+  'api_key',
+  'apikey',
+  'smtp',
+]
+
 function normalizeTranslationLanguage(value: string | undefined): string | null {
   if (!value) return null
   const normalized = value.trim().toLowerCase().replace(/_/g, '-')
@@ -201,6 +330,398 @@ function normalizeInteger(value: unknown): number | undefined {
   if (value === undefined) return undefined
   const parsed = typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value) : Number.NaN
   return Number.isInteger(parsed) ? parsed : undefined
+}
+
+function validationError(error: string, status: 400 | 404 | 409 = 400): ValidationFailure {
+  return { ok: false, error, status }
+}
+
+function enumValue<T extends readonly string[]>(value: unknown, allowed: T): T[number] | null {
+  if (typeof value !== 'string') return null
+  const normalized = value.trim()
+  return (allowed as readonly string[]).includes(normalized) ? normalized as T[number] : null
+}
+
+function requiredTextField(data: Record<string, unknown>, key: string, maxLength: number): ValidationResult<string> {
+  const value = optionalText(data[key])
+  if (!value) return validationError(`${key} is required`)
+  if (value.length > maxLength) return validationError(`${key} must be at most ${maxLength} characters`)
+  return { ok: true, value }
+}
+
+function optionalTextField(data: Record<string, unknown>, key: string, maxLength: number): ValidationResult<string | null | undefined> {
+  if (!hasOwnKey(data, key)) return { ok: true, value: undefined }
+  const value = optionalText(data[key])
+  if (value && value.length > maxLength) return validationError(`${key} must be at most ${maxLength} characters`)
+  return { ok: true, value }
+}
+
+function optionalPositiveIntegerField(data: Record<string, unknown>, key: string): ValidationResult<number | null | undefined> {
+  if (!hasOwnKey(data, key)) return { ok: true, value: undefined }
+  const raw = data[key]
+  if (raw === null || raw === '') return { ok: true, value: null }
+  const parsed = normalizeInteger(raw)
+  if (parsed === undefined || parsed <= 0) return validationError(`${key} must be a positive integer`)
+  return { ok: true, value: parsed }
+}
+
+function optionalBooleanField(data: Record<string, unknown>, key: string): ValidationResult<number | undefined> {
+  if (!hasOwnKey(data, key)) return { ok: true, value: undefined }
+  const flag = booleanFlag(data[key])
+  if (flag === undefined) return validationError(`${key} must be true/false or 1/0`)
+  return { ok: true, value: flag }
+}
+
+function optionalNumberField(
+  data: Record<string, unknown>,
+  key: string,
+  options: { min?: number; minExclusive?: boolean; max?: number; integer?: boolean } = {},
+): ValidationResult<number | null | undefined> {
+  if (!hasOwnKey(data, key)) return { ok: true, value: undefined }
+  const raw = data[key]
+  if (raw === null || raw === '') return { ok: true, value: null }
+  const parsed = typeof raw === 'number' ? raw : typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : Number.NaN
+  if (!Number.isFinite(parsed)) return validationError(`${key} must be a number`)
+  if (options.integer && !Number.isInteger(parsed)) return validationError(`${key} must be an integer`)
+  if (options.min !== undefined) {
+    if (options.minExclusive ? parsed <= options.min : parsed < options.min) {
+      return validationError(`${key} must be ${options.minExclusive ? '>' : '>='} ${options.min}`)
+    }
+  }
+  if (options.max !== undefined && parsed > options.max) return validationError(`${key} must be <= ${options.max}`)
+  return { ok: true, value: parsed }
+}
+
+function optionalUnixTimestampField(data: Record<string, unknown>, key: string): ValidationResult<number | null | undefined> {
+  return optionalNumberField(data, key, { min: 0, integer: true })
+}
+
+function normalizeSourceUrl(value: unknown): ValidationResult<string | null | undefined> {
+  if (value === undefined) return { ok: true, value: undefined }
+  if (value === null || value === '') return { ok: true, value: null }
+  if (typeof value !== 'string') return validationError('source_url must be a URL string')
+  const trimmed = value.trim()
+  if (!trimmed) return { ok: true, value: null }
+  if (trimmed.length > 2048) return validationError('source_url must be at most 2048 characters')
+  try {
+    const url = new URL(trimmed)
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+      return validationError('source_url must use http or https')
+    }
+    return { ok: true, value: url.toString() }
+  } catch {
+    return validationError('source_url must be a valid URL')
+  }
+}
+
+function redactAuditSecrets(value: unknown, depth = 0): unknown {
+  if (depth > 8) return '[redacted: max depth]'
+  if (Array.isArray(value)) return value.map((item) => redactAuditSecrets(item, depth + 1))
+  if (value && typeof value === 'object') {
+    const redacted: Record<string, unknown> = {}
+    for (const [key, nestedValue] of Object.entries(value as Record<string, unknown>)) {
+      const lowered = key.toLowerCase()
+      redacted[key] = SENSITIVE_AUDIT_KEY_PARTS.some((part) => lowered.includes(part))
+        ? '[redacted]'
+        : redactAuditSecrets(nestedValue, depth + 1)
+    }
+    return redacted
+  }
+  return value
+}
+
+function parseAuditChanges(changes: string | null): unknown {
+  if (!changes) return null
+  try {
+    return redactAuditSecrets(JSON.parse(changes))
+  } catch {
+    return null
+  }
+}
+
+function parseAuditDate(value: string | undefined, endOfDay: boolean): number | null | undefined {
+  if (!value) return undefined
+  if (/^\d+$/.test(value)) return Number(value)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null
+  const suffix = endOfDay ? 'T23:59:59Z' : 'T00:00:00Z'
+  const timestamp = Date.parse(`${value}${suffix}`)
+  if (!Number.isFinite(timestamp)) return null
+  return Math.floor(timestamp / 1000)
+}
+
+function formatDoseRecommendationValidation(error: ValidationFailure): { error: string; status: 400 | 404 | 409 } {
+  return { error: error.error, status: error.status ?? 400 }
+}
+
+async function getDoseRecommendationAdminRow(db: D1Database, id: number): Promise<DoseRecommendationAdminRow | null> {
+  return await db.prepare(`
+    SELECT
+      dr.id,
+      dr.ingredient_id,
+      i.name AS ingredient_name,
+      dr.population_id,
+      p.slug AS population_slug,
+      p.name_de AS population_name_de,
+      dr.source_type,
+      dr.source_label,
+      dr.source_url,
+      dr.dose_min,
+      dr.dose_max,
+      dr.unit,
+      dr.per_kg_body_weight,
+      dr.per_kg_cap,
+      dr.timing,
+      dr.context_note,
+      dr.sex_filter,
+      dr.is_athlete,
+      dr.purpose,
+      dr.is_default,
+      dr.is_active,
+      dr.relevance_score,
+      dr.created_by_user_id,
+      u.email AS created_by_email,
+      dr.is_public,
+      dr.verified_profile_id,
+      vp.slug AS verified_profile_slug,
+      COALESCE(vp.name, dr.verified_profile_name) AS verified_profile_name,
+      dr.category_name,
+      dr.published_at,
+      dr.verified_at,
+      dr.review_due_at,
+      dr.superseded_by_id,
+      dr.created_at,
+      dr.updated_at
+    FROM dose_recommendations dr
+    JOIN ingredients i ON i.id = dr.ingredient_id
+    JOIN populations p ON p.id = dr.population_id
+    LEFT JOIN users u ON u.id = dr.created_by_user_id
+    LEFT JOIN verified_profiles vp ON vp.id = dr.verified_profile_id
+    WHERE dr.id = ?
+  `).bind(id).first<DoseRecommendationAdminRow>()
+}
+
+async function validateDoseRecommendationPayload(
+  db: D1Database,
+  body: Record<string, unknown>,
+  existing: DoseRecommendationAdminRow | null,
+): Promise<ValidationResult<DoseRecommendationMutation>> {
+  const isCreate = existing === null
+
+  const ingredientId = hasOwnKey(body, 'ingredient_id')
+    ? normalizeInteger(body.ingredient_id)
+    : existing?.ingredient_id
+  if (!ingredientId || ingredientId <= 0) return validationError('ingredient_id must be a positive integer')
+
+  const ingredient = await db.prepare('SELECT id FROM ingredients WHERE id = ?')
+    .bind(ingredientId)
+    .first<{ id: number }>()
+  if (!ingredient) return validationError('Ingredient not found', 404)
+
+  let population: PopulationLookupRow | null = null
+  if (hasOwnKey(body, 'population_id')) {
+    const populationId = normalizeInteger(body.population_id)
+    if (!populationId || populationId <= 0) return validationError('population_id must be a positive integer')
+    population = await db.prepare('SELECT id, slug, name_de FROM populations WHERE id = ?')
+      .bind(populationId)
+      .first<PopulationLookupRow>()
+  } else if (hasOwnKey(body, 'population_slug')) {
+    const populationSlug = optionalText(body.population_slug)
+    if (!populationSlug) return validationError('population_slug is required when provided')
+    population = await db.prepare('SELECT id, slug, name_de FROM populations WHERE slug = ?')
+      .bind(populationSlug)
+      .first<PopulationLookupRow>()
+  } else if (existing) {
+    population = await db.prepare('SELECT id, slug, name_de FROM populations WHERE id = ?')
+      .bind(existing.population_id)
+      .first<PopulationLookupRow>()
+  }
+  if (!population) {
+    return validationError(isCreate ? 'population_id or population_slug is required' : 'Population not found', isCreate ? 400 : 404)
+  }
+
+  const sourceType = hasOwnKey(body, 'source_type')
+    ? enumValue(body.source_type, DOSE_RECOMMENDATION_SOURCE_TYPES)
+    : existing?.source_type
+  if (!sourceType) return validationError(`source_type must be one of ${DOSE_RECOMMENDATION_SOURCE_TYPES.join(', ')}`)
+
+  const sourceLabelResult = hasOwnKey(body, 'source_label')
+    ? requiredTextField(body, 'source_label', 255)
+    : existing ? { ok: true as const, value: existing.source_label } : validationError('source_label is required')
+  if (!sourceLabelResult.ok) return sourceLabelResult
+
+  const sourceUrlResult = hasOwnKey(body, 'source_url')
+    ? normalizeSourceUrl(body.source_url)
+    : { ok: true as const, value: existing?.source_url }
+  if (!sourceUrlResult.ok) return sourceUrlResult
+  const sourceUrl = sourceUrlResult.value ?? null
+  if ((sourceType === 'official' || sourceType === 'study' || sourceType === 'user_public') && !sourceUrl) {
+    return validationError('source_url is required for official, study, and user_public recommendations')
+  }
+
+  const doseMaxResult = hasOwnKey(body, 'dose_max')
+    ? optionalNumberField(body, 'dose_max', { min: 0, minExclusive: true, max: 1000000000 })
+    : existing ? { ok: true as const, value: existing.dose_max } : validationError('dose_max is required')
+  if (!doseMaxResult.ok) return doseMaxResult
+  if (doseMaxResult.value === null || doseMaxResult.value === undefined) return validationError('dose_max is required')
+  const doseMax = doseMaxResult.value
+
+  const doseMinResult = hasOwnKey(body, 'dose_min')
+    ? optionalNumberField(body, 'dose_min', { min: 0, max: 1000000000 })
+    : { ok: true as const, value: existing?.dose_min ?? null }
+  if (!doseMinResult.ok) return doseMinResult
+  const doseMin = doseMinResult.value ?? null
+  if (doseMin !== null && doseMin > doseMax) return validationError('dose_min must be <= dose_max')
+
+  const unitResult = hasOwnKey(body, 'unit')
+    ? requiredTextField(body, 'unit', 32)
+    : existing ? { ok: true as const, value: existing.unit } : validationError('unit is required')
+  if (!unitResult.ok) return unitResult
+
+  const perKgResult = hasOwnKey(body, 'per_kg_body_weight')
+    ? optionalNumberField(body, 'per_kg_body_weight', { min: 0, minExclusive: true, max: 1000000000 })
+    : { ok: true as const, value: existing?.per_kg_body_weight ?? null }
+  if (!perKgResult.ok) return perKgResult
+
+  const perKgCapResult = hasOwnKey(body, 'per_kg_cap')
+    ? optionalNumberField(body, 'per_kg_cap', { min: 0, minExclusive: true, max: 1000000000 })
+    : { ok: true as const, value: existing?.per_kg_cap ?? null }
+  if (!perKgCapResult.ok) return perKgCapResult
+
+  const timingResult = optionalTextField(body, 'timing', 500)
+  if (!timingResult.ok) return timingResult
+  const contextNoteResult = optionalTextField(body, 'context_note', 2000)
+  if (!contextNoteResult.ok) return contextNoteResult
+  const categoryNameResult = optionalTextField(body, 'category_name', 255)
+  if (!categoryNameResult.ok) return categoryNameResult
+
+  const sexFilter = hasOwnKey(body, 'sex_filter')
+    ? body.sex_filter === null || body.sex_filter === ''
+      ? null
+      : enumValue(body.sex_filter, DOSE_RECOMMENDATION_SEX_FILTERS)
+    : existing?.sex_filter ?? null
+  if (sexFilter === null && hasOwnKey(body, 'sex_filter') && body.sex_filter !== null && body.sex_filter !== '') {
+    return validationError(`sex_filter must be null, male, or female`)
+  }
+
+  const isAthleteResult = optionalBooleanField(body, 'is_athlete')
+  if (!isAthleteResult.ok) return isAthleteResult
+  const isDefaultResult = optionalBooleanField(body, 'is_default')
+  if (!isDefaultResult.ok) return isDefaultResult
+  const isActiveResult = optionalBooleanField(body, 'is_active')
+  if (!isActiveResult.ok) return isActiveResult
+  const isPublicResult = optionalBooleanField(body, 'is_public')
+  if (!isPublicResult.ok) return isPublicResult
+
+  const purpose = hasOwnKey(body, 'purpose')
+    ? enumValue(body.purpose, DOSE_RECOMMENDATION_PURPOSES)
+    : existing?.purpose ?? 'maintenance'
+  if (!purpose) return validationError(`purpose must be one of ${DOSE_RECOMMENDATION_PURPOSES.join(', ')}`)
+
+  const relevanceResult = hasOwnKey(body, 'relevance_score')
+    ? optionalNumberField(body, 'relevance_score', { min: 0, max: 100, integer: true })
+    : { ok: true as const, value: existing?.relevance_score ?? 50 }
+  if (!relevanceResult.ok) return relevanceResult
+  if (relevanceResult.value === null || relevanceResult.value === undefined) return validationError('relevance_score is required')
+
+  const createdByUserResult = optionalPositiveIntegerField(body, 'created_by_user_id')
+  if (!createdByUserResult.ok) return createdByUserResult
+  const createdByUserId = createdByUserResult.value === undefined ? existing?.created_by_user_id ?? null : createdByUserResult.value
+  if (createdByUserId !== null) {
+    const user = await db.prepare('SELECT id FROM users WHERE id = ?').bind(createdByUserId).first<{ id: number }>()
+    if (!user) return validationError('created_by_user_id not found', 404)
+  }
+
+  const verifiedProfileResult = optionalPositiveIntegerField(body, 'verified_profile_id')
+  if (!verifiedProfileResult.ok) return verifiedProfileResult
+  const verifiedProfileId = verifiedProfileResult.value === undefined ? existing?.verified_profile_id ?? null : verifiedProfileResult.value
+  let verifiedProfile: VerifiedProfileLookupRow | null = null
+  if (verifiedProfileId !== null) {
+    verifiedProfile = await db.prepare('SELECT id, slug, name FROM verified_profiles WHERE id = ?')
+      .bind(verifiedProfileId)
+      .first<VerifiedProfileLookupRow>()
+    if (!verifiedProfile) return validationError('verified_profile_id not found', 404)
+  }
+  if (sourceType === 'profile' && verifiedProfileId === null) {
+    return validationError('verified_profile_id is required for profile recommendations')
+  }
+
+  const publishedAtResult = optionalUnixTimestampField(body, 'published_at')
+  if (!publishedAtResult.ok) return publishedAtResult
+  const verifiedAtResult = optionalUnixTimestampField(body, 'verified_at')
+  if (!verifiedAtResult.ok) return verifiedAtResult
+  const reviewDueAtResult = optionalUnixTimestampField(body, 'review_due_at')
+  if (!reviewDueAtResult.ok) return reviewDueAtResult
+
+  const supersededResult = optionalPositiveIntegerField(body, 'superseded_by_id')
+  if (!supersededResult.ok) return supersededResult
+  const supersededById = supersededResult.value === undefined ? existing?.superseded_by_id ?? null : supersededResult.value
+  if (supersededById !== null) {
+    if (existing && supersededById === existing.id) return validationError('superseded_by_id must not reference the same row')
+    const superseding = await db.prepare('SELECT id FROM dose_recommendations WHERE id = ?')
+      .bind(supersededById)
+      .first<{ id: number }>()
+    if (!superseding) return validationError('superseded_by_id not found', 404)
+  }
+
+  const mutation: DoseRecommendationMutation = {
+    ingredient_id: ingredientId,
+    population_id: population.id,
+    source_type: sourceType,
+    source_label: sourceLabelResult.value,
+    source_url: sourceUrl,
+    dose_min: doseMin,
+    dose_max: doseMax,
+    unit: unitResult.value,
+    per_kg_body_weight: perKgResult.value ?? null,
+    per_kg_cap: perKgCapResult.value ?? null,
+    timing: timingResult.value === undefined ? existing?.timing ?? null : timingResult.value,
+    context_note: contextNoteResult.value === undefined ? existing?.context_note ?? null : contextNoteResult.value,
+    sex_filter: sexFilter,
+    is_athlete: isAthleteResult.value ?? existing?.is_athlete ?? 0,
+    purpose,
+    is_default: isDefaultResult.value ?? existing?.is_default ?? 0,
+    is_active: isActiveResult.value ?? existing?.is_active ?? 1,
+    relevance_score: relevanceResult.value,
+    created_by_user_id: createdByUserId,
+    is_public: isPublicResult.value ?? existing?.is_public ?? 0,
+    verified_profile_id: verifiedProfileId,
+    category_name: categoryNameResult.value === undefined ? existing?.category_name ?? null : categoryNameResult.value,
+    population_slug: population.slug,
+    verified_profile_name: verifiedProfile?.name ?? null,
+    published_at: publishedAtResult.value === undefined ? existing?.published_at ?? null : publishedAtResult.value,
+    verified_at: verifiedAtResult.value === undefined ? existing?.verified_at ?? null : verifiedAtResult.value,
+    review_due_at: reviewDueAtResult.value === undefined ? existing?.review_due_at ?? null : reviewDueAtResult.value,
+    superseded_by_id: supersededById,
+  }
+
+  if (mutation.is_default === 1 && mutation.is_active === 1) {
+    const defaultConflict = await db.prepare(`
+      SELECT id
+      FROM dose_recommendations
+      WHERE ingredient_id = ?
+        AND population_id = ?
+        AND COALESCE(sex_filter, '_') = COALESCE(?, '_')
+        AND purpose = ?
+        AND is_athlete = ?
+        AND is_default = 1
+        AND is_active = 1
+        AND (? IS NULL OR id <> ?)
+      LIMIT 1
+    `).bind(
+      mutation.ingredient_id,
+      mutation.population_id,
+      mutation.sex_filter,
+      mutation.purpose,
+      mutation.is_athlete,
+      existing?.id ?? null,
+      existing?.id ?? null,
+    ).first<{ id: number }>()
+    if (defaultConflict) {
+      return validationError('An active default recommendation already exists for this ingredient/population/targeting combination', 409)
+    }
+  }
+
+  return { ok: true, value: mutation }
 }
 
 async function getSubIngredientMapping(
@@ -430,6 +951,481 @@ admin.get('/stats', async (c) => {
     stacks: stacksRow?.count ?? 0,
     pending_products: pendingRow?.count ?? 0,
   })
+})
+
+// GET /api/admin/audit-log?action=&entity_type=&user_id=&date=&date_from=&date_to=&page=1&limit=50 (admin only)
+admin.get('/audit-log', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const action = optionalText(c.req.query('action'))
+  const entityType = optionalText(c.req.query('entity_type'))
+  const userIdParam = c.req.query('user_id')
+  let userId: number | null | undefined
+  if (userIdParam === 'system') {
+    userId = null
+  } else if (userIdParam) {
+    const parsedUserId = parsePositiveId(userIdParam)
+    if (parsedUserId === null) return c.json({ error: 'Invalid user_id' }, 400)
+    userId = parsedUserId
+  }
+
+  const singleDate = c.req.query('date')
+  const dateFrom = parseAuditDate(c.req.query('date_from') ?? singleDate, false)
+  const dateTo = parseAuditDate(c.req.query('date_to') ?? singleDate, true)
+  if (dateFrom === null) return c.json({ error: 'date/date_from must be YYYY-MM-DD or unix seconds' }, 400)
+  if (dateTo === null) return c.json({ error: 'date/date_to must be YYYY-MM-DD or unix seconds' }, 400)
+  if (dateFrom !== undefined && dateTo !== undefined && dateFrom > dateTo) {
+    return c.json({ error: 'date_from must be <= date_to' }, 400)
+  }
+
+  const page = Math.max(1, parsePagination(c.req.query('page'), 1, 100000))
+  const limit = parsePagination(c.req.query('limit'), 50, 100)
+  const offset = (page - 1) * limit
+
+  const where: string[] = []
+  const bindings: Array<string | number | null> = []
+  if (action) {
+    where.push('aal.action = ?')
+    bindings.push(action)
+  }
+  if (entityType) {
+    where.push('aal.entity_type = ?')
+    bindings.push(entityType)
+  }
+  if (userId !== undefined) {
+    where.push(userId === null ? 'aal.user_id IS NULL' : 'aal.user_id = ?')
+    if (userId !== null) bindings.push(userId)
+  }
+  if (dateFrom !== undefined) {
+    where.push('aal.created_at >= ?')
+    bindings.push(dateFrom)
+  }
+  if (dateTo !== undefined) {
+    where.push('aal.created_at <= ?')
+    bindings.push(dateTo)
+  }
+
+  const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''
+  const totalRow = await c.env.DB.prepare(`
+    SELECT COUNT(*) AS count
+    FROM admin_audit_log aal
+    ${whereSql}
+  `).bind(...bindings).first<CountRow>()
+
+  const { results } = await c.env.DB.prepare(`
+    SELECT
+      aal.id,
+      aal.user_id,
+      u.email AS user_email,
+      aal.action,
+      aal.entity_type,
+      aal.entity_id,
+      aal.changes,
+      aal.reason,
+      aal.ip_address,
+      aal.user_agent,
+      aal.created_at
+    FROM admin_audit_log aal
+    LEFT JOIN users u ON u.id = aal.user_id
+    ${whereSql}
+    ORDER BY aal.created_at DESC, aal.id DESC
+    LIMIT ? OFFSET ?
+  `).bind(...bindings, limit, offset).all<AuditLogDbRow>()
+
+  return c.json({
+    logs: results.map((row) => ({
+      id: row.id,
+      user_id: row.user_id,
+      user_email: row.user_email,
+      action: row.action,
+      entity_type: row.entity_type,
+      entity_id: row.entity_id,
+      changes: parseAuditChanges(row.changes),
+      reason: row.reason,
+      ip_address: row.ip_address,
+      user_agent: row.user_agent,
+      created_at: row.created_at,
+    })),
+    page,
+    limit,
+    total: totalRow?.count ?? 0,
+  })
+})
+
+// GET /api/admin/dose-recommendations?ingredient_id=&q=&active=&public=&source_type=&page=1&limit=50 (admin only)
+admin.get('/dose-recommendations', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const page = Math.max(1, parsePagination(c.req.query('page'), 1, 100000))
+  const limit = parsePagination(c.req.query('limit'), 50, 100)
+  const offset = (page - 1) * limit
+  const q = c.req.query('q')?.trim() ?? ''
+  const like = `%${q}%`
+
+  const where: string[] = []
+  const bindings: Array<string | number> = []
+
+  const ingredientIdParam = c.req.query('ingredient_id')
+  if (ingredientIdParam) {
+    const ingredientId = parsePositiveId(ingredientIdParam)
+    if (ingredientId === null) return c.json({ error: 'Invalid ingredient_id' }, 400)
+    where.push('dr.ingredient_id = ?')
+    bindings.push(ingredientId)
+  }
+
+  const sourceTypeParam = c.req.query('source_type')
+  if (sourceTypeParam) {
+    const sourceType = enumValue(sourceTypeParam, DOSE_RECOMMENDATION_SOURCE_TYPES)
+    if (!sourceType) return c.json({ error: `source_type must be one of ${DOSE_RECOMMENDATION_SOURCE_TYPES.join(', ')}` }, 400)
+    where.push('dr.source_type = ?')
+    bindings.push(sourceType)
+  }
+
+  const activeParam = c.req.query('active')
+  if (activeParam !== undefined) {
+    const active = booleanFlag(activeParam === 'true' ? true : activeParam === 'false' ? false : Number(activeParam))
+    if (active === undefined) return c.json({ error: 'active must be true/false or 1/0' }, 400)
+    where.push('dr.is_active = ?')
+    bindings.push(active)
+  }
+
+  const publicParam = c.req.query('public')
+  if (publicParam !== undefined) {
+    const publicFlag = booleanFlag(publicParam === 'true' ? true : publicParam === 'false' ? false : Number(publicParam))
+    if (publicFlag === undefined) return c.json({ error: 'public must be true/false or 1/0' }, 400)
+    where.push('dr.is_public = ?')
+    bindings.push(publicFlag)
+  }
+
+  if (q) {
+    where.push('(i.name LIKE ? OR dr.source_label LIKE ? OR COALESCE(dr.source_url, \'\') LIKE ? OR COALESCE(dr.context_note, \'\') LIKE ?)')
+    bindings.push(like, like, like, like)
+  }
+
+  const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''
+  const totalRow = await c.env.DB.prepare(`
+    SELECT COUNT(*) AS count
+    FROM dose_recommendations dr
+    JOIN ingredients i ON i.id = dr.ingredient_id
+    ${whereSql}
+  `).bind(...bindings).first<CountRow>()
+
+  const { results } = await c.env.DB.prepare(`
+    SELECT
+      dr.id,
+      dr.ingredient_id,
+      i.name AS ingredient_name,
+      dr.population_id,
+      p.slug AS population_slug,
+      p.name_de AS population_name_de,
+      dr.source_type,
+      dr.source_label,
+      dr.source_url,
+      dr.dose_min,
+      dr.dose_max,
+      dr.unit,
+      dr.per_kg_body_weight,
+      dr.per_kg_cap,
+      dr.timing,
+      dr.context_note,
+      dr.sex_filter,
+      dr.is_athlete,
+      dr.purpose,
+      dr.is_default,
+      dr.is_active,
+      dr.relevance_score,
+      dr.created_by_user_id,
+      u.email AS created_by_email,
+      dr.is_public,
+      dr.verified_profile_id,
+      vp.slug AS verified_profile_slug,
+      COALESCE(vp.name, dr.verified_profile_name) AS verified_profile_name,
+      dr.category_name,
+      dr.published_at,
+      dr.verified_at,
+      dr.review_due_at,
+      dr.superseded_by_id,
+      dr.created_at,
+      dr.updated_at
+    FROM dose_recommendations dr
+    JOIN ingredients i ON i.id = dr.ingredient_id
+    JOIN populations p ON p.id = dr.population_id
+    LEFT JOIN users u ON u.id = dr.created_by_user_id
+    LEFT JOIN verified_profiles vp ON vp.id = dr.verified_profile_id
+    ${whereSql}
+    ORDER BY dr.is_active DESC, dr.relevance_score DESC, dr.updated_at DESC, dr.id DESC
+    LIMIT ? OFFSET ?
+  `).bind(...bindings, limit, offset).all<DoseRecommendationAdminRow>()
+
+  return c.json({ recommendations: results, page, limit, total: totalRow?.count ?? 0 })
+})
+
+// POST /api/admin/dose-recommendations (admin only)
+admin.post('/dose-recommendations', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const validation = await validateDoseRecommendationPayload(c.env.DB, body, null)
+  if (!validation.ok) {
+    const failure = formatDoseRecommendationValidation(validation)
+    return c.json({ error: failure.error }, failure.status)
+  }
+
+  const data = validation.value
+  let result: D1Result
+  try {
+    result = await c.env.DB.prepare(`
+      INSERT INTO dose_recommendations (
+        ingredient_id,
+        population_id,
+        source_type,
+        source_label,
+        source_url,
+        dose_min,
+        dose_max,
+        unit,
+        per_kg_body_weight,
+        per_kg_cap,
+        timing,
+        context_note,
+        sex_filter,
+        is_athlete,
+        purpose,
+        is_default,
+        is_active,
+        relevance_score,
+        created_by_user_id,
+        is_public,
+        verified_profile_id,
+        category_name,
+        population_slug,
+        verified_profile_name,
+        published_at,
+        verified_at,
+        review_due_at,
+        superseded_by_id,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s','now'), strftime('%s','now'))
+    `).bind(
+      data.ingredient_id,
+      data.population_id,
+      data.source_type,
+      data.source_label,
+      data.source_url,
+      data.dose_min,
+      data.dose_max,
+      data.unit,
+      data.per_kg_body_weight,
+      data.per_kg_cap,
+      data.timing,
+      data.context_note,
+      data.sex_filter,
+      data.is_athlete,
+      data.purpose,
+      data.is_default,
+      data.is_active,
+      data.relevance_score,
+      data.created_by_user_id,
+      data.is_public,
+      data.verified_profile_id,
+      data.category_name,
+      data.population_slug,
+      data.verified_profile_name,
+      data.published_at,
+      data.verified_at,
+      data.review_due_at,
+      data.superseded_by_id,
+    ).run()
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      return c.json({ error: 'An active default recommendation already exists for this ingredient/population/targeting combination' }, 409)
+    }
+    throw error
+  }
+
+  const id = result.meta.last_row_id as number
+  const recommendation = await getDoseRecommendationAdminRow(c.env.DB, id)
+
+  await logAdminAction(c, {
+    action: 'create_dose_recommendation',
+    entity_type: 'dose_recommendation',
+    entity_id: id,
+    changes: data,
+  })
+
+  return c.json({ recommendation }, 201)
+})
+
+// GET /api/admin/dose-recommendations/:id (admin only)
+admin.get('/dose-recommendations/:id', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const id = parsePositiveId(c.req.param('id'))
+  if (id === null) return c.json({ error: 'Invalid dose recommendation id' }, 400)
+
+  const recommendation = await getDoseRecommendationAdminRow(c.env.DB, id)
+  if (!recommendation) return c.json({ error: 'Dose recommendation not found' }, 404)
+  return c.json({ recommendation })
+})
+
+// PUT /api/admin/dose-recommendations/:id (admin only)
+admin.put('/dose-recommendations/:id', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const id = parsePositiveId(c.req.param('id'))
+  if (id === null) return c.json({ error: 'Invalid dose recommendation id' }, 400)
+
+  const existing = await getDoseRecommendationAdminRow(c.env.DB, id)
+  if (!existing) return c.json({ error: 'Dose recommendation not found' }, 404)
+
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const validation = await validateDoseRecommendationPayload(c.env.DB, body, existing)
+  if (!validation.ok) {
+    const failure = formatDoseRecommendationValidation(validation)
+    return c.json({ error: failure.error }, failure.status)
+  }
+
+  const data = validation.value
+  try {
+    await c.env.DB.prepare(`
+      UPDATE dose_recommendations
+      SET
+        ingredient_id = ?,
+        population_id = ?,
+        source_type = ?,
+        source_label = ?,
+        source_url = ?,
+        dose_min = ?,
+        dose_max = ?,
+        unit = ?,
+        per_kg_body_weight = ?,
+        per_kg_cap = ?,
+        timing = ?,
+        context_note = ?,
+        sex_filter = ?,
+        is_athlete = ?,
+        purpose = ?,
+        is_default = ?,
+        is_active = ?,
+        relevance_score = ?,
+        created_by_user_id = ?,
+        is_public = ?,
+        verified_profile_id = ?,
+        category_name = ?,
+        population_slug = ?,
+        verified_profile_name = ?,
+        published_at = ?,
+        verified_at = ?,
+        review_due_at = ?,
+        superseded_by_id = ?,
+        updated_at = strftime('%s','now')
+      WHERE id = ?
+    `).bind(
+      data.ingredient_id,
+      data.population_id,
+      data.source_type,
+      data.source_label,
+      data.source_url,
+      data.dose_min,
+      data.dose_max,
+      data.unit,
+      data.per_kg_body_weight,
+      data.per_kg_cap,
+      data.timing,
+      data.context_note,
+      data.sex_filter,
+      data.is_athlete,
+      data.purpose,
+      data.is_default,
+      data.is_active,
+      data.relevance_score,
+      data.created_by_user_id,
+      data.is_public,
+      data.verified_profile_id,
+      data.category_name,
+      data.population_slug,
+      data.verified_profile_name,
+      data.published_at,
+      data.verified_at,
+      data.review_due_at,
+      data.superseded_by_id,
+      id,
+    ).run()
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      return c.json({ error: 'An active default recommendation already exists for this ingredient/population/targeting combination' }, 409)
+    }
+    throw error
+  }
+
+  const recommendation = await getDoseRecommendationAdminRow(c.env.DB, id)
+
+  await logAdminAction(c, {
+    action: 'update_dose_recommendation',
+    entity_type: 'dose_recommendation',
+    entity_id: id,
+    changes: { before: existing, after: recommendation },
+  })
+
+  return c.json({ recommendation })
+})
+
+// DELETE /api/admin/dose-recommendations/:id (admin only; soft delete via is_active=0)
+admin.delete('/dose-recommendations/:id', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const id = parsePositiveId(c.req.param('id'))
+  if (id === null) return c.json({ error: 'Invalid dose recommendation id' }, 400)
+
+  const existing = await getDoseRecommendationAdminRow(c.env.DB, id)
+  if (!existing) return c.json({ error: 'Dose recommendation not found' }, 404)
+
+  await c.env.DB.prepare(`
+    UPDATE dose_recommendations
+    SET is_active = 0,
+        is_default = 0,
+        updated_at = strftime('%s','now')
+    WHERE id = ?
+  `).bind(id).run()
+
+  const recommendation = await getDoseRecommendationAdminRow(c.env.DB, id)
+  await logAdminAction(c, {
+    action: 'deactivate_dose_recommendation',
+    entity_type: 'dose_recommendation',
+    entity_id: id,
+    changes: {
+      before: {
+        is_active: existing.is_active,
+        is_default: existing.is_default,
+      },
+      after: {
+        is_active: recommendation?.is_active ?? 0,
+        is_default: recommendation?.is_default ?? 0,
+      },
+    },
+  })
+
+  return c.json({ ok: true, recommendation })
 })
 
 // GET /api/admin/shop-domains (admin only)

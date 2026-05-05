@@ -147,9 +147,11 @@ export default function RegisterPage() {
                 className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
               />
               <span className="text-sm text-gray-700">
-                Ich stimme der Verarbeitung meiner Gesundheitsdaten (Alter, Geschlecht, Raucherstatus)
-                zur Berechnung personalisierter Dosierungsempfehlungen zu.{' '}
-                <span className="text-xs text-gray-500">(DSGVO Art. 9 – erforderlich)</span>
+                Ich stimme der Verarbeitung folgender Daten zu: Alter, Geschlecht,
+                Leitlinienquelle, Profilangaben sowie Supplement-/Stack-Daten, Dosierungen,
+                eigene Produktdaten und weitere Gesundheitsprofileingaben. Diese Angaben werden für
+                personalisierte Stack- und Dosierungsfunktionen genutzt.
+                <span className="text-xs text-gray-500"> (DSGVO Art. 9 erforderlich)</span>
               </span>
             </label>
           </div>

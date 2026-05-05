@@ -60,6 +60,7 @@ type RawIngredientSubIngredient = Partial<IngredientSubIngredient & {
   childIngredientId?: number;
   childName?: string;
   child_unit?: string;
+  unit?: string;
   promptLabel?: string;
   sortOrder?: number;
 }>;

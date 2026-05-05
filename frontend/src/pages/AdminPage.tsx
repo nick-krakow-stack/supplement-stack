@@ -10,7 +10,10 @@ import {
   Plus,
 } from 'lucide-react';
 import ImageCropModal from '../components/ImageCropModal';
+import AuditLogTab from './admin/AuditLogTab';
+import DoseRecommendationsTab from './admin/DoseRecommendationsTab';
 import TranslationsTab from './admin/TranslationsTab';
+import IngredientSubIngredientsTab from './admin/IngredientSubIngredientsTab';
 
 // ---- Local types ----
 interface AdminProduct {
@@ -139,7 +142,18 @@ function getShopHost(shopLink?: string): string | null {
   }
 }
 
-type Tab = 'products' | 'ingredients' | 'translations' | 'interactions' | 'stats' | 'shop_domains' | 'rankings' | 'user_products';
+type Tab =
+  | 'products'
+  | 'ingredients'
+  | 'translations'
+  | 'interactions'
+  | 'stats'
+  | 'shop_domains'
+  | 'rankings'
+  | 'user_products'
+  | 'ingredient_sub_ingredients'
+  | 'dose_recommendations'
+  | 'audit_log';
 
 // ---- Status badge ----
 function StatusBadge({ status }: { status?: string }) {
@@ -1221,6 +1235,9 @@ export default function AdminPage() {
       {activeTab === 'products' && <ProductsTab />}
       {activeTab === 'ingredients' && <IngredientsTab />}
       {activeTab === 'translations' && <TranslationsTab />}
+      {activeTab === 'ingredient_sub_ingredients' && <IngredientSubIngredientsTab />}
+      {activeTab === 'dose_recommendations' && <DoseRecommendationsTab />}
+      {activeTab === 'audit_log' && <AuditLogTab />}
       {activeTab === 'interactions' && <InteractionsTab />}
       {activeTab === 'stats' && <StatsTab />}
       {activeTab === 'shop_domains' && <ShopDomainsPanel />}

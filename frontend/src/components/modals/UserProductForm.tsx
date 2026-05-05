@@ -121,7 +121,7 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
   const [notes, setNotes] = useState(initialProduct?.notes ?? '');
   const [showIngredientSection, setShowIngredientSection] = useState(true);
   const [ingredientRows, setIngredientRows] = useState<IngredientFormRow[]>(() => {
-    const mapped = (initialProduct?.ingredients ?? []).map((ingredient) => ({
+    const mapped: IngredientFormRow[] = (initialProduct?.ingredients ?? []).map((ingredient): IngredientFormRow => ({
       clientId: makeClientId(),
       ingredientId: ingredient.ingredient_id,
       ingredientName: ingredient.ingredient_name ?? `ID ${ingredient.ingredient_id}`,
@@ -132,7 +132,6 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
       basisUnit: ingredient.basis_unit ?? '',
       searchRelevant: Boolean(ingredient.search_relevant),
       parentIngredientId: ingredient.parent_ingredient_id ?? null,
-      parentIngredientName: undefined,
     }));
 
     if (mapped.length > 0) {
@@ -193,7 +192,6 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
     basisUnit: defaultBasisUnit(),
     searchRelevant: true,
     parentIngredientId: null,
-    parentIngredientName: undefined,
     ...overrides,
   });
 
@@ -411,8 +409,16 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
         }
       }
 
+      const ingredientId = row.ingredientId;
+      if (ingredientId === null) {
+        return {
+          ingredients: [],
+          error: `Wirkstoff ${line}: Interner Fehler - Wirkstoff-ID fehlt.`,
+        };
+      }
+
       normalized.push({
-        ingredient_id: row.ingredientId,
+        ingredient_id: ingredientId,
         form_id: row.formId,
         quantity: hasQuantity ? parsedQuantity : null,
         unit: hasUnit ? row.unit.trim() : null,
