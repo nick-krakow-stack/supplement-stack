@@ -461,3 +461,7 @@ Still open:
 - Admin UI for maintaining `knowledge_articles` and `ingredient_safety_warnings` later; first version is migration-seeded only.
 - Product data and dosage data scientific validation remains a separate content workstream.
 - DMARC/DKIM and final legal/compliance sign-off remain pre-indexing tasks.
+
+## 2026-05-05 Purchase-Link Follow-Up
+
+- Later follow-up: if a product ever has no purchase link, product cards/stack surfaces should offer a simple report action so the missing or broken link can be corrected. Current production product data is expected to have purchase links; this is a resilience/maintenance flow, not a blocker for the deployed warning/data-minimization bundle.
