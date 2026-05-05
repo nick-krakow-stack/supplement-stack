@@ -14,9 +14,9 @@ import {
   Menu,
   X,
   LogOut,
-  Leaf,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import AppLogo from './AppLogo';
 
 interface AdminLayoutProps {
   children?: React.ReactNode;
@@ -90,14 +90,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     <>
       {/* Logo */}
       <div className="px-5 py-6 border-b border-slate-800">
-        <div className="flex items-center gap-2.5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600/20">
-            <Leaf size={18} className="text-indigo-400" />
-          </span>
-          <div>
-            <p className="text-white font-bold text-sm leading-tight">Supplement Stack</p>
-            <p className="text-slate-400 text-xs">Admin</p>
-          </div>
+        <div className="flex flex-col items-start gap-2.5">
+          <AppLogo variant="admin" />
+          <p className="text-slate-400 text-xs font-semibold tracking-wide">Admin</p>
         </div>
       </div>
 

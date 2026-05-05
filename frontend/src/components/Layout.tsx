@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Leaf, Menu, X } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import LegalDisclaimer from './LegalDisclaimer';
+import AppLogo from './AppLogo';
 import { resetAnalyticsConsentChoice } from '../lib/analytics';
 
 interface LayoutProps {
@@ -94,18 +95,7 @@ export default function Layout({ children }: LayoutProps) {
       <nav className="sticky top-0 z-50 border-b border-slate-200/70 bg-white/90 shadow-[0_8px_30px_rgba(15,23,42,0.05)] backdrop-blur-xl">
         <div className="mx-auto max-w-[1280px] px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
-            <Link
-              to="/"
-              className="inline-flex min-w-0 items-center gap-2 text-xl font-black tracking-wide text-slate-900"
-              onClick={closeMobile}
-            >
-              <span className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-100 to-blue-100 text-emerald-700">
-                <Leaf size={19} />
-              </span>
-              <span className="truncate bg-gradient-to-r from-blue-700 to-violet-700 bg-clip-text text-transparent">
-                Supplement Stack
-              </span>
-            </Link>
+            <AppLogo onClick={closeMobile} />
 
             <div className="hidden items-center gap-7 md:flex">{navLinks}</div>
             <div className="hidden items-center gap-4 md:flex">{authLinks}</div>
