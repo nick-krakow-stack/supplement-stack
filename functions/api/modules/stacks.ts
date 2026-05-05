@@ -272,6 +272,7 @@ function normalizeStackProductItems(value: unknown): StackProductValidation {
     : []
 
   const items: StackProductInput[] = []
+  const seenProducts = new Set<string>()
   for (const item of rawItems) {
     const id = Number(item.id)
     const productType = normalizeStackProductType(item.product_type ?? item.product_source ?? item.source)
@@ -298,6 +299,11 @@ function normalizeStackProductItems(value: unknown): StackProductValidation {
     if (intakeIntervalDays === null) {
       return { error: 'intake_interval_days must be an integer greater than or equal to 1' }
     }
+    const productKey = `${productType}:${id}`
+    if (seenProducts.has(productKey)) {
+      return { error: 'product_ids must not contain duplicate products' }
+    }
+    seenProducts.add(productKey)
 
     items.push({ id, product_type: productType, quantity, intake_interval_days: intakeIntervalDays, dosage_text: dosageText, timing })
   }

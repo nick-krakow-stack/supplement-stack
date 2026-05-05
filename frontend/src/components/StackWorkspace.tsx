@@ -6,7 +6,6 @@ import {
   ArrowLeft,
   ArrowRight,
   Calculator,
-  CheckCircle2,
   Clock3,
   Flag,
   Info,
@@ -26,7 +25,7 @@ import StacksHeader, { type StacksHeaderVariant } from './StacksHeader';
 import EditStackModal from './EditStackModal';
 import { createFamilyMember, deleteFamilyMember, getFamilyMembers } from '../api/family';
 import { reportProductLink } from '../api/stacks';
-import type { FamilyMember, Interaction, ProductSafetyWarning } from '../types';
+import type { FamilyMember, ProductSafetyWarning } from '../types';
 import type { DosageGuideline, Ingredient, ShopDomain } from '../types/local';
 import {
   calculateProductUsage,
@@ -241,24 +240,6 @@ function formatDaysSupply(days: number | null): string {
   return days ? `${days} Tage` : 'unbekannt';
 }
 
-function normalizeShopHref(value?: string): string | null {
-  const raw = value?.trim();
-  if (!raw) return null;
-  const withScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`;
-  try {
-    const url = new URL(withScheme);
-    if (!['http:', 'https:'].includes(url.protocol)) return null;
-    if (!url.hostname || url.hostname.includes('..')) return null;
-    return url.toString();
-  } catch {
-    return null;
-  }
-}
-
-function shopLinkNeedsReport(product: DemoProduct): boolean {
-  return !normalizeShopHref(product.shop_link);
-}
-
 function stackProfileLabel(stack: DemoStack | undefined): string {
   if (!stack?.family_member_id) return 'Mein Stack';
   return stack.family_member_first_name ? `Fuer ${stack.family_member_first_name}` : 'Familienprofil';
@@ -279,13 +260,6 @@ function routineKeyForTiming(timing?: string): RoutineKey {
   if (normalized.includes('mittag') || normalized.includes('noon')) return 'noon';
   if (normalized.includes('abend') || normalized.includes('nacht') || normalized.includes('evening')) return 'evening';
   return 'flexible';
-}
-
-function effectiveIngredientIds(product: DemoProduct): number[] {
-  return (product.ingredients ?? [])
-    .filter((ingredient) => ingredient.search_relevant === undefined || ingredient.search_relevant === true || ingredient.search_relevant === 1)
-    .map((ingredient) => ingredient.ingredient_id)
-    .filter((id) => Number.isInteger(id));
 }
 
 function productDoseSignature(product: DemoProduct): string {
@@ -355,6 +329,7 @@ function AddProductModal({
   token,
   onAdd,
   onClose,
+  ignoredExistingProductKey,
   title = 'Produkt hinzufügen',
   submitLabel = 'Hinzufügen',
 }: {
@@ -366,6 +341,7 @@ function AddProductModal({
   onClose: () => void;
   title?: string;
   submitLabel?: string;
+  ignoredExistingProductKey?: string;
 }) {
   const [step, setStep] = useState<'search' | 'dosage' | 'products'>('search');
   const [ingredient, setIngredient] = useState<Ingredient | null>(null);
@@ -377,6 +353,11 @@ function AddProductModal({
   const [productsLoading, setProductsLoading] = useState(false);
   const [savingProductKey, setSavingProductKey] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const targetStack = stacks.find((stack) => stack.id === targetStackId);
+  const existingProductKeys = useMemo(
+    () => new Set((targetStack?.products ?? []).map(productStackKey)),
+    [targetStack],
+  );
 
   const dgeGuideline = guidelines.find((gl) => gl.source === 'DGE' || gl.is_default) ?? guidelines[0];
   const studyGuideline =
@@ -456,6 +437,11 @@ function AddProductModal({
   };
 
   const addProduct = async (product: DemoProduct) => {
+    const key = productStackKey(product);
+    if (existingProductKeys.has(key) && key !== ignoredExistingProductKey) {
+      setError('Produkt ist bereits in diesem Stack.');
+      return;
+    }
     const targetDosageText = dose.value > 0 && dose.unit
       ? `${dose.value} ${dose.unit} täglich`
       : product.dosage_text || '1 Portion täglich';
@@ -466,7 +452,7 @@ function AddProductModal({
       intake_interval_days: product.intake_interval_days ?? 1,
     };
     enhanced.quantity = productServingsPerDay(enhanced);
-    setSavingProductKey(productStackKey(product));
+    setSavingProductKey(key);
     setError('');
     try {
       await onAdd(enhanced, targetStackId);
@@ -676,6 +662,7 @@ function AddProductModal({
               <div className="grid gap-4">
                 {products.map((product) => {
                   const key = productStackKey(product);
+                  const alreadyInTargetStack = existingProductKeys.has(key) && key !== ignoredExistingProductKey;
                   const previewProduct: DemoProduct = {
                     ...product,
                     dosage_text: dose.value > 0 && dose.unit
@@ -736,11 +723,11 @@ function AddProductModal({
                     </div>
                     <button
                       onClick={() => void addProduct(product)}
-                      disabled={savingProductKey === key}
+                      disabled={savingProductKey === key || alreadyInTargetStack}
                       className="mt-4 inline-flex w-full items-center justify-center gap-3 rounded-xl bg-blue-600 px-5 py-3 text-base font-black text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <Plus size={22} />
-                      {savingProductKey === key ? 'Speichert...' : submitLabel}
+                      {alreadyInTargetStack ? 'Bereits im Stack' : savingProductKey === key ? 'Speichert...' : submitLabel}
                     </button>
                   </div>
                   );
@@ -1028,8 +1015,7 @@ export function StackWorkspace({
   const [familySaving, setFamilySaving] = useState(false);
   const [familyStatus, setFamilyStatus] = useState('');
   const [linkReportStatus, setLinkReportStatus] = useState('');
-  const [stackWarnings, setStackWarnings] = useState<Interaction[]>([]);
-  const [stackWarningsLoading, setStackWarningsLoading] = useState(false);
+  const [routineOpen, setRoutineOpen] = useState(false);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -1085,6 +1071,7 @@ export function StackWorkspace({
           family_member_first_name?: string | null;
         };
         setState({ stacks: [mapStackDetail(createdStack)], activeStackId: String(createdStack.id) });
+        setSelectedIds(new Set());
         return;
       }
       const detailed = await Promise.all(
@@ -1103,6 +1090,8 @@ export function StackWorkspace({
           ? prev.activeStackId
           : detailed[0].id,
       }));
+      const selectedStack = detailed[0];
+      setSelectedIds(new Set((selectedStack?.products ?? []).map(productStackKey)));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unbekannter Fehler.');
     } finally {
@@ -1129,6 +1118,7 @@ export function StackWorkspace({
           stacks: [{ ...fresh.stacks[0], products }],
           activeStackId: fresh.activeStackId,
         });
+        setSelectedIds(new Set(products.map(productStackKey)));
       })
       .catch(() => setState(fresh));
   }, [loadAuthenticatedStacks, loadFamilyProfiles, mode]);
@@ -1137,8 +1127,9 @@ export function StackWorkspace({
 
   // Reset selection when active stack changes
   useEffect(() => {
-    setSelectedIds(new Set());
-  }, [state.activeStackId]);
+    const stack = state.stacks.find((item) => item.id === state.activeStackId);
+    setSelectedIds(new Set((stack?.products ?? []).map(productStackKey)));
+  }, [state.activeStackId, state.stacks]);
 
   // Keep selection in sync if products change
   useEffect(() => {
@@ -1149,21 +1140,6 @@ export function StackWorkspace({
       return valid;
     });
   }, [activeStack]);
-
-  useEffect(() => {
-    if (!activeStack || isDemo || !token) {
-      setStackWarnings([]);
-      setStackWarningsLoading(false);
-      return;
-    }
-    setStackWarnings([]);
-    setStackWarningsLoading(true);
-    fetch(apiPath(`/stack-warnings/${activeStack.id}`), { headers: authHeaders(token) })
-      .then((response) => (response.ok ? response.json() : { warnings: [] }))
-      .then((data) => setStackWarnings(data.warnings ?? data.interactions ?? []))
-      .catch(() => setStackWarnings([]))
-      .finally(() => setStackWarningsLoading(false));
-  }, [activeStack, isDemo, token]);
 
   const persistStackProducts = useCallback(
     async (stackId: string, products: DemoProduct[], name?: string) => {
@@ -1442,6 +1418,11 @@ export function StackWorkspace({
           s.id === targetStackId ? { ...s, products: nextProducts } : s,
         ),
       }));
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        next.add(productStackKey(product));
+        return next;
+      });
     },
     [loadAuthenticatedStacks, mode, persistStackProducts, state.activeStackId, state.stacks, token],
   );
@@ -1549,6 +1530,13 @@ export function StackWorkspace({
           stack.id === targetStackId ? { ...stack, products: nextProducts } : stack,
         ),
       }));
+      setSelectedIds((prev) => {
+        if (!prev.has(replaceProductKey)) return prev;
+        const next = new Set(prev);
+        next.delete(replaceProductKey);
+        next.add(productStackKey(candidate));
+        return next;
+      });
       setReplaceProductKey(null);
       setEditingProductKey(null);
     },
@@ -1573,37 +1561,8 @@ export function StackWorkspace({
   const activeProducts = useMemo(() => activeStack?.products ?? [], [activeStack]);
   const totalOnce = selectedProducts.reduce((sum, p) => sum + (p.price ?? 0), 0);
   const totalMonthly = selectedProducts.reduce((sum, p) => sum + productMonthlyPrice(p), 0);
-  const stackTotalOnce = activeProducts.reduce((sum, product) => sum + (product.price ?? 0), 0);
-  const stackTotalMonthly = activeProducts.reduce((sum, product) => sum + productMonthlyPrice(product), 0);
   const productsCount = activeProducts.length;
   const allSelected = productsCount > 0 && selectedIds.size === productsCount;
-
-  const stackCockpit = useMemo(() => {
-    const ingredientCounts = new Map<number, number>();
-    for (const product of activeProducts) {
-      for (const ingredientId of new Set(effectiveIngredientIds(product))) {
-        ingredientCounts.set(ingredientId, (ingredientCounts.get(ingredientId) ?? 0) + 1);
-      }
-    }
-    const duplicateIngredientCount = [...ingredientCounts.values()].filter((count) => count > 1).length;
-    const effectiveIngredientCount = ingredientCounts.size;
-    const missingLinkCount = activeProducts.filter(shopLinkNeedsReport).length;
-    const runningOutSoonCount = activeProducts.filter((product) => {
-      const days = calculateProductUsage(product, product.price, { fallbackTotalServings: 30 }).daysSupply;
-      return days !== null && days <= 14;
-    }).length;
-    const warningCount = activeProducts.reduce((sum, product) => (
-      sum + (product.warnings?.length ?? 0) + (product.warning_message ? 1 : 0)
-    ), 0);
-
-    return {
-      duplicateIngredientCount,
-      effectiveIngredientCount,
-      missingLinkCount,
-      runningOutSoonCount,
-      warningCount,
-    };
-  }, [activeProducts]);
 
   const routineGroups = useMemo(() => {
     const groups: Record<RoutineKey, DemoProduct[]> = {
@@ -1693,72 +1652,6 @@ export function StackWorkspace({
       </button>
     </>
   );
-
-  const cockpitTiles = [
-    {
-      label: 'Monat',
-      value: `${formatEuro(stackTotalMonthly)} EUR`,
-      tone: stackTotalMonthly > 80 ? 'bad' : stackTotalMonthly > 40 ? 'warn' : 'good',
-      detail: 'geschaetzt',
-    },
-    {
-      label: 'Einmal',
-      value: `${formatEuro(stackTotalOnce)} EUR`,
-      tone: stackTotalOnce > 200 ? 'bad' : stackTotalOnce > 100 ? 'warn' : 'good',
-      detail: 'Packungskauf',
-    },
-    {
-      label: 'Produkte',
-      value: String(productsCount),
-      tone: productsCount > 12 ? 'warn' : 'good',
-      detail: productsCount === 1 ? 'Produkt' : 'Produkte',
-    },
-    {
-      label: 'Hinweise',
-      value: String(stackCockpit.warningCount),
-      tone: stackCockpit.warningCount > 0 ? 'warn' : 'good',
-      detail: 'Warnungen',
-    },
-    {
-      label: 'Doppelt',
-      value: String(stackCockpit.duplicateIngredientCount),
-      tone: stackCockpit.duplicateIngredientCount > 0 ? 'warn' : 'good',
-      detail: 'Wirkstoffe',
-    },
-    {
-      label: 'Links',
-      value: String(stackCockpit.missingLinkCount),
-      tone: stackCockpit.missingLinkCount > 0 ? 'warn' : 'good',
-      detail: 'fehlen',
-    },
-    {
-      label: 'Vorrat',
-      value: String(stackCockpit.runningOutSoonCount),
-      tone: stackCockpit.runningOutSoonCount > 0 ? 'bad' : 'good',
-      detail: 'bald leer',
-    },
-  ];
-
-  const conflictCount = isDemo ? stackCockpit.duplicateIngredientCount : stackWarnings.length;
-  const conflictState = stackCockpit.effectiveIngredientCount < 2
-    ? {
-        tone: 'unknown',
-        title: 'Nicht genug Daten',
-        text: 'Mindestens zwei eindeutig zugeordnete Wirkstoffe sind fuer einen Stack-Check noetig.',
-      }
-    : conflictCount > 0
-      ? {
-          tone: 'bad',
-          title: `${conflictCount} Konflikt${conflictCount === 1 ? '' : 'e'}`,
-          text: isDemo
-            ? 'Demo-Check: doppelte Wirkstoffe im Stack pruefen.'
-            : 'Bekannte Wechselwirkungs- oder Kombinationshinweise im Stack pruefen.',
-        }
-      : {
-          tone: 'good',
-          title: stackWarningsLoading ? 'Check laeuft...' : 'Keine bekannten Konflikte',
-          text: 'Fuer die aktuell erkannten Wirkstoffe liegen keine aktiven Stack-Konflikte vor.',
-        };
 
   return (
     <>
@@ -1894,17 +1787,14 @@ export function StackWorkspace({
           </div>
         )}
 
-        <section className="stack-cockpit" aria-label="Stack-Check">
+        <section className="stack-cockpit" aria-label="Stack-Steuerung">
           <div className="print-sheet-heading">
             <strong>Supplement Stack Einnahmeplan</strong>
             <span>{activeStack?.name ?? 'Stack'} · {stackProfileLabel(activeStack)}</span>
           </div>
           <div className="stack-cockpit-head">
             <div>
-              <div className="stack-cockpit-kicker">
-                <CheckCircle2 size={16} />
-                Stack-Check
-              </div>
+              <div className="stack-cockpit-kicker">Stack</div>
               <h2>{activeStack?.name ?? 'Stack'}</h2>
               <p>{stackProfileLabel(activeStack)}</p>
             </div>
@@ -1939,6 +1829,15 @@ export function StackWorkspace({
                     Profil
                   </button>
                 )}
+                <button
+                  type="button"
+                  className={`routine-toggle-btn ${routineOpen ? 'active' : ''}`}
+                  onClick={() => setRoutineOpen((open) => !open)}
+                  aria-label={routineOpen ? 'Einnahmeplan einklappen' : 'Einnahmeplan ausklappen'}
+                  title={routineOpen ? 'Einnahmeplan einklappen' : 'Einnahmeplan ausklappen'}
+                >
+                  <Clock3 size={17} />
+                </button>
               </div>
               {familyStatus && <p className="family-status">{familyStatus}</p>}
             </div>
@@ -1982,37 +1881,7 @@ export function StackWorkspace({
             </div>
           )}
 
-          <div className={`conflict-card conflict-${conflictState.tone}`}>
-            <div className="conflict-icon">
-              {conflictState.tone === 'good' ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
-            </div>
-            <div>
-              <strong>{conflictState.title}</strong>
-              <p>{conflictState.text}</p>
-              {!isDemo && stackWarnings.length > 0 && (
-                <ul>
-                  {stackWarnings.slice(0, 3).map((warningItem) => (
-                    <li key={warningItem.id}>{warningItem.comment ?? warningItem.type ?? 'Hinweis pruefen'}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
-
-          <div className="cockpit-grid">
-            {cockpitTiles.map((tile) => (
-              <div key={tile.label} className={`cockpit-tile cockpit-${tile.tone}`}>
-                <span className="cockpit-ampel" aria-hidden="true" />
-                <div>
-                  <p>{tile.label}</p>
-                  <strong>{tile.value}</strong>
-                  <small>{tile.detail}</small>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="routine-panel">
+          <div className={`routine-panel ${routineOpen ? 'routine-open' : 'routine-closed'}`}>
             <div className="routine-panel-title">
               <Clock3 size={17} />
               Einnahmeplan
@@ -2150,9 +2019,9 @@ export function StackWorkspace({
       {productsCount > 0 && (
       <div className="bottom-bar">
         <div>
-          <div className="bb-title">Gewählte Supplements</div>
+          <div className="bb-title">Auswahl</div>
           <div className="bb-sub">
-            {selectedIds.size} von {productsCount} ausgewählt
+            {selectedIds.size} von {productsCount} Produkten
           </div>
         </div>
         <div className="bb-prices">
@@ -2171,7 +2040,7 @@ export function StackWorkspace({
             disabled={productsCount === 0}
             style={productsCount === 0 ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
           >
-            {allSelected ? 'Auswahl aufheben' : 'Alle auswählen'}
+            {allSelected ? 'Alles abwählen' : 'Alles auswählen'}
           </button>
         </div>
       </div>
@@ -2198,6 +2067,7 @@ export function StackWorkspace({
           onClose={() => setReplaceProductKey(null)}
           title="Produkt wechseln"
           submitLabel="Produkt ersetzen"
+          ignoredExistingProductKey={replaceProductKey}
         />
       )}
 
