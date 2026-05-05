@@ -1237,3 +1237,17 @@ Do not assume untracked files are disposable. Review before deleting or committi
 - Validation passed: functions `npx tsc -p tsconfig.json --noEmit`, frontend `npx tsc --noEmit`, frontend `npm run lint --if-present`, frontend `npm run build`, and `git diff --check` with CRLF warnings only.
 - Smoke checks passed: fresh test account could create an empty stack and save Vitamin D3 2000 IU drops at 10,000 IE daily (`quantity=5`). Preview/live root 200 with `assets/index-CTRHry5S.js`.
 - Temporary `qa-stack-%@example.com` test users/stacks/tokens/consents were deleted from production after verification; remaining count is 0.
+
+## 2026-05-05 Stack Cockpit Simplification Deployed
+
+- Commit `8768854` deployed to Cloudflare Pages project `supplementstack`.
+- Preview URL: `https://2de2b5ec.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`, asset `assets/index-BKappw8q.js`.
+- The visible `Stack-Check` cockpit was simplified: middle metric tiles for warnings, duplicate ingredients, missing links, and stock/range were removed from the user stack page.
+- The stack header area now focuses on stack name, profile assignment, family profile creation, and a compact clock button.
+- The intake/routine plan is collapsed by default and expands from the clock button next to the profile controls. It remains rendered for print/PDF via print CSS.
+- The bottom fixed bar is now a centered footer overlay showing selected product count, one-time cost, monthly cost, and `Alles auswaehlen` / `Alles abwaehlen`.
+- Product selection defaults to all products selected when a stack loads or changes; newly added products are selected automatically.
+- Duplicate products are blocked earlier in the add-product modal and are rejected by stack payload normalization on the backend.
+- Validation passed: functions `npx tsc -p tsconfig.json --noEmit`, frontend `npx tsc --noEmit`, frontend `npm run lint --if-present`, frontend `npm run build`, frontend `npm test -- --run` (5 tests), and `git diff --check` with CRLF warnings only.
+- Smoke checks passed: preview/live root return 200 with `assets/index-BKappw8q.js`.

@@ -592,3 +592,14 @@ Closed:
 Still open:
 - Manual browser QA with the real newly verified account after hard refresh.
 - Later data-model improvement: add a true `content_count/content_unit` field instead of deriving total content from `serving_size * servings_per_container`.
+
+## 2026-05-05 Stack Cockpit Simplification Follow-Up
+
+Closed:
+- User-facing Stack-Check metric tiles were removed from the stack page.
+- Intake plan is now collapsed behind the clock button and remains available for print/PDF.
+- Footer overlay now carries selected product count, one-time cost, monthly cost, and all-select/all-deselect.
+- Duplicate product additions are blocked in frontend selection and backend stack payload normalization.
+
+Still open:
+- Manual authenticated browser QA on desktop and mobile for the simplified stack page and footer overlay.

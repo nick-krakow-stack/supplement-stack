@@ -1106,3 +1106,18 @@ When a future agent deploys or applies migrations, append the exact date, commit
 - Validation passed: functions TypeScript, frontend TypeScript, frontend lint, frontend build, and `git diff --check` with CRLF warnings only.
 - Smoke checks passed: fresh test account created stack and saved D3 stack item; temporary test data was deleted afterward.
 - Commit after deploy: `6d0cff4` - Fix stack creation and content preview.
+
+## 2026-05-05 - Stack Cockpit Simplification
+
+- Deploy command: `npx wrangler pages deploy frontend/dist --project-name supplementstack`.
+- Preview URL: `https://2de2b5ec.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`.
+- Build asset: `assets/index-BKappw8q.js`.
+- Scope:
+  - Removed the visible Stack-Check metric tiles from the stack page.
+  - Made the intake plan collapsed by default behind the profile-adjacent clock button.
+  - Converted the bottom bar into a centered cost/product footer overlay.
+  - Blocked duplicate product additions in the modal and backend stack payload validation.
+- Validation passed: functions TypeScript, frontend TypeScript, frontend lint, frontend build, frontend Vitest 5 tests, and `git diff --check` with CRLF warnings only.
+- Smoke checks passed: preview/live root returned 200 with `assets/index-BKappw8q.js`.
+- Commit before deploy: `8768854` - UX: Simplify stack cockpit and bottom summary.

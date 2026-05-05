@@ -675,3 +675,20 @@ Completed:
 Next:
 - User should hard-refresh/reopen `supplementstack.de`, then retry `Meine Stacks` and adding Vitamin D3.
 - If a user still has an old failed in-memory stack state in the tab, reloading the page should force the fixed start-stack creation path.
+
+## 2026-05-05 - Stack Cockpit Simplification Handoff
+
+Completed:
+- Removed the visible Stack-Check metric cockpit from the user stack page.
+- Intake/routine plan is collapsed by default and toggled by a compact clock button beside the profile controls.
+- Bottom bar is now a centered footer overlay with selected product count, one-time cost, monthly cost, and `Alles auswaehlen` / `Alles abwaehlen`.
+- Product selection defaults to all products selected on stack load/change; new products are selected automatically.
+- Duplicate stack products are blocked in the add-product modal and by backend stack item normalization.
+- Deployed to Cloudflare Pages. Preview: `https://2de2b5ec.supplementstack.pages.dev`; live asset: `assets/index-BKappw8q.js`.
+
+Validation:
+- Functions TypeScript, frontend TypeScript, frontend ESLint, frontend build, frontend Vitest 5 tests, and `git diff --check` passed.
+- Preview/live root returned 200 with the new asset.
+
+Next:
+- Manual browser QA on the real stack page: open/close the clock intake plan, select/deselect products, verify footer cost changes, and confirm duplicate add attempts show `Bereits im Stack`.
