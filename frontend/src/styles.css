@@ -107,6 +107,7 @@ body {
 
 /* Page */
 .ss-page { padding: 24px 40px 100px; max-width: 1500px; margin: 0 auto; }
+.ss-page-embedded { padding: 0 0 100px; max-width: none; }
 
 /* Info banner */
 .info-banner {

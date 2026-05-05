@@ -74,6 +74,7 @@ interface DemoState {
 export interface StackWorkspaceProps {
   mode?: 'demo' | 'authenticated';
   token?: string | null;
+  standaloneHeader?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -682,7 +683,11 @@ function IconChevron() {
 
 const HEADER_VARIANT: StacksHeaderVariant = 'warm';
 
-export function StackWorkspace({ mode = 'demo', token = null }: StackWorkspaceProps) {
+export function StackWorkspace({
+  mode = 'demo',
+  token = null,
+  standaloneHeader,
+}: StackWorkspaceProps) {
   const [state, setState] = useState<DemoState>(createDefaultState);
   const [descriptions, setDescriptions] = useState<Record<string, string>>(() =>
     mode === 'authenticated' ? loadDescriptions() : {},
@@ -697,6 +702,7 @@ export function StackWorkspace({ mode = 'demo', token = null }: StackWorkspacePr
   const navigate = useNavigate();
 
   const isDemo = mode === 'demo';
+  const showStandaloneHeader = standaloneHeader ?? isDemo;
 
   // Fetch shop domains
   useEffect(() => {
@@ -1027,6 +1033,7 @@ export function StackWorkspace({ mode = 'demo', token = null }: StackWorkspacePr
 
   return (
     <>
+      {showStandaloneHeader && (
       <StacksHeader
         variant={HEADER_VARIANT}
         title={isDemo ? 'Demo – Supplement Stack' : 'Meine Supplement Stacks'}
@@ -1037,8 +1044,9 @@ export function StackWorkspace({ mode = 'demo', token = null }: StackWorkspacePr
         }
         rightSlot={rightSlot}
       />
+      )}
 
-      <main className="ss-page">
+      <div className={showStandaloneHeader ? 'ss-page' : 'ss-page ss-page-embedded'}>
         {isDemo && (
           <div className="info-banner info-banner-demo">
             <IconInfoCircle />
@@ -1224,7 +1232,7 @@ export function StackWorkspace({ mode = 'demo', token = null }: StackWorkspacePr
             </div>
           );
         })}
-      </main>
+      </div>
 
       {/* Bottom bar */}
       {productsCount > 0 && (

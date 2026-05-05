@@ -212,7 +212,7 @@ export default function MyProductsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-indigo-50/30 p-4 md:p-6">
+    <div className="max-w-5xl">
       <div className="flex flex-col gap-6">
       {/* Page header */}
       <div className="flex items-center justify-between gap-4 flex-wrap">

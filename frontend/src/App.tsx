@@ -58,9 +58,11 @@ export default function App() {
         <Route
           path="/stacks"
           element={
-            <ProtectedRoute>
-              <StacksPage />
-            </ProtectedRoute>
+            <Layout>
+              <ProtectedRoute>
+                <StacksPage />
+              </ProtectedRoute>
+            </Layout>
           }
         />
         <Route path="/demo" element={<DemoPage />} />
