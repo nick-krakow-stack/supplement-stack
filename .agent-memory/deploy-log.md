@@ -1032,3 +1032,4 @@ When a future agent deploys or applies migrations, append the exact date, commit
   - No D1 migration required.
 - Validation passed: functions TypeScript, frontend TypeScript, frontend lint, frontend build, and `git diff --check` with CRLF warnings only.
 - Smoke checks passed: preview/live root 200 with `assets/index-DVbWbGLx.js`; preview/live unauthenticated `/api/admin/ops-dashboard`, `/api/admin/knowledge-articles`, and `/api/admin/product-qa` return 401.
+- Commit after deploy: `2908e8f` - Feature: Add admin ops and knowledge tools.
