@@ -1,4 +1,4 @@
-import { ExternalLink, RefreshCcw, Trash2 } from 'lucide-react';
+import { ExternalLink, Pencil, RefreshCcw, Trash2 } from 'lucide-react';
 import type { ShopDomain } from '../types/local';
 
 interface ProductCardProduct {
@@ -24,6 +24,13 @@ interface ProductCardProduct {
   product_brand?: string;
   timing?: string;
   dosage_text?: string;
+  intake_interval_days?: number;
+  ingredients?: Array<{
+    ingredient_id: number;
+    quantity?: number | null;
+    unit?: string | null;
+    search_relevant?: number | boolean;
+  }>;
   effect_summary?: string;
   warning_title?: string;
   warning_message?: string;
@@ -43,6 +50,7 @@ interface ProductCardProps {
   onAddToWishlist?: () => void;
   onSelect?: () => void;
   onToggleSelected?: () => void;
+  onEdit?: () => void;
   onDelete?: () => void;
   recommendationType?: 'recommended' | 'alternative' | null;
   showWishlistButton?: boolean;
@@ -57,16 +65,87 @@ function formatEur(value: number): string {
   return value.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
 }
 
-function calcMonthlyPrice(price: number, servingsPerContainer?: number, containerCount?: number): number | null {
-  const total = (servingsPerContainer ?? 0) * (containerCount ?? 1);
-  if (total <= 0) return null;
-  return (price / total) * 30;
+function intakeIntervalDays(product: ProductCardProduct): number {
+  const interval = product.intake_interval_days ?? 1;
+  return Number.isInteger(interval) && interval >= 1 ? interval : 1;
 }
 
-function getDaysSupply(servingsPerContainer?: number, containerCount?: number): number | null {
-  const total = (servingsPerContainer ?? 0) * (containerCount ?? 1);
-  if (total <= 0) return null;
-  return Math.round(total);
+function normalizeComparableUnit(unit?: string | null): string {
+  const normalized = (unit ?? '').trim().toLowerCase().replace(/Î¼/g, 'Âµ').replace(/\./g, '');
+  if (['iu', 'ie'].includes(normalized)) return 'iu';
+  if (['Âµg', 'ug', 'mcg'].includes(normalized)) return 'Âµg';
+  if (['kapsel', 'kapseln'].includes(normalized)) return 'kapsel';
+  if (['tablette', 'tabletten'].includes(normalized)) return 'tablette';
+  if (normalized === 'tropfen') return 'tropfen';
+  if (['softgel', 'softgels'].includes(normalized)) return 'softgel';
+  if (['portion', 'portionen'].includes(normalized)) return 'portion';
+  return normalized;
+}
+
+function parseGermanNumber(value: string): number | null {
+  const trimmed = value.trim();
+  const normalized = trimmed.includes(',')
+    ? trimmed.replace(/\./g, '').replace(',', '.')
+    : /^\d{1,3}(?:\.\d{3})+$/.test(trimmed)
+      ? trimmed.replace(/\./g, '')
+      : trimmed;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function parseDoseFromText(text?: string | null): { value: number; unit: string } | null {
+  if (!text) return null;
+  const match = /(\d+(?:[.,]\d{1,3})?(?:\.\d{3})*)\s*(IE|IU|Âµg|Î¼g|ug|mcg|mg|g|Kapseln?|Tabletten?|Tropfen|Softgels?|Portionen?)/i.exec(text);
+  if (!match) return null;
+  const value = parseGermanNumber(match[1]);
+  return value ? { value, unit: match[2] } : null;
+}
+
+function productPrimaryQuantity(product: ProductCardProduct): { quantity: number; unit?: string | null } | null {
+  const fromIngredients = product.ingredients?.find((ingredient) => (
+    Boolean(ingredient.search_relevant ?? 1) && ingredient.quantity != null && ingredient.quantity > 0
+  ));
+  if (fromIngredients?.quantity) return { quantity: fromIngredients.quantity, unit: fromIngredients.unit };
+  if (product.quantity != null && product.quantity > 0 && product.unit) {
+    return { quantity: product.quantity, unit: product.unit };
+  }
+  return null;
+}
+
+function servingsPerIntake(product: ProductCardProduct): number {
+  const parsedDose = parseDoseFromText(product.dosage_text);
+  if (parsedDose) {
+    const doseUnit = normalizeComparableUnit(parsedDose.unit);
+    const ingredient = productPrimaryQuantity(product);
+    if (ingredient && normalizeComparableUnit(ingredient.unit) === doseUnit) {
+      return Math.max(1, Math.ceil(parsedDose.value / ingredient.quantity));
+    }
+    if (
+      product.serving_size != null &&
+      product.serving_size > 0 &&
+      normalizeComparableUnit(product.serving_unit) === doseUnit
+    ) {
+      return Math.max(1, Math.ceil(parsedDose.value / product.serving_size));
+    }
+  }
+
+  if (product.quantity && product.quantity > 0 && product.quantity <= 100) return product.quantity;
+  return 1;
+}
+
+function calcMonthlyPrice(product: ProductCardProduct, price: number): number | null {
+  const total = (product.servings_per_container ?? 0) * (product.container_count ?? 1);
+  const effectiveDailyUsage = servingsPerIntake(product) / intakeIntervalDays(product);
+  if (total <= 0 || effectiveDailyUsage <= 0) return null;
+  const daysSupply = Math.floor(total / effectiveDailyUsage);
+  return daysSupply > 0 ? (price / daysSupply) * 30 : null;
+}
+
+function getDaysSupply(product: ProductCardProduct): number | null {
+  const total = (product.servings_per_container ?? 0) * (product.container_count ?? 1);
+  const effectiveDailyUsage = servingsPerIntake(product) / intakeIntervalDays(product);
+  if (total <= 0 || effectiveDailyUsage <= 0) return null;
+  return Math.floor(total / effectiveDailyUsage);
 }
 
 function getDose(product: ProductCardProduct): string {
@@ -140,7 +219,7 @@ function shopHostMatchesDomain(hostname: string, domain: string): boolean {
 }
 
 export default function ProductCard({
-  product, onAddToWishlist, onSelect, onToggleSelected, onDelete,
+  product, onAddToWishlist, onSelect, onToggleSelected, onEdit, onDelete,
   recommendationType, showWishlistButton = false, showSelectButton = false,
   shopDomains, selected = false, warning,
 }: ProductCardProps) {
@@ -163,9 +242,12 @@ export default function ProductCard({
   const shopName = matchedShop?.display_name ?? null;
   const buttonText = shopName ? `Bei ${shopName} kaufen` : 'Jetzt kaufen';
 
-  const monthlyPrice = calcMonthlyPrice(price, product.servings_per_container, product.container_count);
-  const daysSupply = getDaysSupply(product.servings_per_container, product.container_count);
+  const monthlyPrice = calcMonthlyPrice(product, price);
+  const daysSupply = getDaysSupply(product);
   const dose = getDose(product);
+  const intervalDays = intakeIntervalDays(product);
+  const intervalLabel = intervalDays === 1 ? 'täglich' : `alle ${intervalDays} Tage`;
+  const showInterval = product.intake_interval_days != null;
 
   const productWarning = product.warning_message
     ? { title: product.warning_title, message: product.warning_message, type: product.warning_type ?? 'caution' }
@@ -245,6 +327,7 @@ export default function ProductCard({
         <div>
           <div className="text-[10px] font-bold uppercase tracking-[0.4px] text-slate-400 mb-0.5">Dosierung</div>
           <div className="text-[12.5px] font-bold text-slate-700">{dose}</div>
+          {showInterval && <div className="mt-0.5 text-[11px] font-semibold text-slate-500">{intervalLabel}</div>}
         </div>
         <div>
           <div className="text-[10px] font-bold uppercase tracking-[0.4px] text-slate-400 mb-0.5">Reicht für</div>
@@ -326,6 +409,18 @@ export default function ProductCard({
             <ExternalLink size={13} />
             {buttonText}
           </a>
+        )}
+        {onEdit && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onEdit(); }}
+            aria-label="Produkt bearbeiten"
+            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] transition-colors"
+            style={{ background: '#fef3c7', border: '1.5px solid #fbbf24', color: '#b45309' }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = '#fde68a'; e.currentTarget.style.borderColor = '#f59e0b'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = '#fef3c7'; e.currentTarget.style.borderColor = '#fbbf24'; }}
+          >
+            <Pencil size={15} />
+          </button>
         )}
         {onDelete && (
           <button

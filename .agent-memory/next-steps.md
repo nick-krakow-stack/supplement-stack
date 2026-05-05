@@ -6,6 +6,18 @@ Last updated: 2026-05-05
 
 Phase C is complete. The integrated Phase D rollout is complete:
 
+- Local, not-yet-deployed stack item interval work is present on 2026-05-05:
+  migration `0042_stack_item_intake_interval.sql`, backend create/update/load
+  support, stack email interval-aware package/monthly cost calculation, missing
+  shop-link mail notice, and `StackWorkspace` in-place product editing for
+  dosage/timing/interval. Review follow-up is also applied locally: stack
+  detail/update responses include ingredient rows per item, ProductCard uses
+  parsed dosage plus ingredient rows before quantity fallback, and the edit
+  action is an amber icon-only pencil. Validation passed locally: functions
+  TypeScript, frontend lint, frontend build, frontend Vitest no-test run, and
+  `git diff --check` with CRLF warnings only. Next step is applying/deploying
+  this bundle when ready.
+
 - All-Inkl SMTP mail sending is committed and deployed in `eff1c6a`
   (`Feature: Send stack emails via SMTP`). Preview:
   `https://76fde482.supplementstack.pages.dev`; live:

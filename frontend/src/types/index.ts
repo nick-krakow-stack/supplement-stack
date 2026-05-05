@@ -49,6 +49,7 @@ export interface ProductIngredient {
   unit?: string;
   form_id?: number;
   ingredient_name?: string;
+  search_relevant?: number | boolean;
 }
 
 export interface Product {
@@ -73,6 +74,7 @@ export interface Product {
   container_count?: number;
   timing?: string;
   dosage_text?: string;
+  intake_interval_days?: number;
   effect_summary?: string;
   warning_title?: string;
   warning_message?: string;
@@ -86,6 +88,10 @@ export interface StackItem {
   product_id: number;
   product_type?: 'catalog' | 'user_product';
   quantity: number;
+  intake_interval_days?: number;
+  dosage_text?: string;
+  timing?: string;
+  ingredients?: Array<Pick<ProductIngredient, 'ingredient_id' | 'quantity' | 'unit' | 'search_relevant'>>;
   product?: Product;
 }
 

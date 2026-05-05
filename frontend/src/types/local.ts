@@ -55,6 +55,7 @@ export interface ProductIngredient {
   quantity?: number;
   unit?: string;
   is_main?: number;
+  search_relevant?: number | boolean;
 }
 
 export interface UserProductIngredient {
@@ -97,6 +98,7 @@ export interface Product {
   is_main?: number;
   timing?: string;
   dosage_text?: string;
+  intake_interval_days?: number;
   effect_summary?: string;
   warning_title?: string;
   warning_message?: string;

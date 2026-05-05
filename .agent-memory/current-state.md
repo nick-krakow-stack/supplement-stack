@@ -43,6 +43,34 @@ unless verified against code.
 Phase B is complete. Phase C is complete. Phase D bundle is committed,
 remote-migrated, and deployed to Cloudflare Pages preview.
 
+Local in-progress work on 2026-05-05 implements stack item intake intervals:
+
+- Added `d1-migrations/0042_stack_item_intake_interval.sql` to add
+  `stack_items.intake_interval_days INTEGER NOT NULL DEFAULT 1 CHECK
+  (intake_interval_days >= 1)`.
+- Backend stack create/update now accepts and persists `intake_interval_days`;
+  `loadStackItems` and stack-mail item rows return it.
+- Stack email keeps dose/intake amount on the intake day, renders the interval
+  separately as `täglich` or `alle X Tage`, and calculates package range and
+  monthly cost from effective daily usage (`servingsPerIntake / intervalDays`).
+- Missing shop links in stack emails now show `Kauf-Link fehlt - bitte Produkt
+  melden` instead of the normal `Kein Link` placeholder.
+- `StackWorkspace` now lets stack products be edited in place for dosage,
+  timing, portions per intake day, and intake interval; demo updates stay local
+  and authenticated updates persist through the existing stack PUT flow.
+- Review follow-up: `GET /api/stacks/:id` and stack `PUT` responses now attach
+  product ingredient rows to each item via the existing stack-mail ingredient
+  loader/grouping (`ingredient_id`, `quantity`, `unit`, `search_relevant`).
+  `ProductCard` now uses the same parsed `dosage_text` + ingredient-quantity
+  logic before falling back to stack quantity, preventing old bad rows such as
+  D3 `quantity=2000` from corrupting range/monthly-cost calculations after
+  reload. The product edit action is now an amber icon-only pencil button, and
+  the manual amount field is labeled as fallback.
+- Local validation passed: functions `npx tsc -p tsconfig.json`, frontend
+  `npm run lint --if-present`, frontend `npm run build`, frontend
+  `npm test -- --run` with no test files, and `git diff --check` with CRLF
+  warnings only.
+
 All-Inkl SMTP mail sending is committed and deployed:
 
 - Latest mail-format/cost fix: `9babeae` - Fix: Calculate stack email costs

@@ -4,9 +4,12 @@ Last updated: 2026-05-05
 
 ## Continuation Point
 
-Continue from `main` after All-Inkl SMTP mail sending and the stack-email
-format/cost fix were committed, deployed, and live-smoked. No SMTP setup step
-is pending; DMARC and future password rotation remain pre-launch operations.
+Continue from `main` with local stack item interval work implemented but not
+committed, migrated remotely, or deployed. The bundle adds migration 0042,
+backend stack item `intake_interval_days`, interval-aware stack email
+calculation/rendering, the missing-link mail notice, frontend stack product
+editing, and type/API input updates. No SMTP setup step is pending; DMARC and
+future password rotation remain pre-launch operations.
 
 ## Restart Startup (exact)
 
@@ -19,6 +22,26 @@ is pending; DMARC and future password rotation remain pre-launch operations.
 
 ## Git / Worktree
 
+- Current local task work:
+  - `d1-migrations/0042_stack_item_intake_interval.sql`
+  - `functions/api/modules/stacks.ts`
+  - `functions/api/lib/types.ts`
+  - `frontend/src/components/StackWorkspace.tsx`
+  - `frontend/src/components/ProductCard.tsx`
+  - `frontend/src/api/stacks.ts`
+  - `frontend/src/types/index.ts`
+  - `frontend/src/types/local.ts`
+  - Local checks passed: functions `npx tsc -p tsconfig.json`; frontend
+    `npm run lint --if-present`; frontend `npm run build`; frontend
+    `npm test -- --run` with no test files; `git diff --check` with CRLF
+    warnings only.
+  - Review follow-up is applied locally: stack detail/update responses include
+    ingredient rows on each item; ProductCard derives servings from parsed
+    dosage plus product ingredient quantity before stack quantity fallback; the
+    edit action is an amber icon-only pencil; the manual amount edit field is
+    clearly marked as fallback.
+  - Existing dirty/untracked files still not related to this task:
+    `.claude/SESSION.md`, `.claude/settings.json`, and root `logo.png`.
 - Latest committed/deployed work:
   - `9babeae` - Fix: Calculate stack email costs from daily dose.
   - `eff1c6a` - Feature: Send stack emails via SMTP.

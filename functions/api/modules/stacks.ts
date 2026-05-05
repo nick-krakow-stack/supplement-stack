@@ -23,6 +23,7 @@ type StackProductInput = {
   id: number
   product_type: StackProductType
   quantity: number
+  intake_interval_days: number
   dosage_text: string | null
   timing: string | null
 }
@@ -42,6 +43,7 @@ type StackMailItem = {
   image_url: string | null
   shop_link: string | null
   quantity: number
+  intake_interval_days: number
   serving_size: number | null
   serving_unit: string | null
   servings_per_container: number | null
@@ -60,9 +62,12 @@ type StackMailIngredient = {
   search_relevant: number
 }
 
+type StackItemResponseIngredient = Pick<StackMailIngredient, 'ingredient_id' | 'quantity' | 'unit' | 'search_relevant'>
+
 type StackMailPreparedItem = StackMailItem & {
   dailyAmountLabel: string
   dailyIngredientLabels: string[]
+  intakeIntervalLabel: string
   daysSupply: number | null
   monthlyCost: number | null
   warningLabels: string[]
@@ -125,7 +130,18 @@ function formatDailyUnit(value: number, unit?: string | null): string {
   return `${formatNumber(shown)} ${displayUnit(unit)}`
 }
 
-function computeServingsPerDay(item: StackMailItem, ingredients: StackMailIngredient[]): number {
+function normalizeIntakeIntervalDays(value: unknown): number | null {
+  if (value === undefined || value === null || value === '') return 1
+  const parsed = Number(value)
+  if (!Number.isInteger(parsed) || parsed < 1) return null
+  return parsed
+}
+
+function formatIntakeInterval(days: number): string {
+  return days <= 1 ? 'täglich' : `alle ${days} Tage`
+}
+
+function computeServingsPerIntake(item: StackMailItem, ingredients: StackMailIngredient[]): number {
   const parsedDose = parseDoseFromText(item.dosage_text)
   if (parsedDose) {
     const doseUnit = normalizeComparableUnit(parsedDose.unit)
@@ -159,26 +175,31 @@ function prepareMailItems(
 ): StackMailPreparedItem[] {
   return items.map((item) => {
     const ingredients = ingredientsByItem.get(item.stack_item_id) ?? []
-    const servingsPerDay = computeServingsPerDay(item, ingredients)
+    const servingsPerIntake = computeServingsPerIntake(item, ingredients)
+    const intakeIntervalDays = Math.max(1, item.intake_interval_days || 1)
+    const effectiveDailyUsage = servingsPerIntake / intakeIntervalDays
     const totalServings = (item.servings_per_container ?? 0) * (item.container_count ?? 1)
-    const daysSupply = totalServings > 0 ? Math.floor(totalServings / servingsPerDay) : null
+    const daysSupply = totalServings > 0 && effectiveDailyUsage > 0
+      ? Math.floor(totalServings / effectiveDailyUsage)
+      : null
     const monthlyCost = daysSupply && daysSupply > 0 ? (item.product_price / daysSupply) * 30 : null
     const dailyUnitValue = item.serving_size != null && item.serving_size > 0
-      ? item.serving_size * servingsPerDay
-      : servingsPerDay
+      ? item.serving_size * servingsPerIntake
+      : servingsPerIntake
     const dailyAmountLabel = item.serving_unit
-      ? `${formatDailyUnit(dailyUnitValue, item.serving_unit)}/Tag`
-      : `${formatDailyUnit(servingsPerDay, 'Portionen')}/Tag`
+      ? `${formatDailyUnit(dailyUnitValue, item.serving_unit)}/Einnahmetag`
+      : `${formatDailyUnit(servingsPerIntake, 'Portionen')}/Einnahmetag`
     const dailyIngredientLabels = ingredients
       .filter((ingredient) => ingredient.search_relevant === 1 && ingredient.quantity != null && ingredient.quantity > 0)
       .map((ingredient) => (
-        `${ingredient.ingredient_name}: ${formatDailyUnit((ingredient.quantity ?? 0) * servingsPerDay, ingredient.unit)}/Tag`
+        `${ingredient.ingredient_name}: ${formatDailyUnit((ingredient.quantity ?? 0) * servingsPerIntake, ingredient.unit)}/Einnahmetag`
       ))
 
     return {
       ...item,
       dailyAmountLabel,
       dailyIngredientLabels,
+      intakeIntervalLabel: formatIntakeInterval(intakeIntervalDays),
       daysSupply,
       monthlyCost,
       warningLabels: warningsByItem.get(item.stack_item_id) ?? [],
@@ -193,7 +214,7 @@ function buildStackEmailHtml(stack: StackRow, items: StackMailPreparedItem[], to
       : `<div style="width:56px;height:56px;border-radius:10px;border:1px solid #e5e7eb;background:#f8fafc;text-align:center;line-height:56px;color:#94a3b8;font-size:18px;font-weight:800;">SS</div>`
     const buyButton = item.shop_link
       ? `<a href="${escapeHtml(item.shop_link)}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;font-weight:700;border-radius:8px;padding:9px 12px;white-space:nowrap;">Jetzt kaufen</a>`
-      : '<span style="color:#94a3b8;">Kein Link</span>'
+      : '<span style="display:inline-block;color:#9a3412;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:8px 10px;font-weight:700;">Kauf-Link fehlt - bitte Produkt melden</span>'
     const ingredientText = item.dailyIngredientLabels.length > 0
       ? item.dailyIngredientLabels.map(escapeHtml).join('<br>')
       : '-'
@@ -211,6 +232,7 @@ function buildStackEmailHtml(stack: StackRow, items: StackMailPreparedItem[], to
         <td style="padding:14px 8px;border-bottom:1px solid #e5e7eb;">
           <strong>${escapeHtml(item.dailyAmountLabel)}</strong>
           ${item.dosage_text ? `<br><span style="color:#64748b;">Ziel: ${escapeHtml(item.dosage_text)}</span>` : ''}
+          <br><span style="color:#64748b;">Intervall: ${escapeHtml(item.intakeIntervalLabel)}</span>
           ${item.daysSupply ? `<br><span style="color:#64748b;">reicht ca. ${item.daysSupply} Tage</span>` : ''}
         </td>
         <td style="padding:14px 8px;border-bottom:1px solid #e5e7eb;">${escapeHtml(item.timing ?? '-')}</td>
@@ -273,6 +295,7 @@ function normalizeStackProductItems(value: unknown): StackProductValidation {
     const quantity = item.quantity === undefined || item.quantity === null || item.quantity === ''
       ? 1
       : Number(item.quantity)
+    const intakeIntervalDays = normalizeIntakeIntervalDays(item.intake_interval_days ?? item.intakeIntervalDays)
     const dosageText = typeof item.dosage_text === 'string' && item.dosage_text.trim() !== ''
       ? item.dosage_text.trim()
       : null
@@ -289,8 +312,11 @@ function normalizeStackProductItems(value: unknown): StackProductValidation {
     if (!Number.isFinite(quantity) || quantity <= 0) {
       return { error: 'quantity must be greater than 0' }
     }
+    if (intakeIntervalDays === null) {
+      return { error: 'intake_interval_days must be an integer greater than or equal to 1' }
+    }
 
-    items.push({ id, product_type: productType, quantity, dosage_text: dosageText, timing })
+    items.push({ id, product_type: productType, quantity, intake_interval_days: intakeIntervalDays, dosage_text: dosageText, timing })
   }
 
   return { items }
@@ -361,7 +387,8 @@ async function loadStackItems(
         p.warning_message,
         p.warning_type,
         p.alternative_note,
-        si.quantity
+        si.quantity,
+        si.intake_interval_days
       FROM stack_items si
       JOIN products p ON p.id = si.catalog_product_id
       WHERE si.stack_id = ?
@@ -392,7 +419,8 @@ async function loadStackItems(
         up.warning_message,
         up.warning_type,
         up.alternative_note,
-        si.quantity
+        si.quantity,
+        si.intake_interval_days
       FROM stack_items si
       JOIN user_products up ON up.id = si.user_product_id AND up.user_id = ?
       WHERE si.stack_id = ?
@@ -455,6 +483,29 @@ function groupIngredientsByStackItem(ingredients: StackMailIngredient[]): Map<nu
     grouped.set(ingredient.stack_item_id, rows)
   }
   return grouped
+}
+
+async function loadStackItemsWithIngredients(
+  db: D1Database,
+  stackId: number | string,
+  ownerUserId: number,
+): Promise<Array<StackItemRow & { ingredients: StackItemResponseIngredient[] }>> {
+  const items = await loadStackItems(db, stackId, ownerUserId)
+  const ingredients = await loadStackMailIngredients(db, stackId, ownerUserId)
+  const ingredientsByItem = groupIngredientsByStackItem(ingredients)
+
+  return items.map((item) => {
+    const stackItemId = (item as StackItemRow & { stack_item_id: number }).stack_item_id
+    return {
+      ...item,
+      ingredients: (ingredientsByItem.get(stackItemId) ?? []).map((ingredient) => ({
+        ingredient_id: ingredient.ingredient_id,
+        quantity: ingredient.quantity,
+        unit: ingredient.unit,
+        search_relevant: ingredient.search_relevant,
+      })),
+    }
+  })
 }
 
 function effectiveIngredientIdsByItem(
@@ -574,12 +625,13 @@ stacks.post('/', async (c) => {
 
   for (const item of normalized.items) {
     await c.env.DB.prepare(
-      'INSERT INTO stack_items (stack_id, catalog_product_id, user_product_id, quantity, dosage_text, timing) VALUES (?, ?, ?, ?, ?, ?)'
+      'INSERT INTO stack_items (stack_id, catalog_product_id, user_product_id, quantity, intake_interval_days, dosage_text, timing) VALUES (?, ?, ?, ?, ?, ?, ?)'
     ).bind(
       stackId,
       item.product_type === 'catalog' ? item.id : null,
       item.product_type === 'user_product' ? item.id : null,
       item.quantity,
+      item.intake_interval_days,
       item.dosage_text,
       item.timing,
     ).run()
@@ -595,7 +647,7 @@ stacks.get('/:id', async (c) => {
   const stack = await c.env.DB.prepare('SELECT * FROM stacks WHERE id = ?').bind(c.req.param('id')).first<StackRow>()
   if (!stack) return c.json({ error: 'Not found' }, 404)
   if (stack.user_id !== user.userId && user.role !== 'admin') return c.json({ error: 'Forbidden' }, 403)
-  const items = await loadStackItems(c.env.DB, stack.id, stack.user_id)
+  const items = await loadStackItemsWithIngredients(c.env.DB, stack.id, stack.user_id)
   const total = items.reduce((sum, i) => sum + i.product_price, 0)
   return c.json({ stack, items, total })
 })
@@ -684,12 +736,13 @@ stacks.put('/:id', async (c) => {
     statements.push(c.env.DB.prepare('DELETE FROM stack_items WHERE stack_id = ?').bind(id))
     statements.push(...normalizedItems.map((item) =>
       c.env.DB.prepare(
-        'INSERT INTO stack_items (stack_id, catalog_product_id, user_product_id, quantity, dosage_text, timing) VALUES (?, ?, ?, ?, ?, ?)'
+        'INSERT INTO stack_items (stack_id, catalog_product_id, user_product_id, quantity, intake_interval_days, dosage_text, timing) VALUES (?, ?, ?, ?, ?, ?, ?)'
       ).bind(
         id,
         item.product_type === 'catalog' ? item.id : null,
         item.product_type === 'user_product' ? item.id : null,
         item.quantity,
+        item.intake_interval_days,
         item.dosage_text,
         item.timing,
       )
@@ -699,7 +752,7 @@ stacks.put('/:id', async (c) => {
     await c.env.DB.batch(statements)
   }
   const updated = await c.env.DB.prepare('SELECT * FROM stacks WHERE id = ?').bind(id).first()
-  const items = await loadStackItems(c.env.DB, id, stack.user_id)
+  const items = await loadStackItemsWithIngredients(c.env.DB, id, stack.user_id)
   return c.json({ stack: updated, items })
 })
 

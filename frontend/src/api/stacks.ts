@@ -5,6 +5,7 @@ interface StackProductInput {
   id: number;
   product_type?: 'catalog' | 'user_product';
   quantity?: number;
+  intake_interval_days?: number;
   dosage_text?: string;
   timing?: string;
 }

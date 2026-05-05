@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
+import type { FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -38,6 +39,7 @@ export interface DemoProduct {
   servings_per_container?: number;
   container_count?: number;
   quantity?: number;
+  intake_interval_days?: number;
   unit?: string;
   form?: string;
   timing?: string;
@@ -227,9 +229,18 @@ function productServingsPerDay(product: DemoProduct): number {
   return 1;
 }
 
+function productIntakeIntervalDays(product: DemoProduct): number {
+  const interval = product.intake_interval_days ?? 1;
+  return Number.isInteger(interval) && interval >= 1 ? interval : 1;
+}
+
+function formatIntakeInterval(days: number): string {
+  return days === 1 ? 'täglich' : `alle ${days} Tage`;
+}
+
 function productMonthlyPrice(product: DemoProduct): number {
-  const servingsPerDay = productServingsPerDay(product);
-  const daysSupply = Math.floor(productTotalServings(product) / servingsPerDay);
+  const effectiveDailyUsage = productServingsPerDay(product) / productIntakeIntervalDays(product);
+  const daysSupply = effectiveDailyUsage > 0 ? Math.floor(productTotalServings(product) / effectiveDailyUsage) : 0;
   return daysSupply > 0 ? (product.price / daysSupply) * 30 : product.price;
 }
 
@@ -383,7 +394,9 @@ function AddProductModal({
       ...product,
       dosage_text: product.dosage_text || `${dose.value || 1} ${dose.unit || 'Portion'} täglich`,
       timing: product.timing || 'Zum Frühstück',
+      intake_interval_days: product.intake_interval_days ?? 1,
     };
+    enhanced.quantity = productServingsPerDay(enhanced);
     setSavingProductKey(productStackKey(product));
     setError('');
     try {
@@ -681,6 +694,161 @@ function AddProductModal({
   );
 }
 
+function EditProductModal({
+  product,
+  onSave,
+  onClose,
+}: {
+  product: DemoProduct;
+  onSave: (patch: Pick<DemoProduct, 'quantity' | 'dosage_text' | 'timing' | 'intake_interval_days'>) => Promise<void>;
+  onClose: () => void;
+}) {
+  const [dosageText, setDosageText] = useState(product.dosage_text ?? '');
+  const [timing, setTiming] = useState(product.timing ?? '');
+  const [quantity, setQuantity] = useState(String(productServingsPerDay(product)));
+  const [interval, setInterval] = useState(String(productIntakeIntervalDays(product)));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const intervalNumber = Number(interval);
+  const intervalLabel = Number.isInteger(intervalNumber) && intervalNumber >= 1
+    ? formatIntakeInterval(intervalNumber)
+    : '';
+
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const parsedQuantity = Number(quantity);
+    const parsedInterval = Number(interval);
+    if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
+      setError('Portionen pro Einnahmetag müssen größer als 0 sein.');
+      return;
+    }
+    if (!Number.isInteger(parsedInterval) || parsedInterval < 1) {
+      setError('Das Einnahmeintervall muss mindestens 1 Tag betragen.');
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+    try {
+      await onSave({
+        quantity: parsedQuantity,
+        dosage_text: dosageText.trim() || undefined,
+        timing: timing.trim() || undefined,
+        intake_interval_days: parsedInterval,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Produkt konnte nicht gespeichert werden.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/55 px-3 py-6 backdrop-blur-sm sm:px-6"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <form
+        onSubmit={(event) => void submit(event)}
+        className="w-full max-w-lg rounded-[1.6rem] bg-white p-5 shadow-[0_30px_80px_rgba(15,23,42,0.35)] sm:p-6"
+      >
+        <div className="mb-5 flex items-start justify-between gap-4">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="mt-1 text-indigo-600"><IconPencil /></span>
+            <div className="min-w-0">
+              <h2 className="text-2xl font-black tracking-tight text-slate-950">Produkt bearbeiten</h2>
+              <p className="mt-1 truncate text-sm font-semibold text-slate-500">{product.name}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-2xl p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+            aria-label="Schließen"
+          >
+            <X size={24} />
+          </button>
+        </div>
+
+        {error && <p className="mb-4 rounded-2xl bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
+
+        <div className="space-y-4">
+          <label className="block">
+            <span className="text-sm font-black text-slate-700">Dosierung</span>
+            <input
+              value={dosageText}
+              onChange={(event) => setDosageText(event.target.value)}
+              placeholder="z.B. 2000 IE täglich"
+              className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base font-semibold text-slate-950 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-4 focus:ring-blue-100"
+            />
+          </label>
+
+          <label className="block">
+            <span className="text-sm font-black text-slate-700">Fallback: manuelle Einnahmemenge</span>
+            <input
+              type="number"
+              min={0.1}
+              step={0.1}
+              value={quantity}
+              onChange={(event) => setQuantity(event.target.value)}
+              className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base font-semibold text-slate-950 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-4 focus:ring-blue-100"
+            />
+            <span className="mt-2 block text-xs font-semibold text-slate-500">
+              Wird nur genutzt, wenn die Dosierung nicht aus Wirkstoffmenge und Produktdaten ableitbar ist.
+            </span>
+          </label>
+
+          <label className="block">
+            <span className="text-sm font-black text-slate-700">Timing</span>
+            <input
+              value={timing}
+              onChange={(event) => setTiming(event.target.value)}
+              placeholder="z.B. Zum Frühstück"
+              className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base font-semibold text-slate-950 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-4 focus:ring-blue-100"
+            />
+          </label>
+
+          <label className="block">
+            <span className="text-sm font-black text-slate-700">Einnahmeintervall in Tagen</span>
+            <input
+              type="number"
+              min={1}
+              step={1}
+              value={interval}
+              onChange={(event) => setInterval(event.target.value)}
+              className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base font-semibold text-slate-950 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-4 focus:ring-blue-100"
+            />
+            {intervalLabel && (
+              <span className="mt-2 inline-flex rounded-full bg-indigo-50 px-3 py-1 text-xs font-black text-indigo-700">
+                {intervalLabel}
+              </span>
+            )}
+          </label>
+        </div>
+
+        <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-600 hover:bg-slate-50"
+          >
+            Abbrechen
+          </button>
+          <button
+            type="submit"
+            disabled={saving}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <IconPencil />
+            {saving ? 'Speichert...' : 'Änderungen speichern'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Icons used in toolbar
 // ---------------------------------------------------------------------------
@@ -759,6 +927,7 @@ export function StackWorkspace({
   );
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editingProductKey, setEditingProductKey] = useState<string | null>(null);
   const [shopDomains, setShopDomains] = useState<ShopDomain[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(mode === 'authenticated');
@@ -833,7 +1002,10 @@ export function StackWorkspace({
     fetch(apiPath('/demo/products'))
       .then((res) => (res.ok ? res.json() : { products: [] }))
       .then((data) => {
-        const products = ((data.products ?? []) as DemoProduct[]).slice(0, 6);
+        const products = ((data.products ?? []) as DemoProduct[]).slice(0, 6).map((product) => {
+          const next = { ...product, intake_interval_days: product.intake_interval_days ?? 1 };
+          return { ...next, quantity: productServingsPerDay(next) };
+        });
         setState({
           stacks: [{ ...fresh.stacks[0], products }],
           activeStackId: fresh.activeStackId,
@@ -868,6 +1040,7 @@ export function StackWorkspace({
           id: product.id,
           product_type: product.product_type ?? 'catalog',
           quantity: productServingsPerDay(product),
+          intake_interval_days: productIntakeIntervalDays(product),
           dosage_text: product.dosage_text,
           timing: product.timing,
         })),
@@ -1029,6 +1202,32 @@ export function StackWorkspace({
     [activeStack, loadAuthenticatedStacks, mode, persistStackProducts, token],
   );
 
+  const handleSaveProduct = useCallback(
+    async (productKey: string, productPatch: Pick<DemoProduct, 'quantity' | 'dosage_text' | 'timing' | 'intake_interval_days'>) => {
+      if (!activeStack) return;
+      const nextProducts = activeStack.products.map((product) =>
+        productStackKey(product) === productKey ? { ...product, ...productPatch } : product,
+      );
+      if (mode === 'authenticated' && token) {
+        try {
+          await persistStackProducts(activeStack.id, nextProducts);
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Produkt konnte nicht gespeichert werden.');
+          void loadAuthenticatedStacks();
+          return;
+        }
+      }
+      setState((prev) => ({
+        ...prev,
+        stacks: prev.stacks.map((stack) =>
+          stack.id === prev.activeStackId ? { ...stack, products: nextProducts } : stack,
+        ),
+      }));
+      setEditingProductKey(null);
+    },
+    [activeStack, loadAuthenticatedStacks, mode, persistStackProducts, token],
+  );
+
   // ---- Selection / totals ----
 
   const toggleSelected = (key: string) => {
@@ -1098,6 +1297,7 @@ export function StackWorkspace({
   };
 
   const activeDescription = activeStack ? descriptions[activeStack.id] ?? '' : '';
+  const editingProduct = activeStack?.products.find((product) => productStackKey(product) === editingProductKey) ?? null;
 
   const rightSlot = isDemo ? (
     <>
@@ -1312,6 +1512,7 @@ export function StackWorkspace({
                       shopDomains={shopDomains}
                       selected={selectedIds.has(key)}
                       onToggleSelected={() => toggleSelected(key)}
+                      onEdit={() => setEditingProductKey(key)}
                       onDelete={() => void handleRemoveProduct(key)}
                       showWishlistButton={false}
                       showSelectButton={false}
@@ -1364,6 +1565,14 @@ export function StackWorkspace({
           token={token}
           onAdd={handleAddProduct}
           onClose={() => setAddModalOpen(false)}
+        />
+      )}
+
+      {editingProductKey && editingProduct && (
+        <EditProductModal
+          product={editingProduct}
+          onSave={(patch) => handleSaveProduct(editingProductKey, patch)}
+          onClose={() => setEditingProductKey(null)}
         />
       )}
 

@@ -102,6 +102,7 @@ export type StackItemRow = {
   stack_id: number
   product_id: number
   quantity: number
+  intake_interval_days: number
   product_name: string
   product_price: number
 }
