@@ -208,7 +208,7 @@ function productPrimaryQuantity(product: DemoProduct): { quantity: number; unit?
   return null;
 }
 
-function productServingsPerDay(product: DemoProduct): number {
+function productServingsFromDose(product: DemoProduct): number | null {
   const parsedDose = parseDoseFromText(product.dosage_text);
   if (parsedDose) {
     const doseUnit = normalizeComparableUnit(parsedDose.unit);
@@ -224,6 +224,13 @@ function productServingsPerDay(product: DemoProduct): number {
       return Math.max(1, Math.ceil(parsedDose.value / product.serving_size));
     }
   }
+
+  return null;
+}
+
+function productServingsPerDay(product: DemoProduct): number {
+  const servingsFromDose = productServingsFromDose(product);
+  if (servingsFromDose != null) return servingsFromDose;
 
   if (product.quantity != null && product.quantity > 0 && product.quantity <= 100) return product.quantity;
   return 1;
@@ -293,6 +300,8 @@ function AddProductModal({
   token,
   onAdd,
   onClose,
+  title = 'Produkt hinzufügen',
+  submitLabel = 'Hinzufügen',
 }: {
   stacks: DemoStack[];
   activeStackId: string;
@@ -300,6 +309,8 @@ function AddProductModal({
   token?: string | null;
   onAdd: (product: DemoProduct, stackId: string) => Promise<void>;
   onClose: () => void;
+  title?: string;
+  submitLabel?: string;
 }) {
   const [step, setStep] = useState<'search' | 'dosage' | 'products'>('search');
   const [ingredient, setIngredient] = useState<Ingredient | null>(null);
@@ -427,7 +438,7 @@ function AddProductModal({
           <div className="flex items-center gap-3">
             <Plus size={28} className="text-emerald-600" />
             <h2 className="text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
-              Produkt hinzufügen
+              {title}
             </h2>
           </div>
           <button
@@ -665,7 +676,7 @@ function AddProductModal({
                       className="mt-4 inline-flex w-full items-center justify-center gap-3 rounded-xl bg-blue-600 px-5 py-3 text-base font-black text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <Plus size={22} />
-                      {savingProductKey === key ? 'Speichert...' : 'Hinzufügen'}
+                      {savingProductKey === key ? 'Speichert...' : submitLabel}
                     </button>
                   </div>
                   );
@@ -697,10 +708,12 @@ function AddProductModal({
 function EditProductModal({
   product,
   onSave,
+  onReplace,
   onClose,
 }: {
   product: DemoProduct;
   onSave: (patch: Pick<DemoProduct, 'quantity' | 'dosage_text' | 'timing' | 'intake_interval_days'>) => Promise<void>;
+  onReplace: () => void;
   onClose: () => void;
 }) {
   const [dosageText, setDosageText] = useState(product.dosage_text ?? '');
@@ -836,6 +849,13 @@ function EditProductModal({
             Abbrechen
           </button>
           <button
+            type="button"
+            onClick={onReplace}
+            className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-3 text-sm font-black text-amber-700 hover:bg-amber-100"
+          >
+            Produkt wechseln
+          </button>
+          <button
             type="submit"
             disabled={saving}
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
@@ -928,6 +948,7 @@ export function StackWorkspace({
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingProductKey, setEditingProductKey] = useState<string | null>(null);
+  const [replaceProductKey, setReplaceProductKey] = useState<string | null>(null);
   const [shopDomains, setShopDomains] = useState<ShopDomain[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(mode === 'authenticated');
@@ -1228,6 +1249,58 @@ export function StackWorkspace({
     [activeStack, loadAuthenticatedStacks, mode, persistStackProducts, token],
   );
 
+  const handleReplaceProduct = useCallback(
+    async (replacement: DemoProduct, stackId?: string) => {
+      if (!replaceProductKey) throw new Error('Zu ersetzendes Produkt wurde nicht gefunden.');
+      const targetStackId = stackId ?? state.activeStackId;
+      const targetStack = state.stacks.find((stack) => stack.id === targetStackId);
+      if (!targetStack) throw new Error('Stack konnte nicht gefunden werden.');
+      const previousProduct = targetStack.products.find((product) => productStackKey(product) === replaceProductKey);
+      if (!previousProduct) throw new Error('Zu ersetzendes Produkt wurde nicht gefunden.');
+
+      const replacementKey = productStackKey(replacement);
+      const duplicate = targetStack.products.some((product) => (
+        productStackKey(product) !== replaceProductKey && productStackKey(product) === replacementKey
+      ));
+      if (duplicate) throw new Error('Produkt ist bereits in diesem Stack.');
+
+      const preservedDosage = previousProduct.dosage_text ?? replacement.dosage_text;
+      const preservedTiming = previousProduct.timing ?? replacement.timing;
+      const preservedInterval = productIntakeIntervalDays(previousProduct);
+      const candidate: DemoProduct = {
+        ...replacement,
+        dosage_text: preservedDosage,
+        timing: preservedTiming,
+        intake_interval_days: preservedInterval,
+      };
+      const quantityFromDose = productServingsFromDose(candidate);
+      candidate.quantity = quantityFromDose ?? previousProduct.quantity ?? productServingsPerDay(candidate);
+
+      const nextProducts = targetStack.products.map((product) =>
+        productStackKey(product) === replaceProductKey ? candidate : product,
+      );
+      if (mode === 'authenticated' && token) {
+        try {
+          await persistStackProducts(targetStackId, nextProducts);
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Produkt konnte nicht ersetzt werden.');
+          void loadAuthenticatedStacks();
+          throw err;
+        }
+      }
+
+      setState((prev) => ({
+        ...prev,
+        stacks: prev.stacks.map((stack) =>
+          stack.id === targetStackId ? { ...stack, products: nextProducts } : stack,
+        ),
+      }));
+      setReplaceProductKey(null);
+      setEditingProductKey(null);
+    },
+    [loadAuthenticatedStacks, mode, persistStackProducts, replaceProductKey, state.activeStackId, state.stacks, token],
+  );
+
   // ---- Selection / totals ----
 
   const toggleSelected = (key: string) => {
@@ -1298,6 +1371,7 @@ export function StackWorkspace({
 
   const activeDescription = activeStack ? descriptions[activeStack.id] ?? '' : '';
   const editingProduct = activeStack?.products.find((product) => productStackKey(product) === editingProductKey) ?? null;
+  const replacingStack = activeStack && replaceProductKey ? activeStack : null;
 
   const rightSlot = isDemo ? (
     <>
@@ -1568,10 +1642,27 @@ export function StackWorkspace({
         />
       )}
 
+      {replaceProductKey && replacingStack && (
+        <AddProductModal
+          stacks={[replacingStack]}
+          activeStackId={replacingStack.id}
+          isDemo={isDemo}
+          token={token}
+          onAdd={handleReplaceProduct}
+          onClose={() => setReplaceProductKey(null)}
+          title="Produkt wechseln"
+          submitLabel="Produkt ersetzen"
+        />
+      )}
+
       {editingProductKey && editingProduct && (
         <EditProductModal
           product={editingProduct}
           onSave={(patch) => handleSaveProduct(editingProductKey, patch)}
+          onReplace={() => {
+            setReplaceProductKey(editingProductKey);
+            setEditingProductKey(null);
+          }}
           onClose={() => setEditingProductKey(null)}
         />
       )}
