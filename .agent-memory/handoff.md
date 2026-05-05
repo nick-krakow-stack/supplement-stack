@@ -4,9 +4,9 @@ Last updated: 2026-05-05
 
 ## Continuation Point
 
-Continue from `main` after All-Inkl SMTP mail sending was committed, deployed,
-secret-configured, and live-smoked. No SMTP setup step is pending; DMARC and
-future password rotation remain pre-launch operations.
+Continue from `main` after All-Inkl SMTP mail sending and the stack-email
+format/cost fix were committed, deployed, and live-smoked. No SMTP setup step
+is pending; DMARC and future password rotation remain pre-launch operations.
 
 ## Restart Startup (exact)
 
@@ -20,16 +20,23 @@ future password rotation remain pre-launch operations.
 ## Git / Worktree
 
 - Latest committed/deployed work:
+  - `9babeae` - Fix: Calculate stack email costs from daily dose.
   - `eff1c6a` - Feature: Send stack emails via SMTP.
   - `ba92cd5` - UX: Align authenticated headers with app shell.
   - `03ae0f9` - Brand: Use uploaded logo in headers.
-- Latest preview URL: `https://71204e0a.supplementstack.pages.dev`.
+- Latest preview URL: `https://c673fd9a.supplementstack.pages.dev`.
 - Live URL: `https://supplementstack.de`.
 - Scope:
   - `functions/api/lib/mail.ts` adds a Worker SMTP-over-TLS helper via
     `cloudflare:sockets`.
   - `POST /api/stacks/:id/email` sends the authenticated user's stack summary
     to their own account email and is rate-limited to 5 sends/hour/user.
+  - Stack email now includes product image, product/brand, active ingredient
+    daily amounts, daily intake amount, timing, interaction notes, package
+    price, monthly cost based on daily dose, and buy buttons.
+  - Existing bad `stack_items.quantity` rows containing ingredient quantities
+    are ignored for mail cost calculation when `dosage_text` plus product
+    ingredient quantity can determine servings/day.
   - Forgot-password mail now uses SMTP instead of the Resend helper.
   - Non-secret SMTP config is in `wrangler.toml`; encrypted `SMTP_PASSWORD` is
     present in Cloudflare Pages production secrets.
@@ -52,6 +59,9 @@ future password rotation remain pre-launch operations.
     `{ ok: true }`; the temporary stack/account were deleted afterward.
   - Live temporary-account forgot-password smoke returned the expected generic
     success response; the temporary account was deleted afterward.
+  - Live D3 mail-format smoke: product 23 with `10000 IE täglich` and
+    old-style `quantity=2000` returned stack total `12.5`, sent mail
+    successfully, and deleted the temporary stack/account afterward.
   - Preview/live root asset check for `index-DdLiBTCO.js`.
   - Browser-harness checks confirmed `/stacks`, `/my-products`, and `/profile`
     have normal nav, one `/logo.png`, and no `.site-header`.

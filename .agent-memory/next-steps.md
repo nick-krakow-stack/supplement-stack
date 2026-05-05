@@ -16,6 +16,14 @@ Phase C is complete. The integrated Phase D rollout is complete:
   production secrets. DNS MX/SPF checks passed; DMARC is still deferred until
   pre-launch. Live smoke tests passed for logged-in `Stack mailen` and
   forgot-password using temporary users that were deleted afterward.
+- Stack email format/cost fix is committed and deployed in `9babeae`
+  (`Fix: Calculate stack email costs from daily dose`). Preview:
+  `https://c673fd9a.supplementstack.pages.dev`; live:
+  `https://supplementstack.de`. The mail now includes product image, product,
+  active ingredient daily amounts, daily intake amount, timing, interaction
+  notes, package price, monthly cost based on daily dose, and buy buttons.
+  D3 10,000 IE/day was live-smoked with product 23 and old-style
+  `quantity=2000`; stack total returned 12.5 and email send returned ok.
 - Logo/header branding is complete and deployed in `03ae0f9`
   (`Brand: Use uploaded logo in headers`). Preview:
   `https://47c4db46.supplementstack.pages.dev`; live:

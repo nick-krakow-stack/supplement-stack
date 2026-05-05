@@ -44,6 +44,7 @@ token scopes are verified.
 
 Latest relevant commits:
 
+- `9babeae` - Fix: Calculate stack email costs from daily dose.
 - `eff1c6a` - Feature: Send stack emails via SMTP.
 - `ba92cd5` - UX: Align authenticated headers with app shell.
 - `03ae0f9` - Brand: Use uploaded logo in headers.
@@ -74,6 +75,39 @@ Latest relevant commits:
 - `9a5f523` - DB: Phase B complete (migrations 0028-0035).
 
 ## Product Ingredient Publishing Model
+
+### 2026-05-05 - Cloudflare Pages: stack email format and daily-dose costs
+
+- Commit: `9babeae` - Fix: Calculate stack email costs from daily dose.
+- Scope:
+  - Stack emails now show product image, product/brand, active ingredient daily
+    amounts, daily intake amount, timing, interaction notes, package price,
+    monthly cost based on daily dose, and buy buttons.
+  - Email package price and `GET /api/stacks/:id` total no longer multiply by
+    `stack_items.quantity`.
+  - Existing bad stack rows where `quantity` contains a product ingredient
+    amount, e.g. D3 `quantity=2000`, are handled by parsing `dosage_text` and
+    product ingredient quantity to compute servings/day.
+  - Frontend stack persistence now stores servings/day instead of flat product
+    ingredient quantity for newly saved stack items.
+- Local validation:
+  - `npx tsc -p tsconfig.json` in `functions/` passed.
+  - `npm run build`, `npm run lint`, and `npm test -- --run` in `frontend/`
+    passed; Vitest has no test files.
+  - `git diff --check` passed with CRLF warnings only.
+- Build assets: JS `assets/index-DFKRmH2i.js`, CSS
+  `assets/index-CtyPP7gA.css`.
+- Deploy command:
+  - `. .\scripts\use-supplementstack-cloudflare.local.ps1`
+  - `npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://c673fd9a.supplementstack.pages.dev`.
+- Live smoke:
+  - Temporary user on `noreply@supplementstack.de`, stack product 23
+    `Vitamin D3 2000 IU Tropfen`, `dosage_text='10000 IE täglich'`, and
+    old-style `quantity=2000`.
+  - `GET /api/stacks/:id` returned total `12.5`.
+  - `POST /api/stacks/:id/email` returned ok.
+  - Temporary stack/account were deleted afterward.
 
 ### 2026-05-05 - Cloudflare Pages: All-Inkl SMTP stack email sending
 

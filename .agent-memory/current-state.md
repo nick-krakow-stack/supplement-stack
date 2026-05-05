@@ -45,6 +45,18 @@ remote-migrated, and deployed to Cloudflare Pages preview.
 
 All-Inkl SMTP mail sending is committed and deployed:
 
+- Latest mail-format/cost fix: `9babeae` - Fix: Calculate stack email costs
+  from daily dose. Preview: `https://c673fd9a.supplementstack.pages.dev`;
+  live: `https://supplementstack.de`.
+- Stack emails now render product image, product/brand, active ingredient daily
+  amounts, daily intake amount, timing, stack interaction notes, package price,
+  monthly cost based on daily dose, and buy buttons.
+- Mail cost calculation no longer multiplies package price by
+  `stack_items.quantity`. Existing bad rows such as D3 `quantity=2000` are
+  handled by parsing `dosage_text` and product ingredient quantity.
+- D3 example verified live: product 23 (`Vitamin D3 2000 IU Tropfen`), target
+  `10000 IE täglich`, and old-style `quantity=2000` produced stack total
+  `12.5` and sent mail successfully; temporary smoke user/stack were deleted.
 - Commit: `eff1c6a` - Feature: Send stack emails via SMTP.
 - Preview: `https://76fde482.supplementstack.pages.dev`.
 - Live: `https://supplementstack.de`.
