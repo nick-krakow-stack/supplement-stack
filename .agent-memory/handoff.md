@@ -4,9 +4,9 @@ Last updated: 2026-05-05
 
 ## Continuation Point
 
-Continue from `main` after the logo/header branding update was committed and
-deployed. Next implementation work should start from the open queue below; no
-branding deploy step is pending.
+Continue from `main` after the authenticated app-shell header alignment was
+committed and deployed. Next implementation work should start from the open
+queue below; no header/branding deploy step is pending.
 
 ## Restart Startup (exact)
 
@@ -20,10 +20,14 @@ branding deploy step is pending.
 ## Git / Worktree
 
 - Latest committed/deployed work:
+  - `ba92cd5` - UX: Align authenticated headers with app shell.
   - `03ae0f9` - Brand: Use uploaded logo in headers.
-- Preview URL: `https://47c4db46.supplementstack.pages.dev`.
+- Latest preview URL: `https://3c09e165.supplementstack.pages.dev`.
 - Live URL: `https://supplementstack.de`.
 - Scope:
+  - `/stacks` now renders inside normal `Layout`; Demo still uses its standalone
+    demo header.
+  - `MyProductsPage` no longer uses an extra full-screen gradient shell.
   - Cleaned the user-supplied logo into `frontend/public/logo.png`.
   - Added shared `frontend/src/components/AppLogo.tsx`.
   - Normal app header, Stacks/Demo header, and Admin sidebar now use the same
@@ -33,6 +37,9 @@ branding deploy step is pending.
   - Frontend `npm run lint`.
   - Frontend `npm test -- --run` with no test files.
   - `git diff --check`.
+  - Preview/live root asset check for `index-DdLiBTCO.js`.
+  - Browser-harness checks confirmed `/stacks`, `/my-products`, and `/profile`
+    have normal nav, one `/logo.png`, and no `.site-header`.
   - Preview/live HTTP checks for `/` and `/logo.png`.
   - Browser-harness checks on live root, `/demo`, and `/forgot-password`.
 - Workspace note:

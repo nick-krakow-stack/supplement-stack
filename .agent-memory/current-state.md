@@ -61,6 +61,21 @@ remote-migrated, and deployed to Cloudflare Pages preview.
   - The original root-level `logo.png` remains untracked and intentionally
     untouched as the source file supplied by the user.
 
+- Authenticated app-shell header alignment is committed and deployed:
+
+  - Commit: `ba92cd5` - UX: Align authenticated headers with app shell.
+  - `/stacks` now renders inside the normal `Layout` header instead of the
+    standalone StacksHeader. Demo keeps the standalone demo header.
+  - `StackWorkspace` supports `standaloneHeader` and defaults it to demo-only.
+  - `MyProductsPage` no longer wraps itself in an extra full-screen gradient
+    shell, so it visually belongs to the normal app layout.
+  - Preview: `https://3c09e165.supplementstack.pages.dev`.
+  - Live: `https://supplementstack.de`.
+  - Validation passed: frontend build, frontend lint, frontend Vitest no-test
+    run, `git diff --check`, preview/live root asset check, and
+    browser-harness checks confirming `/stacks`, `/my-products`, and
+    `/profile` have one `/logo.png`, normal nav, and no `.site-header`.
+
 - Decision (2026-05-05): SearchPage and WishlistPage are now intentionally kept out of
   explicit routes and navigation. They fall through to wildcard/404 handling, and any raw
   SearchPage flags are no longer treated as launch blockers.
@@ -536,6 +551,17 @@ Logo/header branding is committed and deployed:
 - Checks passed: frontend build, lint, Vitest no-test run, diff-check, HTTP
   `/logo.png` checks on preview/live, and browser-harness logo rendering checks
   for root, demo, and forgot-password pages.
+
+Authenticated app-shell header alignment is committed and deployed:
+
+- Commit: `ba92cd5` - UX: Align authenticated headers with app shell.
+- Preview URL: `https://3c09e165.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`.
+- `/stacks` now uses the global Layout/nav header; Demo remains standalone.
+- `MyProductsPage` no longer uses its own full-screen gradient shell.
+- Checks passed: frontend build, lint, Vitest no-test run, diff-check, and
+  browser-harness verification that `/stacks`, `/my-products`, and `/profile`
+  render the normal nav logo and no standalone `.site-header`.
 
 Launch QA stack/profile fixes are committed, remote-migrated, deployed, and
 live-smoked:

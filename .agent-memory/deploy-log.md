@@ -44,6 +44,7 @@ token scopes are verified.
 
 Latest relevant commits:
 
+- `ba92cd5` - UX: Align authenticated headers with app shell.
 - `03ae0f9` - Brand: Use uploaded logo in headers.
 - `24b10b5` - Fix: Normalize guideline source values.
 - `cb76cf3` - Fix: Remove D1 run success check from profile update.
@@ -72,6 +73,35 @@ Latest relevant commits:
 - `9a5f523` - DB: Phase B complete (migrations 0028-0035).
 
 ## Product Ingredient Publishing Model
+
+### 2026-05-05 - Cloudflare Pages: authenticated app-shell header alignment
+
+- Commit: `ba92cd5` - UX: Align authenticated headers with app shell.
+- Scope:
+  - `/stacks` now renders inside the normal app `Layout` so it uses the same
+    header as the start page, profile, and own-products routes.
+  - Demo keeps the standalone demo header.
+  - `StackWorkspace` supports a `standaloneHeader` prop and defaults it to
+    demo-only.
+  - `MyProductsPage` no longer wraps itself in a separate full-screen gradient
+    shell.
+- Local validation:
+  - `npm run build` in `frontend/` passed.
+  - `npm run lint` in `frontend/` passed.
+  - `npm test -- --run` in `frontend/` passed with no test files.
+  - `git diff --check` passed with CRLF warnings only.
+- Build assets: JS `assets/index-DdLiBTCO.js`, CSS
+  `assets/index-CtyPP7gA.css`.
+- Deploy prep:
+  - Copied `functions/api` to `frontend/dist/functions/api`.
+  - Verified `frontend/dist/functions/api/[[path]].ts` exists.
+- Deploy command:
+  - `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://3c09e165.supplementstack.pages.dev`.
+- Smoke checks:
+  - Preview/live root returned HTTP 200 with asset `index-DdLiBTCO.js`.
+  - Browser-harness confirmed `/stacks`, `/my-products`, and `/profile` render
+    the normal nav, exactly one `/logo.png`, and no standalone `.site-header`.
 
 ### 2026-05-05 - Cloudflare Pages: logo/header branding
 
