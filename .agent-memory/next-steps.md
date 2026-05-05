@@ -6,6 +6,17 @@ Last updated: 2026-05-05
 
 Phase C is complete. The integrated Phase D rollout is complete:
 
+- Launch-readiness bundle is committed, deployed, and smoke-checked in
+  `6a639cd` (`Feature: Close launch readiness gaps`). It includes stack/product
+  calculation hardening, selected-dose product preview costs, basis-quantity and
+  mass-unit handling, Admin dose-recommendation CRUD, Admin sub-ingredient
+  mapping UI, Admin audit-log viewer, legal/consent preflight copy, context-near
+  affiliate labels, strict frontend TypeScript cleanup, and 5 calculation
+  tests. Preview/live run `assets/index-BlZlfAwp.js`. Validation passed:
+  frontend `npx tsc --noEmit`, frontend lint/build/Vitest, functions
+  TypeScript, and `git diff --check`. Smokes passed for root, unauth admin
+  endpoints, and demo-product basis fields.
+
 - Search/Wishlist dead-code cleanup is committed, deployed, and smoke-checked
   in `ee273a9` (`Cleanup: Remove unused search and wishlist flows`). Removed
   the un-routed Search/Wishlist pages, old

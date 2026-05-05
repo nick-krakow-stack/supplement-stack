@@ -4,8 +4,8 @@ Last updated: 2026-05-05
 
 ## Continuation Point
 
-Continue from `main` after Search/Wishlist dead-code cleanup was committed,
-deployed, and smoke-checked. No DB migrations were changed.
+Continue from `main` after launch-readiness implementation bundle was
+committed, deployed, and smoke-checked. No DB migrations changed in this pass.
 
 ## Restart Startup (exact)
 
@@ -18,6 +18,23 @@ deployed, and smoke-checked. No DB migrations were changed.
 
 ## Git / Worktree
 
+- Latest committed/deployed launch-readiness bundle:
+  - `6a639cd` - Feature: Close launch readiness gaps.
+  - Preview URL: `https://d8e1340c.supplementstack.pages.dev`.
+  - Live URL: `https://supplementstack.de`.
+  - New build asset: `assets/index-BlZlfAwp.js`.
+  - Scope: dose/cost calculation hardening, Admin dose-recommendation CRUD,
+    Admin sub-ingredient mapping UI, Admin audit-log viewer, legal/consent
+    preflight copy, context-near affiliate labels, strict frontend TypeScript
+    cleanup, and 5 stack-calculation tests.
+  - No D1 migration.
+  - Checks passed: frontend `npx tsc --noEmit`, frontend lint/build/Vitest,
+    functions TypeScript, and `git diff --check`.
+  - Smokes passed: preview/live root 200; preview/live unauth admin audit-log
+    and dose-recommendations 401; preview/live demo products 200 with
+    `basis_quantity`, `basis_unit`, and `search_relevant` fields.
+  - Existing unrelated dirty/untracked files still not related to this task:
+    `.claude/SESSION.md`, `.claude/settings.json`, and root `logo.png`.
 - Latest committed/deployed cleanup:
   - `ee273a9` - Cleanup: Remove unused search and wishlist flows.
   - Preview URL: `https://0e174354.supplementstack.pages.dev`.

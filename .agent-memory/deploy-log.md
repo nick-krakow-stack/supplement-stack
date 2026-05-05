@@ -43,8 +43,40 @@ Stack item intake intervals and stack product replacement are committed,
 remote-migrated where needed, deployed, and live-smoked on preview/live.
 Search/Wishlist dead-code cleanup is committed, deployed, and smoke-checked on
 preview/live.
+Launch-readiness implementation bundle is committed, deployed, and
+smoke-checked on preview/live.
 GitHub Actions D1 backup has run successfully both manually and automatically;
 token scopes are verified.
+
+## 2026-05-05 - Launch Readiness Implementation Bundle
+
+- Commit: `6a639cd` - Feature: Close launch readiness gaps.
+- No D1 migration.
+- Preview: `https://d8e1340c.supplementstack.pages.dev`.
+- Live: `https://supplementstack.de`.
+- Build asset: `assets/index-BlZlfAwp.js`.
+- Scope:
+  - Stack/Product cost calculations now account for selected target dose,
+    `basis_quantity`/`basis_unit`, compatible mass-unit conversion, and intake
+    interval. IU/IE is normalized only.
+  - Added frontend/backend stack-calculation helpers and 5 Vitest cases.
+  - Added Admin dose-recommendation CRUD backend/API/UI.
+  - Added Admin sub-ingredient mapping UI.
+  - Added Admin audit-log endpoint/viewer with sensitive key redaction and
+    detail-only IP/User-Agent display.
+  - Updated legal/consent preflight copy for privacy, terms, imprint,
+    registration, landing, and `LegalDisclaimer`.
+  - Added context-near Affiliate-Link labels in ProductCard and stack emails.
+  - Fixed strict frontend TypeScript (`npx tsc --noEmit`) via targeted types.
+- Validation passed: frontend `npx tsc --noEmit`, frontend
+  `npm run lint --if-present`, frontend `npm run build`, frontend
+  `npm test -- --run` (5 tests), functions `npx tsc -p tsconfig.json`, and
+  `git diff --check`.
+- Smoke checks passed: preview/live root 200 with `assets/index-BlZlfAwp.js`;
+  preview/live `GET /api/admin/audit-log` 401 unauthenticated;
+  preview/live `GET /api/admin/dose-recommendations` 401 unauthenticated;
+  preview/live `GET /api/demo/products` 200 with 7 products and top-level
+  `basis_quantity`, `basis_unit`, and `search_relevant` fields.
 
 ## 2026-05-05 - Search/Wishlist Dead-Code Cleanup
 

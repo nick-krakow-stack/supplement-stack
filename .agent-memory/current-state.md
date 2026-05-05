@@ -40,6 +40,38 @@ unless verified against code.
 
 ## Current Phase
 
+Launch-readiness implementation bundle is committed, deployed, and smoke-checked:
+
+- Commit: `6a639cd` - Feature: Close launch readiness gaps.
+- Preview: `https://d8e1340c.supplementstack.pages.dev`.
+- Live: `https://supplementstack.de`.
+- Stack/Product calculations now use `basis_quantity`/`basis_unit`, compatible
+  mass-unit conversion (`g`/`mg`/`ug`/`µg`), interval-aware cost/range math, and
+  selected target dose in Stack product previews. IU/IE is normalized but not
+  converted to mass units.
+- D3 reference case is covered by tests: `2000 IU` per `3 Tropfen`, target
+  `10000 IE` daily => `15 Tropfen`, `66` days, dose-based monthly cost.
+- Admin now has UI/API surfaces for sub-ingredient mappings,
+  dose-recommendation CRUD, and audit-log viewing. New admin backend routes are
+  admin-guarded; audit-log response redacts sensitive `changes` keys and the UI
+  only shows IP/User-Agent inside expanded details.
+- Legal/compliance preflight text updates are live on privacy, terms, imprint,
+  registration consent, landing copy, and `LegalDisclaimer`. This is a
+  technical preflight, not external legal sign-off.
+- Context-near affiliate labels were added to ProductCard buy buttons and stack
+  email buy links.
+- Strict frontend TypeScript is now clean via `npx tsc --noEmit`; the previous
+  frontend latent TypeScript issues were fixed as part of the integration.
+- Validation passed: frontend `npx tsc --noEmit`, frontend
+  `npm run lint --if-present`, frontend `npm run build`, frontend
+  `npm test -- --run` (5 tests), functions `npx tsc -p tsconfig.json`, and
+  `git diff --check`.
+- Smoke checks passed: preview/live root 200 with `assets/index-BlZlfAwp.js`;
+  preview/live `GET /api/admin/audit-log` and
+  `GET /api/admin/dose-recommendations` return 401 unauthenticated;
+  preview/live `GET /api/demo/products` returns 7 products and top-level
+  `basis_quantity`, `basis_unit`, and `search_relevant` fields.
+
 Phase B is complete. Phase C is complete. Phase D bundle is committed,
 remote-migrated, and deployed to Cloudflare Pages preview.
 

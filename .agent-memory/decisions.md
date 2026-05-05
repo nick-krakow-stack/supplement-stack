@@ -4,6 +4,25 @@ Last updated: 2026-05-05
 
 ## Stack Item Product References
 
+## Legal-Text Preflight Scope Boundaries
+
+Decision: On frontend-only legal copy update, only wording/compliance text was changed in:
+
+- `frontend/src/pages/PrivacyPage.tsx`
+- `frontend/src/pages/TermsPage.tsx`
+- `frontend/src/pages/ImprintPage.tsx`
+- `frontend/src/pages/RegisterPage.tsx`
+- `frontend/src/pages/LandingPage.tsx`
+- `frontend/src/components/LegalDisclaimer.tsx`
+
+No backend data model, analytics implementation, affiliate tagging logic, or Admin
+product-card logic were altered in this pass.
+
+Rationale:
+
+- Requirement was explicitly preflight/legal text harmonization without changing
+  calculation, API, or Admin behavior.
+
 Decision: `stack_items` must not use one ambiguous `product_id` for both
 catalog `products` and private `user_products`.
 
@@ -342,3 +361,20 @@ Operational rule:
   unless a separate DB cleanup task is explicitly scoped.
 - `/search` and `/wishlist` should continue to fall through to the generic SPA
   fallback/404 behavior unless a new active flow is intentionally introduced.
+
+## Launch Readiness Bundle
+
+Decision: close launch-readiness implementation gaps in one coordinated bundle
+without adding new schema migrations.
+
+Operational rule:
+
+- Keep stack/product cost logic dose-based and interval-aware. Use
+  `basis_quantity`/`basis_unit` when present and only convert compatible mass
+  units. Normalize IU/IE but do not convert IU to mass units.
+- Admin dose-recommendation editing is admin-only and mutating actions must be
+  audit-logged.
+- Audit-log viewing is admin-only; sensitive keys are redacted and IP/User-Agent
+  should not be part of the default table view.
+- Legal copy updates are technical preflight improvements only. External legal
+  sign-off remains required before SEO indexing/public launch.
