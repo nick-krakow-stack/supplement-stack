@@ -39,11 +39,14 @@ Cloudflare Pages preview and live custom domain.
 Launch QA stack/profile fixes, stack item explicit product references, demo
 D3/K2 dosage reduction, and guideline-source normalization are committed,
 remote-migrated, deployed, and live-smoked on preview/live.
+Stack item intake intervals are committed, remote-migrated, deployed, and
+live-smoked on preview/live.
 GitHub Actions D1 backup has run successfully both manually and automatically;
 token scopes are verified.
 
 Latest relevant commits:
 
+- `6c22463` - Feature: Add stack intake intervals.
 - `9babeae` - Fix: Calculate stack email costs from daily dose.
 - `eff1c6a` - Feature: Send stack emails via SMTP.
 - `ba92cd5` - UX: Align authenticated headers with app shell.
@@ -73,6 +76,42 @@ Latest relevant commits:
 - `dd58ba2` - Feature: Add dose recommendations API.
 - `b1fd347` - Refactor: Split Pages API into Hono modules.
 - `9a5f523` - DB: Phase B complete (migrations 0028-0035).
+
+## Stack Intake Intervals
+
+### 2026-05-05 - Cloudflare Pages: stack intake intervals
+
+- Commit: `6c22463` - Feature: Add stack intake intervals.
+- Remote D1 migration: `0042_stack_item_intake_interval.sql` applied
+  successfully to `supplementstack-production`.
+- Preview URL: `https://df76b0f8.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`.
+- Scope:
+  - Added `stack_items.intake_interval_days` with default 1 and CHECK
+    `intake_interval_days >= 1`.
+  - Stack create/update/load and mail item rows handle `intake_interval_days`.
+  - Stack email renders intake interval separately and calculates package range
+    and monthly cost from effective daily usage.
+  - Missing shop links in stack emails show `Kauf-Link fehlt - bitte Produkt
+    melden`.
+  - Stack detail/update responses include product ingredient rows per item.
+  - ProductCard range/monthly cost calculation derives servings from parsed
+    dosage plus ingredient rows before quantity fallback.
+  - StackWorkspace supports in-place stack product editing for dosage, timing,
+    and intake interval with an amber icon-only edit pencil.
+- Validation passed:
+  - Functions `npx tsc -p tsconfig.json`.
+  - Frontend `npm run lint --if-present`.
+  - Frontend `npm run build`.
+  - Frontend `npm test -- --run` with no test files.
+  - `git diff --check` with CRLF warnings only.
+- Smoke checks passed:
+  - Preview and live root returned 200 with asset `assets/index-DGI7Na2W.js`.
+  - Preview and live unauthenticated `POST /api/stacks/test/email` returned
+    401.
+  - Remote pragma confirmed `intake_interval_days` exists (`has_col=1`).
+  - Live temporary API smoke created stack id 21 with interval 2 and one
+    ingredient row, then deleted the temporary account.
 
 ## Product Ingredient Publishing Model
 

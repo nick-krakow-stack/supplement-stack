@@ -4,12 +4,9 @@ Last updated: 2026-05-05
 
 ## Continuation Point
 
-Continue from `main` with local stack item interval work implemented but not
-committed, migrated remotely, or deployed. The bundle adds migration 0042,
-backend stack item `intake_interval_days`, interval-aware stack email
-calculation/rendering, the missing-link mail notice, frontend stack product
-editing, and type/API input updates. No SMTP setup step is pending; DMARC and
-future password rotation remain pre-launch operations.
+Continue from `main` after stack item intake intervals were committed,
+remote-migrated, deployed, and live-smoked. No SMTP setup step is pending;
+DMARC and future password rotation remain pre-launch operations.
 
 ## Restart Startup (exact)
 
@@ -22,32 +19,35 @@ future password rotation remain pre-launch operations.
 
 ## Git / Worktree
 
-- Current local task work:
-  - `d1-migrations/0042_stack_item_intake_interval.sql`
-  - `functions/api/modules/stacks.ts`
-  - `functions/api/lib/types.ts`
-  - `frontend/src/components/StackWorkspace.tsx`
-  - `frontend/src/components/ProductCard.tsx`
-  - `frontend/src/api/stacks.ts`
-  - `frontend/src/types/index.ts`
-  - `frontend/src/types/local.ts`
-  - Local checks passed: functions `npx tsc -p tsconfig.json`; frontend
+- Latest committed/deployed stack interval work:
+  - `6c22463` - Feature: Add stack intake intervals.
+  - Remote D1 migration `0042_stack_item_intake_interval.sql` applied
+    successfully to `supplementstack-production`.
+  - Preview URL: `https://df76b0f8.supplementstack.pages.dev`.
+  - Live URL: `https://supplementstack.de`.
+  - Stack detail/update responses include ingredient rows on each item;
+    ProductCard derives servings from parsed dosage plus product ingredient
+    quantity before stack quantity fallback; the edit action is an amber
+    icon-only pencil; the manual amount edit field is clearly marked as
+    fallback.
+  - Checks passed: functions `npx tsc -p tsconfig.json`; frontend
     `npm run lint --if-present`; frontend `npm run build`; frontend
     `npm test -- --run` with no test files; `git diff --check` with CRLF
     warnings only.
-  - Review follow-up is applied locally: stack detail/update responses include
-    ingredient rows on each item; ProductCard derives servings from parsed
-    dosage plus product ingredient quantity before stack quantity fallback; the
-    edit action is an amber icon-only pencil; the manual amount edit field is
-    clearly marked as fallback.
+  - Smokes passed: preview/live root 200 with asset
+    `assets/index-DGI7Na2W.js`; preview/live unauthenticated
+    `POST /api/stacks/test/email` 401; remote pragma `has_col=1`; live temp
+    API smoke created stack id 21 with interval 2 and one ingredient row, then
+    deleted the temporary account.
   - Existing dirty/untracked files still not related to this task:
     `.claude/SESSION.md`, `.claude/settings.json`, and root `logo.png`.
 - Latest committed/deployed work:
+  - `6c22463` - Feature: Add stack intake intervals.
   - `9babeae` - Fix: Calculate stack email costs from daily dose.
   - `eff1c6a` - Feature: Send stack emails via SMTP.
   - `ba92cd5` - UX: Align authenticated headers with app shell.
   - `03ae0f9` - Brand: Use uploaded logo in headers.
-- Latest preview URL: `https://c673fd9a.supplementstack.pages.dev`.
+- Latest preview URL: `https://df76b0f8.supplementstack.pages.dev`.
 - Live URL: `https://supplementstack.de`.
 - Scope:
   - `functions/api/lib/mail.ts` adds a Worker SMTP-over-TLS helper via
