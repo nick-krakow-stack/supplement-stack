@@ -1,4 +1,4 @@
-# Next Steps
+﻿# Next Steps
 
 Last updated: 2026-05-05
 
@@ -105,7 +105,7 @@ Phase C is complete. The integrated Phase D rollout is complete:
   user-product validation are committed and deployed in `fcb1a6b`
   (`Fix: Close launch QA flow blockers`).
 - SearchPage/Wishlist werden als normale Fallback-/404-Routen behandelt; `raw`-Flags
-  von SearchPage-Eingaben zählen nicht mehr zu den Launch-Blockern.
+  von SearchPage-Eingaben zÃ¤hlen nicht mehr zu den Launch-Blockern.
 - Launch QA stack/profile fixes are committed, remote-migrated, deployed, and
   live-smoked in bundle commits `0b29fe0`, `baa91a5`, `1a3b8e6`, `cb76cf3`,
   and `24b10b5`. Remote D1 migration
@@ -129,7 +129,7 @@ Phase C is complete. The integrated Phase D rollout is complete:
   CORS allowlist now includes live domain + Pages preview hash subdomains,
   committed and deployed in `283cbc8`.
 - Registration data-loss bug closed: `age`/`gender`/`guideline_source` are now
-  persisted via `RegisterPage` → `AuthContext` → API → DB with backend
+  persisted via `RegisterPage` â†’ `AuthContext` â†’ API â†’ DB with backend
   validation, committed and deployed in `e832263`.
 - Pre-launch indexing block: `frontend/public/robots.txt` disallows search
   crawlers by name (Googlebot, Bingbot, etc.) plus wildcard, committed and
@@ -138,7 +138,7 @@ Phase C is complete. The integrated Phase D rollout is complete:
   Allow.
 - Profile self-service (DSGVO Art. 16 + 17) closed in `78d8925`: new
   `PATCH /api/me/password` and `DELETE /api/me` endpoints with re-auth and
-  rate limits, plus matching ProfilePage sections with `LÖSCHEN` confirmation
+  rate limits, plus matching ProfilePage sections with `LÃ–SCHEN` confirmation
   phrase. Account deletion is hard-delete in a batch transaction with
   best-effort cleanup for later-migration tables.
 - Stack-warnings N+1 is closed in `5905a20`
@@ -168,7 +168,7 @@ Phase C is complete. The integrated Phase D rollout is complete:
   removed; system fonts only. Privacy covers GA4 consent, Cloudflare,
   GitHub/GitHub Actions, Google Analytics, and third-country processing. No
   Apple/OAuth/Social-Login processing is described as active. Research bases:
-  §5 DDG, §25 TDDDG, Art. 13/6 DSGVO, §36 VSBG, §18 MStV, EU ODR shutdown
+  Â§5 DDG, Â§25 TDDDG, Art. 13/6 DSGVO, Â§36 VSBG, Â§18 MStV, EU ODR shutdown
   2025-07-20, and Google GA4 EU privacy/IP. Checks passed: frontend build and
   `git diff --check` with only LF/CRLF warnings. Preview legal routes and live
   legal routes returned HTTP 200 with asset `index-DtdVqjYU.js`.
@@ -179,7 +179,7 @@ Product required package metadata hardening is committed in `52ead1f`
 `supplementstack-production`; DB backfill data is live. The API/frontend
 validation changes from `52ead1f` rode along with the Profile DSGVO deploy
 on 2026-05-04 (preview `https://16edb9e2.supplementstack.pages.dev`,
-build `index-Dkeio0yL.js` / `index-RAoQ0gyV.css`) — both code and data are
+build `index-Dkeio0yL.js` / `index-RAoQ0gyV.css`) â€” both code and data are
 live.
 
 D1 backup is done and is not a next step. Production-domain promotion is done and is not a next step.
@@ -247,9 +247,9 @@ Sub-ingredient product workflow is closed in `29dcde5`
 ## Open Cross-Agent TODOs (top of the queue)
 
 Pick from this list first when you have an open slot. These are the highest-
-signal items any agent — Claude, Codex, anyone — can pick up directly.
+signal items any agent â€” Claude, Codex, anyone â€” can pick up directly.
 
-1. ⚠️ **Final legal/compliance review**
+1. âš ï¸ **Final legal/compliance review**
    - Impressum, Datenschutz, Nutzungsbedingungen, health disclaimer, and
      affiliate disclosure now have frontend surfaces but still need final
      German legal review before SEO indexing/public launch.
@@ -263,7 +263,7 @@ signal items any agent — Claude, Codex, anyone — can pick up directly.
    - Live smokes passed for logged-in `Stack mailen` and forgot-password using
      temporary users that were deleted afterward.
 
-3. ❌ **Admin UI for sub-ingredient mappings**
+3. âŒ **Admin UI for sub-ingredient mappings**
    - Backend APIs exist and migration 0040 seeded launch mappings, but there is
      no dedicated admin UI yet for creating/removing parent/child prompt
      mappings.
@@ -271,13 +271,13 @@ signal items any agent — Claude, Codex, anyone — can pick up directly.
      EPA/DHA/DPA, and future mappings.
    - Effort: M.
 
-4. ❌ **Manual product-submission browser QA**
+4. âŒ **Manual product-submission browser QA**
    - Run product submission and moderation/publish flows on desktop and mobile,
      including sub-ingredient prompts, parent/sub validation errors, and 50-row
      ingredient limit behavior.
    - Effort: S/M.
 
-5. ❌ **Affiliate/domain final policy review**
+5. âŒ **Affiliate/domain final policy review**
    - Review affiliate disclosure, shop-domain matching assumptions, and final
      domain/policy wording before Go-Live.
    - Effort: S.
@@ -297,15 +297,15 @@ The longer audit backlog is below in "Additional Open Items"; treat that as the 
 
 Snapshot from the 2026-05-03 risk/UX audit (User-UX, Admin-UX, Risk forks).
 Each item lists the issue, file:line where applicable, and current status.
-Pick up the next ❌ item when continuing work.
+Pick up the next âŒ item when continuing work.
 
-1. ✅ **CORS + `FRONTEND_URL` for live domain** — closed in `283cbc8`. Reset-mail link now points to `supplementstack.de`; CORS allowlist accepts live, www, all `*.supplementstack.pages.dev` previews, and `localhost:5173`.
-2. ✅ **RegisterPage `age`/`gender`/`guideline_source` data loss** — closed in `e832263`. Values flow through all layers; backend validates `age` 1-120, `gender` enum, `guideline_source` enum, empty strings → `NULL`.
-3. ✅ **Admin Stats field-name mismatch** — already mitigated by Codex; `frontend/src/pages/AdminPage.tsx:1157-1158` accepts both key forms (`products_total`/`products` and `products_pending`/`pending_products`).
-4. ✅ **`stack-warnings/:id` Auth + N+1** — Auth/IDOR closed in `fcb1a6b`; N+1 closed in `5905a20`. `GET /api/stack-warnings/:id` now batches interaction lookup into one SQL query with dynamic `IN (...)` placeholders for both ingredient columns, returns `{ warnings: [] }` immediately for 0/1 ingredient id, and preserves auth/ownership/404/403 semantics.
-5. ✅ **`ingredients/:id/products` moderation filter** — closed in `fcb1a6b` (`functions/api/modules/ingredients.ts:427`).
-6. ✅ **`robots.txt` blocking indexing pre-launch** — closed in `1d8b288`. Note: Cloudflare auto-prepends a managed AI-bot block; if Cloudflare ever changes that prepend or if a new search-crawler user-agent emerges, revisit `frontend/public/robots.txt`.
-7. ✅ **Profile self-service (DSGVO Art. 16 + 17)** — closed in `78d8925`. New endpoints `PATCH /api/me/password` and `DELETE /api/me` require re-auth via current password and are rate-limited. Account deletion hard-deletes via `db.batch([...])` for `stack_items`/`stacks`/`wishlist`/`user_products`/`consent_log`/`users` plus a best-effort cleanup loop for tables from later migrations. ProfilePage has two new sections; deletion requires typing `LÖSCHEN` plus password.
+1. âœ… **CORS + `FRONTEND_URL` for live domain** â€” closed in `283cbc8`. Reset-mail link now points to `supplementstack.de`; CORS allowlist accepts live, www, all `*.supplementstack.pages.dev` previews, and `localhost:5173`.
+2. âœ… **RegisterPage `age`/`gender`/`guideline_source` data loss** â€” closed in `e832263`. Values flow through all layers; backend validates `age` 1-120, `gender` enum, `guideline_source` enum, empty strings â†’ `NULL`.
+3. âœ… **Admin Stats field-name mismatch** â€” already mitigated by Codex; `frontend/src/pages/AdminPage.tsx:1157-1158` accepts both key forms (`products_total`/`products` and `products_pending`/`pending_products`).
+4. âœ… **`stack-warnings/:id` Auth + N+1** â€” Auth/IDOR closed in `fcb1a6b`; N+1 closed in `5905a20`. `GET /api/stack-warnings/:id` now batches interaction lookup into one SQL query with dynamic `IN (...)` placeholders for both ingredient columns, returns `{ warnings: [] }` immediately for 0/1 ingredient id, and preserves auth/ownership/404/403 semantics.
+5. âœ… **`ingredients/:id/products` moderation filter** â€” closed in `fcb1a6b` (`functions/api/modules/ingredients.ts:427`).
+6. âœ… **`robots.txt` blocking indexing pre-launch** â€” closed in `1d8b288`. Note: Cloudflare auto-prepends a managed AI-bot block; if Cloudflare ever changes that prepend or if a new search-crawler user-agent emerges, revisit `frontend/public/robots.txt`.
+7. âœ… **Profile self-service (DSGVO Art. 16 + 17)** â€” closed in `78d8925`. New endpoints `PATCH /api/me/password` and `DELETE /api/me` require re-auth via current password and are rate-limited. Account deletion hard-deletes via `db.batch([...])` for `stack_items`/`stacks`/`wishlist`/`user_products`/`consent_log`/`users` plus a best-effort cleanup loop for tables from later migrations. ProfilePage has two new sections; deletion requires typing `LÃ–SCHEN` plus password.
 
 ## Additional Open Items From The Audit (Beyond Top-7)
 
@@ -313,23 +313,23 @@ Pick up the next ❌ item when continuing work.
   open bullet below is superseded by the deployed changes in
   `functions/api/modules/demo.ts` and `frontend/src/components/StackWorkspace.tsx`.
 
-- ✅ **Footer legal links/pages present and deployed** — Impressum, Datenschutz, Nutzungsbedingungen, and `/agb` alias are implemented and deployed in `9c2c627`. Final legal/compliance sign-off still blocks SEO indexing/public launch.
-- ⚠️ **Pre-existing TS errors** — `frontend/src/api/admin.ts` and `frontend/src/api/base.ts` together have 3 latent TypeScript errors that don't block `npm run build` (Vite's esbuild) but show under `npx tsc --noEmit`. Not introduced by recent fixes.
-- ⚠️ **Mobile-polish browser-QA outstanding** — `c76bcf4` was deployed; manual validation at 375px, 390px, and 430px in a real browser is still pending for demo, logged-in, and admin flows, including Search, StackWorkspace, product modal, dosage modal, My Products, and mobile nav.
-- ✅ **Demo session DoS vector** — fixed and deployed in `18a4141`: `POST /api/demo/sessions` now uses KV per-IP rate limiting and no longer persists submitted `stack_json`; legacy GET returns an empty stack instead of stored user changes.
-- ✅ **No rate-limit on `POST /api/products`** — fixed and deployed in `18a4141`: creation is now KV rate-limited per authenticated user.
-- ✅ **`shop-domains/resolve` substring spoofing** — fixed and deployed in `18a4141`: resolve and ProductCard matching parse hostnames and allow only exact domain or subdomain matches.
-- ✅ **`stack_items.product_id` FK ambiguity** — closed, committed,
+- âœ… **Footer legal links/pages present and deployed** â€” Impressum, Datenschutz, Nutzungsbedingungen, and `/agb` alias are implemented and deployed in `9c2c627`. Final legal/compliance sign-off still blocks SEO indexing/public launch.
+- âš ï¸ **Pre-existing TS errors** â€” `frontend/src/api/admin.ts` and `frontend/src/api/base.ts` together have 3 latent TypeScript errors that don't block `npm run build` (Vite's esbuild) but show under `npx tsc --noEmit`. Not introduced by recent fixes.
+- âš ï¸ **Mobile-polish browser-QA outstanding** â€” `c76bcf4` was deployed; manual validation at 375px, 390px, and 430px in a real browser is still pending for demo, logged-in, and admin flows, including Search, StackWorkspace, product modal, dosage modal, My Products, and mobile nav.
+- âœ… **Demo session DoS vector** â€” fixed and deployed in `18a4141`: `POST /api/demo/sessions` now uses KV per-IP rate limiting and no longer persists submitted `stack_json`; legacy GET returns an empty stack instead of stored user changes.
+- âœ… **No rate-limit on `POST /api/products`** â€” fixed and deployed in `18a4141`: creation is now KV rate-limited per authenticated user.
+- âœ… **`shop-domains/resolve` substring spoofing** â€” fixed and deployed in `18a4141`: resolve and ProductCard matching parse hostnames and allow only exact domain or subdomain matches.
+- âœ… **`stack_items.product_id` FK ambiguity** â€” closed, committed,
   remote-migrated, deployed, and live-smoked by
   `d1-migrations/0041_stack_item_product_sources.sql`, which rebuilds
   `stack_items` with explicit `catalog_product_id` and `user_product_id`.
   Own pending user-product stack add/load/warnings/delete was verified live.
-- ❌ **Migration 0036 missing UPDATE trigger** — `d1-migrations/0036_rename_recommendations_to_product_recommendations.sql:27-41` has compatibility view + INSERT/DELETE triggers but no UPDATE trigger. Compatibility window is temporary; the deferred cleanup migration in "Deferred / Later" will drop the view entirely, so this may be moot.
-- ❌ **No email verification on register** — open question whether this is launch-blocking. Currently anyone can register with any address.
-- ❌ **`window.alert` usage in admin** — replace with toast/dialog component for consistent UX.
-- ❌ **Admin `dose_recommendations` CRUD missing** — admin can edit translations but not the underlying `dose_recommendations` rows. Read-only currently.
-- ❌ **Admin audit-log viewer missing** — `admin_audit_log` is written to but has no UI surface.
-- ❌ **Admin TranslationsTab draft preservation + pagination** — explicit follow-up flagged in earlier UX pass; not done.
+- âŒ **Migration 0036 missing UPDATE trigger** â€” `d1-migrations/0036_rename_recommendations_to_product_recommendations.sql:27-41` has compatibility view + INSERT/DELETE triggers but no UPDATE trigger. Compatibility window is temporary; the deferred cleanup migration in "Deferred / Later" will drop the view entirely, so this may be moot.
+- âŒ **No email verification on register** â€” open question whether this is launch-blocking. Currently anyone can register with any address.
+- âŒ **`window.alert` usage in admin** â€” replace with toast/dialog component for consistent UX.
+- âŒ **Admin `dose_recommendations` CRUD missing** â€” admin can edit translations but not the underlying `dose_recommendations` rows. Read-only currently.
+- âŒ **Admin audit-log viewer missing** â€” `admin_audit_log` is written to but has no UI surface.
+- âŒ **Admin TranslationsTab draft preservation + pagination** â€” explicit follow-up flagged in earlier UX pass; not done.
 
 ## Go-Live / Production Readiness
 
@@ -615,3 +615,22 @@ Closed:
 Still open:
 - Recheck `supplementstack.de` DNS because recursive resolvers returned `SERVFAIL` while authoritative Cloudflare nameservers answered correctly.
 - Manual authenticated browser QA on the live domain once DNS resolves again: stack page, add/edit product, footer overlay, mail preview/send, and print/PDF.
+
+## 2026-05-06 Stack Product View Toggle Follow-Up
+
+Closed locally:
+- Stack products are no longer grouped by heuristic categories.
+- Users can switch between Masonry card view and list view; the preference is stored locally in the browser.
+
+Still open:
+- Deploy and smoke-check the new view toggle on preview/live.
+- Manual browser QA on desktop and mobile for the product overview toggle and footer overlay interaction.
+
+## 2026-05-06 Stack Product View Toggle Follow-Up Update
+
+Closed and deployed:
+- Stack products are no longer grouped by heuristic categories.
+- Users can switch between Masonry card view and list view; preference is stored locally.
+
+Still open:
+- Manual authenticated browser QA on desktop and mobile for the product overview toggle and footer overlay interaction.

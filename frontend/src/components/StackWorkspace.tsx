@@ -9,6 +9,8 @@ import {
   Clock3,
   Flag,
   Info,
+  LayoutGrid,
+  List,
   Package,
   Plus,
   Printer,
@@ -306,39 +308,7 @@ function productDoseSignature(product: DemoProduct): string {
   ].join('#').toLowerCase();
 }
 
-// ---------------------------------------------------------------------------
-// Category classification (client-side)
-// ---------------------------------------------------------------------------
-
-type CategoryKey = 'general' | 'detox' | 'sports' | 'cognition';
-
-interface CategoryMeta {
-  label: string;
-  cls: string;
-  order: number;
-}
-
-const CATEGORY_META: Record<CategoryKey, CategoryMeta> = {
-  general:   { label: 'Allgemeine Versorgung', cls: 'cat-general', order: 1 },
-  detox:     { label: 'Pflanzen & Algen', cls: 'cat-detox', order: 2 },
-  sports:    { label: 'Sport', cls: 'cat-sports', order: 3 },
-  cognition: { label: 'Kognition', cls: 'cat-cognition', order: 4 },
-};
-
-const CATEGORY_ICONS: Record<CategoryKey, string> = {
-  general: '🧬',
-  detox: '🌿',
-  sports: '🏃',
-  cognition: '🧠',
-};
-
-function categorize(product: DemoProduct): CategoryKey {
-  const hay = `${product.ingredient_category ?? ''} ${product.form ?? ''} ${product.name ?? ''} ${product.effect_summary ?? ''}`.toLowerCase();
-  if (/(chlorella|spirulina|zeolith|mariendistel|leber|gluta|ala)/i.test(hay)) return 'detox';
-  if (/(creatin|kreatin|bcaa|protein|whey|beta-alanin|citrullin|arginin|pump|pre-workout|preworkout)/i.test(hay)) return 'sports';
-  if (/(ashwagandha|rhodiola|ginkgo|nootrop|kogniti|fokus|gehirn|l-theanin|bacopa)/i.test(hay)) return 'cognition';
-  return 'general';
-}
+type ProductViewMode = 'grid' | 'list';
 
 // ---------------------------------------------------------------------------
 // AddProductModal (unchanged styling from original — 3-step flow preserved)
@@ -1011,6 +981,12 @@ function IconChevron() {
 // ---------------------------------------------------------------------------
 
 const HEADER_VARIANT: StacksHeaderVariant = 'warm';
+const STACK_PRODUCT_VIEW_KEY = 'supplement-stack-product-view';
+
+function loadProductViewMode(): ProductViewMode {
+  if (typeof window === 'undefined') return 'grid';
+  return window.localStorage.getItem(STACK_PRODUCT_VIEW_KEY) === 'list' ? 'list' : 'grid';
+}
 
 export function StackWorkspace({
   mode = 'demo',
@@ -1038,11 +1014,16 @@ export function StackWorkspace({
   const [familyStatus, setFamilyStatus] = useState('');
   const [linkReportStatus, setLinkReportStatus] = useState('');
   const [routineOpen, setRoutineOpen] = useState(false);
+  const [productViewMode, setProductViewMode] = useState<ProductViewMode>(loadProductViewMode);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
   const isDemo = mode === 'demo';
   const showStandaloneHeader = standaloneHeader ?? isDemo;
+
+  useEffect(() => {
+    window.localStorage.setItem(STACK_PRODUCT_VIEW_KEY, productViewMode);
+  }, [productViewMode]);
 
   // Fetch shop domains
   useEffect(() => {
@@ -1617,19 +1598,6 @@ export function StackWorkspace({
     );
   };
 
-  // ---- Category grouping ----
-
-  const groupedProducts = useMemo(() => {
-    if (!activeStack) return [] as Array<[CategoryKey, DemoProduct[]]>;
-    const groups = new Map<CategoryKey, DemoProduct[]>();
-    for (const p of activeStack.products) {
-      const cat = categorize(p);
-      if (!groups.has(cat)) groups.set(cat, []);
-      groups.get(cat)!.push(p);
-    }
-    return [...groups.entries()].sort((a, b) => CATEGORY_META[a[0]].order - CATEGORY_META[b[0]].order);
-  }, [activeStack]);
-
   const handleLogout = () => {
     logout();
     navigate('/login');
@@ -1964,9 +1932,30 @@ export function StackWorkspace({
           )}
         </section>
 
-        <div className="ss-section-title">
-          <span>🚀</span>
+        <div className="ss-section-title ss-products-title">
           <span>Supplement Übersicht</span>
+          <div className="product-view-toggle" role="group" aria-label="Produktansicht wählen">
+            <button
+              type="button"
+              className={productViewMode === 'grid' ? 'active' : ''}
+              onClick={() => setProductViewMode('grid')}
+              aria-pressed={productViewMode === 'grid'}
+              title="Kachelansicht"
+            >
+              <LayoutGrid size={16} />
+              <span>Kacheln</span>
+            </button>
+            <button
+              type="button"
+              className={productViewMode === 'list' ? 'active' : ''}
+              onClick={() => setProductViewMode('list')}
+              aria-pressed={productViewMode === 'list'}
+              title="Listenansicht"
+            >
+              <List size={16} />
+              <span>Liste</span>
+            </button>
+          </div>
         </div>
 
         {loading && (
@@ -2012,38 +2001,28 @@ export function StackWorkspace({
           </div>
         )}
 
-        {groupedProducts.map(([cat, items]) => {
-          const meta = CATEGORY_META[cat];
-          return (
-            <div key={cat} className="category-group">
-              <div className="category-header">
-                <span className={`category-label ${meta.cls}`}>
-                  <span>{CATEGORY_ICONS[cat]}</span>
-                  <span>{meta.label}</span>
-                </span>
-              </div>
-              <div className="masonry-grid">
-                {items.map((p) => {
-                  const key = productStackKey(p);
-                  return (
-                  <div key={key} className="masonry-item">
-                    <ProductCard
-                      product={p}
-                      shopDomains={shopDomains}
-                      selected={selectedIds.has(key)}
-                      onToggleSelected={() => toggleSelected(key)}
-                      onEdit={() => setEditingProductKey(key)}
-                      onDelete={() => void handleRemoveProduct(key)}
-                      onReportMissingLink={(product, reason) => void handleReportMissingLink(product as DemoProduct, reason)}
-                      showSelectButton={false}
-                    />
-                  </div>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
+        {!loading && activeProducts.length > 0 && (
+          <div className={productViewMode === 'grid' ? 'masonry-grid' : 'product-list-view'}>
+            {activeProducts.map((p) => {
+              const key = productStackKey(p);
+              return (
+                <div key={key} className={productViewMode === 'grid' ? 'masonry-item' : 'product-list-item'}>
+                  <ProductCard
+                    product={p}
+                    shopDomains={shopDomains}
+                    selected={selectedIds.has(key)}
+                    display={productViewMode === 'list' ? 'list' : 'card'}
+                    onToggleSelected={() => toggleSelected(key)}
+                    onEdit={() => setEditingProductKey(key)}
+                    onDelete={() => void handleRemoveProduct(key)}
+                    onReportMissingLink={(product, reason) => void handleReportMissingLink(product as DemoProduct, reason)}
+                    showSelectButton={false}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Bottom bar */}

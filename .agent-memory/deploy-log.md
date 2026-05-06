@@ -1,4 +1,4 @@
-# Deploy Log
+﻿# Deploy Log
 
 Last updated: 2026-05-05
 
@@ -199,7 +199,7 @@ Latest relevant commits:
 - Preview URL: `https://c673fd9a.supplementstack.pages.dev`.
 - Live smoke:
   - Temporary user on `noreply@supplementstack.de`, stack product 23
-    `Vitamin D3 2000 IU Tropfen`, `dosage_text='10000 IE täglich'`, and
+    `Vitamin D3 2000 IU Tropfen`, `dosage_text='10000 IE tÃ¤glich'`, and
     old-style `quantity=2000`.
   - `GET /api/stacks/:id` returned total `12.5`.
   - `POST /api/stacks/:id/email` returned ok.
@@ -558,7 +558,7 @@ Latest relevant commits:
   - Expanded privacy text for GA4 consent, Cloudflare/GitHub/GitHub Actions,
     Google Analytics, and third-country processing.
   - No Apple/OAuth/Social-Login active-processing wording.
-- Research bases: §5 DDG, §25 TDDDG, Art. 13/6 DSGVO, §36 VSBG, §18 MStV,
+- Research bases: Â§5 DDG, Â§25 TDDDG, Art. 13/6 DSGVO, Â§36 VSBG, Â§18 MStV,
   EU ODR shutdown on 2025-07-20, and Google GA4 EU privacy/IP notes.
 - Local validation:
   - `npm run build` in `frontend/` passed.
@@ -636,18 +636,18 @@ Latest relevant commits:
 - Commit: `78d8925` - Feature: Profile self-service for password change and account deletion.
 - Scope:
   - `functions/api/modules/auth.ts`: new `PATCH /api/me/password` and `DELETE /api/me` mounted on the existing `meApp`. Both require `ensureAuth`, re-authenticate via the current password (`verifyPassword`), and are rate-limited (`pwchange:<userId>` 5/15min, `accdel:<userId>` 3/60min).
-  - Account deletion runs `c.env.DB.batch([...])` to hard-delete dependent rows in order (`stack_items` via subselect on `stacks`, then `stacks`, `wishlist`, `user_products`, `consent_log`, `users`). Best-effort cleanup loop covers tables from later migrations (`admin_audit_log`, `dose_recommendations`, `share_links`, `blog_posts`, `api_tokens`) — silently skipped if the table doesn't exist in the live DB.
+  - Account deletion runs `c.env.DB.batch([...])` to hard-delete dependent rows in order (`stack_items` via subselect on `stacks`, then `stacks`, `wishlist`, `user_products`, `consent_log`, `users`). Best-effort cleanup loop covers tables from later migrations (`admin_audit_log`, `dose_recommendations`, `share_links`, `blog_posts`, `api_tokens`) â€” silently skipped if the table doesn't exist in the live DB.
   - `frontend/src/api/auth.ts`: `changePassword`, `deleteAccount`, plus a `preserveTokenOn401` helper. The axios response interceptor in `client.ts:19-21` strips the auth token on any 401; without the helper a wrong-current-password attempt would log the user out.
-  - `frontend/src/pages/ProfilePage.tsx`: two new sections. Password-change with current/new/repeat fields and inline success/error messaging. Account-deletion with red warning, confirmation phrase `LÖSCHEN`, password re-entry, disabled red button until both match. On success: `logout()` + `navigate('/', { replace: true })`. No `window.alert`. 44px touch targets.
+  - `frontend/src/pages/ProfilePage.tsx`: two new sections. Password-change with current/new/repeat fields and inline success/error messaging. Account-deletion with red warning, confirmation phrase `LÃ–SCHEN`, password re-entry, disabled red button until both match. On success: `logout()` + `navigate('/', { replace: true })`. No `window.alert`. 44px touch targets.
 - Local validation: `npx tsc -p tsconfig.json` (functions/) clean; `npm run build` (frontend/) clean.
 - Deploy command: `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
 - Preview URL: `https://16edb9e2.supplementstack.pages.dev`
 - Build assets: JS `index-Dkeio0yL.js`, CSS `index-RAoQ0gyV.css`.
 - Smoke checks:
   - Preview root + live `https://supplementstack.de/` returned HTTP 200.
-  - Unauthenticated `PATCH /api/me/password` → HTTP 401 `{"error":"Unauthorized"}`.
-  - Unauthenticated `DELETE /api/me` → HTTP 401 `{"error":"Unauthorized"}`.
-  - Full end-to-end (login → change password → delete account) deferred to avoid creating or deleting real users in production D1.
+  - Unauthenticated `PATCH /api/me/password` â†’ HTTP 401 `{"error":"Unauthorized"}`.
+  - Unauthenticated `DELETE /api/me` â†’ HTTP 401 `{"error":"Unauthorized"}`.
+  - Full end-to-end (login â†’ change password â†’ delete account) deferred to avoid creating or deleting real users in production D1.
 - Note: live DB is at migration 0022; the optional-cleanup loop in `DELETE /api/me` is intentionally tolerant of missing tables, so this deploy works against the current schema and stays correct after future migrations are applied.
 
 ## Pre-Launch Indexing Block
@@ -669,7 +669,7 @@ Latest relevant commits:
 ### 2026-05-03 - Cloudflare Pages: persist age, gender, guideline_source on register
 
 - Commit: `e832263` - Fix: Persist age, gender, guideline_source on register.
-- Scope: `RegisterPage.tsx` collected `age`/`gender`/`guidelineSource` but only `health_consent` was forwarded; values are now passed through `AuthContext.register()` and the `/api/auth/register` endpoint and persisted on the `users` row. Backend validates `age` (integer 1-120), `gender` (`männlich`/`weiblich`/`divers`), `guideline_source` (`DGE`/`Studien`/`Influencer`); empty strings normalize to `NULL`.
+- Scope: `RegisterPage.tsx` collected `age`/`gender`/`guidelineSource` but only `health_consent` was forwarded; values are now passed through `AuthContext.register()` and the `/api/auth/register` endpoint and persisted on the `users` row. Backend validates `age` (integer 1-120), `gender` (`mÃ¤nnlich`/`weiblich`/`divers`), `guideline_source` (`DGE`/`Studien`/`Influencer`); empty strings normalize to `NULL`.
 - DB schema: columns `users.age`, `users.gender`, `users.guideline_source` already exist (`d1-migrations/0001_initial.sql`); no migration needed.
 - Local validation: `npx tsc -p tsconfig.json` (functions/) clean; `npm run build` (frontend/) clean. 3 pre-existing TS errors in `frontend/src/api/admin.ts` and `src/api/base.ts` are unrelated to this change.
 - Deploy command: `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
@@ -677,7 +677,7 @@ Latest relevant commits:
 - Build assets: JS `index-zWVCB7vc.js`, CSS `index-Cf3yP80d.css`.
 - Smoke checks:
   - Preview root and live `https://supplementstack.de/` returned HTTP 200.
-  - `POST /api/auth/register` with `age: 999` returned HTTP 400 with `{"error":"Alter muss eine ganze Zahl zwischen 1 und 120 sein."}` — backend validation confirmed.
+  - `POST /api/auth/register` with `age: 999` returned HTTP 400 with `{"error":"Alter muss eine ganze Zahl zwischen 1 und 120 sein."}` â€” backend validation confirmed.
   - Full register-flow smoke deferred (would create a real user in production D1; rate-limit window also still relevant).
 
 ## Live Domain Hardening
@@ -699,9 +699,9 @@ Latest relevant commits:
   - Live `https://supplementstack.de/` returned HTTP 200.
   - Live `/api/ingredients` returned HTTP 200.
   - CORS preflight `OPTIONS /api/auth/forgot-password`:
-    - Origin `https://supplementstack.de` → `Access-Control-Allow-Origin: https://supplementstack.de` (echoed) ✓
-    - Origin `https://9c8dfe74.supplementstack.pages.dev` → echoed back ✓
-    - Origin `https://evil.example.com` → no `Access-Control-Allow-Origin` header (browser would block) ✓
+    - Origin `https://supplementstack.de` â†’ `Access-Control-Allow-Origin: https://supplementstack.de` (echoed) âœ“
+    - Origin `https://9c8dfe74.supplementstack.pages.dev` â†’ echoed back âœ“
+    - Origin `https://evil.example.com` â†’ no `Access-Control-Allow-Origin` header (browser would block) âœ“
 
 ## UX Usability Polish
 
@@ -896,7 +896,7 @@ Latest relevant commits:
 - HTTP status check on preview URL: `HTTP/1.1 200 OK`.
 - Open risk: no browser/manual modal QA was run in this session.
 
-## Phase C — Tech-Debt Cleanup
+## Phase C â€” Tech-Debt Cleanup
 
 ### 2026-04-30 - Cloudflare Pages: Tech-Debt-Cleanup nach Phase C
 
@@ -905,15 +905,15 @@ Latest relevant commits:
 - Build: `npx tsc -p tsconfig.json` from `functions/` passed (no errors); `npm run build` from `frontend/` passed (1.45s, 0 errors).
 - Command: `npx wrangler pages deploy frontend/dist --project-name supplementstack` (with CF env vars loaded).
 - Preview URL: `https://c0f45f5b.supplementstack.pages.dev`
-- pages_build_output_dir warning: no "config ignored" warning appeared in deploy output — resolved.
+- pages_build_output_dir warning: no "config ignored" warning appeared in deploy output â€” resolved.
 - Smoke test: build and deploy verified; endpoint functional check skipped (no admin JWT in session).
 
 ## Phase C Deploys
 
 ### 2026-04-30 - Cloudflare Pages: server-side unit conversion
 
-- Commit: `11440f5` - Feature: Server-side Unit-Konvertierung — IU/µg/mg/g für Upper-Limit-Vergleich.
-- New `functions/api/lib/units.ts`: `normalizeUnit()`, `convertAmount()` with IU↔µg/mg/g support for Vitamin D, A, E; pure mass conversion µg↔mg↔g generic.
+- Commit: `11440f5` - Feature: Server-side Unit-Konvertierung â€” IU/Âµg/mg/g fÃ¼r Upper-Limit-Vergleich.
+- New `functions/api/lib/units.ts`: `normalizeUnit()`, `convertAmount()` with IUâ†”Âµg/mg/g support for Vitamin D, A, E; pure mass conversion Âµgâ†”mgâ†”g generic.
 - Integrated into `GET /api/ingredients/:id/recommendations`: cross-unit upper-limit comparison now attempted; `amount_converted_to_upper_limit_unit` field added to response when conversion was performed.
 - Build: `npx tsc -p tsconfig.json` from `functions/` passed (no errors); `npm run build` from `frontend/` passed (1.43s, 0 errors).
 - Command: `npx wrangler pages deploy frontend/dist --project-name supplementstack` (with CF env vars loaded).
@@ -923,7 +923,7 @@ Latest relevant commits:
 
 ### 2026-04-29 - Cloudflare Pages: admin audit logging
 
-- Commit: `4482a5f` - Feature: Admin Audit Logging — alle Mutationen in admin_audit_log.
+- Commit: `4482a5f` - Feature: Admin Audit Logging â€” alle Mutationen in admin_audit_log.
 - New `logAdminAction()` helper in `functions/api/lib/helpers.ts`; 16 mutation endpoints in admin.ts, products.ts, ingredients.ts now write to `admin_audit_log`.
 - Build: `npx tsc -p tsconfig.json` from `functions/` passed; `npm run build` from `frontend/` passed; `functions/api` copied into `frontend/dist/functions/api` before deploy.
 - Command: `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
@@ -1129,3 +1129,13 @@ When a future agent deploys or applies migrations, append the exact date, commit
 - Preview root returned 200 with `assets/index-HwTaoKFr.js`.
 - Validation passed before deploy: frontend tests, frontend TypeScript, lint, build, functions TypeScript, and `git diff --check`.
 - Live-domain smoke was blocked by recursive DNS `SERVFAIL` for `supplementstack.de`; Cloudflare zone/project checks and authoritative nameserver checks look healthy.
+
+## 2026-05-06 Stack Product View Toggle Deployed
+
+- Latest stack product view toggle commit deployed to Cloudflare Pages project `supplementstack`.
+- Preview URL: `https://336cf419.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`, asset `assets/index-vwRdauH5.js`.
+- User stack product overview no longer groups products into heuristic categories. Products render in stack order.
+- Added persisted `Kacheln` / `Liste` toggle for the product overview.
+- Validation passed before deploy: frontend ESLint, frontend TypeScript, frontend Vitest 6 tests, frontend build, and `git diff --check` with CRLF warnings only.
+- Smoke checks passed after deploy: preview/live `/` and `/demo` return HTTP 200 with the new asset.

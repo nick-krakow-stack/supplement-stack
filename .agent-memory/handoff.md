@@ -1,8 +1,21 @@
-# Handoff
+﻿# Handoff
 
 Last updated: 2026-05-05
 
 ## Continuation Point
+
+Most recent investigation: production D1 demo product data explains the
+`385,59 EUR/Monat` demo footer outlier. `/api/demo/products` exposes the main
+ingredient row as top-level `quantity`/`unit`; products without `dosage_text`
+fall back to that quantity. SchwarzkÃ¼mmelÃ¶l has `quantity=40`, `unit=mg`,
+`serving_size=2`, `serving_unit=Kapseln`, `servings_per_container=30`, and
+`dosage_text=NULL`, so the current fallback interprets `40 mg` as 40 intake
+units/day and produces 1 day supply / 341,70 EUR monthly. Product data is also
+incomplete for several demo products (D3/K2, Ginseng, Vitamin C,
+SchwarzkÃ¼mmelÃ¶l, Grapefruitkernextrakt, B-Komplex missing dosage text), while
+Magnesium's `dosage_text='2 Kapseln tÃ¤glich (888mg)'` conflicts with
+`quantity=300mg` and `serving_size=2`. No calculation change was applied after
+the user asked to verify DB data first.
 
 Continue from `main` with local email-verification implementation complete but
 not committed, remote-migrated, deployed, or live-smoked. Apply/commit only
@@ -158,7 +171,7 @@ and must be coordinated separately.
     `{ ok: true }`; the temporary stack/account were deleted afterward.
   - Live temporary-account forgot-password smoke returned the expected generic
     success response; the temporary account was deleted afterward.
-  - Live D3 mail-format smoke: product 23 with `10000 IE täglich` and
+  - Live D3 mail-format smoke: product 23 with `10000 IE tÃ¤glich` and
     old-style `quantity=2000` returned stack total `12.5`, sent mail
     successfully, and deleted the temporary stack/account afterward.
   - Preview/live root asset check for `index-DdLiBTCO.js`.
@@ -246,7 +259,7 @@ and must be coordinated separately.
 
 ## Open Top Queue
 
-1. Entscheidung (2026-05-05): SearchPage und WishlistPage werden bewusst nur über
+1. Entscheidung (2026-05-05): SearchPage und WishlistPage werden bewusst nur Ã¼ber
    Wildcard/404 erreicht; Roh-`raw`-Flags aus SearchPage-Daten gelten nicht mehr als
    Launch-Blocker. (Superseded by local cleanup: the source files are now deleted.)
 
@@ -697,7 +710,7 @@ Next:
 
 Completed:
 - Product/stack calculation now uses physical intake units for multi-unit portions. If product data says `3 Tropfen = 2000 IE`, calculations derive per-drop potency and round required intake up to whole drops/tablets/capsules.
-- D3 examples are covered by tests: `10000 IE täglich` -> `15 Tropfen`, `66` days with the existing package data; `800 IE täglich` -> `2 Tropfen`.
+- D3 examples are covered by tests: `10000 IE tÃ¤glich` -> `15 Tropfen`, `66` days with the existing package data; `800 IE tÃ¤glich` -> `2 Tropfen`.
 - Frontend stack/product rendering, print/PDF routine, and backend stack mail use the same whole-unit semantics through their mirrored calculation helpers.
 - Stack mail daily amount labels and frontend fallback dose labels now pluralize common count units.
 - The footer overlay no longer stays visible on top of stack modals. Desktop legal footer gets extra bottom spacing when the overlay is visible; mobile uses an in-flow sticky bottom bar.
@@ -717,3 +730,34 @@ Important follow-up:
 Workspace notes:
 - Existing unrelated `.claude/SESSION.md`, `.claude/settings.json`, and root `logo.png` remain out of scope.
 - Temporary Browser-Harness screenshots named `qa-*.png` may exist locally and can be deleted after final review.
+
+## 2026-05-06 Stack Product View Toggle Handoff
+
+Completed locally:
+- Removed user-facing stack product category grouping and sorting from `StackWorkspace`; products now render directly in stack order.
+- Added the `Kacheln`/`Liste` product view toggle with localStorage persistence.
+- Added `ProductCard` list display support and responsive CSS for desktop and mobile.
+
+Validation:
+- Frontend ESLint passed.
+- Frontend TypeScript passed.
+- Frontend Vitest passed with 6 stack calculation tests.
+- Frontend production build passed with the existing Vite chunk-size warning.
+- `git diff --check` passed with CRLF warnings only.
+
+Next:
+- Deploy the frontend bundle and smoke-check `/demo` plus authenticated `/stacks` product view switching.
+
+## 2026-05-06 Stack Product View Toggle Deployed Handoff
+
+Completed and deployed:
+- Removed heuristic category grouping from the stack product overview.
+- Added persisted `Kacheln` / `Liste` toggle.
+- Deployed preview `https://336cf419.supplementstack.pages.dev` and live `https://supplementstack.de` with asset `assets/index-vwRdauH5.js`.
+
+Validation:
+- Frontend ESLint, TypeScript, Vitest, build, and `git diff --check` passed.
+- Preview/live `/` and `/demo` returned HTTP 200.
+
+Next:
+- Manual browser QA on authenticated `/stacks` for the view toggle on desktop and mobile.

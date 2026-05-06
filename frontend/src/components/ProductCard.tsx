@@ -68,6 +68,7 @@ interface ProductCardProps {
   selected?: boolean;
   warning?: ProductWarning | null;
   compact?: boolean;
+  display?: 'card' | 'list';
 }
 
 function formatEur(value: number): string {
@@ -197,7 +198,7 @@ export default function ProductCard({
   product, onSelect, onToggleSelected, onEdit, onDelete,
   onReportMissingLink,
   recommendationType, showSelectButton = false,
-  shopDomains, selected = false, warning,
+  shopDomains, selected = false, warning, display = 'card',
 }: ProductCardProps) {
   const [openSafetyWarningId, setOpenSafetyWarningId] = useState<number | null>(null);
   const price = product.product_price ?? product.price;
@@ -247,7 +248,7 @@ export default function ProductCard({
           ? '0 4px 20px rgba(99,102,241,0.2)'
           : '0 2px 12px rgba(99,102,241,0.08), 0 1px 3px rgba(0,0,0,0.04)',
       }}
-      className="ss-product-card relative flex flex-col bg-white cursor-pointer transition-all duration-150 hover:-translate-y-px"
+      className={`ss-product-card ${display === 'list' ? 'ss-product-card-list' : ''} relative flex flex-col bg-white cursor-pointer transition-all duration-150 hover:-translate-y-px`}
     >
       {/* Checkbox */}
       {(onToggleSelected ?? onSelect) && (
@@ -263,7 +264,7 @@ export default function ProductCard({
       )}
 
       {/* Card top */}
-      <div className="flex items-start gap-[11px] mb-3">
+      <div className="ss-product-card-top flex items-start gap-[11px] mb-3">
         {/* Image / emoji */}
         {product.image_url ? (
           <img
@@ -305,7 +306,7 @@ export default function ProductCard({
       </div>
 
       {/* Meta grid */}
-      <div className="grid grid-cols-2 gap-2 mb-2.5">
+      <div className="ss-product-card-meta grid grid-cols-2 gap-2 mb-2.5">
         <div>
           <div className="text-[10px] font-bold uppercase tracking-[0.4px] text-slate-400 mb-0.5">Dosierung</div>
           <div className="text-[12.5px] font-bold text-slate-700">{dose}</div>
@@ -321,7 +322,7 @@ export default function ProductCard({
 
       {/* Effect */}
       {(product.effect_summary ?? product.form) && (
-        <div className="mb-2.5">
+        <div className="ss-product-card-effect mb-2.5">
           <div className="text-[10px] font-bold uppercase tracking-[0.4px] text-slate-400 mb-1">Einordnung</div>
           <div className="text-[12px] text-slate-500 leading-relaxed font-medium">
             {product.effect_summary ?? product.form}
@@ -331,7 +332,7 @@ export default function ProductCard({
 
       {/* Discontinued */}
       {product.discontinued_at && (
-        <div className="flex items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs text-slate-500 mb-2.5">
+        <div className="ss-product-card-note flex items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs text-slate-500 mb-2.5">
           <RefreshCcw size={12} className="shrink-0" />
           Eingestellt — Alternative wählen
         </div>
@@ -339,14 +340,14 @@ export default function ProductCard({
 
       {/* Alternative note */}
       {product.alternative_note && (
-        <div className="rounded-lg border border-indigo-100 bg-indigo-50 px-2.5 py-1.5 text-xs leading-relaxed text-indigo-700 mb-2.5">
+        <div className="ss-product-card-note rounded-lg border border-indigo-100 bg-indigo-50 px-2.5 py-1.5 text-xs leading-relaxed text-indigo-700 mb-2.5">
           <span className="font-bold">Alternative:</span> {product.alternative_note}
         </div>
       )}
 
       {/* Ingredient safety warnings */}
       {product.warnings && product.warnings.length > 0 && (
-        <div className="mb-2.5 flex flex-wrap gap-1.5">
+        <div className="ss-product-card-warnings mb-2.5 flex flex-wrap gap-1.5">
           {product.warnings.map((safetyWarning) => {
             const isOpen = openSafetyWarningId === safetyWarning.id;
             const popoverId = `safety-warning-${product.id}-${safetyWarning.id}`;
@@ -404,7 +405,7 @@ export default function ProductCard({
 
       {/* Warning box */}
       {cardWarning && (
-        <div className="rounded-lg bg-[#fff8f0] border border-[#fed7aa] px-3 py-2.5 mb-2.5">
+        <div className="ss-product-card-warning-box rounded-lg bg-[#fff8f0] border border-[#fed7aa] px-3 py-2.5 mb-2.5">
           <div className="flex items-center gap-1.5 text-[11.5px] font-extrabold text-orange-600 mb-1.5">
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
               <path d="M6 1.5L11.5 10.5H.5L6 1.5Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
@@ -424,7 +425,7 @@ export default function ProductCard({
       )}
 
       {/* Price row */}
-      <div className="flex items-center justify-between pt-2.5 border-t border-slate-100 mb-2.5">
+      <div className="ss-product-card-price flex items-center justify-between pt-2.5 border-t border-slate-100 mb-2.5">
         <span className="text-[18px] font-black text-slate-900">{formatEur(price)}</span>
         {monthlyPrice !== null && (
           <span className="bg-emerald-500 text-white px-2.5 py-0.5 rounded-full text-[12px] font-extrabold">
@@ -434,7 +435,7 @@ export default function ProductCard({
       </div>
 
       {/* Actions */}
-      <div className="flex gap-[7px]">
+      <div className="ss-product-card-actions flex gap-[7px]">
         {shopHref && (
           <a
             href={shopHref}
