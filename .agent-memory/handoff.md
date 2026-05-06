@@ -872,3 +872,21 @@ Validation:
 Workspace notes:
 - Unrelated `.claude/SESSION.md`, `.claude/settings.json`, root `logo.png`,
   and `qa-preview-demo-bottombar-no-cookie.png` remain out of scope.
+
+## 2026-05-06 Affiliate CTA Cleanup Handoff
+
+Completed and deployed:
+- Removed explicit affiliate wording from product-card buy button text.
+- Removed explicit affiliate wording from stack email buy buttons.
+- Removed the user-facing Affiliate checkbox from user product submission.
+- Updated footer disclaimer wording so it no longer claims individual links are
+  marked in the interface.
+- Updated Admin Go-Live checklist wording to record that product cards/buttons
+  do not explicitly mark affiliate links.
+- Preview: `https://5e59a3f6.supplementstack.pages.dev`.
+- Live asset: `assets/index-DnxszgO5.js`.
+
+Standing rule:
+- Affiliate disclosure belongs in footer/legal surfaces only. Do not add
+  `(Affiliate-Link)`, badges, or separate affiliate labels to product cards,
+  buy buttons, stack emails, or product-near CTAs.

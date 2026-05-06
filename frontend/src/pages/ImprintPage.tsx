@@ -55,8 +55,8 @@ export default function ImprintPage() {
         <p>
           Supplement Stack kann Affiliate-Links zu Amazon und weiteren Partnern enthalten. Wenn
           du &uuml;ber solche Links einkaufst, kann der Betreiber eine Provision erhalten.
-          Die Markierung erfolgt transparent im Produktbereich. Die Nutzung der App bleibt
-          kostenlos.
+          F&uuml;r dich entstehen dadurch keine zus&auml;tzlichen Kosten. Die Nutzung der App
+          bleibt kostenlos.
         </p>
       </section>
     </article>

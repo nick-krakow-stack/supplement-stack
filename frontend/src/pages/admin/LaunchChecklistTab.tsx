@@ -42,7 +42,7 @@ const trustItems: ChecklistItem[] = [
   {
     title: 'Affiliate-Hinweis',
     status: 'ok',
-    details: 'Footer, Impressum, Nutzungsbedingungen und Produktbuttons markieren Affiliate-Links transparent.',
+    details: 'Affiliate-Hinweise stehen allgemein in Footer, Impressum und Nutzungsbedingungen. Produktkarten und Kaufen-Buttons markieren einzelne Links nicht explizit.',
   },
   {
     title: 'Health-Claims',

@@ -22,8 +22,8 @@ Phase C is complete. The integrated Phase D rollout is complete:
   calculation hardening, selected-dose product preview costs, basis-quantity and
   mass-unit handling, Admin dose-recommendation CRUD, Admin sub-ingredient
   mapping UI, Admin audit-log viewer, legal/consent preflight copy, context-near
-  affiliate labels, strict frontend TypeScript cleanup, and 5 calculation
-  tests. Preview/live run `assets/index-BlZlfAwp.js`. Validation passed:
+  affiliate disclosure copy, strict frontend TypeScript cleanup, and 5
+  calculation tests. Preview/live run `assets/index-BlZlfAwp.js`. Validation passed:
   frontend `npx tsc --noEmit`, frontend lint/build/Vitest, functions
   TypeScript, and `git diff --check`. Smokes passed for root, unauth admin
   endpoints, and demo-product basis fields.
@@ -706,3 +706,15 @@ Still open:
 - Later cleanup: after old previews are irrelevant, consider removing legacy
   product/user_product `effect_summary` and `timing` columns through a table
   rebuild if the compatibility cost is worth it.
+
+## 2026-05-06 Affiliate CTA Rule
+
+Closed and deployed:
+- Product cards and stack email buy buttons no longer explicitly mark affiliate
+  links.
+- User product submission no longer exposes an Affiliate checkbox.
+
+Standing rule:
+- Do not add affiliate badges/text to individual product cards, buy buttons, or
+  product-near CTAs in future work. Keep disclosure general in footer/legal
+  surfaces only.

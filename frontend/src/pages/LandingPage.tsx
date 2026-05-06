@@ -259,7 +259,7 @@ const trustStats = [
 const trustPoints = [
   'Keine Heilversprechen: Inhalte sind als Orientierung und Entscheidungshilfe gedacht.',
   'Transparente Preisvergleiche ohne versteckte Kosten',
-  'Werbliche Hinweise, Affiliate-Hinweise und Produktvergleichslogik sind klar abgegrenzt.',
+  'Produktvergleichslogik und Preisangaben sind klar abgegrenzt.',
   'Datenschutzbezug ist transparent geregelt (siehe Datenschutzerklärung); personenbezogene Daten werden nur wie beschrieben verarbeitet.',
 ];
 

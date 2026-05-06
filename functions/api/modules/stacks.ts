@@ -217,7 +217,7 @@ function buildStackEmailHtml(stack: StackRow, items: StackMailPreparedItem[], to
       ? `<img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.name)}" width="56" height="56" style="width:56px;height:56px;object-fit:cover;border-radius:10px;border:1px solid #e5e7eb;background:#f8fafc;">`
       : `<div style="width:56px;height:56px;border-radius:10px;border:1px solid #e5e7eb;background:#f8fafc;text-align:center;line-height:56px;color:#94a3b8;font-size:18px;font-weight:800;">SS</div>`
     const buyButton = item.shop_link
-      ? `<a href="${escapeHtml(item.shop_link)}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;font-weight:700;border-radius:8px;padding:9px 12px;white-space:nowrap;">${item.is_affiliate ? 'Kaufen (Affiliate-Link)' : 'Jetzt kaufen'}</a>${item.is_affiliate ? '<br><span style="display:inline-block;margin-top:4px;color:#64748b;font-size:12px;">Affiliate-Link</span>' : ''}`
+      ? `<a href="${escapeHtml(item.shop_link)}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;font-weight:700;border-radius:8px;padding:9px 12px;white-space:nowrap;">Jetzt kaufen</a>`
       : '<span style="display:inline-block;color:#9a3412;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:8px 10px;font-weight:700;">Kauf-Link fehlt - bitte Produkt melden</span>'
     const ingredientText = item.dailyIngredientLabels.length > 0
       ? item.dailyIngredientLabels.map(escapeHtml).join('<br>')

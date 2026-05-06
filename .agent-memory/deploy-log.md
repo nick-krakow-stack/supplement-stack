@@ -66,7 +66,10 @@ token scopes are verified.
     detail-only IP/User-Agent display.
   - Updated legal/consent preflight copy for privacy, terms, imprint,
     registration, landing, and `LegalDisclaimer`.
-  - Added context-near Affiliate-Link labels in ProductCard and stack emails.
+  - Added context-near affiliate labels in ProductCard and stack emails
+    temporarily; this was later superseded by the 2026-05-06 Affiliate CTA
+    Cleanup decision that product-near CTAs do not explicitly mark affiliate
+    links.
   - Fixed strict frontend TypeScript (`npx tsc --noEmit`) via targeted types.
 - Validation passed: frontend `npx tsc --noEmit`, frontend
   `npm run lint --if-present`, frontend `npm run build`, frontend
@@ -1201,3 +1204,23 @@ When a future agent deploys or applies migrations, append the exact date, commit
   and live `/api/demo/products` returns the same D3/Magnesium profile-backed
   fields; remote D1 shows 209 display profiles and linked
   Magnesiumcitrat/Bisglycinat/Malat form IDs.
+
+## 2026-05-06 Affiliate CTA Cleanup Deployed
+
+- Deploy command: `npx wrangler pages deploy frontend/dist --project-name supplementstack`.
+- Correct production Pages project: `supplementstack`.
+- Preview URL: `https://5e59a3f6.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`, asset `assets/index-DnxszgO5.js`.
+- Scope:
+  - Product-card buy buttons no longer append affiliate wording.
+  - Stack email buy buttons no longer append affiliate wording or secondary
+    affiliate labels.
+  - User product submission no longer exposes an Affiliate checkbox.
+  - Footer/legal disclosure remains general; the footer disclaimer no longer
+    claims individual links are marked in the interface.
+  - Admin Go-Live checklist records that product cards/buttons do not mark
+    individual links explicitly.
+- Validation passed: functions TypeScript, frontend TypeScript, frontend lint,
+  frontend build, and `git diff --check`.
+- Smoke checks passed: preview/live root 200 and preview/live
+  `/api/demo/products` returns 7 products.

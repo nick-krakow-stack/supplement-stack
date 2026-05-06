@@ -118,7 +118,7 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
     initialProduct?.container_count != null ? String(initialProduct.container_count) : '1'
   );
   const [shopLink, setShopLink] = useState(initialProduct?.shop_link ?? '');
-  const [isAffiliate, setIsAffiliate] = useState(Boolean(initialProduct?.is_affiliate));
+  const isAffiliate = Boolean(initialProduct?.is_affiliate);
   const [notes, setNotes] = useState(initialProduct?.notes ?? '');
   const [showIngredientSection, setShowIngredientSection] = useState(true);
   const [ingredientRows, setIngredientRows] = useState<IngredientFormRow[]>(() => {
@@ -965,19 +965,6 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
               className={inputClass}
               placeholder="https://..."
             />
-          </div>
-
-          <div className="flex min-h-11 items-center gap-2">
-            <input
-              id="is_affiliate"
-              type="checkbox"
-              checked={isAffiliate}
-              onChange={(e) => setIsAffiliate(e.target.checked)}
-              className="h-5 w-5 cursor-pointer rounded border-gray-300 text-indigo-600"
-            />
-            <label htmlFor="is_affiliate" className="text-sm text-gray-700 cursor-pointer">
-              Affiliate-Link
-            </label>
           </div>
 
           <div>

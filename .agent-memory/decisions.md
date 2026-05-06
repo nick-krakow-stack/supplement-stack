@@ -541,3 +541,25 @@ Rationale:
   by the Wirkstoffform, not by the seller product.
 - Centralizing this data prevents duplicated product maintenance and keeps
   future calculations/content review anchored in one fachliche source.
+
+## 2026-05-06 - Affiliate Disclosure Placement
+
+Decision: do not explicitly mark individual product cards, buy buttons, stack
+emails, or other product-near calls to action as affiliate links.
+
+Operational rule:
+- Buy buttons should say `Bei <Shop> kaufen` when the shop is known, otherwise
+  `Jetzt kaufen`.
+- Do not append `(Affiliate-Link)`, show affiliate badges, or add separate
+  affiliate labels directly on product cards, product buttons, stack email buy
+  buttons, or similar product-near surfaces.
+- Keep the general disclosure in footer/legal surfaces only, e.g. footer
+  disclaimer, Impressum, and Nutzungsbedingungen.
+- Internal admin/product QA fields may still track whether a link is an
+  affiliate/partner link for operations and policy review, but this tracking
+  must not leak into user-facing product CTAs.
+
+Rationale:
+- The owner explicitly wants product cards and buy buttons to stay clean and
+  shop-focused; the general footer/legal disclosure is the accepted disclosure
+  surface.

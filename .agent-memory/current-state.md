@@ -98,8 +98,10 @@ Launch-readiness implementation bundle is committed, deployed, and smoke-checked
 - Legal/compliance preflight text updates are live on privacy, terms, imprint,
   registration consent, landing copy, and `LegalDisclaimer`. This is a
   technical preflight, not external legal sign-off.
-- Context-near affiliate labels were added to ProductCard buy buttons and stack
-  email buy links.
+- Context-near affiliate labels that were previously added to ProductCard buy
+  buttons and stack email buy links have been superseded by the 2026-05-06
+  Affiliate CTA Cleanup decision: product-near CTAs do not explicitly mark
+  affiliate links.
 - Strict frontend TypeScript is now clean via `npx tsc --noEmit`; the previous
   frontend latent TypeScript issues were fixed as part of the integration.
 - Validation passed: frontend `npx tsc --noEmit`, frontend
@@ -1354,3 +1356,14 @@ Do not assume untracked files are disposable. Review before deleting or committi
 - Smokes passed: latest preview root 200, live root 200, unauthenticated admin
   research detail returns 401, and `/api/demo/products` returns D3 and
   Magnesium with profile-backed effect/timing fields on preview/live.
+
+## 2026-05-06 Affiliate CTA Cleanup Deployed
+
+- Product-near affiliate labels are being removed from user-facing surfaces.
+- Product cards now use only `Bei <Shop> kaufen` or `Jetzt kaufen`.
+- Stack email buy buttons now use only `Jetzt kaufen`.
+- User product submission no longer shows an Affiliate checkbox.
+- Footer/legal disclosure remains the disclosure surface; individual product
+  cards/buttons should not explicitly mention affiliate links.
+- Deployed preview: `https://5e59a3f6.supplementstack.pages.dev`.
+- Live `https://supplementstack.de` returns asset `assets/index-DnxszgO5.js`.

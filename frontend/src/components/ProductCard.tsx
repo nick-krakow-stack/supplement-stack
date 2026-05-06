@@ -232,10 +232,7 @@ export default function ProductCard({
       })
     : undefined;
   const shopName = matchedShop?.display_name ?? null;
-  const isAffiliate = Boolean(product.is_affiliate);
-  const buttonText = isAffiliate
-    ? (shopName ? `Bei ${shopName} kaufen (Affiliate-Link)` : 'Kaufen (Affiliate-Link)')
-    : (shopName ? `Bei ${shopName} kaufen` : 'Jetzt kaufen');
+  const buttonText = shopName ? `Bei ${shopName} kaufen` : 'Jetzt kaufen';
   const reportReason: 'missing_link' | 'invalid_link' = product.shop_link ? 'invalid_link' : 'missing_link';
 
   const monthlyPrice = calcMonthlyPrice(product, price);
