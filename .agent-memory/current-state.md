@@ -1281,3 +1281,18 @@ Do not assume untracked files are disposable. Review before deleting or committi
 - Live: `https://supplementstack.de`, asset `assets/index-vwRdauH5.js`.
 - Stack products now render in stack order without heuristic category grouping, and users can switch between `Kacheln` and `Liste` with localStorage persistence.
 - Smokes passed for preview/live `/` and `/demo`.
+
+## 2026-05-06 Product Card Info And Grid Order Deployed
+
+- Product cards now render `effect_summary` as a `Wirkung` section with up to four short chips when the text is comma/semicolon separated, keeping the card informative without long copy.
+- The stack card view no longer uses CSS multi-column balancing. The existing `masonry-grid` class now uses a responsive row-first CSS grid so new cards start on the left in the next row.
+- Validation passed locally: frontend ESLint, frontend TypeScript, frontend Vitest 6 tests, frontend production build, and `git diff --check` with CRLF warnings only.
+
+## 2026-05-06 Product Card Info And Grid Order Deployed Update
+
+- Commit `f85093b` deployed to Cloudflare Pages project `supplementstack`.
+- Preview: `https://3f1bbcc8.supplementstack.pages.dev`.
+- Live: `https://supplementstack.de`, assets `assets/index-BGkjPN9_.js` and `assets/index-428wN7Dg.css`.
+- Product cards show short `Wirkung` chips from existing effect summaries.
+- Card view is row-first so new rows begin on the left.
+- Smokes passed for preview/live `/` and `/demo`.

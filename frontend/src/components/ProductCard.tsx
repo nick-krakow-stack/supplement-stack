@@ -75,6 +75,14 @@ function formatEur(value: number): string {
   return value.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
 }
 
+function effectPoints(value?: string | null): string[] {
+  return (value ?? '')
+    .split(/[,;]+/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .slice(0, 4);
+}
+
 function unitLabel(unit?: string, amount?: number): string {
   const normalized = (unit ?? '').replace(/\bIU\b/gi, 'IE').replace(/\biu\b/g, 'IE').trim();
   const singular = amount == null || Math.abs(amount - 1) < 0.001;
@@ -228,6 +236,8 @@ export default function ProductCard({
   const monthlyPrice = calcMonthlyPrice(product, price);
   const daysSupply = getDaysSupply(product);
   const dose = getDose(product);
+  const effectText = product.effect_summary ?? product.form ?? '';
+  const effects = effectPoints(effectText);
   const intervalDays = getIntakeIntervalDays(product);
   const intervalLabel = intervalDays === 1 ? 'täglich' : `alle ${intervalDays} Tage`;
   const showInterval = product.intake_interval_days != null;
@@ -321,12 +331,20 @@ export default function ProductCard({
       </div>
 
       {/* Effect */}
-      {(product.effect_summary ?? product.form) && (
+      {effectText && (
         <div className="ss-product-card-effect mb-2.5">
-          <div className="text-[10px] font-bold uppercase tracking-[0.4px] text-slate-400 mb-1">Einordnung</div>
-          <div className="text-[12px] text-slate-500 leading-relaxed font-medium">
-            {product.effect_summary ?? product.form}
-          </div>
+          <div className="text-[10px] font-bold uppercase tracking-[0.4px] text-slate-400 mb-1">Wirkung</div>
+          {effects.length > 1 ? (
+            <div className="ss-effect-points">
+              {effects.map((effect) => (
+                <span key={effect}>{effect}</span>
+              ))}
+            </div>
+          ) : (
+            <div className="text-[12px] text-slate-500 leading-relaxed font-medium">
+              {effectText}
+            </div>
+          )}
         </div>
       )}
 

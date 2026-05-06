@@ -634,3 +634,21 @@ Closed and deployed:
 
 Still open:
 - Manual authenticated browser QA on desktop and mobile for the product overview toggle and footer overlay interaction.
+
+## 2026-05-06 Product Card Info And Grid Order Follow-Up
+
+Closed locally:
+- Product cards now expose short Wirkung chips from existing effect summaries.
+- Card view now lays out row-first so the next row starts on the left.
+
+Still open:
+- Manual visual QA in browser for the exact card density on desktop and mobile.
+
+## 2026-05-06 Product Card Info And Grid Order Follow-Up Update
+
+Closed and deployed:
+- Product cards now expose short Wirkung chips from existing effect summaries.
+- Card view now lays out row-first so the next row starts on the left.
+
+Still open:
+- Manual visual QA in browser for exact density on desktop and mobile.

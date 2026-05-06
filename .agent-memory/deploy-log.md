@@ -1139,3 +1139,13 @@ When a future agent deploys or applies migrations, append the exact date, commit
 - Added persisted `Kacheln` / `Liste` toggle for the product overview.
 - Validation passed before deploy: frontend ESLint, frontend TypeScript, frontend Vitest 6 tests, frontend build, and `git diff --check` with CRLF warnings only.
 - Smoke checks passed after deploy: preview/live `/` and `/demo` return HTTP 200 with the new asset.
+
+## 2026-05-06 Product Card Info And Grid Order Deployed
+
+- Commit `f85093b` deployed to Cloudflare Pages project `supplementstack`.
+- Preview URL: `https://3f1bbcc8.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`, assets `assets/index-BGkjPN9_.js` and `assets/index-428wN7Dg.css`.
+- Product cards now show existing `effect_summary` as compact `Wirkung` chips where possible.
+- The stack card view now uses a row-first responsive CSS grid instead of CSS multi-column balancing, so new rows start on the left.
+- Validation passed before deploy: frontend ESLint, frontend TypeScript, frontend Vitest 6 tests, frontend build, and `git diff --check` with CRLF warnings only.
+- Smoke checks passed after deploy: preview/live `/` and `/demo` return HTTP 200 with the new assets.

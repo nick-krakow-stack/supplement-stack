@@ -761,3 +761,30 @@ Validation:
 
 Next:
 - Manual browser QA on authenticated `/stacks` for the view toggle on desktop and mobile.
+
+## 2026-05-06 Product Card Info And Grid Order Handoff
+
+Completed locally:
+- ProductCard `Einordnung` changed to a more useful `Wirkung` section.
+- Comma/semicolon separated effect summaries are rendered as compact chips, limited to four points.
+- Card view grid now flows left-to-right by rows instead of CSS column balancing, so new rows start left.
+
+Validation:
+- Frontend ESLint passed.
+- Frontend TypeScript passed.
+- Frontend Vitest passed with 6 tests.
+- Frontend production build passed with the existing Vite chunk-size warning.
+- `git diff --check` passed with CRLF warnings only.
+
+Next:
+- Deploy and smoke-check preview/live `/demo`.
+
+## 2026-05-06 Product Card Info And Grid Order Deployed Update
+
+Completed and deployed:
+- ProductCard shows short Wirkung chips from existing effect summaries.
+- Card view uses row-first responsive grid instead of CSS column balancing.
+- Deployed preview `https://3f1bbcc8.supplementstack.pages.dev` and live `https://supplementstack.de` with assets `assets/index-BGkjPN9_.js` and `assets/index-428wN7Dg.css`.
+
+Next:
+- Manual visual QA on authenticated `/stacks` for card density and row ordering on desktop/mobile.
