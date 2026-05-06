@@ -193,11 +193,35 @@ export interface AdminIngredientResearchWarning {
   raw?: Record<string, unknown>;
 }
 
+export interface AdminIngredientResearchForm {
+  id: number;
+  ingredient_id: number;
+  name: string;
+  timing: string | null;
+  comment: string | null;
+  raw?: Record<string, unknown>;
+}
+
+export interface AdminIngredientDisplayProfile {
+  id: number;
+  ingredient_id: number;
+  form_id: number | null;
+  sub_ingredient_id: number | null;
+  effect_summary: string | null;
+  timing: string | null;
+  timing_note: string | null;
+  intake_hint: string | null;
+  card_note: string | null;
+  raw?: Record<string, unknown>;
+}
+
 export interface AdminIngredientResearchDetail {
   ingredient: AdminIngredientResearchIngredient;
   status: AdminIngredientResearchStatus;
   sources: AdminIngredientResearchSource[];
   warnings: AdminIngredientResearchWarning[];
+  forms: AdminIngredientResearchForm[];
+  display_profiles: AdminIngredientDisplayProfile[];
 }
 
 export interface AdminIngredientResearchStatusPayload {
@@ -244,6 +268,16 @@ export interface AdminIngredientResearchWarningPayload {
   min_amount?: number | null;
   unit?: string | null;
   active?: boolean | number | null;
+}
+
+export interface AdminIngredientDisplayProfilePayload {
+  form_id?: number | null;
+  sub_ingredient_id?: number | null;
+  effect_summary?: string | null;
+  timing?: string | null;
+  timing_note?: string | null;
+  intake_hint?: string | null;
+  card_note?: string | null;
 }
 
 export interface AdminKnowledgeArticle {
@@ -861,6 +895,32 @@ function parseIngredientResearchWarning(raw: Record<string, unknown>): AdminIngr
   };
 }
 
+function parseIngredientResearchForm(raw: Record<string, unknown>): AdminIngredientResearchForm {
+  return {
+    id: toIntOrNull(raw.id) ?? 0,
+    ingredient_id: toIntOrNull(raw.ingredient_id) ?? 0,
+    name: toTextOrNull(raw.name) || `Form ${toIntOrNull(raw.id) ?? ''}`,
+    timing: toTextOrNull(raw.timing),
+    comment: toTextOrNull(raw.comment),
+    raw,
+  };
+}
+
+function parseIngredientDisplayProfile(raw: Record<string, unknown>): AdminIngredientDisplayProfile {
+  return {
+    id: toIntOrNull(raw.id) ?? 0,
+    ingredient_id: toIntOrNull(raw.ingredient_id) ?? 0,
+    form_id: toIntOrNull(raw.form_id),
+    sub_ingredient_id: toIntOrNull(raw.sub_ingredient_id),
+    effect_summary: toTextOrNull(raw.effect_summary),
+    timing: toTextOrNull(raw.timing),
+    timing_note: toTextOrNull(raw.timing_note),
+    intake_hint: toTextOrNull(raw.intake_hint),
+    card_note: toTextOrNull(raw.card_note),
+    raw,
+  };
+}
+
 function normalizeIngredientResearchListResponse(raw: unknown): AdminIngredientResearchListResponse {
   const payload = raw as {
     ingredients?: unknown;
@@ -888,6 +948,8 @@ function normalizeIngredientResearchDetailResponse(raw: unknown): AdminIngredien
     status?: unknown;
     sources?: unknown;
     warnings?: unknown;
+    forms?: unknown;
+    display_profiles?: unknown;
     data?: unknown;
   };
 
@@ -903,6 +965,12 @@ function normalizeIngredientResearchDetailResponse(raw: unknown): AdminIngredien
   const rawWarnings = (payload.warnings ?? (payload.data as { warnings?: unknown } | undefined)?.warnings) as
     | unknown[]
     | undefined;
+  const rawForms = (payload.forms ?? (payload.data as { forms?: unknown } | undefined)?.forms) as
+    | unknown[]
+    | undefined;
+  const rawDisplayProfiles = (payload.display_profiles ?? (payload.data as { display_profiles?: unknown } | undefined)?.display_profiles) as
+    | unknown[]
+    | undefined;
 
   return {
     ingredient: source ? parseIngredientResearchIngredient(source) : { id: 0, name: 'Unknown', unit: null, category: null },
@@ -916,6 +984,10 @@ function normalizeIngredientResearchDetailResponse(raw: unknown): AdminIngredien
     },
     sources: Array.isArray(rawSources) ? rawSources.map((sourceEntry) => parseIngredientResearchSource(sourceEntry as Record<string, unknown>)) : [],
     warnings: Array.isArray(rawWarnings) ? rawWarnings.map((warningEntry) => parseIngredientResearchWarning(warningEntry as Record<string, unknown>)) : [],
+    forms: Array.isArray(rawForms) ? rawForms.map((formEntry) => parseIngredientResearchForm(formEntry as Record<string, unknown>)) : [],
+    display_profiles: Array.isArray(rawDisplayProfiles)
+      ? rawDisplayProfiles.map((profileEntry) => parseIngredientDisplayProfile(profileEntry as Record<string, unknown>))
+      : [],
   };
 }
 
@@ -971,6 +1043,20 @@ function normalizeWarningPayload(payload: AdminIngredientResearchWarningPayload)
       typeof payload.active === 'number'
         ? payload.active !== 0
         : payload.active,
+  };
+}
+
+function normalizeDisplayProfilePayload(
+  payload: AdminIngredientDisplayProfilePayload,
+): AdminIngredientDisplayProfilePayload {
+  return {
+    form_id: payload.form_id ?? null,
+    sub_ingredient_id: payload.sub_ingredient_id ?? null,
+    effect_summary: toTextOrNull(payload.effect_summary),
+    timing: toTextOrNull(payload.timing),
+    timing_note: toTextOrNull(payload.timing_note),
+    intake_hint: toTextOrNull(payload.intake_hint),
+    card_note: toTextOrNull(payload.card_note),
   };
 }
 
@@ -1359,6 +1445,21 @@ export async function updateIngredientResearchStatus(
   const status = data?.status ?? data;
   if (status && typeof status === 'object') return parseIngredientResearchStatus(status as Record<string, unknown>);
   return normalizeIngredientResearchDetailResponse(data).status;
+}
+
+export async function upsertIngredientDisplayProfile(
+  ingredientId: number,
+  payload: AdminIngredientDisplayProfilePayload,
+): Promise<AdminIngredientDisplayProfile> {
+  const normalized = normalizeDisplayProfilePayload(payload);
+  const { data } = await apiClient
+    .put(`/admin/ingredient-research/${ingredientId}/display-profile`, normalized)
+    .then((response) => response.data);
+  const profile = data?.profile ?? data;
+  if (profile && typeof profile === 'object') {
+    return parseIngredientDisplayProfile(profile as Record<string, unknown>);
+  }
+  throw new Error('Could not parse display profile response.');
 }
 
 export async function createIngredientResearchSource(

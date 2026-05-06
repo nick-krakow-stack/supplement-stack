@@ -26,6 +26,7 @@
 //   POST /ingredient-research/:ingredientId/warnings (admin)
 //   PUT /ingredient-research/warnings/:warningId (admin)
 //   DELETE /ingredient-research/warnings/:warningId (admin)
+//   PUT /ingredient-research/:ingredientId/display-profile (admin)
 //   GET /translations/ingredients — ingredient translations list (admin)
 //   PUT /translations/ingredients/:ingredientId/:language — upsert ingredient translation (admin)
 //   GET /translations/dose-recommendations — dose recommendation translations list (admin)
@@ -337,6 +338,28 @@ type IngredientSafetyWarningAdminRow = {
   unit: string | null
   active: number
   created_at: string
+}
+
+type IngredientFormAdminRow = {
+  id: number
+  ingredient_id: number
+  name: string
+  timing: string | null
+  comment: string | null
+}
+
+type IngredientDisplayProfileRow = {
+  id: number
+  ingredient_id: number
+  form_id: number | null
+  sub_ingredient_id: number | null
+  effect_summary: string | null
+  timing: string | null
+  timing_note: string | null
+  intake_hint: string | null
+  card_note: string | null
+  created_at: string
+  updated_at: string
 }
 
 type IngredientResearchSourceMutation = Omit<IngredientResearchSourceRow, 'id' | 'created_at' | 'updated_at'>
@@ -1279,6 +1302,77 @@ async function validateIngredientWarningPayload(
       min_amount: minAmount.value === undefined ? existing?.min_amount ?? null : minAmount.value,
       unit: unit.value === undefined ? existing?.unit ?? null : unit.value,
       active: active.value === undefined ? existing?.active ?? 1 : active.value,
+    },
+  }
+}
+
+type IngredientDisplayProfileMutation = Omit<IngredientDisplayProfileRow, 'id' | 'created_at' | 'updated_at'>
+
+async function getIngredientDisplayProfileRow(
+  db: D1Database,
+  ingredientId: number,
+  formId: number | null,
+  subIngredientId: number | null,
+): Promise<IngredientDisplayProfileRow | null> {
+  return await db.prepare(`
+    SELECT *
+    FROM ingredient_display_profiles
+    WHERE ingredient_id = ?
+      AND ((form_id IS NULL AND ? IS NULL) OR form_id = ?)
+      AND ((sub_ingredient_id IS NULL AND ? IS NULL) OR sub_ingredient_id = ?)
+  `).bind(ingredientId, formId, formId, subIngredientId, subIngredientId).first<IngredientDisplayProfileRow>()
+}
+
+async function validateIngredientDisplayProfilePayload(
+  db: D1Database,
+  body: Record<string, unknown>,
+  ingredientId: number,
+): Promise<ValidationResult<IngredientDisplayProfileMutation>> {
+  if (!(await ingredientExists(db, ingredientId))) return validationError('Ingredient not found', 404)
+
+  const formIdResult = optionalPositiveIntegerField(body, 'form_id')
+  if (!formIdResult.ok) return formIdResult
+  const subIngredientIdResult = optionalPositiveIntegerField(body, 'sub_ingredient_id')
+  if (!subIngredientIdResult.ok) return subIngredientIdResult
+
+  const formId = formIdResult.value ?? null
+  const subIngredientId = subIngredientIdResult.value ?? null
+
+  if (formId !== null && !(await formBelongsToIngredient(db, formId, ingredientId))) {
+    return validationError('form_id must belong to the ingredient')
+  }
+  if (subIngredientId !== null) {
+    const relation = await db.prepare(`
+      SELECT 1 AS exists_flag
+      FROM ingredient_sub_ingredients
+      WHERE parent_ingredient_id = ?
+        AND child_ingredient_id = ?
+    `).bind(ingredientId, subIngredientId).first<{ exists_flag: number }>()
+    if (!relation) return validationError('sub_ingredient_id must be a configured child of the ingredient')
+  }
+
+  const effectSummary = optionalTextField(body, 'effect_summary', 500)
+  if (!effectSummary.ok) return effectSummary
+  const timing = optionalTextField(body, 'timing', 255)
+  if (!timing.ok) return timing
+  const timingNote = optionalTextField(body, 'timing_note', 2000)
+  if (!timingNote.ok) return timingNote
+  const intakeHint = optionalTextField(body, 'intake_hint', 2000)
+  if (!intakeHint.ok) return intakeHint
+  const cardNote = optionalTextField(body, 'card_note', 2000)
+  if (!cardNote.ok) return cardNote
+
+  return {
+    ok: true,
+    value: {
+      ingredient_id: ingredientId,
+      form_id: formId,
+      sub_ingredient_id: subIngredientId,
+      effect_summary: effectSummary.value ?? null,
+      timing: timing.value ?? null,
+      timing_note: timingNote.value ?? null,
+      intake_hint: intakeHint.value ?? null,
+      card_note: cardNote.value ?? null,
     },
   }
 }
@@ -3235,6 +3329,29 @@ admin.get('/ingredient-research/:ingredientId', async (c) => {
     ORDER BY w.active DESC, w.severity DESC, w.id DESC
   `).bind(ingredientId).all<IngredientSafetyWarningAdminRow>()
 
+  const { results: forms } = await c.env.DB.prepare(`
+    SELECT id, ingredient_id, name, timing, comment
+    FROM ingredient_forms
+    WHERE ingredient_id = ?
+    ORDER BY score DESC, name ASC, id ASC
+  `).bind(ingredientId).all<IngredientFormAdminRow>()
+
+  const { results: displayProfiles } = await c.env.DB.prepare(`
+    SELECT *
+    FROM ingredient_display_profiles
+    WHERE ingredient_id = ?
+    ORDER BY
+      CASE
+        WHEN form_id IS NULL AND sub_ingredient_id IS NULL THEN 0
+        WHEN form_id IS NOT NULL AND sub_ingredient_id IS NULL THEN 1
+        WHEN form_id IS NULL AND sub_ingredient_id IS NOT NULL THEN 2
+        ELSE 3
+      END ASC,
+      form_id ASC,
+      sub_ingredient_id ASC,
+      id ASC
+  `).bind(ingredientId).all<IngredientDisplayProfileRow>()
+
   return c.json({
     ingredient,
     status: status ?? {
@@ -3250,6 +3367,8 @@ admin.get('/ingredient-research/:ingredientId', async (c) => {
     },
     sources,
     warnings,
+    forms,
+    display_profiles: displayProfiles,
   })
 })
 
@@ -3314,6 +3433,82 @@ admin.put('/ingredient-research/:ingredientId/status', async (c) => {
   })
 
   return c.json({ status })
+})
+
+// PUT /api/admin/ingredient-research/:ingredientId/display-profile (admin only)
+admin.put('/ingredient-research/:ingredientId/display-profile', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const ingredientId = parsePositiveId(c.req.param('ingredientId'))
+  if (ingredientId === null) return c.json({ error: 'Invalid ingredient id' }, 400)
+
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const validation = await validateIngredientDisplayProfilePayload(c.env.DB, body, ingredientId)
+  if (!validation.ok) return c.json({ error: validation.error }, validation.status ?? 400)
+
+  const data = validation.value
+  const existing = await getIngredientDisplayProfileRow(c.env.DB, ingredientId, data.form_id, data.sub_ingredient_id)
+  if (existing) {
+    await c.env.DB.prepare(`
+      UPDATE ingredient_display_profiles
+      SET
+        effect_summary = ?,
+        timing = ?,
+        timing_note = ?,
+        intake_hint = ?,
+        card_note = ?,
+        updated_at = datetime('now')
+      WHERE id = ?
+    `).bind(
+      data.effect_summary,
+      data.timing,
+      data.timing_note,
+      data.intake_hint,
+      data.card_note,
+      existing.id,
+    ).run()
+  } else {
+    await c.env.DB.prepare(`
+      INSERT INTO ingredient_display_profiles (
+        ingredient_id,
+        form_id,
+        sub_ingredient_id,
+        effect_summary,
+        timing,
+        timing_note,
+        intake_hint,
+        card_note,
+        created_at,
+        updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+    `).bind(
+      data.ingredient_id,
+      data.form_id,
+      data.sub_ingredient_id,
+      data.effect_summary,
+      data.timing,
+      data.timing_note,
+      data.intake_hint,
+      data.card_note,
+    ).run()
+  }
+
+  const profile = await getIngredientDisplayProfileRow(c.env.DB, ingredientId, data.form_id, data.sub_ingredient_id)
+  await logAdminAction(c, {
+    action: 'upsert_ingredient_display_profile',
+    entity_type: 'ingredient_display_profile',
+    entity_id: profile?.id ?? ingredientId,
+    changes: { before: existing, after: profile },
+  })
+
+  return c.json({ profile })
 })
 
 // POST /api/admin/ingredient-research/:ingredientId/sources (admin only)
@@ -3865,9 +4060,9 @@ admin.put('/user-products/:id/publish', async (c) => {
       INSERT INTO products (
         name, brand, form, price, shop_link, image_url, moderation_status, visibility,
         is_affiliate, serving_size, serving_unit, servings_per_container, container_count,
-        timing, dosage_text, effect_summary, warning_title, warning_message,
+        dosage_text, warning_title, warning_message,
         warning_type, alternative_note, source_user_product_id
-      ) VALUES (?, ?, ?, ?, ?, ?, 'approved', 'public', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, 'approved', 'public', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       userProduct.name,
       userProduct.brand,
@@ -3880,9 +4075,7 @@ admin.put('/user-products/:id/publish', async (c) => {
       userProduct.serving_unit,
       userProduct.servings_per_container,
       userProduct.container_count,
-      userProduct.timing ?? null,
       userProduct.dosage_text ?? null,
-      userProduct.effect_summary ?? null,
       userProduct.warning_title ?? null,
       userProduct.warning_message ?? null,
       userProduct.warning_type ?? null,

@@ -1,19 +1,19 @@
-﻿# Handoff
+# Handoff
 
-Last updated: 2026-05-05
+Last updated: 2026-05-06
 
 ## Continuation Point
 
 Most recent investigation: production D1 demo product data explains the
 `385,59 EUR/Monat` demo footer outlier. `/api/demo/products` exposes the main
 ingredient row as top-level `quantity`/`unit`; products without `dosage_text`
-fall back to that quantity. SchwarzkÃ¼mmelÃ¶l has `quantity=40`, `unit=mg`,
+fall back to that quantity. SchwarzkÃƒÂ¼mmelÃƒÂ¶l has `quantity=40`, `unit=mg`,
 `serving_size=2`, `serving_unit=Kapseln`, `servings_per_container=30`, and
 `dosage_text=NULL`, so the current fallback interprets `40 mg` as 40 intake
 units/day and produces 1 day supply / 341,70 EUR monthly. Product data is also
 incomplete for several demo products (D3/K2, Ginseng, Vitamin C,
-SchwarzkÃ¼mmelÃ¶l, Grapefruitkernextrakt, B-Komplex missing dosage text), while
-Magnesium's `dosage_text='2 Kapseln tÃ¤glich (888mg)'` conflicts with
+SchwarzkÃƒÂ¼mmelÃƒÂ¶l, Grapefruitkernextrakt, B-Komplex missing dosage text), while
+Magnesium's `dosage_text='2 Kapseln tÃƒÂ¤glich (888mg)'` conflicts with
 `quantity=300mg` and `serving_size=2`. No calculation change was applied after
 the user asked to verify DB data first.
 
@@ -171,7 +171,7 @@ and must be coordinated separately.
     `{ ok: true }`; the temporary stack/account were deleted afterward.
   - Live temporary-account forgot-password smoke returned the expected generic
     success response; the temporary account was deleted afterward.
-  - Live D3 mail-format smoke: product 23 with `10000 IE tÃ¤glich` and
+  - Live D3 mail-format smoke: product 23 with `10000 IE tÃƒÂ¤glich` and
     old-style `quantity=2000` returned stack total `12.5`, sent mail
     successfully, and deleted the temporary stack/account afterward.
   - Preview/live root asset check for `index-DdLiBTCO.js`.
@@ -259,7 +259,7 @@ and must be coordinated separately.
 
 ## Open Top Queue
 
-1. Entscheidung (2026-05-05): SearchPage und WishlistPage werden bewusst nur Ã¼ber
+1. Entscheidung (2026-05-05): SearchPage und WishlistPage werden bewusst nur ÃƒÂ¼ber
    Wildcard/404 erreicht; Roh-`raw`-Flags aus SearchPage-Daten gelten nicht mehr als
    Launch-Blocker. (Superseded by local cleanup: the source files are now deleted.)
 
@@ -710,7 +710,7 @@ Next:
 
 Completed:
 - Product/stack calculation now uses physical intake units for multi-unit portions. If product data says `3 Tropfen = 2000 IE`, calculations derive per-drop potency and round required intake up to whole drops/tablets/capsules.
-- D3 examples are covered by tests: `10000 IE tÃ¤glich` -> `15 Tropfen`, `66` days with the existing package data; `800 IE tÃ¤glich` -> `2 Tropfen`.
+- D3 examples are covered by tests: `10000 IE tÃƒÂ¤glich` -> `15 Tropfen`, `66` days with the existing package data; `800 IE tÃƒÂ¤glich` -> `2 Tropfen`.
 - Frontend stack/product rendering, print/PDF routine, and backend stack mail use the same whole-unit semantics through their mirrored calculation helpers.
 - Stack mail daily amount labels and frontend fallback dose labels now pluralize common count units.
 - The footer overlay no longer stays visible on top of stack modals. Desktop legal footer gets extra bottom spacing when the overlay is visible; mobile uses an in-flow sticky bottom bar.
@@ -842,3 +842,33 @@ Completed and deployed:
 
 Next:
 - Fachliche/content review of all Wirkung summaries before SEO indexing.
+
+## 2026-05-06 Ingredient Display Profiles Handoff
+
+Completed, remote-migrated, and deployed:
+- Added `ingredient_display_profiles` as the canonical source for
+  Wirkung/Timing/intake card metadata by ingredient, optional form, and
+  optional sub-ingredient.
+- Applied remote D1 migrations `0050_ingredient_display_profiles.sql` and
+  `0051_backfill_product_ingredient_forms_normalized.sql`.
+- Admin `Wirkstoff-Recherche` now loads `forms` and `display_profiles` and can
+  upsert a base profile or form-specific profile.
+- Product APIs, ingredient-product APIs, demo products, stack load rows, stack
+  mail data, and print/PDF-derived frontend stack rendering now prefer display
+  profile data.
+- Admin product details no longer edit product-level `timing` or
+  `effect_summary`; product create/update validation also ignores those fields.
+- User product form can persist `form_id` on ingredient rows.
+- Latest preview: `https://72d5b8ca.supplementstack.pages.dev`.
+
+Validation:
+- Functions `npx tsc --noEmit` passed.
+- Frontend `npx tsc --noEmit`, `npm run lint`, and `npm run build` passed.
+- `git diff --check` passed with CRLF warnings only.
+- Remote D1 verified 209 display profiles and normalized Magnesium form links.
+- Preview/live smoke: root 200; unauthenticated admin detail 401; demo products
+  show D3/Magnesium profile-backed fields.
+
+Workspace notes:
+- Unrelated `.claude/SESSION.md`, `.claude/settings.json`, root `logo.png`,
+  and `qa-preview-demo-bottombar-no-cookie.png` remain out of scope.

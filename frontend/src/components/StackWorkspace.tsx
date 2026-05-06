@@ -60,7 +60,11 @@ export interface DemoProduct {
   unit?: string;
   form?: string;
   timing?: string;
+  ingredient_timing?: string | null;
+  ingredient_timing_note?: string | null;
+  ingredient_intake_hint?: string | null;
   dosage_text?: string;
+  ingredient_effect_summary?: string | null;
   effect_summary?: string;
   warning_title?: string;
   warning_message?: string;
@@ -440,7 +444,7 @@ function AddProductModal({
     const enhanced: DemoProduct = {
       ...product,
       dosage_text: targetDosageText,
-      timing: product.timing || 'Zum Frühstück',
+      timing: product.ingredient_timing || product.timing || 'Zum Frühstück',
       intake_interval_days: product.intake_interval_days ?? 1,
     };
     enhanced.quantity = productServingsPerDay(enhanced);

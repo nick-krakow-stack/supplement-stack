@@ -103,8 +103,12 @@ export interface Product {
   servings_per_container?: number;
   container_count?: number;
   timing?: string;
+  ingredient_timing?: string | null;
+  ingredient_timing_note?: string | null;
+  ingredient_intake_hint?: string | null;
   dosage_text?: string;
   intake_interval_days?: number;
+  ingredient_effect_summary?: string | null;
   effect_summary?: string;
   warning_title?: string;
   warning_message?: string;

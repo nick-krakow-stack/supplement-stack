@@ -50,9 +50,7 @@ type ProductOptionalInput = {
   is_affiliate?: number
   discontinued_at?: string
   replacement_id?: number
-  timing?: string
   dosage_text?: string
-  effect_summary?: string
   warning_title?: string
   warning_message?: string
   warning_type?: string
@@ -294,9 +292,7 @@ function validateProductPayload(
     'image_url',
     'image_r2_key',
     'discontinued_at',
-    'timing',
     'dosage_text',
-    'effect_summary',
     'warning_title',
     'warning_message',
     'warning_type',
@@ -327,7 +323,39 @@ function validateProductPayload(
 // GET /api/products
 products.get('/', async (c) => {
   const { results } = await c.env.DB.prepare(
-    `SELECT * FROM products WHERE visibility = 'public' AND moderation_status = 'approved'`
+    `SELECT
+      p.*,
+      pi.ingredient_id,
+      pi.quantity,
+      pi.unit,
+      pi.basis_quantity,
+      pi.basis_unit,
+      pi.search_relevant,
+      pi.form_id,
+      COALESCE(idp_form.effect_summary, idp_base.effect_summary) AS effect_summary,
+      COALESCE(idp_form.effect_summary, idp_base.effect_summary) AS ingredient_effect_summary,
+      COALESCE(idp_form.timing, idp_base.timing, p.timing) AS timing,
+      COALESCE(idp_form.timing, idp_base.timing) AS ingredient_timing,
+      COALESCE(idp_form.timing_note, idp_base.timing_note) AS ingredient_timing_note,
+      COALESCE(idp_form.intake_hint, idp_base.intake_hint) AS ingredient_intake_hint
+    FROM products p
+    LEFT JOIN product_ingredients pi ON pi.id = (
+      SELECT pi2.id
+      FROM product_ingredients pi2
+      WHERE pi2.product_id = p.id
+      ORDER BY pi2.is_main DESC, pi2.search_relevant DESC, pi2.id ASC
+      LIMIT 1
+    )
+    LEFT JOIN ingredient_display_profiles idp_form
+      ON idp_form.ingredient_id = pi.ingredient_id
+     AND idp_form.form_id = pi.form_id
+     AND idp_form.sub_ingredient_id IS NULL
+    LEFT JOIN ingredient_display_profiles idp_base
+      ON idp_base.ingredient_id = pi.ingredient_id
+     AND idp_base.form_id IS NULL
+     AND idp_base.sub_ingredient_id IS NULL
+    WHERE p.visibility = 'public'
+      AND p.moderation_status = 'approved'`
   ).all<ProductRow>()
   const warningsByProduct = await loadCatalogProductSafetyWarnings(c.env.DB, results.map((product) => product.id))
   return c.json({ products: attachWarningsToProducts(results, warningsByProduct) })
@@ -336,7 +364,33 @@ products.get('/', async (c) => {
 // GET /api/products/:id
 products.get('/:id', async (c) => {
   const id = c.req.param('id')
-  const product = await c.env.DB.prepare('SELECT * FROM products WHERE id = ?').bind(id).first<ProductRow>()
+  const product = await c.env.DB.prepare(`
+    SELECT
+      p.*,
+      COALESCE(idp_form.effect_summary, idp_base.effect_summary) AS effect_summary,
+      COALESCE(idp_form.effect_summary, idp_base.effect_summary) AS ingredient_effect_summary,
+      COALESCE(idp_form.timing, idp_base.timing, p.timing) AS timing,
+      COALESCE(idp_form.timing, idp_base.timing) AS ingredient_timing,
+      COALESCE(idp_form.timing_note, idp_base.timing_note) AS ingredient_timing_note,
+      COALESCE(idp_form.intake_hint, idp_base.intake_hint) AS ingredient_intake_hint
+    FROM products p
+    LEFT JOIN product_ingredients pi ON pi.id = (
+      SELECT pi2.id
+      FROM product_ingredients pi2
+      WHERE pi2.product_id = p.id
+      ORDER BY pi2.is_main DESC, pi2.search_relevant DESC, pi2.id ASC
+      LIMIT 1
+    )
+    LEFT JOIN ingredient_display_profiles idp_form
+      ON idp_form.ingredient_id = pi.ingredient_id
+     AND idp_form.form_id = pi.form_id
+     AND idp_form.sub_ingredient_id IS NULL
+    LEFT JOIN ingredient_display_profiles idp_base
+      ON idp_base.ingredient_id = pi.ingredient_id
+     AND idp_base.form_id IS NULL
+     AND idp_base.sub_ingredient_id IS NULL
+    WHERE p.id = ?
+  `).bind(id).first<ProductRow>()
   if (!product) return c.json({ error: 'Not found' }, 404)
   const { results: ingredients } = await c.env.DB.prepare(`
     SELECT pi.*, i.name as ingredient_name, i.unit as ingredient_unit,
@@ -467,9 +521,7 @@ products.put('/:id', async (c) => {
       serving_unit = COALESCE(?, serving_unit),
       servings_per_container = COALESCE(?, servings_per_container),
       container_count = COALESCE(?, container_count),
-      timing = COALESCE(?, timing),
       dosage_text = COALESCE(?, dosage_text),
-      effect_summary = COALESCE(?, effect_summary),
       warning_title = COALESCE(?, warning_title),
       warning_message = COALESCE(?, warning_message),
       warning_type = COALESCE(?, warning_type),
@@ -489,9 +541,7 @@ products.put('/:id', async (c) => {
     data.serving_unit ?? null,
     data.servings_per_container ?? null,
     data.container_count ?? null,
-    data.timing ?? null,
     data.dosage_text ?? null,
-    data.effect_summary ?? null,
     data.warning_title ?? null,
     data.warning_message ?? null,
     data.warning_type ?? null,

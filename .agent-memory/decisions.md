@@ -1,6 +1,6 @@
 # Decisions
 
-Last updated: 2026-05-05
+Last updated: 2026-05-06
 
 ## Email Verification Flow
 
@@ -514,3 +514,30 @@ Operational rule:
 ## 2026-05-05 - Whole Physical Intake Units For Stack Calculations
 
 Decision: stack range, monthly cost, product preview, mail, and print/PDF must calculate from whole physical intake units, not abstract product portions. Product ingredient potency is derived per physical unit from `basis_quantity` where available, or from multi-unit `serving_size` as a fallback. Required units per intake day are always rounded up to whole units. Example: `3 Tropfen = 2000 IE` means one drop is about `666.67 IE`; therefore `800 IE` requires `2 Tropfen`, and `10000 IE` requires `15 Tropfen`.
+
+## 2026-05-06 - Ingredient/Form Display Profiles
+
+Decision: product-facing Wirkung, Timing, timing notes, intake hints, and card
+notes belong to ingredient/form display profiles, not to product rows.
+
+Operational rule:
+- Use `ingredient_display_profiles` for base ingredient profiles,
+  form-specific profiles, sub-ingredient profiles, and form+sub-ingredient
+  profiles.
+- Product rows keep only product/package/shop/photo metadata.
+- Potency and unit semantics live in `product_ingredients` and
+  `user_product_ingredients`, including `quantity`, `unit`, optional
+  `basis_quantity`, `basis_unit`, and `form_id`.
+- Public product, ingredient-product, demo, stack, stack-mail, and print/PDF
+  surfaces should prefer display profile data over legacy product
+  `effect_summary` or `timing`.
+- Admin product details should not edit product-level `effect_summary` or
+  `timing`; maintain those texts in Admin `Wirkstoff-Recherche`.
+- Legacy product/user_product columns may remain for deploy compatibility until
+  a later cleanup migration explicitly rebuilds those tables.
+
+Rationale:
+- Wirkung and Wechsel-/Einnahmelogik are determined by the Wirkstoff and often
+  by the Wirkstoffform, not by the seller product.
+- Centralizing this data prevents duplicated product maintenance and keeps
+  future calculations/content review anchored in one fachliche source.

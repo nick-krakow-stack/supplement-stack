@@ -490,6 +490,13 @@ ingredients.get('/:id/products', async (c) => {
         pi.search_relevant,
         pi.parent_ingredient_id,
         pi.ingredient_id AS matched_ingredient_id,
+        pi.form_id,
+        COALESCE(idp_form.effect_summary, idp_base.effect_summary) AS effect_summary,
+        COALESCE(idp_form.effect_summary, idp_base.effect_summary) AS ingredient_effect_summary,
+        COALESCE(idp_form.timing, idp_base.timing, p.timing) AS timing,
+        COALESCE(idp_form.timing, idp_base.timing) AS ingredient_timing,
+        COALESCE(idp_form.timing_note, idp_base.timing_note) AS ingredient_timing_note,
+        COALESCE(idp_form.intake_hint, idp_base.intake_hint) AS ingredient_intake_hint,
         ROW_NUMBER() OVER (
           PARTITION BY p.id
           ORDER BY
@@ -499,6 +506,14 @@ ingredients.get('/:id/products', async (c) => {
         ) AS row_rank
       FROM products p
       JOIN product_ingredients pi ON pi.product_id = p.id
+      LEFT JOIN ingredient_display_profiles idp_form
+        ON idp_form.ingredient_id = pi.ingredient_id
+       AND idp_form.form_id = pi.form_id
+       AND idp_form.sub_ingredient_id IS NULL
+      LEFT JOIN ingredient_display_profiles idp_base
+        ON idp_base.ingredient_id = pi.ingredient_id
+       AND idp_base.form_id IS NULL
+       AND idp_base.sub_ingredient_id IS NULL
       WHERE (pi.ingredient_id = ? OR pi.parent_ingredient_id = ?)
         AND pi.search_relevant = 1
         AND p.visibility = 'public'

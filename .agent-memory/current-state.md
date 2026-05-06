@@ -1,6 +1,6 @@
-﻿# Current State
+# Current State
 
-Last updated: 2026-05-05
+Last updated: 2026-05-06
 
 Model-routing workflow policy for Codex/Sub-Agent delegation is initially recorded in
 commit `2457345`; this restart handoff extends it with Spark
@@ -86,7 +86,7 @@ Launch-readiness implementation bundle is committed, deployed, and smoke-checked
 - Preview: `https://d8e1340c.supplementstack.pages.dev`.
 - Live: `https://supplementstack.de`.
 - Stack/Product calculations now use `basis_quantity`/`basis_unit`, compatible
-  mass-unit conversion (`g`/`mg`/`ug`/`µg`), interval-aware cost/range math, and
+  mass-unit conversion (`g`/`mg`/`ug`/`Âµg`), interval-aware cost/range math, and
   selected target dose in Stack product previews. IU/IE is normalized but not
   converted to mass units.
 - D3 reference case is covered by tests: `2000 IU` per `3 Tropfen`, target
@@ -162,7 +162,7 @@ remote-migrated where needed, deployed, and live-smoked:
 - Backend stack create/update now accepts and persists `intake_interval_days`;
   `loadStackItems` and stack-mail item rows return it.
 - Stack email keeps dose/intake amount on the intake day, renders the interval
-  separately as `tÃ¤glich` or `alle X Tage`, and calculates package range and
+  separately as `tÃƒÂ¤glich` or `alle X Tage`, and calculates package range and
   monthly cost from effective daily usage (`servingsPerIntake / intervalDays`).
 - Missing shop links in stack emails now show `Kauf-Link fehlt - bitte Produkt
   melden` instead of the normal `Kein Link` placeholder.
@@ -205,7 +205,7 @@ All-Inkl SMTP mail sending is committed and deployed:
   `stack_items.quantity`. Existing bad rows such as D3 `quantity=2000` are
   handled by parsing `dosage_text` and product ingredient quantity.
 - D3 example verified live: product 23 (`Vitamin D3 2000 IU Tropfen`), target
-  `10000 IE tÃ¤glich`, and old-style `quantity=2000` produced stack total
+  `10000 IE tÃƒÂ¤glich`, and old-style `quantity=2000` produced stack total
   `12.5` and sent mail successfully; temporary smoke user/stack were deleted.
 - Commit: `eff1c6a` - Feature: Send stack emails via SMTP.
 - Preview: `https://76fde482.supplementstack.pages.dev`.
@@ -562,8 +562,8 @@ Legal pages are committed and deployed:
   GitHub/GitHub Actions, and Google Analytics with non-absolute safeguards
   wording. No Apple/OAuth/Social-Login processing is described as active.
 - Scope is frontend-only; no backend or DB changes.
-- Research/legal bases used: Â§5 DDG, Â§25 TDDDG, Art. 13/6 DSGVO, Â§36 VSBG,
-  Â§18 MStV, EU ODR shutdown on 2025-07-20, and Google GA4 EU privacy/IP
+- Research/legal bases used: Ã‚Â§5 DDG, Ã‚Â§25 TDDDG, Art. 13/6 DSGVO, Ã‚Â§36 VSBG,
+  Ã‚Â§18 MStV, EU ODR shutdown on 2025-07-20, and Google GA4 EU privacy/IP
   notes.
 - Local checks passed: `npm run build` in `frontend/` and `git diff --check`
   with only LF/CRLF warnings.
@@ -719,8 +719,8 @@ Last relevant commits on `main`:
 - `2f4248b` - Fix: Restore demo product loading (`GET /api/demo/products`, frontend API-base consistency for SearchBar/SearchPage).
 - `9107e2e` - Fix: Stabilize dosage and product modal data loading (source-tab dosage dedupe, resilient product modal recommendation loading, flat product ingredient metadata, product `is_main` from ingredient join).
 - `b866c3d` - Refactor + Ops: Tech-Debt-Cleanup nach Phase C (normalizeComparableUnit removed, IngredientRow extended, pages_build_output_dir added, next-steps reorganized).
-- `11440f5` - Feature: Server-side Unit-Konvertierung â€” IU/Âµg/mg/g fÃ¼r Upper-Limit-Vergleich.
-- `4482a5f` - Feature: Admin Audit Logging â€” alle Mutationen in admin_audit_log.
+- `11440f5` - Feature: Server-side Unit-Konvertierung Ã¢â‚¬â€ IU/Ã‚Âµg/mg/g fÃƒÂ¼r Upper-Limit-Vergleich.
+- `4482a5f` - Feature: Admin Audit Logging Ã¢â‚¬â€ alle Mutationen in admin_audit_log.
 - `dd58ba2` - Feature: Add dose recommendations API (`GET /api/ingredients/:id/recommendations` from `dose_recommendations`).
 - `b1fd347` - Refactor: Split Pages API into Hono modules (`functions/api/[[path]].ts` is now a composer; modules under `functions/api/modules/*`, helpers under `functions/api/lib/*`).
 - `2ca9382` - Ops: Shared agent memory and auto-handoff workflow (`AGENTS.md`, `.agent-memory/*`, `scripts/update-agent-handoff.ps1`, `.claude/settings.json`, `.claude/memory.md` as pointer).
@@ -1044,7 +1044,7 @@ Remaining notable local paths typically include:
 - `frontend/dist/` may be present from the latest build/deploy prep and is not committed.
 - Phase D source files, docs, lockfiles, and generic setup scripts are committed in `862ed57`.
 
-`.agent-memory/handoff.md` is regenerated on every PreCompact and after every Bash tool use by `scripts/update-agent-handoff.ps1`. Treat it as a transient snapshot â€” never store unique information only there.
+`.agent-memory/handoff.md` is regenerated on every PreCompact and after every Bash tool use by `scripts/update-agent-handoff.ps1`. Treat it as a transient snapshot Ã¢â‚¬â€ never store unique information only there.
 
 Do not assume untracked files are disposable. Review before deleting or committing.
 
@@ -1233,7 +1233,7 @@ Do not assume untracked files are disposable. Review before deleting or committi
 - Live URL: `https://supplementstack.de`, asset `assets/index-CTRHry5S.js`.
 - Fixed `POST /api/stacks`: omitted `family_member_id` is now treated as `null` / self profile instead of invalid input. This unblocks first-stack creation for new accounts.
 - Frontend stack create/update paths now surface backend error messages instead of always showing generic stack save/create text.
-- Product selection preview now shows product `Inhalt` instead of `Packung`/`Portionen`, using total contained units plus calculated days supply for the selected target dose. Example: D3 drops at 10,000 IE display as roughly `1.000 Tropfen (reicht für 66 Tage)`.
+- Product selection preview now shows product `Inhalt` instead of `Packung`/`Portionen`, using total contained units plus calculated days supply for the selected target dose. Example: D3 drops at 10,000 IE display as roughly `1.000 Tropfen (reicht fÃ¼r 66 Tage)`.
 - Validation passed: functions `npx tsc -p tsconfig.json --noEmit`, frontend `npx tsc --noEmit`, frontend `npm run lint --if-present`, frontend `npm run build`, and `git diff --check` with CRLF warnings only.
 - Smoke checks passed: fresh test account could create an empty stack and save Vitamin D3 2000 IU drops at 10,000 IE daily (`quantity=5`). Preview/live root 200 with `assets/index-CTRHry5S.js`.
 - Temporary `qa-stack-%@example.com` test users/stacks/tokens/consents were deleted from production after verification; remaining count is 0.
@@ -1262,7 +1262,7 @@ Do not assume untracked files are disposable. Review before deleting or committi
 - The same calculation path is mirrored in frontend stack/product rendering and backend stack mail rendering. Print/PDF uses the frontend stack/routine rendering, so it inherits the whole-unit range/cost logic.
 - Product cards, routine fallback labels, and stack mail daily unit labels now pluralize common units such as Kapsel/Kapseln, Tablette/Tabletten, Portion/Portionen, and Softgel/Softgels.
 - Stack footer overlay is hidden while stack modals are open; the page footer receives extra desktop bottom spacing while the overlay is visible, and mobile uses an in-flow sticky footer bar to reduce overlap.
-- Visible ASCII fallback texts in the touched stack/product surfaces were corrected, including `FrÃ¼hstÃ¼ck`, `wÃ¤hlbar`, `verfÃ¼gbar`, and `Ã¶ffnen`.
+- Visible ASCII fallback texts in the touched stack/product surfaces were corrected, including `FrÃƒÂ¼hstÃƒÂ¼ck`, `wÃƒÂ¤hlbar`, `verfÃƒÂ¼gbar`, and `ÃƒÂ¶ffnen`.
 - Validation passed: frontend `npm test -- --run` (6 tests), frontend `npx tsc --noEmit`, frontend `npm run lint --if-present`, frontend `npm run build`, functions `npx tsc -p tsconfig.json --noEmit`, and `git diff --check` with CRLF warnings only.
 - Preview smoke passed: preview root returned 200 with `assets/index-HwTaoKFr.js`; preview `/demo` rendered the updated stack UI and bottom bar. Browser-Harness screenshots were taken during QA and should be treated as temporary artifacts only.
 - Live-domain note: after deploy, public recursive DNS checks for `supplementstack.de` returned `SERVFAIL` from 1.1.1.1 and 8.8.8.8. The Cloudflare zone is active, Pages still lists `supplementstack.de`, Cloudflare DNS records exist, and direct queries against `piper.ns.cloudflare.com` / `sonny.ns.cloudflare.com` return the expected A records. This looks like a recursive DNS/delegation-resolution issue to recheck before relying on the live-domain smoke.
@@ -1326,3 +1326,31 @@ Do not assume untracked files are disposable. Review before deleting or committi
 - Live: `https://supplementstack.de`, asset `assets/index-QxFzPxGu.js`.
 - ProductCard uses only real `effect_summary` for Wirkung, no form fallback.
 - Verified preview/live demo products include D3 `Immunsystem, Knochen, Hormone` and Magnesium `Muskel- & Nervenfunktion, Entspannung`.
+
+## 2026-05-06 Ingredient Display Profiles Deployed
+
+- Remote D1 migrations `0050_ingredient_display_profiles.sql` and
+  `0051_backfill_product_ingredient_forms_normalized.sql` applied successfully
+  to `supplementstack-production`.
+- Cloudflare Pages project `supplementstack` deployed. Latest preview:
+  `https://72d5b8ca.supplementstack.pages.dev`.
+- New canonical UI metadata table: `ingredient_display_profiles`.
+  Wirkstoff-/Formprofile now own card effect summaries, timing, timing notes,
+  intake hints, and card notes. Products keep product/package/link/photo data
+  plus potency rows in `product_ingredients` / `user_product_ingredients`.
+- Admin `Wirkstoff-Recherche` detail now exposes forms and display profiles and
+  lets admins edit the base Wirkstoff profile or a specific form profile.
+- Product list/detail, ingredient product lookup, demo products, stack loading,
+  stack mail, and print/PDF-backed stack rendering now read effect/timing data
+  from display profiles where available.
+- Admin product detail editing no longer writes product-level `timing` or
+  `effect_summary`.
+- User product creation now lets users select an ingredient form for the saved
+  potency row.
+- Remote verification: 209 display profiles exist; Magnesiumcitrat,
+  Magnesiumbisglycinat, and Magnesiummalat are linked to their form IDs.
+- Validation passed: functions `npx tsc --noEmit`, frontend `npx tsc --noEmit`,
+  frontend `npm run lint`, frontend `npm run build`, and `git diff --check`.
+- Smokes passed: latest preview root 200, live root 200, unauthenticated admin
+  research detail returns 401, and `/api/demo/products` returns D3 and
+  Magnesium with profile-backed effect/timing fields on preview/live.

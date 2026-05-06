@@ -43,7 +43,14 @@ demo.get('/products', async (c) => {
       pi.basis_quantity,
       pi.basis_unit,
       pi.search_relevant,
-      pi.is_main
+      pi.is_main,
+      pi.form_id,
+      COALESCE(idp_form.effect_summary, idp_base.effect_summary) AS effect_summary,
+      COALESCE(idp_form.effect_summary, idp_base.effect_summary) AS ingredient_effect_summary,
+      COALESCE(idp_form.timing, idp_base.timing, p.timing) AS timing,
+      COALESCE(idp_form.timing, idp_base.timing) AS ingredient_timing,
+      COALESCE(idp_form.timing_note, idp_base.timing_note) AS ingredient_timing_note,
+      COALESCE(idp_form.intake_hint, idp_base.intake_hint) AS ingredient_intake_hint
     FROM products p
     LEFT JOIN product_ingredients pi ON pi.id = (
       SELECT pi2.id
@@ -53,6 +60,14 @@ demo.get('/products', async (c) => {
       LIMIT 1
     )
     LEFT JOIN ingredients i ON i.id = pi.ingredient_id
+    LEFT JOIN ingredient_display_profiles idp_form
+      ON idp_form.ingredient_id = pi.ingredient_id
+     AND idp_form.form_id = pi.form_id
+     AND idp_form.sub_ingredient_id IS NULL
+    LEFT JOIN ingredient_display_profiles idp_base
+      ON idp_base.ingredient_id = pi.ingredient_id
+     AND idp_base.form_id IS NULL
+     AND idp_base.sub_ingredient_id IS NULL
     WHERE p.visibility = 'public'
       AND p.moderation_status = 'approved'
     ORDER BY

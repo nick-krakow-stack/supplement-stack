@@ -10,8 +10,16 @@ export async function searchIngredients(query: string): Promise<{ ingredients: I
 }
 
 export async function getIngredient(id: number): Promise<Ingredient> {
-  const res = await apiClient.get<Ingredient>(`/ingredients/${id}`);
-  return res.data;
+  const res = await apiClient.get<Ingredient | { ingredient?: Ingredient; forms?: IngredientForm[]; synonyms?: IngredientSynonym[] }>(`/ingredients/${id}`);
+  const payload = res.data;
+  if ('ingredient' in payload && payload.ingredient) {
+    return {
+      ...payload.ingredient,
+      forms: payload.forms ?? payload.ingredient.forms,
+      synonyms: payload.synonyms ?? payload.ingredient.synonyms,
+    };
+  }
+  return payload as Ingredient;
 }
 
 export async function createIngredient(data: Partial<Ingredient>): Promise<Ingredient> {

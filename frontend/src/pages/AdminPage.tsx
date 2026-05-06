@@ -37,9 +37,7 @@ interface AdminProduct {
   serving_unit?: string;
   servings_per_container?: number;
   container_count?: number;
-  timing?: string;
   dosage_text?: string;
-  effect_summary?: string;
   warning_title?: string;
   warning_message?: string;
   warning_type?: string;
@@ -116,9 +114,7 @@ interface AdminStats {
 
 type ProductDetailPatch = Pick<
   AdminProduct,
-  | 'timing'
   | 'dosage_text'
-  | 'effect_summary'
   | 'warning_title'
   | 'warning_message'
   | 'warning_type'
@@ -291,9 +287,7 @@ function ProductsTab() {
     setError('');
     try {
       const body: ProductDetailPatch = {
-        timing: product.timing?.trim() ?? '',
         dosage_text: product.dosage_text?.trim() ?? '',
-        effect_summary: product.effect_summary?.trim() ?? '',
         warning_title: product.warning_title?.trim() ?? '',
         warning_message: product.warning_message?.trim() ?? '',
         warning_type: product.warning_type?.trim() ?? '',
@@ -476,9 +470,9 @@ function ProductsTab() {
             <div className="rounded-2xl border border-indigo-100 bg-indigo-50/40 p-3">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <p className="text-sm font-semibold text-gray-900">Karteninfos</p>
+                  <p className="text-sm font-semibold text-gray-900">Produktdetails</p>
                   <p className="text-xs text-gray-500">
-                    Diese Angaben erscheinen direkt auf den Produktkarten.
+                    Produktbezogene Angaben. Wirkung und Timing pflegst du in der Wirkstoff-Recherche.
                   </p>
                 </div>
                 <button
@@ -491,21 +485,9 @@ function ProductsTab() {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <input
-                  value={product.timing ?? ''}
-                  onChange={(e) => updateProductField(product.id, 'timing', e.target.value)}
-                  placeholder="Timing, z.B. Zum Frühstück"
-                  className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
-                />
-                <input
                   value={product.dosage_text ?? ''}
                   onChange={(e) => updateProductField(product.id, 'dosage_text', e.target.value)}
                   placeholder="Dosierung, z.B. 2 Kapseln täglich (888mg)"
-                  className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
-                />
-                <input
-                  value={product.effect_summary ?? ''}
-                  onChange={(e) => updateProductField(product.id, 'effect_summary', e.target.value)}
-                  placeholder="Einordnung, z.B. Muskel- & Nervenfunktion"
                   className="md:col-span-2 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
                 />
                 <input

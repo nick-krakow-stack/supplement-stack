@@ -32,6 +32,10 @@ interface ProductCardProduct {
   timing?: string;
   dosage_text?: string;
   intake_interval_days?: number;
+  ingredient_effect_summary?: string | null;
+  ingredient_timing?: string | null;
+  ingredient_timing_note?: string | null;
+  ingredient_intake_hint?: string | null;
   ingredients?: Array<{
     ingredient_id: number;
     quantity?: number | null;
@@ -215,7 +219,8 @@ export default function ProductCard({
   const category = getCategory(product);
   const emoji = CATEGORY_EMOJI[category];
 
-  const timingKey = getTimingKey(product.timing);
+  const effectiveTiming = product.ingredient_timing?.trim() || product.timing;
+  const timingKey = getTimingKey(effectiveTiming);
   const timing = TIMING_STYLES[timingKey];
 
   const productHost = normalizeShopHostname(product.shop_link);
@@ -236,7 +241,7 @@ export default function ProductCard({
   const monthlyPrice = calcMonthlyPrice(product, price);
   const daysSupply = getDaysSupply(product);
   const dose = getDose(product);
-  const effectText = product.effect_summary?.trim() ?? '';
+  const effectText = product.ingredient_effect_summary?.trim() ?? product.effect_summary?.trim() ?? '';
   const effects = effectPoints(effectText);
   const intervalDays = getIntakeIntervalDays(product);
   const intervalLabel = intervalDays === 1 ? 'täglich' : `alle ${intervalDays} Tage`;
@@ -303,7 +308,7 @@ export default function ProductCard({
             {name}
           </div>
           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-extrabold ${timing.cls}`}>
-            {product.timing ? product.timing : timing.label}
+            {effectiveTiming ? effectiveTiming : timing.label}
           </span>
           {recommendationType && (
             <span className={`ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-extrabold ${

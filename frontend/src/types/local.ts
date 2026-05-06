@@ -6,9 +6,12 @@ export interface IngredientSynonym {
 }
 
 export interface IngredientForm {
+  id?: number;
+  ingredient_id?: number;
   name: string;
   comment?: string;
   bioavailability?: string;
+  timing?: string;
   is_recommended?: number;
 }
 
@@ -52,6 +55,7 @@ export interface IngredientSubIngredient {
 export interface ProductIngredient {
   ingredient_id: number;
   ingredient_name?: string;
+  form_id?: number | null;
   quantity?: number;
   unit?: string;
   basis_quantity?: number | null;
@@ -101,8 +105,12 @@ export interface Product {
   basis_unit?: string | null;
   is_main?: number;
   timing?: string;
+  ingredient_timing?: string | null;
+  ingredient_timing_note?: string | null;
+  ingredient_intake_hint?: string | null;
   dosage_text?: string;
   intake_interval_days?: number;
+  ingredient_effect_summary?: string | null;
   effect_summary?: string;
   warning_title?: string;
   warning_message?: string;

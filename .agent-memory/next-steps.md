@@ -1,6 +1,6 @@
 ﻿# Next Steps
 
-Last updated: 2026-05-05
+Last updated: 2026-05-06
 
 ## Current Baseline
 
@@ -687,3 +687,22 @@ Closed and deployed:
 
 Still open:
 - Fachliche/content review of each Wirkung summary before SEO indexing.
+
+## 2026-05-06 Ingredient Display Profiles Follow-Up
+
+Closed and deployed:
+- Wirkung, Timing, timing notes, intake hints, and card notes moved to
+  ingredient/form display profiles.
+- Admin can maintain base and form-specific display profiles in
+  `Wirkstoff-Recherche`.
+- Product, ingredient, demo, stack, stack-mail, and print/PDF surfaces use the
+  new profile-backed data path.
+- Remote D1 migrations 0050 and 0051 are applied.
+
+Still open:
+- Content review/fill-in of profile text by ingredient/form before SEO indexing.
+- Authenticated admin browser QA for saving one harmless base profile and one
+  form profile on desktop and mobile.
+- Later cleanup: after old previews are irrelevant, consider removing legacy
+  product/user_product `effect_summary` and `timing` columns through a table
+  rebuild if the compatibility cost is worth it.

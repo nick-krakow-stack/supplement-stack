@@ -11,6 +11,9 @@ import {
   updateIngredientResearchSource,
   updateIngredientResearchStatus,
   updateIngredientResearchWarning,
+  upsertIngredientDisplayProfile,
+  type AdminIngredientDisplayProfile,
+  type AdminIngredientResearchForm,
   type AdminIngredientResearchListItem,
   type AdminIngredientResearchStatus,
   type AdminIngredientResearchStatusPayload,
@@ -59,6 +62,15 @@ interface StatusFormState {
   blog_url: string;
   reviewed_at: string;
   review_due_at: string;
+}
+
+interface DisplayProfileFormState {
+  form_id: string;
+  effect_summary: string;
+  timing: string;
+  timing_note: string;
+  intake_hint: string;
+  card_note: string;
 }
 
 function getErrorMessage(error: unknown): string {
@@ -138,6 +150,44 @@ function normalizeWarningForm(form: WarningFormState): AdminIngredientResearchWa
   };
 }
 
+function normalizeDisplayProfileForm(form: DisplayProfileFormState) {
+  return {
+    form_id: parseOptionalNumber(form.form_id),
+    sub_ingredient_id: null,
+    effect_summary: form.effect_summary.trim() || null,
+    timing: form.timing.trim() || null,
+    timing_note: form.timing_note.trim() || null,
+    intake_hint: form.intake_hint.trim() || null,
+    card_note: form.card_note.trim() || null,
+  };
+}
+
+function displayProfileToForm(
+  profile: AdminIngredientDisplayProfile | undefined,
+  formId = '',
+): DisplayProfileFormState {
+  return {
+    form_id: formId,
+    effect_summary: profile?.effect_summary ?? '',
+    timing: profile?.timing ?? '',
+    timing_note: profile?.timing_note ?? '',
+    intake_hint: profile?.intake_hint ?? '',
+    card_note: profile?.card_note ?? '',
+  };
+}
+
+function findDisplayProfile(
+  profiles: AdminIngredientDisplayProfile[],
+  formId: string,
+): AdminIngredientDisplayProfile | undefined {
+  const normalizedFormId = formId.trim() ? Number(formId) : null;
+  return profiles.find(
+    (profile) =>
+      (profile.form_id ?? null) === normalizedFormId &&
+      profile.sub_ingredient_id === null,
+  );
+}
+
 function statusBadgeClass(status: string): string {
   switch (status) {
     case 'reviewed':
@@ -206,6 +256,15 @@ const EMPTY_WARNING_FORM: WarningFormState = {
   unit: '',
 };
 
+const EMPTY_DISPLAY_PROFILE_FORM: DisplayProfileFormState = {
+  form_id: '',
+  effect_summary: '',
+  timing: '',
+  timing_note: '',
+  intake_hint: '',
+  card_note: '',
+};
+
 const DEFAULT_STATUS_FILTERS = ['', 'unreviewed', 'researching', 'needs_review', 'reviewed', 'stale', 'blocked'];
 const DEFAULT_SOURCE_TYPES = ['official', 'study'];
 const DEFAULT_WARNING_SEVERITIES = ['info', 'caution', 'danger'];
@@ -228,6 +287,8 @@ export default function IngredientResearchTab() {
     status: AdminIngredientResearchStatus;
     sources: AdminIngredientResearchSource[];
     warnings: AdminIngredientResearchWarning[];
+    forms: AdminIngredientResearchForm[];
+    display_profiles: AdminIngredientDisplayProfile[];
   } | null>(null);
 
   const [statusForm, setStatusForm] = useState<StatusFormState>(EMPTY_STATUS_FORM);
@@ -244,6 +305,9 @@ export default function IngredientResearchTab() {
   const [editingWarningForm, setEditingWarningForm] = useState<WarningFormState>(EMPTY_WARNING_FORM);
   const [warningSaving, setWarningSaving] = useState<number | null>(null);
   const [warningDeleting, setWarningDeleting] = useState<number | null>(null);
+
+  const [displayProfileForm, setDisplayProfileForm] = useState<DisplayProfileFormState>(EMPTY_DISPLAY_PROFILE_FORM);
+  const [displayProfileSaving, setDisplayProfileSaving] = useState(false);
 
   useEffect(() => {
     const nextQuery = new URLSearchParams(location.search).get('q') ?? '';
@@ -306,6 +370,7 @@ export default function IngredientResearchTab() {
       const detail = await getIngredientResearchDetail(ingredientId);
       setSelectedDetail(detail);
       setSelectedIngredientName(detail.ingredient.name);
+      setDisplayProfileForm(displayProfileToForm(findDisplayProfile(detail.display_profiles, ''), ''));
       setStatusForm({
         research_status: detail.status.research_status,
         calculation_status: detail.status.calculation_status ?? '',
@@ -380,6 +445,7 @@ export default function IngredientResearchTab() {
   useEffect(() => {
     setEditingSourceId(null);
     setEditingWarningId(null);
+    setDisplayProfileForm(EMPTY_DISPLAY_PROFILE_FORM);
     setSuccessMessage('');
     setDetailError('');
   }, [selectedIngredientId]);
@@ -424,6 +490,40 @@ export default function IngredientResearchTab() {
       setDetailError(getErrorMessage(error));
     } finally {
       setSavingStatus(false);
+    }
+  };
+
+  const handleSelectDisplayProfile = (formId: string) => {
+    if (!selectedDetail) return;
+    setDisplayProfileForm(displayProfileToForm(findDisplayProfile(selectedDetail.display_profiles, formId), formId));
+  };
+
+  const handleSaveDisplayProfile = async () => {
+    if (!selectedIngredientId || !selectedDetail) return;
+    setDisplayProfileSaving(true);
+    setDetailError('');
+    try {
+      const updated = await upsertIngredientDisplayProfile(selectedIngredientId, normalizeDisplayProfileForm(displayProfileForm));
+      setSelectedDetail((previous) => {
+        if (!previous) return previous;
+        const sameScope = (profile: AdminIngredientDisplayProfile) =>
+          (profile.form_id ?? null) === (updated.form_id ?? null) &&
+          profile.sub_ingredient_id === updated.sub_ingredient_id;
+        const exists = previous.display_profiles.some(sameScope);
+        return {
+          ...previous,
+          display_profiles: exists
+            ? previous.display_profiles.map((profile) => (sameScope(profile) ? updated : profile))
+            : [...previous.display_profiles, updated],
+        };
+      });
+      setDisplayProfileForm(displayProfileToForm(updated, updated.form_id == null ? '' : String(updated.form_id)));
+      setSuccessMessage('Darstellungsprofil gespeichert.');
+      setTimeout(() => setSuccessMessage(''), 2500);
+    } catch (error) {
+      setDetailError(getErrorMessage(error));
+    } finally {
+      setDisplayProfileSaving(false);
     }
   };
 
@@ -839,6 +939,103 @@ export default function IngredientResearchTab() {
                   Blog-Link
                 </a>
               </div>
+            </div>
+
+            <div className="rounded-xl border border-gray-100 p-4">
+              <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
+                <div>
+                  <h3 className="font-semibold text-gray-900 text-sm">Darstellung & Einnahmelogik</h3>
+                  <p className="text-xs text-gray-500">
+                    Diese Angaben erscheinen auf Produktkarten, in Stack-Mail, PDF und Einnahmeplan.
+                  </p>
+                </div>
+                <span className="inline-flex rounded-full px-2 py-0.5 bg-slate-100 text-xs font-medium text-slate-600">
+                  {selectedDetail.forms.length ? `${selectedDetail.forms.length} Formen` : 'Basisprofil'}
+                </span>
+              </div>
+
+              <div className="grid gap-3 grid-cols-1 md:grid-cols-2">
+                <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
+                  Profil
+                  <select
+                    value={displayProfileForm.form_id}
+                    onChange={(event) => handleSelectDisplayProfile(event.target.value)}
+                    className="border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                  >
+                    <option value="">Basis-Wirkstoff</option>
+                    {selectedDetail.forms.map((form) => (
+                      <option key={`display-form-${form.id}`} value={form.id}>
+                        {form.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
+                  Wirkung auf Karten
+                  <input
+                    value={displayProfileForm.effect_summary}
+                    onChange={(event) =>
+                      setDisplayProfileForm((previous) => ({ ...previous, effect_summary: event.target.value }))
+                    }
+                    placeholder="z. B. Immunsystem, Knochen, Hormone"
+                    className="border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
+                  Timing
+                  <input
+                    value={displayProfileForm.timing}
+                    onChange={(event) => setDisplayProfileForm((previous) => ({ ...previous, timing: event.target.value }))}
+                    placeholder="z. B. Zum Fruehstueck"
+                    className="border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
+                  Einnahmehinweis
+                  <input
+                    value={displayProfileForm.intake_hint}
+                    onChange={(event) =>
+                      setDisplayProfileForm((previous) => ({ ...previous, intake_hint: event.target.value }))
+                    }
+                    placeholder="z. B. Mit Fett einnehmen"
+                    className="border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-sm font-medium text-gray-700 md:col-span-2">
+                  Timing-Hinweis
+                  <textarea
+                    value={displayProfileForm.timing_note}
+                    onChange={(event) =>
+                      setDisplayProfileForm((previous) => ({ ...previous, timing_note: event.target.value }))
+                    }
+                    rows={2}
+                    placeholder="Kurzer Zusatz, falls das Timing erklaert werden soll."
+                    className="border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-sm font-medium text-gray-700 md:col-span-2">
+                  Karten-Notiz
+                  <textarea
+                    value={displayProfileForm.card_note}
+                    onChange={(event) =>
+                      setDisplayProfileForm((previous) => ({ ...previous, card_note: event.target.value }))
+                    }
+                    rows={2}
+                    placeholder="Interner kurzer Text fuer spaetere Kartenlogik."
+                    className="border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-300 focus:border-indigo-400"
+                  />
+                </label>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => void handleSaveDisplayProfile()}
+                disabled={displayProfileSaving}
+                className="mt-4 inline-flex items-center justify-center gap-2 min-h-11 px-4 py-2 rounded-xl bg-indigo-600 text-white text-sm font-semibold shadow-sm hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {displayProfileSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                Profil speichern
+              </button>
             </div>
 
             <div className="rounded-xl border border-gray-100 p-4">

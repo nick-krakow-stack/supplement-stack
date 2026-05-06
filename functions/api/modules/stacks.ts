@@ -398,9 +398,13 @@ async function loadStackItems(
         p.serving_unit,
         p.servings_per_container,
         p.container_count,
-        COALESCE(si.timing, p.timing) AS timing,
+        COALESCE(si.timing, idp_form.timing, idp_base.timing, p.timing) AS timing,
         COALESCE(si.dosage_text, p.dosage_text) AS dosage_text,
-        p.effect_summary,
+        COALESCE(idp_form.effect_summary, idp_base.effect_summary) AS effect_summary,
+        COALESCE(idp_form.effect_summary, idp_base.effect_summary) AS ingredient_effect_summary,
+        COALESCE(idp_form.timing, idp_base.timing) AS ingredient_timing,
+        COALESCE(idp_form.timing_note, idp_base.timing_note) AS ingredient_timing_note,
+        COALESCE(idp_form.intake_hint, idp_base.intake_hint) AS ingredient_intake_hint,
         p.warning_title,
         p.warning_message,
         p.warning_type,
@@ -409,6 +413,21 @@ async function loadStackItems(
         si.intake_interval_days
       FROM stack_items si
       JOIN products p ON p.id = si.catalog_product_id
+      LEFT JOIN product_ingredients pi_main ON pi_main.id = (
+        SELECT pi2.id
+        FROM product_ingredients pi2
+        WHERE pi2.product_id = p.id
+        ORDER BY pi2.is_main DESC, pi2.search_relevant DESC, pi2.id ASC
+        LIMIT 1
+      )
+      LEFT JOIN ingredient_display_profiles idp_form
+        ON idp_form.ingredient_id = pi_main.ingredient_id
+       AND idp_form.form_id = pi_main.form_id
+       AND idp_form.sub_ingredient_id IS NULL
+      LEFT JOIN ingredient_display_profiles idp_base
+        ON idp_base.ingredient_id = pi_main.ingredient_id
+       AND idp_base.form_id IS NULL
+       AND idp_base.sub_ingredient_id IS NULL
       WHERE si.stack_id = ?
         AND si.catalog_product_id IS NOT NULL
 
@@ -430,9 +449,13 @@ async function loadStackItems(
         up.serving_unit,
         up.servings_per_container,
         up.container_count,
-        COALESCE(si.timing, up.timing) AS timing,
+        COALESCE(si.timing, idp_form.timing, idp_base.timing, up.timing) AS timing,
         COALESCE(si.dosage_text, up.dosage_text) AS dosage_text,
-        up.effect_summary,
+        COALESCE(idp_form.effect_summary, idp_base.effect_summary) AS effect_summary,
+        COALESCE(idp_form.effect_summary, idp_base.effect_summary) AS ingredient_effect_summary,
+        COALESCE(idp_form.timing, idp_base.timing) AS ingredient_timing,
+        COALESCE(idp_form.timing_note, idp_base.timing_note) AS ingredient_timing_note,
+        COALESCE(idp_form.intake_hint, idp_base.intake_hint) AS ingredient_intake_hint,
         up.warning_title,
         up.warning_message,
         up.warning_type,
@@ -441,6 +464,21 @@ async function loadStackItems(
         si.intake_interval_days
       FROM stack_items si
       JOIN user_products up ON up.id = si.user_product_id AND up.user_id = ?
+      LEFT JOIN user_product_ingredients upi_main ON upi_main.id = (
+        SELECT upi2.id
+        FROM user_product_ingredients upi2
+        WHERE upi2.user_product_id = up.id
+        ORDER BY upi2.is_main DESC, upi2.search_relevant DESC, upi2.id ASC
+        LIMIT 1
+      )
+      LEFT JOIN ingredient_display_profiles idp_form
+        ON idp_form.ingredient_id = upi_main.ingredient_id
+       AND idp_form.form_id = upi_main.form_id
+       AND idp_form.sub_ingredient_id IS NULL
+      LEFT JOIN ingredient_display_profiles idp_base
+        ON idp_base.ingredient_id = upi_main.ingredient_id
+       AND idp_base.form_id IS NULL
+       AND idp_base.sub_ingredient_id IS NULL
       WHERE si.stack_id = ?
         AND si.user_product_id IS NOT NULL
     )

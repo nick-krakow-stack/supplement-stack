@@ -3,7 +3,7 @@ import ModalWrapper from './ModalWrapper';
 import ImageCropModal from '../ImageCropModal';
 import SearchBar from '../SearchBar';
 import { Camera, ChevronDown, ChevronUp, Plus, X } from 'lucide-react';
-import { getSubIngredients } from '../../api/ingredients';
+import { getIngredient, getSubIngredients } from '../../api/ingredients';
 import type {
   Ingredient,
   IngredientSubIngredient,
@@ -48,6 +48,7 @@ interface IngredientFormRow {
   ingredientId: number | null;
   ingredientName: string;
   formId: number | null;
+  availableForms: Ingredient['forms'];
   quantity: string;
   unit: string;
   basisQuantity: string;
@@ -126,6 +127,7 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
       ingredientId: ingredient.ingredient_id,
       ingredientName: ingredient.ingredient_name ?? `ID ${ingredient.ingredient_id}`,
       formId: ingredient.form_id ?? null,
+      availableForms: [],
       quantity: ingredient.quantity == null ? '' : String(ingredient.quantity),
       unit: ingredient.unit ?? '',
       basisQuantity: ingredient.basis_quantity == null ? '1' : String(ingredient.basis_quantity),
@@ -155,6 +157,7 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
         ingredientId: null,
         ingredientName: '',
         formId: null,
+        availableForms: [],
         quantity: '',
         unit: '',
         basisQuantity: '',
@@ -186,6 +189,7 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
     ingredientId: null,
     ingredientName: '',
     formId: null,
+    availableForms: [],
     quantity: '',
     unit: '',
     basisQuantity: '',
@@ -256,10 +260,20 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
   };
 
   const handleSelectIngredient = async (clientId: string, ingredient: Ingredient) => {
+    let forms = ingredient.forms ?? [];
+    if (forms.length === 0) {
+      try {
+        const detail = await getIngredient(ingredient.id);
+        forms = detail.forms ?? [];
+      } catch {
+        forms = [];
+      }
+    }
     updateIngredientRow(clientId, {
       ingredientId: ingredient.id,
       ingredientName: ingredient.name,
       formId: null,
+      availableForms: forms,
       parentIngredientId: null,
       parentIngredientName: undefined,
     });
@@ -271,6 +285,7 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
       ingredientId: null,
       ingredientName: '',
       formId: null,
+      availableForms: [],
       quantity: '',
       unit: '',
       basisQuantity: '',
@@ -639,6 +654,27 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
                     onSelect={(ingredient) => handleSelectIngredient(row.clientId, ingredient)}
                     placeholder={row.ingredientId ? 'Anderen Wirkstoff suchen' : 'Wirkstoff suchen'}
                   />
+                  {row.ingredientId && row.availableForms && row.availableForms.length > 0 && (
+                    <label className="mt-2 flex flex-col gap-1 text-sm font-medium text-gray-700">
+                      Wirkstoffform
+                      <select
+                        value={row.formId ?? ''}
+                        onChange={(e) =>
+                          updateIngredientRow(row.clientId, {
+                            formId: e.target.value ? Number(e.target.value) : null,
+                          })
+                        }
+                        className={inputClass}
+                      >
+                        <option value="">Basis-Wirkstoff / keine spezielle Form</option>
+                        {row.availableForms.map((ingredientForm) => (
+                          <option key={ingredientForm.id ?? ingredientForm.name} value={ingredientForm.id ?? ''}>
+                            {ingredientForm.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
                   {row.ingredientId && (
                     <button
                       type="button"
@@ -667,7 +703,7 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
 
               <div>
                 <label className={labelClass}>
-                  Menge
+                  Wirkstoffmenge pro Einheit
                   {row.searchRelevant && <span className="text-red-500 ml-1">*</span>}
                 </label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -706,7 +742,7 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
                   />
                   <div />
                 </div>
-                <p className={fieldHintClass}>Beispiel: 1000 mg pro 4 Kapseln</p>
+                <p className={fieldHintClass}>Beispiel: 2000 IE pro 3 Tropfen oder 300 mg pro 2 Kapseln.</p>
                 {row.searchRelevant && (
                   <p className={fieldHintClass}>
                     Für Such- und Vergleichsauswertung bitte Menge, Einheit und Bezugsgröße ausfüllen.
