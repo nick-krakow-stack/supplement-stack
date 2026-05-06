@@ -236,7 +236,7 @@ export default function ProductCard({
   const monthlyPrice = calcMonthlyPrice(product, price);
   const daysSupply = getDaysSupply(product);
   const dose = getDose(product);
-  const effectText = product.effect_summary ?? product.form ?? '';
+  const effectText = product.effect_summary?.trim() ?? '';
   const effects = effectPoints(effectText);
   const intervalDays = getIntakeIntervalDays(product);
   const intervalLabel = intervalDays === 1 ? 'täglich' : `alle ${intervalDays} Tage`;

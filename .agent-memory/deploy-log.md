@@ -1159,3 +1159,14 @@ When a future agent deploys or applies migrations, append the exact date, commit
 - ProductCard `Wirkung` chips from the previous card improvement remain live.
 - Validation passed before deploy: frontend ESLint, frontend TypeScript, frontend Vitest 6 tests, frontend build, and `git diff --check` with CRLF warnings only.
 - Smoke checks passed after deploy: preview/live `/` and `/demo` return HTTP 200 with the new assets.
+
+## 2026-05-06 Product Card Wirkung Data Deployed
+
+- Commit `9cefe68` deployed to Cloudflare Pages project `supplementstack`.
+- Remote D1 migration `0049_seed_product_effect_summaries.sql` applied successfully to `supplementstack-production`.
+- Preview URL: `https://1ea620af.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`, asset `assets/index-QxFzPxGu.js`.
+- ProductCard no longer falls back from missing `effect_summary` to product `form`, preventing wrong Wirkung values such as `Tropfen`.
+- Initial public catalog products now have short Wirkung summaries; verified D3 `Immunsystem, Knochen, Hormone` and Magnesium `Muskel- & Nervenfunktion, Entspannung` through preview/live `/api/demo/products`.
+- Validation passed before deploy: frontend ESLint, frontend TypeScript, frontend Vitest 6 tests, frontend build, and `git diff --check` with CRLF warnings only.
+- Smoke checks passed after deploy: preview/live `/demo` and `/api/demo/products` return HTTP 200 with the expected summaries.

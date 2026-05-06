@@ -1310,3 +1310,19 @@ Do not assume untracked files are disposable. Review before deleting or committi
 - Live: `https://supplementstack.de`, assets `assets/index-Dsg5FQl8.js` and `assets/index-BSJnq_M0.css`.
 - True CSS-column Masonry is restored for card view. ProductCard Wirkung chips remain live.
 - Smokes passed for preview/live `/` and `/demo`.
+
+## 2026-05-06 Product Card Wirkung Data Deployed
+
+- ProductCard no longer falls back from missing `effect_summary` to product `form`, preventing wrong Wirkung values such as `Tropfen`.
+- New migration `0049_seed_product_effect_summaries.sql` seeds short Wirkung summaries for the initial public catalog products so cards can render useful descriptions like `Immunsystem, Knochen, Hormone` and `Muskel- & Nervenfunktion, Entspannung`.
+- Remote D1 migration 0049 applied successfully to `supplementstack-production` and verified for products 1-7.
+- Validation passed locally: frontend ESLint, frontend TypeScript, frontend Vitest 6 tests, frontend production build, and `git diff --check` with CRLF warnings only.
+
+## 2026-05-06 Product Card Wirkung Data Deployed Update
+
+- Commit `9cefe68` deployed to Cloudflare Pages project `supplementstack`.
+- Remote D1 migration `0049_seed_product_effect_summaries.sql` applied successfully.
+- Preview: `https://1ea620af.supplementstack.pages.dev`.
+- Live: `https://supplementstack.de`, asset `assets/index-QxFzPxGu.js`.
+- ProductCard uses only real `effect_summary` for Wirkung, no form fallback.
+- Verified preview/live demo products include D3 `Immunsystem, Knochen, Hormone` and Magnesium `Muskel- & Nervenfunktion, Entspannung`.

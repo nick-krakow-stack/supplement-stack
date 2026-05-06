@@ -814,3 +814,31 @@ Completed and deployed:
 
 Next:
 - For any future Masonry behavior changes, ask the user before changing layout type.
+
+## 2026-05-06 Product Card Wirkung Data Handoff
+
+Completed locally and remote-migrated:
+- ProductCard uses only real `effect_summary` for Wirkung, no form fallback.
+- Added and applied D1 migration `0049_seed_product_effect_summaries.sql` for initial public catalog Wirkung summaries.
+- Remote verification confirmed products 1-7 now have effect summaries.
+
+Validation:
+- Frontend ESLint passed.
+- Frontend TypeScript passed.
+- Frontend Vitest passed with 6 tests.
+- Frontend production build passed with the existing Vite chunk-size warning.
+- `git diff --check` passed with CRLF warnings only.
+
+Next:
+- Commit, deploy, and smoke-check `/demo`.
+
+## 2026-05-06 Product Card Wirkung Data Deployed Update
+
+Completed and deployed:
+- ProductCard Wirkung uses real `effect_summary` only.
+- Migration 0049 seeds short Wirkung summaries for the initial public catalog and was applied remotely.
+- Deployed preview `https://1ea620af.supplementstack.pages.dev` and live `https://supplementstack.de` with asset `assets/index-QxFzPxGu.js`.
+- Preview/live `/api/demo/products` verified D3 and Magnesium Wirkung summaries.
+
+Next:
+- Fachliche/content review of all Wirkung summaries before SEO indexing.

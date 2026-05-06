@@ -669,3 +669,21 @@ Closed and deployed:
 Still open:
 - Manual visual QA in browser for exact card density and Masonry behavior on desktop/mobile.
 - Future Masonry behavior changes require explicit confirmation before implementation.
+
+## 2026-05-06 Product Card Wirkung Data Follow-Up
+
+Closed locally and remote-migrated:
+- Cards no longer show product form as Wirkung.
+- Initial catalog products now have short effect summaries for card display.
+
+Still open:
+- Fachliche/content review of each Wirkung summary before SEO indexing.
+
+## 2026-05-06 Product Card Wirkung Data Follow-Up Update
+
+Closed and deployed:
+- Cards no longer show product form as Wirkung.
+- Initial catalog products now have short effect summaries for card display.
+
+Still open:
+- Fachliche/content review of each Wirkung summary before SEO indexing.
