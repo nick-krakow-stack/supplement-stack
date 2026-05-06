@@ -788,3 +788,29 @@ Completed and deployed:
 
 Next:
 - Manual visual QA on authenticated `/stacks` for card density and row ordering on desktop/mobile.
+
+## 2026-05-06 Masonry Reverted Handoff
+
+Completed locally:
+- Restored CSS-column Masonry for the stack card view.
+- Kept the ProductCard Wirkung chip improvement.
+
+Validation:
+- Frontend ESLint passed.
+- Frontend TypeScript passed.
+- Frontend Vitest passed with 6 tests.
+- Frontend production build passed with the existing Vite chunk-size warning.
+- `git diff --check` passed with CRLF warnings only.
+
+Next:
+- Deploy and smoke-check preview/live `/demo`.
+
+## 2026-05-06 Masonry Reverted Deployed Update
+
+Completed and deployed:
+- True CSS-column Masonry restored for card view.
+- ProductCard Wirkung chips kept.
+- Deployed preview `https://ff838684.supplementstack.pages.dev` and live `https://supplementstack.de` with assets `assets/index-Dsg5FQl8.js` and `assets/index-BSJnq_M0.css`.
+
+Next:
+- For any future Masonry behavior changes, ask the user before changing layout type.

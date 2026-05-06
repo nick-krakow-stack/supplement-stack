@@ -1296,3 +1296,17 @@ Do not assume untracked files are disposable. Review before deleting or committi
 - Product cards show short `Wirkung` chips from existing effect summaries.
 - Card view is row-first so new rows begin on the left.
 - Smokes passed for preview/live `/` and `/demo`.
+
+## 2026-05-06 Masonry Reverted
+
+- Restored the stack card view to CSS-column Masonry after user clarified that true Masonry should be kept for larger stacks.
+- Kept the improved ProductCard `Wirkung` chips from commit `6d57647`.
+- Validation passed locally: frontend ESLint, frontend TypeScript, frontend Vitest 6 tests, frontend production build, and `git diff --check` with CRLF warnings only.
+
+## 2026-05-06 Masonry Reverted Deployed Update
+
+- Commit `c9ad631` deployed to Cloudflare Pages project `supplementstack`.
+- Preview: `https://ff838684.supplementstack.pages.dev`.
+- Live: `https://supplementstack.de`, assets `assets/index-Dsg5FQl8.js` and `assets/index-BSJnq_M0.css`.
+- True CSS-column Masonry is restored for card view. ProductCard Wirkung chips remain live.
+- Smokes passed for preview/live `/` and `/demo`.

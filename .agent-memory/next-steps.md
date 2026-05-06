@@ -652,3 +652,20 @@ Closed and deployed:
 
 Still open:
 - Manual visual QA in browser for exact density on desktop and mobile.
+
+## 2026-05-06 Masonry Reverted Follow-Up
+
+Closed locally:
+- True Masonry layout restored for card view.
+
+Still open:
+- If left-first Masonry behavior is desired later, discuss a JS masonry layout or CSS masonry support tradeoffs before implementation.
+
+## 2026-05-06 Masonry Reverted Follow-Up Update
+
+Closed and deployed:
+- True Masonry layout restored for card view.
+
+Still open:
+- Manual visual QA in browser for exact card density and Masonry behavior on desktop/mobile.
+- Future Masonry behavior changes require explicit confirmation before implementation.

@@ -1149,3 +1149,13 @@ When a future agent deploys or applies migrations, append the exact date, commit
 - The stack card view now uses a row-first responsive CSS grid instead of CSS multi-column balancing, so new rows start on the left.
 - Validation passed before deploy: frontend ESLint, frontend TypeScript, frontend Vitest 6 tests, frontend build, and `git diff --check` with CRLF warnings only.
 - Smoke checks passed after deploy: preview/live `/` and `/demo` return HTTP 200 with the new assets.
+
+## 2026-05-06 Masonry Reverted Deployed
+
+- Commit `c9ad631` deployed to Cloudflare Pages project `supplementstack`.
+- Preview URL: `https://ff838684.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`, assets `assets/index-Dsg5FQl8.js` and `assets/index-BSJnq_M0.css`.
+- Restored true CSS-column Masonry for the stack card view after user clarified that Masonry should remain for larger stacks.
+- ProductCard `Wirkung` chips from the previous card improvement remain live.
+- Validation passed before deploy: frontend ESLint, frontend TypeScript, frontend Vitest 6 tests, frontend build, and `git diff --check` with CRLF warnings only.
+- Smoke checks passed after deploy: preview/live `/` and `/demo` return HTTP 200 with the new assets.
