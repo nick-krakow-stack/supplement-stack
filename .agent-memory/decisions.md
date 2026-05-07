@@ -2,6 +2,54 @@
 
 Last updated: 2026-05-07
 
+## 2026-05-07 - Wirkstoffe Forms And Precursors Model
+
+Decision: the ingredient rebuild keeps `ingredients` canonical and uses
+separate relationship tables for forms, synonyms, and editorial precursors.
+
+Operational rules:
+
+- `ingredients` contains one canonical row per Wirkstoff.
+- `ingredient_forms` contains salts, esters, derivatives, and label-facing
+  forms that should not become separate canonical Wirkstoff pages.
+- `ingredient_synonyms` contains abbreviations, spelling variants, and
+  alternative names.
+- `ingredient_sub_ingredients` remains reserved for true component
+  relationships and is not the forms mechanism.
+- `ingredient_precursors` stores editorial precursor relationships, not normal
+  search expansion.
+- The admin UI remains under `/administrator`; new admin APIs should prefer
+  `/api/admin`.
+
+Concrete classification:
+
+- L-Carnitin is canonical.
+- Acetyl-L-Carnitin is treated as a form/derivative of L-Carnitin for search
+  and product structure.
+- ALCAR and `Acetyl L Carnitin` are search/synonym spellings that should lead
+  to L-Carnitin with the Acetyl-L-Carnitin form preselected when possible.
+- Lysin and Methionin remain canonical ingredients and may link to L-Carnitin
+  through `ingredient_precursors`.
+
+Implementation status:
+
+- Implemented, remote-migrated, and deployed on 2026-05-07.
+- Remote D1 migrations `0069_ingredient_lookup_indexes.sql`,
+  `0070_ingredient_precursors.sql`, and
+  `0071_consolidate_l_carnitine_forms.sql` are applied to
+  `supplementstack-production`.
+- Ingredient IDs `60`, `65`, and `66` were removed after remapping to
+  canonical L-Carnitin `13` with forms `155`, `154`, and `158`.
+- Old form `189` was merged into form `155`.
+- `ALCAR` search now returns L-Carnitin with `matched_form_id: 155`.
+
+Rationale:
+
+- Product entry and search should avoid duplicate ingredient pages while still
+  preserving form-level filtering.
+- Precursor relationships are useful for admin/content explanation but should
+  not pollute the user-facing ingredient search.
+
 ## 2026-05-07 - Cleanup Canonical Memory And Artifacts
 
 Decision: keep only compact, canonical continuation state in shared memory and

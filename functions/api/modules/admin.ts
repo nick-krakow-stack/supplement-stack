@@ -17,6 +17,9 @@
 //   GET /ingredient-sub-ingredients (admin)
 //   PUT /ingredient-sub-ingredients (admin)
 //   DELETE /ingredient-sub-ingredients/:parentId/:childId (admin)
+//   GET /ingredients/:id/precursors (admin)
+//   POST /ingredients/:id/precursors (admin)
+//   DELETE /ingredients/:id/precursors/:precursorId (admin)
 //   GET /ingredient-research (admin)
 //   GET /ingredient-research/export (admin)
 //   GET /ingredient-research/:ingredientId (admin)
@@ -502,6 +505,16 @@ type IngredientFormAdminRow = {
   name: string
   timing: string | null
   comment: string | null
+}
+
+type IngredientPrecursorAdminRow = {
+  ingredient_id: number
+  precursor_ingredient_id: number
+  precursor_name: string
+  precursor_unit: string | null
+  sort_order: number
+  note: string | null
+  created_at: string | null
 }
 
 type IngredientDisplayProfileRow = {
@@ -3384,6 +3397,28 @@ async function ingredientExists(db: D1Database, ingredientId: number): Promise<b
   return Boolean(row)
 }
 
+async function loadIngredientPrecursors(
+  db: D1Database,
+  ingredientId: number,
+): Promise<IngredientPrecursorAdminRow[]> {
+  if (!(await hasTable(db, 'ingredient_precursors'))) return []
+  const { results } = await db.prepare(`
+    SELECT
+      p.ingredient_id,
+      p.precursor_ingredient_id,
+      pre.name AS precursor_name,
+      pre.unit AS precursor_unit,
+      p.sort_order,
+      p.note,
+      p.created_at
+    FROM ingredient_precursors p
+    JOIN ingredients pre ON pre.id = p.precursor_ingredient_id
+    WHERE p.ingredient_id = ?
+    ORDER BY p.sort_order ASC, pre.name ASC, p.precursor_ingredient_id ASC
+  `).bind(ingredientId).all<IngredientPrecursorAdminRow>()
+  return results ?? []
+}
+
 async function formBelongsToIngredient(db: D1Database, formId: number, ingredientId: number): Promise<boolean> {
   const row = await db.prepare('SELECT id FROM ingredient_forms WHERE id = ? AND ingredient_id = ?')
     .bind(formId, ingredientId)
@@ -5166,6 +5201,19 @@ admin.get('/ingredients', async (c) => {
   }
 
   const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''
+  const hasPrecursorsTable = await hasTable(c.env.DB, 'ingredient_precursors')
+  const precursorCountSelect = hasPrecursorsTable
+    ? 'COALESCE(precursor_counts.precursor_count, 0) AS precursor_count'
+    : '0 AS precursor_count'
+  const precursorCountJoin = hasPrecursorsTable
+    ? `
+      LEFT JOIN (
+        SELECT ingredient_id, COUNT(*) AS precursor_count
+        FROM ingredient_precursors
+        GROUP BY ingredient_id
+      ) precursor_counts ON precursor_counts.ingredient_id = i.id
+    `
+    : ''
   const [totalRow, listResult] = await Promise.all([
     c.env.DB.prepare(`
       SELECT COUNT(*) AS count
@@ -5196,7 +5244,10 @@ admin.get('/ingredients', async (c) => {
         COALESCE(dose_source_counts.sourced_dose_recommendation_count, 0) AS sourced_dose_recommendation_count,
         COALESCE(display_profile_counts.display_profile_count, 0) AS display_profile_count,
         COALESCE(knowledge_counts.knowledge_article_count, 0) AS knowledge_article_count,
-        COALESCE(warning_counts.warning_count, 0) AS warning_count
+        COALESCE(warning_counts.warning_count, 0) AS warning_count,
+        COALESCE(form_counts.form_count, 0) AS form_count,
+        COALESCE(synonym_counts.synonym_count, 0) AS synonym_count,
+        ${precursorCountSelect}
       FROM ingredients i
       LEFT JOIN ingredient_research_status rs ON rs.ingredient_id = i.id
       LEFT JOIN (
@@ -5270,6 +5321,17 @@ admin.get('/ingredients', async (c) => {
         WHERE active = 1
         GROUP BY ingredient_id
       ) warning_counts ON warning_counts.ingredient_id = i.id
+      LEFT JOIN (
+        SELECT ingredient_id, COUNT(*) AS form_count
+        FROM ingredient_forms
+        GROUP BY ingredient_id
+      ) form_counts ON form_counts.ingredient_id = i.id
+      LEFT JOIN (
+        SELECT ingredient_id, COUNT(*) AS synonym_count
+        FROM ingredient_synonyms
+        GROUP BY ingredient_id
+      ) synonym_counts ON synonym_counts.ingredient_id = i.id
+      ${precursorCountJoin}
       ${whereSql}
       ORDER BY COALESCE(i.category, '') ASC, i.name ASC, i.id ASC
       LIMIT ? OFFSET ?
@@ -5287,6 +5349,117 @@ admin.get('/ingredients', async (c) => {
       total,
     },
   })
+})
+
+// GET /api/admin/ingredients/:id/precursors (admin only)
+admin.get('/ingredients/:id/precursors', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const ingredientId = parsePositiveId(c.req.param('id'))
+  if (ingredientId === null) return c.json({ error: 'Invalid ingredient id' }, 400)
+  if (!(await ingredientExists(c.env.DB, ingredientId))) return c.json({ error: 'Ingredient not found' }, 404)
+
+  return c.json({ precursors: await loadIngredientPrecursors(c.env.DB, ingredientId) })
+})
+
+// POST /api/admin/ingredients/:id/precursors (admin only)
+admin.post('/ingredients/:id/precursors', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const ingredientId = parsePositiveId(c.req.param('id'))
+  if (ingredientId === null) return c.json({ error: 'Invalid ingredient id' }, 400)
+  if (!(await ingredientExists(c.env.DB, ingredientId))) return c.json({ error: 'Ingredient not found' }, 404)
+  if (!(await hasTable(c.env.DB, 'ingredient_precursors'))) {
+    return c.json({ error: 'ingredient_precursors migration is not applied' }, 503)
+  }
+
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const precursorId = optionalPositiveIntegerField(body, 'precursor_ingredient_id')
+  if (!precursorId.ok) return c.json({ error: precursorId.error }, precursorId.status ?? 400)
+  if (precursorId.value === undefined || precursorId.value === null) {
+    return c.json({ error: 'precursor_ingredient_id is required' }, 400)
+  }
+  if (precursorId.value === ingredientId) {
+    return c.json({ error: 'ingredient_id and precursor_ingredient_id must be different' }, 400)
+  }
+  if (!(await ingredientExists(c.env.DB, precursorId.value))) {
+    return c.json({ error: 'Precursor ingredient not found' }, 404)
+  }
+
+  const rawSortOrder = body.sort_order
+  const sortOrder = rawSortOrder === undefined || rawSortOrder === null || rawSortOrder === ''
+    ? 0
+    : Number(rawSortOrder)
+  if (!Number.isInteger(sortOrder)) return c.json({ error: 'sort_order must be an integer' }, 400)
+  const note = optionalText(body.note)
+
+  const existing = await c.env.DB.prepare(`
+    SELECT ingredient_id, precursor_ingredient_id
+    FROM ingredient_precursors
+    WHERE ingredient_id = ? AND precursor_ingredient_id = ?
+  `).bind(ingredientId, precursorId.value).first<{ ingredient_id: number; precursor_ingredient_id: number }>()
+  if (existing) return c.json({ error: 'Precursor relationship already exists' }, 409)
+
+  await c.env.DB.prepare(`
+    INSERT INTO ingredient_precursors (ingredient_id, precursor_ingredient_id, sort_order, note)
+    VALUES (?, ?, ?, ?)
+  `).bind(ingredientId, precursorId.value, sortOrder, note).run()
+
+  await logAdminAction(c, {
+    action: 'create_ingredient_precursor',
+    entity_type: 'ingredient_precursor',
+    entity_id: ingredientId,
+    changes: {
+      ingredient_id: ingredientId,
+      precursor_ingredient_id: precursorId.value,
+      sort_order: sortOrder,
+      note,
+    },
+  })
+
+  const created = (await loadIngredientPrecursors(c.env.DB, ingredientId))
+    .find((row) => row.precursor_ingredient_id === precursorId.value)
+  return c.json({ precursor: created ?? null }, 201)
+})
+
+// DELETE /api/admin/ingredients/:id/precursors/:precursorId (admin only)
+admin.delete('/ingredients/:id/precursors/:precursorId', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const ingredientId = parsePositiveId(c.req.param('id'))
+  const precursorId = parsePositiveId(c.req.param('precursorId'))
+  if (ingredientId === null) return c.json({ error: 'Invalid ingredient id' }, 400)
+  if (precursorId === null) return c.json({ error: 'Invalid precursor ingredient id' }, 400)
+  if (!(await hasTable(c.env.DB, 'ingredient_precursors'))) {
+    return c.json({ error: 'ingredient_precursors migration is not applied' }, 503)
+  }
+
+  const result = await c.env.DB.prepare(`
+    DELETE FROM ingredient_precursors
+    WHERE ingredient_id = ? AND precursor_ingredient_id = ?
+  `).bind(ingredientId, precursorId).run()
+  if ((d1ChangeCount(result) ?? 0) === 0) return c.json({ error: 'Not found' }, 404)
+
+  await logAdminAction(c, {
+    action: 'delete_ingredient_precursor',
+    entity_type: 'ingredient_precursor',
+    entity_id: ingredientId,
+    changes: {
+      ingredient_id: ingredientId,
+      precursor_ingredient_id: precursorId,
+    },
+  })
+
+  return c.json({ ok: true })
 })
 
 // GET /api/admin/ingredients/:id/evidence-summary (admin only)
@@ -8401,6 +8574,7 @@ admin.get('/ingredient-research/:ingredientId', async (c) => {
       sub_ingredient_id ASC,
       id ASC
   `).bind(ingredientId).all<IngredientDisplayProfileRow>()
+  const precursors = await loadIngredientPrecursors(c.env.DB, ingredientId)
 
   return c.json({
     ingredient,
@@ -8419,6 +8593,7 @@ admin.get('/ingredient-research/:ingredientId', async (c) => {
     sources,
     warnings,
     forms,
+    precursors,
     display_profiles: displayProfiles,
   })
 })

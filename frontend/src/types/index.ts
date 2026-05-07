@@ -45,6 +45,8 @@ export interface Ingredient {
   external_url?: string;
   synonyms?: IngredientSynonym[];
   forms?: IngredientForm[];
+  matched_form_id?: number | null;
+  matched_form_name?: string | null;
 }
 
 export interface ProductIngredient {
@@ -126,7 +128,7 @@ export interface StackItem {
   intake_interval_days?: number;
   dosage_text?: string;
   timing?: string;
-  ingredients?: Array<Pick<ProductIngredient, 'ingredient_id' | 'quantity' | 'unit' | 'basis_quantity' | 'basis_unit' | 'search_relevant'>>;
+  ingredients?: Array<Pick<ProductIngredient, 'ingredient_id' | 'form_id' | 'quantity' | 'unit' | 'basis_quantity' | 'basis_unit' | 'search_relevant'>>;
   product?: Product;
 }
 

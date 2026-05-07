@@ -10,6 +10,7 @@ export interface IngredientForm {
   ingredient_id?: number;
   name: string;
   comment?: string;
+  score?: number | null;
   bioavailability?: string;
   timing?: string;
   is_recommended?: number;
@@ -41,6 +42,8 @@ export interface Ingredient {
   hypo_symptoms?: string;
   hyper_symptoms?: string;
   external_url?: string;
+  matched_form_id?: number | null;
+  matched_form_name?: string | null;
 }
 
 export interface IngredientSubIngredient {

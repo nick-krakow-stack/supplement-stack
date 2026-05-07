@@ -2,8 +2,8 @@
 // Ingredients module
 // Routes (mounted at /api/ingredients):
 //   GET /           — list all
-//   GET /search     — search by name/synonym
-//   GET /:id        — single ingredient + synonyms + forms
+//   GET /search     — search by canonical name/synonym/form
+//   GET /:id        — single ingredient + synonyms + forms + precursors
 //   GET /:id/sub-ingredients
 //   GET /:id/recommendations
 //   GET /:id/dosage-guidelines
@@ -90,10 +90,32 @@ type IngredientProductRow = {
 }
 
 
+function normalizedLookupSql(expression: string): string {
+  return `lower(replace(replace(replace(${expression}, ' ', ''), '-', ''), '_', ''))`
+}
+
+function normalizeLookupValue(value: string): string {
+  return value.toLowerCase().replace(/[\s\-_]/g, '')
+}
+
 function parsePositiveInteger(value: string): number | null {
   if (!/^\d+$/.test(value)) return null
   const parsed = Number(value)
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null
+}
+
+async function hasTable(db: D1Database, tableName: string): Promise<boolean> {
+  try {
+    const row = await db.prepare(`
+      SELECT name
+      FROM sqlite_master
+      WHERE type = 'table'
+        AND name = ?
+    `).bind(tableName).first<{ name: string }>()
+    return row?.name === tableName
+  } catch {
+    return false
+  }
 }
 
 async function getSubIngredientsForParent(
@@ -198,27 +220,124 @@ ingredients.get('/', async (c) => {
 ingredients.get('/search', async (c) => {
   const q = (c.req.query('q') || '').trim()
   if (!q) return c.json({ ingredients: [] })
-  const { results: byName } = await c.env.DB.prepare(
-    'SELECT * FROM ingredients WHERE name LIKE ?'
-  ).bind(`%${q}%`).all<IngredientRow>()
-  const { results: bySynonym } = await c.env.DB.prepare(
-    'SELECT i.* FROM ingredients i JOIN ingredient_synonyms s ON s.ingredient_id = i.id WHERE s.synonym LIKE ?'
-  ).bind(`%${q}%`).all<IngredientRow>()
-  const merged = [...byName, ...bySynonym]
-  const unique = Array.from(new Map(merged.map(i => [i.id, i])).values()).slice(0, 10)
+  const qNorm = normalizeLookupValue(q)
+  if (!qNorm) return c.json({ ingredients: [] })
+
+  const { results: unique } = await c.env.DB.prepare(`
+    WITH form_shadow AS (
+      SELECT DISTINCT child.id
+      FROM ingredients child
+      JOIN ingredient_forms f
+      JOIN ingredients parent ON parent.id = f.ingredient_id
+      WHERE child.id <> parent.id
+        AND (
+          ${normalizedLookupSql('child.name')} = ${normalizedLookupSql('f.name')}
+          OR ${normalizedLookupSql('child.name')} = ${normalizedLookupSql('parent.name')} || ${normalizedLookupSql('f.name')}
+          OR ${normalizedLookupSql('child.name')} = ${normalizedLookupSql('f.name')} || ${normalizedLookupSql('parent.name')}
+          OR ${normalizedLookupSql('f.name')} LIKE ${normalizedLookupSql('child.name')} || '%'
+        )
+    ),
+    matched AS (
+      SELECT
+        i.id,
+        i.name,
+        i.unit,
+        i.description,
+        NULL AS matched_form_id,
+        NULL AS matched_form_name,
+        0 AS match_rank
+      FROM ingredients i
+      WHERE instr(${normalizedLookupSql('i.name')}, ?) > 0
+        AND NOT EXISTS (SELECT 1 FROM form_shadow fs WHERE fs.id = i.id)
+
+      UNION ALL
+
+      SELECT
+        i.id,
+        i.name,
+        i.unit,
+        i.description,
+        NULL AS matched_form_id,
+        NULL AS matched_form_name,
+        1 AS match_rank
+      FROM ingredient_synonyms s
+      JOIN ingredients i ON i.id = s.ingredient_id
+      WHERE instr(${normalizedLookupSql('s.synonym')}, ?) > 0
+        AND NOT EXISTS (SELECT 1 FROM form_shadow fs WHERE fs.id = i.id)
+
+      UNION ALL
+
+      SELECT
+        i.id,
+        i.name,
+        i.unit,
+        i.description,
+        f.id AS matched_form_id,
+        f.name AS matched_form_name,
+        2 AS match_rank
+      FROM ingredient_forms f
+      JOIN ingredients i ON i.id = f.ingredient_id
+      WHERE instr(${normalizedLookupSql('f.name')}, ?) > 0
+        AND NOT EXISTS (SELECT 1 FROM form_shadow fs WHERE fs.id = i.id)
+    ),
+    ranked AS (
+      SELECT
+        matched.*,
+        ROW_NUMBER() OVER (
+          PARTITION BY matched.id
+          ORDER BY
+            CASE
+              WHEN matched.match_rank = 0 THEN 0
+              WHEN matched.matched_form_id IS NOT NULL THEN 1
+              ELSE 2
+            END ASC,
+            matched.match_rank ASC,
+            length(matched.name) ASC,
+            matched.name ASC,
+            COALESCE(matched.matched_form_name, '') ASC
+        ) AS row_rank
+      FROM matched
+    )
+    SELECT id, name, unit, description, matched_form_id, matched_form_name, match_rank
+    FROM ranked
+    WHERE row_rank = 1
+    ORDER BY
+      CASE
+        WHEN match_rank = 0 THEN 0
+        WHEN matched_form_id IS NOT NULL THEN 1
+        ELSE 2
+      END ASC,
+      match_rank ASC,
+      length(name) ASC,
+      name ASC
+    LIMIT 10
+  `).bind(qNorm, qNorm, qNorm).all<IngredientRow & {
+    matched_form_id: number | null
+    matched_form_name: string | null
+    match_rank: number
+  }>()
+
   if (unique.length === 0) return c.json({ ingredients: [] })
   // Fetch synonyms for all matched ingredients in a single query
   const ids = unique.map(i => i.id)
   const placeholders = ids.map(() => '?').join(',')
   const { results: allSynonyms } = await c.env.DB.prepare(
-    `SELECT ingredient_id, synonym FROM ingredient_synonyms WHERE ingredient_id IN (${placeholders})`
+    `SELECT ingredient_id, synonym FROM ingredient_synonyms WHERE ingredient_id IN (${placeholders}) ORDER BY synonym ASC`
   ).bind(...ids).all<{ ingredient_id: number; synonym: string }>()
   const synMap: Record<number, Array<{ synonym: string }>> = {}
   for (const s of allSynonyms) {
     if (!synMap[s.ingredient_id]) synMap[s.ingredient_id] = []
     synMap[s.ingredient_id].push({ synonym: s.synonym })
   }
-  const ingredientsResult = unique.map(i => ({ ...i, synonyms: synMap[i.id] ?? [] }))
+  const ingredientsResult = unique.map(i => ({
+    id: i.id,
+    name: i.name,
+    unit: i.unit,
+    description: i.description,
+    matched_form_id: i.matched_form_id,
+    matched_form_name: i.matched_form_name,
+    synonyms: synMap[i.id] ?? [],
+  }))
   return c.json({ ingredients: ingredientsResult })
 })
 
@@ -243,17 +362,34 @@ ingredients.get('/:id/sub-ingredients', async (c) => {
 
 // GET /api/ingredients/:id
 ingredients.get('/:id', async (c) => {
-  const id = c.req.param('id')
+  const id = parsePositiveInteger(c.req.param('id'))
+  if (id === null) return c.json({ error: 'id must be a positive integer' }, 400)
   const ingredient = await c.env.DB.prepare('SELECT * FROM ingredients WHERE id = ?').bind(id).first<IngredientRow>()
   if (!ingredient) return c.json({ error: 'Not found' }, 404)
   const { results: synonyms } = await c.env.DB.prepare(
-    'SELECT * FROM ingredient_synonyms WHERE ingredient_id = ?'
+    'SELECT * FROM ingredient_synonyms WHERE ingredient_id = ? ORDER BY synonym ASC'
   ).bind(id).all()
   const { results: forms } = await c.env.DB.prepare(
-    'SELECT * FROM ingredient_forms WHERE ingredient_id = ?'
+    'SELECT * FROM ingredient_forms WHERE ingredient_id = ? ORDER BY score DESC, name ASC, id ASC'
   ).bind(id).all()
   const subIngredients = await getSubIngredientsForParent(c.env.DB, id)
-  return c.json({ ingredient, synonyms, forms, sub_ingredients: subIngredients })
+  const precursors = await hasTable(c.env.DB, 'ingredient_precursors')
+    ? (await c.env.DB.prepare(`
+      SELECT
+        p.ingredient_id,
+        p.precursor_ingredient_id,
+        pre.name AS precursor_name,
+        pre.unit AS precursor_unit,
+        p.sort_order,
+        p.note,
+        p.created_at
+      FROM ingredient_precursors p
+      JOIN ingredients pre ON pre.id = p.precursor_ingredient_id
+      WHERE p.ingredient_id = ?
+      ORDER BY p.sort_order ASC, pre.name ASC, p.precursor_ingredient_id ASC
+    `).bind(id).all()).results
+    : []
+  return c.json({ ingredient, synonyms, forms, sub_ingredients: subIngredients, precursors })
 })
 
 // GET /api/ingredients/:id/recommendations
@@ -477,7 +613,17 @@ ingredients.get('/:id/dosage-guidelines', async (c) => {
 
 // GET /api/ingredients/:id/products
 ingredients.get('/:id/products', async (c) => {
-  const id = c.req.param('id')
+  const id = parsePositiveInteger(c.req.param('id'))
+  if (id === null) return c.json({ error: 'id must be a positive integer' }, 400)
+  const rawFormId = c.req.query('form_id')?.trim()
+  const formId = rawFormId ? parsePositiveInteger(rawFormId) : null
+  if (rawFormId && formId === null) return c.json({ error: 'form_id must be a positive integer' }, 400)
+  if (formId !== null) {
+    const form = await c.env.DB.prepare(
+      'SELECT id FROM ingredient_forms WHERE id = ? AND ingredient_id = ?'
+    ).bind(formId, id).first<{ id: number }>()
+    if (!form) return c.json({ error: 'form_id does not belong to this ingredient' }, 400)
+  }
   const { results: products } = await c.env.DB.prepare(`
     WITH matching_rows AS (
       SELECT
@@ -515,6 +661,7 @@ ingredients.get('/:id/products', async (c) => {
        AND idp_base.form_id IS NULL
        AND idp_base.sub_ingredient_id IS NULL
       WHERE (pi.ingredient_id = ? OR pi.parent_ingredient_id = ?)
+        AND (? IS NULL OR pi.form_id = ?)
         AND pi.search_relevant = 1
         AND p.visibility = 'public'
         AND p.moderation_status = 'approved'
@@ -523,7 +670,7 @@ ingredients.get('/:id/products', async (c) => {
     FROM matching_rows
     WHERE row_rank = 1
     ORDER BY is_main DESC, name ASC
-  `).bind(id, id, id).all<IngredientProductRow>()
+  `).bind(id, id, id, formId, formId).all<IngredientProductRow>()
   const warningsByProduct = await loadCatalogProductSafetyWarnings(c.env.DB, products.map((product) => product.id))
   return c.json({ products: attachWarningsToProducts(products, warningsByProduct) })
 })

@@ -2,6 +2,64 @@
 
 Last updated: 2026-05-07
 
+## 2026-05-07 Wirkstoffe/Formen Rebuild Remote-Migrated And Deployed
+
+- Scope:
+  - Implemented canonical Wirkstoff search across ingredient names, synonyms,
+    and forms with optional `matched_form_id` / `matched_form_name`.
+  - Added optional `form_id` filtering to `/api/ingredients/:id/products`.
+  - Added `ingredient_precursors` plus admin CRUD and Administrator
+    `Wirkstoffteile` UI.
+  - Added form-selection step to the stack add flow.
+  - Consolidated L-Carnitin duplicates: old ingredients `60`, `65`, and `66`
+    into canonical ingredient `13` with forms `155`, `154`, and `158`.
+  - Merged old form `189` into form `155`.
+- Remote D1 migrations:
+  - Applied to `supplementstack-production`:
+    `0069_ingredient_lookup_indexes.sql`,
+    `0070_ingredient_precursors.sql`,
+    `0071_consolidate_l_carnitine_forms.sql`.
+  - Follow-up migration list reported no migrations to apply.
+- Pages deploy:
+  - Project: `supplementstack`.
+  - First preview before final search-ranking patch:
+    `https://c9131194.supplementstack.pages.dev`.
+  - Final preview after the ALCAR ranking patch:
+    `https://e3bb987b.supplementstack.pages.dev`.
+  - Live URL: `https://supplementstack.de`.
+- Validation:
+  - `functions`: `npx tsc -p tsconfig.json --noEmit` passed.
+  - `frontend`: `npx tsc --noEmit` passed.
+  - `frontend`: `npm run lint --if-present` passed.
+  - `frontend`: `npm run build` passed.
+  - `node --check scripts/admin-browser-smoke.mjs` passed.
+  - `node --check scripts/user-browser-smoke.mjs` passed.
+  - Final patch revalidation: functions typecheck, frontend build, and
+    `git diff --check` passed.
+- Remote D1 postflight:
+  - Only ingredient `13` remains from IDs `13`, `60`, `65`, and `66`.
+  - No references remain to ingredient IDs `60`, `65`, or `66`.
+  - Form `189` is removed; forms `154`, `155`, and `158` remain under
+    ingredient `13`.
+  - No mismatched form parents, no ingredient self-interactions, no duplicate
+    normalized synonyms under ingredient `13`, and `PRAGMA foreign_key_check`
+    returned no rows.
+- Smoke checks:
+  - Live and final preview `/api/ingredients/search?q=alcar` returned
+    L-Carnitin with `matched_form_id: 155`.
+  - Live and final preview `/api/ingredients/13/products?form_id=155`
+    exercised the new form filter.
+  - Live `/administrator/ingredients` and
+    `/administrator/ingredients/13?section=precursors` returned HTTP 200.
+  - Live unauthenticated `/api/admin/ingredients/13/precursors` returned
+    HTTP 401.
+- Notes:
+  - Authenticated owner browser QA remains open because no admin session was
+    available locally.
+  - Local D1 apply still needs the old local
+    `0009_auth_profile_extensions.sql` journal/schema mismatch fixed first if
+    local migration replay is required.
+
 ## 2026-05-07 Admin Browser-QA Text/UX Cleanup Deployed
 
 - Scope:

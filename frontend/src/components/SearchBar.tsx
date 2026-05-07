@@ -214,6 +214,11 @@ export default function SearchBar({ onSelect, placeholder = 'Wirkstoff suchen…
               } ${index > 0 ? 'border-t border-slate-100' : ''}`}
             >
               <span className="font-medium text-sm">{ingredient.name}</span>
+              {ingredient.matched_form_name && (
+                <span className="text-xs font-semibold text-blue-500 mt-0.5 truncate">
+                  Form: {ingredient.matched_form_name}
+                </span>
+              )}
               {ingredient.synonyms && ingredient.synonyms.length > 0 && (
                 <span className="text-xs text-gray-400 mt-0.5 truncate">
                   {ingredient.synonyms.map((s) => s.synonym).join(', ')}

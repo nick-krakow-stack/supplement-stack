@@ -11,8 +11,8 @@ Last updated: 2026-05-07
   - Database migrations: `d1-migrations/*`
   - Cloudflare config: `wrangler.toml` and `wrangler.maintenance.toml`
 - Live domain: `https://supplementstack.de`.
-- Latest documented admin cleanup preview:
-  `https://6cd86fa0.supplementstack.pages.dev`.
+- Latest documented deployed preview:
+  `https://e3bb987b.supplementstack.pages.dev`.
 - The active admin frontend is `/administrator`.
 - `/api/admin` remains the backend API namespace.
 - The old frontend `/admin` route was removed during cleanup. Use
@@ -37,6 +37,49 @@ Last updated: 2026-05-07
   refactor candidate.
 
 ## Latest Completed Work
+
+### 2026-05-07 Wirkstoffe/Formen Rebuild - Remote-Migrated And Deployed
+
+- `.agent-memory/wirkstoffe_rebuild.md` was normalized into a concrete
+  implementation plan and updated to the current implementation state.
+- Implemented the Wirkstoffe/Formen rebuild:
+  - normalized ingredient search across canonical names, synonyms, and forms
+  - suppression of old ingredient rows that are identifiable as forms under a
+    different canonical ingredient
+  - optional `matched_form_id` / `matched_form_name` in search results
+  - optional `form_id` product filtering for `/api/ingredients/:id/products`
+  - `ingredient_precursors` migration and admin CRUD API
+  - Stack modal form-selection step before dosage/products
+  - Administrator Ingredient Detail `Wirkstoffteile` tab
+  - Administrator Ingredients list structure counts for forms, synonyms, and
+    precursors
+- Current modeling decision:
+  - canonical Wirkstoffe remain in `ingredients`
+  - forms/derivatives/salts/esters move to `ingredient_forms`
+  - spelling variants and abbreviations stay in `ingredient_synonyms`
+  - editorial precursor relationships use the `ingredient_precursors` table
+  - L-Carnitin is canonical; Acetyl-L-Carnitin is treated as a form/derivative
+    of L-Carnitin for search/product structure
+- Remote read-only audit was written to
+  `_research_raw/ingredient_consolidation_audit.md`.
+- Remote D1 migrations applied successfully to `supplementstack-production`:
+  - `0069_ingredient_lookup_indexes.sql`
+  - `0070_ingredient_precursors.sql`
+  - `0071_consolidate_l_carnitine_forms.sql`
+- L-Carnitin consolidation is complete in remote D1:
+  - old ingredient `60` Acetyl-L-Carnitin -> ingredient `13`, form `155`
+  - old ingredient `65` L-Carnitin Tartrat -> ingredient `13`, form `154`
+  - old ingredient `66` L-Carnitin Fumarat -> ingredient `13`, form `158`
+  - old form `189` was merged into form `155`
+  - old product/user-product ingredient, interaction, synonym, display-profile,
+    dose, sub-ingredient, and JSON blog references were remapped or removed
+    without remaining references to `60`, `65`, `66`, or `189`
+- Live API checks passed after deploy:
+  - `/api/ingredients/search?q=alcar` returns `13` L-Carnitin with
+    `matched_form_id: 155`
+  - `/api/ingredients/13/products?form_id=155` uses the new form filter
+  - `/administrator/ingredients` and
+    `/administrator/ingredients/13?section=precursors` returned HTTP 200
 
 ### 2026-05-07 Worktree Cleanup - Local
 
@@ -103,11 +146,36 @@ Last updated: 2026-05-07
 
 ## Validation Status
 
-- Current cleanup validation still needs to run after this local work:
-  - functions TypeScript
-  - frontend TypeScript
-  - frontend lint/build
-  - smoke-script syntax checks
+- Cleanup validation passed before commit `cec3f89`:
+  - `functions`: `npx tsc -p tsconfig.json --noEmit`
+  - `frontend`: `npx tsc --noEmit`
+  - `frontend`: `npm run lint --if-present`
+  - `frontend`: `npm run build`
+  - `node --check scripts/admin-browser-smoke.mjs`
+  - `node --check scripts/user-browser-smoke.mjs`
+  - `git diff --check`
+- Current Wirkstoffe/Formen validation passed before remote deploy:
+  - `functions`: `npx tsc -p tsconfig.json --noEmit`
+  - `frontend`: `npx tsc --noEmit`
+  - `frontend`: `npm run lint --if-present`
+  - `frontend`: `npm run build`
+  - `node --check scripts/admin-browser-smoke.mjs`
+  - `node --check scripts/user-browser-smoke.mjs`
+  - `git diff --check`
+- Additional validation after the final ALCAR search-ranking patch passed:
+  - `functions`: `npx tsc -p tsconfig.json --noEmit`
+  - `frontend`: `npm run build`
+  - `git diff --check`
+- Remote D1 postflight passed:
+  - no old references to ingredient IDs `60`, `65`, or `66`
+  - no old form `189`
+  - no ingredient/form parent mismatches in user product ingredients
+  - no ingredient self-interactions
+  - no duplicate normalized synonyms under ingredient `13`
+  - `PRAGMA foreign_key_check` returned no rows
+- Local D1 migration apply is blocked before the new migrations by an old local
+  schema/journal mismatch at `0009_auth_profile_extensions.sql`
+  (`no such column: google_id`). Remote D1 migration and postflight worked.
 - Authenticated owner browser QA remains the final acceptance gate for the new
   admin/user workflows.
 
@@ -116,6 +184,7 @@ Last updated: 2026-05-07
 - Final authenticated owner browser QA:
   - login/session persistence
   - stack create/edit/product add/remove/replacement
+  - stack form selection for ingredients with forms
   - user product submit
   - Product Detail overview/moderation/affiliate/Wirkstoffe/image flows
   - Product-QA harmless save

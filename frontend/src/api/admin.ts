@@ -62,6 +62,8 @@ export interface IngredientLookup {
   id: number;
   name: string;
   unit?: string | null;
+  matched_form_id?: number | null;
+  matched_form_name?: string | null;
 }
 
 export interface AdminIngredientListItem extends IngredientLookup {
@@ -81,6 +83,9 @@ export interface AdminIngredientListItem extends IngredientLookup {
   display_profile_count: number;
   knowledge_article_count: number;
   warning_count: number;
+  form_count: number;
+  synonym_count: number;
+  precursor_count: number;
   has_blog_url: boolean;
   raw?: Record<string, unknown>;
 }
@@ -444,6 +449,17 @@ export interface AdminIngredientResearchForm {
   raw?: Record<string, unknown>;
 }
 
+export interface AdminIngredientPrecursor {
+  ingredient_id: number;
+  precursor_ingredient_id: number;
+  precursor_name: string;
+  precursor_unit: string | null;
+  sort_order: number;
+  note: string | null;
+  created_at: string | null;
+  raw?: Record<string, unknown>;
+}
+
 export interface AdminIngredientDisplayProfile {
   id: number;
   ingredient_id: number;
@@ -464,6 +480,7 @@ export interface AdminIngredientResearchDetail {
   sources: AdminIngredientResearchSource[];
   warnings: AdminIngredientResearchWarning[];
   forms: AdminIngredientResearchForm[];
+  precursors: AdminIngredientPrecursor[];
   display_profiles: AdminIngredientDisplayProfile[];
 }
 
@@ -1307,6 +1324,9 @@ function parseAdminIngredientListItem(raw: Record<string, unknown>): AdminIngred
     display_profile_count: toIntOrNull(raw.display_profile_count) ?? 0,
     knowledge_article_count: toIntOrNull(raw.knowledge_article_count) ?? 0,
     warning_count: toIntOrNull(raw.warning_count) ?? 0,
+    form_count: toIntOrNull(raw.form_count) ?? 0,
+    synonym_count: toIntOrNull(raw.synonym_count) ?? 0,
+    precursor_count: toIntOrNull(raw.precursor_count) ?? 0,
     has_blog_url: toBooleanOrNull(raw.has_blog_url) ?? (toIntOrNull(raw.has_blog_url) ?? 0) > 0,
     raw,
   };
@@ -1656,6 +1676,20 @@ function parseIngredientResearchForm(raw: Record<string, unknown>): AdminIngredi
   };
 }
 
+function parseIngredientPrecursor(raw: Record<string, unknown>): AdminIngredientPrecursor {
+  const precursorId = toIntOrNull(raw.precursor_ingredient_id ?? raw.id) ?? 0;
+  return {
+    ingredient_id: toIntOrNull(raw.ingredient_id) ?? 0,
+    precursor_ingredient_id: precursorId,
+    precursor_name: toTextOrNull(raw.precursor_name ?? raw.name) || `Wirkstoff ${precursorId}`,
+    precursor_unit: toTextOrNull(raw.precursor_unit ?? raw.unit),
+    sort_order: toIntOrNull(raw.sort_order) ?? 0,
+    note: toTextOrNull(raw.note),
+    created_at: toDateOrNull(raw.created_at),
+    raw,
+  };
+}
+
 function parseIngredientDisplayProfile(raw: Record<string, unknown>): AdminIngredientDisplayProfile {
   return {
     id: toIntOrNull(raw.id) ?? 0,
@@ -1700,6 +1734,7 @@ function normalizeIngredientResearchDetailResponse(raw: unknown): AdminIngredien
     sources?: unknown;
     warnings?: unknown;
     forms?: unknown;
+    precursors?: unknown;
     display_profiles?: unknown;
     data?: unknown;
   };
@@ -1717,6 +1752,9 @@ function normalizeIngredientResearchDetailResponse(raw: unknown): AdminIngredien
     | unknown[]
     | undefined;
   const rawForms = (payload.forms ?? (payload.data as { forms?: unknown } | undefined)?.forms) as
+    | unknown[]
+    | undefined;
+  const rawPrecursors = (payload.precursors ?? (payload.data as { precursors?: unknown } | undefined)?.precursors) as
     | unknown[]
     | undefined;
   const rawDisplayProfiles = (payload.display_profiles ?? (payload.data as { display_profiles?: unknown } | undefined)?.display_profiles) as
@@ -1737,6 +1775,7 @@ function normalizeIngredientResearchDetailResponse(raw: unknown): AdminIngredien
     sources: Array.isArray(rawSources) ? rawSources.map((sourceEntry) => parseIngredientResearchSource(sourceEntry as Record<string, unknown>)) : [],
     warnings: Array.isArray(rawWarnings) ? rawWarnings.map((warningEntry) => parseIngredientResearchWarning(warningEntry as Record<string, unknown>)) : [],
     forms: Array.isArray(rawForms) ? rawForms.map((formEntry) => parseIngredientResearchForm(formEntry as Record<string, unknown>)) : [],
+    precursors: Array.isArray(rawPrecursors) ? rawPrecursors.map((entry) => parseIngredientPrecursor(entry as Record<string, unknown>)) : [],
     display_profiles: Array.isArray(rawDisplayProfiles)
       ? rawDisplayProfiles.map((profileEntry) => parseIngredientDisplayProfile(profileEntry as Record<string, unknown>))
       : [],
@@ -2697,6 +2736,42 @@ export async function getIngredientResearchItems(params: {
 export async function getIngredientResearchDetail(ingredientId: number): Promise<AdminIngredientResearchDetail> {
   const { data } = await apiClient.get(`/admin/ingredient-research/${ingredientId}`).then((response) => response);
   return normalizeIngredientResearchDetailResponse(data);
+}
+
+export async function getIngredientPrecursors(ingredientId: number): Promise<AdminIngredientPrecursor[]> {
+  const { data } = await apiClient.get<Record<string, unknown>>(`/admin/ingredients/${ingredientId}/precursors`);
+  const rows = Array.isArray(data.precursors) ? data.precursors : [];
+  return rows.map((entry) => parseIngredientPrecursor(entry as Record<string, unknown>));
+}
+
+export async function createIngredientPrecursor(
+  ingredientId: number,
+  payload: {
+    precursor_ingredient_id: number;
+    sort_order?: number | null;
+    note?: string | null;
+  },
+): Promise<AdminIngredientPrecursor> {
+  const { data } = await apiClient.post<Record<string, unknown>>(
+    `/admin/ingredients/${ingredientId}/precursors`,
+    {
+      precursor_ingredient_id: payload.precursor_ingredient_id,
+      sort_order: payload.sort_order ?? 0,
+      note: toTrimmedOrNull(payload.note),
+    },
+  );
+  const created = data.precursor ?? data;
+  if (created && typeof created === 'object') {
+    return parseIngredientPrecursor(created as Record<string, unknown>);
+  }
+  throw new Error('Could not parse precursor response.');
+}
+
+export async function deleteIngredientPrecursor(
+  ingredientId: number,
+  precursorIngredientId: number,
+): Promise<void> {
+  await apiClient.delete(`/admin/ingredients/${ingredientId}/precursors/${precursorIngredientId}`);
 }
 
 export async function updateIngredientResearchStatus(

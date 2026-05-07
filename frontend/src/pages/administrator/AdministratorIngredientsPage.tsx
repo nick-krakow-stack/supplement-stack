@@ -50,6 +50,18 @@ function coverageScore(ingredient: AdminIngredientListItem): { done: number; tot
   };
 }
 
+function structureScore(ingredient: AdminIngredientListItem): { done: number; total: number } {
+  const checks = [
+    ingredient.form_count > 0,
+    ingredient.synonym_count > 0,
+    ingredient.precursor_count > 0,
+  ];
+  return {
+    done: checks.filter(Boolean).length,
+    total: checks.length,
+  };
+}
+
 function coverageTone(ingredient: AdminIngredientListItem): 'ok' | 'warn' | 'info' {
   const score = coverageScore(ingredient);
   if (score.done === score.total) return 'ok';
@@ -95,6 +107,9 @@ function IngredientCoverage({ ingredient }: { ingredient: AdminIngredientListIte
         detail={countLabel(ingredient.dose_source_link_count, 'Link')}
       />
       <CoverageBadge ok={ingredient.display_profile_count > 0} label="Profil" detail={countLabel(ingredient.display_profile_count, 'Profil')} />
+      <CoverageBadge ok={ingredient.form_count > 0} label="Formen" detail={countLabel(ingredient.form_count, 'Form')} />
+      <CoverageBadge ok={ingredient.synonym_count > 0} label="Synonyme" detail={countLabel(ingredient.synonym_count, 'Synonym')} />
+      <CoverageBadge ok={ingredient.precursor_count > 0} label="Wirkstoffteile" detail={countLabel(ingredient.precursor_count, 'Teil')} />
     </div>
   );
 }
@@ -265,6 +280,9 @@ export default function AdministratorIngredientsPage() {
                           <AdminBadge tone={coverageTone(ingredient)}>
                             {score.done}/{score.total} erledigt
                           </AdminBadge>
+                          <AdminBadge tone={structureScore(ingredient).done > 0 ? 'info' : 'warn'}>
+                            Struktur {structureScore(ingredient).done}/{structureScore(ingredient).total}
+                          </AdminBadge>
                           <AdminBadge tone="info">{researchStatusLabel(ingredient.research_status)}</AdminBadge>
                           <AdminBadge>{calculationStatusLabel(ingredient.calculation_status)}</AdminBadge>
                           {ingredient.source_count > 0 && <AdminBadge>{ingredient.source_count} Quellen</AdminBadge>}
@@ -288,6 +306,12 @@ export default function AdministratorIngredientsPage() {
                           </Link>
                           <Link to={`/administrator/ingredients/${ingredient.id}?section=dosing`} className="admin-btn admin-btn-sm">
                             Dosiswerte
+                          </Link>
+                          <Link to={`/administrator/ingredients/${ingredient.id}?section=forms`} className="admin-btn admin-btn-sm">
+                            Formen
+                          </Link>
+                          <Link to={`/administrator/ingredients/${ingredient.id}?section=precursors`} className="admin-btn admin-btn-sm">
+                            Wirkstoffteile
                           </Link>
                         </div>
                       </td>

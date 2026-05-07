@@ -2,9 +2,11 @@ import { type Dispatch, type ReactNode, type SetStateAction, useCallback, useEff
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { AlertTriangle, ArrowLeft, BookOpen, ExternalLink, Loader2, Pencil, Plus, RefreshCw, Save, Trash2, X } from 'lucide-react';
 import {
+  createIngredientPrecursor,
   createAdminNutrientReferenceValue,
   createIngredientResearchSource,
   createIngredientResearchWarning,
+  deleteIngredientPrecursor,
   deleteAdminNutrientReferenceValue,
   deleteIngredientResearchSource,
   deleteIngredientResearchWarning,
@@ -33,6 +35,7 @@ import {
   type AdminIngredientResearchWarning,
   type AdminIngredientResearchSource,
   type AdminIngredientResearchForm,
+  type AdminIngredientPrecursor,
   type IngredientLookup,
   type AdminInteraction,
   type AdminInteractionPayload,
@@ -50,6 +53,7 @@ import { getDosePlausibilityWarnings, type DosePlausibilityWarning } from './dos
 type TabName =
   | 'overview'
   | 'forms'
+  | 'precursors'
   | 'dosing'
   | 'research'
   | 'interactions'
@@ -163,6 +167,7 @@ type InteractionTypeFilter = 'all' | 'avoid' | 'caution' | 'danger';
 const TAB_OPTIONS: { key: TabName; label: string }[] = [
   { key: 'overview', label: '\u00dcberblick' },
   { key: 'forms', label: 'Formen' },
+  { key: 'precursors', label: 'Wirkstoffteile' },
   { key: 'dosing', label: 'Dosiswerte' },
   { key: 'research', label: 'Quellen' },
   { key: 'interactions', label: 'Wechselwirkungen' },
@@ -911,6 +916,13 @@ export default function AdministratorIngredientDetailPage() {
   const [interactionStatusFilter, setInteractionStatusFilter] = useState<InteractionStatusFilter>('all');
   const [interactionSeverityFilter, setInteractionSeverityFilter] = useState<InteractionSeverityFilter>('all');
   const [interactionTypeFilter, setInteractionTypeFilter] = useState<InteractionTypeFilter>('all');
+  const [precursorIngredients, setPrecursorIngredients] = useState<IngredientLookup[]>([]);
+  const [precursorLookupError, setPrecursorLookupError] = useState('');
+  const [precursorIngredientId, setPrecursorIngredientId] = useState('');
+  const [precursorSortOrder, setPrecursorSortOrder] = useState('0');
+  const [precursorNote, setPrecursorNote] = useState('');
+  const [precursorSaving, setPrecursorSaving] = useState(false);
+  const [precursorDeleting, setPrecursorDeleting] = useState<number | null>(null);
   const [evidenceSummary, setEvidenceSummary] = useState<AdminEvidenceSummary | null>(null);
   const [evidenceSummaryLoading, setEvidenceSummaryLoading] = useState(false);
   const [evidenceSummaryError, setEvidenceSummaryError] = useState('');
@@ -1003,6 +1015,21 @@ export default function AdministratorIngredientDetailPage() {
     }
   }, []);
 
+  const loadPrecursorIngredients = useCallback(async () => {
+    setPrecursorLookupError('');
+    try {
+      const next = await getAllIngredients();
+      setPrecursorIngredients(
+        next
+          .filter((entry) => Number.isFinite(entry.id) && typeof entry.name === 'string' && entry.id !== ingredientId)
+          .sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: 'base' })),
+      );
+    } catch (err) {
+      setPrecursorLookupError(getErrorMessage(err));
+      setPrecursorIngredients([]);
+    }
+  }, [ingredientId]);
+
   const loadEvidenceSummary = useCallback(async () => {
     if (!isValidId) {
       setEvidenceSummary(null);
@@ -1059,6 +1086,12 @@ export default function AdministratorIngredientDetailPage() {
       void loadInteractionIngredients();
     }
   }, [activeTab, loadInteractionIngredients, loadInteractions]);
+
+  useEffect(() => {
+    if (activeTab === 'precursors') {
+      void loadPrecursorIngredients();
+    }
+  }, [activeTab, loadPrecursorIngredients]);
 
   useEffect(() => {
     if (activeTab === 'display') {
@@ -1382,6 +1415,85 @@ export default function AdministratorIngredientDetailPage() {
       }));
     } finally {
       setFormProfileSaving(null);
+    }
+  };
+
+  const sortPrecursors = (rows: AdminIngredientPrecursor[]): AdminIngredientPrecursor[] =>
+    [...rows].sort((left, right) => {
+      if (left.sort_order !== right.sort_order) return left.sort_order - right.sort_order;
+      return left.precursor_name.localeCompare(right.precursor_name, 'de');
+    });
+
+  const handleCreatePrecursor = async () => {
+    if (!detail) return;
+    const selectedId = Number(precursorIngredientId);
+    const sortOrder = Number(precursorSortOrder || 0);
+    if (!Number.isInteger(selectedId) || selectedId <= 0) {
+      setError('Bitte einen Wirkstoffteil auswahlen.');
+      return;
+    }
+    if (selectedId === ingredientId) {
+      setError('Ein Wirkstoff kann nicht sein eigener Wirkstoffteil sein.');
+      return;
+    }
+    if (!Number.isInteger(sortOrder)) {
+      setError('Sortierung muss eine ganze Zahl sein.');
+      return;
+    }
+
+    setPrecursorSaving(true);
+    setError('');
+    try {
+      const created = await createIngredientPrecursor(ingredientId, {
+        precursor_ingredient_id: selectedId,
+        sort_order: sortOrder,
+        note: textOrNull(precursorNote),
+      });
+      setDetail((previous) =>
+        previous
+          ? {
+              ...previous,
+              precursors: sortPrecursors([
+                ...previous.precursors.filter((entry) => entry.precursor_ingredient_id !== created.precursor_ingredient_id),
+                created,
+              ]),
+            }
+          : previous,
+      );
+      setPrecursorIngredientId('');
+      setPrecursorSortOrder('0');
+      setPrecursorNote('');
+      setMessage('Wirkstoffteil hinzugefuegt.');
+      setTimeout(() => setMessage(''), 2000);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setPrecursorSaving(false);
+    }
+  };
+
+  const handleDeletePrecursor = async (precursor: AdminIngredientPrecursor) => {
+    if (!detail) return;
+    setPrecursorDeleting(precursor.precursor_ingredient_id);
+    setError('');
+    try {
+      await deleteIngredientPrecursor(ingredientId, precursor.precursor_ingredient_id);
+      setDetail((previous) =>
+        previous
+          ? {
+              ...previous,
+              precursors: previous.precursors.filter(
+                (entry) => entry.precursor_ingredient_id !== precursor.precursor_ingredient_id,
+              ),
+            }
+          : previous,
+      );
+      setMessage('Wirkstoffteil entfernt.');
+      setTimeout(() => setMessage(''), 2000);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setPrecursorDeleting(null);
     }
   };
 
@@ -2158,6 +2270,104 @@ export default function AdministratorIngredientDetailPage() {
         </div>
       )}
     </AdminCard>
+  );
+
+  const renderPrecursorsTab = (precursors: AdminIngredientPrecursor[]) => (
+    <div className="grid gap-4">
+      <AdminCard
+        title="Wirkstoffteile"
+        subtitle="Redaktionelle Vorstufen oder Bausteine dieses Wirkstoffs. Diese Beziehungen erweitern nicht die normale Suche."
+      >
+        {precursorLookupError ? <AdminError>{precursorLookupError}</AdminError> : null}
+        <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_120px]">
+          <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
+            Wirkstoffteil
+            <select
+              className="admin-select mt-1"
+              value={precursorIngredientId}
+              onChange={(event) => setPrecursorIngredientId(event.target.value)}
+            >
+              <option value="">Bitte auswahlen</option>
+              {precursorIngredients.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.name}{option.unit ? ` (${option.unit})` : ''} - ID {option.id}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
+            Sortierung
+            <input
+              type="number"
+              step="1"
+              className="admin-input mt-1"
+              value={precursorSortOrder}
+              onChange={(event) => setPrecursorSortOrder(event.target.value)}
+            />
+          </label>
+          <label className="text-xs font-medium text-[color:var(--admin-ink-2)] md:col-span-2">
+            Notiz
+            <input
+              className="admin-input mt-1"
+              value={precursorNote}
+              onChange={(event) => setPrecursorNote(event.target.value)}
+              placeholder="Optionaler redaktioneller Hinweis"
+            />
+          </label>
+          <div className="md:col-span-2">
+            <AdminButton onClick={() => void handleCreatePrecursor()} disabled={precursorSaving}>
+              <Plus size={14} />
+              {precursorSaving ? 'Speichere...' : 'Wirkstoffteil hinzufuegen'}
+            </AdminButton>
+          </div>
+        </div>
+      </AdminCard>
+
+      <AdminCard title="Verknuepfte Wirkstoffteile" subtitle={`${precursors.length} Eintraege`}>
+        {precursors.length === 0 ? (
+          <AdminEmpty>Noch keine Wirkstoffteile hinterlegt.</AdminEmpty>
+        ) : (
+          <div className="grid gap-2">
+            {precursors.map((precursor) => (
+              <article
+                key={precursor.precursor_ingredient_id}
+                className="rounded-[var(--admin-r-md)] border border-[color:var(--admin-line)] p-3"
+              >
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <p className="font-medium">{precursor.precursor_name}</p>
+                    <p className="admin-muted mt-1 text-[12px]">
+                      ID {precursor.precursor_ingredient_id}
+                      {precursor.precursor_unit ? ` - ${precursor.precursor_unit}` : ''}
+                      {' - '}Sortierung {precursor.sort_order}
+                    </p>
+                    {precursor.note ? (
+                      <p className="admin-muted mt-2 text-[12px]">{precursor.note}</p>
+                    ) : null}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Link
+                      to={`/administrator/ingredients/${precursor.precursor_ingredient_id}`}
+                      className="admin-btn admin-btn-sm"
+                    >
+                      Oeffnen
+                    </Link>
+                    <AdminButton
+                      variant="danger"
+                      onClick={() => void handleDeletePrecursor(precursor)}
+                      disabled={precursorDeleting === precursor.precursor_ingredient_id}
+                    >
+                      <Trash2 size={13} />
+                      Entfernen
+                    </AdminButton>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </AdminCard>
+    </div>
   );
 
   const renderDosingTab = (sources: AdminIngredientResearchSource[]) => {
@@ -3516,6 +3726,7 @@ export default function AdministratorIngredientDetailPage() {
               void loadEvidenceSummary();
               void loadNrvValues();
               if (activeTab === 'interactions') void loadInteractions();
+              if (activeTab === 'precursors') void loadPrecursorIngredients();
             }}
             className={`admin-btn ${loading ? 'admin-btn-ghost' : 'admin-btn-primary'}`}
             disabled={loading}
@@ -3558,6 +3769,7 @@ export default function AdministratorIngredientDetailPage() {
         <div>
           {activeTab === 'overview' && renderOverviewTab(detail)}
           {activeTab === 'forms' && renderFormsTab(detail.forms)}
+          {activeTab === 'precursors' && renderPrecursorsTab(detail.precursors)}
           {activeTab === 'dosing' && renderDosingTab(detail.sources)}
           {activeTab === 'research' && renderResearchTab(detail.sources)}
           {activeTab === 'interactions' && renderInteractionsTab()}

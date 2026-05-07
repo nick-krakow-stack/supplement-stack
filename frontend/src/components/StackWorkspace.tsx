@@ -77,11 +77,13 @@ export interface DemoProduct {
   published_product_id?: number | null;
   ingredients?: Array<{
     ingredient_id: number;
+    form_id?: number | null;
     quantity?: number | null;
     unit?: string | null;
     basis_quantity?: number | null;
     basis_unit?: string | null;
     search_relevant?: number | boolean;
+    parent_ingredient_id?: number | null;
   }>;
 }
 
@@ -93,6 +95,14 @@ export interface DemoStack {
   family_member_id?: number | null;
   family_member_first_name?: string | null;
 }
+
+type IngredientFormOption = {
+  id: number;
+  name: string;
+  comment?: string | null;
+  timing?: string | null;
+  score?: number | null;
+};
 
 interface DemoState {
   stacks: DemoStack[];
@@ -337,8 +347,11 @@ function AddProductModal({
   submitLabel?: string;
   ignoredExistingProductKey?: string;
 }) {
-  const [step, setStep] = useState<'search' | 'dosage' | 'products'>('search');
+  const [step, setStep] = useState<'search' | 'form' | 'dosage' | 'products'>('search');
   const [ingredient, setIngredient] = useState<Ingredient | null>(null);
+  const [forms, setForms] = useState<IngredientFormOption[]>([]);
+  const [selectedFormId, setSelectedFormId] = useState<number | null>(null);
+  const [ingredientLoading, setIngredientLoading] = useState(false);
   const [guidelines, setGuidelines] = useState<DosageGuideline[]>([]);
   const [guidelinesLoading, setGuidelinesLoading] = useState(false);
   const [dose, setDose] = useState<ManualDose>({ value: 0, unit: '' });
@@ -358,13 +371,15 @@ function AddProductModal({
     guidelines.find((gl) => gl.source === 'study') ??
     guidelines.find((gl) => gl.id !== dgeGuideline?.id);
 
-  const chooseIngredient = (selected: Ingredient) => {
-    setIngredient(selected);
-    setStep('dosage');
-    setError('');
+  const selectedForm = useMemo(
+    () => forms.find((form) => form.id === selectedFormId) ?? null,
+    [forms, selectedFormId],
+  );
+
+  const loadDosageGuidelines = useCallback((selected: Ingredient) => {
     setGuidelines([]);
     setGuidelinesLoading(true);
-
+    setStep('dosage');
     credentialedFetch(apiPath(`/ingredients/${selected.id}/dosage-guidelines`))
       .then((response) => {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -380,6 +395,45 @@ function AddProductModal({
         setDose({ value: 0, unit: normalizeUnitToGerman(selected.unit) || '' });
       })
       .finally(() => setGuidelinesLoading(false));
+  }, []);
+
+  const chooseIngredient = (selected: Ingredient) => {
+    setIngredient(selected);
+    setError('');
+    setGuidelines([]);
+    setForms([]);
+    setSelectedFormId(null);
+    setIngredientLoading(true);
+
+    credentialedFetch(apiPath(`/ingredients/${selected.id}`))
+      .then((response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json() as Promise<{ forms?: IngredientFormOption[] }>;
+      })
+      .then((data) => {
+        const loadedForms = Array.isArray(data.forms)
+          ? data.forms.filter((form) => Number.isInteger(form.id) && form.id > 0 && typeof form.name === 'string')
+          : [];
+        setForms(loadedForms);
+        const matchedFormId = selected.matched_form_id ?? null;
+        setSelectedFormId(loadedForms.some((form) => form.id === matchedFormId) ? matchedFormId : null);
+        if (loadedForms.length > 0) {
+          setStep('form');
+        } else {
+          loadDosageGuidelines(selected);
+        }
+      })
+      .catch(() => {
+        setForms([]);
+        setSelectedFormId(null);
+        loadDosageGuidelines(selected);
+      })
+      .finally(() => setIngredientLoading(false));
+  };
+
+  const continueToDosage = () => {
+    if (!ingredient) return;
+    loadDosageGuidelines(ingredient);
   };
 
   const loadProducts = () => {
@@ -387,7 +441,10 @@ function AddProductModal({
     setStep('products');
     setProductsLoading(true);
     setError('');
-    const catalogPromise = credentialedFetch(apiPath(`/ingredients/${ingredient.id}/products`))
+    const productParams = new URLSearchParams();
+    if (selectedFormId !== null) productParams.set('form_id', String(selectedFormId));
+    const productQuery = productParams.toString();
+    const catalogPromise = credentialedFetch(apiPath(`/ingredients/${ingredient.id}/products${productQuery ? `?${productQuery}` : ''}`))
       .then((response) => {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         return response.json() as Promise<{ products?: DemoProduct[] }>;
@@ -410,10 +467,15 @@ function AddProductModal({
           .filter((product) => product.user_product_status !== 'rejected' && product.status !== 'rejected')
           .filter((product) => product.published_product_id == null || !catalogIds.has(product.published_product_id))
           .filter((product) => product.ingredients?.some((row) => (
-            row.ingredient_id === ingredient.id && Boolean(row.search_relevant ?? 1)
+            (row.ingredient_id === ingredient.id || row.parent_ingredient_id === ingredient.id) &&
+            Boolean(row.search_relevant ?? 1) &&
+            (selectedFormId === null || row.form_id === selectedFormId)
           )))
           .map((product) => {
-            const matchingIngredient = product.ingredients?.find((row) => row.ingredient_id === ingredient.id);
+            const matchingIngredient = product.ingredients?.find((row) => (
+              (row.ingredient_id === ingredient.id || row.parent_ingredient_id === ingredient.id) &&
+              (selectedFormId === null || row.form_id === selectedFormId)
+            ));
             return {
               ...product,
               product_type: 'user_product' as const,
@@ -499,7 +561,83 @@ function AddProductModal({
             <p className="mt-3 text-sm font-semibold text-slate-500">
               Beginnen Sie zu tippen, um Wirkstoffe zu finden.
             </p>
+            {ingredientLoading && (
+              <p className="mt-3 text-sm font-bold text-blue-700">Wirkstoffdaten werden geladen...</p>
+            )}
           </div>
+        )}
+
+        {step === 'form' && ingredient && (
+          <>
+            <div className="rounded-2xl border border-sky-200 bg-sky-50/50 p-4 sm:p-5">
+              <div className="mb-4 flex items-center gap-3 text-sky-800">
+                <List size={24} />
+                <h3 className="text-xl font-black sm:text-2xl">Form auswahlen</h3>
+              </div>
+              <p className="mb-4 text-sm font-semibold text-slate-600">
+                Optional fuer {ingredient.name}. Mit einer Form zeigen wir spaeter nur passende Produkte.
+              </p>
+              <div className="grid gap-3 md:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedFormId(null)}
+                  className={`rounded-2xl border p-4 text-left transition ${
+                    selectedFormId === null
+                      ? 'border-sky-500 bg-white shadow-sm'
+                      : 'border-slate-200 bg-white/70 hover:border-sky-300'
+                  }`}
+                >
+                  <p className="text-base font-black text-slate-950">Alle Formen</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-500">
+                    Produktliste nicht nach Form einschraenken.
+                  </p>
+                </button>
+                {forms.map((form) => (
+                  <button
+                    key={form.id}
+                    type="button"
+                    onClick={() => setSelectedFormId(form.id)}
+                    className={`rounded-2xl border p-4 text-left transition ${
+                      selectedFormId === form.id
+                        ? 'border-sky-500 bg-white shadow-sm'
+                        : 'border-slate-200 bg-white/70 hover:border-sky-300'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="text-base font-black text-slate-950">{form.name}</p>
+                      {typeof form.score === 'number' && form.score > 0 && (
+                        <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-black text-sky-700">
+                          Score {form.score}
+                        </span>
+                      )}
+                    </div>
+                    {form.comment && (
+                      <p className="mt-2 line-clamp-2 text-sm font-semibold text-slate-500">{form.comment}</p>
+                    )}
+                    {form.timing && (
+                      <p className="mt-2 text-xs font-bold uppercase tracking-wide text-slate-400">{form.timing}</p>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <button
+                onClick={() => setStep('search')}
+                className="inline-flex items-center gap-2 rounded-xl px-2 py-2 text-base font-semibold text-blue-600 hover:text-blue-800"
+              >
+                <ArrowLeft size={20} />
+                Zuruck zur Suche
+              </button>
+              <button
+                onClick={continueToDosage}
+                className="inline-flex items-center justify-center gap-3 rounded-xl bg-sky-600 px-6 py-3 text-lg font-black text-white shadow-lg shadow-sky-600/20 hover:bg-sky-700"
+              >
+                Weiter zur Dosierung
+                <ArrowRight size={24} />
+              </button>
+            </div>
+          </>
         )}
 
         {step === 'dosage' && ingredient && (
@@ -620,11 +758,11 @@ function AddProductModal({
 
             <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <button
-                onClick={() => setStep('search')}
+                onClick={() => setStep(forms.length > 0 ? 'form' : 'search')}
                 className="inline-flex items-center gap-2 rounded-xl px-2 py-2 text-base font-semibold text-blue-600 hover:text-blue-800"
               >
                 <ArrowLeft size={20} />
-                Zurück zur Suche
+                {forms.length > 0 ? 'Zuruck zur Formauswahl' : 'Zuruck zur Suche'}
               </button>
               <button
                 onClick={loadProducts}
@@ -643,6 +781,7 @@ function AddProductModal({
               <h3 className="text-2xl font-black tracking-tight text-slate-950">Produkt auswählen</h3>
               <p className="mt-1 text-base font-semibold text-slate-500">
                 {ingredient.name} · {dose.value || 1} {dose.unit || normalizeUnitToGerman(ingredient.unit)}
+                {selectedForm ? ` · ${selectedForm.name}` : ''}
               </p>
             </div>
             <div className="border-y border-slate-200 py-5">

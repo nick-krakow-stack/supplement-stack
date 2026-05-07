@@ -4,16 +4,28 @@ Last updated: 2026-05-07
 
 ## Immediate
 
-- Run cleanup validation:
-  - `functions`: `npx tsc -p tsconfig.json --noEmit`
-  - `frontend`: `npx tsc --noEmit`
-  - `frontend`: `npm run lint --if-present`
-  - `frontend`: `npm run build`
-  - `node --check scripts/admin-browser-smoke.mjs`
-  - `node --check scripts/user-browser-smoke.mjs`
-- Commit the current deployed admin code plus cleanup so the worktree is clean.
-- Do not delete or revert the new `/administrator` implementation, migrations,
-  smoke scripts, or backend admin/security changes.
+- Wirkstoffe/Formen rebuild is remote-migrated and deployed. Use
+  `https://supplementstack.de` or preview
+  `https://e3bb987b.supplementstack.pages.dev` for follow-up QA.
+- Run authenticated owner QA for the new user/admin flows, especially stack
+  form selection, user-product ingredient entry, and Administrator Ingredient
+  `Wirkstoffteile`.
+- Review L-Carnitin/ALCAR display copy in admin content if the migrated legacy
+  notes should be rewritten into final editorial wording.
+- Fix or reset the local D1 migration journal/schema mismatch if local
+  migration apply is required; current failure happens at old migration
+  `0009_auth_profile_extensions.sql`, before the new migrations run.
+- Keep `/administrator` as the frontend admin surface and `/api/admin` as the
+  backend admin namespace.
+
+## Wirkstoffe/Formen Rebuild
+
+- Model canonical Wirkstoffe in `ingredients`.
+- Model salts, esters, derivatives, and forms in `ingredient_forms`.
+- Model spelling variants and abbreviations in `ingredient_synonyms`.
+- Use `ingredient_precursors` for editorial precursor relationships.
+- Treat L-Carnitin as canonical and Acetyl-L-Carnitin as a form/derivative of
+  L-Carnitin for search/product structure.
 
 ## Admin QA
 

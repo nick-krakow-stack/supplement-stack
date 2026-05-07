@@ -4,72 +4,98 @@ Last updated: 2026-05-07
 
 ## Exact Continuation Point
 
-1. Finish local cleanup validation:
-   - `functions`: `npx tsc -p tsconfig.json --noEmit`
-   - `frontend`: `npx tsc --noEmit`
-   - `frontend`: `npm run lint --if-present`
-   - `frontend`: `npm run build`
-   - `node --check scripts/admin-browser-smoke.mjs`
-   - `node --check scripts/user-browser-smoke.mjs`
-2. If validation passes, commit the current deployed admin code plus cleanup so
-   `git status --short` is clean.
-3. Do not revert the deployed admin work. The large dirty tree contains the new
-   `/administrator` implementation, migrations, smoke scripts, and backend
-   admin/security changes.
-4. Do not treat `/api/admin` as legacy; it is the backend admin API namespace.
-5. The old frontend `/admin` route has been removed. Use `/administrator` for
-   the admin UI.
+The Wirkstoffe/Formen rebuild has been implemented, remote-migrated, deployed,
+and postflight-checked.
 
-## Completed In Latest Local Cleanup
+Remote D1 `supplementstack-production` has these migrations applied:
 
-- Deleted local-only artifacts:
-  - `admin-preview/`
-  - root `logo.png`
-  - `qa-preview-demo-bottombar-no-cookie.png`
-- Added `.gitignore` entries for local design/browser-QA artifacts and Claude
-  deploy-error logs.
-- Removed legacy `.claude/SESSION.md` and `.claude/hooks/post-deploy-log.sh`.
-- Updated `.claude/settings.json` so it no longer appends deploy history to the
-  legacy session file.
-- Kept `.agent-memory/deploy-log.md` as canonical deploy/migration history.
-- Replaced the large temporary admin rebuild analysis/plan files with compact
-  `.agent-memory/admin-rebuild-plan.md`.
-- Compressed required startup memory files to current state only.
-- Updated `CLAUDE.md` to reference the `AdministratorShell` admin surface and
-  clarify `.agent-memory/*` as canonical memory.
-- Verified by search that active frontend/functions/scripts/CI code no longer
-  imports the deleted old frontend admin monolith files.
-- Removed the old frontend `/admin` compatibility redirect and related admin
-  status copy.
+- `0069_ingredient_lookup_indexes.sql`
+- `0070_ingredient_precursors.sql`
+- `0071_consolidate_l_carnitine_forms.sql`
 
-## Last Deployed Functional Work
+Final deployed preview:
 
-- Admin Browser-QA Text/UX Cleanup:
-  - Preview: `https://6cd86fa0.supplementstack.pages.dev`
-  - Live: `https://supplementstack.de`
-  - No D1 migration required.
-  - Frontend TypeScript, lint, build, smoke-script syntax, Pages deploy, route
-    smokes, and unauthenticated admin API guard checks passed.
-- Ingredient Research Coverage List:
-  - Preview: `https://d363ade8.supplementstack.pages.dev`
-  - Live: `https://supplementstack.de`
-  - No D1 migration required.
-  - Functions/frontend validation, remote D1 read-only coverage query, remote
-    migration list, route smokes, and unauthenticated admin API guard checks
-    passed.
+- `https://e3bb987b.supplementstack.pages.dev`
+- Live domain: `https://supplementstack.de`
 
-## Remaining Acceptance Gate
+## What Changed
 
-- Final authenticated owner browser QA and feedback.
-- Suggested order:
-  1. Login/session persistence.
-  2. Stack create/edit/product add/remove/replacement and user product submit.
-  3. Admin Product Detail overview/moderation/affiliate save.
-  4. Admin Product Detail Wirkstoff row add/edit/delete.
-  5. Admin Product Detail image upload and image URL save.
-  6. Product-QA harmless save.
-  7. Product Warning create/edit/deactivate.
-  8. Dosing save with source links and plausibility display.
-  9. Interaction edit/delete through admin-by-id endpoints.
-  10. Ingredient Research source/warning and NRV CRUD.
-  11. One stale-version `409` check.
+- Ingredient search is now canonical-Wirkstoff centered and can return optional
+  `matched_form_id` / `matched_form_name`.
+- `/api/ingredients/:id/products` accepts optional `form_id` filtering.
+- `ingredient_precursors` exists for editorial precursor relationships, with
+  admin CRUD under `/api/admin/ingredients/:id/precursors`.
+- Stack add flow now has an optional form-selection step before dosage/products.
+- Administrator Ingredient Detail has a `Wirkstoffteile` tab.
+- Administrator Ingredients list shows counts for forms, synonyms, and
+  precursors.
+- L-Carnitin is canonical ingredient `13`.
+- Old ingredient `60` Acetyl-L-Carnitin was consolidated into form `155`.
+- Old ingredient `65` L-Carnitin Tartrat was consolidated into form `154`.
+- Old ingredient `66` L-Carnitin Fumarat was consolidated into form `158`.
+- Old form `189` was merged into form `155`.
+
+## Verification Already Done
+
+- `functions`: `npx tsc -p tsconfig.json --noEmit`
+- `frontend`: `npx tsc --noEmit`
+- `frontend`: `npm run lint --if-present`
+- `frontend`: `npm run build`
+- `node --check scripts/admin-browser-smoke.mjs`
+- `node --check scripts/user-browser-smoke.mjs`
+- `git diff --check`
+- Remote D1 postflight:
+  - no references to old ingredient IDs `60`, `65`, or `66`
+  - no old form `189`
+  - no ingredient/form parent mismatches in user product ingredients
+  - no ingredient self-interactions
+  - no duplicate normalized synonyms under ingredient `13`
+  - `PRAGMA foreign_key_check` returned no rows
+- Live and preview `/api/ingredients/search?q=alcar` return L-Carnitin with
+  `matched_form_id: 155`.
+- Live and preview `/api/ingredients/13/products?form_id=155` exercise the
+  product form filter.
+- Live `/administrator/ingredients` and
+  `/administrator/ingredients/13?section=precursors` return HTTP 200.
+- Unauthenticated `/api/admin/ingredients/13/precursors` returns HTTP 401.
+
+## Remaining Work
+
+- Authenticated owner browser QA remains open:
+  - login/session persistence
+  - stack create/edit/product add/remove/replacement
+  - stack form selection for Wirkstoffe with forms
+  - user product submit with ingredient/form rows
+  - Product Detail overview/moderation/affiliate/Wirkstoffe/image flows
+  - Product-QA harmless save
+  - product warnings
+  - Dosing source links
+  - Interaction edit/delete
+  - Ingredient Research source/warning and NRV CRUD
+  - one stale-version `409` check
+- If local D1 migration apply is needed, fix/reset the old local
+  `0009_auth_profile_extensions.sql` journal/schema mismatch first
+  (`no such column: google_id`).
+- Continue ingredient-by-ingredient research/copywriting through
+  `/administrator/ingredients`.
+- External inbox mail tests and content/science/legal review remain launch
+  gates.
+
+## Required Startup For Next Agent
+
+1. Read `AGENTS.md`.
+2. Read `CLAUDE.md`.
+3. Read `.agent-memory/current-state.md`.
+4. Read this handoff.
+5. Read `.agent-memory/next-steps.md`.
+6. Run `git status --short`.
+
+## Constraints
+
+- Do not write secrets, tokens, passwords, or raw credential values into memory
+  files.
+- Use code and migrations as final source of truth if docs conflict.
+- Keep `/administrator` as the frontend admin path and `/api/admin` as the
+  backend admin namespace.
+- Keep implementation compatible with Cloudflare Workers / Pages Functions.
+- Review untracked files before deleting or committing them.
