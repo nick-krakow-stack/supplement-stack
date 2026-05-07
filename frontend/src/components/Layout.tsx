@@ -42,7 +42,7 @@ export default function Layout({ children }: LayoutProps) {
       )}
       {isAdmin && (
         <Link
-          to="/admin"
+          to="/administrator"
           className="flex min-h-11 items-center rounded-xl px-2 text-sm font-extrabold tracking-wide text-amber-600 transition-colors hover:bg-amber-50 hover:text-amber-700 md:min-h-0 md:px-0 md:hover:bg-transparent"
           onClick={closeMobile}
         >

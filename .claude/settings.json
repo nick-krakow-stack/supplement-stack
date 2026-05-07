@@ -26,7 +26,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/hooks/pre-deploy-check.sh"
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/pre-deploy-check.sh\""
           }
         ]
       }
@@ -41,11 +41,7 @@
           },
           {
             "type": "command",
-            "command": "bash .claude/hooks/post-deploy-log.sh"
-          },
-          {
-            "type": "command",
-            "command": "bash .claude/hooks/error-capture.sh"
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/error-capture.sh\""
           }
         ]
       }

@@ -19,6 +19,10 @@ import {
   hashResetToken,
   ensureAuth,
   checkRateLimit,
+  clearSessionCookie,
+  setSessionCookie,
+  SESSION_TTL_SECONDS,
+  validateBrowserOrigin,
 } from '../lib/helpers'
 import { sendEmailVerificationEmail, sendPasswordResetEmail } from '../lib/mail'
 
@@ -82,6 +86,9 @@ async function createEmailVerificationToken(
 
 // POST /api/auth/register
 auth.post('/register', async (c) => {
+  const originErr = validateBrowserOrigin(c)
+  if (originErr) return originErr
+
   const ip = c.req.header('CF-Connecting-IP') ?? c.req.header('X-Forwarded-For') ?? 'unknown'
   const allowed = await checkRateLimit(c.env.RATE_LIMITER, `register:${ip}`, 5, 15 * 60)
   if (!allowed) return c.json({ error: 'Zu viele Versuche. Bitte warte kurz.' }, 429)
@@ -136,9 +143,10 @@ auth.post('/register', async (c) => {
 
   const mailResult = await sendEmailVerificationEmail(c.env, frontendUrl(c.env), data.email, verificationToken)
   const token = await sign(
-    { userId, email: data.email, role: 'user', exp: Math.floor(Date.now() / 1000) + 7 * 24 * 3600 },
+    { userId, email: data.email, role: 'user', exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS },
     c.env.JWT_SECRET,
   )
+  setSessionCookie(c, token)
   return c.json({
     token,
     email_verification_email_sent: mailResult.ok,
@@ -166,8 +174,12 @@ auth.get('/google/callback', async (_c) => {
 })
 
 // POST /api/auth/logout
-auth.post('/logout', async (_c) => {
-  return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+auth.post('/logout', async (c) => {
+  const originErr = validateBrowserOrigin(c)
+  if (originErr) return originErr
+
+  clearSessionCookie(c)
+  return c.json({ ok: true })
 })
 
 // POST /api/auth/verify-email
@@ -292,6 +304,9 @@ auth.post('/reset-password', async (c) => {
 
 // POST /api/auth/login
 auth.post('/login', async (c) => {
+  const originErr = validateBrowserOrigin(c)
+  if (originErr) return originErr
+
   const ip = c.req.header('CF-Connecting-IP') ?? c.req.header('X-Forwarded-For') ?? 'unknown'
   const allowed = await checkRateLimit(c.env.RATE_LIMITER, `login:${ip}`, 10, 15 * 60)
   if (!allowed) return c.json({ error: 'Zu viele Versuche. Bitte warte kurz.' }, 429)
@@ -308,9 +323,10 @@ auth.post('/login', async (c) => {
   if (!valid) return c.json({ error: 'Invalid credentials' }, 401)
 
   const token = await sign(
-    { userId: user.id, email: user.email, role: user.role ?? 'user', exp: Math.floor(Date.now() / 1000) + 7 * 24 * 3600 },
+    { userId: user.id, email: user.email, role: user.role ?? 'user', exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS },
     c.env.JWT_SECRET,
   )
+  setSessionCookie(c, token)
   return c.json({
     token,
     profile: publicProfile(user),

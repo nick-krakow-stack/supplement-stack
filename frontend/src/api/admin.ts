@@ -2,6 +2,49 @@ import { apiClient } from './client';
 import type { AxiosError } from 'axios';
 import type { AdminStats, Interaction } from '../types';
 
+export type AdminMutationOptions = {
+  version?: number | null;
+};
+
+export type AdminInteractionSeverity = 'info' | 'medium' | 'high' | 'danger';
+export type AdminInteractionPartnerType = 'ingredient' | 'food' | 'medication' | 'condition';
+
+export interface AdminInteraction {
+  id: number;
+  ingredient_id: number;
+  partner_type: AdminInteractionPartnerType | string;
+  partner_ingredient_id: number | null;
+  partner_label: string | null;
+  type: string;
+  comment?: string | null;
+  severity: AdminInteractionSeverity | string | null;
+  mechanism: string | null;
+  source_label: string | null;
+  source_url: string | null;
+  is_active: number | boolean | null;
+  ingredient_a_id: number;
+  ingredient_b_id: number | null;
+  ingredient_a_name?: string;
+  ingredient_b_name?: string | null;
+  version: number | null;
+}
+
+export interface AdminInteractionPayload {
+  id?: number | null;
+  ingredient_id: number;
+  partner_type: AdminInteractionPartnerType | string;
+  partner_ingredient_id?: number | null;
+  partner_label?: string | null;
+  type: string;
+  severity?: AdminInteractionSeverity | string | null;
+  mechanism?: string | null;
+  comment?: string | null;
+  source_label?: string | null;
+  source_url?: string | null;
+  is_active?: number | boolean | null;
+  version?: number | null;
+}
+
 export interface AdminIngredientSubIngredient {
   parent_ingredient_id: number;
   parent_name: string;
@@ -19,6 +62,38 @@ export interface IngredientLookup {
   id: number;
   name: string;
   unit?: string | null;
+}
+
+export interface AdminIngredientListItem extends IngredientLookup {
+  category: string | null;
+  research_status: string | null;
+  calculation_status: string | null;
+  product_count: number;
+  dose_recommendation_count: number;
+  source_count: number;
+  official_source_count: number;
+  dge_source_count: number;
+  study_source_count: number;
+  no_recommendation_count: number;
+  nrv_count: number;
+  dose_source_link_count: number;
+  sourced_dose_recommendation_count: number;
+  display_profile_count: number;
+  knowledge_article_count: number;
+  warning_count: number;
+  has_blog_url: boolean;
+  raw?: Record<string, unknown>;
+}
+
+export interface AdminIngredientsResponse {
+  ingredients: AdminIngredientListItem[];
+  total: number;
+  page: number;
+  limit: number;
+  total_pages: number;
+  summary?: {
+    total: number;
+  };
 }
 
 export interface AdminDoseRecommendation {
@@ -48,6 +123,34 @@ export interface AdminDoseRecommendation {
   category_name?: string | null;
   created_by_user_id?: number | null;
   is_public?: number | null;
+  version: number | null;
+  sources?: AdminDoseRecommendationSource[];
+  plausibility_warnings?: AdminDosePlausibilityWarning[];
+}
+
+export interface AdminDosePlausibilityWarning {
+  code: string | null;
+  severity: string | null;
+  label: string | null;
+  detail: string;
+  raw?: Record<string, unknown>;
+}
+
+export interface AdminDoseRecommendationSource {
+  id?: number | null;
+  dose_recommendation_id?: number | null;
+  research_source_id: number;
+  relevance_weight: number;
+  is_primary: number;
+  note?: string | null;
+  source_kind?: string | null;
+  source_title?: string | null;
+  source_url?: string | null;
+  organization?: string | null;
+  study_type?: string | null;
+  evidence_quality?: string | null;
+  outcome?: string | null;
+  reviewed_at?: string | null;
 }
 
 export interface AdminDoseRecommendationPayload {
@@ -73,6 +176,15 @@ export interface AdminDoseRecommendationPayload {
   relevance_score?: number | null;
   verified_profile_id?: number | null;
   category_name?: string | null;
+  version?: number | null;
+  sources?: AdminDoseRecommendationSourcePayload[];
+}
+
+export interface AdminDoseRecommendationSourcePayload {
+  research_source_id: number;
+  relevance_weight?: number | null;
+  is_primary?: number | boolean | null;
+  note?: string | null;
 }
 
 export interface AdminDoseRecommendationResponse {
@@ -107,6 +219,74 @@ export interface AdminAuditLogResponse {
   source: string;
 }
 
+export interface AdminBulkApproveUserProductResult {
+  id: number;
+  ok: boolean;
+  status: 'approved' | 'failed';
+  previous_status?: string | null;
+  approved_at?: string | null;
+  error?: string | null;
+}
+
+export interface AdminBulkApproveUserProductsResponse {
+  ok: boolean;
+  requested: number;
+  unique: number;
+  approved: number;
+  failed: number;
+  results: AdminBulkApproveUserProductResult[];
+}
+
+export type AdminUserProductStatus = 'pending' | 'approved' | 'rejected';
+
+export interface AdminUserProductIngredient {
+  ingredient_id: number;
+  ingredient_name?: string | null;
+  quantity?: number | null;
+  unit?: string | null;
+  basis_quantity?: number | null;
+  basis_unit?: string | null;
+  search_relevant?: number | boolean | null;
+  parent_ingredient_id?: number | null;
+}
+
+export interface AdminUserProduct {
+  id: number;
+  user_id: number;
+  user_email?: string | null;
+  name: string;
+  brand?: string | null;
+  form?: string | null;
+  price: number;
+  shop_link?: string | null;
+  serving_size?: number | null;
+  serving_unit?: string | null;
+  servings_per_container?: number | null;
+  container_count?: number | null;
+  is_affiliate?: number | null;
+  notes?: string | null;
+  status: AdminUserProductStatus;
+  approved_at?: string | null;
+  created_at: string;
+  user_is_trusted_product_submitter?: number | null;
+  published_product_id?: number | null;
+  ingredients?: AdminUserProductIngredient[];
+  raw?: Record<string, unknown>;
+}
+
+export interface AdminUserProductsResponse {
+  products: AdminUserProduct[];
+  total: number;
+  page: number;
+  limit: number;
+  total_pages: number;
+  summary?: {
+    total: number;
+    statuses: Record<AdminUserProductStatus, number>;
+  };
+  status_summary?: Record<AdminUserProductStatus, number>;
+}
+
 export interface AdminIngredientResearchIngredient {
   id: number;
   name: string;
@@ -121,6 +301,7 @@ export interface AdminIngredientResearchStatus {
   blog_url: string | null;
   reviewed_at: string | null;
   review_due_at: string | null;
+  version: number | null;
   raw?: Record<string, unknown>;
 }
 
@@ -177,7 +358,67 @@ export interface AdminIngredientResearchSource {
   pubmed_id: string | null;
   source_date: string | null;
   reviewed_at: string | null;
+  is_retracted: boolean | null;
+  retraction_checked_at: string | null;
+  retraction_notice_url: string | null;
+  evidence_grade: string | null;
+  version: number | null;
   raw?: Record<string, unknown>;
+}
+
+export interface AdminEvidenceSummary {
+  total_sources: number;
+  official_sources: number;
+  study_sources: number;
+  other_sources: number;
+  no_recommendation_count: number;
+  retracted_count: number;
+  grade_counts: Record<string, number>;
+  suggested_grade: string | null;
+  raw?: Record<string, unknown>;
+}
+
+export type AdminNutrientReferenceValueKind =
+  | 'rda'
+  | 'ai'
+  | 'ear'
+  | 'ul'
+  | 'pri'
+  | 'ar'
+  | 'lti'
+  | 'ri'
+  | 'nrv';
+
+export interface AdminNutrientReferenceValue {
+  id: number;
+  ingredient_id: number;
+  population_id: number | null;
+  organization: string;
+  region: string | null;
+  kind: AdminNutrientReferenceValueKind | string;
+  value: number | null;
+  unit: string;
+  source_url: string | null;
+  source_label: string | null;
+  source_year: number | null;
+  notes: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  version: number | null;
+  raw?: Record<string, unknown>;
+}
+
+export interface AdminNutrientReferenceValuePayload {
+  population_id?: number | null;
+  organization: string;
+  region?: string | null;
+  kind: AdminNutrientReferenceValueKind | string;
+  value: number | null;
+  unit: string;
+  source_url?: string | null;
+  source_label?: string | null;
+  source_year?: number | null;
+  notes?: string | null;
 }
 
 export interface AdminIngredientResearchWarning {
@@ -190,6 +431,7 @@ export interface AdminIngredientResearchWarning {
   min_amount: number | null;
   unit: string | null;
   active: number | null;
+  version: number | null;
   raw?: Record<string, unknown>;
 }
 
@@ -212,6 +454,7 @@ export interface AdminIngredientDisplayProfile {
   timing_note: string | null;
   intake_hint: string | null;
   card_note: string | null;
+  version: number | null;
   raw?: Record<string, unknown>;
 }
 
@@ -231,6 +474,7 @@ export interface AdminIngredientResearchStatusPayload {
   blog_url?: string | null;
   reviewed_at?: string | number | null;
   review_due_at?: string | number | null;
+  version?: number | null;
 }
 
 export interface AdminIngredientResearchSourcePayload {
@@ -258,6 +502,24 @@ export interface AdminIngredientResearchSourcePayload {
   pubmed_id?: string | null;
   source_date?: string | number | null;
   reviewed_at?: string | number | null;
+  is_retracted?: boolean | number | null;
+  retraction_checked_at?: string | number | null;
+  retraction_notice_url?: string | null;
+  evidence_grade?: string | null;
+  version?: number | null;
+}
+
+export interface AdminPubMedLookup {
+  pmid: string;
+  doi: string | null;
+  title: string;
+  journal: string | null;
+  source_url: string;
+  source_date: string | null;
+  authors: string[];
+  source_kind: 'study';
+  organization: 'PubMed';
+  notes: string | null;
 }
 
 export interface AdminIngredientResearchWarningPayload {
@@ -268,6 +530,7 @@ export interface AdminIngredientResearchWarningPayload {
   min_amount?: number | null;
   unit?: string | null;
   active?: boolean | number | null;
+  version?: number | null;
 }
 
 export interface AdminIngredientDisplayProfilePayload {
@@ -278,6 +541,7 @@ export interface AdminIngredientDisplayProfilePayload {
   timing_note?: string | null;
   intake_hint?: string | null;
   card_note?: string | null;
+  version?: number | null;
 }
 
 export interface AdminKnowledgeArticle {
@@ -291,6 +555,7 @@ export interface AdminKnowledgeArticle {
   created_at?: string | null;
   updated_at?: string | null;
   archived_at?: string | null;
+  version: number | null;
   raw?: Record<string, unknown>;
 }
 
@@ -302,6 +567,7 @@ export interface AdminKnowledgeArticlePayload {
   status?: string | null;
   reviewed_at?: string | null;
   sources_json?: unknown;
+  version?: number | null;
 }
 
 export interface AdminKnowledgeArticlesResponse {
@@ -340,6 +606,43 @@ export interface AdminOpsDashboard {
   raw?: Record<string, unknown>;
 }
 
+export type AdminLaunchCheckStatus = 'ok' | 'warning' | 'danger' | 'info' | 'unknown';
+export type AdminLaunchCheckSeverity = 'info' | 'warning' | 'critical';
+export type AdminLaunchCheckSource = 'db' | 'env' | 'http' | 'dns' | 'manual';
+
+export interface AdminLaunchCheck {
+  id: string;
+  title: string;
+  status: AdminLaunchCheckStatus;
+  severity: AdminLaunchCheckSeverity;
+  source: AdminLaunchCheckSource;
+  details: string;
+  action?: string;
+  observed_count?: number;
+  configured?: boolean;
+}
+
+export interface AdminLaunchCheckSection {
+  id: string;
+  title: string;
+  checks: AdminLaunchCheck[];
+}
+
+export interface AdminLaunchChecksResponse {
+  generated_at: string;
+  domain: string;
+  source: 'live';
+  admin_only: boolean;
+  summary: {
+    total: number;
+    by_status: Record<AdminLaunchCheckStatus, number>;
+    by_severity: Record<AdminLaunchCheckSeverity, number>;
+    blocking: number;
+    needs_attention: number;
+  };
+  sections: AdminLaunchCheckSection[];
+}
+
 export interface AdminOpsResearchQueueItem {
   ingredient_id: number;
   ingredient_name: string;
@@ -371,6 +674,21 @@ export interface AdminOpsKnowledgeDraftItem {
   raw?: Record<string, unknown>;
 }
 
+export type AdminAffiliateLinkHealthStatus = 'unchecked' | 'ok' | 'failed' | 'timeout' | 'invalid';
+
+export interface AdminAffiliateLinkHealth {
+  url: string | null;
+  status: AdminAffiliateLinkHealthStatus | null;
+  http_status: number | null;
+  failure_reason: string | null;
+  last_checked_at: string | null;
+  last_success_at: string | null;
+  consecutive_failures: number | null;
+  response_time_ms: number | null;
+  final_url: string | null;
+  redirected: number | null;
+}
+
 export interface AdminProductQAProduct {
   id: number;
   name: string;
@@ -379,6 +697,10 @@ export interface AdminProductQAProduct {
   shop_link: string | null;
   image_url: string | null;
   is_affiliate: number | null;
+  affiliate_owner_type: 'none' | 'nick' | 'user' | null;
+  affiliate_owner_user_id: number | null;
+  moderation_status: string | null;
+  visibility: string | null;
   serving_size: number | null;
   serving_unit: string | null;
   servings_per_container: number | null;
@@ -386,21 +708,174 @@ export interface AdminProductQAProduct {
   ingredient_count: number;
   main_ingredient_count: number;
   issues: string[];
+  link_health: AdminAffiliateLinkHealth | null;
+  version: number | null;
   raw?: Record<string, unknown>;
 }
 
 export interface AdminProductQAResponse {
   products: AdminProductQAProduct[];
+  total: number;
+  page: number;
+  limit: number;
+  summary: {
+    total: number;
+    issues: Record<string, number>;
+  };
+  available_issues?: string[];
 }
 
 export interface AdminProductQAPatch {
+  name?: string;
+  brand?: string | null;
   price?: number | null;
   shop_link?: string | null;
+  image_url?: string | null;
   is_affiliate?: number | boolean | null;
+  affiliate_owner_type?: 'none' | 'nick' | 'user' | null;
+  affiliate_owner_user_id?: number | null;
+  moderation_status?: 'pending' | 'approved' | 'rejected';
+  visibility?: 'hidden' | 'public';
   serving_size?: number | null;
   serving_unit?: string | null;
   servings_per_container?: number | null;
   container_count?: number | null;
+}
+
+export interface AdminProductImageUploadResponse {
+  image_url: string;
+  image_r2_key: string | null;
+  product_version: number | null;
+}
+
+export interface AdminCatalogProduct {
+  id: number;
+  name: string;
+  brand: string | null;
+  form: string | null;
+  price: number | null;
+  shop_link: string | null;
+  image_url: string | null;
+  image_r2_key?: string | null;
+  is_affiliate: number | null;
+  affiliate_owner_type: 'none' | 'nick' | 'user' | null;
+  affiliate_owner_user_id: number | null;
+  moderation_status: string | null;
+  visibility: string | null;
+  created_at: string | null;
+  serving_size?: number | null;
+  serving_unit?: string | null;
+  servings_per_container?: number | null;
+  container_count?: number | null;
+  dosage_text?: string | null;
+  warning_title?: string | null;
+  warning_message?: string | null;
+  warning_type?: string | null;
+  alternative_note?: string | null;
+  link_health: AdminAffiliateLinkHealth | null;
+  version: number | null;
+  raw?: Record<string, unknown>;
+}
+
+export interface AdminCatalogProductsResponse {
+  products: AdminCatalogProduct[];
+  total: number;
+  page: number;
+  limit: number;
+  total_pages: number;
+}
+
+export interface AdminProductIngredient {
+  id: number;
+  product_id: number;
+  ingredient_id: number;
+  ingredient_name: string;
+  ingredient_unit: string | null;
+  ingredient_description: string | null;
+  form_id: number | null;
+  form_name: string | null;
+  parent_ingredient_id: number | null;
+  parent_ingredient_name: string | null;
+  is_main: number;
+  search_relevant: number;
+  quantity: number | null;
+  unit: string | null;
+  basis_quantity: number | null;
+  basis_unit: string | null;
+  effect_summary: string | null;
+  timing: string | null;
+  timing_note: string | null;
+  intake_hint: string | null;
+  card_note: string | null;
+  raw?: Record<string, unknown>;
+}
+
+export interface AdminProductIngredientPayload {
+  ingredient_id: number;
+  is_main?: number | boolean;
+  quantity?: number | null;
+  unit?: string | null;
+  form_id?: number | null;
+  basis_quantity?: number | null;
+  basis_unit?: string | null;
+  search_relevant?: number | boolean;
+  parent_ingredient_id?: number | null;
+  version?: number | null;
+}
+
+export interface AdminProductSafetyWarning {
+  id: number;
+  ingredient_id: number;
+  short_label: string;
+  popover_text: string | null;
+  severity: 'info' | 'caution' | 'danger';
+  article_slug: string | null;
+  article_title: string | null;
+  article_url: string | null;
+  raw?: Record<string, unknown>;
+}
+
+export type AdminProductWarningSeverity = 'info' | 'caution' | 'warning' | 'danger';
+
+export interface AdminProductWarning {
+  id: number;
+  product_id: number;
+  severity: AdminProductWarningSeverity;
+  title: string;
+  message: string;
+  alternative_note: string | null;
+  active: number;
+  created_at: string | null;
+  updated_at: string | null;
+  version: number | null;
+  raw?: Record<string, unknown>;
+}
+
+export interface AdminProductWarningPayload {
+  severity: AdminProductWarningSeverity;
+  title: string;
+  message: string;
+  alternative_note?: string | null;
+  active?: number | boolean;
+}
+
+export interface AdminProductDetail extends AdminCatalogProduct {
+  ingredients: AdminProductIngredient[];
+  qa: AdminProductQAProduct | null;
+  qa_counts: {
+    ingredient_count: number;
+    main_ingredient_count: number;
+    issue_count: number;
+    warning_count: number;
+    product_warning_count: number;
+    link_report_count: number;
+    open_link_report_count: number;
+    audit_count: number;
+  };
+  warnings: AdminProductSafetyWarning[];
+  product_warnings: AdminProductWarning[];
+  link_reports: AdminProductLinkReport[];
+  audit_logs: AdminAuditLogEntry[];
 }
 
 export type AdminProductLinkReportStatus = 'open' | 'reviewed' | 'closed';
@@ -424,8 +899,14 @@ export interface AdminProductLinkReport {
 
 export interface AdminProductLinkReportsResponse {
   reports: AdminProductLinkReport[];
-  total?: number | null;
-  limit?: number;
+  total: number;
+  page: number;
+  limit: number;
+  summary: {
+    total: number;
+    statuses: Record<AdminProductLinkReportStatus, number>;
+  };
+  available_statuses?: AdminProductLinkReportStatus[];
 }
 
 interface AuditFilterParams {
@@ -532,6 +1013,16 @@ function toIntOrNull(value: unknown): number | null {
   return null;
 }
 
+function withIfMatch(
+  payload?: { version?: number | null },
+  options: AdminMutationOptions = {},
+): { headers: { 'If-Match': string } } | undefined {
+  const version = options.version ?? payload?.version ?? null;
+  return version === null || version === undefined
+    ? undefined
+    : { headers: { 'If-Match': String(version) } };
+}
+
 function toBooleanOrNull(value: unknown): boolean | null {
   if (value === undefined || value === null) return null;
   if (typeof value === 'boolean') return value;
@@ -609,6 +1100,7 @@ function parseKnowledgeArticle(raw: Record<string, unknown>): AdminKnowledgeArti
     created_at: toDateOrNull(raw.created_at),
     updated_at: toDateOrNull(raw.updated_at),
     archived_at: toDateOrNull(raw.archived_at),
+    version: toIntOrNull(raw.version),
     raw,
   };
 }
@@ -624,6 +1116,7 @@ function normalizeKnowledgeArticlePayload(
     status: toTextOrNull(payload.status) ?? 'draft',
     reviewed_at: payload.reviewed_at !== undefined ? toDateOrNull(payload.reviewed_at) : null,
     sources_json: payload.sources_json ?? null,
+    version: payload.version ?? null,
   };
 }
 
@@ -706,6 +1199,27 @@ function normalizeOpsDashboard(raw: unknown): AdminOpsDashboard {
   };
 }
 
+function parseAffiliateLinkHealth(value: unknown): AdminAffiliateLinkHealth | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const raw = value as Record<string, unknown>;
+  const status = toTextOrNull(raw.status);
+
+  return {
+    url: toTextOrNull(raw.url),
+    status: status === 'unchecked' || status === 'ok' || status === 'failed' || status === 'timeout' || status === 'invalid'
+      ? status
+      : null,
+    http_status: toIntOrNull(raw.http_status),
+    failure_reason: toTextOrNull(raw.failure_reason),
+    last_checked_at: toDateOrNull(raw.last_checked_at),
+    last_success_at: toDateOrNull(raw.last_success_at),
+    consecutive_failures: toIntOrNull(raw.consecutive_failures),
+    response_time_ms: toIntOrNull(raw.response_time_ms),
+    final_url: toTextOrNull(raw.final_url),
+    redirected: toIntOrNull(raw.redirected),
+  };
+}
+
 function parseProductQAProduct(raw: Record<string, unknown>): AdminProductQAProduct {
   const issues = Array.isArray(raw.issues)
     ? raw.issues.map((issue) => toTextOrNull(issue)).filter((issue): issue is string => Boolean(issue))
@@ -718,6 +1232,13 @@ function parseProductQAProduct(raw: Record<string, unknown>): AdminProductQAProd
     shop_link: toTextOrNull(raw.shop_link),
     image_url: toTextOrNull(raw.image_url),
     is_affiliate: toIntOrNull(raw.is_affiliate),
+    affiliate_owner_type: (() => {
+      const value = toTextOrNull(raw.affiliate_owner_type);
+      return value === 'none' || value === 'nick' || value === 'user' ? value : null;
+    })(),
+    affiliate_owner_user_id: toIntOrNull(raw.affiliate_owner_user_id),
+    moderation_status: toTextOrNull(raw.moderation_status),
+    visibility: toTextOrNull(raw.visibility),
     serving_size: toNumberOrNull(raw.serving_size),
     serving_unit: toTextOrNull(raw.serving_unit),
     servings_per_container: toNumberOrNull(raw.servings_per_container),
@@ -725,6 +1246,163 @@ function parseProductQAProduct(raw: Record<string, unknown>): AdminProductQAProd
     ingredient_count: toIntOrNull(raw.ingredient_count) ?? 0,
     main_ingredient_count: toIntOrNull(raw.main_ingredient_count) ?? 0,
     issues,
+    link_health: parseAffiliateLinkHealth(raw.link_health),
+    version: toIntOrNull(raw.version),
+    raw,
+  };
+}
+
+function parseCatalogProduct(raw: Record<string, unknown>): AdminCatalogProduct {
+  return {
+    id: toIntOrNull(raw.id) ?? 0,
+    name: toTextOrNull(raw.name) || `Produkt ${toIntOrNull(raw.id) ?? ''}`,
+    brand: toTextOrNull(raw.brand),
+    form: toTextOrNull(raw.form),
+    price: toNumberOrNull(raw.price),
+    shop_link: toTextOrNull(raw.shop_link),
+    image_url: toTextOrNull(raw.image_url),
+    image_r2_key: toTextOrNull(raw.image_r2_key),
+    is_affiliate: toIntOrNull(raw.is_affiliate),
+    affiliate_owner_type: (() => {
+      const value = toTextOrNull(raw.affiliate_owner_type);
+      return value === 'none' || value === 'nick' || value === 'user' ? value : null;
+    })(),
+    affiliate_owner_user_id: toIntOrNull(raw.affiliate_owner_user_id),
+    moderation_status: toTextOrNull(raw.moderation_status),
+    visibility: toTextOrNull(raw.visibility),
+    created_at: toDateOrNull(raw.created_at),
+    serving_size: toNumberOrNull(raw.serving_size),
+    serving_unit: toTextOrNull(raw.serving_unit),
+    servings_per_container: toNumberOrNull(raw.servings_per_container),
+    container_count: toNumberOrNull(raw.container_count),
+    dosage_text: toTextOrNull(raw.dosage_text),
+    warning_title: toTextOrNull(raw.warning_title),
+    warning_message: toTextOrNull(raw.warning_message),
+    warning_type: toTextOrNull(raw.warning_type),
+    alternative_note: toTextOrNull(raw.alternative_note),
+    link_health: parseAffiliateLinkHealth(raw.link_health),
+    version: toIntOrNull(raw.version),
+    raw,
+  };
+}
+
+function parseAdminIngredientListItem(raw: Record<string, unknown>): AdminIngredientListItem {
+  return {
+    id: toIntOrNull(raw.id ?? raw.ingredient_id) ?? 0,
+    name: toTextOrNull(raw.name ?? raw.ingredient_name) || `Wirkstoff ${toIntOrNull(raw.id ?? raw.ingredient_id) ?? ''}`,
+    unit: toTextOrNull(raw.unit ?? raw.ingredient_unit),
+    category: toTextOrNull(raw.category),
+    research_status: toTextOrNull(raw.research_status),
+    calculation_status: toTextOrNull(raw.calculation_status),
+    product_count: toIntOrNull(raw.product_count) ?? 0,
+    dose_recommendation_count: toIntOrNull(raw.dose_recommendation_count) ?? 0,
+    source_count: toIntOrNull(raw.source_count) ?? 0,
+    official_source_count: toIntOrNull(raw.official_source_count) ?? 0,
+    dge_source_count: toIntOrNull(raw.dge_source_count) ?? 0,
+    study_source_count: toIntOrNull(raw.study_source_count) ?? 0,
+    no_recommendation_count: toIntOrNull(raw.no_recommendation_count) ?? 0,
+    nrv_count: toIntOrNull(raw.nrv_count) ?? 0,
+    dose_source_link_count: toIntOrNull(raw.dose_source_link_count) ?? 0,
+    sourced_dose_recommendation_count: toIntOrNull(raw.sourced_dose_recommendation_count) ?? 0,
+    display_profile_count: toIntOrNull(raw.display_profile_count) ?? 0,
+    knowledge_article_count: toIntOrNull(raw.knowledge_article_count) ?? 0,
+    warning_count: toIntOrNull(raw.warning_count) ?? 0,
+    has_blog_url: toBooleanOrNull(raw.has_blog_url) ?? (toIntOrNull(raw.has_blog_url) ?? 0) > 0,
+    raw,
+  };
+}
+
+function parseProductIngredient(raw: Record<string, unknown>): AdminProductIngredient {
+  return {
+    id: toIntOrNull(raw.id) ?? 0,
+    product_id: toIntOrNull(raw.product_id) ?? 0,
+    ingredient_id: toIntOrNull(raw.ingredient_id) ?? 0,
+    ingredient_name: toTextOrNull(raw.ingredient_name) || `Wirkstoff ${toIntOrNull(raw.ingredient_id) ?? ''}`,
+    ingredient_unit: toTextOrNull(raw.ingredient_unit),
+    ingredient_description: toTextOrNull(raw.ingredient_description),
+    form_id: toIntOrNull(raw.form_id),
+    form_name: toTextOrNull(raw.form_name),
+    parent_ingredient_id: toIntOrNull(raw.parent_ingredient_id),
+    parent_ingredient_name: toTextOrNull(raw.parent_ingredient_name),
+    is_main: toBooleanOrNull(raw.is_main) ? 1 : 0,
+    search_relevant: toBooleanOrNull(raw.search_relevant) === false ? 0 : 1,
+    quantity: toNumberOrNull(raw.quantity),
+    unit: toTextOrNull(raw.unit),
+    basis_quantity: toNumberOrNull(raw.basis_quantity),
+    basis_unit: toTextOrNull(raw.basis_unit),
+    effect_summary: toTextOrNull(raw.effect_summary),
+    timing: toTextOrNull(raw.timing),
+    timing_note: toTextOrNull(raw.timing_note),
+    intake_hint: toTextOrNull(raw.intake_hint),
+    card_note: toTextOrNull(raw.card_note),
+    raw,
+  };
+}
+
+function parseProductSafetyWarning(raw: Record<string, unknown>): AdminProductSafetyWarning {
+  const severity = toTextOrNull(raw.severity);
+  return {
+    id: toIntOrNull(raw.id) ?? 0,
+    ingredient_id: toIntOrNull(raw.ingredient_id) ?? 0,
+    short_label: toTextOrNull(raw.short_label) || 'Warnung',
+    popover_text: toTextOrNull(raw.popover_text),
+    severity: severity === 'info' || severity === 'danger' ? severity : 'caution',
+    article_slug: toTextOrNull(raw.article_slug),
+    article_title: toTextOrNull(raw.article_title),
+    article_url: toTextOrNull(raw.article_url),
+    raw,
+  };
+}
+
+function parseProductWarning(raw: Record<string, unknown>): AdminProductWarning {
+  const severity = toTextOrNull(raw.severity);
+  return {
+    id: toIntOrNull(raw.id) ?? 0,
+    product_id: toIntOrNull(raw.product_id) ?? 0,
+    severity:
+      severity === 'info' || severity === 'danger' || severity === 'warning' || severity === 'caution'
+        ? severity
+        : 'caution',
+    title: toTextOrNull(raw.title) || 'Produktwarnung',
+    message: toTextOrNull(raw.message) || '',
+    alternative_note: toTextOrNull(raw.alternative_note),
+    active: toBooleanOrNull(raw.active) === false ? 0 : 1,
+    created_at: toDateOrNull(raw.created_at),
+    updated_at: toDateOrNull(raw.updated_at),
+    version: toIntOrNull(raw.version),
+    raw,
+  };
+}
+
+function parseProductDetail(raw: Record<string, unknown>): AdminProductDetail {
+  const productPayload = (raw.product && typeof raw.product === 'object' ? raw.product : raw) as Record<string, unknown>;
+  const product = parseCatalogProduct(productPayload);
+  const ingredients = Array.isArray(raw.ingredients) ? raw.ingredients : [];
+  const warnings = Array.isArray(raw.warnings) ? raw.warnings : [];
+  const productWarnings = Array.isArray(raw.product_warnings) ? raw.product_warnings : [];
+  const linkReports = Array.isArray(raw.link_reports) ? raw.link_reports : [];
+  const auditLogs = Array.isArray(raw.audit_logs) ? raw.audit_logs : [];
+  const qaRaw = raw.qa && typeof raw.qa === 'object' ? raw.qa as Record<string, unknown> : null;
+  const countsRaw = raw.qa_counts && typeof raw.qa_counts === 'object' ? raw.qa_counts as Record<string, unknown> : {};
+
+  return {
+    ...product,
+    ingredients: ingredients.map((entry) => parseProductIngredient(entry as Record<string, unknown>)),
+    qa: qaRaw ? parseProductQAProduct(qaRaw) : null,
+    qa_counts: {
+      ingredient_count: toIntOrNull(countsRaw.ingredient_count) ?? ingredients.length,
+      main_ingredient_count: toIntOrNull(countsRaw.main_ingredient_count) ?? 0,
+      issue_count: toIntOrNull(countsRaw.issue_count) ?? (qaRaw ? parseProductQAProduct(qaRaw).issues.length : 0),
+      warning_count: toIntOrNull(countsRaw.warning_count) ?? warnings.length,
+      product_warning_count: toIntOrNull(countsRaw.product_warning_count) ?? productWarnings.length,
+      link_report_count: toIntOrNull(countsRaw.link_report_count) ?? linkReports.length,
+      open_link_report_count: toIntOrNull(countsRaw.open_link_report_count) ?? 0,
+      audit_count: toIntOrNull(countsRaw.audit_count) ?? auditLogs.length,
+    },
+    warnings: warnings.map((entry) => parseProductSafetyWarning(entry as Record<string, unknown>)),
+    product_warnings: productWarnings.map((entry) => parseProductWarning(entry as Record<string, unknown>)),
+    link_reports: linkReports.map((entry) => parseProductLinkReport(entry as Record<string, unknown>)),
+    audit_logs: parseAuditEntries({ logs: auditLogs }),
     raw,
   };
 }
@@ -839,6 +1517,7 @@ function parseIngredientResearchStatus(raw: Record<string, unknown>): AdminIngre
     blog_url: toTextOrNull(raw.blog_url),
     reviewed_at: toDateOrNull(raw.reviewed_at),
     review_due_at: toDateOrNull(raw.review_due_at),
+    version: toIntOrNull(raw.version),
     raw,
   };
 }
@@ -876,7 +1555,77 @@ function parseIngredientResearchSource(raw: Record<string, unknown>): AdminIngre
     pubmed_id: toTextOrNull(raw.pubmed_id),
     source_date: toDateOrNull(raw.source_date),
     reviewed_at: toDateOrNull(raw.reviewed_at),
+    is_retracted: toBooleanOrNull(raw.is_retracted),
+    retraction_checked_at: toDateOrNull(raw.retraction_checked_at),
+    retraction_notice_url: toTextOrNull(raw.retraction_notice_url),
+    evidence_grade: toTextOrNull(raw.evidence_grade),
+    version: toIntOrNull(raw.version),
     raw,
+  };
+}
+
+function parseEvidenceSummary(raw: Record<string, unknown>): AdminEvidenceSummary {
+  const countsRaw = (raw.counts && typeof raw.counts === 'object' ? raw.counts : raw) as Record<string, unknown>;
+  const gradeCounts = parseCountMap(
+    raw.grade_counts ??
+      raw.evidence_grade_counts ??
+      countsRaw.grade_counts ??
+      countsRaw.evidence_grade_counts,
+  );
+  return {
+    total_sources: readCount(countsRaw, ['total_sources', 'total', 'source_count']),
+    official_sources: readCount(countsRaw, ['official_sources', 'official', 'official_source_count']),
+    study_sources: readCount(countsRaw, ['study_sources', 'study', 'study_source_count']),
+    other_sources: readCount(countsRaw, ['other_sources', 'other', 'other_source_count']),
+    no_recommendation_count: readCount(countsRaw, ['no_recommendation_count', 'no_recommendation']),
+    retracted_count: readCount(countsRaw, ['retracted_count', 'retracted', 'is_retracted']),
+    grade_counts: gradeCounts,
+    suggested_grade: toTextOrNull(raw.suggested_grade ?? countsRaw.suggested_grade),
+    raw,
+  };
+}
+
+function normalizeNutrientReferenceValueKind(value: unknown): AdminNutrientReferenceValueKind | string {
+  const normalized = toTextOrNull(value)?.toLowerCase() ?? 'nrv';
+  return normalized;
+}
+
+function parseNutrientReferenceValue(raw: Record<string, unknown>): AdminNutrientReferenceValue {
+  return {
+    id: toIntOrNull(raw.id) ?? 0,
+    ingredient_id: toIntOrNull(raw.ingredient_id) ?? 0,
+    population_id: toIntOrNull(raw.population_id),
+    organization: toTextOrNull(raw.organization) ?? '',
+    region: toTextOrNull(raw.region),
+    kind: normalizeNutrientReferenceValueKind(raw.kind),
+    value: toNumberOrNull(raw.value ?? raw.value_min ?? raw.value_max),
+    unit: toTextOrNull(raw.unit) ?? '',
+    source_url: toTextOrNull(raw.source_url),
+    source_label: toTextOrNull(raw.source_label),
+    source_year: toIntOrNull(raw.source_year),
+    notes: toTextOrNull(raw.notes ?? raw.note),
+    created_at: toDateOrNull(raw.created_at),
+    updated_at: toDateOrNull(raw.updated_at),
+    version: toIntOrNull(raw.version),
+    raw,
+  };
+}
+
+function parsePubMedLookup(raw: Record<string, unknown>): AdminPubMedLookup {
+  const authors = Array.isArray(raw.authors)
+    ? raw.authors.map((entry) => toTextOrNull(entry)).filter((entry): entry is string => Boolean(entry))
+    : [];
+  return {
+    pmid: toTextOrNull(raw.pmid) ?? '',
+    doi: toTextOrNull(raw.doi),
+    title: toTextOrNull(raw.title) ?? '',
+    journal: toTextOrNull(raw.journal),
+    source_url: toTextOrNull(raw.source_url) ?? '',
+    source_date: toTextOrNull(raw.source_date),
+    authors,
+    source_kind: 'study',
+    organization: 'PubMed',
+    notes: toTextOrNull(raw.notes),
   };
 }
 
@@ -891,6 +1640,7 @@ function parseIngredientResearchWarning(raw: Record<string, unknown>): AdminIngr
     min_amount: toIntOrNull(raw.min_amount),
     unit: toTextOrNull(raw.unit),
     active: toIntOrNull(raw.active),
+    version: toIntOrNull(raw.version),
     raw,
   };
 }
@@ -917,6 +1667,7 @@ function parseIngredientDisplayProfile(raw: Record<string, unknown>): AdminIngre
     timing_note: toTextOrNull(raw.timing_note),
     intake_hint: toTextOrNull(raw.intake_hint),
     card_note: toTextOrNull(raw.card_note),
+    version: toIntOrNull(raw.version),
     raw,
   };
 }
@@ -981,6 +1732,7 @@ function normalizeIngredientResearchDetailResponse(raw: unknown): AdminIngredien
       blog_url: null,
       reviewed_at: null,
       review_due_at: null,
+      version: null,
     },
     sources: Array.isArray(rawSources) ? rawSources.map((sourceEntry) => parseIngredientResearchSource(sourceEntry as Record<string, unknown>)) : [],
     warnings: Array.isArray(rawWarnings) ? rawWarnings.map((warningEntry) => parseIngredientResearchWarning(warningEntry as Record<string, unknown>)) : [],
@@ -999,6 +1751,7 @@ function normalizeStatusPayload(payload: AdminIngredientResearchStatusPayload): 
     blog_url: toTextOrNull(payload.blog_url),
     reviewed_at: payload.reviewed_at !== undefined ? toDateOrNull(payload.reviewed_at) : null,
     review_due_at: payload.review_due_at !== undefined ? toDateOrNull(payload.review_due_at) : null,
+    version: payload.version ?? null,
   };
 }
 
@@ -1028,6 +1781,32 @@ function normalizeSourcePayload(payload: AdminIngredientResearchSourcePayload): 
     pubmed_id: toTextOrNull(payload.pubmed_id),
     source_date: payload.source_date !== undefined ? toDateOrNull(payload.source_date) : null,
     reviewed_at: payload.reviewed_at !== undefined ? toDateOrNull(payload.reviewed_at) : null,
+    is_retracted:
+      typeof payload.is_retracted === 'number'
+        ? payload.is_retracted !== 0
+        : payload.is_retracted ?? null,
+    retraction_checked_at:
+      payload.retraction_checked_at !== undefined ? toDateOrNull(payload.retraction_checked_at) : null,
+    retraction_notice_url: toTextOrNull(payload.retraction_notice_url),
+    evidence_grade: toTextOrNull(payload.evidence_grade)?.toUpperCase() ?? null,
+    version: payload.version ?? null,
+  };
+}
+
+function normalizeNutrientReferenceValuePayload(
+  payload: AdminNutrientReferenceValuePayload,
+): AdminNutrientReferenceValuePayload {
+  return {
+    population_id: payload.population_id ?? null,
+    organization: toTrimmedOrNull(payload.organization) ?? '',
+    region: toTrimmedOrNull(payload.region),
+    kind: normalizeNutrientReferenceValueKind(payload.kind),
+    value: toNumberOrNull(payload.value),
+    unit: toTrimmedOrNull(payload.unit) ?? '',
+    source_url: toTrimmedOrNull(payload.source_url),
+    source_label: toTrimmedOrNull(payload.source_label),
+    source_year: toIntOrNull(payload.source_year),
+    notes: toTrimmedOrNull(payload.notes),
   };
 }
 
@@ -1043,6 +1822,7 @@ function normalizeWarningPayload(payload: AdminIngredientResearchWarningPayload)
       typeof payload.active === 'number'
         ? payload.active !== 0
         : payload.active,
+    version: payload.version ?? null,
   };
 }
 
@@ -1057,6 +1837,7 @@ function normalizeDisplayProfilePayload(
     timing_note: toTextOrNull(payload.timing_note),
     intake_hint: toTextOrNull(payload.intake_hint),
     card_note: toTextOrNull(payload.card_note),
+    version: payload.version ?? null,
   };
 }
 
@@ -1129,11 +1910,79 @@ function parseAuditEntries(raw: unknown): AdminAuditLogEntry[] {
   });
 }
 
+function parseBulkApproveUserProductsResponse(raw: unknown): AdminBulkApproveUserProductsResponse {
+  const payload = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
+  const rawResults = Array.isArray(payload.results) ? payload.results : [];
+  const results: AdminBulkApproveUserProductResult[] = rawResults.map((entry) => {
+    const row = entry as Record<string, unknown>;
+    const status = toTextOrNull(row.status);
+    return {
+      id: toIntOrNull(row.id) ?? 0,
+      ok: toBooleanOrNull(row.ok) === true,
+      status: status === 'approved' ? 'approved' : 'failed',
+      previous_status: toTextOrNull(row.previous_status),
+      approved_at: toDateOrNull(row.approved_at),
+      error: toTextOrNull(row.error),
+    };
+  });
+  return {
+    ok: toBooleanOrNull(payload.ok) === true,
+    requested: toIntOrNull(payload.requested) ?? results.length,
+    unique: toIntOrNull(payload.unique) ?? results.length,
+    approved: toIntOrNull(payload.approved) ?? results.filter((result) => result.ok).length,
+    failed: toIntOrNull(payload.failed) ?? results.filter((result) => !result.ok).length,
+    results,
+  };
+}
+
+function parseAdminUserProductIngredient(raw: Record<string, unknown>): AdminUserProductIngredient {
+  return {
+    ingredient_id: toIntOrNull(raw.ingredient_id) ?? 0,
+    ingredient_name: toTextOrNull(raw.ingredient_name),
+    quantity: toNumberOrNull(raw.quantity),
+    unit: toTextOrNull(raw.unit),
+    basis_quantity: toNumberOrNull(raw.basis_quantity),
+    basis_unit: toTextOrNull(raw.basis_unit),
+    search_relevant: toBooleanOrNull(raw.search_relevant) ?? toIntOrNull(raw.search_relevant),
+    parent_ingredient_id: toIntOrNull(raw.parent_ingredient_id),
+  };
+}
+
+function parseAdminUserProduct(raw: Record<string, unknown>): AdminUserProduct {
+  const status = toTextOrNull(raw.status);
+  const ingredients = Array.isArray(raw.ingredients)
+    ? raw.ingredients.map((entry) => parseAdminUserProductIngredient(entry as Record<string, unknown>))
+    : [];
+  return {
+    id: toIntOrNull(raw.id) ?? 0,
+    user_id: toIntOrNull(raw.user_id) ?? 0,
+    user_email: toTextOrNull(raw.user_email),
+    name: toTextOrNull(raw.name) ?? 'Unbenanntes Produkt',
+    brand: toTextOrNull(raw.brand),
+    form: toTextOrNull(raw.form),
+    price: toNumberOrNull(raw.price) ?? 0,
+    shop_link: toTextOrNull(raw.shop_link),
+    serving_size: toNumberOrNull(raw.serving_size),
+    serving_unit: toTextOrNull(raw.serving_unit),
+    servings_per_container: toNumberOrNull(raw.servings_per_container),
+    container_count: toNumberOrNull(raw.container_count),
+    is_affiliate: toIntOrNull(raw.is_affiliate),
+    notes: toTextOrNull(raw.notes),
+    status: status === 'approved' || status === 'rejected' ? status : 'pending',
+    approved_at: toDateOrNull(raw.approved_at),
+    created_at: toDateOrNull(raw.created_at) ?? '',
+    user_is_trusted_product_submitter: toIntOrNull(raw.user_is_trusted_product_submitter),
+    published_product_id: toIntOrNull(raw.published_product_id),
+    ingredients,
+    raw,
+  };
+}
+
 function normalizeDoseListResponse(raw: unknown): AdminDoseRecommendation[] {
   const payload = raw as AdminListResponse;
   const candidates = payload.recommendations ?? payload.dose_recommendments ?? payload.dose_recommendment ?? [];
   if (!Array.isArray(candidates)) return [];
-  return candidates;
+  return candidates.map((entry) => parseDoseRecommendation(entry as unknown as Record<string, unknown>));
 }
 
 function mapTranslationDoseRowToAdmin(row: TranslationDoseRow): AdminDoseRecommendation {
@@ -1156,11 +2005,115 @@ function mapTranslationDoseRowToAdmin(row: TranslationDoseRow): AdminDoseRecomme
     purpose: row.purpose,
     is_active: row.is_active,
     is_default: 0,
+    version: null,
   };
 }
 
-function normalizeDosePayload(payload: AdminDoseRecommendationPayload): AdminDoseRecommendationPayload {
+function parseDoseRecommendationSource(raw: Record<string, unknown>): AdminDoseRecommendationSource | null {
+  const researchSourceId = toIntOrNull(raw.research_source_id ?? raw.source_id ?? raw.id);
+  if (researchSourceId === null || researchSourceId <= 0) return null;
   return {
+    id: toIntOrNull(raw.id),
+    dose_recommendation_id: toIntOrNull(raw.dose_recommendation_id),
+    research_source_id: researchSourceId,
+    relevance_weight: toIntOrNull(raw.relevance_weight ?? raw.weight) ?? 50,
+    is_primary: toBooleanOrNull(raw.is_primary ?? raw.primary) ? 1 : 0,
+    note: toTextOrNull(raw.note ?? raw.notes),
+    source_kind: toTextOrNull(raw.source_kind ?? raw.source_type),
+    source_title: toTextOrNull(raw.source_title ?? raw.title ?? raw.label),
+    source_url: toTextOrNull(raw.source_url ?? raw.url),
+    organization: toTextOrNull(raw.organization),
+    study_type: toTextOrNull(raw.study_type),
+    evidence_quality: toTextOrNull(raw.evidence_quality),
+    outcome: toTextOrNull(raw.outcome),
+    reviewed_at: toDateOrNull(raw.reviewed_at),
+  };
+}
+
+function parseDosePlausibilityWarnings(value: unknown): AdminDosePlausibilityWarning[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry): AdminDosePlausibilityWarning | null => {
+      if (typeof entry === 'string') {
+        const detail = entry.trim();
+        return detail ? { code: null, severity: null, label: null, detail } : null;
+      }
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return null;
+      const raw = entry as Record<string, unknown>;
+      const detail =
+        toTextOrNull(raw.detail ?? raw.message ?? raw.warning ?? raw.text) ??
+        toTextOrNull(raw.label) ??
+        '';
+      if (!detail) return null;
+      return {
+        code: toTextOrNull(raw.code),
+        severity: toTextOrNull(raw.severity),
+        label: toTextOrNull(raw.label ?? raw.title),
+        detail,
+        raw,
+      };
+    })
+    .filter((entry): entry is AdminDosePlausibilityWarning => entry !== null);
+}
+
+function parseDoseRecommendation(raw: Record<string, unknown>): AdminDoseRecommendation {
+  const rawSources = Array.isArray(raw.sources) ? raw.sources : [];
+  const sources = rawSources
+    .map((entry) => parseDoseRecommendationSource(entry as Record<string, unknown>))
+    .filter((entry): entry is AdminDoseRecommendationSource => entry !== null);
+  const plausibilityWarnings = parseDosePlausibilityWarnings(raw.plausibility_warnings);
+
+  return {
+    id: toIntOrNull(raw.id ?? raw.dose_recommendation_id) ?? 0,
+    ingredient_id: toIntOrNull(raw.ingredient_id),
+    ingredient_name: toTextOrNull(raw.ingredient_name),
+    population_id: toIntOrNull(raw.population_id),
+    population_slug: toTextOrNull(raw.population_slug),
+    source_type: toTextOrNull(raw.source_type),
+    source_label: toTextOrNull(raw.source_label),
+    source_url: toTextOrNull(raw.source_url),
+    dose_min: toNumberOrNull(raw.dose_min),
+    dose_max: toNumberOrNull(raw.dose_max),
+    unit: toTextOrNull(raw.unit),
+    per_kg_body_weight: toNumberOrNull(raw.per_kg_body_weight),
+    per_kg_cap: toNumberOrNull(raw.per_kg_cap),
+    timing: toTextOrNull(raw.timing),
+    context_note: toTextOrNull(raw.context_note),
+    sex_filter: toTextOrNull(raw.sex_filter),
+    is_athlete: toIntOrNull(raw.is_athlete),
+    purpose: toTextOrNull(raw.purpose),
+    is_default: toIntOrNull(raw.is_default),
+    is_active: toIntOrNull(raw.is_active),
+    relevance_score: toIntOrNull(raw.relevance_score),
+    verified_profile_id: toIntOrNull(raw.verified_profile_id),
+    verified_profile_name: toTextOrNull(raw.verified_profile_name),
+    category_name: toTextOrNull(raw.category_name),
+    created_by_user_id: toIntOrNull(raw.created_by_user_id),
+    is_public: toIntOrNull(raw.is_public),
+    version: toIntOrNull(raw.version),
+    sources,
+    plausibility_warnings: plausibilityWarnings,
+  };
+}
+
+function normalizeDoseSources(
+  sources?: AdminDoseRecommendationSourcePayload[],
+): AdminDoseRecommendationSourcePayload[] | undefined {
+  if (!Array.isArray(sources)) return undefined;
+  return sources
+    .map((source) => ({
+      research_source_id: toIntOrNull(source.research_source_id) ?? 0,
+      relevance_weight: Math.min(100, Math.max(0, toIntOrNull(source.relevance_weight) ?? 50)),
+      is_primary: typeof source.is_primary === 'boolean'
+        ? source.is_primary
+        : toBooleanOrNull(source.is_primary) ?? false,
+      note: toTextOrNull(source.note),
+    }))
+    .filter((source) => source.research_source_id > 0);
+}
+
+function normalizeDosePayload(payload: AdminDoseRecommendationPayload): AdminDoseRecommendationPayload {
+  const normalized: AdminDoseRecommendationPayload = {
     ingredient_id: payload.ingredient_id,
     population_id: payload.population_id,
     population_slug: toTrimmedOrNull(payload.population_slug),
@@ -1179,9 +2132,33 @@ function normalizeDosePayload(payload: AdminDoseRecommendationPayload): AdminDos
     purpose: toTrimmedOrNull(payload.purpose),
     is_default: payload.is_default,
     is_active: payload.is_active,
+    is_public: payload.is_public,
     relevance_score: payload.relevance_score ?? null,
     verified_profile_id: payload.verified_profile_id ?? null,
+    category_name: toTrimmedOrNull(payload.category_name),
+    version: payload.version ?? null,
   };
+  const sources = normalizeDoseSources(payload.sources);
+  if (sources !== undefined) normalized.sources = sources;
+  return normalized;
+}
+
+function parseDoseMutationResponse(data: unknown): AdminDoseRecommendation {
+  const payload = data && typeof data === 'object' ? (data as Record<string, unknown>) : {};
+  const recommendationRaw =
+    payload.recommendation ??
+    payload.dose_recommendment ??
+    payload.dose_recommendments ??
+    payload;
+  const recommendation = parseDoseRecommendation(recommendationRaw as Record<string, unknown>);
+  const responseWarnings = parseDosePlausibilityWarnings(payload.plausibility_warnings);
+  if (responseWarnings.length > 0) {
+    return {
+      ...recommendation,
+      plausibility_warnings: responseWarnings,
+    };
+  }
+  return recommendation;
 }
 
 export async function getAdminStats(): Promise<AdminStats> {
@@ -1236,72 +2213,325 @@ export async function createKnowledgeArticle(
 export async function updateKnowledgeArticle(
   slug: string,
   payload: AdminKnowledgeArticlePayload,
+  options: AdminMutationOptions = {},
 ): Promise<AdminKnowledgeArticle> {
   const normalized = normalizeKnowledgeArticlePayload(payload);
   const res = await apiClient.put<{ article?: unknown }>(
     `/admin/knowledge-articles/${encodeURIComponent(slug)}`,
     normalized,
+    withIfMatch(normalized, options),
   );
   const article = (res.data.article ?? res.data) as Record<string, unknown>;
   return parseKnowledgeArticle(article);
 }
 
-export async function archiveKnowledgeArticle(slug: string): Promise<AdminKnowledgeArticle> {
+export async function archiveKnowledgeArticle(
+  slug: string,
+  options: AdminMutationOptions = {},
+): Promise<AdminKnowledgeArticle> {
   const res = await apiClient.delete<{ ok?: boolean; article?: unknown }>(
     `/admin/knowledge-articles/${encodeURIComponent(slug)}`,
+    withIfMatch(undefined, options),
   );
   const article = (res.data.article ?? {}) as Record<string, unknown>;
   return parseKnowledgeArticle(article);
 }
 
+export async function getAdminUserProducts(params: {
+  status?: AdminUserProductStatus;
+  page?: number;
+  limit?: number;
+} = {}): Promise<AdminUserProductsResponse> {
+  const query = toQueryParams({
+    status: params.status ?? 'pending',
+    page: params.page,
+    limit: params.limit ?? 50,
+  });
+  const res = await apiClient.get<Record<string, unknown>>('/admin/user-products', { params: query });
+  const products = Array.isArray(res.data.products) ? res.data.products : [];
+  const total = toIntOrNull(res.data.total) ?? products.length;
+  const page = toIntOrNull(res.data.page) ?? params.page ?? 1;
+  const limit = toIntOrNull(res.data.limit) ?? params.limit ?? Math.max(1, products.length);
+  const summaryRaw = res.data.summary && typeof res.data.summary === 'object'
+    ? res.data.summary as Record<string, unknown>
+    : {};
+  const statusSummaryRaw = summaryRaw.statuses && typeof summaryRaw.statuses === 'object'
+    ? summaryRaw.statuses as Record<string, unknown>
+    : res.data.status_summary && typeof res.data.status_summary === 'object'
+      ? res.data.status_summary as Record<string, unknown>
+      : {};
+  const statuses: Record<AdminUserProductStatus, number> = {
+    pending: toIntOrNull(statusSummaryRaw.pending) ?? 0,
+    approved: toIntOrNull(statusSummaryRaw.approved) ?? 0,
+    rejected: toIntOrNull(statusSummaryRaw.rejected) ?? 0,
+  };
+  return {
+    products: products.map((product) => parseAdminUserProduct(product as Record<string, unknown>)),
+    total,
+    page,
+    limit,
+    total_pages: toIntOrNull(res.data.total_pages) ?? Math.max(1, Math.ceil(total / limit)),
+    summary: {
+      total: toIntOrNull(summaryRaw.total) ?? statuses.pending + statuses.approved + statuses.rejected,
+      statuses,
+    },
+    status_summary: statuses,
+  };
+}
+
+export async function bulkApproveUserProducts(ids: number[]): Promise<AdminBulkApproveUserProductsResponse> {
+  const res = await apiClient.put<Record<string, unknown>>('/admin/user-products/bulk-approve', { ids });
+  return parseBulkApproveUserProductsResponse(res.data);
+}
+
 export async function getProductQA(params: {
   q?: string;
   issue?: string;
+  page?: number;
   limit?: number;
 } = {}): Promise<AdminProductQAResponse> {
   const query = toQueryParams({
     q: params.q,
     issue: params.issue,
-    limit: params.limit ?? 100,
+    page: params.page,
+    limit: params.limit ?? 50,
   });
-  const res = await apiClient.get<{ products?: unknown }>('/admin/product-qa', { params: query });
+  const res = await apiClient.get<Record<string, unknown>>('/admin/product-qa', { params: query });
   const products = Array.isArray(res.data.products) ? res.data.products : [];
+  const summaryRaw = res.data.summary && typeof res.data.summary === 'object'
+    ? res.data.summary as Record<string, unknown>
+    : {};
+  const issueSummaryRaw = summaryRaw.issues ?? res.data.issue_summary;
+  const availableIssues = Array.isArray(res.data.available_issues)
+    ? res.data.available_issues.map((entry) => toTextOrNull(entry)).filter((entry): entry is string => Boolean(entry))
+    : undefined;
   return {
     products: products.map((product) => parseProductQAProduct(product as Record<string, unknown>)),
+    total: toIntOrNull(res.data.total) ?? products.length,
+    page: toIntOrNull(res.data.page) ?? params.page ?? 1,
+    limit: toIntOrNull(res.data.limit) ?? params.limit ?? 50,
+    summary: {
+      total: toIntOrNull(summaryRaw.total) ?? 0,
+      issues: parseCountMap(issueSummaryRaw),
+    },
+    available_issues: availableIssues,
   };
 }
 
 export async function updateProductQA(
   productId: number,
   payload: AdminProductQAPatch,
+  options: AdminMutationOptions = {},
 ): Promise<AdminProductQAProduct> {
   const res = await apiClient.patch<{ product?: unknown }>(
     `/admin/product-qa/${productId}`,
     payload,
+    withIfMatch(undefined, options),
   );
   const product = (res.data.product ?? res.data) as Record<string, unknown>;
   return parseProductQAProduct(product);
 }
 
+export async function getAdminProducts(params: {
+  q?: string;
+  page?: number;
+  limit?: number;
+} = {}): Promise<AdminCatalogProductsResponse> {
+  const query = toQueryParams({
+    q: params.q,
+    page: params.page,
+    limit: params.limit,
+  });
+  const res = await apiClient.get<Record<string, unknown>>('/admin/products', { params: query });
+  const products = Array.isArray(res.data.products) ? res.data.products : [];
+  const total = toIntOrNull(res.data.total) ?? products.length;
+  const page = toIntOrNull(res.data.page) ?? params.page ?? 1;
+  const limit = toIntOrNull(res.data.limit) ?? params.limit ?? Math.max(1, products.length);
+  return {
+    products: products.map((product) => parseCatalogProduct(product as Record<string, unknown>)),
+    total,
+    page,
+    limit,
+    total_pages: toIntOrNull(res.data.total_pages) ?? Math.max(1, Math.ceil(total / limit)),
+  };
+}
+
+export async function getAdminProduct(productId: number): Promise<AdminProductDetail> {
+  const res = await apiClient.get<{ product?: unknown }>(`/admin/products/${productId}`);
+  return parseProductDetail(res.data as Record<string, unknown>);
+}
+
+export async function uploadAdminProductImage(
+  productId: number,
+  file: Blob,
+  options: AdminMutationOptions = {},
+): Promise<AdminProductImageUploadResponse> {
+  const formData = new FormData();
+  formData.append('image', file, 'product.jpg');
+  if (options.version !== null && options.version !== undefined) {
+    formData.append('version', String(options.version));
+  }
+  const res = await apiClient.post<Record<string, unknown>>(
+    `/admin/products/${productId}/image`,
+    formData,
+    withIfMatch(undefined, options),
+  );
+  return {
+    image_url: toTextOrNull(res.data.image_url) ?? '',
+    image_r2_key: toTextOrNull(res.data.image_r2_key),
+    product_version: toIntOrNull(res.data.product_version),
+  };
+}
+
+export async function createAdminProductIngredient(
+  productId: number,
+  payload: AdminProductIngredientPayload,
+  options: AdminMutationOptions = {},
+): Promise<AdminProductIngredient> {
+  const res = await apiClient.post<{ ingredient?: unknown; row?: unknown }>(
+    `/admin/products/${productId}/ingredients`,
+    payload,
+    withIfMatch(payload, options),
+  );
+  const row = (res.data.ingredient ?? res.data.row ?? res.data) as Record<string, unknown>;
+  return parseProductIngredient(row);
+}
+
+export async function updateAdminProductIngredient(
+  productId: number,
+  rowId: number,
+  payload: AdminProductIngredientPayload,
+  options: AdminMutationOptions = {},
+): Promise<AdminProductIngredient> {
+  const res = await apiClient.put<{ ingredient?: unknown; row?: unknown }>(
+    `/admin/products/${productId}/ingredients/${rowId}`,
+    payload,
+    withIfMatch(payload, options),
+  );
+  const row = (res.data.ingredient ?? res.data.row ?? res.data) as Record<string, unknown>;
+  return parseProductIngredient(row);
+}
+
+export async function deleteAdminProductIngredient(
+  productId: number,
+  rowId: number,
+  options: AdminMutationOptions = {},
+): Promise<void> {
+  await apiClient.delete(
+    `/admin/products/${productId}/ingredients/${rowId}`,
+    withIfMatch(undefined, options),
+  );
+}
+
+export async function createAdminProductWarning(
+  productId: number,
+  payload: AdminProductWarningPayload,
+): Promise<AdminProductWarning> {
+  const res = await apiClient.post<{ warning?: unknown }>(`/admin/products/${productId}/warnings`, payload);
+  const warning = (res.data.warning ?? res.data) as Record<string, unknown>;
+  return parseProductWarning(warning);
+}
+
+export async function updateAdminProductWarning(
+  productId: number,
+  warningId: number,
+  payload: AdminProductWarningPayload,
+  options: AdminMutationOptions = {},
+): Promise<AdminProductWarning> {
+  const res = await apiClient.put<{ warning?: unknown }>(
+    `/admin/products/${productId}/warnings/${warningId}`,
+    payload,
+    withIfMatch(undefined, options),
+  );
+  const warning = (res.data.warning ?? res.data) as Record<string, unknown>;
+  return parseProductWarning(warning);
+}
+
+export async function deleteAdminProductWarning(
+  productId: number,
+  warningId: number,
+  options: AdminMutationOptions = {},
+): Promise<AdminProductWarning | null> {
+  const res = await apiClient.delete<{ warning?: unknown }>(
+    `/admin/products/${productId}/warnings/${warningId}`,
+    withIfMatch(undefined, options),
+  );
+  if (!res.data.warning || typeof res.data.warning !== 'object') return null;
+  return parseProductWarning(res.data.warning as Record<string, unknown>);
+}
+
+export async function getAdminIngredients(params: {
+  q?: string;
+  page?: number;
+  limit?: number;
+} = {}): Promise<AdminIngredientsResponse> {
+  const query = toQueryParams({
+    q: params.q,
+    page: params.page,
+    limit: params.limit,
+  });
+  const res = await apiClient.get<Record<string, unknown>>('/admin/ingredients', { params: query });
+  const ingredients = Array.isArray(res.data.ingredients) ? res.data.ingredients : [];
+  const total = toIntOrNull(res.data.total) ?? ingredients.length;
+  const page = toIntOrNull(res.data.page) ?? params.page ?? 1;
+  const limit = toIntOrNull(res.data.limit) ?? params.limit ?? Math.max(1, ingredients.length);
+  const summaryRaw = res.data.summary && typeof res.data.summary === 'object'
+    ? res.data.summary as Record<string, unknown>
+    : {};
+  return {
+    ingredients: ingredients.map((ingredient) => parseAdminIngredientListItem(ingredient as Record<string, unknown>)),
+    total,
+    page,
+    limit,
+    total_pages: toIntOrNull(res.data.total_pages) ?? Math.max(1, Math.ceil(total / limit)),
+    summary: {
+      total: toIntOrNull(summaryRaw.total) ?? total,
+    },
+  };
+}
+
 export async function getProductLinkReports(params: {
   q?: string;
   status?: AdminProductLinkReportStatus | '';
+  page?: number;
   limit?: number;
 } = {}): Promise<AdminProductLinkReportsResponse> {
   const query = toQueryParams({
     q: params.q,
     status: params.status,
-    limit: params.limit ?? 100,
+    page: params.page,
+    limit: params.limit ?? 50,
   });
-  const res = await apiClient.get<{ reports?: unknown; total?: number | null; limit?: number }>(
+  const res = await apiClient.get<Record<string, unknown>>(
     '/admin/link-reports',
     { params: query },
   );
   const reports = Array.isArray(res.data.reports) ? res.data.reports : [];
+  const summaryRaw = res.data.summary && typeof res.data.summary === 'object'
+    ? res.data.summary as Record<string, unknown>
+    : {};
+  const statusSummary = parseCountMap(summaryRaw.statuses ?? res.data.status_summary);
+  const availableStatuses = Array.isArray(res.data.available_statuses)
+    ? res.data.available_statuses
+        .map((entry) => toTextOrNull(entry))
+        .filter((entry): entry is AdminProductLinkReportStatus => (
+          entry === 'open' || entry === 'reviewed' || entry === 'closed'
+        ))
+    : undefined;
   return {
     reports: reports.map((report) => parseProductLinkReport(report as Record<string, unknown>)),
-    total: res.data.total,
-    limit: res.data.limit,
+    total: toIntOrNull(res.data.total) ?? reports.length,
+    page: toIntOrNull(res.data.page) ?? params.page ?? 1,
+    limit: toIntOrNull(res.data.limit) ?? params.limit ?? 50,
+    summary: {
+      total: toIntOrNull(summaryRaw.total) ?? 0,
+      statuses: {
+        open: statusSummary.open ?? 0,
+        reviewed: statusSummary.reviewed ?? 0,
+        closed: statusSummary.closed ?? 0,
+      },
+    },
+    available_statuses: availableStatuses,
   };
 }
 
@@ -1322,9 +2552,48 @@ export async function getIngredientResearchExport(): Promise<unknown> {
   return res.data;
 }
 
-export async function getInteractions(): Promise<Interaction[]> {
-  const res = await apiClient.get('/interactions');
-  return res.data.interactions ?? [];
+export async function getLaunchChecks(): Promise<AdminLaunchChecksResponse> {
+  const res = await apiClient.get<AdminLaunchChecksResponse>('/admin/launch-checks');
+  return res.data;
+}
+
+function parseAdminInteraction(raw: Record<string, unknown>): AdminInteraction {
+  return {
+    id: toIntOrNull(raw.id) ?? 0,
+    ingredient_id: toIntOrNull(raw.ingredient_id) ?? toIntOrNull(raw.ingredient_a_id) ?? 0,
+    partner_type: toTextOrNull(raw.partner_type) ?? 'ingredient',
+    partner_ingredient_id: toIntOrNull(raw.partner_ingredient_id),
+    partner_label: toTextOrNull(raw.partner_label),
+    type: toTextOrNull(raw.type) ?? 'caution',
+    comment: toTextOrNull(raw.comment),
+    severity: toTextOrNull(raw.severity),
+    mechanism: toTextOrNull(raw.mechanism),
+    source_label: toTextOrNull(raw.source_label),
+    source_url: toTextOrNull(raw.source_url),
+    is_active: toIntOrNull(raw.is_active) ?? (toBooleanOrNull(raw.is_active) === false ? 0 : 1),
+    ingredient_a_id: toIntOrNull(raw.ingredient_a_id) ?? toIntOrNull(raw.ingredient_id) ?? 0,
+    ingredient_b_id: toIntOrNull(raw.ingredient_b_id) ?? toIntOrNull(raw.partner_ingredient_id),
+    ingredient_a_name: toTextOrNull(raw.ingredient_a_name) ?? undefined,
+    ingredient_b_name: toTextOrNull(raw.ingredient_b_name),
+    version: toIntOrNull(raw.version),
+  };
+}
+
+export async function getInteractions(params: {
+  ingredient_id?: number;
+} = {}): Promise<AdminInteraction[]> {
+  const query = toQueryParams({
+    ingredient_id: params.ingredient_id,
+  });
+  const res = await apiClient.get<{ interactions?: unknown[] }>('/interactions', { params: query });
+  const interactions = Array.isArray(res.data.interactions) ? res.data.interactions : [];
+  return interactions.map((interaction) => parseAdminInteraction(interaction as Record<string, unknown>));
+}
+
+export async function upsertAdminInteraction(payload: AdminInteractionPayload): Promise<AdminInteraction> {
+  const res = await apiClient.post<{ interaction?: unknown }>('/interactions', payload, withIfMatch(payload));
+  const interaction = (res.data.interaction ?? res.data) as Record<string, unknown>;
+  return parseAdminInteraction(interaction);
 }
 
 export async function createInteraction(data: {
@@ -1337,8 +2606,8 @@ export async function createInteraction(data: {
   return (res.data.interaction ?? res.data) as Interaction;
 }
 
-export async function deleteInteraction(id: number): Promise<void> {
-  await apiClient.delete(`/interactions/${id}`);
+export async function deleteInteraction(id: number, options: AdminMutationOptions = {}): Promise<void> {
+  await apiClient.delete(`/interactions/${id}`, withIfMatch(undefined, options));
 }
 
 export async function searchIngredients(query: string): Promise<IngredientLookup[]> {
@@ -1351,12 +2620,8 @@ export async function searchIngredients(query: string): Promise<IngredientLookup
 }
 
 export async function getAllIngredients(): Promise<IngredientLookup[]> {
-  try {
-    const res = await apiClient.get<IngredientListResponse>('/ingredients');
-    return res.data.ingredients ?? [];
-  } catch {
-    return [];
-  }
+  const res = await apiClient.get<IngredientListResponse>('/ingredients');
+  return res.data.ingredients ?? [];
 }
 
 export async function getIngredientSubIngredients(params?: {
@@ -1437,11 +2702,14 @@ export async function getIngredientResearchDetail(ingredientId: number): Promise
 export async function updateIngredientResearchStatus(
   ingredientId: number,
   payload: AdminIngredientResearchStatusPayload,
+  options: AdminMutationOptions = {},
 ): Promise<AdminIngredientResearchStatus> {
   const normalized = normalizeStatusPayload(payload);
-  const { data } = await apiClient
-    .put(`/admin/ingredient-research/${ingredientId}/status`, normalized)
-    .then((response) => response.data);
+  const { data } = await apiClient.put(
+    `/admin/ingredient-research/${ingredientId}/status`,
+    normalized,
+    withIfMatch(normalized, options),
+  );
   const status = data?.status ?? data;
   if (status && typeof status === 'object') return parseIngredientResearchStatus(status as Record<string, unknown>);
   return normalizeIngredientResearchDetailResponse(data).status;
@@ -1450,11 +2718,14 @@ export async function updateIngredientResearchStatus(
 export async function upsertIngredientDisplayProfile(
   ingredientId: number,
   payload: AdminIngredientDisplayProfilePayload,
+  options: AdminMutationOptions = {},
 ): Promise<AdminIngredientDisplayProfile> {
   const normalized = normalizeDisplayProfilePayload(payload);
-  const { data } = await apiClient
-    .put(`/admin/ingredient-research/${ingredientId}/display-profile`, normalized)
-    .then((response) => response.data);
+  const { data } = await apiClient.put(
+    `/admin/ingredient-research/${ingredientId}/display-profile`,
+    normalized,
+    withIfMatch(normalized, options),
+  );
   const profile = data?.profile ?? data;
   if (profile && typeof profile === 'object') {
     return parseIngredientDisplayProfile(profile as Record<string, unknown>);
@@ -1467,9 +2738,7 @@ export async function createIngredientResearchSource(
   payload: AdminIngredientResearchSourcePayload,
 ): Promise<AdminIngredientResearchSource> {
   const normalized = normalizeSourcePayload(payload);
-  const { data } = await apiClient
-    .post(`/admin/ingredient-research/${ingredientId}/sources`, normalized)
-    .then((response) => response.data);
+  const { data } = await apiClient.post(`/admin/ingredient-research/${ingredientId}/sources`, normalized);
   const created = data?.source ?? data;
   if (created && typeof created === 'object') {
     return parseIngredientResearchSource(created as Record<string, unknown>);
@@ -1477,14 +2746,79 @@ export async function createIngredientResearchSource(
   throw new Error('Could not parse source response.');
 }
 
+export async function getAdminEvidenceSummary(ingredientId: number): Promise<AdminEvidenceSummary> {
+  const { data } = await apiClient.get<Record<string, unknown>>(
+    `/admin/ingredients/${ingredientId}/evidence-summary`,
+  );
+  const summary = (data.summary ?? data.evidence_summary ?? data) as Record<string, unknown>;
+  return parseEvidenceSummary(summary);
+}
+
+export async function getAdminNutrientReferenceValues(
+  ingredientId: number,
+): Promise<AdminNutrientReferenceValue[]> {
+  const { data } = await apiClient.get<unknown>(
+    `/admin/ingredients/${ingredientId}/nutrient-reference-values`,
+  );
+  const payload = data && typeof data === 'object' && !Array.isArray(data)
+    ? (data as Record<string, unknown>)
+    : {};
+  const values = Array.isArray(data)
+    ? data
+    : Array.isArray(payload.values)
+      ? payload.values
+      : Array.isArray(payload.nutrient_reference_values)
+        ? payload.nutrient_reference_values
+        : [];
+  return values.map((entry) => parseNutrientReferenceValue(entry as Record<string, unknown>));
+}
+
+export async function createAdminNutrientReferenceValue(
+  ingredientId: number,
+  payload: AdminNutrientReferenceValuePayload,
+): Promise<AdminNutrientReferenceValue> {
+  const normalized = normalizeNutrientReferenceValuePayload(payload);
+  const { data } = await apiClient.post<Record<string, unknown>>(
+    `/admin/ingredients/${ingredientId}/nutrient-reference-values`,
+    normalized,
+  );
+  const value = (data.value ?? data.nutrient_reference_value ?? data) as Record<string, unknown>;
+  return parseNutrientReferenceValue(value);
+}
+
+export async function updateAdminNutrientReferenceValue(
+  valueId: number,
+  payload: AdminNutrientReferenceValuePayload,
+  options: AdminMutationOptions = {},
+): Promise<AdminNutrientReferenceValue> {
+  const normalized = normalizeNutrientReferenceValuePayload(payload);
+  const { data } = await apiClient.put<Record<string, unknown>>(
+    `/admin/nutrient-reference-values/${valueId}`,
+    normalized,
+    withIfMatch(undefined, options),
+  );
+  const value = (data.value ?? data.nutrient_reference_value ?? data) as Record<string, unknown>;
+  return parseNutrientReferenceValue(value);
+}
+
+export async function deleteAdminNutrientReferenceValue(
+  valueId: number,
+  options: AdminMutationOptions = {},
+): Promise<void> {
+  await apiClient.delete(`/admin/nutrient-reference-values/${valueId}`, withIfMatch(undefined, options));
+}
+
 export async function updateIngredientResearchSource(
   sourceId: number,
   payload: AdminIngredientResearchSourcePayload,
+  options: AdminMutationOptions = {},
 ): Promise<AdminIngredientResearchSource> {
   const normalized = normalizeSourcePayload(payload);
-  const { data } = await apiClient
-    .put(`/admin/ingredient-research/sources/${sourceId}`, normalized)
-    .then((response) => response.data);
+  const { data } = await apiClient.put(
+    `/admin/ingredient-research/sources/${sourceId}`,
+    normalized,
+    withIfMatch(normalized, options),
+  );
   const updated = data?.source ?? data;
   if (updated && typeof updated === 'object') {
     return parseIngredientResearchSource(updated as Record<string, unknown>);
@@ -1492,8 +2826,26 @@ export async function updateIngredientResearchSource(
   throw new Error('Could not parse source response.');
 }
 
-export async function deleteIngredientResearchSource(sourceId: number): Promise<void> {
-  await apiClient.delete(`/admin/ingredient-research/sources/${sourceId}`);
+export async function lookupPubMedResearchSource(params: {
+  pmid?: string | null;
+  doi?: string | null;
+}): Promise<AdminPubMedLookup> {
+  const query = toQueryParams({
+    pmid: toTrimmedOrNull(params.pmid),
+    doi: toTrimmedOrNull(params.doi),
+  });
+  const { data } = await apiClient.get<Record<string, unknown>>('/admin/research/pubmed-lookup', {
+    params: query,
+  });
+  const lookup = (data.lookup ?? data) as Record<string, unknown>;
+  return parsePubMedLookup(lookup);
+}
+
+export async function deleteIngredientResearchSource(
+  sourceId: number,
+  options: AdminMutationOptions = {},
+): Promise<void> {
+  await apiClient.delete(`/admin/ingredient-research/sources/${sourceId}`, withIfMatch(undefined, options));
 }
 
 export async function createIngredientResearchWarning(
@@ -1501,9 +2853,7 @@ export async function createIngredientResearchWarning(
   payload: AdminIngredientResearchWarningPayload,
 ): Promise<AdminIngredientResearchWarning> {
   const normalized = normalizeWarningPayload(payload);
-  const { data } = await apiClient
-    .post(`/admin/ingredient-research/${ingredientId}/warnings`, normalized)
-    .then((response) => response.data);
+  const { data } = await apiClient.post(`/admin/ingredient-research/${ingredientId}/warnings`, normalized);
   const created = data?.warning ?? data;
   if (created && typeof created === 'object') {
     return parseIngredientResearchWarning(created as Record<string, unknown>);
@@ -1514,11 +2864,14 @@ export async function createIngredientResearchWarning(
 export async function updateIngredientResearchWarning(
   warningId: number,
   payload: AdminIngredientResearchWarningPayload,
+  options: AdminMutationOptions = {},
 ): Promise<AdminIngredientResearchWarning> {
   const normalized = normalizeWarningPayload(payload);
-  const { data } = await apiClient
-    .put(`/admin/ingredient-research/warnings/${warningId}`, normalized)
-    .then((response) => response.data);
+  const { data } = await apiClient.put(
+    `/admin/ingredient-research/warnings/${warningId}`,
+    normalized,
+    withIfMatch(normalized, options),
+  );
   const updated = data?.warning ?? data;
   if (updated && typeof updated === 'object') {
     return parseIngredientResearchWarning(updated as Record<string, unknown>);
@@ -1526,8 +2879,11 @@ export async function updateIngredientResearchWarning(
   throw new Error('Could not parse warning response.');
 }
 
-export async function deleteIngredientResearchWarning(warningId: number): Promise<void> {
-  await apiClient.delete(`/admin/ingredient-research/warnings/${warningId}`);
+export async function deleteIngredientResearchWarning(
+  warningId: number,
+  options: AdminMutationOptions = {},
+): Promise<void> {
+  await apiClient.delete(`/admin/ingredient-research/warnings/${warningId}`, withIfMatch(undefined, options));
 }
 
 export async function getDoseRecommendations(params: {
@@ -1607,18 +2963,13 @@ export async function createDoseRecommendation(
   const { data } = await requestWithFallback<unknown>(DOSE_RECOMMENDATION_ENDPOINTS, (path) =>
     apiClient.post(path, normalized).then((response) => response.data),
   );
-  const mapped = data as {
-    recommendation?: AdminDoseRecommendation;
-    dose_recommendment?: AdminDoseRecommendation;
-  };
-  if (mapped.recommendation) return mapped.recommendation;
-  if (mapped.dose_recommendment) return mapped.dose_recommendment;
-  return data as AdminDoseRecommendation;
+  return parseDoseMutationResponse(data);
 }
 
 export async function updateDoseRecommendation(
   doseRecommendationId: number,
   payload: AdminDoseRecommendationPayload,
+  options: AdminMutationOptions = {},
 ): Promise<AdminDoseRecommendation> {
   const normalized = normalizeDosePayload(payload);
   const paths = [
@@ -1626,26 +2977,21 @@ export async function updateDoseRecommendation(
     `/admin/dose_recommendments/${doseRecommendationId}`,
   ] as const;
   const { data } = await requestWithFallback<unknown>(paths, (path) =>
-    apiClient.put(path, normalized).then((response) => response.data),
+    apiClient.put(path, normalized, withIfMatch(normalized, options)).then((response) => response.data),
   );
-  const mapped = data as {
-    recommendation?: AdminDoseRecommendation;
-    dose_recommendment?: AdminDoseRecommendation;
-    dose_recommendments?: AdminDoseRecommendation;
-  };
-  if (mapped.recommendation) return mapped.recommendation;
-  if (mapped.dose_recommendment) return mapped.dose_recommendment;
-  if (mapped.dose_recommendments) return mapped.dose_recommendments;
-  return data as AdminDoseRecommendation;
+  return parseDoseMutationResponse(data);
 }
 
-export async function deleteDoseRecommendation(doseRecommendationId: number): Promise<void> {
+export async function deleteDoseRecommendation(
+  doseRecommendationId: number,
+  options: AdminMutationOptions = {},
+): Promise<void> {
   const paths = [
     `/admin/dose-recommendations/${doseRecommendationId}`,
     `/admin/dose_recommendments/${doseRecommendationId}`,
   ] as const;
   await requestWithFallback<{ ok: boolean }>(paths, async (path) => {
-    await apiClient.delete(path);
+    await apiClient.delete(path, withIfMatch(undefined, options));
     return { ok: true };
   });
 }

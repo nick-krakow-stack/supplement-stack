@@ -19,6 +19,15 @@ import { attachWarningsToProducts, loadCatalogProductSafetyWarnings } from './kn
 const products = new Hono<AppContext>()
 
 const MAX_PRODUCT_INGREDIENT_ROWS = 50
+const AFFILIATE_OWNER_TYPES = ['none', 'nick', 'user'] as const
+
+type AffiliateOwnerType = typeof AFFILIATE_OWNER_TYPES[number]
+
+type AffiliateOwnership = {
+  affiliate_owner_type: AffiliateOwnerType
+  affiliate_owner_user_id: number | null
+  is_affiliate: number
+}
 
 type ProductIngredientInput = {
   ingredient_id: number
@@ -48,6 +57,8 @@ type ProductOptionalInput = {
   image_url?: string
   image_r2_key?: string
   is_affiliate?: number
+  affiliate_owner_type?: AffiliateOwnerType
+  affiliate_owner_user_id?: number | null
   discontinued_at?: string
   replacement_id?: number
   dosage_text?: string
@@ -115,7 +126,73 @@ function optionalPositiveNumberOrNull(value: unknown): number | null | undefined
 
 function booleanFlag(value: unknown): number | undefined {
   if (value === undefined) return undefined
-  return value === 1 || value === true ? 1 : 0
+  if (value === true || value === 1) return 1
+  if (value === false || value === 0) return 0
+  return undefined
+}
+
+function parseAffiliateOwnerType(value: unknown): AffiliateOwnerType | undefined {
+  if (typeof value !== 'string') return undefined
+  const normalized = value.trim()
+  return (AFFILIATE_OWNER_TYPES as readonly string[]).includes(normalized)
+    ? normalized as AffiliateOwnerType
+    : undefined
+}
+
+function normalizeAffiliateOwnership(
+  body: Record<string, unknown>,
+  fallback?: Partial<AffiliateOwnership>,
+): { value?: AffiliateOwnership; error?: string } {
+  const hasOwnerType = hasOwnKey(body, 'affiliate_owner_type')
+  const hasOwnerUserId = hasOwnKey(body, 'affiliate_owner_user_id')
+  const hasLegacyAffiliate = hasOwnKey(body, 'is_affiliate')
+
+  if (hasOwnerUserId && !hasOwnerType) {
+    return { error: 'affiliate_owner_user_id requires affiliate_owner_type.' }
+  }
+
+  let ownerType: AffiliateOwnerType = fallback?.affiliate_owner_type ?? 'none'
+  let ownerUserId: number | null = fallback?.affiliate_owner_user_id ?? null
+
+  if (hasOwnerType) {
+    const parsedType = parseAffiliateOwnerType(body.affiliate_owner_type)
+    if (!parsedType) {
+      return { error: `affiliate_owner_type must be one of ${AFFILIATE_OWNER_TYPES.join(', ')}.` }
+    }
+    ownerType = parsedType
+    const parsedUserId = optionalPositiveIntegerOrNull(body.affiliate_owner_user_id)
+    if (parsedUserId === undefined && hasOwnerUserId) {
+      return { error: 'affiliate_owner_user_id must be a positive integer when provided.' }
+    }
+    ownerUserId = parsedUserId ?? null
+  } else if (hasLegacyAffiliate) {
+    const legacyFlag = booleanFlag(body.is_affiliate)
+    if (legacyFlag === undefined) return { error: 'is_affiliate must be true/false or 1/0.' }
+    ownerType = legacyFlag === 1 ? 'nick' : 'none'
+    ownerUserId = null
+  }
+
+  if (ownerType === 'none' || ownerType === 'nick') {
+    ownerUserId = null
+  }
+
+  if (ownerType === 'user' && ownerUserId === null) {
+    return { error: 'affiliate_owner_user_id is required when affiliate_owner_type is user.' }
+  }
+
+  return {
+    value: {
+      affiliate_owner_type: ownerType,
+      affiliate_owner_user_id: ownerUserId,
+      is_affiliate: ownerType === 'none' ? 0 : 1,
+    },
+  }
+}
+
+async function validateAffiliateOwnerUser(db: D1Database, ownership: AffiliateOwnership): Promise<string | null> {
+  if (ownership.affiliate_owner_type !== 'user') return null
+  const user = await db.prepare('SELECT id FROM users WHERE id = ?').bind(ownership.affiliate_owner_user_id).first<{ id: number }>()
+  return user ? null : 'affiliate_owner_user_id must reference an existing user.'
 }
 
 function validateIngredients(value: unknown): { ingredients?: ProductIngredientInput[]; error?: string } {
@@ -302,8 +379,17 @@ function validateProductPayload(
     if (value !== undefined) data[field] = value ?? undefined
   }
 
-  const isAffiliate = booleanFlag(body.is_affiliate)
-  if (isAffiliate !== undefined) data.is_affiliate = isAffiliate
+  const ownership = normalizeAffiliateOwnership(body)
+  if (ownership.error) return { error: ownership.error }
+  if (
+    hasOwnKey(body, 'affiliate_owner_type') ||
+    hasOwnKey(body, 'affiliate_owner_user_id') ||
+    hasOwnKey(body, 'is_affiliate')
+  ) {
+    data.affiliate_owner_type = ownership.value!.affiliate_owner_type
+    data.affiliate_owner_user_id = ownership.value!.affiliate_owner_user_id
+    data.is_affiliate = ownership.value!.is_affiliate
+  }
 
   const replacementId = optionalPositiveIntegerOrNull(body.replacement_id)
   if (replacementId === undefined && hasOwnKey(body, 'replacement_id')) {
@@ -424,12 +510,34 @@ products.post('/', async (c) => {
   } catch {
     return parseJsonBodyError()
   }
-  const validation = validateProductPayload(body, 'create')
+  const payload = { ...body }
+  const requestedOwnerType = parseAffiliateOwnerType(payload.affiliate_owner_type)
+  if (requestedOwnerType === 'nick' || (!requestedOwnerType && booleanFlag(payload.is_affiliate) === 1)) {
+    return c.json({ error: 'Nick affiliate ownership can only be assigned by an admin.' }, 403)
+  }
+  if (requestedOwnerType === 'user') {
+    const requestedOwnerUserId = optionalPositiveIntegerOrNull(payload.affiliate_owner_user_id)
+    if (requestedOwnerUserId === undefined && hasOwnKey(payload, 'affiliate_owner_user_id')) {
+      return c.json({ error: 'affiliate_owner_user_id must be a positive integer when provided.' }, 400)
+    }
+    if (requestedOwnerUserId !== null && requestedOwnerUserId !== undefined && requestedOwnerUserId !== user.userId) {
+      return c.json({ error: 'affiliate_owner_user_id must match the authenticated user.' }, 403)
+    }
+    payload.affiliate_owner_user_id = user.userId
+  }
+  const validation = validateProductPayload(payload, 'create')
   if (validation.error || !validation.data?.ingredients) {
     return c.json({ error: validation.error ?? 'Ungültige Produktdaten.' }, 400)
   }
   const data = validation.data
   const ingredients = data.ingredients!
+  const ownership = {
+    affiliate_owner_type: data.affiliate_owner_type ?? 'none',
+    affiliate_owner_user_id: data.affiliate_owner_user_id ?? null,
+    is_affiliate: data.is_affiliate ?? 0,
+  } satisfies AffiliateOwnership
+  const affiliateOwnerError = await validateAffiliateOwnerUser(c.env.DB, ownership)
+  if (affiliateOwnerError) return c.json({ error: affiliateOwnerError }, 400)
   const ingredientReferenceError = await validateProductIngredientReferences(c.env.DB, ingredients)
   if (ingredientReferenceError) return c.json({ error: ingredientReferenceError }, 400)
 
@@ -441,8 +549,9 @@ products.post('/', async (c) => {
   const result = await c.env.DB.prepare(
     `INSERT INTO products (
       name, brand, form, price, shop_link, image_url, moderation_status, visibility,
+      is_affiliate, affiliate_owner_type, affiliate_owner_user_id,
       serving_size, serving_unit, servings_per_container, container_count
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
     data.name,
     data.brand,
@@ -452,6 +561,9 @@ products.post('/', async (c) => {
     data.image_url ?? null,
     'pending',
     'hidden',
+    ownership.is_affiliate,
+    ownership.affiliate_owner_type,
+    ownership.affiliate_owner_user_id,
     data.serving_size,
     data.serving_unit,
     data.servings_per_container,
@@ -502,6 +614,16 @@ products.put('/:id', async (c) => {
     return c.json({ error: validation.error ?? 'Ungültige Produktdaten.' }, 400)
   }
   const data = validation.data
+  const ownership = normalizeAffiliateOwnership(body, {
+    affiliate_owner_type: product.affiliate_owner_type ?? (product.is_affiliate === 1 ? 'nick' : 'none'),
+    affiliate_owner_user_id: product.affiliate_owner_user_id,
+    is_affiliate: product.is_affiliate === 1 ? 1 : 0,
+  })
+  if (ownership.error || !ownership.value) {
+    return c.json({ error: ownership.error ?? 'Ungueltige Affiliate-Owner-Daten.' }, 400)
+  }
+  const affiliateOwnerError = await validateAffiliateOwnerUser(c.env.DB, ownership.value)
+  if (affiliateOwnerError) return c.json({ error: affiliateOwnerError }, 400)
   if (data.ingredients) {
     const ingredientReferenceError = await validateProductIngredientReferences(c.env.DB, data.ingredients)
     if (ingredientReferenceError) return c.json({ error: ingredientReferenceError }, 400)
@@ -515,7 +637,9 @@ products.put('/:id', async (c) => {
       shop_link = COALESCE(?, shop_link),
       image_url = COALESCE(?, image_url),
       image_r2_key = COALESCE(?, image_r2_key),
-      is_affiliate = COALESCE(?, is_affiliate),
+      is_affiliate = ?,
+      affiliate_owner_type = ?,
+      affiliate_owner_user_id = ?,
       discontinued_at = COALESCE(?, discontinued_at),
       serving_size = COALESCE(?, serving_size),
       serving_unit = COALESCE(?, serving_unit),
@@ -535,7 +659,9 @@ products.put('/:id', async (c) => {
     data.shop_link ?? null,
     data.image_url ?? null,
     data.image_r2_key ?? null,
-    data.is_affiliate ?? null,
+    ownership.value.is_affiliate,
+    ownership.value.affiliate_owner_type,
+    ownership.value.affiliate_owner_user_id,
     data.discontinued_at ?? null,
     data.serving_size ?? null,
     data.serving_unit ?? null,
@@ -577,7 +703,7 @@ products.put('/:id', async (c) => {
     action: 'update_product',
     entity_type: 'product',
     entity_id: Number(id),
-    changes: data,
+    changes: { ...data, ...ownership.value },
   })
   return c.json({ product: updated })
 })

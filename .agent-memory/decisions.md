@@ -1,6 +1,165 @@
 # Decisions
 
-Last updated: 2026-05-06
+Last updated: 2026-05-07
+
+## 2026-05-07 - Cleanup Canonical Memory And Artifacts
+
+Decision: keep only compact, canonical continuation state in shared memory and
+remove local-only artifacts from version control consideration.
+
+Operational rules:
+
+- `.agent-memory/deploy-log.md` is the canonical deploy/migration log.
+- Do not revive `.claude/SESSION.md` or a hook that appends deploy history to
+  it.
+- Do not commit local browser-QA screenshots, root-level scratch logos, or
+  one-off design reference dumps such as `admin-preview/`.
+- Temporary analysis plans should be deleted or reduced once their outcome is
+  reflected in current state, handoff, next steps, and durable decisions.
+
+## 2026-05-07 - German Admin UI Wording Standard
+
+Decision: productive admin/user UI copy should use clear German for normal
+operators, not development notes, raw enum values, or internal technical terms.
+
+Operational rules:
+
+- German is the source language and should not be offered as a translation
+  target in the Translation admin tool.
+- Visible decimal input/output in German UI should use comma notation; backend
+  and database values remain numeric/dot-normalized internally.
+- Visible admin labels should prefer understandable German terms such as
+  `Nutzer`, `Link gehoert zu`, `Shop-Link`, `Freigabe`, and `Sichtbarkeit`
+  instead of raw words such as `User`, `Owner`, `Affiliate`, `Pending`, or
+  `Publish-Guardrails`.
+- Raw enum values may remain internal API/database values, but pages should map
+  them to German labels before display.
+
+## 2026-05-07 - Ingredient Research Checklist Source
+
+Decision: the per-ingredient research checklist is computed from canonical
+admin data instead of being stored as a separate manual checkbox table.
+
+Rationale:
+
+- A separate checklist would drift from the actual content/source state.
+- The admin already has canonical stores for research sources, NRV/UL rows,
+  dose recommendations, dose-source links, display profiles, warnings,
+  knowledge articles, and blog URLs.
+- `/administrator/ingredients` can therefore show reliable automatic Haken for
+  what exists and clear missing badges for what still needs research or
+  copywriting.
+
+Operational rule:
+
+- Use `/administrator/ingredients` as the high-level progress board, then edit
+  the underlying data in Ingredient Detail, Research, Dosing, Warnings,
+  Display, and Knowledge.
+
+## 2026-05-06 - Administrator Final Code Boundary
+
+Decision: the new `/administrator` code path is now considered code-complete
+for the current admin rebuild, pending only owner-run authenticated browser QA
+and feedback.
+
+Rationale:
+
+- Every planned sidebar destination has a real page; no active placeholder page
+  remains.
+- The old frontend admin monolith is removed. `/admin` is retained only as a
+  compatibility alias to `/administrator`.
+- Product Detail now covers the high-impact catalog maintenance actions:
+  product fields, moderation, affiliate ownership, structured warnings,
+  product ingredient rows, image upload, link context, QA context, and audit
+  context.
+- Ingredient Detail covers research sources/warnings, dosing source links,
+  display profiles, i18n bridge, interactions context, evidence summary, and
+  NRV CRUD with update/delete locking.
+
+Kept deliberately:
+
+- Backend Bearer fallback remains until final authenticated browser QA confirms
+  cookie-only browser operation under real owner usage.
+- Big cleanup migrations that drop legacy columns/tables and the `admin.ts`
+  module split remain post-QA/refactor work. They are not required for the
+  current deployed admin behavior.
+
+## 2026-05-06 - Code Completion Acceptance Boundary
+
+Decision: after the admin code-completion pass, remaining launch acceptance is
+treated as authenticated owner browser QA feedback, not an unimplemented
+code-build blocker.
+
+Rationale: the Critic P1 code gaps were closed: new admin product detail
+editing exists, Dosing is navigable, legacy `/admin` routes into
+`/administrator`, Interactions have admin-by-id versioned endpoints, and
+cookie-backed mutations have Origin/Referer validation.
+
+Kept deliberately:
+
+- Bearer auth fallback remains for API/QA tooling until authenticated browser
+  QA is complete.
+- Product detail image editing is URL-based in `/administrator`; full upload
+  crop remains on user/product-submission surfaces.
+- Product ingredient rows remain read-only in product detail because detailed
+  ingredient/dose maintenance lives in ingredient/dosing admin surfaces.
+
+## 2026-05-06 - Administrator Versioning And Evidence Scope
+
+Decision: admin edit concurrency is enforced opportunistically through additive
+`version` columns and `If-Match` headers, while non-migrated environments keep
+working without the column.
+
+Operational rules:
+
+- If a table has no `version` column, admin reads return `version: null` and
+  writes continue without conflict enforcement.
+- If a table has a `version` column and an existing row is being updated or
+  soft-deleted, callers should send `If-Match: <version>` or payload
+  `version`.
+- Conflict responses use HTTP `409` with
+  `{ error: "Version conflict", current_version: <number|null> }`.
+- New rows rely on database defaults for initial version values.
+- The existing `/api/interactions` relation-upsert contract remains
+  compatibility-first; full strict locking for interaction metadata should be
+  implemented later with a dedicated `PUT /api/interactions/:id`.
+
+Decision: PubMed retraction/evidence-grade handling is manual/admin-maintained
+for now, not an automated external medical-data sync.
+
+Operational rules:
+
+- `ingredient_research_sources` may store `is_retracted`,
+  `retraction_checked_at`, `retraction_notice_url`, and `evidence_grade`.
+- `evidence_grade` is restricted to `A`, `B`, `C`, `D`, `F`, or null.
+- The app may summarize evidence counts for admin workflow, but should not make
+  stronger medical claims from these fields.
+- No raw external PubMed/NCBI retraction state should be assumed unless a later
+  sourced, tested sync job is explicitly built.
+
+## 2026-05-06 - Administrator Auth Cookie-Only Frontend
+
+Decision: normal frontend API calls should rely on the HttpOnly `session`
+cookie and `credentials: include`, not persisted frontend JWT storage or Bearer
+headers.
+
+Operational rules:
+
+- Do not reintroduce `ss_token` localStorage usage in `frontend/src`.
+- Do not add frontend `Authorization: Bearer` fallback for normal app/admin API
+  calls.
+- The browser smoke harness may accept `ADMIN_QA_TOKEN`, but must convert it to
+  a browser `session` cookie for `/administrator` page checks.
+- Keep backend Bearer fallback during the transition for API-level token
+  verification and QA preflight unless a later security pass explicitly removes
+  it.
+
+Rationale:
+
+- The backend already sets and clears HttpOnly Secure SameSite=Lax session
+  cookies.
+- Removing frontend token persistence reduces exposure of admin/user sessions
+  to script-readable storage while preserving a practical admin QA path.
 
 ## Email Verification Flow
 
@@ -25,6 +184,86 @@ Rationale:
 - The product currently has no high-risk action that must be blocked solely by
   email verification; visible nudges plus resend preserve UX while improving
   account trust.
+
+## 2026-05-06 - Administrator Admin Slice
+
+Decision: Do not rewrite legacy `/admin` during the first rebuild slice. Build the
+new admin surface under `/administrator` and keep `/admin` as a legacy/fallback
+route until migration completion.
+Stage-1 analysis source is `.agent-memory/admin-overhaul-analysis.md`; Stage-2
+implementation plan is `.agent-memory/admin-rebuild-plan.md`.
+
+Operational rule:
+
+- New code paths for `Phase 0` and subsequent slices should use
+  `/administrator/*`.
+- New route files are `frontend/src/pages/administrator/*` and `frontend/src/App.tsx`
+  wiring keeps redirect `/administrator -> /administrator/dashboard`.
+- `/api/interactions` has compatibility aliases so legacy payloads remain supported.
+- Next explicit phase in this migration sequence is `Phase 0.2 Affiliate-Ownership`.
+
+Rationale:
+
+- This avoids risky one-shot rewrites of existing admin workflows.
+- Legacy admin users keep access while `/administrator` stabilizes.
+
+## 2026-05-06 - Admin Phase 0 Data Integrity
+
+Decision: Phase 0 schema fixes are additive and deploy-gated by migration
+order.
+
+Operational rules:
+
+- Apply `0052_product_affiliate_ownership.sql` before deploying code that reads
+  or writes `products.affiliate_owner_type` / `products.affiliate_owner_user_id`.
+- Apply `0053_dose_recommendation_sources.sql` before deploying code that reads
+  or writes `dose_recommendation_sources`.
+- Keep `products.is_affiliate` as a compatibility column and dual-write it
+  until the later cleanup/drop migration.
+- Keep `dose_recommendations.source_label` / `source_url` as fallback until
+  the later cleanup/drop migration.
+- `/api/interactions` remains mounted for compatibility, but the list endpoint
+  is admin-only; create a separate active-only public endpoint if public
+  interaction data is needed later.
+
+Rationale:
+
+- The admin backend now selects the new columns/tables directly, so code-before-
+  migration deploys would produce runtime failures.
+- The old fallback fields keep existing data editable while the new
+  `/administrator` workflows are filled in.
+
+## 2026-05-06 - Auth Cookie Dual-Mode
+
+Decision: Roll out HttpOnly cookie auth in dual mode, not as a hard cutover.
+
+Operational rules:
+
+- Backend accepts `session` cookie first and `Authorization: Bearer ...` as
+  fallback.
+- Login and register continue returning the body token for compatibility and
+  additionally set `session=<jwt>; HttpOnly; Secure; SameSite=Lax; Path=/`.
+- Cookie `Max-Age` matches current JWT lifetime: 604800 seconds / 7 days.
+- Logout clears the cookie but does not revoke already issued stateless JWTs.
+- CORS credentials are allowed only for the existing explicit allowlist and
+  Pages preview subdomain pattern.
+- Frontend localStorage/Bearer removal is deferred until a second cookie-aware
+  frontend deploy and authenticated browser smoke pass.
+
+## 2026-05-06 - Auth Cookie Cutover Status Update
+
+Superseding note: the frontend localStorage/Bearer removal phase is now
+implemented locally for normal app/admin API flows (`credentials: include` + no
+frontend token reads/writes), while production verification remains gated on
+authenticated browser smoke. Backend Bearer fallback is intentionally still in
+place for remote verification.
+
+Rationale:
+
+- A one-shot switch away from localStorage would risk logging out or breaking
+  active admin sessions.
+- Secure cookies do not work on plain `http://localhost`, so Bearer fallback
+  remains necessary during the migration/dev window.
 ## Stack Item Product References
 
 ## Legal-Text Preflight Scope Boundaries
@@ -563,3 +802,172 @@ Rationale:
 - The owner explicitly wants product cards and buy buttons to stay clean and
   shop-focused; the general footer/legal disclosure is the accepted disclosure
   surface.
+
+## 2026-05-06 - Catalog Affiliate Ownership
+
+Decision: catalog products use `affiliate_owner_type` (`none`, `nick`, `user`)
+plus optional `affiliate_owner_user_id` as the canonical ownership model while
+legacy `products.is_affiliate` remains dual-written for compatibility.
+
+Operational rule:
+- `none` and `nick` always clear `affiliate_owner_user_id`.
+- `user` requires an existing `users.id` on admin write paths.
+- `/api/products` authenticated create cannot assign another user's id; user
+  ownership is forced to the current user when requested there.
+- Publishing a user-submitted product with its submitted link/source creates a
+  user-owned catalog product and writes `is_affiliate=1` for compatibility.
+- Product-QA must not flag every normal non-affiliate shop link; the retained
+  legacy issue key only represents missing/unknown owner data.
+
+## 2026-05-06 - Administrator Visual System
+
+Decision: the new `/administrator` surface uses `admin-preview/Admin Panel.html`
+as the visual reference and keeps the admin design system scoped to the
+administrator route.
+
+Operational rule:
+- Keep admin styling in `frontend/src/pages/administrator/admin.css` and shared
+  primitives in `AdminUi.tsx`; do not leak the warm paper admin tokens into the
+  public app.
+- Use the three-group sidebar: Katalog, Operations, Konfiguration.
+- Use warm neutral cards, hairline borders, subdued shadows, serif page/card
+  headings, neutral active nav state, and dark ink primary buttons.
+- Use placeholders for planned routes only as temporary handoff surfaces; replace
+  them with real slices rather than expanding placeholder logic.
+- Hide public cookie-consent UI on `/administrator` so admin tools are not
+  obstructed.
+
+Rationale:
+- The user supplied the local HTML as design Vorlage; scoping the CSS allows the
+  new admin to match it without disturbing existing public stack/product pages.
+
+## 2026-05-06 - Administrator Operations Slice Shipping
+
+Decision: ship the new `/administrator` design shell with two real Operations
+slices now, while keeping legacy `/admin` as fallback and keeping the remaining
+planned sections as explicit placeholders.
+
+Operational rule:
+- `/administrator/user-products` may use frontend-chunked calls to the existing
+  single approve endpoint for the first deploy; add a backend bulk endpoint only
+  when queue volume or failure handling requires it.
+- `/administrator/audit-log` should render current `changes` JSON safely and
+  keep expandable details; a richer before/after diff remains a later sprint.
+- Do not remove or rewrite legacy `/admin` tabs until matching
+  `/administrator` slices are functionally equivalent and verified.
+
+Rationale:
+- The user asked to get the current Admin rebuild deployable. Shipping the shell
+  plus User-Produkte and Audit-Log gives operational value without new
+  migrations or risky backend contract changes.
+
+## 2026-05-06 - Administrator Parallel Slice Integration
+
+Decision: continue the `/administrator` rebuild as separate routed pages and
+thin frontend slices over existing admin contracts where possible, adding only
+small targeted backend contracts when an existing endpoint would force brittle
+client behavior.
+
+Operational rule:
+- Keep legacy `/admin` as fallback until the `/administrator` equivalents are
+  functionally complete and browser-tested with an authenticated admin session.
+- Product detail uses `GET /api/admin/products/:id`; do not regress it to a
+  full list fetch plus client-side lookup.
+- Ingredient lookup helpers should surface API/auth failures to calling admin
+  pages; do not convert these failures to empty data unless the page explicitly
+  marks the lookup as optional.
+- It is acceptable for Go-Live-Checks to remain a static checklist for this
+  deploy slice, but mark live DNS/backup verification as a follow-up rather
+  than implying automatic verification.
+- Avoid schema changes for UI-only admin slices unless data integrity or a
+  missing backend contract requires them.
+
+Rationale:
+- The user asked to build out as much of the new admin panel as possible and
+  deploy the current state. Separate routed slices reduce collision risk between
+  agents and avoid rewriting the legacy monolith before parity is reached.
+
+## 2026-05-06 - Administrator User Management Safety Scope
+
+Decision: `/administrator/users` may manage only operationally necessary,
+low-surface admin fields for now: user role and trusted-product-submitter
+status.
+
+Operational rule:
+- Do not expose password hashes, reset tokens, verification tokens, raw session
+  data, or secrets in the user-management page/API.
+- Role changes must be audited.
+- Admins cannot demote their own account.
+- The last remaining admin account cannot be demoted.
+- Broader account operations such as delete, impersonation, password reset,
+  consent editing, or raw profile editing require a separate explicit design
+  and risk review before implementation.
+
+Rationale:
+- User management is sensitive and production-facing. The current admin need is
+  operational visibility plus trusted-submitter control; broader controls would
+  increase support/security risk without being needed to finish the admin
+  navigation parity slice.
+
+## 2026-05-06 - Administrator List Pagination Compatibility
+
+Decision: new `/administrator` list pages use paginated admin endpoints, while
+legacy no-query `/api/admin/products` remains unbounded until `/admin` is fully
+retired.
+
+Operational rule:
+- `/administrator/products` must pass explicit `q`, `page`, and `limit`.
+- `/administrator/ingredients` must pass explicit `q`, `page`, and `limit`.
+- Existing legacy `/admin` callers that fetch `/api/admin/products` without
+  query parameters keep receiving the full catalog for compatibility.
+- Do not remove that compatibility behavior before the legacy `/admin` product
+  and recommendation dropdown flows are either migrated or explicitly retired.
+
+Rationale:
+- Server-side pagination prevents the new admin from loading/filtering broad
+  catalog data client-side.
+- The old monolith still has no pagination controls and uses the no-query
+  products endpoint in more than one place, so changing that default would
+  silently truncate legacy admin workflows.
+
+## 2026-05-06 - User-Produkte Bulk Moderation
+
+Decision: `/administrator/user-products` uses one capped backend bulk endpoint
+for approve actions instead of frontend-chunking single approve calls.
+
+Operational rule:
+- Bulk approve endpoint is `PUT /api/admin/user-products/bulk-approve`.
+- Accept at most 100 unique positive IDs per request.
+- Return per-item result rows and allow partial failures.
+- Audit one summary action rather than one audit entry per selected row.
+- Keep existing single approve, reject, publish, and delete endpoints for row
+  actions and compatibility.
+
+Rationale:
+- Frontend loops over single mutation endpoints are fragile under network
+  failures and scale poorly as the moderation queue grows.
+- A capped backend endpoint keeps Worker/D1 work bounded while giving the UI a
+  single authoritative partial-success response.
+
+## 2026-05-06 - Admin Product Image Upload
+
+Decision: product image upload from the new Administrator product detail uses a
+dedicated admin endpoint instead of reusing the legacy public product-module
+admin route.
+
+Operational rule:
+- Use `POST /api/admin/products/:id/image` for `/administrator/products/:id`.
+- Send the loaded `products.version` as `If-Match` when present.
+- Store files in the existing `PRODUCT_IMAGES` R2 bucket under
+  `products/:id/:uuid.ext`.
+- Update both `products.image_url` and `products.image_r2_key`, bump
+  `products.version` when the column exists, and audit before/after image
+  fields.
+- Keep `POST /api/products/:id/image` compatible for existing
+  `UserProductForm` / `ImageCropModal` usage.
+
+Rationale:
+- Admin Product Detail needs the same optimistic-locking semantics as other
+  admin mutations.
+- The existing non-versioned route remains useful compatibility surface, but
+  should not be the write path for the rebuilt admin editor.

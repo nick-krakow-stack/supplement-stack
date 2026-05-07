@@ -1,6 +1,190 @@
 # Deploy Log
 
-Last updated: 2026-05-06
+Last updated: 2026-05-07
+
+## 2026-05-07 Admin Browser-QA Text/UX Cleanup Deployed
+
+- Scope:
+  - Cleaned productive admin/user UI text after owner browser-QA feedback:
+    removed development notes, replaced visible ASCII fallback German, and
+    simplified technical wording.
+  - Removed German from translation targets.
+  - Fixed `Linkmeldungen` search input spacing around the search icon.
+  - Reworked Product-QA labels and added direct admin product image upload from
+    QA rows.
+  - Added German labels/options to the Interaction Matrix filters/create form.
+  - Added German comma decimal handling to touched admin/user entry/display
+    surfaces while leaving backend/database values numeric.
+- Remote D1 migrations:
+  - No new migration required.
+- Pages deploy:
+  - Project: `supplementstack`.
+  - Preview URL: `https://6cd86fa0.supplementstack.pages.dev`.
+  - Live URL: `https://supplementstack.de`.
+- Validation:
+  - `frontend`: `npx tsc --noEmit` passed.
+  - `frontend`: `npm run lint --if-present` passed.
+  - `frontend`: `npm run build` passed.
+  - `node --check scripts/admin-browser-smoke.mjs` passed.
+  - Wrangler Pages deploy compiled the Functions bundle successfully.
+- Smoke checks:
+  - Preview/live `/administrator`, `/administrator/product-qa`,
+    `/administrator/interactions`, `/administrator/translations`, and `/admin`
+    returned HTTP 200.
+  - Preview/live unauthenticated `/api/admin/health` returned HTTP 401.
+
+## 2026-05-07 Ingredient Research Coverage List Deployed
+
+- Scope:
+  - Extended `GET /api/admin/ingredients` with ingredient research/content
+    coverage counts from existing tables.
+  - Updated `/administrator/ingredients` to show automatic checklist badges for
+    Blog/Wissen, DGE, official sources, studies, NRV/UL, Dosing,
+    Dosis-Quellen, and display profile.
+  - Added direct row actions to ingredient detail Research and Dosing tabs.
+- Remote D1 migrations:
+  - No new migration required.
+  - `npx wrangler d1 migrations list supplementstack-production --remote`
+    returned: no migrations to apply.
+- Pages deploy:
+  - Project: `supplementstack`.
+  - Preview URL: `https://d363ade8.supplementstack.pages.dev`.
+  - Live URL: `https://supplementstack.de`.
+- Validation:
+  - `functions`: `npx tsc -p tsconfig.json --noEmit` passed.
+  - `frontend`: `npx tsc --noEmit` passed.
+  - `frontend`: `npm run lint --if-present` passed.
+  - `frontend`: `npm run build` passed.
+  - Scoped `git diff --check` passed with existing LF/CRLF warnings only.
+  - Remote D1 read-only coverage SQL returned one row successfully.
+- Smoke checks:
+  - Preview/live `/administrator/ingredients` returned HTTP 200.
+  - Preview/live unauthenticated `/api/admin/ingredients` returned HTTP 401.
+
+## 2026-05-06 Administrator Final Code Pass Deployed
+
+- Scope:
+  - Removed the old frontend Admin monolith while preserving `/admin` as an
+    alias to `/administrator`.
+  - Added editable Product Ingredient rows in Product Detail.
+  - Added versioned Admin Product Image upload backed by R2.
+  - Added NRV update/delete optimistic locking.
+  - Removed the dead Administrator placeholder page.
+- Remote D1 migrations:
+  - No new migration required.
+  - `npx wrangler d1 migrations list supplementstack-production --remote`
+    returned: no migrations to apply.
+- Pages deploy:
+  - Project: `supplementstack`.
+  - Preview URL: `https://7db85497.supplementstack.pages.dev`.
+  - Live URL: `https://supplementstack.de`.
+- Validation:
+  - `functions`: `npx tsc -p tsconfig.json --noEmit` passed.
+  - `frontend`: `npx tsc --noEmit` passed.
+  - `frontend`: `npm run lint --if-present` passed.
+  - `frontend`: `npm run build` passed.
+  - `node --check scripts/admin-browser-smoke.mjs` passed.
+  - `node --check scripts/user-browser-smoke.mjs` passed.
+  - Admin guard smoke passed on preview/live.
+  - User public/guard browser smoke passed on preview/live.
+  - `git diff --check` passed with existing LF/CRLF warnings only.
+- Smoke checks:
+  - Preview/live `/`, `/administrator`, `/administrator/products/1`,
+    `/administrator/products/1?section=wirkstoffe`,
+    `/administrator/products/1?section=overview`,
+    `/administrator/ingredients/1?section=nrv`, `/administrator/health`,
+    `/admin`, and `/admin/products/1` returned HTTP 200.
+  - Preview/live unauthenticated Product Detail, Product Ingredient mutation,
+    Admin Product Image upload, NRV mutation, and Health API checks returned
+    HTTP 401.
+- Notes:
+  - Authenticated browser QA remains the final owner feedback gate by request.
+
+## 2026-05-06 Admin/User Code Completion Pass Deployed
+
+- Scope:
+  - Closed final code-side admin completion gaps after Critic review:
+    legacy `/admin` now routes into `/administrator`, Dosing is in sidebar,
+    Product Detail has edit/save for high-impact product fields, and
+    Interactions have dedicated admin-by-id GET/PUT/DELETE endpoints with
+    version conflict handling.
+  - Added cookie mutation Origin/Referer hardening while keeping Bearer tooling
+    available.
+  - Added route-level lazy loading and split frontend chunks.
+  - Expanded admin/user smoke scripts and added CI syntax checks for them.
+- Remote D1 migrations:
+  - No new migrations required; remote list returned no pending migrations.
+- Pages deploy:
+  - Project: `supplementstack`.
+  - Preview URL: `https://93454a26.supplementstack.pages.dev`.
+  - Live URL: `https://supplementstack.de`.
+- Validation:
+  - `functions`: `npx tsc -p tsconfig.json --noEmit` passed.
+  - `frontend`: `npx tsc --noEmit` passed.
+  - `frontend`: `npm run lint --if-present` passed.
+  - `frontend`: `npm run build` passed with no Vite chunk-size warning.
+  - `node --check scripts/admin-browser-smoke.mjs` passed.
+  - `node --check scripts/user-browser-smoke.mjs` passed.
+  - Admin guard smoke passed on preview/live.
+  - User public/guard browser smoke passed on preview/live.
+  - `git diff --check` passed with existing LF/CRLF warnings only.
+- Smoke checks:
+  - Preview/live `/`, `/administrator`, `/administrator/dosing`, `/admin`,
+    `/admin/products/1` returned HTTP 200.
+  - Preview/live unauthenticated `/api/admin/stats`, `/api/admin/health`, and
+    `/api/admin/interactions/1` returned HTTP 401.
+- Notes:
+  - Authenticated browser QA remains owner feedback gate because no admin/user
+    QA credentials were present in the local process.
+
+## 2026-05-06 Admin Rebuild Batch Deployed
+
+- Scope:
+  - Deployed the current `/administrator` rebuild batch: version-aware admin
+    edit paths, structured Product Warnings, Research Evidence Grade/retraction
+    fields, Evidence Summary, NRV CRUD, Dosing plausibility warnings, Product-QA
+    versioning, Interaction detail/global improvements, and cookie-only
+    frontend auth.
+- Remote D1 migrations:
+  - Applied to `supplementstack-production`: `0055_add_version_columns.sql`,
+    `0056_display_profile_translations.sql`,
+    `0058_product_warnings.sql`,
+    `0060_ingredient_synonyms_language.sql`,
+    `0062_admin_audit_structured_diff.sql`,
+    `0067_research_evidence_flags.sql`,
+    `0068_nutrient_reference_values.sql`.
+  - Follow-up migration list check returned: no migrations to apply.
+- Pages deploy:
+  - Project: `supplementstack`.
+  - Preview URL: `https://31301b17.supplementstack.pages.dev`.
+  - Live URL: `https://supplementstack.de`.
+- Validation:
+  - `functions`: `npx tsc -p tsconfig.json --noEmit` passed.
+  - `frontend`: `npm run build` passed with known Vite chunk-size warning.
+  - `ADMIN_QA_GUARD_ONLY=1 node scripts/admin-browser-smoke.mjs` passed
+    against the new preview URL.
+  - Preview/live `/` and `/administrator` returned HTTP 200.
+  - Preview/live unauthenticated `/api/admin/stats` and `/api/admin/health`
+    returned HTTP 401.
+- Notes:
+  - Authenticated browser QA was not run because no `ADMIN_QA_TOKEN`,
+    `SUPPLEMENTSTACK_ADMIN_TOKEN`, `ADMIN_TOKEN`, `ADMIN_QA_EMAIL`, or
+    `ADMIN_QA_PASSWORD` was present in the local process.
+
+## 2026-05-06 Admin Local Build Remote Blocked
+
+- Superseded by `2026-05-06 Admin Rebuild Batch Deployed`; the token was later
+  loaded from the documented local script, migrations were applied, and Pages
+  was deployed.
+- No deployment or remote migration was performed for the latest local admin
+  rebuild batch.
+- Remote check attempted:
+  `npx wrangler d1 migrations list supplementstack-production --remote`.
+- Result: blocked by Cloudflare auth:
+  `Authentication error [code: 10000]` and
+  `Invalid access token [code: 9109]`.
+- Next deployment step is to restore a valid Cloudflare token, apply pending
+  admin migrations, then deploy Pages and run authenticated smoke checks.
 
 ## Latest Known Production State
 
@@ -47,6 +231,412 @@ Launch-readiness implementation bundle is committed, deployed, and
 smoke-checked on preview/live.
 GitHub Actions D1 backup has run successfully both manually and automatically;
 token scopes are verified.
+Administrator User-Produkte server pagination and expanded admin browser-smoke
+coverage are deployed to Cloudflare Pages preview and live custom domain.
+Administrator live Launch-Checks and URL-backed Ingredient detail tabs are
+deployed to Cloudflare Pages preview and live custom domain.
+Backend Auth dual-mode cookies and read-only Ingredient Interactions are
+deployed to Cloudflare Pages preview and live custom domain.
+Frontend cookie-aware auth and form-specific Ingredient display-profile editing
+are deployed to Cloudflare Pages preview and live custom domain.
+Administrator Ingredient i18n deeplink bridge is deployed to Cloudflare Pages
+preview and live custom domain.
+Administrator Health dashboard is API-backed and deployed to Cloudflare Pages
+preview and live custom domain.
+Administrator Command Palette/search is deployed to Cloudflare Pages preview
+and live custom domain.
+Administrator CSV export is deployed to Cloudflare Pages preview and live
+custom domain.
+Administrator PubMed lookup is deployed to Cloudflare Pages preview and live
+custom domain.
+Administrator Plausibility-Warner, Audit Diff improvement, remote
+`0054_affiliate_link_health`, and the separate `supplement-stack-maintenance`
+cron Worker are deployed.
+Administrator Link Health visibility is deployed in Product Detail and
+Product-QA.
+Administrator Link Health rollups are deployed in Health and Products list.
+Administrator PubMed KV cache, Evidence Source UI, and Link-Health Critic fixes
+are deployed.
+Administrator rebuild batch with versioning, structured warnings, evidence
+flags, NRV CRUD, dosing plausibility warnings, and interaction/Product-QA
+locking support is remote-migrated and deployed to preview/live.
+Admin/User code completion pass is deployed: legacy admin routes into
+`/administrator`, product detail editing is live, Dosing is navigable, cookie
+mutation Origin/Referer hardening is live, and smoke tooling is expanded.
+
+## 2026-05-06 Administrator PubMed Cache + Evidence UI Deployed
+
+- Scope:
+  - Added optional 24h `RATE_LIMITER` KV cache to PubMed lookup.
+  - Added source/evidence filters and badges to Ingredient Research tab.
+  - Included checked `link_health.url` in Admin API parsing.
+  - Deleted stale Link-Health rows when product `shop_link` changes.
+  - Broadened Maintenance Worker HEAD fallback to sparse Range GET for common
+    non-ok statuses.
+- Remote D1 migrations:
+  - No new migration in this slice.
+- Maintenance Worker deploy:
+  - Config: `wrangler.maintenance.toml`.
+  - Worker: `supplement-stack-maintenance`.
+  - URL: `https://supplement-stack-maintenance.email-d8f.workers.dev`.
+  - Cron: `17 2 * * *`.
+  - Version ID: `a6c74b9a-7ff8-452c-9a14-09996a3d16f2`.
+- Pages deploy:
+  - Preview URL: `https://77f16bd6.supplementstack.pages.dev`.
+  - Live URL: `https://supplementstack.de`.
+- Validation:
+  - `npx wrangler deploy -c wrangler.maintenance.toml --dry-run` passed.
+  - `npx wrangler deploy -c wrangler.maintenance.toml` passed.
+  - `npx tsc -p tsconfig.json --noEmit` from `functions/` passed.
+  - `npx tsc --noEmit` from `frontend/` passed.
+  - `npm run lint --if-present` from `frontend/` passed.
+  - `npm run build` from `frontend/` passed with known Vite chunk-size
+    warning.
+  - `node --check scripts/admin-browser-smoke.mjs` passed.
+  - `ADMIN_QA_GUARD_ONLY=1 node scripts/admin-browser-smoke.mjs` passed.
+  - Scoped `git diff --check` passed with CRLF warnings only.
+- Smoke checks:
+  - Preview/live `/`, `/administrator/ingredients/1?section=research`,
+    `/administrator/products`, `/administrator/product-qa`, and
+    `/administrator/health` returned HTTP 200.
+  - Preview/live unauthenticated PubMed lookup, Products, Product-QA, Health,
+    and `/api/me` returned HTTP 401.
+  - Maintenance Worker root returned HTTP 404.
+- Notes:
+  - Authenticated cache/payload/edit-flow QA remains blocked by missing admin
+    token/session.
+
+## 2026-05-06 Administrator Link Health Rollups Deployed
+
+- Scope:
+  - Added Affiliate Link Health rollup section/metrics to
+    `GET /api/admin/health`.
+  - Product list rows now show compact technical Link-Health badges.
+  - Inline Product save preserves returned `link_health`.
+- Remote D1 migrations:
+  - No new migration in this slice; `0054_affiliate_link_health.sql` was
+    already applied.
+- Validation:
+  - `npx tsc -p tsconfig.json --noEmit` from `functions/` passed.
+  - `npx tsc --noEmit` from `frontend/` passed.
+  - `npm run lint --if-present` from `frontend/` passed.
+  - `npm run build` from `frontend/` passed with the known Vite chunk-size
+    warning.
+  - Scoped `git diff --check` passed with CRLF warnings only.
+  - `ADMIN_QA_GUARD_ONLY=1 node scripts/admin-browser-smoke.mjs` passed.
+- Deploy prep:
+  - Copied `functions/` to `frontend/dist/functions`.
+  - Verified `frontend/dist/functions/api/[[path]].ts` exists with
+    `Test-Path -LiteralPath`.
+- Deploy command:
+  - `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://922f705f.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`.
+- Smoke checks:
+  - Preview/live `/`, `/administrator/products`,
+    `/administrator/products/1`, `/administrator/product-qa`, and
+    `/administrator/health` returned HTTP 200.
+  - Preview/live unauthenticated Products, Product Detail, Product-QA,
+    Health, and `/api/me` returned HTTP 401.
+- Notes:
+  - Authenticated Health payload inspection is still blocked by missing admin
+    token/session.
+
+## 2026-05-06 Administrator Link Health Visibility Deployed
+
+- Scope:
+  - Admin Products/Product Detail/Product-QA endpoints now include optional
+    `link_health` data from `affiliate_link_health`.
+  - Product-QA update responses keep returning normalized products with
+    `link_health`.
+  - Product Detail and Product-QA render technical link health status beside
+    shop-link context.
+  - Admin smoke script now includes direct Ingredient section deep links and
+    unauthenticated API guard checks.
+- Remote D1 migrations:
+  - No new migration in this slice; `0054_affiliate_link_health.sql` was
+    already applied in the prior slice.
+- Validation:
+  - `npx tsc -p tsconfig.json --noEmit` from `functions/` passed.
+  - `npx tsc --noEmit` from `frontend/` passed.
+  - `npm run lint --if-present` from `frontend/` passed.
+  - `npm run build` from `frontend/` passed with the known Vite chunk-size
+    warning.
+  - `node --check scripts/admin-browser-smoke.mjs` passed.
+  - `ADMIN_QA_GUARD_ONLY=1 node scripts/admin-browser-smoke.mjs` passed.
+  - Scoped `git diff --check` passed with CRLF warnings only.
+- Deploy prep:
+  - Copied `functions/` to `frontend/dist/functions`.
+  - Verified `frontend/dist/functions/api/[[path]].ts` exists with
+    `Test-Path -LiteralPath`.
+- Deploy command:
+  - `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://aafb0e9e.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`.
+- Smoke checks:
+  - Preview/live `/`, `/administrator/products`,
+    `/administrator/products/1`, `/administrator/product-qa`,
+    `/administrator/ingredients/1?section=dosing`,
+    `/administrator/audit-log`, and `/administrator/health` returned HTTP
+    200.
+  - Preview/live unauthenticated Products, Product Detail, Product-QA, PubMed
+    lookup, CSV export, Health, User-Product bulk approve, and `/api/me`
+    returned HTTP 401.
+- Notes:
+  - Authenticated payload verification of actual `link_health` JSON remains
+    blocked by missing admin token/session.
+
+## 2026-05-06 Administrator Plausibility, Audit Diff, Link Health Worker Deployed
+
+- Scope:
+  - Added non-blocking dose plausibility warnings to Ingredient detail Dosing
+    and research-source dose forms.
+  - Improved Audit-Log rendering for top-level `{ before, after }` change
+    objects.
+  - Added `affiliate_link_health` table for latest product shop-link health
+    state.
+  - Added separate maintenance Worker config and Worker entry for nightly link
+    checks.
+- Remote D1 migrations:
+  - Applied `0054_affiliate_link_health.sql` to
+    `supplementstack-production`.
+- Maintenance Worker deploy:
+  - Config: `wrangler.maintenance.toml`.
+  - Worker: `supplement-stack-maintenance`.
+  - URL: `https://supplement-stack-maintenance.email-d8f.workers.dev`.
+  - Cron: `17 2 * * *`.
+  - Version ID: `70128ee7-5fdd-476c-a3a9-6a69fd02f8f1`.
+- Pages deploy:
+  - Preview URL: `https://0cc971cc.supplementstack.pages.dev`.
+  - Live URL: `https://supplementstack.de`.
+- Validation:
+  - `npx wrangler deploy -c wrangler.maintenance.toml --dry-run` passed.
+  - `npx tsc -p tsconfig.json --noEmit` from `functions/` passed.
+  - `npx tsc --noEmit` from `frontend/` passed.
+  - `npm run lint --if-present` from `frontend/` passed.
+  - `npm run build` from `frontend/` passed with the known Vite chunk-size
+    warning.
+  - `node --check scripts/admin-browser-smoke.mjs` passed.
+  - Scoped `git diff --check` passed with CRLF warnings only.
+  - Remote D1 table check confirmed `affiliate_link_health` exists.
+  - Remote migration list reports no pending migrations.
+- Smoke checks:
+  - Preview/live `/`, `/administrator/ingredients/1?section=dosing`,
+    `/administrator/ingredients/1?section=research`,
+    `/administrator/audit-log`, `/administrator/health`, and
+    `/administrator/products` returned HTTP 200.
+  - Preview/live unauthenticated PubMed lookup, CSV export, Health,
+    User-Product bulk approve, and `/api/me` returned HTTP 401.
+  - Preview/live `/api/scheduled` returned HTTP 404.
+  - Maintenance Worker root returned HTTP 404.
+- Notes:
+  - Cron Triggers run on UTC; the first scheduled row writes should be checked
+    after the next `17 2 * * *` run.
+  - Authenticated admin/browser QA remains blocked by missing admin token or
+    credentials.
+
+## 2026-05-06 Administrator PubMed Lookup Deployed
+
+- Scope:
+  - Added admin-only `GET /api/admin/research/pubmed-lookup?pmid=&doi=`.
+  - PMID lookup loads PubMed ESummary directly.
+  - DOI lookup resolves a PubMed ID through ESearch before loading ESummary.
+  - Ingredient research-source forms can fill source title, URL, DOI, PMID,
+    organization, date, journal/authors notes, and source kind from PubMed.
+- Remote D1 migrations:
+  - No new migration required.
+- Validation:
+  - `npx tsc -p tsconfig.json --noEmit` from `functions/` passed.
+  - `npx tsc --noEmit` from `frontend/` passed.
+  - `npm run lint --if-present` from `frontend/` passed.
+  - `npm run build` from `frontend/` passed with the known Vite chunk-size
+    warning.
+  - `node --check scripts/admin-browser-smoke.mjs` passed.
+  - Scoped `git diff --check` passed with CRLF warnings only.
+- Deploy prep:
+  - Copied `functions/` to `frontend/dist/functions`.
+  - Verified `frontend/dist/functions/api/[[path]].ts` exists with
+    `Test-Path -LiteralPath`.
+- Deploy command:
+  - `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://f7299c4d.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`.
+- Smoke checks:
+  - Preview/live `/`, `/administrator/ingredients/1?section=research`,
+    `/administrator/ingredients/1?section=i18n&language=en`, and
+    `/administrator/health` returned HTTP 200.
+  - Preview/live unauthenticated PubMed lookup by PMID, PubMed lookup by DOI,
+    CSV export, and `/api/me` returned HTTP 401.
+- Notes:
+  - Authenticated PubMed lookup/form-save QA is still open because no admin
+    token or admin credentials are available in the environment.
+
+## 2026-05-06 Administrator CSV Export Deployed
+
+- Scope:
+  - Added admin-only `GET /api/admin/export?entity=...`.
+  - Allowlisted entities: `products`, `ingredients`, `user-products`,
+    `product-qa`, and `link-reports`.
+  - CSV export uses explicit safe columns, no raw auth/secrets, correct CSV
+    escaping, `Content-Disposition` filenames, no-store caching, and a
+    5,000-row cap.
+  - Export filters support `q`, `status`, and `issue` where relevant.
+  - Admin shell shows a compact CSV button only on matching list/queue pages.
+- Remote D1 migrations:
+  - No new migration required.
+- Validation:
+  - `npx tsc -p tsconfig.json --noEmit` from `functions/` passed.
+  - `npx tsc --noEmit` from `frontend/` passed.
+  - `npm run lint --if-present` from `frontend/` passed.
+  - `npm run build` from `frontend/` passed with the known Vite chunk-size
+    warning.
+  - `node --check scripts/admin-browser-smoke.mjs` passed.
+  - Scoped `git diff --check` passed with CRLF warnings only.
+- Deploy prep:
+  - Copied `functions/` to `frontend/dist/functions`.
+  - Verified `frontend/dist/functions/api/[[path]].ts` exists with
+    `Test-Path -LiteralPath`.
+- Deploy command:
+  - `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://3355b7d1.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`.
+- Smoke checks:
+  - Preview/live `/`, `/administrator/products`,
+    `/administrator/ingredients`, `/administrator/user-products?status=pending`,
+    `/administrator/product-qa?issue=missing_shop_link`, and
+    `/administrator/link-reports?status=open` returned HTTP 200.
+  - Preview/live unauthenticated exports for `products`, `ingredients`,
+    `user-products`, `product-qa`, `link-reports`, and invalid entity returned
+    HTTP 401, as did unauthenticated Search and `/api/me`.
+- Notes:
+  - Authenticated browser/mobile QA and actual CSV download verification are
+    still open because no admin token or admin credentials are available in
+    the environment.
+
+## 2026-05-06 Administrator Command Palette Deployed
+
+- Scope:
+  - Added admin-only `GET /api/admin/search?q=&limit=`.
+  - Short queries return curated core `/administrator` route results.
+  - Search queries look across ingredients, products, user-products, and
+    knowledge articles with per-entity defensive fallback.
+  - Added `AdministratorCommandPalette.tsx` and wired it into the admin
+    topbar.
+  - Palette opens via the topbar search trigger and Ctrl/Cmd+K, then supports
+    autofocus, Escape close, ArrowUp/ArrowDown, Enter open, and click
+    navigation.
+- Remote D1 migrations:
+  - No new migration required.
+- Validation:
+  - `npx tsc -p tsconfig.json --noEmit` from `functions/` passed.
+  - `npx tsc --noEmit` from `frontend/` passed.
+  - `npm run lint --if-present` from `frontend/` passed.
+  - `npm run build` from `frontend/` passed with the known Vite chunk-size
+    warning.
+  - `node --check scripts/admin-browser-smoke.mjs` passed.
+  - Scoped `git diff --check` passed with CRLF warnings only.
+- Deploy prep:
+  - Copied `functions/` to `frontend/dist/functions`.
+  - Verified `frontend/dist/functions/api/[[path]].ts` exists with
+    `Test-Path -LiteralPath`.
+- Deploy command:
+  - `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://e9f73506.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`.
+- Smoke checks:
+  - Preview/live `/`, `/administrator/dashboard`, `/administrator/health`,
+    `/administrator/ingredients/1?section=i18n&language=en`, and
+    `/administrator/translations?entity=ingredients&language=en&q=Magnesium&status=all&focus=ingredients:1:en&returnTo=/administrator/ingredients/1?section=i18n&language=en`
+    returned HTTP 200.
+  - Preview/live unauthenticated `/api/admin/search?q=mag&limit=12`,
+    `/api/admin/health`,
+    `/api/admin/translations/ingredients?language=en&q=Magnesium&limit=5&offset=0`,
+    and `/api/me` returned HTTP 401.
+- Notes:
+  - Authenticated browser/mobile QA is still open because no admin token or
+    admin credentials are available in the environment.
+
+## 2026-05-06 Administrator Health Dashboard Deployed
+
+- Scope:
+  - Added admin-only `GET /api/admin/health`.
+  - Health response contains `generated_at`, `summary`, `metrics`, and
+    `sections` with safe operational checks.
+  - Checks cover missing default doses, stale/overdue ingredient research,
+    missing English ingredient translations, pending user-products older than
+    7 days, product-QA issues, open link reports, and products missing shop
+    links.
+  - `/administrator/health` now renders the API snapshot with refresh/retry,
+    summary cards, metric cards, check sections, and admin links.
+- Remote D1 migrations:
+  - No new migration required.
+- Validation:
+  - `npx tsc -p tsconfig.json --noEmit` from `functions/` passed.
+  - `npx tsc --noEmit` from `frontend/` passed.
+  - `npm run lint --if-present` from `frontend/` passed.
+  - `npm run build` from `frontend/` passed with the known Vite chunk-size
+    warning.
+  - `node --check scripts/admin-browser-smoke.mjs` passed.
+  - Scoped `git diff --check` passed with CRLF warnings only.
+- Deploy prep:
+  - Copied `functions/` to `frontend/dist/functions`.
+  - Verified `frontend/dist/functions/api/[[path]].ts` exists with
+    `Test-Path -LiteralPath`.
+- Deploy command:
+  - `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://3ba2cb28.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`.
+- Smoke checks:
+  - Preview/live `/`, `/administrator/health`,
+    `/administrator/ingredients/1?section=i18n&language=en`,
+    `/administrator/translations?entity=ingredients&language=en&q=Magnesium&status=all&focus=ingredients:1:en&returnTo=/administrator/ingredients/1?section=i18n&language=en`,
+    and `/administrator/launch-checks` returned HTTP 200.
+  - Preview/live unauthenticated `/api/admin/health`,
+    `/api/admin/translations/ingredients?language=en&q=Magnesium&limit=5&offset=0`,
+    `/api/me`, and `/api/admin/launch-checks` returned HTTP 401.
+- Notes:
+  - Authenticated browser/mobile QA is still open because no admin token or
+    admin credentials are available in the environment.
+
+## 2026-05-06 Administrator i18n Deeplink Bridge Deployed
+
+- Scope:
+  - `/administrator/ingredients/:id?section=i18n&language=<code>` now bridges
+    to the central translations workspace.
+  - `/administrator/translations` accepts URL-backed `entity`, `language`,
+    `q`, `status`, `page`, `focus`, and safe `/administrator/...` `returnTo`
+    state.
+  - Focused translation rows are highlighted when present in the loaded page.
+- Remote D1 migrations:
+  - No new migration required.
+- Validation:
+  - `npx tsc -p tsconfig.json --noEmit` from `functions/` passed.
+  - `npx tsc --noEmit` from `frontend/` passed.
+  - `npm run lint --if-present` from `frontend/` passed.
+  - `npm run build` from `frontend/` passed with the known Vite chunk-size
+    warning.
+  - `node --check scripts/admin-browser-smoke.mjs` passed.
+  - Scoped `git diff --check` passed with CRLF warnings only.
+- Deploy prep:
+  - Copied `functions/` to `frontend/dist/functions`.
+  - Verified `frontend/dist/functions/api/[[path]].ts` exists with
+    `Test-Path -LiteralPath`.
+- Deploy command:
+  - `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://f1445601.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`.
+- Smoke checks:
+  - Preview/live `/`,
+    `/administrator/ingredients/1?section=i18n&language=en`,
+    `/administrator/translations?entity=ingredients&language=en&q=Magnesium&status=all&focus=ingredients:1:en&returnTo=/administrator/ingredients/1?section=i18n&language=en`,
+    `/administrator/ingredients/1?section=display`, and
+    `/administrator/launch-checks` returned HTTP 200.
+  - Preview/live unauthenticated
+    `/api/admin/translations/ingredients?language=en&q=Magnesium&limit=5&offset=0`,
+    `/api/me`, and `/api/admin/launch-checks` returned HTTP 401.
+- Notes:
+  - Authenticated browser/mobile QA is still open because no admin token or
+    admin credentials are available in the environment.
 
 ## 2026-05-05 - Launch Readiness Implementation Bundle
 
@@ -1224,3 +1814,621 @@ When a future agent deploys or applies migrations, append the exact date, commit
   frontend build, and `git diff --check`.
 - Smoke checks passed: preview/live root 200 and preview/live
   `/api/demo/products` returns 7 products.
+
+## 2026-05-06 Admin Rebuild Phase 0 Deployed
+
+- Scope:
+  - New `/administrator` admin surface remains active alongside legacy `/admin`.
+  - Phase 0.1 interactions compatibility is deployed; `GET /api/interactions`
+    is now admin-protected.
+  - Phase 0.2 Affiliate-Ownership is deployed with
+    `products.affiliate_owner_type` / `affiliate_owner_user_id` and legacy
+    `is_affiliate` dual-write compatibility.
+  - Phase 0.3 Dose-Source-Bridge is deployed with
+    `dose_recommendation_sources`, admin dose source-link read/write support,
+    `/administrator/dosing`, and linked-source delete guard.
+- Remote D1 migrations:
+  - `0052_product_affiliate_ownership.sql` applied successfully.
+  - `0053_dose_recommendation_sources.sql` applied successfully.
+  - Post-apply `wrangler d1 migrations list supplementstack-production --remote`
+    returned no pending migrations.
+- Deploy prep:
+  - `npx tsc -p tsconfig.json --noEmit` from `functions/` passed.
+  - `npm run build` from `frontend/` passed with the known Vite chunk-size
+    warning.
+  - Copied `functions/` to `frontend/dist/functions`; verified
+    `frontend/dist/functions/api/[[path]].ts` exists.
+- Deploy command:
+  - `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://e3331f0b.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`.
+- Deployed asset: `assets/index-BC8IufAV.js` and `assets/index-DDNI4ZzM.css`.
+- Smoke checks:
+  - Preview/live `/` returned HTTP 200.
+  - Preview/live `/administrator/dosing` returned HTTP 200.
+  - Preview/live unauthenticated `/api/admin/dose-recommendations` returned
+    HTTP 401.
+  - Preview/live unauthenticated `/api/interactions` returned HTTP 401.
+  - Remote D1 schema smoke returned `product_owner_cols=2`,
+    `dose_source_table=1`, and `primary_index=1`.
+  - Remote D1 data smoke returned `invalid_affiliate_owner_rows=0`,
+    `linked_dose_sources=0`, and `primary_dose_sources=0`.
+- Notes:
+  - `linked_dose_sources=0` means production had no matching
+    `(ingredient_id, source_url)` rows for automatic bridge backfill; existing
+    dose recommendations need manual source linking in `/administrator/dosing`.
+  - Wrangler warned about uncommitted changes during deploy. Expected for this
+    active admin rebuild worktree; unrelated `.claude/*`, `logo.png`, and
+    `qa-preview-demo-bottombar-no-cookie.png` were not intentionally changed by
+    this deploy pass.
+
+## 2026-05-06 Administrator Design + Operations Slice Deployed
+
+- Scope:
+  - `/administrator` design shell deployed live alongside legacy `/admin`.
+  - New `/administrator/user-products` page with status filters, per-row
+    approve/reject/publish/delete, Trusted-Submitter toggle, checkbox
+    selection, and frontend-chunked bulk approve.
+  - New `/administrator/audit-log` page with filters, pagination, endpoint
+    source badge, action badges, and expandable changes/reason/request metadata.
+  - Remaining planned routes stay as explicit placeholders instead of
+    redirecting.
+- Remote D1 migrations:
+  - `wrangler d1 migrations list supplementstack-production --remote` returned
+    no pending migrations before deploy.
+- Validation:
+  - `npx tsc -p tsconfig.json --noEmit` from `functions/` passed.
+  - `npx tsc --noEmit`, `npm run lint --if-present`, and `npm run build` from
+    `frontend/` passed. Vite chunk-size warning remains known.
+  - Scoped `git diff --check` passed with CRLF warning only.
+  - Local mocked Playwright smoke passed for administrator dashboard,
+    user-products, audit-log, and 390px mobile user-products.
+- Deploy prep:
+  - Copied `functions/` to `frontend/dist/functions`.
+  - Verified `frontend/dist/functions/api/[[path]].ts` exists.
+- Deploy command:
+  - `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://bee102d9.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`.
+- Smoke checks:
+  - Preview/live `/` returned HTTP 200.
+  - Preview/live `/administrator/dashboard` returned HTTP 200.
+  - Preview/live `/administrator/user-products` returned HTTP 200.
+  - Preview/live `/administrator/audit-log` returned HTTP 200.
+  - Preview/live unauthenticated `/api/admin/dose-recommendations` returned
+    HTTP 401.
+  - Preview/live unauthenticated `/api/interactions` returned HTTP 401.
+- Notes:
+  - Deploy ran with expected Wrangler dirty-worktree warning because the admin
+    rebuild remains an active uncommitted worktree.
+
+## 2026-05-06 Administrator Broad UI Slice Deployed
+
+- Scope:
+  - `/administrator/products/:id` product detail page with tabs for overview,
+    ingredients, moderation, affiliate, warnings, and audit context.
+  - `/administrator/ingredients/:id` ingredient detail page with tabs for
+    overview, forms, dosing, research, interactions, warnings, display, and
+    i18n context.
+  - Real pages replacing placeholders for Product-QA, Linkmeldungen, Wissen,
+    Go-Live-Checks, Uebersetzungen, Sub-Wirkstoffe, Shop-Domains, and Rankings.
+  - Shell navigation and breadcrumbs updated for product/ingredient detail
+    routes and Sub-Wirkstoffe.
+  - Follow-up review fixes: real `GET /api/admin/products/:id` endpoint added;
+    product detail no longer loads all products client-side; ingredient lookup
+    helper no longer swallows API/auth failures; Sub-Wirkstoffe shows lookup
+    load errors; mobile-only cards no longer duplicate desktop tables on
+    Shop-Domains/Rankings; translations draft keys include language and
+    pagination is based on backend-loaded rows.
+- Remote D1 migrations:
+  - No new migration required for this slice.
+  - Earlier `0052_product_affiliate_ownership.sql` and
+    `0053_dose_recommendation_sources.sql` remain applied.
+- Validation:
+  - `npx tsc -p tsconfig.json --noEmit` from `functions/` passed.
+  - `npx tsc --noEmit` from `frontend/` passed.
+  - `npm run lint --if-present` from `frontend/` passed.
+  - `npm run build` from `frontend/` passed with the known Vite chunk-size
+    warning.
+  - Scoped `git diff --check` passed with CRLF warnings only.
+- Deploy prep:
+  - Copied `functions/` to `frontend/dist/functions`.
+  - Verified `frontend/dist/functions/api/[[path]].ts` exists with
+    `Test-Path -LiteralPath`.
+- Deploy command:
+  - `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://3b7180e8.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`.
+- Deployed asset: `assets/index-OUTVBOeo.js` and `assets/index-1L_skzTs.css`.
+- Smoke checks:
+  - Preview/live `/` returned HTTP 200.
+  - Preview/live `/administrator/products`, `/administrator/products/1`,
+    `/administrator/ingredients/1`, `/administrator/product-qa`,
+    `/administrator/link-reports`, `/administrator/knowledge`,
+    `/administrator/translations`, `/administrator/sub-ingredients`,
+    `/administrator/shop-domains`, and `/administrator/rankings` returned
+    HTTP 200.
+  - Preview/live unauthenticated `/api/admin/product-qa` returned HTTP 401.
+  - Preview/live unauthenticated `/api/admin/products/1` returned HTTP 401.
+- Notes:
+  - `/administrator/users` and `/administrator/settings` remain placeholders.
+  - Product-QA/Linkmeldungen counters are loaded-window counts, not global
+    backend totals.
+  - Go-Live-Checks are currently a static admin checklist and do not yet verify
+    live DNS/backup state.
+  - Wrangler warned about uncommitted changes during deploy, expected for this
+    active admin rebuild worktree.
+
+## 2026-05-06 Administrator Users + Settings Slice Deployed
+
+- Scope:
+  - `/administrator/users` is now a real admin user-management page.
+  - `/administrator/settings` is now a real system/readiness overview page.
+  - Backend added `GET /api/admin/users` with q/role/trusted/verified/page/limit
+    filters, summary counts, and product/stack usage counts.
+  - Backend added `PATCH /api/admin/users/:id` for safe admin fields only:
+    `role` and `trusted_submitter`. The route audits changes, blocks
+    self-demotion, and blocks demoting the last admin.
+  - Frontend route imports wired Users and Settings pages instead of
+    placeholders.
+  - P1 review fixes: ingredient-detail save helpers now parse actual Axios
+    response data; dosing payload normalization now includes `is_public`.
+  - Administrator shell removed inert hard-coded nav badges and no-op search /
+    notification controls.
+  - Mobile CSS polish added for admin drawer, toolbars, tables, tab strips,
+    forms, touch targets, and overflow handling at 375px-430px.
+- Remote D1 migrations:
+  - `wrangler d1 migrations list supplementstack-production --remote` returned
+    no migrations to apply.
+- Validation:
+  - `npx tsc -p tsconfig.json --noEmit` from `functions/` passed.
+  - `npx tsc --noEmit` from `frontend/` passed.
+  - `npm run lint --if-present` from `frontend/` passed.
+  - `npm run build` from `frontend/` passed with the known Vite chunk-size
+    warning.
+  - Scoped `git diff --check` passed with CRLF warnings only.
+- Deploy prep:
+  - Copied `functions/` to `frontend/dist/functions`.
+  - Verified `frontend/dist/functions/api/[[path]].ts` exists with
+    `Test-Path -LiteralPath`.
+- Deploy command:
+  - `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://97eea08f.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`.
+- Deployed asset: `assets/index-CUsuTl-I.js` and `assets/index-Cb18eqEl.css`.
+- Smoke checks:
+  - Preview/live `/`, `/administrator/users`, `/administrator/settings`,
+    `/administrator/products/1`, `/administrator/ingredients/1`,
+    `/administrator/product-qa`, `/administrator/link-reports`, and
+    `/administrator/sub-ingredients` returned HTTP 200.
+  - Preview/live unauthenticated `GET /api/admin/users`,
+    `PATCH /api/admin/users/1`, `/api/admin/product-qa`,
+    `/api/admin/link-reports`, `/api/admin/dose-recommendations`, and
+    `/api/interactions` returned HTTP 401.
+- Notes:
+  - `GET /api/admin/users/1` is not implemented and returns 404; the supported
+    mutation contract is `PATCH /api/admin/users/:id`.
+  - Authenticated browser/mobile QA is still open.
+  - Next technical slice is Product Detail depth: real ingredient rows,
+    warnings, QA flags, and recent audit context.
+
+## 2026-05-06 Administrator Product Detail Depth Deployed
+
+- Scope:
+  - `GET /api/admin/products/:id` now returns product-scoped detail data:
+    ingredient rows with form/parent/potency/basis/display-profile context,
+    QA row/counts, active safety warnings, catalog link-report counts/details,
+    and recent product audit rows.
+  - `/administrator/products/:id` renders real ingredient tables/cards,
+    QA flags, link report context, warning details, and recent audit entries.
+  - Existing affiliate save behavior remains on the Product-QA patch path.
+  - Product-QA and Linkmeldungen mobile rendering now hides the desktop
+    `AdminCard` wrapper below `md`, avoiding duplicate mobile cards plus an
+    empty desktop table shell.
+- Remote D1 migrations:
+  - No new migration required.
+- Validation:
+  - `npx tsc -p tsconfig.json --noEmit` from `functions/` passed.
+  - `npx tsc --noEmit` from `frontend/` passed.
+  - `npm run lint --if-present` from `frontend/` passed.
+  - `npm run build` from `frontend/` passed with the known Vite chunk-size
+    warning.
+  - Scoped `git diff --check` passed with CRLF warnings only.
+- Deploy prep:
+  - Copied `functions/` to `frontend/dist/functions`.
+  - Verified `frontend/dist/functions/api/[[path]].ts` exists with
+    `Test-Path -LiteralPath`.
+- Deploy command:
+  - `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://3cf7797e.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`.
+- Deployed asset: `assets/index-D9Io4Pi3.js` and `assets/index-Cb18eqEl.css`.
+- Smoke checks:
+  - Preview/live `/`, `/administrator/products/1`, `/administrator/users`,
+    `/administrator/settings`, `/administrator/product-qa`, and
+    `/administrator/link-reports` returned HTTP 200.
+  - Preview/live unauthenticated `/api/admin/products/1`,
+    `/api/admin/users`, `/api/admin/product-qa`, `/api/admin/link-reports`,
+    `/api/admin/dose-recommendations`, and `/api/interactions` returned
+    HTTP 401.
+- Notes:
+  - Audit context is limited to recent `admin_audit_log` rows with
+    `entity_type='product'` and matching `entity_id`.
+  - Link report status editing remains in the dedicated Linkmeldungen page.
+  - Authenticated browser/mobile QA is still open.
+  - Next technical slice is Ingredient Detail editing/source-to-dose linking.
+
+## 2026-05-06 Administrator Ingredient Detail Editor Deployed
+
+- Scope:
+  - `/administrator/ingredients/:id` now supports create/edit/delete UI for
+    ingredient research sources.
+  - `/administrator/ingredients/:id` now supports create/edit/deactivate UI for
+    ingredient safety warnings.
+  - Ingredient dosing tab now loads dose recommendations for the current
+    ingredient, shows linked sources, and can link/unlink existing research
+    sources as primary or secondary using the existing dose recommendation
+    `sources` payload.
+  - Existing research status and display-profile editing remains intact.
+  - `/administrator/products/:id` tab state is URL-backed via `?section=`.
+- Remote D1 migrations:
+  - No new migration required.
+- Validation:
+  - `npx tsc -p tsconfig.json --noEmit` from `functions/` passed.
+  - `npx tsc --noEmit` from `frontend/` passed.
+  - `npm run lint --if-present` from `frontend/` passed.
+  - `npm run build` from `frontend/` passed with the known Vite chunk-size
+    warning.
+  - Scoped `git diff --check` passed with CRLF warnings only.
+- Deploy prep:
+  - Copied `functions/` to `frontend/dist/functions`.
+  - Verified `frontend/dist/functions/api/[[path]].ts` exists with
+    `Test-Path -LiteralPath`.
+- Deploy command:
+  - `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://ef57c67b.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`.
+- Deployed asset: `assets/index-ZD0Mcdfm.js` and `assets/index-DmIdTXWw.css`.
+- Smoke checks:
+  - Preview/live `/`, `/administrator/ingredients/1`,
+    `/administrator/ingredients/1?section=research`,
+    `/administrator/ingredients/1?section=dosing`,
+    `/administrator/products/1?section=audit`, `/administrator/users`, and
+    `/administrator/settings` returned HTTP 200.
+  - Preview/live unauthenticated `/api/admin/ingredient-research/1`,
+    `/api/admin/dose-recommendations?ingredient_id=1&limit=5`,
+    `/api/admin/products/1`, `/api/admin/users`, and `/api/interactions`
+    returned HTTP 401.
+- Notes:
+  - Authenticated browser/mobile QA is still open.
+  - Research source deletion may return 409 when the source is linked to a dose
+    recommendation; the UI surfaces that backend error.
+  - Next technical slice is shared pagination/counts for Product-QA and
+    Linkmeldungen.
+
+## 2026-05-06 Administrator Product-QA + Linkmeldungen Pagination Deployed
+
+- Scope:
+  - `GET /api/admin/product-qa` now accepts `page`, `limit`, `issue`, and `q`;
+    returns paged products plus real `total`, `page`, `limit`,
+    `summary.issues`, and `issue_summary`.
+  - `GET /api/admin/link-reports` now accepts `page`, `limit`, `status`, and
+    `q`; returns paged reports plus real `total`, `page`, `limit`,
+    `summary.statuses`, and `status_summary`.
+  - `/administrator/product-qa` and `/administrator/link-reports` now show real
+    totals, page range, page-size selectors, previous/next controls, and global
+    summary chips instead of loaded-window counts.
+  - Existing filters, inline Product-QA edits, Linkmeldungen status actions,
+    and mobile cards were preserved.
+- Remote D1 migrations:
+  - No new migration required.
+- Validation:
+  - `npx tsc -p tsconfig.json --noEmit` from `functions/` passed.
+  - `npx tsc --noEmit` from `frontend/` passed.
+  - `npm run lint --if-present` from `frontend/` passed.
+  - `npm run build` from `frontend/` passed with the known Vite chunk-size
+    warning.
+  - Scoped `git diff --check` passed with CRLF warnings only.
+- Deploy prep:
+  - Copied `functions/` to `frontend/dist/functions`.
+  - Verified `frontend/dist/functions/api/[[path]].ts` exists with
+    `Test-Path -LiteralPath`.
+- Deploy command:
+  - `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://606be06f.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`.
+- Deployed asset: `assets/index-DwQj58i8.js` and `assets/index-DmIdTXWw.css`.
+- Smoke checks:
+  - Preview/live `/`, `/administrator/product-qa`,
+    `/administrator/link-reports`, `/administrator/ingredients/1?section=dosing`,
+    and `/administrator/products/1?section=audit` returned HTTP 200.
+  - Preview/live unauthenticated `/api/admin/product-qa?page=1&limit=5`,
+    `/api/admin/link-reports?page=1&limit=5`,
+    `/api/admin/ingredient-research/1`, `/api/admin/products/1`, and
+    `/api/interactions` returned HTTP 401.
+- Notes:
+  - Authenticated browser/mobile QA is still open.
+  - Next technical slice is paginated Products and Ingredients list endpoints.
+
+## 2026-05-06 Administrator Product/Ingredient List Pagination Deployed
+
+- Scope:
+  - `GET /api/admin/products` now supports admin `q`, `page`, and `limit`
+    pagination for `/administrator/products`.
+  - Legacy no-query `GET /api/admin/products` remains unbounded for old
+    `/admin` compatibility.
+  - `GET /api/admin/ingredients` now supports admin `q`, `page`, and `limit`
+    pagination, with lightweight product, dose, warning, and research status
+    counts for `/administrator/ingredients`.
+  - `/administrator/products` and `/administrator/ingredients` now use
+    server-side search, total counts, page ranges, page-size selectors, and
+    previous/next controls.
+  - UI/Mobile polish added focus-visible states, mobile drawer ARIA/Escape
+    behavior, touch target and overflow guards, and thin admin scrollbars.
+  - Added read-only authenticated QA harness:
+    `scripts/admin-browser-smoke.mjs` plus `scripts/admin-browser-smoke.md`.
+- Remote D1 migrations:
+  - No new migration required.
+- Validation:
+  - `npx tsc -p tsconfig.json --noEmit` from `functions/` passed.
+  - `npx tsc --noEmit` from `frontend/` passed.
+  - `npm run lint --if-present` from `frontend/` passed.
+  - `npm run build` from `frontend/` passed with the known Vite chunk-size
+    warning.
+  - `node --check scripts/admin-browser-smoke.mjs` passed.
+  - `node scripts/admin-browser-smoke.mjs --help` passed.
+  - Scoped `git diff --check` passed with CRLF warnings only.
+- Deploy prep:
+  - Copied `functions/` to `frontend/dist/functions`.
+  - Verified `frontend/dist/functions/api/[[path]].ts` exists with
+    `Test-Path -LiteralPath`.
+- Deploy command:
+  - `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://a192265c.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`.
+- Deployed asset: `assets/index-CIEnKZf8.js` and `assets/index-Bs8Bs153.css`.
+- Smoke checks:
+  - Preview/live `/`, `/administrator/dashboard`, `/administrator/products`,
+    `/administrator/ingredients`, `/administrator/product-qa`,
+    `/administrator/link-reports`, `/administrator/users`,
+    `/administrator/settings`, and `/administrator/health` returned HTTP 200.
+  - Preview/live unauthenticated
+    `/api/admin/products?page=1&limit=5`,
+    `/api/admin/ingredients?page=1&limit=5`, `/api/admin/products/1`,
+    `/api/admin/product-qa?page=1&limit=5`,
+    `/api/admin/link-reports?page=1&limit=5`, and `/api/interactions`
+    returned HTTP 401.
+- Notes:
+  - The authenticated browser smoke harness was not run against a real admin
+    session in this pass because no admin token or admin credentials were
+    provided in the environment.
+  - Wrangler warned about uncommitted changes during deploy, expected for this
+    active admin rebuild worktree.
+
+## 2026-05-06 Administrator Operations Polish Deployed
+
+- Scope:
+  - Added `PUT /api/admin/user-products/bulk-approve`, admin-guarded and
+    capped at 100 IDs per request, with deduplication, per-item results,
+    partial failure reporting, and one audit-log summary action.
+  - `/administrator/user-products` now uses the backend bulk endpoint instead
+    of sending one approve request per selected product.
+  - `/administrator/audit-log` now renders common `changes` payloads as
+    before/after rows or readable field cards, with JSON fallback for nested
+    structures.
+  - Legacy `/admin` interaction creation now maps old `type` values to
+    severity when no explicit `severity` is sent, preserving `type: danger`
+    as `severity: danger`.
+- Remote D1 migrations:
+  - No new migration required.
+- Validation:
+  - `npx tsc -p tsconfig.json --noEmit` from `functions/` passed.
+  - `npx tsc --noEmit` from `frontend/` passed.
+  - `npm run lint --if-present` from `frontend/` passed.
+  - `npm run build` from `frontend/` passed with the known Vite chunk-size
+    warning.
+  - `node --check scripts/admin-browser-smoke.mjs` passed.
+  - Scoped `git diff --check` passed with CRLF warnings only.
+- Deploy prep:
+  - Copied `functions/` to `frontend/dist/functions`.
+  - Verified `frontend/dist/functions/api/[[path]].ts` exists with
+    `Test-Path -LiteralPath`.
+- Deploy command:
+  - `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://01af0df1.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`.
+- Deployed asset: `assets/index-iMjuWDij.js` and `assets/index-ahA9uoPv.css`.
+- Smoke checks:
+  - Preview/live `/`, `/administrator/user-products`,
+    `/administrator/audit-log`, `/administrator/interactions`,
+    `/administrator/products`, and `/administrator/ingredients` returned
+    HTTP 200.
+  - Preview/live unauthenticated `/api/interactions`,
+    `/api/admin/audit-log?page=1&limit=5`,
+    `/api/admin/user-products?status=pending`, and
+    `PUT /api/admin/user-products/bulk-approve` returned HTTP 401.
+- Notes:
+  - `/api/admin/user-products` still needs server-side pagination; the bulk
+    endpoint only fixes the write path scale issue.
+
+## 2026-05-06 Administrator User-Produkte Pagination + Smoke Harness Deployed
+
+- Scope:
+  - `GET /api/admin/user-products` now accepts `status`, `page`, and `limit`,
+    returns paged products plus `total`, `page`, `limit`, `total_pages`,
+    `summary`, and `status_summary`.
+  - `/administrator/user-products` now uses backend pagination controls,
+    status totals, page ranges, and page-size selectors while preserving the
+    existing bulk approve endpoint.
+  - `scripts/admin-browser-smoke.mjs` default route coverage now spans the
+    current `/administrator` surface, including product/ingredient details and
+    ingredient detail tab clicks; docs were updated.
+- Remote D1 migrations:
+  - No new migration required.
+- Validation:
+  - `npx tsc -p tsconfig.json --noEmit` from `functions/` passed.
+  - `npx tsc --noEmit` from `frontend/` passed.
+  - `npm run lint --if-present` from `frontend/` passed.
+  - `npm run build` from `frontend/` passed with the known Vite chunk-size
+    warning.
+  - `node --check scripts/admin-browser-smoke.mjs` passed.
+  - `node scripts/admin-browser-smoke.mjs --help` passed.
+  - Scoped `git diff --check` passed with CRLF warnings only.
+- Deploy prep:
+  - Copied `functions/` to `frontend/dist/functions`.
+  - Verified `frontend/dist/functions/api/[[path]].ts` exists with
+    `Test-Path -LiteralPath`.
+- Deploy command:
+  - `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://bbdb6c99.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`.
+- Smoke checks:
+  - Preview/live `/`, `/administrator/user-products`,
+    `/administrator/audit-log`, `/administrator/products`, and
+    `/administrator/ingredients` returned HTTP 200.
+  - Preview/live unauthenticated
+    `/api/admin/user-products?status=pending&page=1&limit=5`,
+    `PUT /api/admin/user-products/bulk-approve`,
+    `/api/admin/products?page=1&limit=5`, and `/api/interactions` returned
+    HTTP 401.
+- Notes:
+  - Authenticated browser/mobile QA is still open because no admin token or
+    admin credentials are available in the environment.
+
+## 2026-05-06 Administrator Launch Checks + Ingredient URL Tabs Deployed
+
+- Scope:
+  - Added `GET /api/admin/launch-checks`, admin-only behind `ensureAdmin`.
+  - Endpoint returns safe launch-readiness checks for D1 basic/count queries,
+    operations queues, configured/missing env flags, public HTTPS/DNS signals
+    for `supplementstack.de`, and manual legal/mail/backup sign-offs.
+  - Raw secret values and DNS TXT contents are not returned.
+  - `/administrator/launch-checks` now renders the API snapshot with refresh,
+    loading, error, status, and severity states.
+  - `/administrator/ingredients/:id` tabs now use `?section=...` so direct
+    links, refresh, and browser history preserve the selected tab.
+- Remote D1 migrations:
+  - No new migration required.
+- Validation:
+  - `npx tsc -p tsconfig.json --noEmit` from `functions/` passed.
+  - `npx tsc --noEmit` from `frontend/` passed.
+  - `npm run lint --if-present` from `frontend/` passed.
+  - `npm run build` from `frontend/` passed with the known Vite chunk-size
+    warning.
+  - `node --check scripts/admin-browser-smoke.mjs` passed.
+  - Scoped `git diff --check` passed with CRLF warnings only.
+- Deploy prep:
+  - Copied `functions/` to `frontend/dist/functions`.
+  - Verified `frontend/dist/functions/api/[[path]].ts` exists with
+    `Test-Path -LiteralPath`.
+- Deploy command:
+  - `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://d3c2fc10.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`.
+- Smoke checks:
+  - Preview/live `/`, `/administrator/launch-checks`,
+    `/administrator/ingredients/1?section=dosing`,
+    `/administrator/ingredients/1?section=display`,
+    `/administrator/user-products`, and `/administrator/products` returned
+    HTTP 200.
+  - Preview/live unauthenticated `/api/admin/launch-checks`,
+    `/api/admin/user-products?status=pending&page=1&limit=5`,
+    `/api/admin/products?page=1&limit=5`, and `/api/interactions` returned
+    HTTP 401.
+- Notes:
+  - Authenticated browser/mobile QA is still open because no admin token or
+    admin credentials are available in the environment.
+
+## 2026-05-06 Auth Backend Dual-Mode + Ingredient Interactions Deployed
+
+- Scope:
+  - `ensureAuth` now accepts HttpOnly `session` cookie first and falls back to
+    `Authorization: Bearer ...`.
+  - Login/register still return body token and additionally set
+    `session=<jwt>; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=604800`.
+  - Logout clears the same cookie with `Max-Age=0`.
+  - CORS now includes credentials support for the existing explicit allowlist
+    and Pages preview subdomains; no origin was added.
+  - `GET /api/interactions?ingredient_id=:id` filters the admin-only
+    interactions list for one ingredient.
+  - `/administrator/ingredients/:id?section=interactions` renders a read-only
+    Interaction table with source/mechanism/comment/status and link to the
+    global editor.
+- Remote D1 migrations:
+  - No new migration required.
+- Validation:
+  - `npx tsc -p tsconfig.json --noEmit` from `functions/` passed.
+  - `npx tsc --noEmit` from `frontend/` passed.
+  - `npm run lint --if-present` from `frontend/` passed.
+  - `npm run build` from `frontend/` passed with the known Vite chunk-size
+    warning.
+  - `node --check scripts/admin-browser-smoke.mjs` passed.
+  - Scoped `git diff --check` passed with CRLF warnings only.
+- Deploy prep:
+  - Copied `functions/` to `frontend/dist/functions`.
+  - Verified `frontend/dist/functions/api/[[path]].ts` exists with
+    `Test-Path -LiteralPath`.
+- Deploy command:
+  - `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://03a81657.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`.
+- Smoke checks:
+  - Preview/live `/`, `/administrator/ingredients/1?section=interactions`,
+    `/administrator/interactions`, and `/administrator/launch-checks` returned
+    HTTP 200.
+  - Preview/live unauthenticated `/api/interactions`,
+    `/api/interactions?ingredient_id=1`, `/api/interactions?ingredient_id=bad`,
+    `/api/admin/launch-checks`, and `/api/me` returned HTTP 401.
+  - Preview CORS smoke with `Origin: https://supplementstack.de` returned
+    `Access-Control-Allow-Origin: https://supplementstack.de` and
+    `Access-Control-Allow-Credentials: true`.
+- Notes:
+  - Login Set-Cookie, cookie-only `/api/me`, and authenticated browser/mobile
+    QA remain open because no admin/user credentials are available in the
+    environment.
+
+## 2026-05-06 Auth Frontend Cookie-Aware + Form Display Profiles Deployed
+
+- Scope:
+  - Frontend Axios sends `withCredentials: true`.
+  - Auth bootstrap now attempts `getMe()` even without a local token; 401 is
+    treated as logged-out state.
+  - Login/register continue storing the body token for Bearer fallback.
+  - Logout calls backend `POST /api/auth/logout` and clears local state even if
+    the request fails.
+  - Manual auth fetch callsites now send `credentials: 'include'` while keeping
+    Bearer headers where available.
+  - `/administrator/ingredients/:id?section=display` supports edit/create for
+    form-specific display profiles via the existing display-profile upsert API.
+- Remote D1 migrations:
+  - No new migration required.
+- Validation:
+  - `npx tsc -p tsconfig.json --noEmit` from `functions/` passed.
+  - `npx tsc --noEmit` from `frontend/` passed.
+  - `npm run lint --if-present` from `frontend/` passed.
+  - `npm run build` from `frontend/` passed with the known Vite chunk-size
+    warning.
+  - `node --check scripts/admin-browser-smoke.mjs` passed.
+  - Scoped `git diff --check` passed with CRLF warnings only.
+- Deploy prep:
+  - Copied `functions/` to `frontend/dist/functions`.
+  - Verified `frontend/dist/functions/api/[[path]].ts` exists with
+    `Test-Path -LiteralPath`.
+- Deploy command:
+  - `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://f5585a23.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`.
+- Smoke checks:
+  - Preview/live `/`, `/administrator/ingredients/1?section=display`,
+    `/administrator/ingredients/1?section=interactions`,
+    `/administrator/launch-checks`, `/my-products`, and `/stacks` returned
+    HTTP 200.
+  - Preview/live unauthenticated `/api/me`,
+    `/api/interactions?ingredient_id=1`, `/api/admin/launch-checks`,
+    `/api/user-products`, and `/api/stacks` returned HTTP 401.
+  - Preview CORS smoke with `Origin: https://supplementstack.de` returned
+    `Access-Control-Allow-Origin: https://supplementstack.de` and
+    `Access-Control-Allow-Credentials: true`.
+- Notes:
+  - Authenticated cookie-only login/logout and admin browser/mobile QA remain
+    open because no admin/user credentials are available in the environment.

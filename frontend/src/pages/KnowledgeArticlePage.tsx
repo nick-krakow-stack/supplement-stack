@@ -58,7 +58,7 @@ export default function KnowledgeArticlePage() {
         className="mb-8 inline-flex items-center gap-2 text-sm font-bold text-slate-500 transition-colors hover:text-slate-900"
       >
         <ArrowLeft size={16} />
-        Zurueck
+        Zurück
       </Link>
 
       {loading && (
@@ -80,7 +80,7 @@ export default function KnowledgeArticlePage() {
             <h1 className="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">{article.title}</h1>
             <p className="mt-4 text-base font-semibold leading-relaxed text-slate-600">{article.summary}</p>
             {reviewedDate && (
-              <p className="mt-4 text-sm font-semibold text-slate-400">Geprueft am {reviewedDate}</p>
+              <p className="mt-4 text-sm font-semibold text-slate-400">Geprüft am {reviewedDate}</p>
             )}
           </div>
 

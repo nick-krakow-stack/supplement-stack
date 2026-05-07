@@ -12,23 +12,15 @@ import products, { r2App } from './modules/products'
 import stacks, { stackWarningsApp } from './modules/stacks'
 import userProducts from './modules/user-products'
 import type { AppContext } from './lib/types'
+import { isAllowedFrontendOrigin } from './lib/helpers'
 
 const app = new Hono<AppContext>()
 
 app.use('*', cors({
   origin: (origin) => {
-    if (!origin) return null
-    const allowed = [
-      'https://supplementstack.de',
-      'https://www.supplementstack.de',
-      'https://supplementstack.pages.dev',
-      'http://localhost:5173',
-    ]
-    if (allowed.includes(origin)) return origin
-    // Pages preview subdomains: https://<hash>.supplementstack.pages.dev
-    if (/^https:\/\/[a-z0-9-]+\.supplementstack\.pages\.dev$/.test(origin)) return origin
-    return null
+    return isAllowedFrontendOrigin(origin) ? origin : null
   },
+  credentials: true,
 }))
 
 app.route('/api/auth', auth)

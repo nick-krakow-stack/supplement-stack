@@ -101,7 +101,6 @@ interface DemoState {
 
 export interface StackWorkspaceProps {
   mode?: 'demo' | 'authenticated';
-  token?: string | null;
   standaloneHeader?: boolean;
 }
 
@@ -122,11 +121,12 @@ function createDefaultState(): DemoState {
   return { stacks: [{ id, name: 'Basis Gesundheit', products: [] }], activeStackId: id };
 }
 
-function authHeaders(token?: string | null): Record<string, string> {
-  return {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
+const JSON_HEADERS: Record<string, string> = {
+  'Content-Type': 'application/json',
+};
+
+function credentialedFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+  return fetch(input, { credentials: 'include', ...init });
 }
 
 function demoRestrictedNotice() {
@@ -322,7 +322,6 @@ function AddProductModal({
   stacks,
   activeStackId,
   isDemo,
-  token,
   onAdd,
   onClose,
   ignoredExistingProductKey,
@@ -332,7 +331,6 @@ function AddProductModal({
   stacks: DemoStack[];
   activeStackId: string;
   isDemo: boolean;
-  token?: string | null;
   onAdd: (product: DemoProduct, stackId: string) => Promise<void>;
   onClose: () => void;
   title?: string;
@@ -367,7 +365,7 @@ function AddProductModal({
     setGuidelines([]);
     setGuidelinesLoading(true);
 
-    fetch(apiPath(`/ingredients/${selected.id}/dosage-guidelines`))
+    credentialedFetch(apiPath(`/ingredients/${selected.id}/dosage-guidelines`))
       .then((response) => {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         return response.json();
@@ -389,13 +387,13 @@ function AddProductModal({
     setStep('products');
     setProductsLoading(true);
     setError('');
-    const catalogPromise = fetch(apiPath(`/ingredients/${ingredient.id}/products`))
+    const catalogPromise = credentialedFetch(apiPath(`/ingredients/${ingredient.id}/products`))
       .then((response) => {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         return response.json() as Promise<{ products?: DemoProduct[] }>;
       });
-    const userProductsPromise = !isDemo && token
-      ? fetch(apiPath('/user-products'), { headers: authHeaders(token) })
+    const userProductsPromise = !isDemo
+      ? credentialedFetch(apiPath('/user-products'), { headers: JSON_HEADERS })
           .then((response) => (response.ok ? response.json() : { products: [] }))
           .catch(() => ({ products: [] }))
       : Promise.resolve({ products: [] });
@@ -579,10 +577,14 @@ function AddProductModal({
                 Geplante Tagesmenge ({dose.unit || normalizeUnitToGerman(ingredient.unit) || 'Einheit'})
               </label>
               <input
-                type="number"
-                min={0}
-                value={dose.value || ''}
-                onChange={(event) => setDose((prev) => ({ ...prev, value: Number(event.target.value) }))}
+                type="text"
+                inputMode="decimal"
+                value={dose.value ? String(dose.value).replace('.', ',') : ''}
+                onChange={(event) => {
+                  const normalized = event.target.value.replace(',', '.');
+                  const parsed = Number(normalized);
+                  setDose((prev) => ({ ...prev, value: Number.isFinite(parsed) ? parsed : 0 }));
+                }}
                 className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-xl font-semibold text-slate-950 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-4 focus:ring-blue-100"
               />
               <p className="mt-2 text-sm font-semibold text-slate-500">
@@ -994,7 +996,6 @@ function loadProductViewMode(): ProductViewMode {
 
 export function StackWorkspace({
   mode = 'demo',
-  token = null,
   standaloneHeader,
 }: StackWorkspaceProps) {
   const [state, setState] = useState<DemoState>(createDefaultState);
@@ -1031,28 +1032,28 @@ export function StackWorkspace({
 
   // Fetch shop domains
   useEffect(() => {
-    fetch(apiPath('/shop-domains'))
+    credentialedFetch(apiPath('/shop-domains'))
       .then((r) => (r.ok ? r.json() : { shops: [] }))
       .then((data) => setShopDomains(data.shops ?? []))
       .catch(() => { /* ignore */ });
   }, []);
 
   const loadFamilyProfiles = useCallback(async () => {
-    if (mode !== 'authenticated' || !token) return;
+    if (mode !== 'authenticated') return;
     try {
       const members = await getFamilyMembers();
       setFamilyMembers(members);
     } catch {
       setFamilyStatus('Familienprofile konnten nicht geladen werden.');
     }
-  }, [mode, token]);
+  }, [mode]);
 
   const loadAuthenticatedStacks = useCallback(async () => {
-    if (mode !== 'authenticated' || !token) return;
+    if (mode !== 'authenticated') return;
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(apiPath('/stacks'), { headers: authHeaders(token) });
+      const res = await credentialedFetch(apiPath('/stacks'), { headers: JSON_HEADERS });
       if (!res.ok) throw new Error('Stacks konnten nicht geladen werden.');
       const data = await res.json();
       const stackList: Array<{
@@ -1062,9 +1063,9 @@ export function StackWorkspace({
         family_member_first_name?: string | null;
       }> = data.stacks ?? data ?? [];
       if (stackList.length === 0) {
-        const createRes = await fetch(apiPath('/stacks'), {
+        const createRes = await credentialedFetch(apiPath('/stacks'), {
           method: 'POST',
-          headers: authHeaders(token),
+          headers: JSON_HEADERS,
           body: JSON.stringify({ name: 'Mein Stack', product_ids: [] }),
         });
         const createData = await createRes.json().catch(() => ({})) as Record<string, unknown>;
@@ -1083,8 +1084,8 @@ export function StackWorkspace({
       }
       const detailed = await Promise.all(
         stackList.map(async (stack) => {
-          const detailRes = await fetch(apiPath(`/stacks/${stack.id}`), {
-            headers: authHeaders(token),
+          const detailRes = await credentialedFetch(apiPath(`/stacks/${stack.id}`), {
+            headers: JSON_HEADERS,
           });
           if (!detailRes.ok) return mapStackDetail(stack);
           const detail = await detailRes.json();
@@ -1104,7 +1105,7 @@ export function StackWorkspace({
     } finally {
       setLoading(false);
     }
-  }, [mode, token]);
+  }, [mode]);
 
   useEffect(() => {
     if (mode === 'authenticated') {
@@ -1114,7 +1115,7 @@ export function StackWorkspace({
     }
 
     const fresh = createDefaultState();
-    fetch(apiPath('/demo/products'))
+    credentialedFetch(apiPath('/demo/products'))
       .then((res) => (res.ok ? res.json() : { products: [] }))
       .then((data) => {
         const products = ((data.products ?? []) as DemoProduct[]).slice(0, 6).map((product) => {
@@ -1150,7 +1151,7 @@ export function StackWorkspace({
 
   const persistStackProducts = useCallback(
     async (stackId: string, products: DemoProduct[], name?: string) => {
-      if (mode !== 'authenticated' || !token) return;
+      if (mode !== 'authenticated') return;
       const payload = {
         ...(name ? { name } : {}),
         product_ids: products.map((product) => ({
@@ -1162,29 +1163,29 @@ export function StackWorkspace({
           timing: product.timing,
         })),
       };
-      const res = await fetch(apiPath(`/stacks/${stackId}`), {
+      const res = await credentialedFetch(apiPath(`/stacks/${stackId}`), {
         method: 'PUT',
-        headers: authHeaders(token),
+        headers: JSON_HEADERS,
         body: JSON.stringify(payload),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? 'Stack konnte nicht gespeichert werden.');
     },
-    [mode, token],
+    [mode],
   );
 
   const handleAssignFamilyMember = useCallback(
     async (familyMemberId: number | null) => {
       if (!activeStack) return;
-      if (mode !== 'authenticated' || !token) {
+      if (mode !== 'authenticated') {
         setFamilyStatus('Familienprofile sind nur angemeldet verfügbar.');
         return;
       }
       setFamilyStatus('');
       try {
-        const res = await fetch(apiPath(`/stacks/${activeStack.id}`), {
+        const res = await credentialedFetch(apiPath(`/stacks/${activeStack.id}`), {
           method: 'PUT',
-          headers: authHeaders(token),
+          headers: JSON_HEADERS,
           body: JSON.stringify({ family_member_id: familyMemberId }),
         });
         const data = await res.json().catch(() => ({}));
@@ -1206,13 +1207,13 @@ export function StackWorkspace({
         setFamilyStatus(err instanceof Error ? err.message : 'Profil konnte nicht zugeordnet werden.');
       }
     },
-    [activeStack, familyMembers, mode, token],
+    [activeStack, familyMembers, mode],
   );
 
   const handleCreateFamilyMember = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
-      if (mode !== 'authenticated' || !token) {
+      if (mode !== 'authenticated') {
         setFamilyStatus('Familienprofile sind nur angemeldet verfügbar.');
         return;
       }
@@ -1256,12 +1257,12 @@ export function StackWorkspace({
         setFamilySaving(false);
       }
     },
-    [activeStack, familyDraft, handleAssignFamilyMember, mode, token],
+    [activeStack, familyDraft, handleAssignFamilyMember, mode],
   );
 
   const handleDeleteFamilyMember = useCallback(
     async (memberId: number) => {
-      if (mode !== 'authenticated' || !token) return;
+      if (mode !== 'authenticated') return;
       const member = familyMembers.find((item) => item.id === memberId);
       if (!member || !window.confirm(`Profil "${member.first_name}" entfernen?`)) return;
       setFamilyStatus('');
@@ -1280,12 +1281,12 @@ export function StackWorkspace({
         setFamilyStatus(err instanceof Error ? err.message : 'Familienprofil konnte nicht entfernt werden.');
       }
     },
-    [familyMembers, mode, token],
+    [familyMembers, mode],
   );
 
   const handleReportMissingLink = useCallback(
     async (product: DemoProduct, reason: 'missing_link' | 'invalid_link') => {
-      if (isDemo || !token || !activeStack) {
+      if (isDemo || !activeStack) {
         setLinkReportStatus('Danke. In der Vollversion wird die Meldung direkt an die Produktpflege gesendet.');
         return;
       }
@@ -1302,7 +1303,7 @@ export function StackWorkspace({
         setLinkReportStatus(err instanceof Error ? err.message : 'Link konnte nicht gemeldet werden.');
       }
     },
-    [activeStack, isDemo, token],
+    [activeStack, isDemo],
   );
 
   // ---- Stack management ----
@@ -1310,11 +1311,11 @@ export function StackWorkspace({
   const handleCreateStack = useCallback(async () => {
     const id = newStackId();
     const name = `Stack ${state.stacks.length + 1}`;
-    if (mode === 'authenticated' && token) {
+    if (mode === 'authenticated') {
       try {
-        const res = await fetch(apiPath('/stacks'), {
+        const res = await credentialedFetch(apiPath('/stacks'), {
           method: 'POST',
-          headers: authHeaders(token),
+          headers: JSON_HEADERS,
           body: JSON.stringify({ name, product_ids: [] }),
         });
         const data = await res.json().catch(() => ({}));
@@ -1335,7 +1336,7 @@ export function StackWorkspace({
       stacks: [...prev.stacks, { id, name, products: [] }],
       activeStackId: id,
     }));
-  }, [mode, state.stacks.length, token]);
+  }, [mode, state.stacks.length]);
 
   const handleDeleteStack = useCallback(
     async (id: string) => {
@@ -1347,11 +1348,11 @@ export function StackWorkspace({
       const stack = state.stacks.find((s) => s.id === id);
       if (!stack) return;
       if (!window.confirm(`Stack "${stack.name}" wirklich löschen?`)) return;
-      if (mode === 'authenticated' && token) {
+      if (mode === 'authenticated') {
         try {
-          const res = await fetch(apiPath(`/stacks/${id}`), {
+          const res = await credentialedFetch(apiPath(`/stacks/${id}`), {
             method: 'DELETE',
-            headers: authHeaders(token),
+            headers: JSON_HEADERS,
           });
           if (!res.ok) throw new Error('Stack konnte nicht gelöscht werden.');
         } catch (err) {
@@ -1373,14 +1374,14 @@ export function StackWorkspace({
         return next;
       });
     },
-    [isDemo, mode, state.stacks, token],
+    [isDemo, mode, state.stacks],
   );
 
   const handleSaveStackMeta = useCallback(
     async (newName: string, newDescription: string) => {
       if (!activeStack) return;
       const prevName = activeStack.name;
-      if (mode === 'authenticated' && token && newName !== prevName) {
+      if (mode === 'authenticated' && newName !== prevName) {
         await persistStackProducts(activeStack.id, activeStack.products, newName);
       }
       setState((prev) => ({
@@ -1396,7 +1397,7 @@ export function StackWorkspace({
       });
       setEditModalOpen(false);
     },
-    [activeStack, mode, persistStackProducts, token],
+    [activeStack, mode, persistStackProducts],
   );
 
   // ---- Product management ----
@@ -1410,7 +1411,7 @@ export function StackWorkspace({
         throw new Error('Produkt ist bereits in diesem Stack.');
       }
       const nextProducts = [...targetStack.products, product];
-      if (mode === 'authenticated' && token) {
+      if (mode === 'authenticated') {
         try {
           await persistStackProducts(targetStackId, nextProducts);
         } catch (err) {
@@ -1431,14 +1432,14 @@ export function StackWorkspace({
         return next;
       });
     },
-    [loadAuthenticatedStacks, mode, persistStackProducts, state.activeStackId, state.stacks, token],
+    [loadAuthenticatedStacks, mode, persistStackProducts, state.activeStackId, state.stacks],
   );
 
   const handleRemoveProduct = useCallback(
     async (productKey: string) => {
       if (!activeStack) return;
       const nextProducts = activeStack.products.filter((p) => productStackKey(p) !== productKey);
-      if (mode === 'authenticated' && token) {
+      if (mode === 'authenticated') {
         try {
           await persistStackProducts(activeStack.id, nextProducts);
         } catch (err) {
@@ -1454,7 +1455,7 @@ export function StackWorkspace({
         ),
       }));
     },
-    [activeStack, loadAuthenticatedStacks, mode, persistStackProducts, token],
+    [activeStack, loadAuthenticatedStacks, mode, persistStackProducts],
   );
 
   const handleSaveProduct = useCallback(
@@ -1463,7 +1464,7 @@ export function StackWorkspace({
       const nextProducts = activeStack.products.map((product) =>
         productStackKey(product) === productKey ? { ...product, ...productPatch } : product,
       );
-      if (mode === 'authenticated' && token) {
+      if (mode === 'authenticated') {
         try {
           await persistStackProducts(activeStack.id, nextProducts);
         } catch (err) {
@@ -1480,7 +1481,7 @@ export function StackWorkspace({
       }));
       setEditingProductKey(null);
     },
-    [activeStack, loadAuthenticatedStacks, mode, persistStackProducts, token],
+    [activeStack, loadAuthenticatedStacks, mode, persistStackProducts],
   );
 
   const handleReplaceProduct = useCallback(
@@ -1521,7 +1522,7 @@ export function StackWorkspace({
       const nextProducts = targetStack.products.map((product) =>
         productStackKey(product) === replaceProductKey ? candidate : product,
       );
-      if (mode === 'authenticated' && token) {
+      if (mode === 'authenticated') {
         try {
           await persistStackProducts(targetStackId, nextProducts);
         } catch (err) {
@@ -1547,7 +1548,7 @@ export function StackWorkspace({
       setReplaceProductKey(null);
       setEditingProductKey(null);
     },
-    [loadAuthenticatedStacks, mode, persistStackProducts, replaceProductKey, state.activeStackId, state.stacks, token],
+    [loadAuthenticatedStacks, mode, persistStackProducts, replaceProductKey, state.activeStackId, state.stacks],
   );
 
   // ---- Selection / totals ----
@@ -1608,13 +1609,13 @@ export function StackWorkspace({
   };
 
   const handleEmailStack = async () => {
-    if (isDemo || !activeStack || !token) return;
+    if (isDemo || !activeStack) return;
     setEmailSending(true);
     setEmailStatus('');
     try {
-      const res = await fetch(apiPath(`/stacks/${activeStack.id}/email`), {
+      const res = await credentialedFetch(apiPath(`/stacks/${activeStack.id}/email`), {
         method: 'POST',
-        headers: authHeaders(token),
+        headers: JSON_HEADERS,
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -2065,7 +2066,6 @@ export function StackWorkspace({
           stacks={state.stacks}
           activeStackId={state.activeStackId}
           isDemo={isDemo}
-          token={token}
           onAdd={handleAddProduct}
           onClose={() => setAddModalOpen(false)}
         />
@@ -2076,7 +2076,6 @@ export function StackWorkspace({
           stacks={[replacingStack]}
           activeStackId={replacingStack.id}
           isDemo={isDemo}
-          token={token}
           onAdd={handleReplaceProduct}
           onClose={() => setReplaceProductKey(null)}
           title="Produkt wechseln"

@@ -10,11 +10,26 @@ interface ImageCropModalProps {
   currentImageUrl?: string;
   /** When provided, the cropped image is uploaded to POST /api/products/:productId/image */
   productId?: number;
+  /** Optional upload target for admin/versioned image uploads. Defaults to /api/products/:productId/image. */
+  uploadEndpoint?: string;
+  /** Optional optimistic-lock version sent as If-Match and form field version. */
+  uploadVersion?: number | null;
   /** Called with the stored image_url after a successful upload */
-  onSuccess?: (imageUrl: string) => void;
+  onSuccess?: (imageUrl: string, response?: { image_url: string; image_r2_key?: string | null; product_version?: number | null }) => void;
+  /** Called when the direct upload fails. */
+  onError?: (message: string) => void;
 }
 
-export default function ImageCropModal({ onCrop, onClose, currentImageUrl, productId, onSuccess }: ImageCropModalProps) {
+export default function ImageCropModal({
+  onCrop,
+  onClose,
+  currentImageUrl,
+  productId,
+  uploadEndpoint,
+  uploadVersion,
+  onSuccess,
+  onError,
+}: ImageCropModalProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [scale, setScale] = useState(1);
@@ -25,6 +40,7 @@ export default function ImageCropModal({ onCrop, onClose, currentImageUrl, produ
   const [, forceUpdate] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const resolvedUploadEndpoint = uploadEndpoint ?? (productId !== undefined ? `/api/products/${productId}/image` : null);
 
   // ── load image from File ──
   const loadFile = useCallback((file: File) => {
@@ -136,8 +152,8 @@ export default function ImageCropModal({ onCrop, onClose, currentImageUrl, produ
 
     const dataUrl = out.toDataURL('image/jpeg', 0.88);
 
-    // If productId + onSuccess provided, upload directly to backend
-    if (productId !== undefined && onSuccess) {
+    // If an upload target + onSuccess are provided, upload directly to backend.
+    if (resolvedUploadEndpoint && onSuccess) {
       setUploading(true);
       setUploadError(null);
       try {
@@ -146,21 +162,33 @@ export default function ImageCropModal({ onCrop, onClose, currentImageUrl, produ
         });
         const formData = new FormData();
         formData.append('image', blob, 'product.jpg');
-        const token = localStorage.getItem('ss_token');
-        const res = await fetch(`/api/products/${productId}/image`, {
+        if (uploadVersion !== null && uploadVersion !== undefined) {
+          formData.append('version', String(uploadVersion));
+        }
+        const headers = new Headers();
+        if (uploadVersion !== null && uploadVersion !== undefined) {
+          headers.set('If-Match', String(uploadVersion));
+        }
+        const res = await fetch(resolvedUploadEndpoint, {
           method: 'POST',
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          credentials: 'include',
+          headers,
           body: formData,
         });
         if (!res.ok) {
-          const errData = await res.json().catch(() => ({})) as { error?: string };
-          throw new Error(errData.error ?? `Upload fehlgeschlagen (${res.status})`);
+          const errData = await res.json().catch(() => ({})) as { error?: string; current_version?: number | null };
+          const conflictSuffix = res.status === 409 && errData.current_version !== undefined && errData.current_version !== null
+            ? ` Aktuelle Version: ${errData.current_version}.`
+            : '';
+          throw new Error(`${errData.error ?? `Upload fehlgeschlagen (${res.status})`}${conflictSuffix}`);
         }
-        const data = await res.json() as { image_url: string };
-        onSuccess(data.image_url);
+        const data = await res.json() as { image_url: string; image_r2_key?: string | null; product_version?: number | null };
+        onSuccess(data.image_url, data);
         onClose();
       } catch (e) {
-        setUploadError(e instanceof Error ? e.message : 'Upload fehlgeschlagen');
+        const message = e instanceof Error ? e.message : 'Upload fehlgeschlagen';
+        setUploadError(message);
+        onError?.(message);
       } finally {
         setUploading(false);
       }
@@ -337,7 +365,7 @@ export default function ImageCropModal({ onCrop, onClose, currentImageUrl, produ
               ) : (
                 <>
                   <Check size={14} />
-                  {productId !== undefined ? 'Zuschneiden & Hochladen' : 'Zuschneiden'}
+                  {resolvedUploadEndpoint ? 'Zuschneiden & Hochladen' : 'Zuschneiden'}
                 </>
               )}
             </button>

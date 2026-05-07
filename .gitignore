@@ -21,6 +21,12 @@ scripts/*.local.ps1
 frontend/.env.local
 functions/.dev.vars
 
+# Local design/browser QA artifacts
+/admin-preview/
+/qa-*.png
+/logo.png
+.claude/deploy-errors.log
+
 # Claude local-only state
 .claude/settings.local.json
 .claude/worktrees/

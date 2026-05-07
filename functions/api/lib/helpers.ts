@@ -3,6 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import { verify } from 'hono/jwt'
+import { getCookie, setCookie } from 'hono/cookie'
 import type { Context } from 'hono'
 import type { AppContext } from './types'
 
@@ -56,16 +57,141 @@ export async function hashResetToken(rawToken: string): Promise<string> {
 // Auth helpers
 // ---------------------------------------------------------------------------
 
+export const SESSION_COOKIE_NAME = 'session'
+export const SESSION_TTL_SECONDS = 7 * 24 * 3600
+const SAFE_HTTP_METHODS = new Set(['GET', 'HEAD', 'OPTIONS'])
+
+function originFromUrl(value: string | undefined | null): string | null {
+  if (!value) return null
+  try {
+    return new URL(value).origin
+  } catch {
+    return null
+  }
+}
+
+function configuredFrontendOrigin(env: AppContext['Bindings']): string | null {
+  return originFromUrl(env.FRONTEND_URL)
+}
+
+export function isSafeHttpMethod(method: string): boolean {
+  return SAFE_HTTP_METHODS.has(method.toUpperCase())
+}
+
+export function isAllowedFrontendOrigin(
+  origin: string | undefined | null,
+  env?: AppContext['Bindings'],
+  requestUrl?: string,
+): boolean {
+  if (!origin) return false
+  const normalizedOrigin = originFromUrl(origin)
+  if (!normalizedOrigin) return false
+
+  const requestOrigin = originFromUrl(requestUrl)
+  if (requestOrigin && normalizedOrigin === requestOrigin) return true
+
+  const frontendOrigin = env ? configuredFrontendOrigin(env) : null
+  if (frontendOrigin && normalizedOrigin === frontendOrigin) return true
+
+  if (
+    normalizedOrigin === 'https://supplementstack.de' ||
+    normalizedOrigin === 'https://www.supplementstack.de' ||
+    normalizedOrigin === 'https://supplementstack.pages.dev' ||
+    normalizedOrigin === 'http://localhost:5173'
+  ) {
+    return true
+  }
+
+  return /^https:\/\/[a-z0-9-]+\.supplementstack\.pages\.dev$/.test(normalizedOrigin)
+}
+
+export function validateBrowserOrigin(
+  c: Context<AppContext>,
+  options: { requireWhenCookiePresent?: boolean } = {},
+): Response | null {
+  if (isSafeHttpMethod(c.req.method)) return null
+
+  const origin = c.req.header('Origin')
+  if (origin !== undefined) {
+    return isAllowedFrontendOrigin(origin, c.env, c.req.url)
+      ? null
+      : c.json({ error: 'Forbidden' }, 403) as never
+  }
+
+  const refererOrigin = originFromUrl(c.req.header('Referer'))
+  if (refererOrigin) {
+    return isAllowedFrontendOrigin(refererOrigin, c.env, c.req.url)
+      ? null
+      : c.json({ error: 'Forbidden' }, 403) as never
+  }
+
+  if (options.requireWhenCookiePresent && getCookie(c, SESSION_COOKIE_NAME)) {
+    return c.json({ error: 'Forbidden' }, 403) as never
+  }
+
+  return null
+}
+
+async function verifyAuthToken(c: Context<AppContext>, token: string): Promise<AppContext['Variables']['user'] | null> {
+  try {
+    return await verify(token, c.env.JWT_SECRET, 'HS256') as AppContext['Variables']['user']
+  } catch {
+    return null
+  }
+}
+
+export function setSessionCookie(c: Context<AppContext>, token: string): void {
+  setCookie(c, SESSION_COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'Lax',
+    path: '/',
+    maxAge: SESSION_TTL_SECONDS,
+  })
+}
+
+export function clearSessionCookie(c: Context<AppContext>): void {
+  setCookie(c, SESSION_COOKIE_NAME, '', {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'Lax',
+    path: '/',
+    maxAge: 0,
+  })
+}
+
 export async function ensureAuth(c: Context<AppContext>): Promise<Response | null> {
   const header = c.req.header('Authorization')
-  if (!header?.startsWith('Bearer ')) return c.json({ error: 'Unauthorized' }, 401) as never
-  try {
-    const payload = await verify(header.slice(7), c.env.JWT_SECRET, 'HS256') as AppContext['Variables']['user']
+  const bearerToken = header?.startsWith('Bearer ') ? header.slice(7) : null
+
+  if (!isSafeHttpMethod(c.req.method) && bearerToken) {
+    const bearerPayload = await verifyAuthToken(c, bearerToken)
+    if (bearerPayload) {
+      c.set('user', bearerPayload)
+      return null
+    }
+  }
+
+  const sessionToken = getCookie(c, SESSION_COOKIE_NAME)
+  if (sessionToken) {
+    const payload = await verifyAuthToken(c, sessionToken)
+    if (payload) {
+      const originErr = validateBrowserOrigin(c, { requireWhenCookiePresent: true })
+      if (originErr) return originErr
+
+      c.set('user', payload)
+      return null
+    }
+  }
+
+  if (!bearerToken) return c.json({ error: 'Unauthorized' }, 401) as never
+
+  const payload = await verifyAuthToken(c, bearerToken)
+  if (payload) {
     c.set('user', payload)
     return null
-  } catch {
-    return c.json({ error: 'Unauthorized' }, 401) as never
   }
+  return c.json({ error: 'Unauthorized' }, 401) as never
 }
 
 export function requireAdmin(c: Context<AppContext>): Response | null {

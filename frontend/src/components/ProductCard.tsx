@@ -76,7 +76,11 @@ interface ProductCardProps {
 }
 
 function formatEur(value: number): string {
-  return value.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+  return value.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' \u20ac';
+}
+
+function formatAmount(value: number): string {
+  return new Intl.NumberFormat('de-DE', { maximumFractionDigits: 6 }).format(value);
 }
 
 function effectPoints(value?: string | null): string[] {
@@ -118,16 +122,16 @@ function getDaysSupply(product: ProductCardProduct): number | null {
 
 function getDose(product: ProductCardProduct): string {
   if (product.dosage_text) return product.dosage_text;
-  if (product.quantity && product.unit) return `${product.quantity} ${unitLabel(product.unit, product.quantity)}`;
-  if (product.serving_size && product.serving_unit) return `${product.serving_size} ${unitLabel(product.serving_unit, product.serving_size)}`;
-  return '—';
+  if (product.quantity && product.unit) return `${formatAmount(product.quantity)} ${unitLabel(product.unit, product.quantity)}`;
+  if (product.serving_size && product.serving_unit) return `${formatAmount(product.serving_size)} ${unitLabel(product.serving_unit, product.serving_size)}`;
+  return '\u2014';
 }
 
 type TimingKey = 'morning' | 'evening' | 'noon' | 'trial' | 'anytime';
 
 function getTimingKey(timing?: string): TimingKey {
   const t = (timing ?? '').toLowerCase();
-  if (t.includes('morgen') || t.includes('morning') || t.includes('früh')) return 'morning';
+  if (t.includes('morgen') || t.includes('morning') || t.includes('fr\u00fch')) return 'morning';
   if (t.includes('abend') || t.includes('evening') || t.includes('nacht')) return 'evening';
   if (t.includes('mittag') || t.includes('noon')) return 'noon';
   if (t.includes('probe') || t.includes('trial') || t.includes('test')) return 'trial';
@@ -135,7 +139,7 @@ function getTimingKey(timing?: string): TimingKey {
 }
 
 const TIMING_STYLES: Record<TimingKey, { cls: string; label: string }> = {
-  morning: { cls: 'bg-[#fef3c7] text-[#d97706]', label: 'Zum Frühstück' },
+  morning: { cls: 'bg-[#fef3c7] text-[#d97706]', label: 'Zum Fr\u00fchst\u00fcck' },
   evening: { cls: 'bg-[#ede9fe] text-[#7c3aed]', label: 'Zum Abendessen' },
   noon:    { cls: 'bg-[#dcfce7] text-[#16a34a]', label: 'Mittags' },
   trial:   { cls: 'bg-[#fee2e2] text-[#dc2626] border border-dashed border-[#fca5a5]', label: 'Zum Probieren' },
@@ -148,17 +152,17 @@ function getCategory(product: ProductCardProduct): CategoryKey {
   const hay = `${product.ingredient_category ?? ''} ${product.form ?? ''} ${product.name}`.toLowerCase();
   if (hay.includes('vitamin')) return 'vitamin';
   if (hay.includes('mineral') || hay.includes('magnesium') || hay.includes('zink') || hay.includes('calcium') || hay.includes('selen') || hay.includes('jod') || hay.includes('eisen')) return 'mineral';
-  if (hay.includes('omega') || hay.includes('fischöl') || hay.includes('fish') || hay.includes('dha') || hay.includes('epa')) return 'omega';
+  if (hay.includes('omega') || hay.includes('fisch\u00f6l') || hay.includes('fish') || hay.includes('dha') || hay.includes('epa')) return 'omega';
   if (hay.includes('protein') || hay.includes('kreatin') || hay.includes('bcaa')) return 'protein';
   return 'default';
 }
 
 const CATEGORY_EMOJI: Record<CategoryKey, string> = {
-  vitamin: '☀️',
-  mineral: '💊',
-  omega:   '🐟',
-  protein: '💪',
-  default: '🌿',
+  vitamin: '\u2600\ufe0f',
+  mineral: '\u25cf',
+  omega: '\u03a9',
+  protein: '\u26a1',
+  default: '\u2733',
 };
 
 const SAFETY_WARNING_STYLES: Record<ProductSafetyWarning['severity'], string> = {
@@ -169,8 +173,8 @@ const SAFETY_WARNING_STYLES: Record<ProductSafetyWarning['severity'], string> = 
 
 function getFallbackWarning(product: ProductCardProduct): ProductWarning | null {
   const t = product.name.toLowerCase();
-  if (t.includes('b12')) return { type: 'caution', title: 'Einnahmeabstand prüfen', message: 'Kaffee oder Tee werden in Quellen im Zusammenhang mit möglicher geringerer Aufnahme einzelner Nährstoffe diskutiert. Ein zeitlicher Abstand kann sinnvoll sein.' };
-  if (t.includes('jod')) return { type: 'danger', title: 'Schilddrüsenkontext beachten', message: 'Bei Schilddrüsenerkrankungen, Jodmedikation oder unklarer Versorgung sollte Jod nur nach ärztlicher Rücksprache ergänzt werden.' };
+  if (t.includes('b12')) return { type: 'caution', title: 'Einnahmeabstand pr\u00fcfen', message: 'Kaffee oder Tee werden in Quellen im Zusammenhang mit m\u00f6glicher geringerer Aufnahme einzelner N\u00e4hrstoffe diskutiert. Ein zeitlicher Abstand kann sinnvoll sein.' };
+  if (t.includes('jod')) return { type: 'danger', title: 'Schilddr\u00fcsenkontext beachten', message: 'Bei Schilddr\u00fcsenerkrankungen, Jodmedikation oder unklarer Versorgung sollte Jod nur nach \u00e4rztlicher R\u00fccksprache erg\u00e4nzt werden.' };
   return null;
 }
 
@@ -241,7 +245,7 @@ export default function ProductCard({
   const effectText = product.ingredient_effect_summary?.trim() ?? product.effect_summary?.trim() ?? '';
   const effects = effectPoints(effectText);
   const intervalDays = getIntakeIntervalDays(product);
-  const intervalLabel = intervalDays === 1 ? 'täglich' : `alle ${intervalDays} Tage`;
+  const intervalLabel = intervalDays === 1 ? 't\u00e4glich' : `alle ${intervalDays} Tage`;
   const showInterval = product.intake_interval_days != null;
 
   const productWarning = product.warning_message
@@ -325,9 +329,9 @@ export default function ProductCard({
           {showInterval && <div className="mt-0.5 text-[11px] font-semibold text-slate-500">{intervalLabel}</div>}
         </div>
         <div>
-          <div className="text-[10px] font-bold uppercase tracking-[0.4px] text-slate-400 mb-0.5">Reicht für</div>
+          <div className="text-[10px] font-bold uppercase tracking-[0.4px] text-slate-400 mb-0.5">Reicht f&uuml;r</div>
           <div className="text-[12.5px] font-bold text-slate-700">
-            {daysSupply ? `${daysSupply} Tage` : '—'}
+            {daysSupply ? `${daysSupply} Tage` : '\u2014'}
           </div>
         </div>
       </div>
@@ -354,7 +358,7 @@ export default function ProductCard({
       {product.discontinued_at && (
         <div className="ss-product-card-note flex items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs text-slate-500 mb-2.5">
           <RefreshCcw size={12} className="shrink-0" />
-          Eingestellt — Alternative wählen
+          Eingestellt &mdash; Alternative w&auml;hlen
         </div>
       )}
 
@@ -400,8 +404,8 @@ export default function ProductCard({
                 {safetyWarning.article_url && (
                   <Link
                     to={safetyWarning.article_url}
-                    aria-label={safetyWarning.article_title ?? 'Wissensartikel öffnen'}
-                    title={safetyWarning.article_title ?? 'Wissensartikel öffnen'}
+                    aria-label={safetyWarning.article_title ?? 'Wissensartikel \u00f6ffnen'}
+                    title={safetyWarning.article_title ?? 'Wissensartikel \u00f6ffnen'}
                     className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-white/70 focus:outline-none focus:ring-2 focus:ring-current focus:ring-offset-1"
                     onClick={(e) => e.stopPropagation()}
                   >
@@ -436,7 +440,8 @@ export default function ProductCard({
           </div>
           <ul className="list-none space-y-0.5">
             {cardWarning.message.split('.').filter(s => s.trim()).map((item, i) => (
-              <li key={i} className="text-[11px] text-orange-900 font-medium pl-3 relative leading-snug before:content-['•'] before:absolute before:left-0.5 before:text-orange-500">
+              <li key={i} className="flex gap-1.5 text-[11px] text-orange-900 font-medium leading-snug">
+                <span aria-hidden="true" className="text-orange-500">&bull;</span>
                 {item.trim()}.
               </li>
             ))}

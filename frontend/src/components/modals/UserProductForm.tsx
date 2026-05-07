@@ -58,17 +58,9 @@ interface IngredientFormRow {
   parentIngredientName?: string;
 }
 
-function getToken(): string | null {
-  return localStorage.getItem('ss_token');
-}
-
-function authHeaders(): Record<string, string> {
-  const token = getToken();
-  return {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-}
+const JSON_HEADERS: Record<string, string> = {
+  'Content-Type': 'application/json',
+};
 
 const FORM_OPTIONS = ['Kapsel', 'Tablette', 'Pulver', 'Tropfen', 'Gel', 'Sonstige'];
 const SERVING_UNIT_OPTIONS = [
@@ -98,6 +90,7 @@ const inputClass =
 const fieldHintClass = 'text-xs text-gray-500 mt-1';
 
 const makeClientId = () => `ingredient_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+const formatInputNumber = (value: number) => String(value).replace('.', ',');
 
 export default function UserProductForm({ onClose, onSaved, initialProduct }: UserProductFormProps) {
   const isEdit = initialProduct !== undefined;
@@ -105,17 +98,17 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
   const [name, setName] = useState(initialProduct?.name ?? '');
   const [brand, setBrand] = useState(initialProduct?.brand ?? '');
   const [form, setForm] = useState(initialProduct?.form ?? '');
-  const [price, setPrice] = useState(initialProduct?.price != null ? String(initialProduct.price) : '');
+  const [price, setPrice] = useState(initialProduct?.price != null ? formatInputNumber(initialProduct.price) : '');
   const [imageUrl, setImageUrl] = useState(initialProduct?.image_url ?? '');
   const [servingSize, setServingSize] = useState(
-    initialProduct?.serving_size != null ? String(initialProduct.serving_size) : ''
+    initialProduct?.serving_size != null ? formatInputNumber(initialProduct.serving_size) : ''
   );
   const [servingUnit, setServingUnit] = useState(initialProduct?.serving_unit ?? '');
   const [servingsPerContainer, setServingsPerContainer] = useState(
-    initialProduct?.servings_per_container != null ? String(initialProduct.servings_per_container) : ''
+    initialProduct?.servings_per_container != null ? formatInputNumber(initialProduct.servings_per_container) : ''
   );
   const [containerCount, setContainerCount] = useState(
-    initialProduct?.container_count != null ? String(initialProduct.container_count) : '1'
+    initialProduct?.container_count != null ? formatInputNumber(initialProduct.container_count) : '1'
   );
   const [shopLink, setShopLink] = useState(initialProduct?.shop_link ?? '');
   const isAffiliate = Boolean(initialProduct?.is_affiliate);
@@ -128,9 +121,9 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
       ingredientName: ingredient.ingredient_name ?? `ID ${ingredient.ingredient_id}`,
       formId: ingredient.form_id ?? null,
       availableForms: [],
-      quantity: ingredient.quantity == null ? '' : String(ingredient.quantity),
+      quantity: ingredient.quantity == null ? '' : formatInputNumber(ingredient.quantity),
       unit: ingredient.unit ?? '',
-      basisQuantity: ingredient.basis_quantity == null ? '1' : String(ingredient.basis_quantity),
+      basisQuantity: ingredient.basis_quantity == null ? '1' : formatInputNumber(ingredient.basis_quantity),
       basisUnit: ingredient.basis_unit ?? '',
       searchRelevant: Boolean(ingredient.search_relevant),
       parentIngredientId: ingredient.parent_ingredient_id ?? null,
@@ -558,7 +551,8 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
 
       const res = await fetch(url, {
         method,
-        headers: authHeaders(),
+        credentials: 'include',
+        headers: JSON_HEADERS,
         body: JSON.stringify(body),
       });
 

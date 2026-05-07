@@ -2,18 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import UserProductForm, { UserProduct } from '../components/modals/UserProductForm';
-
-function getToken(): string | null {
-  return localStorage.getItem('ss_token');
-}
-
-function authHeaders(): Record<string, string> {
-  const token = getToken();
-  return {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-}
+import { useAuth } from '../contexts/AuthContext';
 
 // ---- Skeleton row ----
 function SkeletonRow() {
@@ -53,11 +42,12 @@ function ProductRow({
   onDelete: (id: number) => void;
   deleting: boolean;
 }) {
+  const formatNumber = (value: number) => new Intl.NumberFormat('de-DE', { maximumFractionDigits: 6 }).format(value);
   const servingInfo =
     product.serving_size != null && product.serving_unit
-      ? `${product.serving_size} ${product.serving_unit}`
+      ? `${formatNumber(product.serving_size)} ${product.serving_unit}`
       : product.serving_size != null
-      ? String(product.serving_size)
+      ? formatNumber(product.serving_size)
       : null;
   const locked = product.status === 'approved';
 
@@ -73,19 +63,19 @@ function ProductRow({
           {product.brand && <span>{product.brand}</span>}
           {servingInfo && <span>{servingInfo}</span>}
           {product.servings_per_container != null && (
-            <span>{product.servings_per_container} Portionen</span>
+            <span>{formatNumber(product.servings_per_container)} Portionen</span>
           )}
         </div>
         {locked && (
           <p className="mt-1 text-xs text-gray-500">
-            Dieses Produkt ist freigegeben und kann nicht mehr bearbeitet oder geloescht werden.
+            Dieses Produkt ist freigegeben und kann nicht mehr bearbeitet oder gelöscht werden.
           </p>
         )}
       </div>
 
       {/* Price */}
       <span className="text-sm font-semibold text-emerald-600 max-[430px]:w-full">
-        €{Number(product.price).toFixed(2)}/Mo.
+        {Number(product.price).toLocaleString('de-DE', { style: 'currency', currency: 'EUR' })}/Mo.
       </span>
 
       {/* Actions */}
@@ -115,7 +105,7 @@ function ProductRow({
 
 // ---- Main page ----
 export default function MyProductsPage() {
-  const token = getToken();
+  const { user } = useAuth();
 
   const [products, setProducts] = useState<UserProduct[]>([]);
   const [loading, setLoading] = useState(true);
@@ -126,11 +116,13 @@ export default function MyProductsPage() {
   const [editingProduct, setEditingProduct] = useState<UserProduct | undefined>(undefined);
 
   const loadProducts = useCallback(async () => {
-    if (!token) return;
+    if (!user) return;
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/user-products', { headers: authHeaders() });
+      const res = await fetch('/api/user-products', {
+        credentials: 'include',
+      });
       if (!res.ok) throw new Error('Fehler beim Laden der Produkte.');
       const data = await res.json();
       setProducts(data.products ?? []);
@@ -139,7 +131,7 @@ export default function MyProductsPage() {
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [user]);
 
   useEffect(() => {
     loadProducts();
@@ -176,7 +168,7 @@ export default function MyProductsPage() {
   const handleDelete = async (id: number) => {
     const product = products.find((p) => p.id === id);
     if (product?.status === 'approved') {
-      setError('Freigegebene Produkte koennen nicht mehr geloescht werden.');
+      setError('Freigegebene Produkte können nicht mehr gelöscht werden.');
       return;
     }
     if (!window.confirm(`Produkt "${product?.name ?? id}" wirklich löschen?`)) return;
@@ -184,7 +176,7 @@ export default function MyProductsPage() {
     try {
       const res = await fetch(`/api/user-products/${id}`, {
         method: 'DELETE',
-        headers: authHeaders(),
+        credentials: 'include',
       });
       if (!res.ok) throw new Error('Löschen fehlgeschlagen.');
       setProducts((prev) => prev.filter((p) => p.id !== id));
@@ -196,7 +188,7 @@ export default function MyProductsPage() {
   };
 
   // Not logged in guard
-  if (!token) {
+  if (!user) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4 text-center">
         <h1 className="text-2xl font-bold text-gray-900">Bitte anmelden</h1>

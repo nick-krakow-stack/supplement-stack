@@ -9,6 +9,7 @@
 //   GET /product-rankings   — product rankings (admin)
 //   PUT /product-rankings/:productId — upsert ranking (admin)
 //   GET /user-products?status= — user-submitted products (admin)
+//   PUT /user-products/bulk-approve (admin)
 //   PUT /user-products/:id/approve (admin)
 //   PUT /user-products/:id/publish  (admin)
 //   PUT /user-products/:id/reject  (admin)
@@ -40,18 +41,25 @@
 //   PATCH /product-qa/:id — update high-impact product QA fields (admin)
 //   GET /link-reports     — product link reports queue (admin)
 //   PATCH /link-reports/:id — update product link report status (admin)
+//   GET /export?entity=   — CSV export for allowlisted admin entities (admin)
+//   GET /users           — user account list (admin)
+//   PATCH /users/:id     — update safe user admin fields (admin)
+//   GET /health          — admin health dashboard snapshot (admin)
+//   GET /launch-checks   — live launch readiness checks (admin)
 // Plus public shop-domain routes (mounted at /api/shop-domains):
 //   GET /resolve?url=       — resolve shop name from URL (public)
 //   GET /                   — list shop domains (public)
 // Plus interaction routes (mounted at /api/interactions):
-//   GET /                   — list all (public)
+//   GET /                   — list all, optionally filtered by ingredient_id (admin)
 //   POST /                  — create (admin)
 //   DELETE /:id             — delete (admin)
 // ---------------------------------------------------------------------------
 
 import { Hono } from 'hono'
-import type { AppContext, CountRow, ProductRow, InteractionRow } from '../lib/types'
+import type { Context } from 'hono'
+import type { AppContext, CountRow, ProductRow } from '../lib/types'
 import { ensureAuth, requireAdmin, ensureAdmin, logAdminAction } from '../lib/helpers'
+import { loadCatalogProductSafetyWarnings } from './knowledge'
 
 const admin = new Hono<AppContext>()
 
@@ -135,6 +143,61 @@ type UserProductIngredientRow = {
   parent_ingredient_name: string | null
 }
 
+type UserProductBulkModerationRow = {
+  id: number
+  status: string | null
+  approved_at: string | null
+}
+
+type UserProductBulkApproveResult = {
+  id: number
+  ok: boolean
+  status: 'approved' | 'failed'
+  previous_status?: string | null
+  approved_at?: string | null
+  error?: string
+}
+
+type ProductWarningSeverity = 'info' | 'caution' | 'warning' | 'danger'
+
+type ProductWarningRow = {
+  id: number
+  product_id: number
+  severity: ProductWarningSeverity | string | null
+  title: string
+  message: string
+  alternative_note: string | null
+  active: number | null
+  created_at: string | null
+  updated_at: string | null
+  version: number | null
+}
+
+type ProductWarningPayload = {
+  severity: ProductWarningSeverity
+  title: string
+  message: string
+  alternative_note: string | null
+  active: number
+}
+
+type AdminUserRow = {
+  id: number
+  email: string
+  role: string | null
+  created_at: string
+  health_consent: number | null
+  health_consent_at: string | null
+  email_verified_at: string | null
+  deleted_at: string | null
+  is_trusted_product_submitter: number
+  stack_count: number
+  last_stack_at: string | null
+  user_product_count: number
+  pending_user_product_count: number
+  approved_user_product_count: number
+}
+
 type IngredientSubIngredientAdminRow = {
   parent_ingredient_id: number
   parent_name: string
@@ -184,6 +247,54 @@ type DoseRecommendationAdminRow = {
   superseded_by_id: number | null
   created_at: number
   updated_at: number
+  version: number | null
+  sources: DoseRecommendationLinkedSource[]
+}
+
+type DoseRecommendationLinkedSource = {
+  id: number
+  dose_recommendation_id: number
+  research_source_id: number
+  source_ingredient_id: number
+  relevance_weight: number
+  is_primary: number
+  note: string | null
+  created_at: number
+  source_kind: IngredientResearchSourceKind
+  organization: string | null
+  country: string | null
+  region: string | null
+  population: string | null
+  recommendation_type: string | null
+  no_recommendation: number
+  dose_min: number | null
+  dose_max: number | null
+  dose_unit: string | null
+  per_kg_body_weight: number
+  frequency: string | null
+  study_type: string | null
+  evidence_quality: string | null
+  duration: string | null
+  outcome: string | null
+  finding: string | null
+  source_title: string | null
+  source_url: string | null
+  doi: string | null
+  pubmed_id: string | null
+  notes: string | null
+  source_date: string | null
+  reviewed_at: string | null
+  is_retracted: number
+  retraction_checked_at: string | null
+  retraction_notice_url: string | null
+  evidence_grade: EvidenceGrade | null
+}
+
+type DoseRecommendationSourceMutation = {
+  research_source_id: number
+  relevance_weight: number
+  is_primary: number
+  note: string | null
 }
 
 type DoseRecommendationMutation = {
@@ -215,12 +326,13 @@ type DoseRecommendationMutation = {
   verified_at: number | null
   review_due_at: number | null
   superseded_by_id: number | null
+  sources: DoseRecommendationSourceMutation[] | undefined
 }
 
 type ValidationFailure = {
   ok: false
   error: string
-  status?: 400 | 404 | 409
+  status?: 400 | 404 | 409 | 502
 }
 
 type ValidationSuccess<T> = {
@@ -260,6 +372,8 @@ type IngredientResearchStatusValue = typeof INGREDIENT_RESEARCH_STATUSES[number]
 type IngredientCalculationStatusValue = typeof INGREDIENT_CALCULATION_STATUSES[number]
 type IngredientResearchSourceKind = typeof INGREDIENT_RESEARCH_SOURCE_KINDS[number]
 type IngredientWarningSeverity = typeof INGREDIENT_WARNING_SEVERITIES[number]
+type EvidenceGrade = typeof EVIDENCE_GRADES[number]
+type NutrientReferenceValueKind = typeof NUTRIENT_REFERENCE_VALUE_KINDS[number]
 
 type IngredientResearchListRow = {
   ingredient_id: number
@@ -290,6 +404,7 @@ type IngredientResearchStatusRow = {
   review_due_at: string | null
   created_at: string
   updated_at: string
+  version: number | null
 }
 
 type IngredientResearchSourceRow = {
@@ -319,8 +434,48 @@ type IngredientResearchSourceRow = {
   notes: string | null
   source_date: string | null
   reviewed_at: string | null
+  is_retracted: number
+  retraction_checked_at: string | null
+  retraction_notice_url: string | null
+  evidence_grade: EvidenceGrade | null
   created_at: string
   updated_at: string
+  version: number | null
+}
+
+type NutrientReferenceValueRow = {
+  id: number
+  ingredient_id: number
+  population_id: number | null
+  organization: string
+  region: string | null
+  kind: NutrientReferenceValueKind
+  value: number
+  value_min: number | null
+  value_max: number | null
+  unit: string
+  source_url: string | null
+  source_label: string | null
+  source_year: number | null
+  notes: string | null
+  note: string | null
+  created_at: string | null
+  updated_at: string | null
+  version: number | null
+}
+
+type NutrientReferenceValueMutation = {
+  ingredient_id: number
+  population_id: number | null
+  organization: string
+  region: string | null
+  kind: NutrientReferenceValueKind
+  value: number
+  unit: string
+  source_url: string | null
+  source_label: string | null
+  source_year: number | null
+  notes: string | null
 }
 
 type IngredientSafetyWarningAdminRow = {
@@ -338,6 +493,7 @@ type IngredientSafetyWarningAdminRow = {
   unit: string | null
   active: number
   created_at: string
+  version: number | null
 }
 
 type IngredientFormAdminRow = {
@@ -360,10 +516,11 @@ type IngredientDisplayProfileRow = {
   card_note: string | null
   created_at: string
   updated_at: string
+  version: number | null
 }
 
-type IngredientResearchSourceMutation = Omit<IngredientResearchSourceRow, 'id' | 'created_at' | 'updated_at'>
-type IngredientSafetyWarningMutation = Omit<IngredientSafetyWarningAdminRow, 'id' | 'ingredient_name' | 'form_name' | 'article_title' | 'created_at'>
+type IngredientResearchSourceMutation = Omit<IngredientResearchSourceRow, 'id' | 'created_at' | 'updated_at' | 'version'>
+type IngredientSafetyWarningMutation = Omit<IngredientSafetyWarningAdminRow, 'id' | 'ingredient_name' | 'form_name' | 'article_title' | 'created_at' | 'version'>
 
 type KnowledgeArticleStatus = typeof KNOWLEDGE_ARTICLE_STATUSES[number]
 
@@ -377,6 +534,7 @@ type KnowledgeArticleDbRow = {
   sources_json: string
   created_at: string
   updated_at: string
+  version: number | null
 }
 
 type KnowledgeArticleListDbRow = Omit<KnowledgeArticleDbRow, 'body' | 'created_at'>
@@ -397,6 +555,34 @@ type ParsedKnowledgeArticle<T extends KnowledgeArticleDbRow | KnowledgeArticleLi
   }
 
 type ProductQaIssue = typeof PRODUCT_QA_ISSUES[number]
+type AffiliateLinkHealthStatus = 'unchecked' | 'ok' | 'failed' | 'timeout' | 'invalid'
+
+type AffiliateLinkHealth = {
+  url: string | null
+  status: AffiliateLinkHealthStatus | null
+  http_status: number | null
+  failure_reason: string | null
+  last_checked_at: string | null
+  last_success_at: string | null
+  consecutive_failures: number | null
+  response_time_ms: number | null
+  final_url: string | null
+  redirected: number | null
+}
+
+type AffiliateLinkHealthSelectRow = {
+  lh_product_id: number | null
+  lh_url: string | null
+  lh_status: string | null
+  lh_http_status: number | null
+  lh_failure_reason: string | null
+  lh_last_checked_at: string | null
+  lh_last_success_at: string | null
+  lh_consecutive_failures: number | null
+  lh_response_time_ms: number | null
+  lh_final_url: string | null
+  lh_redirected: number | null
+}
 
 type ProductQaRow = {
   id: number
@@ -408,6 +594,8 @@ type ProductQaRow = {
   image_url: string | null
   image_r2_key: string | null
   is_affiliate: number
+  affiliate_owner_type: AffiliateOwnerType | null
+  affiliate_owner_user_id: number | null
   serving_size: number | null
   serving_unit: string | null
   servings_per_container: number | null
@@ -423,12 +611,24 @@ type ProductQaRow = {
   suspicious_price_zero_or_high: number
   missing_ingredient_rows: number
   no_affiliate_flag_on_shop_link: number
+  version: number | null
+} & Partial<AffiliateLinkHealthSelectRow>
+
+type ProductQaIssueSummaryRow = Record<ProductQaIssue, number> & {
+  total: number
 }
 
 type ProductQaPatch = {
+  name?: string
+  brand?: string | null
   price?: number | null
   shop_link?: string | null
+  image_url?: string | null
   is_affiliate?: number
+  affiliate_owner_type?: AffiliateOwnerType
+  affiliate_owner_user_id?: number | null
+  moderation_status?: ProductModerationStatus
+  visibility?: ProductVisibility
   serving_size?: number | null
   serving_unit?: string | null
   servings_per_container?: number | null
@@ -451,6 +651,49 @@ type ProductLinkReportRow = {
   reason: string
   status: ProductLinkReportStatus
   created_at: string
+}
+
+type ProductLinkReportStatusSummaryRow = {
+  total: number
+  open: number
+  reviewed: number
+  closed: number
+}
+
+type AdminProductIngredientRow = {
+  id: number
+  product_id: number
+  ingredient_id: number
+  ingredient_name: string
+  ingredient_unit: string | null
+  ingredient_description: string | null
+  form_id: number | null
+  form_name: string | null
+  parent_ingredient_id: number | null
+  parent_ingredient_name: string | null
+  is_main: number
+  search_relevant: number
+  quantity: number | null
+  unit: string | null
+  basis_quantity: number | null
+  basis_unit: string | null
+  effect_summary: string | null
+  timing: string | null
+  timing_note: string | null
+  intake_hint: string | null
+  card_note: string | null
+}
+
+type ProductIngredientPayload = {
+  ingredient_id: number
+  is_main: number
+  quantity: number | null
+  unit: string | null
+  form_id: number | null
+  basis_quantity: number | null
+  basis_unit: string | null
+  search_relevant: number
+  parent_ingredient_id: number | null
 }
 
 type IngredientResearchExportRow = {
@@ -483,7 +726,20 @@ const INGREDIENT_RESEARCH_STATUSES = ['unreviewed', 'researching', 'needs_review
 const INGREDIENT_CALCULATION_STATUSES = ['not_started', 'in_progress', 'needs_review', 'ready', 'not_applicable', 'blocked'] as const
 const INGREDIENT_RESEARCH_SOURCE_KINDS = ['official', 'study'] as const
 const INGREDIENT_WARNING_SEVERITIES = ['info', 'caution', 'danger'] as const
+const EVIDENCE_GRADES = ['A', 'B', 'C', 'D', 'F'] as const
+const NUTRIENT_REFERENCE_VALUE_KINDS = ['rda', 'ai', 'ear', 'ul', 'pri', 'ar', 'lti', 'ri', 'nrv'] as const
 const KNOWLEDGE_ARTICLE_STATUSES = ['draft', 'published', 'archived'] as const
+const AFFILIATE_OWNER_TYPES = ['none', 'nick', 'user'] as const
+const PRODUCT_MODERATION_STATUSES = ['pending', 'approved', 'rejected'] as const
+const PRODUCT_VISIBILITIES = ['hidden', 'public'] as const
+type AffiliateOwnerType = typeof AFFILIATE_OWNER_TYPES[number]
+type ProductModerationStatus = typeof PRODUCT_MODERATION_STATUSES[number]
+type ProductVisibility = typeof PRODUCT_VISIBILITIES[number]
+type AffiliateOwnership = {
+  affiliate_owner_type: AffiliateOwnerType
+  affiliate_owner_user_id: number | null
+  is_affiliate: number
+}
 const PRODUCT_QA_ISSUES = [
   'missing_image',
   'missing_shop_link',
@@ -493,6 +749,259 @@ const PRODUCT_QA_ISSUES = [
   'no_affiliate_flag_on_shop_link',
 ] as const
 const PRODUCT_LINK_REPORT_STATUSES = ['open', 'reviewed', 'closed'] as const
+const ADMIN_EXPORT_ENTITIES = ['products', 'ingredients', 'user-products', 'product-qa', 'link-reports'] as const
+const ADMIN_EXPORT_MAX_ROWS = 5000
+type AdminExportEntity = typeof ADMIN_EXPORT_ENTITIES[number]
+type AdminExportColumn = {
+  key: string
+  header: string
+}
+type AdminExportQuery = {
+  columns: AdminExportColumn[]
+  sql: string
+  bindings: Array<string | number>
+}
+
+type LaunchCheckStatus = 'ok' | 'warning' | 'danger' | 'info' | 'unknown'
+type LaunchCheckSeverity = 'info' | 'warning' | 'critical'
+type LaunchCheckSource = 'db' | 'env' | 'http' | 'dns' | 'manual'
+
+type LaunchCheck = {
+  id: string
+  title: string
+  status: LaunchCheckStatus
+  severity: LaunchCheckSeverity
+  source: LaunchCheckSource
+  details: string
+  action?: string
+  observed_count?: number
+  configured?: boolean
+}
+
+type LaunchCheckSection = {
+  id: string
+  title: string
+  checks: LaunchCheck[]
+}
+
+type LaunchCheckCountRule = {
+  id: string
+  title: string
+  sql: string
+  details: (count: number) => string
+  okWhen: (count: number) => boolean
+  severity: LaunchCheckSeverity
+  action?: string
+}
+
+type DnsJsonResponse = {
+  Status?: number
+  Answer?: Array<{ name?: string; type?: number; data?: string }>
+}
+
+type AdminHealthStatus = 'ok' | 'warning' | 'critical'
+type AdminHealthSeverity = 'info' | 'warning' | 'critical'
+
+type AdminHealthMetric = {
+  id: string
+  label: string
+  value: number
+  status: AdminHealthStatus
+  href?: string
+}
+
+type AdminHealthCheck = {
+  id: string
+  title: string
+  status: AdminHealthStatus
+  severity: AdminHealthSeverity
+  details: string
+  action?: string
+  href?: string
+  observed_count?: number
+}
+
+type AdminHealthSection = {
+  id: string
+  title: string
+  checks: AdminHealthCheck[]
+}
+
+type AdminHealthCountRule = {
+  id: string
+  title: string
+  label: string
+  sql: string
+  severity: AdminHealthSeverity
+  okWhen: (count: number) => boolean
+  details: (count: number) => string
+  action?: string
+  href?: string
+}
+
+type AdminAffiliateLinkHealthRollupRow = {
+  total_checked_rows: number
+  ok_count: number | null
+  failed_count: number | null
+  timeout_count: number | null
+  invalid_count: number | null
+  unchecked_count: number | null
+  stale_count: number | null
+  failed_or_timeout_count: number | null
+  not_checked_products: number
+}
+
+type AdminAffiliateLinkHealthRollup = {
+  section: AdminHealthSection
+  metrics: AdminHealthMetric[]
+}
+
+type AdminSearchResultType = 'ingredient' | 'product' | 'user_product' | 'knowledge' | 'route'
+
+type AdminSearchResult = {
+  id: string
+  type: AdminSearchResultType
+  title: string
+  subtitle?: string
+  href: string
+}
+
+type AdminSearchRoute = AdminSearchResult & {
+  keywords: string
+}
+
+type AdminIngredientSearchRow = {
+  id: number
+  name: string
+  unit: string | null
+  description: string | null
+}
+
+type AdminProductSearchRow = {
+  id: number
+  name: string
+  brand: string | null
+  form: string | null
+  moderation_status: string | null
+  visibility: string | null
+}
+
+type AdminUserProductSearchRow = {
+  id: number
+  name: string
+  brand: string | null
+  form: string | null
+  status: string | null
+  user_email: string | null
+}
+
+type AdminKnowledgeSearchRow = {
+  slug: string
+  title: string
+  summary: string | null
+  status: string | null
+}
+
+type PubMedLookupQuery = {
+  pmid?: string
+  doi?: string
+}
+
+type PubMedLookup = {
+  pmid: string
+  doi?: string
+  title: string
+  journal?: string
+  source_url: string
+  source_date?: string
+  authors?: string[]
+  source_kind: 'study'
+  organization: 'PubMed'
+  country: null
+  region: null
+  study_type: null
+  evidence_quality: null
+  notes?: string
+}
+
+type PubMedFetchResult = ValidationResult<unknown>
+type PubMedLookupCachePayload = {
+  lookup: PubMedLookup
+}
+
+const ADMIN_SEARCH_DEFAULT_LIMIT = 12
+const ADMIN_SEARCH_MAX_LIMIT = 20
+const PUBMED_LOOKUP_TIMEOUT_MS = 5000
+const PUBMED_AUTHOR_LIMIT = 25
+const PUBMED_LOOKUP_CACHE_TTL_SECONDS = 24 * 60 * 60
+const AFFILIATE_LINK_HEALTH_STALE_DAYS = 7
+
+const ADMIN_SEARCH_ROUTES: AdminSearchRoute[] = [
+  {
+    id: 'route:dashboard',
+    type: 'route',
+    title: 'Dashboard',
+    subtitle: 'Admin-Uebersicht und operative Kennzahlen',
+    href: '/administrator/dashboard',
+    keywords: 'dashboard uebersicht admin start',
+  },
+  {
+    id: 'route:ingredients',
+    type: 'route',
+    title: 'Wirkstoffe',
+    subtitle: 'Wirkstoff-Recherche, Profile und Quellen',
+    href: '/administrator/ingredients',
+    keywords: 'wirkstoffe ingredients research wirkstoff recherche',
+  },
+  {
+    id: 'route:products',
+    type: 'route',
+    title: 'Produkte',
+    subtitle: 'Katalogprodukte und Affiliate-Daten',
+    href: '/administrator/products',
+    keywords: 'produkte products katalog affiliate',
+  },
+  {
+    id: 'route:user-products',
+    type: 'route',
+    title: 'User-Produkte',
+    subtitle: 'Nutzer-Einreichungen moderieren',
+    href: '/administrator/user-products',
+    keywords: 'user produkte submissions einreichungen moderation',
+  },
+  {
+    id: 'route:product-qa',
+    type: 'route',
+    title: 'Produkt-QA',
+    subtitle: 'Produktdaten pruefen und korrigieren',
+    href: '/administrator/product-qa',
+    keywords: 'produkt qa quality daten pruefen',
+  },
+  {
+    id: 'route:link-reports',
+    type: 'route',
+    title: 'Linkmeldungen',
+    subtitle: 'Gemeldete fehlende oder defekte Shop-Links',
+    href: '/administrator/link-reports',
+    keywords: 'linkmeldungen links reports shop broken defekt',
+  },
+  {
+    id: 'route:health',
+    type: 'route',
+    title: 'Health',
+    subtitle: 'Admin-Systemzustand und offene Checks',
+    href: '/administrator/health',
+    keywords: 'health system checks status',
+  },
+  {
+    id: 'route:translations',
+    type: 'route',
+    title: 'Uebersetzungen',
+    subtitle: 'i18n-Inhalte und Sprachstatus',
+    href: '/administrator/translations',
+    keywords: 'uebersetzungen translations i18n sprache language',
+  },
+]
 
 const SENSITIVE_AUDIT_KEY_PARTS = [
   'password',
@@ -519,10 +1028,504 @@ function parsePagination(value: string | undefined, fallback: number, max: numbe
   return Math.min(Math.floor(parsed), max)
 }
 
+function parseAdminSearchLimit(value: string | undefined): number {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed) || parsed <= 0) return ADMIN_SEARCH_DEFAULT_LIMIT
+  return Math.min(Math.floor(parsed), ADMIN_SEARCH_MAX_LIMIT)
+}
+
+function escapeAdminSearchLike(value: string): string {
+  return value.replace(/[\\%_]/g, (char) => `\\${char}`)
+}
+
+function adminSearchLike(query: string): string {
+  return `%${escapeAdminSearchLike(query)}%`
+}
+
+function adminSearchSubtitle(parts: Array<string | null | undefined>): string | undefined {
+  const subtitle = parts
+    .map((part) => part?.trim())
+    .filter((part): part is string => Boolean(part))
+    .join(' - ')
+  return subtitle || undefined
+}
+
+function adminSearchPreview(value: string | null | undefined, maxLength = 90): string | null {
+  if (!value) return null
+  const normalized = value.replace(/\s+/g, ' ').trim()
+  if (!normalized) return null
+  return normalized.length > maxLength ? `${normalized.slice(0, maxLength - 1)}...` : normalized
+}
+
+function isAdminExportEntity(value: string): value is AdminExportEntity {
+  return (ADMIN_EXPORT_ENTITIES as readonly string[]).includes(value)
+}
+
+function csvEscape(value: unknown): string {
+  if (value === null || value === undefined) return ''
+  const text = String(value)
+  const escaped = text.replace(/"/g, '""')
+  return /[",\r\n]/.test(escaped) ? `"${escaped}"` : escaped
+}
+
+function rowsToCsv(columns: AdminExportColumn[], rows: Array<Record<string, unknown>>): string {
+  const lines = [
+    columns.map((column) => csvEscape(column.header)).join(','),
+    ...rows.map((row) => columns.map((column) => csvEscape(row[column.key])).join(',')),
+  ]
+  return lines.join('\r\n')
+}
+
+function csvAttachmentFilename(entity: AdminExportEntity): string {
+  const date = new Date().toISOString().slice(0, 10)
+  return `supplement-stack-${entity}-${date}.csv`
+}
+
+function buildAdminExportQuery(entity: AdminExportEntity, query: {
+  q: string
+  status: string
+  issue: string
+}): ValidationResult<AdminExportQuery> {
+  const q = query.q.trim()
+  const statusParam = query.status.trim()
+  const issueParam = query.issue.trim()
+
+  if (entity === 'products') {
+    const where: string[] = []
+    const bindings: Array<string | number> = []
+    if (q) {
+      const like = `%${q}%`
+      where.push(`(
+        p.name LIKE ?
+        OR COALESCE(p.brand, '') LIKE ?
+        OR COALESCE(p.form, '') LIKE ?
+        OR COALESCE(p.shop_link, '') LIKE ?
+        OR CAST(p.id AS TEXT) LIKE ?
+      )`)
+      bindings.push(like, like, like, like, like)
+    }
+    const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''
+    return {
+      ok: true,
+      value: {
+        columns: [
+          { key: 'id', header: 'id' },
+          { key: 'name', header: 'name' },
+          { key: 'brand', header: 'brand' },
+          { key: 'form', header: 'form' },
+          { key: 'price', header: 'price' },
+          { key: 'shop_link', header: 'shop_link' },
+          { key: 'is_affiliate', header: 'is_affiliate' },
+          { key: 'affiliate_owner_type', header: 'affiliate_owner_type' },
+          { key: 'serving_size', header: 'serving_size' },
+          { key: 'serving_unit', header: 'serving_unit' },
+          { key: 'servings_per_container', header: 'servings_per_container' },
+          { key: 'container_count', header: 'container_count' },
+          { key: 'moderation_status', header: 'moderation_status' },
+          { key: 'visibility', header: 'visibility' },
+          { key: 'discontinued_at', header: 'discontinued_at' },
+          { key: 'created_at', header: 'created_at' },
+        ],
+        sql: `
+          SELECT
+            p.id,
+            p.name,
+            p.brand,
+            p.form,
+            p.price,
+            p.shop_link,
+            COALESCE(p.is_affiliate, 0) AS is_affiliate,
+            COALESCE(
+              p.affiliate_owner_type,
+              CASE WHEN COALESCE(p.is_affiliate, 0) = 1 THEN 'nick' ELSE 'none' END
+            ) AS affiliate_owner_type,
+            p.serving_size,
+            p.serving_unit,
+            p.servings_per_container,
+            p.container_count,
+            p.moderation_status,
+            p.visibility,
+            p.discontinued_at,
+            p.created_at
+          FROM products p
+          ${whereSql}
+          ORDER BY p.created_at DESC, p.id DESC
+          LIMIT ?
+        `,
+        bindings: [...bindings, ADMIN_EXPORT_MAX_ROWS],
+      },
+    }
+  }
+
+  if (entity === 'ingredients') {
+    const where: string[] = []
+    const bindings: Array<string | number> = []
+    if (q) {
+      const like = `%${q}%`
+      where.push(`(
+        i.name LIKE ?
+        OR COALESCE(i.unit, '') LIKE ?
+        OR COALESCE(i.category, '') LIKE ?
+        OR CAST(i.id AS TEXT) LIKE ?
+      )`)
+      bindings.push(like, like, like, like)
+    }
+    const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''
+    return {
+      ok: true,
+      value: {
+        columns: [
+          { key: 'id', header: 'id' },
+          { key: 'name', header: 'name' },
+          { key: 'unit', header: 'unit' },
+          { key: 'category', header: 'category' },
+          { key: 'research_status', header: 'research_status' },
+          { key: 'calculation_status', header: 'calculation_status' },
+          { key: 'product_count', header: 'product_count' },
+          { key: 'dose_recommendation_count', header: 'dose_recommendation_count' },
+          { key: 'warning_count', header: 'warning_count' },
+          { key: 'created_at', header: 'created_at' },
+        ],
+        sql: `
+          SELECT
+            i.id,
+            i.name,
+            i.unit,
+            i.category,
+            COALESCE(rs.research_status, 'unreviewed') AS research_status,
+            COALESCE(rs.calculation_status, 'not_started') AS calculation_status,
+            COALESCE(product_counts.product_count, 0) AS product_count,
+            COALESCE(dose_counts.dose_recommendation_count, 0) AS dose_recommendation_count,
+            COALESCE(warning_counts.warning_count, 0) AS warning_count,
+            i.created_at
+          FROM ingredients i
+          LEFT JOIN ingredient_research_status rs ON rs.ingredient_id = i.id
+          LEFT JOIN (
+            SELECT ingredient_id, COUNT(DISTINCT product_id) AS product_count
+            FROM product_ingredients
+            GROUP BY ingredient_id
+          ) product_counts ON product_counts.ingredient_id = i.id
+          LEFT JOIN (
+            SELECT ingredient_id, COUNT(*) AS dose_recommendation_count
+            FROM dose_recommendations
+            GROUP BY ingredient_id
+          ) dose_counts ON dose_counts.ingredient_id = i.id
+          LEFT JOIN (
+            SELECT ingredient_id, COUNT(*) AS warning_count
+            FROM ingredient_safety_warnings
+            WHERE active = 1
+            GROUP BY ingredient_id
+          ) warning_counts ON warning_counts.ingredient_id = i.id
+          ${whereSql}
+          ORDER BY COALESCE(i.category, '') ASC, i.name ASC, i.id ASC
+          LIMIT ?
+        `,
+        bindings: [...bindings, ADMIN_EXPORT_MAX_ROWS],
+      },
+    }
+  }
+
+  if (entity === 'user-products') {
+    const where: string[] = []
+    const bindings: Array<string | number> = []
+    if (statusParam && statusParam !== 'all') {
+      if (!['pending', 'approved', 'rejected'].includes(statusParam)) {
+        return validationError('status must be one of pending, approved, rejected, all')
+      }
+      where.push('up.status = ?')
+      bindings.push(statusParam)
+    }
+    if (q) {
+      const like = `%${q}%`
+      where.push(`(
+        up.name LIKE ?
+        OR COALESCE(up.brand, '') LIKE ?
+        OR COALESCE(up.form, '') LIKE ?
+        OR COALESCE(up.shop_link, '') LIKE ?
+        OR COALESCE(u.email, '') LIKE ?
+        OR CAST(up.id AS TEXT) LIKE ?
+      )`)
+      bindings.push(like, like, like, like, like, like)
+    }
+    const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''
+    return {
+      ok: true,
+      value: {
+        columns: [
+          { key: 'id', header: 'id' },
+          { key: 'name', header: 'name' },
+          { key: 'brand', header: 'brand' },
+          { key: 'form', header: 'form' },
+          { key: 'price', header: 'price' },
+          { key: 'shop_link', header: 'shop_link' },
+          { key: 'is_affiliate', header: 'is_affiliate' },
+          { key: 'serving_size', header: 'serving_size' },
+          { key: 'serving_unit', header: 'serving_unit' },
+          { key: 'servings_per_container', header: 'servings_per_container' },
+          { key: 'container_count', header: 'container_count' },
+          { key: 'status', header: 'status' },
+          { key: 'approved_at', header: 'approved_at' },
+          { key: 'published_product_id', header: 'published_product_id' },
+          { key: 'published_at', header: 'published_at' },
+          { key: 'user_email', header: 'user_email' },
+          { key: 'user_is_trusted_product_submitter', header: 'user_is_trusted_product_submitter' },
+          { key: 'created_at', header: 'created_at' },
+        ],
+        sql: `
+          SELECT
+            up.id,
+            up.name,
+            up.brand,
+            up.form,
+            up.price,
+            up.shop_link,
+            COALESCE(up.is_affiliate, 0) AS is_affiliate,
+            up.serving_size,
+            up.serving_unit,
+            up.servings_per_container,
+            up.container_count,
+            up.status,
+            up.approved_at,
+            up.published_product_id,
+            up.published_at,
+            u.email AS user_email,
+            COALESCE(u.is_trusted_product_submitter, 0) AS user_is_trusted_product_submitter,
+            up.created_at
+          FROM user_products up
+          LEFT JOIN users u ON up.user_id = u.id
+          ${whereSql}
+          ORDER BY up.created_at DESC, up.id DESC
+          LIMIT ?
+        `,
+        bindings: [...bindings, ADMIN_EXPORT_MAX_ROWS],
+      },
+    }
+  }
+
+  if (entity === 'product-qa') {
+    const where: string[] = []
+    const bindings: Array<string | number> = []
+    const issue = issueParam && issueParam !== 'all' ? enumValue(issueParam, PRODUCT_QA_ISSUES) : null
+    if (issueParam && issueParam !== 'all' && !issue) {
+      return validationError(`issue must be one of ${PRODUCT_QA_ISSUES.join(', ')}, all`)
+    }
+    if (q) {
+      const like = `%${q}%`
+      where.push('(name LIKE ? OR COALESCE(brand, \'\') LIKE ? OR COALESCE(form, \'\') LIKE ?)')
+      bindings.push(like, like, like)
+    }
+    if (issue) {
+      where.push(`${issue} = 1`)
+    }
+    const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''
+    return {
+      ok: true,
+      value: {
+        columns: [
+          { key: 'id', header: 'id' },
+          { key: 'name', header: 'name' },
+          { key: 'brand', header: 'brand' },
+          { key: 'form', header: 'form' },
+          { key: 'price', header: 'price' },
+          { key: 'shop_link', header: 'shop_link' },
+          { key: 'is_affiliate', header: 'is_affiliate' },
+          { key: 'affiliate_owner_type', header: 'affiliate_owner_type' },
+          { key: 'serving_size', header: 'serving_size' },
+          { key: 'serving_unit', header: 'serving_unit' },
+          { key: 'servings_per_container', header: 'servings_per_container' },
+          { key: 'container_count', header: 'container_count' },
+          { key: 'moderation_status', header: 'moderation_status' },
+          { key: 'visibility', header: 'visibility' },
+          { key: 'ingredient_count', header: 'ingredient_count' },
+          { key: 'main_ingredient_count', header: 'main_ingredient_count' },
+          { key: 'missing_image', header: 'missing_image' },
+          { key: 'missing_shop_link', header: 'missing_shop_link' },
+          { key: 'missing_serving_data', header: 'missing_serving_data' },
+          { key: 'suspicious_price_zero_or_high', header: 'suspicious_price_zero_or_high' },
+          { key: 'missing_ingredient_rows', header: 'missing_ingredient_rows' },
+          { key: 'no_affiliate_flag_on_shop_link', header: 'no_affiliate_flag_on_shop_link' },
+          { key: 'created_at', header: 'created_at' },
+        ],
+        sql: `
+          WITH ingredient_counts AS (
+            SELECT
+              product_id,
+              COUNT(*) AS ingredient_count,
+              SUM(CASE WHEN is_main = 1 THEN 1 ELSE 0 END) AS main_ingredient_count
+            FROM product_ingredients
+            GROUP BY product_id
+          ),
+          qa AS (
+            SELECT
+              p.id,
+              p.name,
+              p.brand,
+              p.form,
+              p.price,
+              p.shop_link,
+              COALESCE(p.is_affiliate, 0) AS is_affiliate,
+              COALESCE(
+                p.affiliate_owner_type,
+                CASE WHEN COALESCE(p.is_affiliate, 0) = 1 THEN 'nick' ELSE 'none' END
+              ) AS affiliate_owner_type,
+              p.serving_size,
+              p.serving_unit,
+              p.servings_per_container,
+              p.container_count,
+              p.moderation_status,
+              p.visibility,
+              p.created_at,
+              COALESCE(ic.ingredient_count, 0) AS ingredient_count,
+              COALESCE(ic.main_ingredient_count, 0) AS main_ingredient_count,
+              CASE WHEN COALESCE(p.image_url, '') = '' AND COALESCE(p.image_r2_key, '') = '' THEN 1 ELSE 0 END AS missing_image,
+              CASE WHEN COALESCE(p.shop_link, '') = '' THEN 1 ELSE 0 END AS missing_shop_link,
+              CASE
+                WHEN p.serving_size IS NULL
+                  OR p.serving_size <= 0
+                  OR COALESCE(p.serving_unit, '') = ''
+                  OR p.servings_per_container IS NULL
+                  OR p.servings_per_container <= 0
+                  OR p.container_count IS NULL
+                  OR p.container_count <= 0
+                THEN 1 ELSE 0
+              END AS missing_serving_data,
+              CASE WHEN p.price <= 0 OR p.price > 300 THEN 1 ELSE 0 END AS suspicious_price_zero_or_high,
+              CASE WHEN COALESCE(ic.ingredient_count, 0) = 0 THEN 1 ELSE 0 END AS missing_ingredient_rows,
+              CASE
+                WHEN COALESCE(p.shop_link, '') <> ''
+                  AND COALESCE(p.affiliate_owner_type, '') = ''
+                THEN 1 ELSE 0
+              END AS no_affiliate_flag_on_shop_link
+            FROM products p
+            LEFT JOIN ingredient_counts ic ON ic.product_id = p.id
+          )
+          SELECT *
+          FROM qa
+          ${whereSql}
+          ORDER BY
+            missing_image DESC,
+            missing_shop_link DESC,
+            missing_serving_data DESC,
+            suspicious_price_zero_or_high DESC,
+            missing_ingredient_rows DESC,
+            no_affiliate_flag_on_shop_link DESC,
+            created_at DESC,
+            id DESC
+          LIMIT ?
+        `,
+        bindings: [...bindings, ADMIN_EXPORT_MAX_ROWS],
+      },
+    }
+  }
+
+  const where: string[] = []
+  const bindings: Array<string | number> = []
+  const status = statusParam && statusParam !== 'all' ? enumValue(statusParam, PRODUCT_LINK_REPORT_STATUSES) : null
+  if (statusParam && statusParam !== 'all' && !status) {
+    return validationError(`status must be one of ${PRODUCT_LINK_REPORT_STATUSES.join(', ')}, all`)
+  }
+  if (status) {
+    where.push('r.status = ?')
+    bindings.push(status)
+  }
+  if (q) {
+    const like = `%${q}%`
+    where.push(`(
+      COALESCE(r.product_name, '') LIKE ?
+      OR COALESCE(u.email, '') LIKE ?
+      OR COALESCE(s.name, '') LIKE ?
+      OR COALESCE(r.shop_link_snapshot, '') LIKE ?
+      OR COALESCE(p.shop_link, '') LIKE ?
+      OR COALESCE(up.shop_link, '') LIKE ?
+    )`)
+    bindings.push(like, like, like, like, like, like)
+  }
+  const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''
+  return {
+    ok: true,
+    value: {
+      columns: [
+        { key: 'id', header: 'id' },
+        { key: 'user_email', header: 'user_email' },
+        { key: 'stack_id', header: 'stack_id' },
+        { key: 'stack_name', header: 'stack_name' },
+        { key: 'product_type', header: 'product_type' },
+        { key: 'product_id', header: 'product_id' },
+        { key: 'product_name', header: 'product_name' },
+        { key: 'shop_link_snapshot', header: 'shop_link_snapshot' },
+        { key: 'current_shop_link', header: 'current_shop_link' },
+        { key: 'reason', header: 'reason' },
+        { key: 'status', header: 'status' },
+        { key: 'created_at', header: 'created_at' },
+      ],
+      sql: `
+        SELECT
+          r.id,
+          u.email AS user_email,
+          r.stack_id,
+          s.name AS stack_name,
+          r.product_type,
+          r.product_id,
+          r.product_name,
+          r.shop_link_snapshot,
+          CASE
+            WHEN r.product_type = 'catalog' THEN p.shop_link
+            ELSE up.shop_link
+          END AS current_shop_link,
+          r.reason,
+          r.status,
+          r.created_at
+        FROM product_link_reports r
+        LEFT JOIN users u ON u.id = r.user_id
+        LEFT JOIN stacks s ON s.id = r.stack_id
+        LEFT JOIN products p ON r.product_type = 'catalog' AND p.id = r.product_id
+        LEFT JOIN user_products up ON r.product_type = 'user_product' AND up.id = r.product_id
+        ${whereSql}
+        ORDER BY
+          CASE r.status WHEN 'open' THEN 0 WHEN 'reviewed' THEN 1 ELSE 2 END,
+          r.created_at ASC,
+          r.id ASC
+        LIMIT ?
+      `,
+      bindings: [...bindings, ADMIN_EXPORT_MAX_ROWS],
+    },
+  }
+}
+
+function adminRouteSearchResults(query: string): AdminSearchResult[] {
+  const normalized = query.trim().toLowerCase()
+  const routes = normalized.length < 2
+    ? ADMIN_SEARCH_ROUTES
+    : ADMIN_SEARCH_ROUTES.filter((route) => {
+        const haystack = `${route.title} ${route.subtitle ?? ''} ${route.href} ${route.keywords}`.toLowerCase()
+        return haystack.includes(normalized)
+      })
+
+  return routes.map(({ keywords: _keywords, ...route }) => route)
+}
+
 function optionalText(value: unknown): string | null {
   if (typeof value !== 'string') return null
   const trimmed = value.trim()
   return trimmed.length > 0 ? trimmed : null
+}
+
+function parseBooleanFilter(value: string | undefined): boolean | null | undefined {
+  if (value === undefined || value.trim() === '') return undefined
+  const normalized = value.trim().toLowerCase()
+  if (['1', 'true', 'yes', 'ja'].includes(normalized)) return true
+  if (['0', 'false', 'no', 'nein'].includes(normalized)) return false
+  return null
+}
+
+function parseBooleanMutation(value: unknown): boolean | null {
+  if (value === true || value === 1) return true
+  if (value === false || value === 0) return false
+  if (typeof value === 'string') {
+    const parsed = parseBooleanFilter(value)
+    return parsed === undefined ? null : parsed
+  }
+  return null
 }
 
 function parsePositiveId(value: string): number | null {
@@ -533,6 +1536,784 @@ function parsePositiveId(value: string): number | null {
 
 function hasOwnKey(data: Record<string, unknown>, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(data, key)
+}
+
+function envFlagConfigured(value: unknown): boolean {
+  if (typeof value === 'string') return value.trim().length > 0
+  return value !== undefined && value !== null
+}
+
+function launchCheckStatus(ok: boolean, severity: LaunchCheckSeverity): LaunchCheckStatus {
+  if (ok) return 'ok'
+  return severity === 'critical' ? 'danger' : 'warning'
+}
+
+async function runLaunchCountCheck(db: D1Database, rule: LaunchCheckCountRule): Promise<LaunchCheck> {
+  try {
+    const row = await db.prepare(rule.sql).first<CountRow>()
+    const count = row?.count ?? 0
+    const ok = rule.okWhen(count)
+    return {
+      id: rule.id,
+      title: rule.title,
+      status: launchCheckStatus(ok, rule.severity),
+      severity: rule.severity,
+      source: 'db',
+      details: rule.details(count),
+      action: ok ? undefined : rule.action,
+      observed_count: count,
+    }
+  } catch {
+    return {
+      id: rule.id,
+      title: rule.title,
+      status: 'danger',
+      severity: 'critical',
+      source: 'db',
+      details: 'Datenbank-Check konnte nicht ausgefuehrt werden.',
+      action: 'Schema, Migrationen und D1-Bindung pruefen.',
+    }
+  }
+}
+
+function buildLaunchEnvChecks(env: AppContext['Bindings']): LaunchCheck[] {
+  const flags: Array<{
+    id: string
+    title: string
+    value: unknown
+    severity: LaunchCheckSeverity
+    details: string
+    action: string
+  }> = [
+    {
+      id: 'env-jwt-secret',
+      title: 'JWT Secret',
+      value: env.JWT_SECRET,
+      severity: 'critical',
+      details: 'Session-Signatur ist als Secret-Binding konfiguriert.',
+      action: 'JWT_SECRET als Cloudflare Pages Secret setzen.',
+    },
+    {
+      id: 'env-frontend-url',
+      title: 'Frontend URL',
+      value: env.FRONTEND_URL,
+      severity: 'warning',
+      details: 'Canonical Frontend-URL ist konfiguriert.',
+      action: 'FRONTEND_URL fuer Live-Domain setzen.',
+    },
+    {
+      id: 'env-smtp-host',
+      title: 'SMTP Host',
+      value: env.SMTP_HOST,
+      severity: 'warning',
+      details: 'SMTP-Host ist vorhanden.',
+      action: 'SMTP_HOST in der Pages-Umgebung setzen.',
+    },
+    {
+      id: 'env-smtp-username',
+      title: 'SMTP Username',
+      value: env.SMTP_USERNAME,
+      severity: 'warning',
+      details: 'SMTP-Benutzer ist vorhanden.',
+      action: 'SMTP_USERNAME in der Pages-Umgebung setzen.',
+    },
+    {
+      id: 'env-smtp-password',
+      title: 'SMTP Password',
+      value: env.SMTP_PASSWORD,
+      severity: 'critical',
+      details: 'SMTP-Passwort ist als Secret-Binding vorhanden.',
+      action: 'SMTP_PASSWORD als Cloudflare Pages Secret setzen.',
+    },
+    {
+      id: 'env-smtp-from-email',
+      title: 'SMTP From Email',
+      value: env.SMTP_FROM_EMAIL,
+      severity: 'warning',
+      details: 'Absenderadresse ist konfiguriert.',
+      action: 'SMTP_FROM_EMAIL fuer ausgehende Mails setzen.',
+    },
+    {
+      id: 'env-rate-limiter',
+      title: 'Rate Limiter KV',
+      value: env.RATE_LIMITER,
+      severity: 'warning',
+      details: 'Rate-Limiter KV-Binding ist vorhanden.',
+      action: 'RATE_LIMITER KV-Binding fuer Produktionsschutz verbinden.',
+    },
+    {
+      id: 'env-product-images',
+      title: 'Product Images R2',
+      value: env.PRODUCT_IMAGES,
+      severity: 'warning',
+      details: 'Produktbild-R2-Bucket ist verbunden.',
+      action: 'PRODUCT_IMAGES R2-Binding fuer Bilduploads verbinden.',
+    },
+  ]
+
+  return flags.map((flag) => {
+    const configured = envFlagConfigured(flag.value)
+    return {
+      id: flag.id,
+      title: flag.title,
+      status: launchCheckStatus(configured, flag.severity),
+      severity: flag.severity,
+      source: 'env',
+      details: configured ? flag.details : 'Nicht konfiguriert.',
+      action: configured ? undefined : flag.action,
+      configured,
+    }
+  })
+}
+
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(url, { ...init, signal: controller.signal })
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
+
+function normalizePubMedLookupQuery(rawPmid: string | undefined, rawDoi: string | undefined): ValidationResult<PubMedLookupQuery> {
+  const pmid = rawPmid?.trim() ?? ''
+  const doi = rawDoi?.trim() ?? ''
+  const hasPmid = pmid.length > 0
+  const hasDoi = doi.length > 0
+
+  if (hasPmid === hasDoi) return validationError('Provide exactly one of pmid or doi')
+  if (hasPmid) {
+    if (!/^[1-9][0-9]{0,9}$/.test(pmid)) return validationError('pmid must be numeric')
+    return { ok: true, value: { pmid } }
+  }
+
+  if (doi.length < 6 || doi.length > 255) return validationError('doi must be between 6 and 255 characters')
+  if (!/^10\.[0-9]{4,9}\/[A-Z0-9._;()/:+-]+$/i.test(doi)) {
+    return validationError('doi must be a valid DOI string')
+  }
+  return { ok: true, value: { doi } }
+}
+
+function pubMedESummaryUrl(pmid: string): string {
+  const url = new URL('https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi')
+  url.searchParams.set('db', 'pubmed')
+  url.searchParams.set('id', pmid)
+  url.searchParams.set('retmode', 'json')
+  return url.toString()
+}
+
+function pubMedESearchDoiUrl(doi: string): string {
+  const url = new URL('https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi')
+  url.searchParams.set('db', 'pubmed')
+  url.searchParams.set('term', `${doi}[AID]`)
+  url.searchParams.set('retmode', 'json')
+  url.searchParams.set('retmax', '1')
+  return url.toString()
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError'
+}
+
+async function fetchPubMedJson(url: string): Promise<PubMedFetchResult> {
+  let response: Response
+  try {
+    response = await fetchWithTimeout(url, { headers: { accept: 'application/json' } }, PUBMED_LOOKUP_TIMEOUT_MS)
+  } catch (error) {
+    return validationError(isAbortError(error) ? 'PubMed lookup timed out' : 'PubMed lookup failed upstream', 502)
+  }
+
+  if (!response.ok) return validationError('PubMed lookup failed upstream', 502)
+
+  try {
+    const body: unknown = await response.json()
+    return { ok: true, value: body }
+  } catch {
+    return validationError('PubMed lookup failed upstream', 502)
+  }
+}
+
+function asJsonRecord(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null
+}
+
+function jsonStringField(record: Record<string, unknown>, key: string): string | undefined {
+  const value = record[key]
+  if (typeof value !== 'string') return undefined
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : undefined
+}
+
+function jsonRecordArrayField(record: Record<string, unknown>, key: string): Array<Record<string, unknown>> {
+  const value = record[key]
+  if (!Array.isArray(value)) return []
+  return value.map(asJsonRecord).filter((entry): entry is Record<string, unknown> => entry !== null)
+}
+
+function pubMedESearchFirstPmid(body: unknown): string | null {
+  const root = asJsonRecord(body)
+  const esearch = root ? asJsonRecord(root.esearchresult) : null
+  const idlist = esearch?.idlist
+  if (!Array.isArray(idlist)) return null
+  const first = idlist.find((value) => typeof value === 'string' && /^[1-9][0-9]{0,9}$/.test(value))
+  return typeof first === 'string' ? first : null
+}
+
+function pubMedESummaryRecord(body: unknown, requestedPmid: string): Record<string, unknown> | null {
+  const root = asJsonRecord(body)
+  const result = root ? asJsonRecord(root.result) : null
+  if (!result) return null
+
+  const requestedRecord = asJsonRecord(result[requestedPmid])
+  if (requestedRecord && !jsonStringField(requestedRecord, 'error')) return requestedRecord
+
+  const uids = result.uids
+  if (!Array.isArray(uids)) return null
+  for (const uid of uids) {
+    if (typeof uid !== 'string') continue
+    const record = asJsonRecord(result[uid])
+    if (record && !jsonStringField(record, 'error')) return record
+  }
+  return null
+}
+
+function pubMedArticleId(record: Record<string, unknown>, idType: string): string | undefined {
+  for (const item of jsonRecordArrayField(record, 'articleids')) {
+    const currentType = jsonStringField(item, 'idtype')?.toLowerCase()
+    const value = jsonStringField(item, 'value')
+    if (currentType === idType && value) return value
+  }
+  return undefined
+}
+
+function pubMedAuthors(record: Record<string, unknown>): { authors: string[]; truncated: boolean } {
+  const names = jsonRecordArrayField(record, 'authors')
+    .map((author) => jsonStringField(author, 'name'))
+    .filter((name): name is string => Boolean(name))
+  return {
+    authors: names.slice(0, PUBMED_AUTHOR_LIMIT),
+    truncated: names.length > PUBMED_AUTHOR_LIMIT,
+  }
+}
+
+function pubMedLookupFromSummary(record: Record<string, unknown>, fallbackPmid: string, fallbackDoi?: string): PubMedLookup | null {
+  const pmid = pubMedArticleId(record, 'pubmed') ?? jsonStringField(record, 'uid') ?? fallbackPmid
+  if (!/^[1-9][0-9]{0,9}$/.test(pmid)) return null
+
+  const title = jsonStringField(record, 'title')
+  if (!title) return null
+
+  const journal = jsonStringField(record, 'fulljournalname') ?? jsonStringField(record, 'source')
+  const sourceDate = jsonStringField(record, 'pubdate')
+  const doi = pubMedArticleId(record, 'doi') ?? fallbackDoi
+  const authorResult = pubMedAuthors(record)
+
+  return {
+    pmid,
+    ...(doi ? { doi } : {}),
+    title,
+    ...(journal ? { journal } : {}),
+    source_url: `https://pubmed.ncbi.nlm.nih.gov/${pmid}/`,
+    ...(sourceDate ? { source_date: sourceDate } : {}),
+    ...(authorResult.authors.length > 0 ? { authors: authorResult.authors } : {}),
+    source_kind: 'study',
+    organization: 'PubMed',
+    country: null,
+    region: null,
+    study_type: null,
+    evidence_quality: null,
+    ...(authorResult.truncated ? { notes: `Author list truncated to ${PUBMED_AUTHOR_LIMIT} names.` } : {}),
+  }
+}
+
+function normalizedPubMedDoiCachePart(doi: string): string {
+  return doi.trim().toLowerCase()
+}
+
+function pubMedLookupCacheKeyForPmid(pmid: string): string {
+  return `admin:pubmed:pmid:${pmid}`
+}
+
+function pubMedLookupCacheKeyForQuery(query: PubMedLookupQuery): string {
+  if (query.pmid) return pubMedLookupCacheKeyForPmid(query.pmid)
+  return `admin:pubmed:doi:${normalizedPubMedDoiCachePart(query.doi ?? '')}`
+}
+
+function pubMedLookupFromCacheValue(value: unknown): PubMedLookup | null {
+  const root = asJsonRecord(value)
+  const record = root ? asJsonRecord(root.lookup) : null
+  if (!record) return null
+
+  const pmid = jsonStringField(record, 'pmid')
+  const title = jsonStringField(record, 'title')
+  const sourceUrl = jsonStringField(record, 'source_url')
+  if (!pmid || !/^[1-9][0-9]{0,9}$/.test(pmid) || !title || !sourceUrl) return null
+
+  const authorsValue = record.authors
+  const authors = Array.isArray(authorsValue)
+    ? authorsValue
+        .filter((author): author is string => typeof author === 'string' && author.trim().length > 0)
+        .map((author) => author.trim())
+        .slice(0, PUBMED_AUTHOR_LIMIT)
+    : []
+
+  const doi = jsonStringField(record, 'doi')
+  const journal = jsonStringField(record, 'journal')
+  const sourceDate = jsonStringField(record, 'source_date')
+  const notes = jsonStringField(record, 'notes')
+
+  return {
+    pmid,
+    ...(doi ? { doi } : {}),
+    title,
+    ...(journal ? { journal } : {}),
+    source_url: sourceUrl,
+    ...(sourceDate ? { source_date: sourceDate } : {}),
+    ...(authors.length > 0 ? { authors } : {}),
+    source_kind: 'study',
+    organization: 'PubMed',
+    country: null,
+    region: null,
+    study_type: null,
+    evidence_quality: null,
+    ...(notes ? { notes } : {}),
+  }
+}
+
+async function readPubMedLookupCache(kv: KVNamespace | undefined, cacheKey: string): Promise<PubMedLookup | null> {
+  if (!kv) return null
+  try {
+    const cached = await kv.get(cacheKey)
+    if (!cached) return null
+    return pubMedLookupFromCacheValue(JSON.parse(cached) as unknown)
+  } catch {
+    return null
+  }
+}
+
+async function writePubMedLookupCache(
+  kv: KVNamespace | undefined,
+  cacheKey: string,
+  lookup: PubMedLookup,
+): Promise<void> {
+  if (!kv) return
+  const payload: PubMedLookupCachePayload = { lookup }
+  try {
+    await kv.put(cacheKey, JSON.stringify(payload), { expirationTtl: PUBMED_LOOKUP_CACHE_TTL_SECONDS })
+  } catch {
+    // Cache errors must not block the live PubMed lookup path.
+  }
+}
+
+function dnsJson(value: unknown): DnsJsonResponse {
+  if (!value || typeof value !== 'object') return {}
+  const raw = value as Record<string, unknown>
+  const answers = Array.isArray(raw.Answer)
+    ? raw.Answer
+        .filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object')
+        .map((entry) => ({
+          name: typeof entry.name === 'string' ? entry.name : undefined,
+          type: typeof entry.type === 'number' ? entry.type : undefined,
+          data: typeof entry.data === 'string' ? entry.data : undefined,
+        }))
+    : undefined
+  return {
+    Status: typeof raw.Status === 'number' ? raw.Status : undefined,
+    Answer: answers,
+  }
+}
+
+async function runDnsPresenceCheck(id: string, title: string, name: string, type: string, matcher?: (data: string) => boolean): Promise<LaunchCheck> {
+  try {
+    const url = `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(name)}&type=${encodeURIComponent(type)}`
+    const response = await fetchWithTimeout(url, { headers: { accept: 'application/dns-json' } }, 2500)
+    if (!response.ok) {
+      return {
+        id,
+        title,
+        status: 'unknown',
+        severity: 'warning',
+        source: 'dns',
+        details: 'DNS-over-HTTPS Check ist nicht erreichbar.',
+        action: 'DNS manuell gegen einen zweiten Resolver pruefen.',
+      }
+    }
+    const body = dnsJson(await response.json())
+    const answers = body.Answer ?? []
+    const hasRecord = body.Status === 0 && answers.some((answer) => {
+      if (!answer.data) return false
+      return matcher ? matcher(answer.data) : true
+    })
+    return {
+      id,
+      title,
+      status: hasRecord ? 'ok' : 'warning',
+      severity: 'warning',
+      source: 'dns',
+      details: hasRecord ? 'DNS-Record ist oeffentlich auffindbar.' : 'DNS-Record wurde nicht gefunden.',
+      action: hasRecord ? undefined : 'DNS-Zone und Provider-Konfiguration pruefen.',
+      configured: hasRecord,
+    }
+  } catch {
+    return {
+      id,
+      title,
+      status: 'unknown',
+      severity: 'warning',
+      source: 'dns',
+      details: 'DNS-Check konnte nicht stabil ausgefuehrt werden.',
+      action: 'DNS manuell gegen authoritative Nameserver pruefen.',
+    }
+  }
+}
+
+async function runDomainReachabilityCheck(): Promise<LaunchCheck> {
+  try {
+    const response = await fetchWithTimeout('https://supplementstack.de', { method: 'HEAD' }, 3000)
+    const ok = response.status >= 200 && response.status < 400
+    return {
+      id: 'domain-https-head',
+      title: 'supplementstack.de HTTPS',
+      status: ok ? 'ok' : 'warning',
+      severity: 'warning',
+      source: 'http',
+      details: ok
+        ? `Live-Domain antwortet per HTTPS HEAD mit HTTP ${response.status}.`
+        : `Live-Domain antwortet per HTTPS HEAD mit HTTP ${response.status}.`,
+      action: ok ? undefined : 'Pages Custom Domain, DNS und Functions-Deploy pruefen.',
+    }
+  } catch {
+    return {
+      id: 'domain-https-head',
+      title: 'supplementstack.de HTTPS',
+      status: 'unknown',
+      severity: 'warning',
+      source: 'http',
+      details: 'Live-Domain konnte per HTTPS HEAD nicht stabil erreicht werden.',
+      action: 'Domain manuell im Browser und per Cloudflare Pages pruefen.',
+    }
+  }
+}
+
+async function buildDomainChecks(): Promise<LaunchCheck[]> {
+  const results = await Promise.all([
+    runDomainReachabilityCheck(),
+    runDnsPresenceCheck('dns-root-a', 'Root Domain A', 'supplementstack.de', 'A'),
+    runDnsPresenceCheck('dns-spf-txt', 'SPF TXT', 'supplementstack.de', 'TXT', (data) => data.includes('v=spf1')),
+    runDnsPresenceCheck('dns-dmarc-txt', 'DMARC TXT', '_dmarc.supplementstack.de', 'TXT', (data) => data.includes('v=DMARC1')),
+    runDnsPresenceCheck(
+      'dns-dkim-txt',
+      'DKIM TXT',
+      'kas202508251337._domainkey.supplementstack.de',
+      'TXT',
+      (data) => data.includes('v=DKIM1') || data.includes('p='),
+    ),
+  ])
+  return results
+}
+
+function summarizeLaunchSections(sections: LaunchCheckSection[]) {
+  const byStatus: Record<LaunchCheckStatus, number> = {
+    ok: 0,
+    warning: 0,
+    danger: 0,
+    info: 0,
+    unknown: 0,
+  }
+  const bySeverity: Record<LaunchCheckSeverity, number> = {
+    info: 0,
+    warning: 0,
+    critical: 0,
+  }
+  let total = 0
+  for (const section of sections) {
+    for (const check of section.checks) {
+      total += 1
+      byStatus[check.status] += 1
+      bySeverity[check.severity] += 1
+    }
+  }
+  return {
+    total,
+    by_status: byStatus,
+    by_severity: bySeverity,
+    blocking: byStatus.danger,
+    needs_attention: byStatus.warning + byStatus.unknown,
+  }
+}
+
+function adminHealthStatus(ok: boolean, severity: AdminHealthSeverity): AdminHealthStatus {
+  if (ok) return 'ok'
+  return severity === 'critical' ? 'critical' : 'warning'
+}
+
+async function runAdminHealthCountCheck(db: D1Database, rule: AdminHealthCountRule): Promise<AdminHealthCheck> {
+  try {
+    const row = await db.prepare(rule.sql).first<CountRow>()
+    const count = row?.count ?? 0
+    const ok = rule.okWhen(count)
+    return {
+      id: rule.id,
+      title: rule.title,
+      status: adminHealthStatus(ok, rule.severity),
+      severity: rule.severity,
+      details: rule.details(count),
+      action: ok ? undefined : rule.action,
+      href: rule.href,
+      observed_count: count,
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown database error'
+    return {
+      id: rule.id,
+      title: rule.title,
+      status: adminHealthStatus(false, rule.severity),
+      severity: rule.severity,
+      details: `Check konnte nicht ausgefuehrt werden: ${message}`,
+      action: 'Schema/Migrationen fuer diesen Health-Check pruefen.',
+      href: rule.href,
+    }
+  }
+}
+
+function summarizeAdminHealthSections(sections: AdminHealthSection[]) {
+  let okCount = 0
+  let warningCount = 0
+  let criticalCount = 0
+
+  for (const section of sections) {
+    for (const check of section.checks) {
+      if (check.status === 'ok') okCount += 1
+      if (check.status === 'warning') warningCount += 1
+      if (check.status === 'critical') criticalCount += 1
+    }
+  }
+
+  return {
+    status: criticalCount > 0 ? 'critical' : warningCount > 0 ? 'warning' : 'ok',
+    ok_count: okCount,
+    warning_count: warningCount,
+    critical_count: criticalCount,
+  } satisfies {
+    status: AdminHealthStatus
+    ok_count: number
+    warning_count: number
+    critical_count: number
+  }
+}
+
+function metricFromAdminHealthCheck(check: AdminHealthCheck, label: string): AdminHealthMetric {
+  return {
+    id: check.id,
+    label,
+    value: check.observed_count ?? 0,
+    status: check.status,
+    href: check.href,
+  }
+}
+
+function adminHealthMetric(
+  id: string,
+  label: string,
+  value: number,
+  status: AdminHealthStatus,
+  href?: string,
+): AdminHealthMetric {
+  return { id, label, value, status, href }
+}
+
+function adminHealthCount(value: number | null | undefined): number {
+  return value ?? 0
+}
+
+async function getAdminAffiliateLinkHealthRollup(db: D1Database): Promise<AdminAffiliateLinkHealthRollup> {
+  const href = '/administrator/products'
+  const tableExists = await hasAffiliateLinkHealthTable(db)
+  if (!tableExists) {
+    return {
+      section: {
+        id: 'affiliate-link-health',
+        title: 'Affiliate Link Health',
+        checks: [
+          {
+            id: 'affiliate-link-health-table-missing',
+            title: 'Affiliate-Link-Health Tabelle',
+            status: 'warning',
+            severity: 'info',
+            details: 'Optionale Tabelle affiliate_link_health ist in dieser Umgebung nicht vorhanden.',
+            action: 'Migration 0054 nur in Umgebungen anwenden, in denen Link-Health beobachtet werden soll.',
+            href,
+          },
+        ],
+      },
+      metrics: [],
+    }
+  }
+
+  try {
+    const row = await db.prepare(`
+      WITH products_with_shop_link AS (
+        SELECT id
+        FROM products
+        WHERE trim(COALESCE(shop_link, '')) <> ''
+      )
+      SELECT
+        COUNT(lh.product_id) AS total_checked_rows,
+        COALESCE(SUM(CASE WHEN lh.status = 'ok' THEN 1 ELSE 0 END), 0) AS ok_count,
+        COALESCE(SUM(CASE WHEN lh.status = 'failed' THEN 1 ELSE 0 END), 0) AS failed_count,
+        COALESCE(SUM(CASE WHEN lh.status = 'timeout' THEN 1 ELSE 0 END), 0) AS timeout_count,
+        COALESCE(SUM(CASE WHEN lh.status = 'invalid' THEN 1 ELSE 0 END), 0) AS invalid_count,
+        COALESCE(SUM(CASE WHEN lh.status = 'unchecked' OR lh.last_checked_at IS NULL THEN 1 ELSE 0 END), 0) AS unchecked_count,
+        COALESCE(SUM(
+          CASE
+            WHEN lh.last_checked_at IS NOT NULL
+             AND datetime(lh.last_checked_at) <= datetime('now', ?)
+            THEN 1
+            ELSE 0
+          END
+        ), 0) AS stale_count,
+        COALESCE(SUM(CASE WHEN lh.status IN ('failed', 'timeout') THEN 1 ELSE 0 END), 0) AS failed_or_timeout_count,
+        (
+          SELECT COUNT(*)
+          FROM products_with_shop_link p
+          LEFT JOIN affiliate_link_health missing_lh ON missing_lh.product_id = p.id
+          WHERE missing_lh.product_id IS NULL
+        ) AS not_checked_products
+      FROM affiliate_link_health lh
+    `).bind(`-${AFFILIATE_LINK_HEALTH_STALE_DAYS} days`).first<AdminAffiliateLinkHealthRollupRow>()
+
+    const totalCheckedRows = adminHealthCount(row?.total_checked_rows)
+    const okCount = adminHealthCount(row?.ok_count)
+    const failedCount = adminHealthCount(row?.failed_count)
+    const timeoutCount = adminHealthCount(row?.timeout_count)
+    const invalidCount = adminHealthCount(row?.invalid_count)
+    const uncheckedCount = adminHealthCount(row?.unchecked_count)
+    const staleCount = adminHealthCount(row?.stale_count)
+    const failedOrTimeoutCount = adminHealthCount(row?.failed_or_timeout_count)
+    const notCheckedProducts = adminHealthCount(row?.not_checked_products)
+    const uncheckedOrStaleCount = uncheckedCount + staleCount
+    const brokenStatusCount = failedOrTimeoutCount + invalidCount
+    const coverageGapCount = notCheckedProducts + uncheckedOrStaleCount
+
+    const checks: AdminHealthCheck[] = []
+    if (totalCheckedRows === 0) {
+      checks.push({
+        id: 'affiliate-link-health-no-run',
+        title: 'Link-Health Lauf',
+        status: 'warning',
+        severity: 'info',
+        details: `Noch kein Link-Health-Lauf beobachtet. ${notCheckedProducts} Produkt(e) mit Shop-Link haben noch keinen Health-Row.`,
+        action: 'Maintenance Worker/Cron nach dem naechsten Lauf pruefen.',
+        href,
+        observed_count: totalCheckedRows,
+      })
+    } else {
+      checks.push({
+        id: 'affiliate-link-health-rollup',
+        title: 'Link-Health Rollup',
+        status: brokenStatusCount > 0 ? 'warning' : 'ok',
+        severity: brokenStatusCount > 0 ? 'warning' : 'info',
+        details: `${totalCheckedRows} Health-Row(s): ${okCount} ok, ${failedCount} failed, ${timeoutCount} timeout, ${invalidCount} invalid.`,
+        action: brokenStatusCount > 0 ? 'Failed/Timeout/Invalid Links im Produktkatalog pruefen.' : undefined,
+        href,
+        observed_count: failedOrTimeoutCount,
+      })
+
+      checks.push({
+        id: 'affiliate-link-health-coverage',
+        title: 'Link-Health Abdeckung',
+        status: coverageGapCount > 0 ? 'warning' : 'ok',
+        severity: 'info',
+        details: `${notCheckedProducts} Produkt(e) mit Shop-Link ohne Health-Row, ${uncheckedCount} unchecked, ${staleCount} stale > ${AFFILIATE_LINK_HEALTH_STALE_DAYS} Tage.`,
+        action: coverageGapCount > 0 ? 'Naechsten Maintenance-Lauf beobachten oder einzelne Produktlinks pruefen.' : undefined,
+        href,
+        observed_count: coverageGapCount,
+      })
+    }
+
+    return {
+      section: {
+        id: 'affiliate-link-health',
+        title: 'Affiliate Link Health',
+        checks,
+      },
+      metrics: [
+        adminHealthMetric(
+          'affiliate-link-health-total-checked-rows',
+          'Link-Health Rows',
+          totalCheckedRows,
+          totalCheckedRows > 0 ? 'ok' : 'warning',
+          href,
+        ),
+        adminHealthMetric('affiliate-link-health-ok', 'Links ok', okCount, 'ok', href),
+        adminHealthMetric(
+          'affiliate-link-health-failed',
+          'Links failed',
+          failedCount,
+          failedCount > 0 ? 'warning' : 'ok',
+          href,
+        ),
+        adminHealthMetric(
+          'affiliate-link-health-timeout',
+          'Links timeout',
+          timeoutCount,
+          timeoutCount > 0 ? 'warning' : 'ok',
+          href,
+        ),
+        adminHealthMetric(
+          'affiliate-link-health-invalid',
+          'Links invalid',
+          invalidCount,
+          invalidCount > 0 ? 'warning' : 'ok',
+          href,
+        ),
+        adminHealthMetric(
+          'affiliate-link-health-unchecked-stale',
+          'Unchecked/Stale',
+          uncheckedOrStaleCount,
+          uncheckedOrStaleCount > 0 ? 'warning' : 'ok',
+          href,
+        ),
+        adminHealthMetric(
+          'affiliate-link-health-not-checked-products',
+          'Produkte ohne Health-Row',
+          notCheckedProducts,
+          notCheckedProducts > 0 ? 'warning' : 'ok',
+          href,
+        ),
+        adminHealthMetric(
+          'affiliate-link-health-failed-or-timeout',
+          'Failed/Timeout',
+          failedOrTimeoutCount,
+          failedOrTimeoutCount > 0 ? 'warning' : 'ok',
+          href,
+        ),
+      ],
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown database error'
+    return {
+      section: {
+        id: 'affiliate-link-health',
+        title: 'Affiliate Link Health',
+        checks: [
+          {
+            id: 'affiliate-link-health-rollup-error',
+            title: 'Link-Health Rollup',
+            status: 'warning',
+            severity: 'warning',
+            details: `Link-Health-Rollup konnte nicht berechnet werden: ${message}`,
+            action: 'affiliate_link_health Schema und Maintenance Worker pruefen.',
+            href,
+          },
+        ],
+      },
+      metrics: [],
+    }
+  }
 }
 
 function normalizeSlug(value: unknown): string | null {
@@ -571,13 +2352,75 @@ function booleanFlag(value: unknown): number | undefined {
   return undefined
 }
 
+function parseAffiliateOwnerType(value: unknown): AffiliateOwnerType | undefined {
+  if (typeof value !== 'string') return undefined
+  const normalized = value.trim()
+  return (AFFILIATE_OWNER_TYPES as readonly string[]).includes(normalized)
+    ? normalized as AffiliateOwnerType
+    : undefined
+}
+
+function normalizeAffiliateOwnership(
+  body: Record<string, unknown>,
+  fallback: Partial<AffiliateOwnership> = {},
+): ValidationResult<AffiliateOwnership> {
+  const hasOwnerType = hasOwnKey(body, 'affiliate_owner_type')
+  const hasOwnerUserId = hasOwnKey(body, 'affiliate_owner_user_id')
+  const hasLegacyAffiliate = hasOwnKey(body, 'is_affiliate')
+
+  if (hasOwnerUserId && !hasOwnerType) {
+    return validationError('affiliate_owner_user_id requires affiliate_owner_type')
+  }
+
+  let ownerType: AffiliateOwnerType = fallback.affiliate_owner_type ?? 'none'
+  let ownerUserId: number | null = fallback.affiliate_owner_user_id ?? null
+
+  if (hasOwnerType) {
+    const parsedType = parseAffiliateOwnerType(body.affiliate_owner_type)
+    if (!parsedType) return validationError(`affiliate_owner_type must be one of ${AFFILIATE_OWNER_TYPES.join(', ')}`)
+    ownerType = parsedType
+    const parsedUserId = optionalPositiveIntegerField(body, 'affiliate_owner_user_id')
+    if (!parsedUserId.ok) return parsedUserId
+    ownerUserId = parsedUserId.value ?? null
+  } else if (hasLegacyAffiliate) {
+    const legacyFlag = booleanFlag(body.is_affiliate)
+    if (legacyFlag === undefined) return validationError('is_affiliate must be true/false or 1/0')
+    ownerType = legacyFlag === 1 ? 'nick' : 'none'
+    ownerUserId = null
+  }
+
+  if (ownerType === 'none' || ownerType === 'nick') {
+    ownerUserId = null
+  }
+
+  if (ownerType === 'user' && ownerUserId === null) {
+    return validationError('affiliate_owner_user_id is required when affiliate_owner_type is user')
+  }
+
+  return {
+    ok: true,
+    value: {
+      affiliate_owner_type: ownerType,
+      affiliate_owner_user_id: ownerUserId,
+      is_affiliate: ownerType === 'none' ? 0 : 1,
+    },
+  }
+}
+
+async function validateAffiliateOwnerUser(db: D1Database, ownership: AffiliateOwnership): Promise<ValidationResult<AffiliateOwnership>> {
+  if (ownership.affiliate_owner_type !== 'user') return { ok: true, value: ownership }
+  const user = await db.prepare('SELECT id FROM users WHERE id = ?').bind(ownership.affiliate_owner_user_id).first<{ id: number }>()
+  if (!user) return validationError('affiliate_owner_user_id must reference an existing user')
+  return { ok: true, value: ownership }
+}
+
 function normalizeInteger(value: unknown): number | undefined {
   if (value === undefined) return undefined
   const parsed = typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value) : Number.NaN
   return Number.isInteger(parsed) ? parsed : undefined
 }
 
-function validationError(error: string, status: 400 | 404 | 409 = 400): ValidationFailure {
+function validationError(error: string, status: 400 | 404 | 409 | 502 = 400): ValidationFailure {
   return { ok: false, error, status }
 }
 
@@ -615,6 +2458,121 @@ function optionalBooleanField(data: Record<string, unknown>, key: string): Valid
   const flag = booleanFlag(data[key])
   if (flag === undefined) return validationError(`${key} must be true/false or 1/0`)
   return { ok: true, value: flag }
+}
+
+function validateProductWarningPayload(
+  body: Record<string, unknown>,
+  existing: ProductWarningRow | null,
+): ValidationResult<ProductWarningPayload> {
+  const severity = hasOwnKey(body, 'severity')
+    ? enumValue(body.severity, PRODUCT_WARNING_SEVERITIES)
+    : existing?.severity && PRODUCT_WARNING_SEVERITIES.includes(existing.severity as ProductWarningSeverity)
+      ? existing.severity as ProductWarningSeverity
+      : null
+  if (!severity) return validationError(`severity must be one of ${PRODUCT_WARNING_SEVERITIES.join(', ')}`)
+
+  const title = hasOwnKey(body, 'title')
+    ? requiredTextField(body, 'title', 255)
+    : existing ? { ok: true as const, value: existing.title } : validationError('title is required')
+  if (!title.ok) return title
+
+  const message = hasOwnKey(body, 'message')
+    ? requiredTextField(body, 'message', 2000)
+    : existing ? { ok: true as const, value: existing.message } : validationError('message is required')
+  if (!message.ok) return message
+
+  const alternativeNote = optionalTextField(body, 'alternative_note', 2000)
+  if (!alternativeNote.ok) return alternativeNote
+
+  const active = optionalBooleanField(body, 'active')
+  if (!active.ok) return active
+
+  return {
+    ok: true,
+    value: {
+      severity,
+      title: title.value,
+      message: message.value,
+      alternative_note: alternativeNote.value === undefined
+        ? existing?.alternative_note ?? null
+        : alternativeNote.value,
+      active: active.value ?? existing?.active ?? 1,
+    },
+  }
+}
+
+async function validateProductIngredientPayload(
+  db: D1Database,
+  body: Record<string, unknown>,
+  existing: AdminProductIngredientRow | null,
+): Promise<ValidationResult<ProductIngredientPayload>> {
+  const allowedFields = new Set([
+    'ingredient_id',
+    'is_main',
+    'quantity',
+    'unit',
+    'form_id',
+    'basis_quantity',
+    'basis_unit',
+    'search_relevant',
+    'parent_ingredient_id',
+    'version',
+  ])
+  for (const key of Object.keys(body)) {
+    if (!allowedFields.has(key)) return validationError(`${key} cannot be updated on product ingredient rows`)
+  }
+
+  const rawIngredientId = hasOwnKey(body, 'ingredient_id')
+    ? normalizeInteger(body.ingredient_id)
+    : existing?.ingredient_id
+  if (!rawIngredientId || rawIngredientId <= 0) return validationError('ingredient_id must be a positive integer')
+  if (!(await ingredientExists(db, rawIngredientId))) return validationError('Ingredient not found', 404)
+
+  const formId = optionalPositiveIntegerField(body, 'form_id')
+  if (!formId.ok) return formId
+  const finalFormId = formId.value === undefined ? existing?.form_id ?? null : formId.value
+  if (finalFormId !== null && !(await formBelongsToIngredient(db, finalFormId, rawIngredientId))) {
+    return validationError('form_id must belong to the selected ingredient')
+  }
+
+  const parentIngredientId = optionalPositiveIntegerField(body, 'parent_ingredient_id')
+  if (!parentIngredientId.ok) return parentIngredientId
+  const finalParentIngredientId = parentIngredientId.value === undefined
+    ? existing?.parent_ingredient_id ?? null
+    : parentIngredientId.value
+  if (finalParentIngredientId !== null && !(await ingredientExists(db, finalParentIngredientId))) {
+    return validationError('parent_ingredient_id must reference an existing ingredient', 404)
+  }
+
+  const quantity = optionalNumberField(body, 'quantity', { min: 0, max: 1000000000 })
+  if (!quantity.ok) return quantity
+  const basisQuantity = optionalNumberField(body, 'basis_quantity', { min: 0, max: 1000000000 })
+  if (!basisQuantity.ok) return basisQuantity
+
+  const unit = optionalTextField(body, 'unit', 64)
+  if (!unit.ok) return unit
+  const basisUnit = optionalTextField(body, 'basis_unit', 64)
+  if (!basisUnit.ok) return basisUnit
+
+  const isMain = optionalBooleanField(body, 'is_main')
+  if (!isMain.ok) return isMain
+  const searchRelevant = optionalBooleanField(body, 'search_relevant')
+  if (!searchRelevant.ok) return searchRelevant
+
+  return {
+    ok: true,
+    value: {
+      ingredient_id: rawIngredientId,
+      is_main: isMain.value ?? existing?.is_main ?? 0,
+      quantity: quantity.value === undefined ? existing?.quantity ?? null : quantity.value,
+      unit: unit.value === undefined ? existing?.unit ?? null : unit.value,
+      form_id: finalFormId,
+      basis_quantity: basisQuantity.value === undefined ? existing?.basis_quantity ?? null : basisQuantity.value,
+      basis_unit: basisUnit.value === undefined ? existing?.basis_unit ?? null : basisUnit.value,
+      search_relevant: searchRelevant.value ?? existing?.search_relevant ?? 1,
+      parent_ingredient_id: finalParentIngredientId,
+    },
+  }
 }
 
 function optionalNumberField(
@@ -666,6 +2624,20 @@ function normalizeHttpUrlField(data: Record<string, unknown>, key: string): Vali
   return result
 }
 
+function normalizeProductImageUrlField(data: Record<string, unknown>, key: string): ValidationResult<string | null | undefined> {
+  if (!hasOwnKey(data, key)) return { ok: true, value: undefined }
+  const raw = data[key]
+  if (raw === null || raw === '') return { ok: true, value: null }
+  if (typeof raw !== 'string') return validationError(`${key} must be a URL string`)
+  const value = raw.trim()
+  if (!value) return { ok: true, value: null }
+  if (value.length > 2048) return validationError(`${key} must be at most 2048 characters`)
+  if (value.startsWith('/')) return { ok: true, value }
+  const result = normalizeSourceUrl(value)
+  if (!result.ok) return validationError(result.error.replace('source_url', key), result.status)
+  return { ok: true, value: result.value ?? null }
+}
+
 function optionalDateTextField(data: Record<string, unknown>, key: string): ValidationResult<string | null | undefined> {
   const result = optionalTextField(data, key, 40)
   if (!result.ok || result.value === undefined || result.value === null) return result
@@ -673,6 +2645,78 @@ function optionalDateTextField(data: Record<string, unknown>, key: string): Vali
     return validationError(`${key} must be an ISO-like date string`)
   }
   return result
+}
+
+function ingredientResearchEvidenceSelect(columns: Set<string>, tableAlias = ''): string {
+  const prefix = tableAlias ? `${tableAlias}.` : ''
+  return [
+    columns.has('is_retracted') ? `${prefix}is_retracted AS is_retracted` : '0 AS is_retracted',
+    columns.has('retraction_checked_at') ? `${prefix}retraction_checked_at AS retraction_checked_at` : 'NULL AS retraction_checked_at',
+    columns.has('retraction_notice_url') ? `${prefix}retraction_notice_url AS retraction_notice_url` : 'NULL AS retraction_notice_url',
+    columns.has('evidence_grade') ? `${prefix}evidence_grade AS evidence_grade` : 'NULL AS evidence_grade',
+  ].join(',\n      ')
+}
+
+function parseEvidenceGradeField(
+  body: Record<string, unknown>,
+  existing: IngredientResearchSourceRow | null,
+): ValidationResult<EvidenceGrade | null> {
+  if (!hasOwnKey(body, 'evidence_grade')) return { ok: true, value: existing?.evidence_grade ?? null }
+  if (body.evidence_grade === null || body.evidence_grade === '') return { ok: true, value: null }
+  const grade = enumValue(body.evidence_grade, EVIDENCE_GRADES)
+  if (!grade) return validationError(`evidence_grade must be one of ${EVIDENCE_GRADES.join(', ')} or null`)
+  return { ok: true, value: grade }
+}
+
+function evidenceQualityToGrade(value: string | null): EvidenceGrade | null {
+  const quality = value?.trim().toLowerCase() ?? ''
+  if (!quality) return null
+  if (quality.includes('high') || quality.includes('hoch')) return 'B'
+  if (quality.includes('moderate') || quality.includes('medium') || quality.includes('mittel')) return 'C'
+  if (quality.includes('very low') || quality.includes('poor') || quality.includes('sehr niedrig')) return 'F'
+  if (quality.includes('low') || quality.includes('niedrig')) return 'D'
+  return null
+}
+
+function nutrientReferenceValueSelect(columns: Set<string>): string {
+  const valueExpr = columns.has('value')
+    ? 'value'
+    : columns.has('value_min')
+      ? 'value_min'
+      : columns.has('value_max')
+        ? 'value_max'
+        : 'NULL'
+  const noteExpr = columns.has('notes')
+    ? 'notes'
+    : columns.has('note')
+      ? 'note'
+      : 'NULL'
+  const legacyNoteExpr = columns.has('note')
+    ? 'note'
+    : columns.has('notes')
+      ? 'notes'
+      : 'NULL'
+
+  return [
+    'id',
+    'ingredient_id',
+    columns.has('population_id') ? 'population_id' : 'NULL AS population_id',
+    'organization',
+    columns.has('region') ? 'region' : 'NULL AS region',
+    'kind',
+    `${valueExpr} AS value`,
+    columns.has('value_min') ? 'value_min' : `${valueExpr} AS value_min`,
+    columns.has('value_max') ? 'value_max' : 'NULL AS value_max',
+    'unit',
+    columns.has('source_url') ? 'source_url' : 'NULL AS source_url',
+    columns.has('source_label') ? 'source_label' : 'NULL AS source_label',
+    columns.has('source_year') ? 'source_year' : 'NULL AS source_year',
+    `${noteExpr} AS notes`,
+    `${legacyNoteExpr} AS note`,
+    columns.has('created_at') ? 'created_at' : 'NULL AS created_at',
+    columns.has('updated_at') ? 'updated_at' : 'NULL AS updated_at',
+    columns.has('version') ? 'version' : 'NULL AS version',
+  ].join(',\n      ')
 }
 
 function parseKnowledgeSourcesJson(value: string): unknown[] {
@@ -708,11 +2752,354 @@ function parseKnowledgeArticle<T extends KnowledgeArticleDbRow | KnowledgeArticl
   }
 }
 
+const AFFILIATE_LINK_HEALTH_SELECT = `
+  lh.product_id AS lh_product_id,
+  lh.url AS lh_url,
+  lh.status AS lh_status,
+  lh.http_status AS lh_http_status,
+  lh.failure_reason AS lh_failure_reason,
+  lh.last_checked_at AS lh_last_checked_at,
+  lh.last_success_at AS lh_last_success_at,
+  lh.consecutive_failures AS lh_consecutive_failures,
+  lh.response_time_ms AS lh_response_time_ms,
+  lh.final_url AS lh_final_url,
+  lh.redirected AS lh_redirected
+`
+
+const AFFILIATE_LINK_HEALTH_STATUSES = new Set<string>(['unchecked', 'ok', 'failed', 'timeout', 'invalid'])
+const PRODUCT_WARNING_SEVERITIES = ['info', 'caution', 'warning', 'danger'] as const
+
+async function hasAffiliateLinkHealthTable(db: D1Database): Promise<boolean> {
+  try {
+    const row = await db.prepare(`
+      SELECT name
+      FROM sqlite_master
+      WHERE type = 'table'
+        AND name = 'affiliate_link_health'
+    `).first<{ name: string }>()
+    return row?.name === 'affiliate_link_health'
+  } catch {
+    return false
+  }
+}
+
+async function hasProductWarningsTable(db: D1Database): Promise<boolean> {
+  try {
+    const row = await db.prepare(`
+      SELECT name
+      FROM sqlite_master
+      WHERE type = 'table'
+        AND name = 'product_warnings'
+    `).first<{ name: string }>()
+    return row?.name === 'product_warnings'
+  } catch {
+    return false
+  }
+}
+
+async function productWarningsHasActiveColumn(db: D1Database): Promise<boolean> {
+  try {
+    const { results } = await db.prepare(`PRAGMA table_info(product_warnings)`).all<{ name: string }>()
+    return (results ?? []).some((row) => row.name === 'active')
+  } catch {
+    return false
+  }
+}
+
+async function hasTable(db: D1Database, tableName: string): Promise<boolean> {
+  try {
+    const row = await db.prepare(`
+      SELECT name
+      FROM sqlite_master
+      WHERE type = 'table'
+        AND name = ?
+    `).bind(tableName).first<{ name: string }>()
+    return row?.name === tableName
+  } catch {
+    return false
+  }
+}
+
+async function getTableColumns(db: D1Database, tableName: string): Promise<Set<string>> {
+  try {
+    const { results } = await db.prepare(`PRAGMA table_info(${tableName})`).all<{ name: string }>()
+    return new Set((results ?? []).map((row) => row.name))
+  } catch {
+    return new Set()
+  }
+}
+
+function versionSelect(columns: Set<string>, alias?: string): string {
+  if (!columns.has('version')) return 'NULL AS version'
+  return alias ? `${alias}.version AS version` : 'version'
+}
+
+function parseVersionValue(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isInteger(value) && value >= 0) return value
+  if (typeof value !== 'string') return null
+  const normalized = value.trim().replace(/^W\//i, '').replace(/^"|"$/g, '')
+  if (!/^\d+$/.test(normalized)) return null
+  return Number(normalized)
+}
+
+function requestVersion(c: Context<AppContext>, body?: Record<string, unknown>): number | null {
+  return parseVersionValue(c.req.header('If-Match')) ?? parseVersionValue(body?.version)
+}
+
+async function requestVersionFromRequest(c: Context<AppContext>): Promise<number | null> {
+  const headerVersion = parseVersionValue(c.req.header('If-Match'))
+  if (headerVersion !== null) return headerVersion
+  if (!c.req.header('Content-Type')?.toLowerCase().includes('application/json')) return null
+  try {
+    const body = await c.req.json<Record<string, unknown>>()
+    return parseVersionValue(body?.version)
+  } catch {
+    return null
+  }
+}
+
+function validateOptimisticLock(
+  hasVersion: boolean,
+  currentVersion: number | null,
+  expectedVersion: number | null,
+): ValidationResult<{ enforce: boolean; expectedVersion: number | null }> {
+  if (!hasVersion || currentVersion === null) return { ok: true, value: { enforce: false, expectedVersion: null } }
+  if (expectedVersion !== currentVersion) return validationError('Version conflict', 409)
+  return { ok: true, value: { enforce: true, expectedVersion } }
+}
+
+function d1ChangeCount(result: D1Result): number | null {
+  const meta = result.meta as { changes?: unknown }
+  return typeof meta.changes === 'number' ? meta.changes : null
+}
+
+function optimisticWhere(column = 'id'): string {
+  return `${column} = ? AND version = ?`
+}
+
+function formatAffiliateLinkHealth(row: Partial<AffiliateLinkHealthSelectRow>): AffiliateLinkHealth | null {
+  if (row.lh_product_id === undefined || row.lh_product_id === null) return null
+  const status = row.lh_status && AFFILIATE_LINK_HEALTH_STATUSES.has(row.lh_status)
+    ? row.lh_status as AffiliateLinkHealthStatus
+    : null
+
+  return {
+    url: row.lh_url ?? null,
+    status,
+    http_status: row.lh_http_status ?? null,
+    failure_reason: row.lh_failure_reason ?? null,
+    last_checked_at: row.lh_last_checked_at ?? null,
+    last_success_at: row.lh_last_success_at ?? null,
+    consecutive_failures: row.lh_consecutive_failures ?? null,
+    response_time_ms: row.lh_response_time_ms ?? null,
+    final_url: row.lh_final_url ?? null,
+    redirected: row.lh_redirected ?? null,
+  }
+}
+
+function withAffiliateLinkHealth<T extends object>(
+  row: T & Partial<AffiliateLinkHealthSelectRow>,
+): T & { link_health: AffiliateLinkHealth | null } {
+  const {
+    lh_product_id: _lhProductId,
+    lh_url: _lhUrl,
+    lh_status: _lhStatus,
+    lh_http_status: _lhHttpStatus,
+    lh_failure_reason: _lhFailureReason,
+    lh_last_checked_at: _lhLastCheckedAt,
+    lh_last_success_at: _lhLastSuccessAt,
+    lh_consecutive_failures: _lhConsecutiveFailures,
+    lh_response_time_ms: _lhResponseTimeMs,
+    lh_final_url: _lhFinalUrl,
+    lh_redirected: _lhRedirected,
+    ...rest
+  } = row
+
+  return {
+    ...(rest as T),
+    link_health: formatAffiliateLinkHealth(row),
+  }
+}
+
+async function productExists(db: D1Database, productId: number): Promise<boolean> {
+  const row = await db.prepare('SELECT id FROM products WHERE id = ?').bind(productId).first<{ id: number }>()
+  return Boolean(row)
+}
+
+async function getProductVersionRow(
+  db: D1Database,
+  productId: number,
+  columns?: Set<string>,
+): Promise<{ id: number; version: number | null } | null> {
+  const productColumns = columns ?? await getTableColumns(db, 'products')
+  const versionExpr = productColumns.has('version') ? 'version' : 'NULL AS version'
+  return await db.prepare(`SELECT id, ${versionExpr} FROM products WHERE id = ?`)
+    .bind(productId)
+    .first<{ id: number; version: number | null }>()
+}
+
+async function reserveProductVersionForMutation(
+  db: D1Database,
+  productId: number,
+  columns: Set<string>,
+  expectedVersion: number | null,
+): Promise<
+  | { ok: true; productVersion: number | null }
+  | { ok: false; error: string; current_version: number | null }
+> {
+  if (!columns.has('version')) return { ok: true, productVersion: null }
+  if (expectedVersion === null) return { ok: true, productVersion: null }
+
+  const updateResult = await db.prepare(`
+    UPDATE products
+    SET version = COALESCE(version, 0) + 1
+    WHERE id = ? AND version = ?
+  `).bind(productId, expectedVersion).run()
+  if (d1ChangeCount(updateResult) === 0) {
+    const current = await getProductVersionRow(db, productId, columns)
+    return { ok: false, error: 'Version conflict', current_version: current?.version ?? null }
+  }
+
+  const current = await getProductVersionRow(db, productId, columns)
+  return { ok: true, productVersion: current?.version ?? null }
+}
+
+async function incrementProductVersionAfterMutation(
+  db: D1Database,
+  productId: number,
+  columns: Set<string>,
+): Promise<number | null> {
+  if (!columns.has('version')) return null
+  await db.prepare(`
+    UPDATE products
+    SET version = COALESCE(version, 0) + 1
+    WHERE id = ?
+  `).bind(productId).run()
+  const current = await getProductVersionRow(db, productId, columns)
+  return current?.version ?? null
+}
+
+async function getProductIngredientRow(
+  db: D1Database,
+  productId: number,
+  rowId: number,
+): Promise<AdminProductIngredientRow | null> {
+  return await db.prepare(`
+    SELECT
+      pi.id,
+      pi.product_id,
+      pi.ingredient_id,
+      i.name AS ingredient_name,
+      i.unit AS ingredient_unit,
+      i.description AS ingredient_description,
+      pi.form_id,
+      f.name AS form_name,
+      pi.parent_ingredient_id,
+      parent.name AS parent_ingredient_name,
+      COALESCE(pi.is_main, 0) AS is_main,
+      COALESCE(pi.search_relevant, 1) AS search_relevant,
+      pi.quantity,
+      pi.unit,
+      pi.basis_quantity,
+      pi.basis_unit,
+      COALESCE(idp_form.effect_summary, idp_base.effect_summary) AS effect_summary,
+      COALESCE(idp_form.timing, idp_base.timing) AS timing,
+      COALESCE(idp_form.timing_note, idp_base.timing_note) AS timing_note,
+      COALESCE(idp_form.intake_hint, idp_base.intake_hint) AS intake_hint,
+      COALESCE(idp_form.card_note, idp_base.card_note) AS card_note
+    FROM product_ingredients pi
+    JOIN ingredients i ON i.id = pi.ingredient_id
+    LEFT JOIN ingredient_forms f ON f.id = pi.form_id
+    LEFT JOIN ingredients parent ON parent.id = pi.parent_ingredient_id
+    LEFT JOIN ingredient_display_profiles idp_form
+      ON idp_form.ingredient_id = pi.ingredient_id
+     AND idp_form.form_id = pi.form_id
+     AND idp_form.sub_ingredient_id IS NULL
+    LEFT JOIN ingredient_display_profiles idp_base
+      ON idp_base.ingredient_id = pi.ingredient_id
+     AND idp_base.form_id IS NULL
+     AND idp_base.sub_ingredient_id IS NULL
+    WHERE pi.product_id = ?
+      AND pi.id = ?
+  `).bind(productId, rowId).first<AdminProductIngredientRow>()
+}
+
+async function loadProductWarnings(db: D1Database, productId: number, includeInactive = false): Promise<ProductWarningRow[]> {
+  if (!(await hasProductWarningsTable(db))) return []
+  try {
+    const columns = await getTableColumns(db, 'product_warnings')
+    const activeWhere = includeInactive ? '' : 'AND COALESCE(active, 1) = 1'
+    const { results } = await db.prepare(`
+      SELECT
+        id,
+        product_id,
+        severity,
+        title,
+        message,
+        alternative_note,
+        active,
+        created_at,
+        updated_at,
+        ${versionSelect(columns)}
+      FROM product_warnings
+      WHERE product_id = ?
+        ${activeWhere}
+      ORDER BY
+        COALESCE(active, 1) DESC,
+        CASE severity
+          WHEN 'danger' THEN 0
+          WHEN 'warning' THEN 1
+          WHEN 'caution' THEN 2
+          WHEN 'info' THEN 3
+          ELSE 4
+        END,
+        id DESC
+    `).bind(productId).all<ProductWarningRow>()
+    return results ?? []
+  } catch {
+    return []
+  }
+}
+
+async function getProductWarningRow(db: D1Database, productId: number, warningId: number): Promise<ProductWarningRow | null> {
+  if (!(await hasProductWarningsTable(db))) return null
+  try {
+    const columns = await getTableColumns(db, 'product_warnings')
+    return await db.prepare(`
+      SELECT
+        id,
+        product_id,
+        severity,
+        title,
+        message,
+        alternative_note,
+        active,
+        created_at,
+        updated_at,
+        ${versionSelect(columns)}
+      FROM product_warnings
+      WHERE id = ?
+        AND product_id = ?
+    `).bind(warningId, productId).first<ProductWarningRow>()
+  } catch {
+    return null
+  }
+}
+
 function productQaIssues(row: ProductQaRow): ProductQaIssue[] {
   return PRODUCT_QA_ISSUES.filter((issue) => row[issue] === 1)
 }
 
-async function getProductQaRow(db: D1Database, productId: number): Promise<ProductQaRow | null> {
+async function getProductQaRow(
+  db: D1Database,
+  productId: number,
+  includeLinkHealth = false,
+): Promise<ProductQaRow | null> {
+  const productColumns = await getTableColumns(db, 'products')
+  const productVersionSelect = productColumns.has('version') ? 'p.version AS version,' : 'NULL AS version,'
+  const linkHealthSelect = includeLinkHealth ? `,${AFFILIATE_LINK_HEALTH_SELECT}` : ''
+  const linkHealthJoin = includeLinkHealth ? 'LEFT JOIN affiliate_link_health lh ON lh.product_id = p.id' : ''
+
   return db.prepare(`
     WITH ingredient_counts AS (
       SELECT
@@ -720,6 +3107,7 @@ async function getProductQaRow(db: D1Database, productId: number): Promise<Produ
         COUNT(*) AS ingredient_count,
         SUM(CASE WHEN is_main = 1 THEN 1 ELSE 0 END) AS main_ingredient_count
       FROM product_ingredients
+      WHERE product_id = ?
       GROUP BY product_id
     ),
     qa AS (
@@ -733,6 +3121,11 @@ async function getProductQaRow(db: D1Database, productId: number): Promise<Produ
         p.image_url,
         p.image_r2_key,
         COALESCE(p.is_affiliate, 0) AS is_affiliate,
+        COALESCE(
+          p.affiliate_owner_type,
+          CASE WHEN COALESCE(p.is_affiliate, 0) = 1 THEN 'nick' ELSE 'none' END
+        ) AS affiliate_owner_type,
+        p.affiliate_owner_user_id,
         p.serving_size,
         p.serving_unit,
         p.servings_per_container,
@@ -740,6 +3133,7 @@ async function getProductQaRow(db: D1Database, productId: number): Promise<Produ
         p.moderation_status,
         p.visibility,
         p.created_at,
+        ${productVersionSelect}
         COALESCE(ic.ingredient_count, 0) AS ingredient_count,
         COALESCE(ic.main_ingredient_count, 0) AS main_ingredient_count,
         CASE WHEN COALESCE(p.image_url, '') = '' AND COALESCE(p.image_r2_key, '') = '' THEN 1 ELSE 0 END AS missing_image,
@@ -756,28 +3150,41 @@ async function getProductQaRow(db: D1Database, productId: number): Promise<Produ
         END AS missing_serving_data,
         CASE WHEN p.price <= 0 OR p.price > 300 THEN 1 ELSE 0 END AS suspicious_price_zero_or_high,
         CASE WHEN COALESCE(ic.ingredient_count, 0) = 0 THEN 1 ELSE 0 END AS missing_ingredient_rows,
-        CASE WHEN COALESCE(p.shop_link, '') <> '' AND COALESCE(p.is_affiliate, 0) = 0 THEN 1 ELSE 0 END AS no_affiliate_flag_on_shop_link
+        CASE
+          WHEN COALESCE(p.shop_link, '') <> ''
+            AND COALESCE(p.affiliate_owner_type, '') = ''
+          THEN 1 ELSE 0
+        END AS no_affiliate_flag_on_shop_link
+        ${linkHealthSelect}
       FROM products p
       LEFT JOIN ingredient_counts ic ON ic.product_id = p.id
+      ${linkHealthJoin}
       WHERE p.id = ?
     )
     SELECT *
     FROM qa
-  `).bind(productId).first<ProductQaRow>()
+  `).bind(productId, productId).first<ProductQaRow>()
 }
 
 function formatProductQaRow(row: ProductQaRow) {
-  return {
+  return withAffiliateLinkHealth({
     ...row,
     issues: productQaIssues(row),
-  }
+  })
 }
 
 function validateProductQaPatch(body: Record<string, unknown>): ValidationResult<ProductQaPatch> {
   const allowedFields = new Set([
+    'name',
+    'brand',
     'price',
     'shop_link',
+    'image_url',
     'is_affiliate',
+    'affiliate_owner_type',
+    'affiliate_owner_user_id',
+    'moderation_status',
+    'visibility',
     'serving_size',
     'serving_unit',
     'servings_per_container',
@@ -790,6 +3197,14 @@ function validateProductQaPatch(body: Record<string, unknown>): ValidationResult
 
   const data: ProductQaPatch = {}
 
+  const name = hasOwnKey(body, 'name') ? requiredTextField(body, 'name', 240) : { ok: true as const, value: undefined }
+  if (!name.ok) return name
+  if (name.value !== undefined) data.name = name.value
+
+  const brand = optionalTextField(body, 'brand', 240)
+  if (!brand.ok) return brand
+  if (brand.value !== undefined) data.brand = brand.value
+
   const price = optionalNumberField(body, 'price', { min: 0, minExclusive: true, max: 300 })
   if (!price.ok) return price
   if (price.value === null) return validationError('price is required')
@@ -798,6 +3213,22 @@ function validateProductQaPatch(body: Record<string, unknown>): ValidationResult
   const shopLink = normalizeHttpUrlField(body, 'shop_link')
   if (!shopLink.ok) return shopLink
   if (shopLink.value !== undefined) data.shop_link = shopLink.value
+
+  const imageUrl = normalizeProductImageUrlField(body, 'image_url')
+  if (!imageUrl.ok) return imageUrl
+  if (imageUrl.value !== undefined) data.image_url = imageUrl.value
+
+  if (hasOwnKey(body, 'moderation_status')) {
+    const moderationStatus = enumValue(body.moderation_status, PRODUCT_MODERATION_STATUSES)
+    if (!moderationStatus) return validationError(`moderation_status must be one of ${PRODUCT_MODERATION_STATUSES.join(', ')}`)
+    data.moderation_status = moderationStatus
+  }
+
+  if (hasOwnKey(body, 'visibility')) {
+    const visibility = enumValue(body.visibility, PRODUCT_VISIBILITIES)
+    if (!visibility) return validationError(`visibility must be one of ${PRODUCT_VISIBILITIES.join(', ')}`)
+    data.visibility = visibility
+  }
 
   const isAffiliate = optionalBooleanField(body, 'is_affiliate')
   if (!isAffiliate.ok) return isAffiliate
@@ -942,7 +3373,7 @@ function parseAuditDate(value: string | undefined, endOfDay: boolean): number | 
   return Math.floor(timestamp / 1000)
 }
 
-function formatDoseRecommendationValidation(error: ValidationFailure): { error: string; status: 400 | 404 | 409 } {
+function formatDoseRecommendationValidation(error: ValidationFailure): { error: string; status: 400 | 404 | 409 | 502 } {
   return { error: error.error, status: error.status ?? 400 }
 }
 
@@ -968,6 +3399,7 @@ async function articleSlugExists(db: D1Database, articleSlug: string): Promise<b
 }
 
 async function getKnowledgeArticleRow(db: D1Database, slug: string): Promise<KnowledgeArticleDbRow | null> {
+  const columns = await getTableColumns(db, 'knowledge_articles')
   return await db.prepare(`
     SELECT
       slug,
@@ -978,13 +3410,15 @@ async function getKnowledgeArticleRow(db: D1Database, slug: string): Promise<Kno
       reviewed_at,
       sources_json,
       created_at,
-      updated_at
+      updated_at,
+      ${versionSelect(columns)}
     FROM knowledge_articles
     WHERE slug = ?
   `).bind(slug).first<KnowledgeArticleDbRow>()
 }
 
 async function getIngredientResearchStatusRow(db: D1Database, ingredientId: number): Promise<IngredientResearchStatusRow | null> {
+  const columns = await getTableColumns(db, 'ingredient_research_status')
   return await db.prepare(`
     SELECT
       ingredient_id,
@@ -995,13 +3429,15 @@ async function getIngredientResearchStatusRow(db: D1Database, ingredientId: numb
       reviewed_at,
       review_due_at,
       created_at,
-      updated_at
+      updated_at,
+      ${versionSelect(columns)}
     FROM ingredient_research_status
     WHERE ingredient_id = ?
   `).bind(ingredientId).first<IngredientResearchStatusRow>()
 }
 
 async function getIngredientResearchSourceRow(db: D1Database, sourceId: number): Promise<IngredientResearchSourceRow | null> {
+  const columns = await getTableColumns(db, 'ingredient_research_sources')
   return await db.prepare(`
     SELECT
       id,
@@ -1030,14 +3466,17 @@ async function getIngredientResearchSourceRow(db: D1Database, sourceId: number):
       notes,
       source_date,
       reviewed_at,
+      ${ingredientResearchEvidenceSelect(columns)},
       created_at,
-      updated_at
+      updated_at,
+      ${versionSelect(columns)}
     FROM ingredient_research_sources
     WHERE id = ?
   `).bind(sourceId).first<IngredientResearchSourceRow>()
 }
 
 async function getIngredientSafetyWarningAdminRow(db: D1Database, warningId: number): Promise<IngredientSafetyWarningAdminRow | null> {
+  const columns = await getTableColumns(db, 'ingredient_safety_warnings')
   return await db.prepare(`
     SELECT
       w.id,
@@ -1053,7 +3492,8 @@ async function getIngredientSafetyWarningAdminRow(db: D1Database, warningId: num
       w.min_amount,
       w.unit,
       w.active,
-      w.created_at
+      w.created_at,
+      ${versionSelect(columns, 'w')}
     FROM ingredient_safety_warnings w
     LEFT JOIN ingredients i ON i.id = w.ingredient_id
     LEFT JOIN ingredient_forms f ON f.id = w.form_id
@@ -1065,7 +3505,7 @@ async function getIngredientSafetyWarningAdminRow(db: D1Database, warningId: num
 async function validateIngredientResearchStatusPayload(
   body: Record<string, unknown>,
   existing: IngredientResearchStatusRow | null,
-): Promise<ValidationResult<Omit<IngredientResearchStatusRow, 'ingredient_id' | 'created_at' | 'updated_at'>>> {
+): Promise<ValidationResult<Omit<IngredientResearchStatusRow, 'ingredient_id' | 'created_at' | 'updated_at' | 'version'>>> {
   const researchStatusInput = hasOwnKey(body, 'research_status')
     ? body.research_status
     : hasOwnKey(body, 'status')
@@ -1192,6 +3632,18 @@ async function validateIngredientResearchSourcePayload(
   const reviewedAt = optionalDateTextField(body, 'reviewed_at')
   if (!reviewedAt.ok) return reviewedAt
 
+  const isRetracted = optionalBooleanField(body, 'is_retracted')
+  if (!isRetracted.ok) return isRetracted
+
+  const retractionCheckedAt = optionalDateTextField(body, 'retraction_checked_at')
+  if (!retractionCheckedAt.ok) return retractionCheckedAt
+
+  const retractionNoticeUrl = normalizeHttpUrlField(body, 'retraction_notice_url')
+  if (!retractionNoticeUrl.ok) return retractionNoticeUrl
+
+  const evidenceGrade = parseEvidenceGradeField(body, existing)
+  if (!evidenceGrade.ok) return evidenceGrade
+
   const finalDoseMin = doseMin.value === undefined ? existing?.dose_min ?? null : doseMin.value
   const finalDoseMax = doseMax.value === undefined ? existing?.dose_max ?? null : doseMax.value
   if (finalDoseMin !== null && finalDoseMax !== null && finalDoseMin > finalDoseMax) {
@@ -1228,6 +3680,10 @@ async function validateIngredientResearchSourcePayload(
       notes: textValues.notes,
       source_date: sourceDate.value === undefined ? existing?.source_date ?? null : sourceDate.value,
       reviewed_at: reviewedAt.value === undefined ? existing?.reviewed_at ?? null : reviewedAt.value,
+      is_retracted: isRetracted.value === undefined ? existing?.is_retracted ?? 0 : isRetracted.value,
+      retraction_checked_at: retractionCheckedAt.value === undefined ? existing?.retraction_checked_at ?? null : retractionCheckedAt.value,
+      retraction_notice_url: retractionNoticeUrl.value === undefined ? existing?.retraction_notice_url ?? null : retractionNoticeUrl.value,
+      evidence_grade: evidenceGrade.value,
     },
   }
 }
@@ -1306,7 +3762,7 @@ async function validateIngredientWarningPayload(
   }
 }
 
-type IngredientDisplayProfileMutation = Omit<IngredientDisplayProfileRow, 'id' | 'created_at' | 'updated_at'>
+type IngredientDisplayProfileMutation = Omit<IngredientDisplayProfileRow, 'id' | 'created_at' | 'updated_at' | 'version'>
 
 async function getIngredientDisplayProfileRow(
   db: D1Database,
@@ -1314,8 +3770,21 @@ async function getIngredientDisplayProfileRow(
   formId: number | null,
   subIngredientId: number | null,
 ): Promise<IngredientDisplayProfileRow | null> {
+  const columns = await getTableColumns(db, 'ingredient_display_profiles')
   return await db.prepare(`
-    SELECT *
+    SELECT
+      id,
+      ingredient_id,
+      form_id,
+      sub_ingredient_id,
+      effect_summary,
+      timing,
+      timing_note,
+      intake_hint,
+      card_note,
+      created_at,
+      updated_at,
+      ${versionSelect(columns)}
     FROM ingredient_display_profiles
     WHERE ingredient_id = ?
       AND ((form_id IS NULL AND ? IS NULL) OR form_id = ?)
@@ -1377,8 +3846,181 @@ async function validateIngredientDisplayProfilePayload(
   }
 }
 
+async function getDoseRecommendationSourceMap(
+  db: D1Database,
+  recommendationIds: number[],
+): Promise<Map<number, DoseRecommendationLinkedSource[]>> {
+  const sourceMap = new Map<number, DoseRecommendationLinkedSource[]>()
+  const ids = Array.from(new Set(recommendationIds.filter((id) => Number.isInteger(id) && id > 0)))
+  if (ids.length === 0) return sourceMap
+
+  const placeholders = ids.map(() => '?').join(', ')
+  const researchColumns = await getTableColumns(db, 'ingredient_research_sources')
+  const { results } = await db.prepare(`
+    SELECT
+      drs.id,
+      drs.dose_recommendation_id,
+      drs.research_source_id,
+      irs.ingredient_id AS source_ingredient_id,
+      drs.relevance_weight,
+      drs.is_primary,
+      drs.note,
+      drs.created_at,
+      irs.source_kind,
+      irs.organization,
+      irs.country,
+      irs.region,
+      irs.population,
+      irs.recommendation_type,
+      irs.no_recommendation,
+      irs.dose_min,
+      irs.dose_max,
+      irs.dose_unit,
+      irs.per_kg_body_weight,
+      irs.frequency,
+      irs.study_type,
+      irs.evidence_quality,
+      irs.duration,
+      irs.outcome,
+      irs.finding,
+      irs.source_title,
+      irs.source_url,
+      irs.doi,
+      irs.pubmed_id,
+      irs.notes,
+      irs.source_date,
+      irs.reviewed_at,
+      ${ingredientResearchEvidenceSelect(researchColumns, 'irs')}
+    FROM dose_recommendation_sources drs
+    JOIN ingredient_research_sources irs ON irs.id = drs.research_source_id
+    WHERE drs.dose_recommendation_id IN (${placeholders})
+    ORDER BY drs.dose_recommendation_id ASC, drs.is_primary DESC, drs.relevance_weight DESC, drs.id ASC
+  `).bind(...ids).all<DoseRecommendationLinkedSource>()
+
+  for (const source of results) {
+    const current = sourceMap.get(source.dose_recommendation_id) ?? []
+    current.push(source)
+    sourceMap.set(source.dose_recommendation_id, current)
+  }
+  return sourceMap
+}
+
+async function attachDoseRecommendationSources(
+  db: D1Database,
+  rows: DoseRecommendationAdminRow[],
+): Promise<DoseRecommendationAdminRow[]> {
+  const sourceMap = await getDoseRecommendationSourceMap(db, rows.map((row) => row.id))
+  return rows.map((row) => ({
+    ...row,
+    sources: sourceMap.get(row.id) ?? [],
+  }))
+}
+
+async function validateDoseRecommendationSources(
+  db: D1Database,
+  rawSources: unknown,
+  ingredientId: number,
+): Promise<ValidationResult<DoseRecommendationSourceMutation[]>> {
+  if (!Array.isArray(rawSources)) return validationError('sources must be an array')
+  if (rawSources.length > 50) return validationError('sources must contain at most 50 items')
+
+  const sources: DoseRecommendationSourceMutation[] = []
+  const seenSourceIds = new Set<number>()
+  let primaryCount = 0
+
+  for (const [index, rawSource] of rawSources.entries()) {
+    if (!rawSource || typeof rawSource !== 'object' || Array.isArray(rawSource)) {
+      return validationError(`sources[${index}] must be an object`)
+    }
+    const sourceData = rawSource as Record<string, unknown>
+    const rawSourceId = hasOwnKey(sourceData, 'research_source_id')
+      ? sourceData.research_source_id
+      : sourceData.source_id
+    const sourceId = normalizeInteger(rawSourceId)
+    if (sourceId === undefined || sourceId <= 0) {
+      return validationError(`sources[${index}].research_source_id must be a positive integer`)
+    }
+    if (seenSourceIds.has(sourceId)) {
+      return validationError('sources must not contain duplicate research_source_id values')
+    }
+    seenSourceIds.add(sourceId)
+
+    const relevanceWeight = hasOwnKey(sourceData, 'relevance_weight')
+      ? optionalNumberField(sourceData, 'relevance_weight', { min: 0, max: 100, integer: true })
+      : { ok: true as const, value: 50 }
+    if (!relevanceWeight.ok) return relevanceWeight
+    if (relevanceWeight.value === null || relevanceWeight.value === undefined) {
+      return validationError(`sources[${index}].relevance_weight is required`)
+    }
+
+    const isPrimary = hasOwnKey(sourceData, 'is_primary')
+      ? optionalBooleanField(sourceData, 'is_primary')
+      : { ok: true as const, value: 0 }
+    if (!isPrimary.ok) return isPrimary
+    const primary = isPrimary.value ?? 0
+    primaryCount += primary === 1 ? 1 : 0
+    if (primaryCount > 1) return validationError('Only one linked source can be primary')
+
+    const note = optionalTextField(sourceData, 'note', 2000)
+    if (!note.ok) return note
+
+    sources.push({
+      research_source_id: sourceId,
+      relevance_weight: relevanceWeight.value,
+      is_primary: primary,
+      note: note.value ?? null,
+    })
+  }
+
+  if (sources.length === 0) return { ok: true, value: [] }
+
+  const placeholders = sources.map(() => '?').join(', ')
+  const { results: sourceRows } = await db.prepare(`
+    SELECT id, ingredient_id
+    FROM ingredient_research_sources
+    WHERE id IN (${placeholders})
+  `).bind(...sources.map((source) => source.research_source_id)).all<{ id: number; ingredient_id: number }>()
+
+  if (sourceRows.length !== sources.length) return validationError('All source research_source_id values must exist', 404)
+  const sourceIngredientById = new Map(sourceRows.map((row) => [row.id, row.ingredient_id]))
+  for (const source of sources) {
+    if (sourceIngredientById.get(source.research_source_id) !== ingredientId) {
+      return validationError('All linked sources must belong to the same ingredient as the dose recommendation')
+    }
+  }
+
+  return { ok: true, value: sources }
+}
+
+async function replaceDoseRecommendationSources(
+  db: D1Database,
+  recommendationId: number,
+  sources: DoseRecommendationSourceMutation[],
+): Promise<void> {
+  const statements = [
+    db.prepare('DELETE FROM dose_recommendation_sources WHERE dose_recommendation_id = ?').bind(recommendationId),
+    ...sources.map((source) => db.prepare(`
+      INSERT INTO dose_recommendation_sources (
+        dose_recommendation_id,
+        research_source_id,
+        relevance_weight,
+        is_primary,
+        note
+      ) VALUES (?, ?, ?, ?, ?)
+    `).bind(
+      recommendationId,
+      source.research_source_id,
+      source.relevance_weight,
+      source.is_primary,
+      source.note,
+    )),
+  ]
+  await db.batch(statements)
+}
+
 async function getDoseRecommendationAdminRow(db: D1Database, id: number): Promise<DoseRecommendationAdminRow | null> {
-  return await db.prepare(`
+  const columns = await getTableColumns(db, 'dose_recommendations')
+  const row = await db.prepare(`
     SELECT
       dr.id,
       dr.ingredient_id,
@@ -1414,7 +4056,8 @@ async function getDoseRecommendationAdminRow(db: D1Database, id: number): Promis
       dr.review_due_at,
       dr.superseded_by_id,
       dr.created_at,
-      dr.updated_at
+      dr.updated_at,
+      ${versionSelect(columns, 'dr')}
     FROM dose_recommendations dr
     JOIN ingredients i ON i.id = dr.ingredient_id
     JOIN populations p ON p.id = dr.population_id
@@ -1422,6 +4065,9 @@ async function getDoseRecommendationAdminRow(db: D1Database, id: number): Promis
     LEFT JOIN verified_profiles vp ON vp.id = dr.verified_profile_id
     WHERE dr.id = ?
   `).bind(id).first<DoseRecommendationAdminRow>()
+  if (!row) return null
+  const [withSources] = await attachDoseRecommendationSources(db, [row])
+  return withSources
 }
 
 async function validateDoseRecommendationPayload(
@@ -1478,8 +4124,23 @@ async function validateDoseRecommendationPayload(
     : { ok: true as const, value: existing?.source_url }
   if (!sourceUrlResult.ok) return sourceUrlResult
   const sourceUrl = sourceUrlResult.value ?? null
-  if ((sourceType === 'official' || sourceType === 'study' || sourceType === 'user_public') && !sourceUrl) {
-    return validationError('source_url is required for official, study, and user_public recommendations')
+
+  const sourceLinksResult = hasOwnKey(body, 'sources')
+    ? await validateDoseRecommendationSources(db, body.sources, ingredientId)
+    : existing
+      ? { ok: true as const, value: undefined }
+      : { ok: true as const, value: [] }
+  if (!sourceLinksResult.ok) return sourceLinksResult
+
+  if (!hasOwnKey(body, 'sources') && existing?.sources.some((source) => source.source_ingredient_id !== ingredientId)) {
+    return validationError('Existing linked sources do not belong to the target ingredient; provide a replacement sources array')
+  }
+
+  const effectiveLinkedSourceCount = sourceLinksResult.value !== undefined
+    ? sourceLinksResult.value.length
+    : existing?.sources.length ?? 0
+  if ((sourceType === 'official' || sourceType === 'study' || sourceType === 'user_public') && !sourceUrl && effectiveLinkedSourceCount === 0) {
+    return validationError('At least one linked source or source_url fallback is required for official, study, and user_public recommendations')
   }
 
   const doseMaxResult = hasOwnKey(body, 'dose_max')
@@ -1616,6 +4277,7 @@ async function validateDoseRecommendationPayload(
     verified_at: verifiedAtResult.value === undefined ? existing?.verified_at ?? null : verifiedAtResult.value,
     review_due_at: reviewDueAtResult.value === undefined ? existing?.review_due_at ?? null : reviewDueAtResult.value,
     superseded_by_id: supersededById,
+    sources: sourceLinksResult.value,
   }
 
   if (mutation.is_default === 1 && mutation.is_active === 1) {
@@ -1646,6 +4308,297 @@ async function validateDoseRecommendationPayload(
   }
 
   return { ok: true, value: mutation }
+}
+
+async function getNutrientReferenceValueRow(
+  db: D1Database,
+  id: number,
+): Promise<NutrientReferenceValueRow | null> {
+  if (!(await hasTable(db, 'nutrient_reference_values'))) return null
+  const columns = await getTableColumns(db, 'nutrient_reference_values')
+  if (!columns.has('id') || !columns.has('ingredient_id') || !columns.has('organization') || !columns.has('kind') || !columns.has('unit')) {
+    return null
+  }
+  return await db.prepare(`
+    SELECT
+      ${nutrientReferenceValueSelect(columns)}
+    FROM nutrient_reference_values
+    WHERE id = ?
+  `).bind(id).first<NutrientReferenceValueRow>()
+}
+
+async function validateNutrientReferenceValuePayload(
+  db: D1Database,
+  body: Record<string, unknown>,
+  routeIngredientId: number | null,
+  existing: NutrientReferenceValueRow | null,
+): Promise<ValidationResult<NutrientReferenceValueMutation>> {
+  const bodyIngredientId = hasOwnKey(body, 'ingredient_id')
+    ? normalizeInteger(body.ingredient_id)
+    : undefined
+  if (hasOwnKey(body, 'ingredient_id') && (!bodyIngredientId || bodyIngredientId <= 0)) {
+    return validationError('ingredient_id must be a positive integer')
+  }
+  if (routeIngredientId !== null && bodyIngredientId !== undefined && bodyIngredientId !== routeIngredientId) {
+    return validationError('ingredient_id must match the route ingredient id')
+  }
+  const ingredientId = routeIngredientId ?? bodyIngredientId ?? existing?.ingredient_id
+  if (!ingredientId || ingredientId <= 0) return validationError('ingredient_id must be a positive integer')
+  if (!(await ingredientExists(db, ingredientId))) return validationError('Ingredient not found', 404)
+
+  const populationIdResult = optionalPositiveIntegerField(body, 'population_id')
+  if (!populationIdResult.ok) return populationIdResult
+  const populationId = populationIdResult.value === undefined ? existing?.population_id ?? null : populationIdResult.value
+  if (populationId !== null) {
+    const population = await db.prepare('SELECT id FROM populations WHERE id = ?')
+      .bind(populationId)
+      .first<{ id: number }>()
+    if (!population) return validationError('population_id must reference an existing population', 404)
+  }
+
+  const organization = hasOwnKey(body, 'organization')
+    ? requiredTextField(body, 'organization', 255)
+    : existing ? { ok: true as const, value: existing.organization } : validationError('organization is required')
+  if (!organization.ok) return organization
+
+  const kind = hasOwnKey(body, 'kind')
+    ? enumValue(body.kind, NUTRIENT_REFERENCE_VALUE_KINDS)
+    : existing?.kind
+  if (!kind) return validationError(`kind must be one of ${NUTRIENT_REFERENCE_VALUE_KINDS.join(', ')}`)
+
+  const valueResult = hasOwnKey(body, 'value')
+    ? optionalNumberField(body, 'value', { min: 0 })
+    : existing ? { ok: true as const, value: existing.value } : validationError('value is required')
+  if (!valueResult.ok) return valueResult
+  if (valueResult.value === null || valueResult.value === undefined) return validationError('value is required')
+
+  const unit = hasOwnKey(body, 'unit')
+    ? requiredTextField(body, 'unit', 50)
+    : existing ? { ok: true as const, value: existing.unit } : validationError('unit is required')
+  if (!unit.ok) return unit
+
+  const region = optionalTextField(body, 'region', 100)
+  if (!region.ok) return region
+
+  const sourceUrl = normalizeHttpUrlField(body, 'source_url')
+  if (!sourceUrl.ok) return sourceUrl
+
+  const sourceLabel = optionalTextField(body, 'source_label', 255)
+  if (!sourceLabel.ok) return sourceLabel
+
+  const sourceYear = optionalNumberField(body, 'source_year', { min: 1900, max: 2100, integer: true })
+  if (!sourceYear.ok) return sourceYear
+
+  const notesInput = hasOwnKey(body, 'notes')
+    ? optionalTextField(body, 'notes', 5000)
+    : hasOwnKey(body, 'note')
+      ? optionalTextField(body, 'note', 5000)
+      : { ok: true as const, value: undefined }
+  if (!notesInput.ok) return notesInput
+
+  return {
+    ok: true,
+    value: {
+      ingredient_id: ingredientId,
+      population_id: populationId,
+      organization: organization.value,
+      region: region.value === undefined ? existing?.region ?? null : region.value,
+      kind,
+      value: valueResult.value,
+      unit: unit.value,
+      source_url: sourceUrl.value === undefined ? existing?.source_url ?? null : sourceUrl.value,
+      source_label: sourceLabel.value === undefined ? existing?.source_label ?? null : sourceLabel.value,
+      source_year: sourceYear.value === undefined ? existing?.source_year ?? null : sourceYear.value,
+      notes: notesInput.value === undefined ? existing?.notes ?? existing?.note ?? null : notesInput.value,
+    },
+  }
+}
+
+function buildNutrientReferenceValueFields(
+  columns: Set<string>,
+  data: NutrientReferenceValueMutation,
+): Array<[string, string | number | null]> {
+  const fields: Array<[string, string | number | null]> = [
+    ['ingredient_id', data.ingredient_id],
+    ['organization', data.organization],
+    ['kind', data.kind],
+    ['unit', data.unit],
+  ]
+  if (columns.has('population_id')) fields.push(['population_id', data.population_id])
+  if (columns.has('region')) fields.push(['region', data.region])
+  if (columns.has('value')) fields.push(['value', data.value])
+  if (columns.has('value_min')) fields.push(['value_min', data.value])
+  if (columns.has('value_max')) fields.push(['value_max', columns.has('value_min') || columns.has('value') ? null : data.value])
+  if (columns.has('source_url')) fields.push(['source_url', data.source_url])
+  if (columns.has('source_label')) fields.push(['source_label', data.source_label])
+  if (columns.has('source_year')) fields.push(['source_year', data.source_year])
+  if (columns.has('notes')) fields.push(['notes', data.notes])
+  if (columns.has('note')) fields.push(['note', data.notes])
+  return fields
+}
+
+function nrvSchemaSupportsMutation(columns: Set<string>): boolean {
+  return (
+    columns.has('id') &&
+    columns.has('ingredient_id') &&
+    columns.has('organization') &&
+    columns.has('kind') &&
+    columns.has('unit') &&
+    (columns.has('value') || columns.has('value_min') || columns.has('value_max'))
+  )
+}
+
+function normalizeDoseUnit(unit: string | null | undefined): string | null {
+  if (!unit) return null
+  const normalized = unit.trim().toLowerCase()
+  if (['ug', 'mcg', '\u00b5g', '\u03bcg'].includes(normalized)) return 'ug'
+  if (normalized === 'mg') return 'mg'
+  if (normalized === 'g') return 'g'
+  if (['iu', 'ie'].includes(normalized)) return 'iu'
+  return normalized || null
+}
+
+function convertDoseUnit(value: number, fromUnit: string, toUnit: string): number | null {
+  const from = normalizeDoseUnit(fromUnit)
+  const to = normalizeDoseUnit(toUnit)
+  if (!from || !to) return null
+  const massFactors: Record<string, number> = { ug: 0.001, mg: 1, g: 1000 }
+  if (from in massFactors && to in massFactors) return value * massFactors[from] / massFactors[to]
+  if (from === to) return value
+  return null
+}
+
+type DosePlausibilityWarning = {
+  source: 'ingredient_upper_limit' | 'nutrient_reference_values'
+  severity: 'near_upper_limit' | 'exceeds_upper_limit'
+  message: string
+  dose_value: number
+  dose_unit: string
+  compared_value: number
+  compared_unit: string
+  ratio: number
+  organization?: string | null
+  source_url?: string | null
+  note?: string | null
+}
+
+function makeDosePlausibilityWarning(
+  source: DosePlausibilityWarning['source'],
+  doseMax: number,
+  doseUnit: string,
+  limitValue: number | null,
+  limitUnit: string | null,
+  metadata: { organization?: string | null; source_url?: string | null; note?: string | null } = {},
+): DosePlausibilityWarning | null {
+  if (limitValue === null || limitValue <= 0 || !limitUnit) return null
+  const convertedDose = convertDoseUnit(doseMax, doseUnit, limitUnit)
+  if (convertedDose === null) return null
+  const ratio = convertedDose / limitValue
+  if (ratio < 0.9) return null
+  const severity = ratio > 1 ? 'exceeds_upper_limit' : 'near_upper_limit'
+  return {
+    source,
+    severity,
+    message: severity === 'exceeds_upper_limit'
+      ? 'Die gespeicherte Dosis liegt ueber einem bekannten Upper-Limit-Signal.'
+      : 'Die gespeicherte Dosis liegt nahe an einem bekannten Upper-Limit-Signal.',
+    dose_value: doseMax,
+    dose_unit: doseUnit,
+    compared_value: limitValue,
+    compared_unit: limitUnit,
+    ratio: Math.round(ratio * 1000) / 1000,
+    ...metadata,
+  }
+}
+
+async function buildDosePlausibilityWarnings(
+  db: D1Database,
+  recommendation: DoseRecommendationAdminRow | DoseRecommendationMutation | null,
+): Promise<DosePlausibilityWarning[]> {
+  if (!recommendation || (recommendation.per_kg_body_weight ?? 0) > 0) return []
+  const warnings: DosePlausibilityWarning[] = []
+  const ingredientLimit = await db.prepare(`
+    SELECT upper_limit, upper_limit_unit, upper_limit_note
+    FROM ingredients
+    WHERE id = ?
+  `).bind(recommendation.ingredient_id).first<{
+    upper_limit: number | null
+    upper_limit_unit: string | null
+    upper_limit_note: string | null
+  }>()
+  const ingredientWarning = makeDosePlausibilityWarning(
+    'ingredient_upper_limit',
+    recommendation.dose_max,
+    recommendation.unit,
+    ingredientLimit?.upper_limit ?? null,
+    ingredientLimit?.upper_limit_unit ?? null,
+    { note: ingredientLimit?.upper_limit_note ?? null },
+  )
+  if (ingredientWarning) warnings.push(ingredientWarning)
+
+  if (!(await hasTable(db, 'nutrient_reference_values'))) return warnings
+  const columns = await getTableColumns(db, 'nutrient_reference_values')
+  if (!nrvSchemaSupportsMutation(columns)) return warnings
+  const valueExpr = columns.has('value')
+    ? 'value'
+    : columns.has('value_min') && columns.has('value_max')
+      ? 'COALESCE(value_max, value_min)'
+      : columns.has('value_max')
+        ? 'value_max'
+        : 'value_min'
+  const noteExpr = columns.has('notes')
+    ? 'notes'
+    : columns.has('note')
+      ? 'note'
+      : 'NULL'
+  const organizationExpr = columns.has('organization') ? 'organization' : 'NULL'
+  const sourceUrlExpr = columns.has('source_url') ? 'source_url' : 'NULL'
+  const populationPredicate = columns.has('population_id')
+    ? 'AND (population_id = ? OR population_id IS NULL)'
+    : ''
+  const orderByPopulation = columns.has('population_id')
+    ? 'CASE WHEN population_id = ? THEN 0 ELSE 1 END,'
+    : ''
+  const bindings = columns.has('population_id')
+    ? [recommendation.ingredient_id, recommendation.population_id, recommendation.population_id]
+    : [recommendation.ingredient_id]
+  const { results } = await db.prepare(`
+    SELECT
+      ${valueExpr} AS value,
+      unit,
+      ${organizationExpr} AS organization,
+      ${sourceUrlExpr} AS source_url,
+      ${noteExpr} AS note
+    FROM nutrient_reference_values
+    WHERE ingredient_id = ?
+      AND kind = 'ul'
+      ${populationPredicate}
+    ORDER BY ${orderByPopulation} value ASC, id ASC
+    LIMIT 5
+  `).bind(...bindings).all<{
+    value: number | null
+    unit: string | null
+    organization: string | null
+    source_url: string | null
+    note: string | null
+  }>()
+
+  for (const row of results ?? []) {
+    const warning = makeDosePlausibilityWarning(
+      'nutrient_reference_values',
+      recommendation.dose_max,
+      recommendation.unit,
+      row.value,
+      row.unit,
+      {
+        organization: row.organization,
+        source_url: row.source_url,
+        note: row.note,
+      },
+    )
+    if (warning) warnings.push(warning)
+  }
+  return warnings
 }
 
 async function getSubIngredientMapping(
@@ -1843,16 +4796,1425 @@ async function validateUserProductPublish(
   return null
 }
 
-// GET /api/admin/products (admin only)
-admin.get('/products', async (c) => {
-  const authErr = await ensureAuth(c)
+// GET /api/admin/search?q=&limit=12 (admin only)
+admin.get('/search', async (c) => {
+  const authErr = await ensureAdmin(c)
   if (authErr) return authErr
-  const admErr = requireAdmin(c)
-  if (admErr) return admErr
-  const { results: products } = await c.env.DB.prepare(
-    'SELECT * FROM products ORDER BY created_at DESC'
-  ).all<ProductRow>()
-  return c.json({ products })
+
+  const query = c.req.query('q')?.trim() ?? ''
+  const limit = parseAdminSearchLimit(c.req.query('limit'))
+  const routeResults = adminRouteSearchResults(query)
+
+  if (query.length < 2) {
+    return c.json({
+      query,
+      results: routeResults.slice(0, limit),
+    })
+  }
+
+  const like = adminSearchLike(query)
+
+  const [ingredientResults, productResults, userProductResults, knowledgeResults] = await Promise.all([
+    (async (): Promise<AdminSearchResult[]> => {
+      try {
+        const { results } = await c.env.DB.prepare(`
+          SELECT
+            id,
+            name,
+            unit,
+            description
+          FROM ingredients
+          WHERE name LIKE ? ESCAPE '\\'
+             OR COALESCE(unit, '') LIKE ? ESCAPE '\\'
+             OR COALESCE(description, '') LIKE ? ESCAPE '\\'
+             OR CAST(id AS TEXT) LIKE ? ESCAPE '\\'
+          ORDER BY name ASC, id ASC
+          LIMIT ?
+        `).bind(like, like, like, like, limit).all<AdminIngredientSearchRow>()
+
+        return (results ?? []).map((row) => ({
+          id: `ingredient:${row.id}`,
+          type: 'ingredient',
+          title: row.name,
+          subtitle: adminSearchSubtitle([
+            row.unit ? `Einheit: ${row.unit}` : null,
+            adminSearchPreview(row.description),
+          ]),
+          href: `/administrator/ingredients/${row.id}`,
+        }))
+      } catch {
+        return []
+      }
+    })(),
+    (async (): Promise<AdminSearchResult[]> => {
+      try {
+        const { results } = await c.env.DB.prepare(`
+          SELECT
+            id,
+            name,
+            brand,
+            form,
+            moderation_status,
+            visibility
+          FROM products
+          WHERE name LIKE ? ESCAPE '\\'
+             OR COALESCE(brand, '') LIKE ? ESCAPE '\\'
+             OR COALESCE(form, '') LIKE ? ESCAPE '\\'
+             OR COALESCE(moderation_status, '') LIKE ? ESCAPE '\\'
+             OR COALESCE(visibility, '') LIKE ? ESCAPE '\\'
+             OR CAST(id AS TEXT) LIKE ? ESCAPE '\\'
+          ORDER BY created_at DESC, id DESC
+          LIMIT ?
+        `).bind(like, like, like, like, like, like, limit).all<AdminProductSearchRow>()
+
+        return (results ?? []).map((row) => ({
+          id: `product:${row.id}`,
+          type: 'product',
+          title: row.name,
+          subtitle: adminSearchSubtitle([
+            row.brand,
+            row.form,
+            row.moderation_status ? `Status: ${row.moderation_status}` : null,
+            row.visibility ? `Sichtbarkeit: ${row.visibility}` : null,
+          ]),
+          href: `/administrator/products/${row.id}`,
+        }))
+      } catch {
+        return []
+      }
+    })(),
+    (async (): Promise<AdminSearchResult[]> => {
+      try {
+        const { results } = await c.env.DB.prepare(`
+          SELECT
+            up.id,
+            up.name,
+            up.brand,
+            up.form,
+            up.status,
+            u.email AS user_email
+          FROM user_products up
+          LEFT JOIN users u ON u.id = up.user_id
+          WHERE up.name LIKE ? ESCAPE '\\'
+             OR COALESCE(up.brand, '') LIKE ? ESCAPE '\\'
+             OR COALESCE(up.form, '') LIKE ? ESCAPE '\\'
+             OR COALESCE(up.status, '') LIKE ? ESCAPE '\\'
+             OR COALESCE(u.email, '') LIKE ? ESCAPE '\\'
+             OR CAST(up.id AS TEXT) LIKE ? ESCAPE '\\'
+          ORDER BY
+            CASE up.status
+              WHEN 'pending' THEN 0
+              WHEN 'approved' THEN 1
+              WHEN 'rejected' THEN 2
+              ELSE 3
+            END,
+            up.created_at DESC,
+            up.id DESC
+          LIMIT ?
+        `).bind(like, like, like, like, like, like, limit).all<AdminUserProductSearchRow>()
+
+        return (results ?? []).map((row) => {
+          const hrefStatus = row.status && ['pending', 'approved', 'rejected'].includes(row.status)
+            ? row.status
+            : 'pending'
+          return {
+            id: `user_product:${row.id}`,
+            type: 'user_product',
+            title: row.name,
+            subtitle: adminSearchSubtitle([
+              row.brand,
+              row.form,
+              row.status ? `Status: ${row.status}` : null,
+              row.user_email,
+            ]),
+            href: `/administrator/user-products?status=${encodeURIComponent(hrefStatus)}`,
+          }
+        })
+      } catch {
+        return []
+      }
+    })(),
+    (async (): Promise<AdminSearchResult[]> => {
+      try {
+        const { results } = await c.env.DB.prepare(`
+          SELECT
+            slug,
+            title,
+            summary,
+            status
+          FROM knowledge_articles
+          WHERE slug LIKE ? ESCAPE '\\'
+             OR title LIKE ? ESCAPE '\\'
+             OR COALESCE(summary, '') LIKE ? ESCAPE '\\'
+             OR COALESCE(status, '') LIKE ? ESCAPE '\\'
+          ORDER BY updated_at DESC, slug ASC
+          LIMIT ?
+        `).bind(like, like, like, like, limit).all<AdminKnowledgeSearchRow>()
+
+        return (results ?? []).map((row) => ({
+          id: `knowledge:${row.slug}`,
+          type: 'knowledge',
+          title: row.title,
+          subtitle: adminSearchSubtitle([
+            row.status ? `Status: ${row.status}` : null,
+            adminSearchPreview(row.summary),
+          ]),
+          href: `/administrator/knowledge?article=${encodeURIComponent(row.slug)}`,
+        }))
+      } catch {
+        return []
+      }
+    })(),
+  ])
+
+  return c.json({
+    query,
+    results: [
+      ...routeResults,
+      ...ingredientResults,
+      ...productResults,
+      ...userProductResults,
+      ...knowledgeResults,
+    ].slice(0, limit),
+  })
+})
+
+// GET /api/admin/export?entity=products|ingredients|user-products|product-qa|link-reports (admin only)
+admin.get('/export', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const entity = c.req.query('entity')?.trim() ?? ''
+  if (!isAdminExportEntity(entity)) {
+    return c.json({
+      error: 'Invalid entity',
+      allowed: ADMIN_EXPORT_ENTITIES,
+    }, 400)
+  }
+
+  const query = buildAdminExportQuery(entity, {
+    q: c.req.query('q') ?? '',
+    status: c.req.query('status') ?? '',
+    issue: c.req.query('issue') ?? '',
+  })
+  if (!query.ok) {
+    return c.json({ error: query.error }, query.status ?? 400)
+  }
+
+  const { results } = await c.env.DB.prepare(query.value.sql)
+    .bind(...query.value.bindings)
+    .all<Record<string, unknown>>()
+  const csv = rowsToCsv(query.value.columns, results ?? [])
+  const filename = csvAttachmentFilename(entity)
+
+  return new Response(csv, {
+    status: 200,
+    headers: {
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Cache-Control': 'no-store',
+    },
+  })
+})
+
+// GET /api/admin/research/pubmed-lookup?pmid=&doi= (admin only)
+admin.get('/research/pubmed-lookup', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const query = normalizePubMedLookupQuery(c.req.query('pmid'), c.req.query('doi'))
+  if (!query.ok) return c.json({ error: query.error }, query.status ?? 400)
+
+  const cacheKey = pubMedLookupCacheKeyForQuery(query.value)
+  const cachedLookup = await readPubMedLookupCache(c.env.RATE_LIMITER, cacheKey)
+  if (cachedLookup) return c.json({ lookup: cachedLookup })
+
+  let pmid = query.value.pmid
+  const doi = query.value.doi
+
+  if (!pmid && doi) {
+    const searchResult = await fetchPubMedJson(pubMedESearchDoiUrl(doi))
+    if (!searchResult.ok) return c.json({ error: searchResult.error }, searchResult.status ?? 502)
+    pmid = pubMedESearchFirstPmid(searchResult.value) ?? undefined
+    if (!pmid) return c.json({ error: 'PubMed record not found' }, 404)
+  }
+
+  if (!pmid) return c.json({ error: 'PubMed record not found' }, 404)
+
+  const summaryResult = await fetchPubMedJson(pubMedESummaryUrl(pmid))
+  if (!summaryResult.ok) return c.json({ error: summaryResult.error }, summaryResult.status ?? 502)
+
+  const record = pubMedESummaryRecord(summaryResult.value, pmid)
+  if (!record) return c.json({ error: 'PubMed record not found' }, 404)
+
+  const lookup = pubMedLookupFromSummary(record, pmid, doi)
+  if (!lookup) return c.json({ error: 'PubMed record not found' }, 404)
+
+  await writePubMedLookupCache(c.env.RATE_LIMITER, cacheKey, lookup)
+  if (doi) {
+    const pmidCacheKey = pubMedLookupCacheKeyForPmid(lookup.pmid)
+    if (pmidCacheKey !== cacheKey) {
+      await writePubMedLookupCache(c.env.RATE_LIMITER, pmidCacheKey, lookup)
+    }
+  }
+
+  return c.json({ lookup })
+})
+
+// GET /api/admin/products?q=&page=1&limit=50 (admin only)
+admin.get('/products', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const includeLinkHealth = await hasAffiliateLinkHealthTable(c.env.DB)
+  const linkHealthSelect = includeLinkHealth ? `,${AFFILIATE_LINK_HEALTH_SELECT}` : ''
+  const linkHealthJoin = includeLinkHealth ? 'LEFT JOIN affiliate_link_health lh ON lh.product_id = p.id' : ''
+  const hasPagedRequest = (
+    c.req.query('q') !== undefined ||
+    c.req.query('page') !== undefined ||
+    c.req.query('limit') !== undefined
+  )
+  const q = c.req.query('q')?.trim() ?? ''
+
+  if (!hasPagedRequest) {
+    const { results } = await c.env.DB.prepare(`
+      SELECT p.*${linkHealthSelect}
+      FROM products p
+      ${linkHealthJoin}
+      ORDER BY p.created_at DESC, p.id DESC
+    `).all<ProductRow & Partial<AffiliateLinkHealthSelectRow>>()
+    const products = results ?? []
+    return c.json({
+      products: products.map((product) => withAffiliateLinkHealth(product)),
+      total: products.length,
+      page: 1,
+      limit: Math.max(1, products.length),
+      total_pages: 1,
+    })
+  }
+
+  const page = Math.max(1, parsePagination(c.req.query('page'), 1, 100000))
+  const limit = Math.max(1, parsePagination(c.req.query('limit'), 50, 250))
+  const offset = (page - 1) * limit
+  const where: string[] = []
+  const bindings: Array<string | number> = []
+
+  if (q) {
+    const like = `%${q}%`
+    where.push(`(
+      p.name LIKE ?
+      OR COALESCE(p.brand, '') LIKE ?
+      OR COALESCE(p.shop_link, '') LIKE ?
+      OR CAST(p.id AS TEXT) LIKE ?
+    )`)
+    bindings.push(like, like, like, like)
+  }
+
+  const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''
+  const [totalRow, listResult] = await Promise.all([
+    c.env.DB.prepare(`
+      SELECT COUNT(*) AS count
+      FROM products p
+      ${whereSql}
+    `).bind(...bindings).first<CountRow>(),
+    c.env.DB.prepare(`
+      SELECT p.*${linkHealthSelect}
+      FROM products p
+      ${linkHealthJoin}
+      ${whereSql}
+      ORDER BY p.created_at DESC, p.id DESC
+      LIMIT ? OFFSET ?
+    `).bind(...bindings, limit, offset).all<ProductRow & Partial<AffiliateLinkHealthSelectRow>>(),
+  ])
+
+  const total = totalRow?.count ?? 0
+  return c.json({
+    products: (listResult.results ?? []).map((product) => withAffiliateLinkHealth(product)),
+    total,
+    page,
+    limit,
+    total_pages: Math.max(1, Math.ceil(total / limit)),
+  })
+})
+
+// GET /api/admin/ingredients?q=&page=1&limit=50 (admin only)
+admin.get('/ingredients', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const hasPagedRequest = (
+    c.req.query('q') !== undefined ||
+    c.req.query('page') !== undefined ||
+    c.req.query('limit') !== undefined
+  )
+  const q = c.req.query('q')?.trim() ?? ''
+  const page = Math.max(1, parsePagination(c.req.query('page'), 1, 100000))
+  const limit = Math.max(1, parsePagination(c.req.query('limit'), hasPagedRequest ? 50 : 250, 250))
+  const offset = (page - 1) * limit
+  const where: string[] = []
+  const bindings: Array<string | number> = []
+
+  if (q) {
+    const like = `%${q}%`
+    where.push(`(
+      i.name LIKE ?
+      OR COALESCE(i.unit, '') LIKE ?
+      OR COALESCE(i.category, '') LIKE ?
+      OR CAST(i.id AS TEXT) LIKE ?
+    )`)
+    bindings.push(like, like, like, like)
+  }
+
+  const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''
+  const [totalRow, listResult] = await Promise.all([
+    c.env.DB.prepare(`
+      SELECT COUNT(*) AS count
+      FROM ingredients i
+      ${whereSql}
+    `).bind(...bindings).first<CountRow>(),
+    c.env.DB.prepare(`
+      SELECT
+        i.id,
+        i.name,
+        i.unit,
+        i.category,
+        COALESCE(rs.research_status, 'unreviewed') AS research_status,
+        COALESCE(rs.calculation_status, 'not_started') AS calculation_status,
+        CASE
+          WHEN rs.blog_url IS NOT NULL AND TRIM(rs.blog_url) <> '' THEN 1
+          ELSE 0
+        END AS has_blog_url,
+        COALESCE(product_counts.product_count, 0) AS product_count,
+        COALESCE(dose_counts.dose_recommendation_count, 0) AS dose_recommendation_count,
+        COALESCE(source_counts.source_count, 0) AS source_count,
+        COALESCE(source_counts.official_source_count, 0) AS official_source_count,
+        COALESCE(source_counts.dge_source_count, 0) AS dge_source_count,
+        COALESCE(source_counts.study_source_count, 0) AS study_source_count,
+        COALESCE(source_counts.no_recommendation_count, 0) AS no_recommendation_count,
+        COALESCE(nrv_counts.nrv_count, 0) AS nrv_count,
+        COALESCE(dose_source_counts.dose_source_link_count, 0) AS dose_source_link_count,
+        COALESCE(dose_source_counts.sourced_dose_recommendation_count, 0) AS sourced_dose_recommendation_count,
+        COALESCE(display_profile_counts.display_profile_count, 0) AS display_profile_count,
+        COALESCE(knowledge_counts.knowledge_article_count, 0) AS knowledge_article_count,
+        COALESCE(warning_counts.warning_count, 0) AS warning_count
+      FROM ingredients i
+      LEFT JOIN ingredient_research_status rs ON rs.ingredient_id = i.id
+      LEFT JOIN (
+        SELECT ingredient_id, COUNT(DISTINCT product_id) AS product_count
+        FROM product_ingredients
+        GROUP BY ingredient_id
+      ) product_counts ON product_counts.ingredient_id = i.id
+      LEFT JOIN (
+        SELECT ingredient_id, COUNT(*) AS dose_recommendation_count
+        FROM dose_recommendations
+        GROUP BY ingredient_id
+      ) dose_counts ON dose_counts.ingredient_id = i.id
+      LEFT JOIN (
+        SELECT
+          ingredient_id,
+          COUNT(*) AS source_count,
+          SUM(CASE WHEN source_kind = 'official' THEN 1 ELSE 0 END) AS official_source_count,
+          SUM(CASE WHEN source_kind = 'study' THEN 1 ELSE 0 END) AS study_source_count,
+          SUM(CASE WHEN no_recommendation = 1 THEN 1 ELSE 0 END) AS no_recommendation_count,
+          SUM(CASE
+            WHEN source_kind = 'official'
+              AND (
+                lower(COALESCE(organization, '')) LIKE '%dge%'
+                OR lower(COALESCE(source_title, '')) LIKE '%dge%'
+                OR lower(COALESCE(source_url, '')) LIKE '%dge.de%'
+              )
+            THEN 1
+            ELSE 0
+          END) AS dge_source_count
+        FROM ingredient_research_sources
+        GROUP BY ingredient_id
+      ) source_counts ON source_counts.ingredient_id = i.id
+      LEFT JOIN (
+        SELECT ingredient_id, COUNT(*) AS nrv_count
+        FROM nutrient_reference_values
+        GROUP BY ingredient_id
+      ) nrv_counts ON nrv_counts.ingredient_id = i.id
+      LEFT JOIN (
+        SELECT
+          dr.ingredient_id,
+          COUNT(*) AS dose_source_link_count,
+          COUNT(DISTINCT dr.id) AS sourced_dose_recommendation_count
+        FROM dose_recommendations dr
+        JOIN dose_recommendation_sources drs ON drs.dose_recommendation_id = dr.id
+        GROUP BY dr.ingredient_id
+      ) dose_source_counts ON dose_source_counts.ingredient_id = i.id
+      LEFT JOIN (
+        SELECT ingredient_id, COUNT(*) AS display_profile_count
+        FROM ingredient_display_profiles
+        WHERE COALESCE(TRIM(effect_summary), '') <> ''
+          OR COALESCE(TRIM(timing), '') <> ''
+          OR COALESCE(TRIM(timing_note), '') <> ''
+          OR COALESCE(TRIM(intake_hint), '') <> ''
+          OR COALESCE(TRIM(card_note), '') <> ''
+        GROUP BY ingredient_id
+      ) display_profile_counts ON display_profile_counts.ingredient_id = i.id
+      LEFT JOIN (
+        SELECT
+          w.ingredient_id,
+          COUNT(DISTINCT w.article_slug) AS knowledge_article_count
+        FROM ingredient_safety_warnings w
+        JOIN knowledge_articles a ON a.slug = w.article_slug
+        WHERE w.active = 1
+          AND w.article_slug IS NOT NULL
+          AND a.status <> 'archived'
+        GROUP BY w.ingredient_id
+      ) knowledge_counts ON knowledge_counts.ingredient_id = i.id
+      LEFT JOIN (
+        SELECT ingredient_id, COUNT(*) AS warning_count
+        FROM ingredient_safety_warnings
+        WHERE active = 1
+        GROUP BY ingredient_id
+      ) warning_counts ON warning_counts.ingredient_id = i.id
+      ${whereSql}
+      ORDER BY COALESCE(i.category, '') ASC, i.name ASC, i.id ASC
+      LIMIT ? OFFSET ?
+    `).bind(...bindings, limit, offset).all<Record<string, string | number | null>>(),
+  ])
+
+  const total = totalRow?.count ?? 0
+  return c.json({
+    ingredients: listResult.results ?? [],
+    total,
+    page,
+    limit,
+    total_pages: Math.max(1, Math.ceil(total / limit)),
+    summary: {
+      total,
+    },
+  })
+})
+
+// GET /api/admin/ingredients/:id/evidence-summary (admin only)
+admin.get('/ingredients/:id/evidence-summary', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const ingredientId = parsePositiveId(c.req.param('id'))
+  if (ingredientId === null) return c.json({ error: 'Invalid ingredient id' }, 400)
+  if (!(await ingredientExists(c.env.DB, ingredientId))) return c.json({ error: 'Ingredient not found' }, 404)
+
+  if (!(await hasTable(c.env.DB, 'ingredient_research_sources'))) {
+    return c.json({
+      ingredient_id: ingredientId,
+      counts: {
+        total: 0,
+        usable_active: 0,
+        no_recommendation: 0,
+        retracted: 0,
+      },
+      by_quality: {},
+      by_evidence_grade: {},
+      latest_checked_at: null,
+      suggested_grade: null,
+    })
+  }
+
+  const researchColumns = await getTableColumns(c.env.DB, 'ingredient_research_sources')
+  const { results } = await c.env.DB.prepare(`
+    SELECT
+      source_kind,
+      no_recommendation,
+      evidence_quality,
+      reviewed_at,
+      ${ingredientResearchEvidenceSelect(researchColumns)}
+    FROM ingredient_research_sources
+    WHERE ingredient_id = ?
+  `).bind(ingredientId).all<Pick<IngredientResearchSourceRow,
+    'source_kind' | 'no_recommendation' | 'evidence_quality' | 'reviewed_at' |
+    'is_retracted' | 'retraction_checked_at' | 'evidence_grade'
+  >>()
+
+  const byQuality: Record<string, number> = {}
+  const byEvidenceGrade: Record<string, number> = {}
+  let usableActive = 0
+  let noRecommendation = 0
+  let retracted = 0
+  let latestCheckedAt: string | null = null
+  const gradeRank = new Map<string, number>(EVIDENCE_GRADES.map((grade, index) => [grade, index]))
+  let bestGrade: EvidenceGrade | null = null
+  let bestFallbackGrade: EvidenceGrade | null = null
+
+  for (const row of results ?? []) {
+    const quality = optionalText(row.evidence_quality)?.toLowerCase() ?? 'unspecified'
+    byQuality[quality] = (byQuality[quality] ?? 0) + 1
+    const grade = row.evidence_grade ?? 'unspecified'
+    byEvidenceGrade[grade] = (byEvidenceGrade[grade] ?? 0) + 1
+
+    if (row.no_recommendation === 1) noRecommendation += 1
+    if (row.is_retracted === 1) retracted += 1
+    const usable = row.no_recommendation !== 1 && row.is_retracted !== 1
+    if (usable) {
+      usableActive += 1
+      if (row.evidence_grade) {
+        if (bestGrade === null || (gradeRank.get(row.evidence_grade) ?? 99) < (gradeRank.get(bestGrade) ?? 99)) {
+          bestGrade = row.evidence_grade
+        }
+      } else {
+        const fallback = evidenceQualityToGrade(row.evidence_quality)
+        if (fallback && (bestFallbackGrade === null || (gradeRank.get(fallback) ?? 99) < (gradeRank.get(bestFallbackGrade) ?? 99))) {
+          bestFallbackGrade = fallback
+        }
+      }
+    }
+
+    const checkedAt = row.retraction_checked_at ?? row.reviewed_at
+    if (checkedAt && (!latestCheckedAt || checkedAt > latestCheckedAt)) latestCheckedAt = checkedAt
+  }
+
+  return c.json({
+    ingredient_id: ingredientId,
+    counts: {
+      total: (results ?? []).length,
+      usable_active: usableActive,
+      no_recommendation: noRecommendation,
+      retracted,
+    },
+    by_quality: byQuality,
+    by_evidence_grade: byEvidenceGrade,
+    latest_checked_at: latestCheckedAt,
+    suggested_grade: bestGrade ?? bestFallbackGrade,
+  })
+})
+
+// GET /api/admin/ingredients/:id/nutrient-reference-values (admin only)
+admin.get('/ingredients/:id/nutrient-reference-values', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const ingredientId = parsePositiveId(c.req.param('id'))
+  if (ingredientId === null) return c.json({ error: 'Invalid ingredient id' }, 400)
+  if (!(await ingredientExists(c.env.DB, ingredientId))) return c.json({ error: 'Ingredient not found' }, 404)
+
+  if (!(await hasTable(c.env.DB, 'nutrient_reference_values'))) {
+    return c.json({ nutrient_reference_values: [], items: [] })
+  }
+  const columns = await getTableColumns(c.env.DB, 'nutrient_reference_values')
+  if (!nrvSchemaSupportsMutation(columns)) {
+    return c.json({ nutrient_reference_values: [], items: [] })
+  }
+  const nrvRegionOrder = columns.has('region') ? "COALESCE(region, '') ASC," : ''
+
+  const { results } = await c.env.DB.prepare(`
+    SELECT
+      ${nutrientReferenceValueSelect(columns)}
+    FROM nutrient_reference_values
+    WHERE ingredient_id = ?
+    ORDER BY
+      CASE kind WHEN 'ul' THEN 0 WHEN 'rda' THEN 1 WHEN 'ai' THEN 2 ELSE 3 END,
+      ${nrvRegionOrder}
+      organization ASC,
+      id ASC
+  `).bind(ingredientId).all<NutrientReferenceValueRow>()
+
+  return c.json({ nutrient_reference_values: results ?? [], items: results ?? [] })
+})
+
+// POST /api/admin/ingredients/:id/nutrient-reference-values (admin only)
+admin.post('/ingredients/:id/nutrient-reference-values', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const ingredientId = parsePositiveId(c.req.param('id'))
+  if (ingredientId === null) return c.json({ error: 'Invalid ingredient id' }, 400)
+
+  if (!(await hasTable(c.env.DB, 'nutrient_reference_values'))) {
+    return c.json({ error: 'nutrient_reference_values table is not available in this environment' }, 409)
+  }
+  const columns = await getTableColumns(c.env.DB, 'nutrient_reference_values')
+  if (!nrvSchemaSupportsMutation(columns)) {
+    return c.json({ error: 'nutrient_reference_values schema is not writable in this environment' }, 409)
+  }
+
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const validation = await validateNutrientReferenceValuePayload(c.env.DB, body, ingredientId, null)
+  if (!validation.ok) return c.json({ error: validation.error }, validation.status ?? 400)
+
+  const data = validation.value
+  const fields = buildNutrientReferenceValueFields(columns, data)
+  if (columns.has('created_at')) fields.push(['created_at', new Date().toISOString()])
+  if (columns.has('updated_at')) fields.push(['updated_at', new Date().toISOString()])
+  if (columns.has('version')) fields.push(['version', 1])
+
+  let result: D1Result
+  try {
+    result = await c.env.DB.prepare(`
+      INSERT INTO nutrient_reference_values (
+        ${fields.map(([key]) => key).join(',\n        ')}
+      )
+      VALUES (${fields.map(() => '?').join(', ')})
+    `).bind(...fields.map(([, value]) => value)).run()
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      return c.json({ error: 'A nutrient reference value already exists for this ingredient, organization, population, and kind' }, 409)
+    }
+    throw error
+  }
+
+  const id = result.meta.last_row_id as number
+  const nutrientReferenceValue = await getNutrientReferenceValueRow(c.env.DB, id)
+  await logAdminAction(c, {
+    action: 'create_nutrient_reference_value',
+    entity_type: 'nutrient_reference_value',
+    entity_id: id,
+    changes: data,
+  })
+  return c.json({ nutrient_reference_value: nutrientReferenceValue }, 201)
+})
+
+// PUT /api/admin/nutrient-reference-values/:id (admin only)
+admin.put('/nutrient-reference-values/:id', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const id = parsePositiveId(c.req.param('id'))
+  if (id === null) return c.json({ error: 'Invalid nutrient reference value id' }, 400)
+  if (!(await hasTable(c.env.DB, 'nutrient_reference_values'))) {
+    return c.json({ error: 'nutrient_reference_values table is not available in this environment' }, 409)
+  }
+  const columns = await getTableColumns(c.env.DB, 'nutrient_reference_values')
+  if (!nrvSchemaSupportsMutation(columns)) {
+    return c.json({ error: 'nutrient_reference_values schema is not writable in this environment' }, 409)
+  }
+
+  const existing = await getNutrientReferenceValueRow(c.env.DB, id)
+  if (!existing) return c.json({ error: 'Nutrient reference value not found' }, 404)
+
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const validation = await validateNutrientReferenceValuePayload(c.env.DB, body, null, existing)
+  if (!validation.ok) return c.json({ error: validation.error }, validation.status ?? 400)
+
+  const lock = validateOptimisticLock(columns.has('version'), existing.version, requestVersion(c, body))
+  if (!lock.ok) return c.json({ error: lock.error, current_version: existing.version }, 409)
+
+  const data = validation.value
+  const fields = buildNutrientReferenceValueFields(columns, data).filter(([key]) => key !== 'ingredient_id')
+  if (columns.has('ingredient_id')) fields.unshift(['ingredient_id', data.ingredient_id])
+  if (columns.has('updated_at')) fields.push(['updated_at', new Date().toISOString()])
+  const versionSet = lock.value.enforce ? ',\n        version = COALESCE(version, 0) + 1' : ''
+  const whereSql = lock.value.enforce ? optimisticWhere() : 'id = ?'
+  const bindings = fields.map(([, value]) => value)
+  bindings.push(id)
+  if (lock.value.enforce && lock.value.expectedVersion !== null) bindings.push(lock.value.expectedVersion)
+
+  try {
+    const updateResult = await c.env.DB.prepare(`
+      UPDATE nutrient_reference_values
+      SET
+        ${fields.map(([key]) => `${key} = ?`).join(',\n        ')}${versionSet}
+      WHERE ${whereSql}
+    `).bind(...bindings).run()
+    if (lock.value.enforce && d1ChangeCount(updateResult) === 0) {
+      const current = await getNutrientReferenceValueRow(c.env.DB, id)
+      return c.json({ error: 'Version conflict', current_version: current?.version ?? existing.version }, 409)
+    }
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      return c.json({ error: 'A nutrient reference value already exists for this ingredient, organization, population, and kind' }, 409)
+    }
+    throw error
+  }
+
+  const nutrientReferenceValue = await getNutrientReferenceValueRow(c.env.DB, id)
+  await logAdminAction(c, {
+    action: 'update_nutrient_reference_value',
+    entity_type: 'nutrient_reference_value',
+    entity_id: id,
+    changes: { before: existing, after: nutrientReferenceValue },
+  })
+  return c.json({ nutrient_reference_value: nutrientReferenceValue })
+})
+
+// DELETE /api/admin/nutrient-reference-values/:id (admin only)
+admin.delete('/nutrient-reference-values/:id', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const id = parsePositiveId(c.req.param('id'))
+  if (id === null) return c.json({ error: 'Invalid nutrient reference value id' }, 400)
+  if (!(await hasTable(c.env.DB, 'nutrient_reference_values'))) {
+    return c.json({ error: 'nutrient_reference_values table is not available in this environment' }, 409)
+  }
+  const columns = await getTableColumns(c.env.DB, 'nutrient_reference_values')
+  const existing = await getNutrientReferenceValueRow(c.env.DB, id)
+  if (!existing) return c.json({ error: 'Nutrient reference value not found' }, 404)
+
+  const expectedVersion = await requestVersionFromRequest(c)
+  const lock = validateOptimisticLock(columns.has('version'), existing.version, expectedVersion)
+  if (!lock.ok) return c.json({ error: lock.error, current_version: existing.version }, 409)
+  const whereSql = lock.value.enforce ? optimisticWhere() : 'id = ?'
+  const deleteBindings = lock.value.enforce ? [id, lock.value.expectedVersion] : [id]
+
+  const deleteResult = await c.env.DB.prepare(`
+    DELETE FROM nutrient_reference_values
+    WHERE ${whereSql}
+  `).bind(...deleteBindings).run()
+  if (lock.value.enforce && d1ChangeCount(deleteResult) === 0) {
+    const current = await getNutrientReferenceValueRow(c.env.DB, id)
+    return c.json({ error: 'Version conflict', current_version: current?.version ?? existing.version }, 409)
+  }
+  await logAdminAction(c, {
+    action: 'delete_nutrient_reference_value',
+    entity_type: 'nutrient_reference_value',
+    entity_id: id,
+    changes: { before: existing },
+  })
+  return c.json({ ok: true })
+})
+
+// GET /api/admin/products/:id (admin only)
+admin.get('/products/:id', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const id = parsePositiveId(c.req.param('id'))
+  if (id === null) return c.json({ error: 'Invalid product id' }, 400)
+
+  const includeLinkHealth = await hasAffiliateLinkHealthTable(c.env.DB)
+  const linkHealthSelect = includeLinkHealth ? `,${AFFILIATE_LINK_HEALTH_SELECT}` : ''
+  const linkHealthJoin = includeLinkHealth ? 'LEFT JOIN affiliate_link_health lh ON lh.product_id = p.id' : ''
+  const product = await c.env.DB.prepare(
+    `
+      SELECT p.*${linkHealthSelect}
+      FROM products p
+      ${linkHealthJoin}
+      WHERE p.id = ?
+    `
+  ).bind(id).first<ProductRow & Partial<AffiliateLinkHealthSelectRow>>()
+  if (!product) return c.json({ error: 'Product not found' }, 404)
+
+  const [
+    ingredientsResult,
+    qa,
+    productWarnings,
+    warningsByProduct,
+    linkReportsResult,
+    linkReportCounts,
+    auditRowsResult,
+    auditCount,
+  ] = await Promise.all([
+    c.env.DB.prepare(`
+      SELECT
+        pi.id,
+        pi.product_id,
+        pi.ingredient_id,
+        i.name AS ingredient_name,
+        i.unit AS ingredient_unit,
+        i.description AS ingredient_description,
+        pi.form_id,
+        f.name AS form_name,
+        pi.parent_ingredient_id,
+        parent.name AS parent_ingredient_name,
+        COALESCE(pi.is_main, 0) AS is_main,
+        COALESCE(pi.search_relevant, 1) AS search_relevant,
+        pi.quantity,
+        pi.unit,
+        pi.basis_quantity,
+        pi.basis_unit,
+        COALESCE(idp_form.effect_summary, idp_base.effect_summary) AS effect_summary,
+        COALESCE(idp_form.timing, idp_base.timing) AS timing,
+        COALESCE(idp_form.timing_note, idp_base.timing_note) AS timing_note,
+        COALESCE(idp_form.intake_hint, idp_base.intake_hint) AS intake_hint,
+        COALESCE(idp_form.card_note, idp_base.card_note) AS card_note
+      FROM product_ingredients pi
+      JOIN ingredients i ON i.id = pi.ingredient_id
+      LEFT JOIN ingredient_forms f ON f.id = pi.form_id
+      LEFT JOIN ingredients parent ON parent.id = pi.parent_ingredient_id
+      LEFT JOIN ingredient_display_profiles idp_form
+        ON idp_form.ingredient_id = pi.ingredient_id
+       AND idp_form.form_id = pi.form_id
+       AND idp_form.sub_ingredient_id IS NULL
+      LEFT JOIN ingredient_display_profiles idp_base
+        ON idp_base.ingredient_id = pi.ingredient_id
+       AND idp_base.form_id IS NULL
+       AND idp_base.sub_ingredient_id IS NULL
+      WHERE pi.product_id = ?
+      ORDER BY pi.is_main DESC, pi.search_relevant DESC, i.name ASC, pi.id ASC
+    `).bind(id).all<AdminProductIngredientRow>(),
+    getProductQaRow(c.env.DB, id, includeLinkHealth),
+    loadProductWarnings(c.env.DB, id),
+    loadCatalogProductSafetyWarnings(c.env.DB, [id]),
+    c.env.DB.prepare(`
+      SELECT
+        r.id,
+        r.user_id,
+        u.email AS user_email,
+        r.stack_id,
+        s.name AS stack_name,
+        r.product_type,
+        r.product_id,
+        r.product_name,
+        r.shop_link_snapshot,
+        p.shop_link AS current_shop_link,
+        r.reason,
+        r.status,
+        r.created_at
+      FROM product_link_reports r
+      LEFT JOIN users u ON u.id = r.user_id
+      LEFT JOIN stacks s ON s.id = r.stack_id
+      LEFT JOIN products p ON p.id = r.product_id
+      WHERE r.product_type = 'catalog'
+        AND r.product_id = ?
+      ORDER BY
+        CASE r.status WHEN 'open' THEN 0 WHEN 'reviewed' THEN 1 ELSE 2 END,
+        r.created_at DESC,
+        r.id DESC
+      LIMIT 20
+    `).bind(id).all<ProductLinkReportRow>(),
+    c.env.DB.prepare(`
+      SELECT
+        COUNT(*) AS count,
+        SUM(CASE WHEN status = 'open' THEN 1 ELSE 0 END) AS open_count
+      FROM product_link_reports
+      WHERE product_type = 'catalog'
+        AND product_id = ?
+    `).bind(id).first<{ count: number; open_count: number | null }>(),
+    c.env.DB.prepare(`
+      SELECT
+        aal.id,
+        aal.user_id,
+        u.email AS user_email,
+        aal.action,
+        aal.entity_type,
+        aal.entity_id,
+        aal.changes,
+        aal.reason,
+        aal.ip_address,
+        aal.user_agent,
+        aal.created_at
+      FROM admin_audit_log aal
+      LEFT JOIN users u ON u.id = aal.user_id
+      WHERE aal.entity_type = 'product'
+        AND aal.entity_id = ?
+      ORDER BY aal.created_at DESC, aal.id DESC
+      LIMIT 10
+    `).bind(id).all<AuditLogDbRow>(),
+    c.env.DB.prepare(`
+      SELECT COUNT(*) AS count
+      FROM admin_audit_log
+      WHERE entity_type = 'product'
+        AND entity_id = ?
+    `).bind(id).first<CountRow>(),
+  ])
+
+  const qaIssues = qa ? productQaIssues(qa) : []
+  const warnings = warningsByProduct.get(id) ?? []
+  const activeProductWarnings = productWarnings.filter((warning) => warning.active !== 0)
+  const linkReportCount = linkReportCounts?.count ?? 0
+  const openLinkReportCount = linkReportCounts?.open_count ?? 0
+
+  return c.json({
+    product: withAffiliateLinkHealth(product),
+    ingredients: ingredientsResult.results ?? [],
+    qa: qa ? formatProductQaRow(qa) : null,
+    qa_counts: {
+      ingredient_count: qa?.ingredient_count ?? ingredientsResult.results?.length ?? 0,
+      main_ingredient_count: qa?.main_ingredient_count ?? 0,
+      issue_count: qaIssues.length,
+      warning_count: warnings.length,
+      product_warning_count: activeProductWarnings.length,
+      link_report_count: linkReportCount,
+      open_link_report_count: openLinkReportCount,
+      audit_count: auditCount?.count ?? 0,
+    },
+    warnings,
+    product_warnings: productWarnings,
+    link_reports: linkReportsResult.results ?? [],
+    audit_logs: (auditRowsResult.results ?? []).map((row) => ({
+      id: row.id,
+      user_id: row.user_id,
+      user_email: row.user_email,
+      action: row.action,
+      entity_type: row.entity_type,
+      entity_id: row.entity_id,
+      changes: parseAuditChanges(row.changes),
+      reason: row.reason,
+      ip_address: row.ip_address,
+      user_agent: row.user_agent,
+      created_at: row.created_at,
+    })),
+  })
+})
+
+// POST /api/admin/products/:id/image (admin only)
+admin.post('/products/:id/image', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const id = parsePositiveId(c.req.param('id'))
+  if (id === null) return c.json({ error: 'Invalid product id' }, 400)
+  if (!c.env.PRODUCT_IMAGES) return c.json({ error: 'Product image storage is not configured' }, 501)
+
+  const productColumns = await getTableColumns(c.env.DB, 'products')
+  if (!productColumns.has('image_url') || !productColumns.has('image_r2_key')) {
+    return c.json({ error: 'Product image columns are not available in this environment' }, 409)
+  }
+
+  const productVersionSelect = productColumns.has('version') ? 'version' : 'NULL AS version'
+  const existing = await c.env.DB.prepare(`
+    SELECT id, image_url, image_r2_key, ${productVersionSelect}
+    FROM products
+    WHERE id = ?
+  `).bind(id).first<{
+    id: number
+    image_url: string | null
+    image_r2_key: string | null
+    version: number | null
+  }>()
+  if (!existing) return c.json({ error: 'Product not found' }, 404)
+
+  let formData: FormData
+  try {
+    formData = await c.req.formData()
+  } catch {
+    return c.json({ error: 'Invalid multipart form data' }, 400)
+  }
+
+  const fileEntry = formData.get('image') ?? formData.get('file')
+  if (!fileEntry || typeof fileEntry === 'string') return c.json({ error: 'image field required' }, 400)
+  const file = fileEntry as unknown as {
+    type: string
+    size: number
+    arrayBuffer(): Promise<ArrayBuffer>
+  }
+
+  const allowedTypes = new Set(['image/jpeg', 'image/png', 'image/webp'])
+  if (!allowedTypes.has(file.type)) return c.json({ error: 'Only JPEG, PNG or WebP images are allowed' }, 415)
+  if (file.size > 5 * 1024 * 1024) return c.json({ error: 'Max 5 MB' }, 413)
+
+  const expectedVersion = parseVersionValue(c.req.header('If-Match')) ?? parseVersionValue(formData.get('version'))
+  const lock = validateOptimisticLock(productColumns.has('version'), existing.version, expectedVersion)
+  if (!lock.ok) return c.json({ error: lock.error, current_version: existing.version }, 409)
+
+  const extMap: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }
+  const ext = extMap[file.type] ?? 'jpg'
+  const filename = `${crypto.randomUUID()}.${ext}`
+  const r2Key = `products/${id}/${filename}`
+  const imageUrl = `/api/r2/products/${id}/${filename}`
+
+  const buffer = await file.arrayBuffer()
+  await c.env.PRODUCT_IMAGES.put(r2Key, buffer, {
+    httpMetadata: { contentType: file.type },
+  })
+
+  const versionSet = lock.value.enforce ? ', version = COALESCE(version, 0) + 1' : ''
+  const whereSql = lock.value.enforce ? optimisticWhere() : 'id = ?'
+  const updateResult = await c.env.DB.prepare(`
+    UPDATE products
+    SET image_url = ?,
+        image_r2_key = ?${versionSet}
+    WHERE ${whereSql}
+  `).bind(
+    imageUrl,
+    r2Key,
+    id,
+    ...(lock.value.enforce ? [lock.value.expectedVersion] : []),
+  ).run()
+
+  if (lock.value.enforce && d1ChangeCount(updateResult) === 0) {
+    await c.env.PRODUCT_IMAGES.delete(r2Key).catch(() => undefined)
+    const current = await getProductVersionRow(c.env.DB, id, productColumns)
+    return c.json({ error: 'Version conflict', current_version: current?.version ?? existing.version }, 409)
+  }
+
+  const current = await getProductVersionRow(c.env.DB, id, productColumns)
+  await logAdminAction(c, {
+    action: 'upload_admin_product_image',
+    entity_type: 'product',
+    entity_id: id,
+    changes: {
+      before: {
+        image_url: existing.image_url,
+        image_r2_key: existing.image_r2_key,
+      },
+      after: {
+        image_url: imageUrl,
+        image_r2_key: r2Key,
+      },
+    },
+  })
+
+  return c.json({
+    image_url: imageUrl,
+    image_r2_key: r2Key,
+    product_version: current?.version ?? null,
+  })
+})
+
+// POST /api/admin/products/:id/ingredients (admin only)
+admin.post('/products/:id/ingredients', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const productId = parsePositiveId(c.req.param('id'))
+  if (productId === null) return c.json({ error: 'Invalid product id' }, 400)
+  const productColumns = await getTableColumns(c.env.DB, 'products')
+  const productVersion = await getProductVersionRow(c.env.DB, productId, productColumns)
+  if (!productVersion) return c.json({ error: 'Product not found' }, 404)
+
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const validation = await validateProductIngredientPayload(c.env.DB, body, null)
+  if (!validation.ok) return c.json({ error: validation.error }, validation.status ?? 400)
+  const data = validation.value
+
+  const lock = await reserveProductVersionForMutation(c.env.DB, productId, productColumns, requestVersion(c, body))
+  if (!lock.ok) return c.json({ error: lock.error, current_version: lock.current_version }, 409)
+
+  const result = await c.env.DB.prepare(`
+    INSERT INTO product_ingredients (
+      product_id,
+      ingredient_id,
+      is_main,
+      quantity,
+      unit,
+      form_id,
+      basis_quantity,
+      basis_unit,
+      search_relevant,
+      parent_ingredient_id
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    productId,
+    data.ingredient_id,
+    data.is_main,
+    data.quantity,
+    data.unit,
+    data.form_id,
+    data.basis_quantity,
+    data.basis_unit,
+    data.search_relevant,
+    data.parent_ingredient_id,
+  ).run()
+
+  const rowId = result.meta.last_row_id as number
+  const row = await getProductIngredientRow(c.env.DB, productId, rowId)
+  const productVersionAfter = lock.productVersion ?? await incrementProductVersionAfterMutation(c.env.DB, productId, productColumns)
+  await logAdminAction(c, {
+    action: 'create_product_ingredient',
+    entity_type: 'product',
+    entity_id: productId,
+    changes: { after: row },
+  })
+
+  return c.json({ ok: true, ingredient: row, row, product_version: productVersionAfter }, 201)
+})
+
+// PUT /api/admin/products/:id/ingredients/:rowId (admin only)
+admin.put('/products/:id/ingredients/:rowId', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const productId = parsePositiveId(c.req.param('id'))
+  if (productId === null) return c.json({ error: 'Invalid product id' }, 400)
+  const rowId = parsePositiveId(c.req.param('rowId'))
+  if (rowId === null) return c.json({ error: 'Invalid product ingredient row id' }, 400)
+
+  const productColumns = await getTableColumns(c.env.DB, 'products')
+  const productVersion = await getProductVersionRow(c.env.DB, productId, productColumns)
+  if (!productVersion) return c.json({ error: 'Product not found' }, 404)
+
+  const existing = await getProductIngredientRow(c.env.DB, productId, rowId)
+  if (!existing) return c.json({ error: 'Product ingredient row not found' }, 404)
+
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const validation = await validateProductIngredientPayload(c.env.DB, body, existing)
+  if (!validation.ok) return c.json({ error: validation.error }, validation.status ?? 400)
+  const data = validation.value
+
+  const lock = await reserveProductVersionForMutation(c.env.DB, productId, productColumns, requestVersion(c, body))
+  if (!lock.ok) return c.json({ error: lock.error, current_version: lock.current_version }, 409)
+
+  await c.env.DB.prepare(`
+    UPDATE product_ingredients
+    SET
+      ingredient_id = ?,
+      is_main = ?,
+      quantity = ?,
+      unit = ?,
+      form_id = ?,
+      basis_quantity = ?,
+      basis_unit = ?,
+      search_relevant = ?,
+      parent_ingredient_id = ?
+    WHERE id = ?
+      AND product_id = ?
+  `).bind(
+    data.ingredient_id,
+    data.is_main,
+    data.quantity,
+    data.unit,
+    data.form_id,
+    data.basis_quantity,
+    data.basis_unit,
+    data.search_relevant,
+    data.parent_ingredient_id,
+    rowId,
+    productId,
+  ).run()
+
+  const row = await getProductIngredientRow(c.env.DB, productId, rowId)
+  const productVersionAfter = lock.productVersion ?? await incrementProductVersionAfterMutation(c.env.DB, productId, productColumns)
+  await logAdminAction(c, {
+    action: 'update_product_ingredient',
+    entity_type: 'product',
+    entity_id: productId,
+    changes: { before: existing, after: row },
+  })
+
+  return c.json({ ok: true, ingredient: row, row, product_version: productVersionAfter })
+})
+
+// DELETE /api/admin/products/:id/ingredients/:rowId (admin only)
+admin.delete('/products/:id/ingredients/:rowId', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const productId = parsePositiveId(c.req.param('id'))
+  if (productId === null) return c.json({ error: 'Invalid product id' }, 400)
+  const rowId = parsePositiveId(c.req.param('rowId'))
+  if (rowId === null) return c.json({ error: 'Invalid product ingredient row id' }, 400)
+
+  const productColumns = await getTableColumns(c.env.DB, 'products')
+  const productVersion = await getProductVersionRow(c.env.DB, productId, productColumns)
+  if (!productVersion) return c.json({ error: 'Product not found' }, 404)
+
+  const existing = await getProductIngredientRow(c.env.DB, productId, rowId)
+  if (!existing) return c.json({ error: 'Product ingredient row not found' }, 404)
+
+  const lock = await reserveProductVersionForMutation(c.env.DB, productId, productColumns, await requestVersionFromRequest(c))
+  if (!lock.ok) return c.json({ error: lock.error, current_version: lock.current_version }, 409)
+
+  await c.env.DB.prepare(`
+    DELETE FROM product_ingredients
+    WHERE id = ?
+      AND product_id = ?
+  `).bind(rowId, productId).run()
+
+  const productVersionAfter = lock.productVersion ?? await incrementProductVersionAfterMutation(c.env.DB, productId, productColumns)
+  await logAdminAction(c, {
+    action: 'delete_product_ingredient',
+    entity_type: 'product',
+    entity_id: productId,
+    changes: { before: existing },
+  })
+
+  return c.json({ ok: true, product_version: productVersionAfter })
+})
+
+// POST /api/admin/products/:id/warnings (admin only)
+admin.post('/products/:id/warnings', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const productId = parsePositiveId(c.req.param('id'))
+  if (productId === null) return c.json({ error: 'Invalid product id' }, 400)
+  if (!(await productExists(c.env.DB, productId))) return c.json({ error: 'Product not found' }, 404)
+  if (!(await hasProductWarningsTable(c.env.DB))) {
+    return c.json({ error: 'product_warnings table is not available in this environment' }, 409)
+  }
+
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const validation = validateProductWarningPayload(body, null)
+  if (!validation.ok) return c.json({ error: validation.error }, validation.status ?? 400)
+  const data = validation.value
+
+  const result = await c.env.DB.prepare(`
+    INSERT INTO product_warnings (
+      product_id,
+      severity,
+      title,
+      message,
+      alternative_note,
+      active
+    )
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).bind(
+    productId,
+    data.severity,
+    data.title,
+    data.message,
+    data.alternative_note,
+    data.active,
+  ).run()
+
+  const warningId = result.meta.last_row_id as number
+  const warning = await getProductWarningRow(c.env.DB, productId, warningId)
+  await logAdminAction(c, {
+    action: 'create_product_warning',
+    entity_type: 'product_warning',
+    entity_id: warningId,
+    changes: { product_id: productId, ...data },
+  })
+
+  return c.json({ warning }, 201)
+})
+
+// PUT /api/admin/products/:id/warnings/:warningId (admin only)
+admin.put('/products/:id/warnings/:warningId', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const productId = parsePositiveId(c.req.param('id'))
+  if (productId === null) return c.json({ error: 'Invalid product id' }, 400)
+  const warningId = parsePositiveId(c.req.param('warningId'))
+  if (warningId === null) return c.json({ error: 'Invalid warning id' }, 400)
+  if (!(await hasProductWarningsTable(c.env.DB))) {
+    return c.json({ error: 'product_warnings table is not available in this environment' }, 409)
+  }
+  const columns = await getTableColumns(c.env.DB, 'product_warnings')
+
+  const existing = await getProductWarningRow(c.env.DB, productId, warningId)
+  if (!existing) return c.json({ error: 'Warning not found' }, 404)
+
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const validation = validateProductWarningPayload(body, existing)
+  if (!validation.ok) return c.json({ error: validation.error }, validation.status ?? 400)
+  const data = validation.value
+  const lock = validateOptimisticLock(columns.has('version'), existing.version, requestVersion(c, body))
+  if (!lock.ok) return c.json({ error: lock.error, current_version: existing.version }, 409)
+  const versionSet = lock.value.enforce ? ', version = COALESCE(version, 0) + 1' : ''
+  const whereSql = lock.value.enforce
+    ? 'id = ? AND product_id = ? AND version = ?'
+    : 'id = ? AND product_id = ?'
+
+  const updateResult = await c.env.DB.prepare(`
+    UPDATE product_warnings
+    SET
+      severity = ?,
+      title = ?,
+      message = ?,
+      alternative_note = ?,
+      active = ?,
+      updated_at = CURRENT_TIMESTAMP${versionSet}
+    WHERE ${whereSql}
+  `).bind(
+    data.severity,
+    data.title,
+    data.message,
+    data.alternative_note,
+    data.active,
+    warningId,
+    productId,
+    ...(lock.value.enforce ? [lock.value.expectedVersion] : []),
+  ).run()
+  if (lock.value.enforce && d1ChangeCount(updateResult) === 0) {
+    const current = await getProductWarningRow(c.env.DB, productId, warningId)
+    return c.json({ error: 'Version conflict', current_version: current?.version ?? existing.version }, 409)
+  }
+
+  const warning = await getProductWarningRow(c.env.DB, productId, warningId)
+  await logAdminAction(c, {
+    action: 'update_product_warning',
+    entity_type: 'product_warning',
+    entity_id: warningId,
+    changes: { before: existing, after: warning },
+  })
+
+  return c.json({ warning })
+})
+
+// DELETE /api/admin/products/:id/warnings/:warningId (admin only)
+admin.delete('/products/:id/warnings/:warningId', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const productId = parsePositiveId(c.req.param('id'))
+  if (productId === null) return c.json({ error: 'Invalid product id' }, 400)
+  const warningId = parsePositiveId(c.req.param('warningId'))
+  if (warningId === null) return c.json({ error: 'Invalid warning id' }, 400)
+  if (!(await hasProductWarningsTable(c.env.DB))) {
+    return c.json({ error: 'product_warnings table is not available in this environment' }, 409)
+  }
+  const columns = await getTableColumns(c.env.DB, 'product_warnings')
+
+  const existing = await getProductWarningRow(c.env.DB, productId, warningId)
+  if (!existing) return c.json({ error: 'Warning not found' }, 404)
+  const expectedVersion = await requestVersionFromRequest(c)
+  const lock = validateOptimisticLock(columns.has('version'), existing.version, expectedVersion)
+  if (!lock.ok) return c.json({ error: lock.error, current_version: existing.version }, 409)
+  const versionSet = lock.value.enforce ? ', version = COALESCE(version, 0) + 1' : ''
+  const whereSql = lock.value.enforce
+    ? 'id = ? AND product_id = ? AND version = ?'
+    : 'id = ? AND product_id = ?'
+  const whereBindings = lock.value.enforce
+    ? [warningId, productId, lock.value.expectedVersion]
+    : [warningId, productId]
+
+  const hasActive = await productWarningsHasActiveColumn(c.env.DB)
+  if (hasActive) {
+    const deactivateResult = await c.env.DB.prepare(`
+      UPDATE product_warnings
+      SET active = 0,
+          updated_at = CURRENT_TIMESTAMP${versionSet}
+      WHERE ${whereSql}
+    `).bind(...whereBindings).run()
+    if (lock.value.enforce && d1ChangeCount(deactivateResult) === 0) {
+      const current = await getProductWarningRow(c.env.DB, productId, warningId)
+      return c.json({ error: 'Version conflict', current_version: current?.version ?? existing.version }, 409)
+    }
+  } else {
+    const deleteResult = await c.env.DB.prepare(`
+      DELETE FROM product_warnings
+      WHERE ${whereSql}
+    `).bind(...whereBindings).run()
+    if (lock.value.enforce && d1ChangeCount(deleteResult) === 0) {
+      const current = await getProductWarningRow(c.env.DB, productId, warningId)
+      return c.json({ error: 'Version conflict', current_version: current?.version ?? existing.version }, 409)
+    }
+  }
+
+  const warning = await getProductWarningRow(c.env.DB, productId, warningId)
+  await logAdminAction(c, {
+    action: hasActive ? 'deactivate_product_warning' : 'delete_product_warning',
+    entity_type: 'product_warning',
+    entity_id: warningId,
+    changes: hasActive
+      ? { before: { active: existing.active }, after: { active: warning?.active ?? 0 } }
+      : existing,
+  })
+
+  return c.json({ ok: true, warning })
 })
 
 // GET /api/admin/stats (admin only)
@@ -2000,6 +6362,7 @@ admin.get('/knowledge-articles', async (c) => {
     bindings.push(status)
   }
 
+  const columns = await getTableColumns(c.env.DB, 'knowledge_articles')
   const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''
   const { results } = await c.env.DB.prepare(`
     SELECT
@@ -2009,7 +6372,8 @@ admin.get('/knowledge-articles', async (c) => {
       status,
       reviewed_at,
       sources_json,
-      updated_at
+      updated_at,
+      ${versionSelect(columns)}
     FROM knowledge_articles
     ${whereSql}
     ORDER BY updated_at DESC, slug ASC
@@ -2112,11 +6476,27 @@ admin.put('/knowledge-articles/:slug', async (c) => {
     if (!bodySlug || bodySlug !== slug) return c.json({ error: 'slug is immutable' }, 400)
   }
 
+  const columns = await getTableColumns(c.env.DB, 'knowledge_articles')
+  const lock = validateOptimisticLock(columns.has('version'), existing.version, requestVersion(c, body))
+  if (!lock.ok) return c.json({ error: lock.error, current_version: existing.version }, 409)
+
   const validation = validateKnowledgeArticlePayload(body, existing)
   if (!validation.ok) return c.json({ error: validation.error }, validation.status ?? 400)
   const data = validation.value
+  const versionSet = lock.value.enforce ? ', version = COALESCE(version, 0) + 1' : ''
+  const whereSql = lock.value.enforce ? optimisticWhere('slug') : 'slug = ?'
+  const updateBindings: Array<string | number | null> = [
+    data.title,
+    data.summary,
+    data.body,
+    data.status,
+    data.reviewed_at,
+    data.sources_json,
+    slug,
+  ]
+  if (lock.value.enforce && lock.value.expectedVersion !== null) updateBindings.push(lock.value.expectedVersion)
 
-  await c.env.DB.prepare(`
+  const updateResult = await c.env.DB.prepare(`
     UPDATE knowledge_articles
     SET
       title = ?,
@@ -2125,17 +6505,13 @@ admin.put('/knowledge-articles/:slug', async (c) => {
       status = ?,
       reviewed_at = ?,
       sources_json = ?,
-      updated_at = datetime('now')
-    WHERE slug = ?
-  `).bind(
-    data.title,
-    data.summary,
-    data.body,
-    data.status,
-    data.reviewed_at,
-    data.sources_json,
-    slug,
-  ).run()
+      updated_at = datetime('now')${versionSet}
+    WHERE ${whereSql}
+  `).bind(...updateBindings).run()
+  if (lock.value.enforce && d1ChangeCount(updateResult) === 0) {
+    const current = await getKnowledgeArticleRow(c.env.DB, slug)
+    return c.json({ error: 'Version conflict', current_version: current?.version ?? existing.version }, 409)
+  }
 
   const article = await getKnowledgeArticleRow(c.env.DB, slug)
   await logAdminAction(c, {
@@ -2158,13 +6534,24 @@ admin.delete('/knowledge-articles/:slug', async (c) => {
 
   const existing = await getKnowledgeArticleRow(c.env.DB, slug)
   if (!existing) return c.json({ error: 'Knowledge article not found' }, 404)
+  const columns = await getTableColumns(c.env.DB, 'knowledge_articles')
+  const lock = validateOptimisticLock(columns.has('version'), existing.version, requestVersion(c))
+  if (!lock.ok) return c.json({ error: lock.error, current_version: existing.version }, 409)
+  const versionSet = lock.value.enforce ? ', version = COALESCE(version, 0) + 1' : ''
+  const whereSql = lock.value.enforce ? optimisticWhere('slug') : 'slug = ?'
+  const archiveBindings: Array<string | number> = [slug]
+  if (lock.value.enforce && lock.value.expectedVersion !== null) archiveBindings.push(lock.value.expectedVersion)
 
-  await c.env.DB.prepare(`
+  const archiveResult = await c.env.DB.prepare(`
     UPDATE knowledge_articles
     SET status = 'archived',
-        updated_at = datetime('now')
-    WHERE slug = ?
-  `).bind(slug).run()
+        updated_at = datetime('now')${versionSet}
+    WHERE ${whereSql}
+  `).bind(...archiveBindings).run()
+  if (lock.value.enforce && d1ChangeCount(archiveResult) === 0) {
+    const current = await getKnowledgeArticleRow(c.env.DB, slug)
+    return c.json({ error: 'Version conflict', current_version: current?.version ?? existing.version }, 409)
+  }
 
   const article = await getKnowledgeArticleRow(c.env.DB, slug)
   await logAdminAction(c, {
@@ -2255,7 +6642,10 @@ admin.get('/ops-dashboard', async (c) => {
          OR p.price <= 0
          OR p.price > 300
          OR COALESCE(ic.ingredient_count, 0) = 0
-         OR (COALESCE(p.shop_link, '') <> '' AND COALESCE(p.is_affiliate, 0) = 0)
+         OR (
+           COALESCE(p.shop_link, '') <> ''
+           AND COALESCE(p.affiliate_owner_type, '') = ''
+         )
     `),
     c.env.DB.prepare(`
       WITH ingredient_counts AS (
@@ -2277,6 +6667,11 @@ admin.get('/ops-dashboard', async (c) => {
           p.image_url,
           p.image_r2_key,
           COALESCE(p.is_affiliate, 0) AS is_affiliate,
+          COALESCE(
+            p.affiliate_owner_type,
+            CASE WHEN COALESCE(p.is_affiliate, 0) = 1 THEN 'nick' ELSE 'none' END
+          ) AS affiliate_owner_type,
+          p.affiliate_owner_user_id,
           p.serving_size,
           p.serving_unit,
           p.servings_per_container,
@@ -2300,7 +6695,11 @@ admin.get('/ops-dashboard', async (c) => {
           END AS missing_serving_data,
           CASE WHEN p.price <= 0 OR p.price > 300 THEN 1 ELSE 0 END AS suspicious_price_zero_or_high,
           CASE WHEN COALESCE(ic.ingredient_count, 0) = 0 THEN 1 ELSE 0 END AS missing_ingredient_rows,
-          CASE WHEN COALESCE(p.shop_link, '') <> '' AND COALESCE(p.is_affiliate, 0) = 0 THEN 1 ELSE 0 END AS no_affiliate_flag_on_shop_link
+          CASE
+            WHEN COALESCE(p.shop_link, '') <> ''
+              AND COALESCE(p.affiliate_owner_type, '') = ''
+            THEN 1 ELSE 0
+          END AS no_affiliate_flag_on_shop_link
         FROM products p
         LEFT JOIN ingredient_counts ic ON ic.product_id = p.id
       )
@@ -2445,7 +6844,445 @@ admin.get('/ops-dashboard', async (c) => {
   })
 })
 
-// GET /api/admin/product-qa?q=&issue=&limit=100 (admin only)
+// GET /api/admin/health (admin only)
+admin.get('/health', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const missingDefaultDosesRule: AdminHealthCountRule = {
+    id: 'missing-default-doses',
+    title: 'Fehlende Default-Dosen',
+    label: 'Fehlende Default-Dosen',
+    severity: 'critical',
+    href: '/administrator/dosing',
+    sql: `
+      SELECT COUNT(*) AS count
+      FROM ingredients i
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM dose_recommendations dr
+        WHERE dr.ingredient_id = i.id
+          AND dr.is_active = 1
+          AND dr.is_default = 1
+      )
+    `,
+    okWhen: (count) => count === 0,
+    details: (count) => count === 0
+      ? 'Alle Wirkstoffe haben eine aktive Default-Dosis.'
+      : `${count} Wirkstoff(e) haben keine aktive Default-Dosis.`,
+    action: 'Default-Dosis in /administrator/dosing ergaenzen oder bewusst deaktivierte Wirkstoffe aus der Pruefung nehmen.',
+  }
+
+  const staleResearchRule: AdminHealthCountRule = {
+    id: 'stale-overdue-ingredient-research',
+    title: 'Ueberfaellige Wirkstoff-Recherche',
+    label: 'Research ueberfaellig',
+    severity: 'warning',
+    href: '/administrator/ingredients',
+    sql: `
+      SELECT COUNT(*) AS count
+      FROM ingredient_research_status
+      WHERE research_status = 'stale'
+         OR (
+           review_due_at IS NOT NULL
+           AND date(review_due_at) <= date('now')
+         )
+    `,
+    okWhen: (count) => count === 0,
+    details: (count) => count === 0
+      ? 'Keine stale oder ueberfaellige Wirkstoff-Recherche gefunden.'
+      : `${count} Wirkstoff-Recherche-Eintrag/Eintraege sind stale oder ueberfaellig.`,
+    action: 'Research-Status, Quellen und Review-Datum im Wirkstoff-Cockpit aktualisieren.',
+  }
+
+  const missingEnglishTranslationsRule: AdminHealthCountRule = {
+    id: 'missing-english-ingredient-translations',
+    title: 'Fehlende englische Wirkstoff-Uebersetzungen',
+    label: 'EN-Uebersetzungen fehlen',
+    severity: 'warning',
+    href: '/administrator/translations?entity=ingredients&language=en&status=missing',
+    sql: `
+      SELECT COUNT(*) AS count
+      FROM ingredients i
+      LEFT JOIN ingredient_translations t
+        ON t.ingredient_id = i.id
+       AND t.language = 'en'
+      WHERE t.ingredient_id IS NULL
+         OR trim(COALESCE(t.name, '')) = ''
+    `,
+    okWhen: (count) => count === 0,
+    details: (count) => count === 0
+      ? 'Alle Wirkstoffe haben eine englische Namens-Uebersetzung.'
+      : `${count} Wirkstoff(e) haben keine englische Namens-Uebersetzung.`,
+    action: 'Fehlende englische Wirkstoff-Uebersetzungen im Translations-Bereich pflegen.',
+  }
+
+  const oldPendingUserProductsRule: AdminHealthCountRule = {
+    id: 'old-pending-user-products',
+    title: 'Aeltere pending User-Produkte',
+    label: 'Pending > 7 Tage',
+    severity: 'warning',
+    href: '/administrator/user-products?status=pending',
+    sql: `
+      SELECT COUNT(*) AS count
+      FROM user_products
+      WHERE status = 'pending'
+        AND datetime(created_at) <= datetime('now', '-7 days')
+    `,
+    okWhen: (count) => count === 0,
+    details: (count) => count === 0
+      ? 'Keine pending User-Produkte aelter als 7 Tage.'
+      : `${count} pending User-Produkt(e) sind aelter als 7 Tage.`,
+    action: 'User-Produkte moderieren, ablehnen oder publizieren.',
+  }
+
+  const openProductQaRule: AdminHealthCountRule = {
+    id: 'open-product-qa',
+    title: 'Offene Produkt-QA',
+    label: 'Produkt-QA offen',
+    severity: 'warning',
+    href: '/administrator/product-qa',
+    sql: `
+      WITH ingredient_counts AS (
+        SELECT product_id, COUNT(*) AS ingredient_count
+        FROM product_ingredients
+        GROUP BY product_id
+      )
+      SELECT COUNT(*) AS count
+      FROM products p
+      LEFT JOIN ingredient_counts ic ON ic.product_id = p.id
+      WHERE COALESCE(p.shop_link, '') = ''
+         OR p.serving_size IS NULL
+         OR p.serving_size <= 0
+         OR COALESCE(p.serving_unit, '') = ''
+         OR p.servings_per_container IS NULL
+         OR p.servings_per_container <= 0
+         OR p.container_count IS NULL
+         OR p.container_count <= 0
+         OR p.price <= 0
+         OR p.price > 300
+         OR COALESCE(ic.ingredient_count, 0) = 0
+    `,
+    okWhen: (count) => count === 0,
+    details: (count) => count === 0
+      ? 'Keine offenen Produkt-QA-Auffaelligkeiten gefunden.'
+      : `${count} Produkt(e) haben offene QA-Auffaelligkeiten.`,
+    action: 'Produkt-QA-Liste pruefen und Katalogdaten korrigieren.',
+  }
+
+  const openLinkReportsRule: AdminHealthCountRule = {
+    id: 'open-link-reports',
+    title: 'Offene Linkmeldungen',
+    label: 'Linkmeldungen offen',
+    severity: 'warning',
+    href: '/administrator/link-reports?status=open',
+    sql: `
+      SELECT COUNT(*) AS count
+      FROM product_link_reports
+      WHERE status = 'open'
+    `,
+    okWhen: (count) => count === 0,
+    details: (count) => count === 0
+      ? 'Keine offenen Linkmeldungen.'
+      : `${count} Linkmeldung(en) sind offen.`,
+    action: 'Gemeldete Links pruefen und den Report schliessen.',
+  }
+
+  const productsMissingShopLinkRule: AdminHealthCountRule = {
+    id: 'products-missing-shop-link',
+    title: 'Produkte ohne Shop-Link',
+    label: 'Produkte ohne Shop-Link',
+    severity: 'critical',
+    href: '/administrator/products',
+    sql: `
+      SELECT COUNT(*) AS count
+      FROM products
+      WHERE COALESCE(shop_link, '') = ''
+    `,
+    okWhen: (count) => count === 0,
+    details: (count) => count === 0
+      ? 'Alle Produkte haben einen Shop-Link.'
+      : `${count} Produkt(e) haben keinen Shop-Link.`,
+    action: 'Shop-Link im Produktdetail oder in der Produkt-QA ergaenzen.',
+  }
+
+  const [
+    missingDefaultDosesCheck,
+    staleResearchCheck,
+    missingEnglishTranslationsCheck,
+    oldPendingUserProductsCheck,
+    openProductQaCheck,
+    openLinkReportsCheck,
+    productsMissingShopLinkCheck,
+    affiliateLinkHealthRollup,
+  ] = await Promise.all([
+    runAdminHealthCountCheck(c.env.DB, missingDefaultDosesRule),
+    runAdminHealthCountCheck(c.env.DB, staleResearchRule),
+    runAdminHealthCountCheck(c.env.DB, missingEnglishTranslationsRule),
+    runAdminHealthCountCheck(c.env.DB, oldPendingUserProductsRule),
+    runAdminHealthCountCheck(c.env.DB, openProductQaRule),
+    runAdminHealthCountCheck(c.env.DB, openLinkReportsRule),
+    runAdminHealthCountCheck(c.env.DB, productsMissingShopLinkRule),
+    getAdminAffiliateLinkHealthRollup(c.env.DB),
+  ])
+
+  const sections: AdminHealthSection[] = [
+    {
+      id: 'science-content',
+      title: 'Science und Content',
+      checks: [
+        missingDefaultDosesCheck,
+        staleResearchCheck,
+        missingEnglishTranslationsCheck,
+      ],
+    },
+    {
+      id: 'operations',
+      title: 'Operations',
+      checks: [
+        oldPendingUserProductsCheck,
+        openProductQaCheck,
+        openLinkReportsCheck,
+      ],
+    },
+    {
+      id: 'catalog',
+      title: 'Katalog',
+      checks: [productsMissingShopLinkCheck],
+    },
+    affiliateLinkHealthRollup.section,
+  ]
+
+  const metrics: AdminHealthMetric[] = [
+    metricFromAdminHealthCheck(missingDefaultDosesCheck, missingDefaultDosesRule.label),
+    metricFromAdminHealthCheck(staleResearchCheck, staleResearchRule.label),
+    metricFromAdminHealthCheck(missingEnglishTranslationsCheck, missingEnglishTranslationsRule.label),
+    metricFromAdminHealthCheck(oldPendingUserProductsCheck, oldPendingUserProductsRule.label),
+    metricFromAdminHealthCheck(openProductQaCheck, openProductQaRule.label),
+    metricFromAdminHealthCheck(openLinkReportsCheck, openLinkReportsRule.label),
+    metricFromAdminHealthCheck(productsMissingShopLinkCheck, productsMissingShopLinkRule.label),
+    ...affiliateLinkHealthRollup.metrics,
+  ]
+
+  return c.json({
+    generated_at: new Date().toISOString(),
+    summary: summarizeAdminHealthSections(sections),
+    metrics,
+    sections,
+  })
+})
+
+// GET /api/admin/launch-checks (admin only)
+admin.get('/launch-checks', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const dbRules: LaunchCheckCountRule[] = [
+    {
+      id: 'db-basic-query',
+      title: 'D1 Basic Query',
+      sql: 'SELECT 1 AS count',
+      details: () => 'D1 beantwortet eine minimale Query.',
+      okWhen: (count) => count === 1,
+      severity: 'critical',
+      action: 'D1-Binding und Cloudflare Pages Functions pruefen.',
+    },
+    {
+      id: 'db-users',
+      title: 'User-Tabelle',
+      sql: 'SELECT COUNT(*) AS count FROM users',
+      details: (count) => `${count} User-Konto/Konten vorhanden.`,
+      okWhen: (count) => count >= 1,
+      severity: 'critical',
+      action: 'Produktionsdatenbank und User-Migrationen pruefen.',
+    },
+    {
+      id: 'db-admin-users',
+      title: 'Admin-Konten',
+      sql: "SELECT COUNT(*) AS count FROM users WHERE COALESCE(role, 'user') = 'admin'",
+      details: (count) => `${count} Admin-Konto/Konten vorhanden.`,
+      okWhen: (count) => count >= 1,
+      severity: 'critical',
+      action: 'Mindestens ein Admin-Konto benoetigt.',
+    },
+    {
+      id: 'db-products',
+      title: 'Produktkatalog',
+      sql: 'SELECT COUNT(*) AS count FROM products',
+      details: (count) => `${count} Produkt(e) im Katalog.`,
+      okWhen: (count) => count >= 1,
+      severity: 'critical',
+      action: 'Seed-/Produktdaten pruefen.',
+    },
+    {
+      id: 'db-product-ingredients',
+      title: 'Produkt-Wirkstoffzeilen',
+      sql: 'SELECT COUNT(*) AS count FROM product_ingredients',
+      details: (count) => `${count} Produkt-Wirkstoffzeile(n) vorhanden.`,
+      okWhen: (count) => count >= 1,
+      severity: 'critical',
+      action: 'Produkt-Wirkstoffmodell und Migrationen pruefen.',
+    },
+    {
+      id: 'db-ingredients',
+      title: 'Wirkstoffdatenbank',
+      sql: 'SELECT COUNT(*) AS count FROM ingredients',
+      details: (count) => `${count} Wirkstoff(e) vorhanden.`,
+      okWhen: (count) => count >= 1,
+      severity: 'critical',
+      action: 'Ingredient-Seeds/Migrationen pruefen.',
+    },
+    {
+      id: 'db-active-dose-recommendations',
+      title: 'Aktive Dosis-Richtwerte',
+      sql: 'SELECT COUNT(*) AS count FROM dose_recommendations WHERE is_active = 1',
+      details: (count) => `${count} aktive Dosis-Richtwert(e).`,
+      okWhen: (count) => count >= 1,
+      severity: 'warning',
+      action: 'Dosing-Bereich pruefen und fehlende Richtwerte ergaenzen.',
+    },
+    {
+      id: 'db-dose-source-links',
+      title: 'Richtwert-Quellenlinks',
+      sql: 'SELECT COUNT(*) AS count FROM dose_recommendation_sources',
+      details: (count) => `${count} verknuepfte Richtwert-Quelle(n).`,
+      okWhen: (count) => count >= 1,
+      severity: 'warning',
+      action: 'Dosis-Richtwerte in /administrator/dosing mit Research-Quellen verknuepfen.',
+    },
+    {
+      id: 'db-open-link-reports',
+      title: 'Offene Linkmeldungen',
+      sql: "SELECT COUNT(*) AS count FROM product_link_reports WHERE status = 'open'",
+      details: (count) => `${count} offene Linkmeldung(en).`,
+      okWhen: (count) => count === 0,
+      severity: 'warning',
+      action: 'Linkmeldungen vor Launch abarbeiten.',
+    },
+    {
+      id: 'db-pending-user-products',
+      title: 'Pending User-Produkte',
+      sql: "SELECT COUNT(*) AS count FROM user_products WHERE status = 'pending'",
+      details: (count) => `${count} offene User-Produkt-Einreichung(en).`,
+      okWhen: (count) => count === 0,
+      severity: 'warning',
+      action: 'User-Produkte moderieren oder bewusst fuer nach Launch einplanen.',
+    },
+    {
+      id: 'db-knowledge-drafts',
+      title: 'Knowledge Drafts',
+      sql: "SELECT COUNT(*) AS count FROM knowledge_articles WHERE status = 'draft'",
+      details: (count) => `${count} Wissensartikel-Draft(s).`,
+      okWhen: (count) => count === 0,
+      severity: 'info',
+      action: 'Drafts vor SEO/Indexing pruefen.',
+    },
+    {
+      id: 'db-warnings-without-article',
+      title: 'Warnungen ohne Artikel',
+      sql: `
+        SELECT COUNT(*) AS count
+        FROM ingredient_safety_warnings w
+        LEFT JOIN knowledge_articles a ON a.slug = w.article_slug
+        WHERE w.active = 1
+          AND (w.article_slug IS NULL OR a.slug IS NULL)
+      `,
+      details: (count) => `${count} aktive Warnung(en) ohne verlinkten Wissensartikel.`,
+      okWhen: (count) => count === 0,
+      severity: 'warning',
+      action: 'Warnungen mit Knowledge-Artikeln verknuepfen oder bewusst freigeben.',
+    },
+    {
+      id: 'db-product-qa-issues',
+      title: 'Produkt-QA Issues',
+      sql: `
+        WITH ingredient_counts AS (
+          SELECT
+            product_id,
+            COUNT(*) AS ingredient_count,
+            SUM(CASE WHEN is_main = 1 THEN 1 ELSE 0 END) AS main_ingredient_count
+          FROM product_ingredients
+          GROUP BY product_id
+        )
+        SELECT COUNT(*) AS count
+        FROM products p
+        LEFT JOIN ingredient_counts ic ON ic.product_id = p.id
+        WHERE (COALESCE(p.image_url, '') = '' AND COALESCE(p.image_r2_key, '') = '')
+           OR COALESCE(p.shop_link, '') = ''
+           OR p.serving_size IS NULL
+           OR p.serving_size <= 0
+           OR COALESCE(p.serving_unit, '') = ''
+           OR p.servings_per_container IS NULL
+           OR p.servings_per_container <= 0
+           OR p.container_count IS NULL
+           OR p.container_count <= 0
+           OR p.price <= 0
+           OR p.price > 300
+           OR COALESCE(ic.ingredient_count, 0) = 0
+           OR (
+             COALESCE(p.shop_link, '') <> ''
+             AND COALESCE(p.affiliate_owner_type, '') = ''
+           )
+      `,
+      details: (count) => `${count} Produkt(e) mit QA-Auffaelligkeiten.`,
+      okWhen: (count) => count === 0,
+      severity: 'warning',
+      action: 'Produkt-QA vor Launch abarbeiten.',
+    },
+  ]
+
+  const dbChecks = await Promise.all(dbRules.map((rule) => runLaunchCountCheck(c.env.DB, rule)))
+  const envChecks = buildLaunchEnvChecks(c.env)
+  const domainChecks = await buildDomainChecks()
+
+  const manualChecks: LaunchCheck[] = [
+    {
+      id: 'manual-legal-review',
+      title: 'Legal/Compliance Review',
+      status: 'info',
+      severity: 'warning',
+      source: 'manual',
+      details: 'Finale juristische Pruefung ist nicht automatisierbar und bleibt vor SEO/Indexing manuell.',
+      action: 'Impressum, Datenschutz, AGB, Health Claims und Affiliate-Hinweis extern/fachlich pruefen.',
+    },
+    {
+      id: 'manual-mail-deliverability',
+      title: 'Mail-Zustellung extern',
+      status: 'info',
+      severity: 'warning',
+      source: 'manual',
+      details: 'Echte Registrierung, Verifizierung, Passwort-Reset und Stack-Mail muessen in externen Inboxen geprueft werden.',
+      action: 'Header auf SPF/DKIM/DMARC alignment und Spam-Placement pruefen.',
+    },
+    {
+      id: 'manual-d1-backup',
+      title: 'D1 Backup vor Freigabe',
+      status: 'info',
+      severity: 'warning',
+      source: 'manual',
+      details: 'Backup-Freshness laesst sich ohne Deployment-/Backup-API nicht sicher aus der App verifizieren.',
+      action: 'Frischen Export im Deploy-Log dokumentieren.',
+    },
+  ]
+
+  const sections: LaunchCheckSection[] = [
+    { id: 'database', title: 'Datenbank und Operations', checks: dbChecks },
+    { id: 'environment', title: 'Konfiguration', checks: envChecks },
+    { id: 'domain', title: 'Domain und DNS', checks: domainChecks },
+    { id: 'manual', title: 'Manuelle Freigaben', checks: manualChecks },
+  ]
+
+  return c.json({
+    generated_at: new Date().toISOString(),
+    domain: 'supplementstack.de',
+    source: 'live',
+    admin_only: true,
+    summary: summarizeLaunchSections(sections),
+    sections,
+  })
+})
+
+// GET /api/admin/product-qa?q=&issue=&page=1&limit=50 (admin only)
 admin.get('/product-qa', async (c) => {
   const authErr = await ensureAdmin(c)
   if (authErr) return authErr
@@ -2455,14 +7292,21 @@ admin.get('/product-qa', async (c) => {
   const issue = issueParam ? enumValue(issueParam, PRODUCT_QA_ISSUES) : null
   if (issueParam && !issue) return c.json({ error: `issue must be one of ${PRODUCT_QA_ISSUES.join(', ')}` }, 400)
 
-  const limit = parsePagination(c.req.query('limit'), 100, 250)
+  const page = Math.max(1, parsePagination(c.req.query('page'), 1, 100000))
+  const limit = Math.max(1, parsePagination(c.req.query('limit'), 50, 250))
+  const offset = (page - 1) * limit
   const where: string[] = []
   const bindings: Array<string | number> = []
+  const summaryWhere: string[] = []
+  const summaryBindings: Array<string | number> = []
 
   if (q) {
     const like = `%${q}%`
-    where.push('(name LIKE ? OR COALESCE(brand, \'\') LIKE ? OR COALESCE(form, \'\') LIKE ?)')
+    const searchSql = '(name LIKE ? OR COALESCE(brand, \'\') LIKE ? OR COALESCE(form, \'\') LIKE ?)'
+    where.push(searchSql)
+    summaryWhere.push(searchSql)
     bindings.push(like, like, like)
+    summaryBindings.push(like, like, like)
   }
 
   if (issue) {
@@ -2470,7 +7314,13 @@ admin.get('/product-qa', async (c) => {
   }
 
   const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''
-  const { results } = await c.env.DB.prepare(`
+  const summaryWhereSql = summaryWhere.length > 0 ? `WHERE ${summaryWhere.join(' AND ')}` : ''
+  const includeLinkHealth = await hasAffiliateLinkHealthTable(c.env.DB)
+  const productColumns = await getTableColumns(c.env.DB, 'products')
+  const productVersionSelect = productColumns.has('version') ? 'p.version AS version,' : 'NULL AS version,'
+  const linkHealthSelect = includeLinkHealth ? `,${AFFILIATE_LINK_HEALTH_SELECT}` : ''
+  const linkHealthJoin = includeLinkHealth ? 'LEFT JOIN affiliate_link_health lh ON lh.product_id = p.id' : ''
+  const productQaCte = `
     WITH ingredient_counts AS (
       SELECT
         product_id,
@@ -2490,6 +7340,11 @@ admin.get('/product-qa', async (c) => {
         p.image_url,
         p.image_r2_key,
         COALESCE(p.is_affiliate, 0) AS is_affiliate,
+        COALESCE(
+          p.affiliate_owner_type,
+          CASE WHEN COALESCE(p.is_affiliate, 0) = 1 THEN 'nick' ELSE 'none' END
+        ) AS affiliate_owner_type,
+        p.affiliate_owner_user_id,
         p.serving_size,
         p.serving_unit,
         p.servings_per_container,
@@ -2497,6 +7352,7 @@ admin.get('/product-qa', async (c) => {
         p.moderation_status,
         p.visibility,
         p.created_at,
+        ${productVersionSelect}
         COALESCE(ic.ingredient_count, 0) AS ingredient_count,
         COALESCE(ic.main_ingredient_count, 0) AS main_ingredient_count,
         CASE WHEN COALESCE(p.image_url, '') = '' AND COALESCE(p.image_r2_key, '') = '' THEN 1 ELSE 0 END AS missing_image,
@@ -2513,10 +7369,40 @@ admin.get('/product-qa', async (c) => {
         END AS missing_serving_data,
         CASE WHEN p.price <= 0 OR p.price > 300 THEN 1 ELSE 0 END AS suspicious_price_zero_or_high,
         CASE WHEN COALESCE(ic.ingredient_count, 0) = 0 THEN 1 ELSE 0 END AS missing_ingredient_rows,
-        CASE WHEN COALESCE(p.shop_link, '') <> '' AND COALESCE(p.is_affiliate, 0) = 0 THEN 1 ELSE 0 END AS no_affiliate_flag_on_shop_link
+        CASE
+          WHEN COALESCE(p.shop_link, '') <> ''
+            AND COALESCE(p.affiliate_owner_type, '') = ''
+          THEN 1 ELSE 0
+        END AS no_affiliate_flag_on_shop_link
+        ${linkHealthSelect}
       FROM products p
       LEFT JOIN ingredient_counts ic ON ic.product_id = p.id
+      ${linkHealthJoin}
     )
+  `
+
+  const [totalRow, summaryRow, listResult] = await Promise.all([
+    c.env.DB.prepare(`
+      ${productQaCte}
+      SELECT COUNT(*) AS count
+      FROM qa
+      ${whereSql}
+    `).bind(...bindings).first<CountRow>(),
+    c.env.DB.prepare(`
+      ${productQaCte}
+      SELECT
+        COUNT(*) AS total,
+        COALESCE(SUM(missing_image), 0) AS missing_image,
+        COALESCE(SUM(missing_shop_link), 0) AS missing_shop_link,
+        COALESCE(SUM(missing_serving_data), 0) AS missing_serving_data,
+        COALESCE(SUM(suspicious_price_zero_or_high), 0) AS suspicious_price_zero_or_high,
+        COALESCE(SUM(missing_ingredient_rows), 0) AS missing_ingredient_rows,
+        COALESCE(SUM(no_affiliate_flag_on_shop_link), 0) AS no_affiliate_flag_on_shop_link
+      FROM qa
+      ${summaryWhereSql}
+    `).bind(...summaryBindings).first<ProductQaIssueSummaryRow>(),
+    c.env.DB.prepare(`
+      ${productQaCte}
     SELECT *
     FROM qa
     ${whereSql}
@@ -2529,16 +7415,28 @@ admin.get('/product-qa', async (c) => {
       no_affiliate_flag_on_shop_link DESC,
       created_at DESC,
       id DESC
-    LIMIT ?
-  `).bind(...bindings, limit).all<ProductQaRow>()
+      LIMIT ? OFFSET ?
+    `).bind(...bindings, limit, offset).all<ProductQaRow>(),
+  ])
+
+  const issueSummary = PRODUCT_QA_ISSUES.reduce((acc, issueKey) => {
+    acc[issueKey] = Number(summaryRow?.[issueKey] ?? 0)
+    return acc
+  }, {} as Record<ProductQaIssue, number>)
 
   return c.json({
-    products: results.map((row) => ({
+    products: (listResult.results ?? []).map((row) => ({
       ...row,
       issues: productQaIssues(row),
     })),
-    total: results.length,
+    total: totalRow?.count ?? 0,
+    page,
     limit,
+    summary: {
+      total: Number(summaryRow?.total ?? 0),
+      issues: issueSummary,
+    },
+    issue_summary: issueSummary,
     available_issues: PRODUCT_QA_ISSUES,
   })
 })
@@ -2551,7 +7449,9 @@ admin.patch('/product-qa/:id', async (c) => {
   const id = parsePositiveId(c.req.param('id'))
   if (id === null) return c.json({ error: 'Invalid product id' }, 400)
 
-  const existing = await getProductQaRow(c.env.DB, id)
+  const includeLinkHealth = await hasAffiliateLinkHealthTable(c.env.DB)
+  const productColumns = await getTableColumns(c.env.DB, 'products')
+  const existing = await getProductQaRow(c.env.DB, id, includeLinkHealth)
   if (!existing) return c.json({ error: 'Product not found' }, 404)
 
   let body: Record<string, unknown>
@@ -2564,11 +7464,38 @@ admin.patch('/product-qa/:id', async (c) => {
   const validation = validateProductQaPatch(body)
   if (!validation.ok) return c.json({ error: validation.error }, validation.status)
   const data = validation.value
+  const lock = validateOptimisticLock(productColumns.has('version'), existing.version, requestVersion(c))
+  if (!lock.ok) return c.json({ error: lock.error, current_version: existing.version }, 409)
+
+  const ownership = normalizeAffiliateOwnership(body, {
+    affiliate_owner_type: existing.affiliate_owner_type ?? (existing.is_affiliate === 1 ? 'nick' : 'none'),
+    affiliate_owner_user_id: existing.affiliate_owner_user_id,
+    is_affiliate: existing.is_affiliate === 1 ? 1 : 0,
+  })
+  if (!ownership.ok) return c.json({ error: ownership.error }, ownership.status)
+  const affiliateOwner = await validateAffiliateOwnerUser(c.env.DB, ownership.value)
+  if (!affiliateOwner.ok) return c.json({ error: affiliateOwner.error }, affiliateOwner.status)
+  if (
+    hasOwnKey(body, 'affiliate_owner_type') ||
+    hasOwnKey(body, 'affiliate_owner_user_id') ||
+    hasOwnKey(body, 'is_affiliate')
+  ) {
+    data.affiliate_owner_type = affiliateOwner.value.affiliate_owner_type
+    data.affiliate_owner_user_id = affiliateOwner.value.affiliate_owner_user_id
+    data.is_affiliate = affiliateOwner.value.is_affiliate
+  }
 
   const fields = [
+    'name',
+    'brand',
     'price',
     'shop_link',
+    'image_url',
     'is_affiliate',
+    'affiliate_owner_type',
+    'affiliate_owner_user_id',
+    'moderation_status',
+    'visibility',
     'serving_size',
     'serving_unit',
     'servings_per_container',
@@ -2588,14 +7515,28 @@ admin.patch('/product-qa/:id', async (c) => {
   }
 
   if (setClauses.length === 0) return c.json({ error: 'At least one product QA field is required' }, 400)
+  if (lock.value.enforce) setClauses.push('version = COALESCE(version, 0) + 1')
+  const whereSql = lock.value.enforce ? 'id = ? AND version = ?' : 'id = ?'
 
-  await c.env.DB.prepare(`
+  const updateResult = await c.env.DB.prepare(`
     UPDATE products
     SET ${setClauses.join(', ')}
-    WHERE id = ?
-  `).bind(...bindings, id).run()
+    WHERE ${whereSql}
+  `).bind(...bindings, id, ...(lock.value.enforce ? [lock.value.expectedVersion] : [])).run()
+  if (lock.value.enforce && d1ChangeCount(updateResult) === 0) {
+    const current = await getProductQaRow(c.env.DB, id, includeLinkHealth)
+    return c.json({ error: 'Version conflict', current_version: current?.version ?? existing.version }, 409)
+  }
 
-  const updated = await getProductQaRow(c.env.DB, id)
+  if (hasOwnKey(data, 'shop_link') && includeLinkHealth) {
+    await c.env.DB.prepare(`
+      DELETE FROM affiliate_link_health
+      WHERE product_id = ?
+        AND COALESCE(url, '') <> COALESCE(?, '')
+    `).bind(id, data.shop_link ?? null).run()
+  }
+
+  const updated = await getProductQaRow(c.env.DB, id, includeLinkHealth)
   if (!updated) return c.json({ error: 'Product not found after update' }, 404)
 
   await logAdminAction(c, {
@@ -2608,7 +7549,7 @@ admin.patch('/product-qa/:id', async (c) => {
   return c.json({ product: formatProductQaRow(updated) })
 })
 
-// GET /api/admin/link-reports?status=&q=&limit=100 (admin only)
+// GET /api/admin/link-reports?status=&q=&page=1&limit=50 (admin only)
 admin.get('/link-reports', async (c) => {
   const authErr = await ensureAdmin(c)
   if (authErr) return authErr
@@ -2619,9 +7560,13 @@ admin.get('/link-reports', async (c) => {
   if (statusParam && !status) {
     return c.json({ error: `status must be one of ${PRODUCT_LINK_REPORT_STATUSES.join(', ')}` }, 400)
   }
-  const limit = parsePagination(c.req.query('limit'), 100, 250)
+  const page = Math.max(1, parsePagination(c.req.query('page'), 1, 100000))
+  const limit = Math.max(1, parsePagination(c.req.query('limit'), 50, 250))
+  const offset = (page - 1) * limit
   const where: string[] = []
   const bindings: Array<string | number> = []
+  const summaryWhere: string[] = []
+  const summaryBindings: Array<string | number> = []
 
   if (status) {
     where.push('r.status = ?')
@@ -2630,19 +7575,46 @@ admin.get('/link-reports', async (c) => {
 
   if (q) {
     const like = `%${q}%`
-    where.push(`(
+    const searchSql = `(
       COALESCE(r.product_name, '') LIKE ?
       OR COALESCE(u.email, '') LIKE ?
       OR COALESCE(s.name, '') LIKE ?
       OR COALESCE(r.shop_link_snapshot, '') LIKE ?
       OR COALESCE(p.shop_link, '') LIKE ?
       OR COALESCE(up.shop_link, '') LIKE ?
-    )`)
+    )`
+    where.push(searchSql)
+    summaryWhere.push(searchSql)
     bindings.push(like, like, like, like, like, like)
+    summaryBindings.push(like, like, like, like, like, like)
   }
 
   const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''
-  const { results } = await c.env.DB.prepare(`
+  const summaryWhereSql = summaryWhere.length > 0 ? `WHERE ${summaryWhere.join(' AND ')}` : ''
+  const linkReportsFromSql = `
+    FROM product_link_reports r
+    LEFT JOIN users u ON u.id = r.user_id
+    LEFT JOIN stacks s ON s.id = r.stack_id
+    LEFT JOIN products p ON r.product_type = 'catalog' AND p.id = r.product_id
+    LEFT JOIN user_products up ON r.product_type = 'user_product' AND up.id = r.product_id
+  `
+
+  const [totalRow, summaryRow, listResult] = await Promise.all([
+    c.env.DB.prepare(`
+      SELECT COUNT(*) AS count
+      ${linkReportsFromSql}
+      ${whereSql}
+    `).bind(...bindings).first<CountRow>(),
+    c.env.DB.prepare(`
+      SELECT
+        COUNT(*) AS total,
+        COALESCE(SUM(CASE WHEN r.status = 'open' THEN 1 ELSE 0 END), 0) AS open,
+        COALESCE(SUM(CASE WHEN r.status = 'reviewed' THEN 1 ELSE 0 END), 0) AS reviewed,
+        COALESCE(SUM(CASE WHEN r.status = 'closed' THEN 1 ELSE 0 END), 0) AS closed
+      ${linkReportsFromSql}
+      ${summaryWhereSql}
+    `).bind(...summaryBindings).first<ProductLinkReportStatusSummaryRow>(),
+    c.env.DB.prepare(`
     SELECT
       r.id,
       r.user_id,
@@ -2660,23 +7632,32 @@ admin.get('/link-reports', async (c) => {
       r.reason,
       r.status,
       r.created_at
-    FROM product_link_reports r
-    LEFT JOIN users u ON u.id = r.user_id
-    LEFT JOIN stacks s ON s.id = r.stack_id
-    LEFT JOIN products p ON r.product_type = 'catalog' AND p.id = r.product_id
-    LEFT JOIN user_products up ON r.product_type = 'user_product' AND up.id = r.product_id
+    ${linkReportsFromSql}
     ${whereSql}
     ORDER BY
       CASE r.status WHEN 'open' THEN 0 WHEN 'reviewed' THEN 1 ELSE 2 END,
       r.created_at ASC,
       r.id ASC
-    LIMIT ?
-  `).bind(...bindings, limit).all<ProductLinkReportRow>()
+      LIMIT ? OFFSET ?
+    `).bind(...bindings, limit, offset).all<ProductLinkReportRow>(),
+  ])
+
+  const statusSummary = {
+    open: Number(summaryRow?.open ?? 0),
+    reviewed: Number(summaryRow?.reviewed ?? 0),
+    closed: Number(summaryRow?.closed ?? 0),
+  }
 
   return c.json({
-    reports: results,
-    total: results.length,
+    reports: listResult.results ?? [],
+    total: totalRow?.count ?? 0,
+    page,
     limit,
+    summary: {
+      total: Number(summaryRow?.total ?? 0),
+      statuses: statusSummary,
+    },
+    status_summary: statusSummary,
     available_statuses: PRODUCT_LINK_REPORT_STATUSES,
   })
 })
@@ -2795,10 +7776,28 @@ admin.get('/dose-recommendations', async (c) => {
   }
 
   if (q) {
-    where.push('(i.name LIKE ? OR dr.source_label LIKE ? OR COALESCE(dr.source_url, \'\') LIKE ? OR COALESCE(dr.context_note, \'\') LIKE ?)')
-    bindings.push(like, like, like, like)
+    where.push(`(
+      i.name LIKE ?
+      OR dr.source_label LIKE ?
+      OR COALESCE(dr.source_url, '') LIKE ?
+      OR COALESCE(dr.context_note, '') LIKE ?
+      OR EXISTS (
+        SELECT 1
+        FROM dose_recommendation_sources drs_q
+        JOIN ingredient_research_sources irs_q ON irs_q.id = drs_q.research_source_id
+        WHERE drs_q.dose_recommendation_id = dr.id
+          AND (
+            COALESCE(irs_q.source_title, '') LIKE ?
+            OR COALESCE(irs_q.source_url, '') LIKE ?
+            OR COALESCE(irs_q.organization, '') LIKE ?
+            OR COALESCE(irs_q.outcome, '') LIKE ?
+          )
+      )
+    )`)
+    bindings.push(like, like, like, like, like, like, like, like)
   }
 
+  const columns = await getTableColumns(c.env.DB, 'dose_recommendations')
   const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''
   const totalRow = await c.env.DB.prepare(`
     SELECT COUNT(*) AS count
@@ -2843,7 +7842,8 @@ admin.get('/dose-recommendations', async (c) => {
       dr.review_due_at,
       dr.superseded_by_id,
       dr.created_at,
-      dr.updated_at
+      dr.updated_at,
+      ${versionSelect(columns, 'dr')}
     FROM dose_recommendations dr
     JOIN ingredients i ON i.id = dr.ingredient_id
     JOIN populations p ON p.id = dr.population_id
@@ -2853,8 +7853,9 @@ admin.get('/dose-recommendations', async (c) => {
     ORDER BY dr.is_active DESC, dr.relevance_score DESC, dr.updated_at DESC, dr.id DESC
     LIMIT ? OFFSET ?
   `).bind(...bindings, limit, offset).all<DoseRecommendationAdminRow>()
+  const recommendations = await attachDoseRecommendationSources(c.env.DB, results)
 
-  return c.json({ recommendations: results, page, limit, total: totalRow?.count ?? 0 })
+  return c.json({ recommendations, page, limit, total: totalRow?.count ?? 0 })
 })
 
 // POST /api/admin/dose-recommendations (admin only)
@@ -2950,7 +7951,11 @@ admin.post('/dose-recommendations', async (c) => {
   }
 
   const id = result.meta.last_row_id as number
+  if (data.sources !== undefined) {
+    await replaceDoseRecommendationSources(c.env.DB, id, data.sources)
+  }
   const recommendation = await getDoseRecommendationAdminRow(c.env.DB, id)
+  const plausibilityWarnings = await buildDosePlausibilityWarnings(c.env.DB, recommendation)
 
   await logAdminAction(c, {
     action: 'create_dose_recommendation',
@@ -2959,7 +7964,7 @@ admin.post('/dose-recommendations', async (c) => {
     changes: data,
   })
 
-  return c.json({ recommendation }, 201)
+  return c.json({ recommendation, plausibility_warnings: plausibilityWarnings }, 201)
 })
 
 // GET /api/admin/dose-recommendations/:id (admin only)
@@ -2999,9 +8004,47 @@ admin.put('/dose-recommendations/:id', async (c) => {
     return c.json({ error: failure.error }, failure.status)
   }
 
+  const columns = await getTableColumns(c.env.DB, 'dose_recommendations')
+  const lock = validateOptimisticLock(columns.has('version'), existing.version, requestVersion(c, body))
+  if (!lock.ok) return c.json({ error: lock.error, current_version: existing.version }, 409)
+
   const data = validation.value
+  const versionSet = lock.value.enforce ? ', version = COALESCE(version, 0) + 1' : ''
+  const whereSql = lock.value.enforce ? optimisticWhere() : 'id = ?'
+  const updateBindings: Array<string | number | null> = [
+    data.ingredient_id,
+    data.population_id,
+    data.source_type,
+    data.source_label,
+    data.source_url,
+    data.dose_min,
+    data.dose_max,
+    data.unit,
+    data.per_kg_body_weight,
+    data.per_kg_cap,
+    data.timing,
+    data.context_note,
+    data.sex_filter,
+    data.is_athlete,
+    data.purpose,
+    data.is_default,
+    data.is_active,
+    data.relevance_score,
+    data.created_by_user_id,
+    data.is_public,
+    data.verified_profile_id,
+    data.category_name,
+    data.population_slug,
+    data.verified_profile_name,
+    data.published_at,
+    data.verified_at,
+    data.review_due_at,
+    data.superseded_by_id,
+    id,
+  ]
+  if (lock.value.enforce && lock.value.expectedVersion !== null) updateBindings.push(lock.value.expectedVersion)
   try {
-    await c.env.DB.prepare(`
+    const updateResult = await c.env.DB.prepare(`
       UPDATE dose_recommendations
       SET
         ingredient_id = ?,
@@ -3032,47 +8075,25 @@ admin.put('/dose-recommendations/:id', async (c) => {
         verified_at = ?,
         review_due_at = ?,
         superseded_by_id = ?,
-        updated_at = strftime('%s','now')
-      WHERE id = ?
-    `).bind(
-      data.ingredient_id,
-      data.population_id,
-      data.source_type,
-      data.source_label,
-      data.source_url,
-      data.dose_min,
-      data.dose_max,
-      data.unit,
-      data.per_kg_body_weight,
-      data.per_kg_cap,
-      data.timing,
-      data.context_note,
-      data.sex_filter,
-      data.is_athlete,
-      data.purpose,
-      data.is_default,
-      data.is_active,
-      data.relevance_score,
-      data.created_by_user_id,
-      data.is_public,
-      data.verified_profile_id,
-      data.category_name,
-      data.population_slug,
-      data.verified_profile_name,
-      data.published_at,
-      data.verified_at,
-      data.review_due_at,
-      data.superseded_by_id,
-      id,
-    ).run()
+        updated_at = strftime('%s','now')${versionSet}
+      WHERE ${whereSql}
+    `).bind(...updateBindings).run()
+    if (lock.value.enforce && d1ChangeCount(updateResult) === 0) {
+      const current = await getDoseRecommendationAdminRow(c.env.DB, id)
+      return c.json({ error: 'Version conflict', current_version: current?.version ?? existing.version }, 409)
+    }
   } catch (error) {
     if (isUniqueConstraintError(error)) {
       return c.json({ error: 'An active default recommendation already exists for this ingredient/population/targeting combination' }, 409)
     }
     throw error
   }
+  if (data.sources !== undefined) {
+    await replaceDoseRecommendationSources(c.env.DB, id, data.sources)
+  }
 
   const recommendation = await getDoseRecommendationAdminRow(c.env.DB, id)
+  const plausibilityWarnings = await buildDosePlausibilityWarnings(c.env.DB, recommendation)
 
   await logAdminAction(c, {
     action: 'update_dose_recommendation',
@@ -3081,7 +8102,7 @@ admin.put('/dose-recommendations/:id', async (c) => {
     changes: { before: existing, after: recommendation },
   })
 
-  return c.json({ recommendation })
+  return c.json({ recommendation, plausibility_warnings: plausibilityWarnings })
 })
 
 // DELETE /api/admin/dose-recommendations/:id (admin only; soft delete via is_active=0)
@@ -3094,14 +8115,25 @@ admin.delete('/dose-recommendations/:id', async (c) => {
 
   const existing = await getDoseRecommendationAdminRow(c.env.DB, id)
   if (!existing) return c.json({ error: 'Dose recommendation not found' }, 404)
+  const columns = await getTableColumns(c.env.DB, 'dose_recommendations')
+  const lock = validateOptimisticLock(columns.has('version'), existing.version, requestVersion(c))
+  if (!lock.ok) return c.json({ error: lock.error, current_version: existing.version }, 409)
+  const versionSet = lock.value.enforce ? ', version = COALESCE(version, 0) + 1' : ''
+  const whereSql = lock.value.enforce ? optimisticWhere() : 'id = ?'
+  const deactivateBindings: number[] = [id]
+  if (lock.value.enforce && lock.value.expectedVersion !== null) deactivateBindings.push(lock.value.expectedVersion)
 
-  await c.env.DB.prepare(`
+  const deactivateResult = await c.env.DB.prepare(`
     UPDATE dose_recommendations
     SET is_active = 0,
         is_default = 0,
-        updated_at = strftime('%s','now')
-    WHERE id = ?
-  `).bind(id).run()
+        updated_at = strftime('%s','now')${versionSet}
+    WHERE ${whereSql}
+  `).bind(...deactivateBindings).run()
+  if (lock.value.enforce && d1ChangeCount(deactivateResult) === 0) {
+    const current = await getDoseRecommendationAdminRow(c.env.DB, id)
+    return c.json({ error: 'Version conflict', current_version: current?.version ?? existing.version }, 409)
+  }
 
   const recommendation = await getDoseRecommendationAdminRow(c.env.DB, id)
   await logAdminAction(c, {
@@ -3269,6 +8301,9 @@ admin.get('/ingredient-research/:ingredientId', async (c) => {
   if (!ingredient) return c.json({ error: 'Ingredient not found' }, 404)
 
   const status = await getIngredientResearchStatusRow(c.env.DB, ingredientId)
+  const researchSourceColumns = await getTableColumns(c.env.DB, 'ingredient_research_sources')
+  const warningColumns = await getTableColumns(c.env.DB, 'ingredient_safety_warnings')
+  const displayProfileColumns = await getTableColumns(c.env.DB, 'ingredient_display_profiles')
 
   const { results: sources } = await c.env.DB.prepare(`
     SELECT
@@ -3298,8 +8333,10 @@ admin.get('/ingredient-research/:ingredientId', async (c) => {
       notes,
       source_date,
       reviewed_at,
+      ${ingredientResearchEvidenceSelect(researchSourceColumns)},
       created_at,
-      updated_at
+      updated_at,
+      ${versionSelect(researchSourceColumns)}
     FROM ingredient_research_sources
     WHERE ingredient_id = ?
     ORDER BY source_kind ASC, COALESCE(reviewed_at, source_date, created_at) DESC, id DESC
@@ -3320,7 +8357,8 @@ admin.get('/ingredient-research/:ingredientId', async (c) => {
       w.min_amount,
       w.unit,
       w.active,
-      w.created_at
+      w.created_at,
+      ${versionSelect(warningColumns, 'w')}
     FROM ingredient_safety_warnings w
     LEFT JOIN ingredients i ON i.id = w.ingredient_id
     LEFT JOIN ingredient_forms f ON f.id = w.form_id
@@ -3337,7 +8375,19 @@ admin.get('/ingredient-research/:ingredientId', async (c) => {
   `).bind(ingredientId).all<IngredientFormAdminRow>()
 
   const { results: displayProfiles } = await c.env.DB.prepare(`
-    SELECT *
+    SELECT
+      id,
+      ingredient_id,
+      form_id,
+      sub_ingredient_id,
+      effect_summary,
+      timing,
+      timing_note,
+      intake_hint,
+      card_note,
+      created_at,
+      updated_at,
+      ${versionSelect(displayProfileColumns)}
     FROM ingredient_display_profiles
     WHERE ingredient_id = ?
     ORDER BY
@@ -3364,6 +8414,7 @@ admin.get('/ingredient-research/:ingredientId', async (c) => {
       review_due_at: null,
       created_at: null,
       updated_at: null,
+      version: null,
     },
     sources,
     warnings,
@@ -3393,8 +8444,23 @@ admin.put('/ingredient-research/:ingredientId/status', async (c) => {
   if (!validation.ok) return c.json({ error: validation.error }, validation.status ?? 400)
 
   const data = validation.value
-  await c.env.DB.prepare(`
-    INSERT INTO ingredient_research_status (
+  const columns = await getTableColumns(c.env.DB, 'ingredient_research_status')
+  const lock = validateOptimisticLock(columns.has('version') && existing !== null, existing?.version ?? null, requestVersion(c, body))
+  if (!lock.ok) return c.json({ error: lock.error, current_version: existing?.version ?? null }, 409)
+  const insertColumns = columns.has('version')
+    ? `
+      ingredient_id,
+      research_status,
+      calculation_status,
+      internal_notes,
+      blog_url,
+      reviewed_at,
+      review_due_at,
+      version,
+      created_at,
+      updated_at
+    `
+    : `
       ingredient_id,
       research_status,
       calculation_status,
@@ -3404,17 +8470,13 @@ admin.put('/ingredient-research/:ingredientId/status', async (c) => {
       review_due_at,
       created_at,
       updated_at
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
-    ON CONFLICT(ingredient_id) DO UPDATE SET
-      research_status = excluded.research_status,
-      calculation_status = excluded.calculation_status,
-      internal_notes = excluded.internal_notes,
-      blog_url = excluded.blog_url,
-      reviewed_at = excluded.reviewed_at,
-      review_due_at = excluded.review_due_at,
-      updated_at = datetime('now')
-  `).bind(
+    `
+  const insertValues = columns.has('version')
+    ? '?, ?, ?, ?, ?, ?, ?, 1, datetime(\'now\'), datetime(\'now\')'
+    : '?, ?, ?, ?, ?, ?, ?, datetime(\'now\'), datetime(\'now\')'
+  const versionSet = columns.has('version') ? ', version = COALESCE(ingredient_research_status.version, 0) + 1' : ''
+  const conflictWhere = lock.value.enforce ? ' WHERE ingredient_research_status.version = ?' : ''
+  const statusBindings: Array<string | number | null> = [
     ingredientId,
     data.research_status,
     data.calculation_status,
@@ -3422,7 +8484,26 @@ admin.put('/ingredient-research/:ingredientId/status', async (c) => {
     data.blog_url,
     data.reviewed_at,
     data.review_due_at,
-  ).run()
+  ]
+  if (lock.value.enforce && lock.value.expectedVersion !== null) statusBindings.push(lock.value.expectedVersion)
+  const statusResult = await c.env.DB.prepare(`
+    INSERT INTO ingredient_research_status (
+      ${insertColumns}
+    )
+    VALUES (${insertValues})
+    ON CONFLICT(ingredient_id) DO UPDATE SET
+      research_status = excluded.research_status,
+      calculation_status = excluded.calculation_status,
+      internal_notes = excluded.internal_notes,
+      blog_url = excluded.blog_url,
+      reviewed_at = excluded.reviewed_at,
+      review_due_at = excluded.review_due_at,
+      updated_at = datetime('now')${versionSet}${conflictWhere}
+  `).bind(...statusBindings).run()
+  if (lock.value.enforce && d1ChangeCount(statusResult) === 0) {
+    const current = await getIngredientResearchStatusRow(c.env.DB, ingredientId)
+    return c.json({ error: 'Version conflict', current_version: current?.version ?? existing?.version ?? null }, 409)
+  }
 
   const status = await getIngredientResearchStatusRow(c.env.DB, ingredientId)
   await logAdminAction(c, {
@@ -3455,8 +8536,22 @@ admin.put('/ingredient-research/:ingredientId/display-profile', async (c) => {
 
   const data = validation.value
   const existing = await getIngredientDisplayProfileRow(c.env.DB, ingredientId, data.form_id, data.sub_ingredient_id)
+  const columns = await getTableColumns(c.env.DB, 'ingredient_display_profiles')
+  const lock = validateOptimisticLock(columns.has('version') && existing !== null, existing?.version ?? null, requestVersion(c, body))
+  if (!lock.ok) return c.json({ error: lock.error, current_version: existing?.version ?? null }, 409)
   if (existing) {
-    await c.env.DB.prepare(`
+    const versionSet = lock.value.enforce ? ', version = COALESCE(version, 0) + 1' : ''
+    const whereSql = lock.value.enforce ? optimisticWhere() : 'id = ?'
+    const profileBindings: Array<string | number | null> = [
+      data.effect_summary,
+      data.timing,
+      data.timing_note,
+      data.intake_hint,
+      data.card_note,
+      existing.id,
+    ]
+    if (lock.value.enforce && lock.value.expectedVersion !== null) profileBindings.push(lock.value.expectedVersion)
+    const profileResult = await c.env.DB.prepare(`
       UPDATE ingredient_display_profiles
       SET
         effect_summary = ?,
@@ -3464,16 +8559,13 @@ admin.put('/ingredient-research/:ingredientId/display-profile', async (c) => {
         timing_note = ?,
         intake_hint = ?,
         card_note = ?,
-        updated_at = datetime('now')
-      WHERE id = ?
-    `).bind(
-      data.effect_summary,
-      data.timing,
-      data.timing_note,
-      data.intake_hint,
-      data.card_note,
-      existing.id,
-    ).run()
+        updated_at = datetime('now')${versionSet}
+      WHERE ${whereSql}
+    `).bind(...profileBindings).run()
+    if (lock.value.enforce && d1ChangeCount(profileResult) === 0) {
+      const current = await getIngredientDisplayProfileRow(c.env.DB, ingredientId, data.form_id, data.sub_ingredient_id)
+      return c.json({ error: 'Version conflict', current_version: current?.version ?? existing.version }, 409)
+    }
   } else {
     await c.env.DB.prepare(`
       INSERT INTO ingredient_display_profiles (
@@ -3530,64 +8622,46 @@ admin.post('/ingredient-research/:ingredientId/sources', async (c) => {
   if (!validation.ok) return c.json({ error: validation.error }, validation.status ?? 400)
 
   const data = validation.value
+  const researchColumns = await getTableColumns(c.env.DB, 'ingredient_research_sources')
+  const fields: Array<[string, string | number | null]> = [
+    ['ingredient_id', data.ingredient_id],
+    ['source_kind', data.source_kind],
+    ['organization', data.organization],
+    ['country', data.country],
+    ['region', data.region],
+    ['population', data.population],
+    ['recommendation_type', data.recommendation_type],
+    ['no_recommendation', data.no_recommendation],
+    ['dose_min', data.dose_min],
+    ['dose_max', data.dose_max],
+    ['dose_unit', data.dose_unit],
+    ['per_kg_body_weight', data.per_kg_body_weight],
+    ['frequency', data.frequency],
+    ['study_type', data.study_type],
+    ['evidence_quality', data.evidence_quality],
+    ['duration', data.duration],
+    ['outcome', data.outcome],
+    ['finding', data.finding],
+    ['source_title', data.source_title],
+    ['source_url', data.source_url],
+    ['doi', data.doi],
+    ['pubmed_id', data.pubmed_id],
+    ['notes', data.notes],
+    ['source_date', data.source_date],
+    ['reviewed_at', data.reviewed_at],
+  ]
+  if (researchColumns.has('is_retracted')) fields.push(['is_retracted', data.is_retracted])
+  if (researchColumns.has('retraction_checked_at')) fields.push(['retraction_checked_at', data.retraction_checked_at])
+  if (researchColumns.has('retraction_notice_url')) fields.push(['retraction_notice_url', data.retraction_notice_url])
+  if (researchColumns.has('evidence_grade')) fields.push(['evidence_grade', data.evidence_grade])
   const result = await c.env.DB.prepare(`
     INSERT INTO ingredient_research_sources (
-      ingredient_id,
-      source_kind,
-      organization,
-      country,
-      region,
-      population,
-      recommendation_type,
-      no_recommendation,
-      dose_min,
-      dose_max,
-      dose_unit,
-      per_kg_body_weight,
-      frequency,
-      study_type,
-      evidence_quality,
-      duration,
-      outcome,
-      finding,
-      source_title,
-      source_url,
-      doi,
-      pubmed_id,
-      notes,
-      source_date,
-      reviewed_at,
+      ${fields.map(([key]) => key).join(',\n      ')},
       created_at,
       updated_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
-  `).bind(
-    data.ingredient_id,
-    data.source_kind,
-    data.organization,
-    data.country,
-    data.region,
-    data.population,
-    data.recommendation_type,
-    data.no_recommendation,
-    data.dose_min,
-    data.dose_max,
-    data.dose_unit,
-    data.per_kg_body_weight,
-    data.frequency,
-    data.study_type,
-    data.evidence_quality,
-    data.duration,
-    data.outcome,
-    data.finding,
-    data.source_title,
-    data.source_url,
-    data.doi,
-    data.pubmed_id,
-    data.notes,
-    data.source_date,
-    data.reviewed_at,
-  ).run()
+    VALUES (${fields.map(() => '?').join(', ')}, datetime('now'), datetime('now'))
+  `).bind(...fields.map(([, value]) => value)).run()
 
   const sourceId = result.meta.last_row_id as number
   const source = await getIngredientResearchSourceRow(c.env.DB, sourceId)
@@ -3628,64 +8702,55 @@ admin.put('/ingredient-research/sources/:sourceId', async (c) => {
   if (!validation.ok) return c.json({ error: validation.error }, validation.status ?? 400)
 
   const data = validation.value
-  await c.env.DB.prepare(`
+  const researchColumns = await getTableColumns(c.env.DB, 'ingredient_research_sources')
+  const lock = validateOptimisticLock(researchColumns.has('version'), existing.version, requestVersion(c, body))
+  if (!lock.ok) return c.json({ error: lock.error, current_version: existing.version }, 409)
+  const fields: Array<[string, string | number | null]> = [
+    ['ingredient_id', data.ingredient_id],
+    ['source_kind', data.source_kind],
+    ['organization', data.organization],
+    ['country', data.country],
+    ['region', data.region],
+    ['population', data.population],
+    ['recommendation_type', data.recommendation_type],
+    ['no_recommendation', data.no_recommendation],
+    ['dose_min', data.dose_min],
+    ['dose_max', data.dose_max],
+    ['dose_unit', data.dose_unit],
+    ['per_kg_body_weight', data.per_kg_body_weight],
+    ['frequency', data.frequency],
+    ['study_type', data.study_type],
+    ['evidence_quality', data.evidence_quality],
+    ['duration', data.duration],
+    ['outcome', data.outcome],
+    ['finding', data.finding],
+    ['source_title', data.source_title],
+    ['source_url', data.source_url],
+    ['doi', data.doi],
+    ['pubmed_id', data.pubmed_id],
+    ['notes', data.notes],
+    ['source_date', data.source_date],
+    ['reviewed_at', data.reviewed_at],
+  ]
+  if (researchColumns.has('is_retracted')) fields.push(['is_retracted', data.is_retracted])
+  if (researchColumns.has('retraction_checked_at')) fields.push(['retraction_checked_at', data.retraction_checked_at])
+  if (researchColumns.has('retraction_notice_url')) fields.push(['retraction_notice_url', data.retraction_notice_url])
+  if (researchColumns.has('evidence_grade')) fields.push(['evidence_grade', data.evidence_grade])
+  const versionSet = lock.value.enforce ? ', version = COALESCE(version, 0) + 1' : ''
+  const whereSql = lock.value.enforce ? optimisticWhere() : 'id = ?'
+  const sourceBindings: Array<string | number | null> = [...fields.map(([, value]) => value), sourceId]
+  if (lock.value.enforce && lock.value.expectedVersion !== null) sourceBindings.push(lock.value.expectedVersion)
+  const sourceUpdateResult = await c.env.DB.prepare(`
     UPDATE ingredient_research_sources
     SET
-      ingredient_id = ?,
-      source_kind = ?,
-      organization = ?,
-      country = ?,
-      region = ?,
-      population = ?,
-      recommendation_type = ?,
-      no_recommendation = ?,
-      dose_min = ?,
-      dose_max = ?,
-      dose_unit = ?,
-      per_kg_body_weight = ?,
-      frequency = ?,
-      study_type = ?,
-      evidence_quality = ?,
-      duration = ?,
-      outcome = ?,
-      finding = ?,
-      source_title = ?,
-      source_url = ?,
-      doi = ?,
-      pubmed_id = ?,
-      notes = ?,
-      source_date = ?,
-      reviewed_at = ?,
-      updated_at = datetime('now')
-    WHERE id = ?
-  `).bind(
-    data.ingredient_id,
-    data.source_kind,
-    data.organization,
-    data.country,
-    data.region,
-    data.population,
-    data.recommendation_type,
-    data.no_recommendation,
-    data.dose_min,
-    data.dose_max,
-    data.dose_unit,
-    data.per_kg_body_weight,
-    data.frequency,
-    data.study_type,
-    data.evidence_quality,
-    data.duration,
-    data.outcome,
-    data.finding,
-    data.source_title,
-    data.source_url,
-    data.doi,
-    data.pubmed_id,
-    data.notes,
-    data.source_date,
-    data.reviewed_at,
-    sourceId,
-  ).run()
+      ${fields.map(([key]) => `${key} = ?`).join(',\n      ')},
+      updated_at = datetime('now')${versionSet}
+    WHERE ${whereSql}
+  `).bind(...sourceBindings).run()
+  if (lock.value.enforce && d1ChangeCount(sourceUpdateResult) === 0) {
+    const current = await getIngredientResearchSourceRow(c.env.DB, sourceId)
+    return c.json({ error: 'Version conflict', current_version: current?.version ?? existing.version }, 409)
+  }
 
   const source = await getIngredientResearchSourceRow(c.env.DB, sourceId)
   await logAdminAction(c, {
@@ -3708,10 +8773,30 @@ admin.delete('/ingredient-research/sources/:sourceId', async (c) => {
 
   const existing = await getIngredientResearchSourceRow(c.env.DB, sourceId)
   if (!existing) return c.json({ error: 'Source not found' }, 404)
+  const researchColumns = await getTableColumns(c.env.DB, 'ingredient_research_sources')
+  const lock = validateOptimisticLock(researchColumns.has('version'), existing.version, requestVersion(c))
+  if (!lock.ok) return c.json({ error: lock.error, current_version: existing.version }, 409)
 
-  await c.env.DB.prepare('DELETE FROM ingredient_research_sources WHERE id = ?')
-    .bind(sourceId)
+  const linkedDoseCount = await c.env.DB.prepare(`
+    SELECT COUNT(*) AS count
+    FROM dose_recommendation_sources
+    WHERE research_source_id = ?
+  `).bind(sourceId).first<CountRow>()
+  if ((linkedDoseCount?.count ?? 0) > 0) {
+    return c.json({ error: 'Source is linked to dose recommendations and cannot be deleted' }, 409)
+  }
+
+  const deleteResult = await c.env.DB.prepare(
+    lock.value.enforce
+      ? 'DELETE FROM ingredient_research_sources WHERE id = ? AND version = ?'
+      : 'DELETE FROM ingredient_research_sources WHERE id = ?',
+  )
+    .bind(...(lock.value.enforce && lock.value.expectedVersion !== null ? [sourceId, lock.value.expectedVersion] : [sourceId]))
     .run()
+  if (lock.value.enforce && d1ChangeCount(deleteResult) === 0) {
+    const current = await getIngredientResearchSourceRow(c.env.DB, sourceId)
+    return c.json({ error: 'Version conflict', current_version: current?.version ?? existing.version }, 409)
+  }
 
   await logAdminAction(c, {
     action: 'delete_ingredient_research_source',
@@ -3801,20 +8886,12 @@ admin.put('/ingredient-research/warnings/:warningId', async (c) => {
   if (!validation.ok) return c.json({ error: validation.error }, validation.status ?? 400)
 
   const data = validation.value
-  await c.env.DB.prepare(`
-    UPDATE ingredient_safety_warnings
-    SET
-      ingredient_id = ?,
-      form_id = ?,
-      short_label = ?,
-      popover_text = ?,
-      severity = ?,
-      article_slug = ?,
-      min_amount = ?,
-      unit = ?,
-      active = ?
-    WHERE id = ?
-  `).bind(
+  const columns = await getTableColumns(c.env.DB, 'ingredient_safety_warnings')
+  const lock = validateOptimisticLock(columns.has('version'), existing.version, requestVersion(c, body))
+  if (!lock.ok) return c.json({ error: lock.error, current_version: existing.version }, 409)
+  const versionSet = lock.value.enforce ? ', version = COALESCE(version, 0) + 1' : ''
+  const whereSql = lock.value.enforce ? optimisticWhere() : 'id = ?'
+  const warningBindings: Array<string | number | null> = [
     data.ingredient_id,
     data.form_id,
     data.short_label,
@@ -3825,7 +8902,26 @@ admin.put('/ingredient-research/warnings/:warningId', async (c) => {
     data.unit,
     data.active,
     warningId,
-  ).run()
+  ]
+  if (lock.value.enforce && lock.value.expectedVersion !== null) warningBindings.push(lock.value.expectedVersion)
+  const warningUpdateResult = await c.env.DB.prepare(`
+    UPDATE ingredient_safety_warnings
+    SET
+      ingredient_id = ?,
+      form_id = ?,
+      short_label = ?,
+      popover_text = ?,
+      severity = ?,
+      article_slug = ?,
+      min_amount = ?,
+      unit = ?,
+      active = ?${versionSet}
+    WHERE ${whereSql}
+  `).bind(...warningBindings).run()
+  if (lock.value.enforce && d1ChangeCount(warningUpdateResult) === 0) {
+    const current = await getIngredientSafetyWarningAdminRow(c.env.DB, warningId)
+    return c.json({ error: 'Version conflict', current_version: current?.version ?? existing.version }, 409)
+  }
 
   const warning = await getIngredientSafetyWarningAdminRow(c.env.DB, warningId)
   await logAdminAction(c, {
@@ -3848,10 +8944,21 @@ admin.delete('/ingredient-research/warnings/:warningId', async (c) => {
 
   const existing = await getIngredientSafetyWarningAdminRow(c.env.DB, warningId)
   if (!existing) return c.json({ error: 'Warning not found' }, 404)
+  const columns = await getTableColumns(c.env.DB, 'ingredient_safety_warnings')
+  const lock = validateOptimisticLock(columns.has('version'), existing.version, requestVersion(c))
+  if (!lock.ok) return c.json({ error: lock.error, current_version: existing.version }, 409)
+  const versionSet = lock.value.enforce ? ', version = COALESCE(version, 0) + 1' : ''
+  const whereSql = lock.value.enforce ? optimisticWhere() : 'id = ?'
+  const warningBindings: number[] = [warningId]
+  if (lock.value.enforce && lock.value.expectedVersion !== null) warningBindings.push(lock.value.expectedVersion)
 
-  await c.env.DB.prepare('UPDATE ingredient_safety_warnings SET active = 0 WHERE id = ?')
-    .bind(warningId)
+  const warningDeactivateResult = await c.env.DB.prepare(`UPDATE ingredient_safety_warnings SET active = 0${versionSet} WHERE ${whereSql}`)
+    .bind(...warningBindings)
     .run()
+  if (lock.value.enforce && d1ChangeCount(warningDeactivateResult) === 0) {
+    const current = await getIngredientSafetyWarningAdminRow(c.env.DB, warningId)
+    return c.json({ error: 'Version conflict', current_version: current?.version ?? existing.version }, 409)
+  }
 
   const warning = await getIngredientSafetyWarningAdminRow(c.env.DB, warningId)
   await logAdminAction(c, {
@@ -3958,7 +9065,7 @@ admin.put('/product-rankings/:productId', async (c) => {
   return c.json({ ok: true })
 })
 
-// GET /api/admin/user-products?status=pending (admin)
+// GET /api/admin/user-products?status=pending&page=1&limit=50 (admin)
 admin.get('/user-products', async (c) => {
   const authErr = await ensureAdmin(c)
   if (authErr) return authErr
@@ -3966,15 +9073,197 @@ admin.get('/user-products', async (c) => {
   if (!['pending', 'approved', 'rejected'].includes(status)) {
     return c.json({ error: 'Invalid status' }, 400)
   }
-  const { results } = await c.env.DB.prepare(`
-    SELECT up.*, u.email as user_email, u.is_trusted_product_submitter as user_is_trusted_product_submitter
-    FROM user_products up
-    LEFT JOIN users u ON up.user_id = u.id
-    WHERE up.status = ?
-    ORDER BY up.created_at DESC
-  `).bind(status).all()
-  const products = await attachUserProductIngredients(c.env.DB, results as Record<string, unknown>[])
-  return c.json({ products })
+  const page = Math.max(1, parsePagination(c.req.query('page'), 1, 100000))
+  const limit = Math.max(1, parsePagination(c.req.query('limit'), 50, 100))
+  const offset = (page - 1) * limit
+
+  const [totalRow, summaryRow, listResult] = await Promise.all([
+    c.env.DB.prepare(`
+      SELECT COUNT(*) AS count
+      FROM user_products up
+      WHERE up.status = ?
+    `).bind(status).first<CountRow>(),
+    c.env.DB.prepare(`
+      SELECT
+        COUNT(*) AS total,
+        COALESCE(SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), 0) AS pending,
+        COALESCE(SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END), 0) AS approved,
+        COALESCE(SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END), 0) AS rejected
+      FROM user_products
+    `).first<Record<'total' | 'pending' | 'approved' | 'rejected', number>>(),
+    c.env.DB.prepare(`
+      SELECT up.*, u.email as user_email, u.is_trusted_product_submitter as user_is_trusted_product_submitter
+      FROM user_products up
+      LEFT JOIN users u ON up.user_id = u.id
+      WHERE up.status = ?
+      ORDER BY up.created_at DESC, up.id DESC
+      LIMIT ? OFFSET ?
+    `).bind(status, limit, offset).all(),
+  ])
+
+  const products = await attachUserProductIngredients(c.env.DB, (listResult.results ?? []) as Record<string, unknown>[])
+  const total = totalRow?.count ?? 0
+  const statusSummary = {
+    pending: Number(summaryRow?.pending ?? 0),
+    approved: Number(summaryRow?.approved ?? 0),
+    rejected: Number(summaryRow?.rejected ?? 0),
+  }
+  return c.json({
+    products,
+    total,
+    page,
+    limit,
+    total_pages: Math.max(1, Math.ceil(total / limit)),
+    summary: {
+      total: Number(summaryRow?.total ?? 0),
+      statuses: statusSummary,
+    },
+    status_summary: statusSummary,
+  })
+})
+
+// PUT /api/admin/user-products/bulk-approve (admin)
+admin.put('/user-products/bulk-approve', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  let body: unknown
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  let rawIds: unknown[] | null = null
+  if (Array.isArray(body)) {
+    rawIds = body
+  } else if (body && typeof body === 'object') {
+    const bodyRecord = body as Record<string, unknown>
+    rawIds = Array.isArray(bodyRecord.ids) ? bodyRecord.ids : null
+  }
+
+  if (!rawIds) return c.json({ error: 'ids array is required' }, 400)
+  if (rawIds.length === 0) return c.json({ error: 'ids array must not be empty' }, 400)
+  if (rawIds.length > 100) return c.json({ error: 'Bulk approve is limited to 100 ids per request' }, 400)
+
+  const ids: number[] = []
+  const seen = new Set<number>()
+  for (const rawId of rawIds) {
+    const id = normalizeInteger(rawId)
+    if (id === undefined || id <= 0) {
+      return c.json({ error: 'ids must contain positive integers' }, 400)
+    }
+    if (!seen.has(id)) {
+      seen.add(id)
+      ids.push(id)
+    }
+  }
+
+  const placeholders = ids.map(() => '?').join(', ')
+  const { results: existingRows } = await c.env.DB.prepare(`
+    SELECT id, status, approved_at
+    FROM user_products
+    WHERE id IN (${placeholders})
+  `).bind(...ids).all<UserProductBulkModerationRow>()
+
+  const existingById = new Map<number, UserProductBulkModerationRow>(
+    (existingRows ?? []).map((row) => [row.id, row]),
+  )
+  const results: UserProductBulkApproveResult[] = []
+  let approved = 0
+
+  for (const id of ids) {
+    const existing = existingById.get(id)
+    if (!existing) {
+      results.push({
+        id,
+        ok: false,
+        status: 'failed',
+        error: 'not_found',
+      })
+      continue
+    }
+
+    if (existing.status !== 'pending') {
+      results.push({
+        id,
+        ok: false,
+        status: 'failed',
+        previous_status: existing.status,
+        approved_at: existing.approved_at,
+        error: 'not_pending',
+      })
+      continue
+    }
+
+    try {
+      const updateResult = await c.env.DB.prepare(`
+        UPDATE user_products
+        SET status = 'approved',
+            approved_at = datetime('now')
+        WHERE id = ?
+          AND status = 'pending'
+      `).bind(id).run()
+
+      if (updateResult.meta.changes === 0) {
+        const current = await c.env.DB.prepare(`
+          SELECT id, status, approved_at
+          FROM user_products
+          WHERE id = ?
+        `).bind(id).first<UserProductBulkModerationRow>()
+        results.push({
+          id,
+          ok: false,
+          status: 'failed',
+          previous_status: current?.status ?? existing.status,
+          approved_at: current?.approved_at ?? existing.approved_at,
+          error: current ? 'status_changed' : 'not_found',
+        })
+        continue
+      }
+
+      approved += 1
+      results.push({
+        id,
+        ok: true,
+        status: 'approved',
+        previous_status: existing.status,
+      })
+    } catch {
+      results.push({
+        id,
+        ok: false,
+        status: 'failed',
+        previous_status: existing.status,
+        approved_at: existing.approved_at,
+        error: 'update_failed',
+      })
+    }
+  }
+
+  const failed = results.length - approved
+  await logAdminAction(c, {
+    action: 'bulk_approve_user_products',
+    entity_type: 'user_product',
+    entity_id: null,
+    changes: {
+      requested: rawIds.length,
+      unique: ids.length,
+      approved,
+      failed,
+      ids,
+      failed_ids: results.filter((result) => !result.ok).map((result) => result.id),
+    },
+  })
+
+  return c.json({
+    ok: failed === 0,
+    requested: rawIds.length,
+    unique: ids.length,
+    approved,
+    failed,
+    results,
+  })
 })
 
 // PUT /api/admin/user-products/:id/approve (admin)
@@ -4019,6 +9308,28 @@ admin.put('/user-products/:id/publish', async (c) => {
   ).bind(id).first<Record<string, unknown>>()
   if (!userProduct) return c.json({ error: 'User product not found' }, 404)
 
+  const sourceUserId = normalizeInteger(userProduct.user_id)
+  if (sourceUserId === undefined || sourceUserId <= 0) {
+    return c.json({ error: 'User product has no valid owner user id' }, 400)
+  }
+  const sourceHasShopLink = typeof userProduct.shop_link === 'string' && userProduct.shop_link.trim().length > 0
+  const explicitOwnerInput = hasOwnKey(body, 'affiliate_owner_type') || hasOwnKey(body, 'affiliate_owner_user_id')
+  let ownership: AffiliateOwnership
+  if (explicitOwnerInput) {
+    const normalizedOwner = normalizeAffiliateOwnership(body)
+    if (!normalizedOwner.ok) return c.json({ error: normalizedOwner.error }, normalizedOwner.status)
+    const ownerUser = await validateAffiliateOwnerUser(c.env.DB, normalizedOwner.value)
+    if (!ownerUser.ok) return c.json({ error: ownerUser.error }, ownerUser.status)
+    ownership = ownerUser.value
+  } else {
+    const ownerType: AffiliateOwnerType = sourceHasShopLink ? 'user' : isAffiliate === 1 ? 'nick' : 'none'
+    ownership = {
+      affiliate_owner_type: ownerType,
+      affiliate_owner_user_id: ownerType === 'user' ? sourceUserId : null,
+      is_affiliate: ownerType === 'none' ? 0 : 1,
+    }
+  }
+
   const existingPublishedId = Number(userProduct.published_product_id)
   if (Number.isInteger(existingPublishedId) && existingPublishedId > 0) {
     const existingPayload = await getProductPublishPayloadByProductId(c.env.DB, existingPublishedId)
@@ -4053,13 +9364,13 @@ admin.put('/user-products/:id/publish', async (c) => {
   const validationError = await validateUserProductPublish(c.env.DB, ingredients)
   if (validationError) return c.json({ error: validationError }, 400)
 
-  const affiliateValue = isAffiliate ?? (userProduct.is_affiliate === 1 ? 1 : 0)
   let productId: number
   try {
     const result = await c.env.DB.prepare(`
       INSERT INTO products (
         name, brand, form, price, shop_link, image_url, moderation_status, visibility,
-        is_affiliate, serving_size, serving_unit, servings_per_container, container_count,
+        is_affiliate, affiliate_owner_type, affiliate_owner_user_id,
+        serving_size, serving_unit, servings_per_container, container_count,
         dosage_text, warning_title, warning_message,
         warning_type, alternative_note, source_user_product_id
       ) VALUES (?, ?, ?, ?, ?, ?, 'approved', 'public', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -4070,7 +9381,9 @@ admin.put('/user-products/:id/publish', async (c) => {
       userProduct.price,
       userProduct.shop_link ?? null,
       userProduct.image_url ?? null,
-      affiliateValue,
+      ownership.is_affiliate,
+      ownership.affiliate_owner_type,
+      ownership.affiliate_owner_user_id,
       userProduct.serving_size,
       userProduct.serving_unit,
       userProduct.servings_per_container,
@@ -4124,7 +9437,7 @@ admin.put('/user-products/:id/publish', async (c) => {
     action: 'publish_user_product',
     entity_type: 'user_product',
     entity_id: id,
-    changes: { published_product_id: productId, is_affiliate: affiliateValue },
+    changes: { published_product_id: productId, ...ownership },
   })
 
   return c.json({ ok: true, product: payload?.product ?? null, ingredients: payload?.ingredients ?? [], idempotent: false }, 201)
@@ -4160,6 +9473,236 @@ admin.delete('/user-products/:id', async (c) => {
     entity_id: Number(id),
   })
   return c.json({ ok: true })
+})
+
+// GET /api/admin/users?q=&role=&trusted=&verified=&page=1&limit=25 (admin)
+admin.get('/users', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const q = optionalText(c.req.query('q'))
+  const role = optionalText(c.req.query('role'))
+  if (role && !['user', 'admin'].includes(role)) {
+    return c.json({ error: 'role must be user or admin' }, 400)
+  }
+
+  const trusted = parseBooleanFilter(c.req.query('trusted'))
+  if (trusted === null) return c.json({ error: 'trusted must be true or false' }, 400)
+
+  const verified = parseBooleanFilter(c.req.query('verified'))
+  if (verified === null) return c.json({ error: 'verified must be true or false' }, 400)
+
+  const page = Math.max(1, parsePagination(c.req.query('page'), 1, 100000))
+  const limit = parsePagination(c.req.query('limit'), 25, 100)
+  const offset = (page - 1) * limit
+
+  const where: string[] = []
+  const bindings: Array<string | number> = []
+
+  if (q) {
+    where.push('(u.email LIKE ? OR CAST(u.id AS TEXT) = ?)')
+    bindings.push(`%${q}%`, q)
+  }
+  if (role) {
+    where.push("COALESCE(u.role, 'user') = ?")
+    bindings.push(role)
+  }
+  if (trusted !== undefined) {
+    where.push('u.is_trusted_product_submitter = ?')
+    bindings.push(trusted ? 1 : 0)
+  }
+  if (verified !== undefined) {
+    where.push(verified ? 'u.email_verified_at IS NOT NULL' : 'u.email_verified_at IS NULL')
+  }
+
+  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
+  const countQuery = `SELECT COUNT(*) AS count FROM users u ${whereSql}`
+  const countStmt = c.env.DB.prepare(countQuery)
+  const totalRow = bindings.length
+    ? await countStmt.bind(...bindings).first<CountRow>()
+    : await countStmt.first<CountRow>()
+
+  const listBindings = [...bindings, limit, offset]
+  const { results: users } = await c.env.DB.prepare(`
+    SELECT
+      u.id,
+      u.email,
+      COALESCE(u.role, 'user') AS role,
+      u.created_at,
+      u.health_consent,
+      u.health_consent_at,
+      u.email_verified_at,
+      u.deleted_at,
+      u.is_trusted_product_submitter,
+      COALESCE(sc.stack_count, 0) AS stack_count,
+      sc.last_stack_at,
+      COALESCE(upc.user_product_count, 0) AS user_product_count,
+      COALESCE(upc.pending_user_product_count, 0) AS pending_user_product_count,
+      COALESCE(upc.approved_user_product_count, 0) AS approved_user_product_count
+    FROM users u
+    LEFT JOIN (
+      SELECT user_id, COUNT(*) AS stack_count, MAX(created_at) AS last_stack_at
+      FROM stacks
+      GROUP BY user_id
+    ) sc ON sc.user_id = u.id
+    LEFT JOIN (
+      SELECT
+        user_id,
+        COUNT(*) AS user_product_count,
+        SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending_user_product_count,
+        SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) AS approved_user_product_count
+      FROM user_products
+      GROUP BY user_id
+    ) upc ON upc.user_id = u.id
+    ${whereSql}
+    ORDER BY u.created_at DESC, u.id DESC
+    LIMIT ? OFFSET ?
+  `).bind(...listBindings).all<AdminUserRow>()
+
+  const summaryRow = await c.env.DB.prepare(`
+    SELECT
+      COUNT(*) AS total,
+      SUM(CASE WHEN COALESCE(role, 'user') = 'admin' THEN 1 ELSE 0 END) AS admins,
+      SUM(CASE WHEN is_trusted_product_submitter = 1 THEN 1 ELSE 0 END) AS trusted,
+      SUM(CASE WHEN email_verified_at IS NOT NULL THEN 1 ELSE 0 END) AS verified,
+      SUM(CASE WHEN email_verified_at IS NULL THEN 1 ELSE 0 END) AS unverified,
+      SUM(CASE WHEN deleted_at IS NOT NULL THEN 1 ELSE 0 END) AS deleted
+    FROM users
+  `).first<{
+    total: number
+    admins: number | null
+    trusted: number | null
+    verified: number | null
+    unverified: number | null
+    deleted: number | null
+  }>()
+
+  return c.json({
+    users,
+    total: totalRow?.count ?? 0,
+    page,
+    limit,
+    summary: {
+      total: summaryRow?.total ?? 0,
+      admins: summaryRow?.admins ?? 0,
+      trusted: summaryRow?.trusted ?? 0,
+      verified: summaryRow?.verified ?? 0,
+      unverified: summaryRow?.unverified ?? 0,
+      deleted: summaryRow?.deleted ?? 0,
+    },
+  })
+})
+
+// PATCH /api/admin/users/:id (admin)
+admin.patch('/users/:id', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const userId = parsePositiveId(c.req.param('id'))
+  if (userId === null) return c.json({ error: 'Invalid user id' }, 400)
+
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const existing = await c.env.DB.prepare(`
+    SELECT id, email, COALESCE(role, 'user') AS role, is_trusted_product_submitter
+    FROM users
+    WHERE id = ?
+  `).bind(userId).first<{
+    id: number
+    email: string
+    role: string
+    is_trusted_product_submitter: number
+  }>()
+  if (!existing) return c.json({ error: 'User not found' }, 404)
+
+  const setClauses: string[] = []
+  const values: Array<string | number> = []
+  const changes: Record<string, { before: string | number; after: string | number }> = {}
+
+  if (hasOwnKey(body, 'role')) {
+    if (typeof body.role !== 'string' || !['user', 'admin'].includes(body.role)) {
+      return c.json({ error: 'role must be user or admin' }, 400)
+    }
+    const nextRole = body.role
+    const currentUser = c.get('user')
+    if (existing.role === 'admin' && nextRole !== 'admin') {
+      if (currentUser?.userId === userId) {
+        return c.json({ error: 'Admins cannot demote their own account.' }, 400)
+      }
+      const adminCount = await c.env.DB.prepare(
+        `SELECT COUNT(*) AS count FROM users WHERE COALESCE(role, 'user') = 'admin'`
+      ).first<CountRow>()
+      if ((adminCount?.count ?? 0) <= 1) {
+        return c.json({ error: 'Cannot demote the last admin account.' }, 400)
+      }
+    }
+    if (nextRole !== existing.role) {
+      setClauses.push('role = ?')
+      values.push(nextRole)
+      changes.role = { before: existing.role, after: nextRole }
+    }
+  }
+
+  if (hasOwnKey(body, 'trusted_submitter') || hasOwnKey(body, 'is_trusted_product_submitter')) {
+    const rawTrusted = hasOwnKey(body, 'trusted_submitter')
+      ? body.trusted_submitter
+      : body.is_trusted_product_submitter
+    const trusted = parseBooleanMutation(rawTrusted)
+    if (trusted === null) return c.json({ error: 'trusted_submitter must be true or false' }, 400)
+    const nextTrusted = trusted ? 1 : 0
+    if (nextTrusted !== existing.is_trusted_product_submitter) {
+      setClauses.push('is_trusted_product_submitter = ?')
+      values.push(nextTrusted)
+      changes.is_trusted_product_submitter = {
+        before: existing.is_trusted_product_submitter,
+        after: nextTrusted,
+      }
+    }
+  }
+
+  if (setClauses.length === 0) {
+    return c.json({
+      ok: true,
+      user: {
+        id: existing.id,
+        email: existing.email,
+        role: existing.role,
+        is_trusted_product_submitter: existing.is_trusted_product_submitter,
+      },
+      unchanged: true,
+    })
+  }
+
+  await c.env.DB.prepare(`
+    UPDATE users
+    SET ${setClauses.join(', ')}
+    WHERE id = ?
+  `).bind(...values, userId).run()
+
+  await logAdminAction(c, {
+    action: 'update_user_admin_fields',
+    entity_type: 'user',
+    entity_id: userId,
+    changes,
+  })
+
+  const updated = await c.env.DB.prepare(`
+    SELECT id, email, COALESCE(role, 'user') AS role, is_trusted_product_submitter
+    FROM users
+    WHERE id = ?
+  `).bind(userId).first<{
+    id: number
+    email: string
+    role: string
+    is_trusted_product_submitter: number
+  }>()
+
+  return c.json({ ok: true, user: updated })
 })
 
 // PUT /api/admin/users/:id/trusted-product-submitter (admin)
@@ -4921,60 +10464,696 @@ shopDomainsPublicApp.get('/', async (c) => {
 
 export const interactionsApp = new Hono<AppContext>()
 
+const INTERACTION_PARTNER_TYPES = ['ingredient', 'food', 'medication', 'condition'] as const
+type InteractionPartnerType = (typeof INTERACTION_PARTNER_TYPES)[number]
+const INTERACTION_SEVERITIES = ['info', 'medium', 'high', 'danger'] as const
+type InteractionSeverity = (typeof INTERACTION_SEVERITIES)[number]
+type InteractionTypeValue = 'avoid' | 'caution' | 'danger' | string
+
+function severityFromLegacyInteractionType(type: InteractionTypeValue): InteractionSeverity {
+  if (type === 'danger') return 'danger'
+  if (type === 'avoid') return 'high'
+  if (type === 'caution') return 'medium'
+  return 'medium'
+}
+
+type InteractionAdminRow = {
+  id: number
+  ingredient_id: number
+  partner_type: InteractionPartnerType
+  partner_ingredient_id: number | null
+  partner_label: string | null
+  type: InteractionTypeValue | null
+  severity: InteractionSeverity | null
+  mechanism: string | null
+  comment: string | null
+  source_url: string | null
+  source_label: string | null
+  is_active: number
+  version: number | null
+  ingredient_a_name: string
+  ingredient_b_name: string | null
+}
+
+type InteractionMutation = {
+  ingredient_id: number
+  partner_type: InteractionPartnerType
+  partner_ingredient_id: number | null
+  partner_label: string | null
+  type: InteractionTypeValue
+  severity: InteractionSeverity
+  mechanism: string | null
+  comment: string | null
+  source_url: string | null
+  source_label: string | null
+  is_active: number
+}
+
+function formatAdminInteraction(row: InteractionAdminRow) {
+  return {
+    ...row,
+    ingredient_a_id: row.ingredient_id,
+    ingredient_b_id: row.partner_type === 'ingredient' ? row.partner_ingredient_id : null,
+    ingredient_b_name: row.partner_type === 'ingredient'
+      ? row.ingredient_b_name
+      : row.partner_label ?? row.ingredient_b_name,
+  }
+}
+
+async function loadAdminInteractionById(
+  db: D1Database,
+  id: number,
+  columns?: Set<string>,
+): Promise<InteractionAdminRow | null> {
+  const interactionColumns = columns ?? await getTableColumns(db, 'interactions')
+  return db.prepare(`
+    SELECT
+      ix.id,
+      ix.ingredient_id,
+      ix.partner_type,
+      ix.partner_ingredient_id,
+      ix.partner_label,
+      ix.type,
+      ix.severity,
+      ix.mechanism,
+      ix.comment,
+      ix.source_url,
+      ix.source_label,
+      ix.is_active,
+      ${versionSelect(interactionColumns, 'ix')},
+      ia.name AS ingredient_a_name,
+      COALESCE(ib.name, ix.partner_label) AS ingredient_b_name
+    FROM interactions ix
+    JOIN ingredients ia ON ia.id = ix.ingredient_id
+    LEFT JOIN ingredients ib ON ib.id = ix.partner_ingredient_id
+    WHERE ix.id = ?
+  `).bind(id).first<InteractionAdminRow>()
+}
+
+function validateInteractionMutation(
+  data: Record<string, unknown>,
+  existing: InteractionAdminRow,
+): ValidationResult<InteractionMutation> {
+  const rawIngredientId = hasOwnKey(data, 'ingredient_id')
+    ? data.ingredient_id
+    : hasOwnKey(data, 'ingredient_a_id')
+      ? data.ingredient_a_id
+      : existing.ingredient_id
+  const ingredientId = normalizeInteger(rawIngredientId)
+  if (ingredientId === undefined || ingredientId <= 0) {
+    return validationError('ingredient_id must be a positive integer')
+  }
+
+  const rawPartnerType = hasOwnKey(data, 'partner_type') ? data.partner_type : existing.partner_type
+  const partnerType = enumValue(rawPartnerType, INTERACTION_PARTNER_TYPES)
+  if (!partnerType) {
+    return validationError(`partner_type must be one of: ${INTERACTION_PARTNER_TYPES.join(', ')}`)
+  }
+
+  let partnerIngredientId: number | null = null
+  let partnerLabel: string | null = null
+  if (partnerType === 'ingredient') {
+    const rawPartnerIngredientId = hasOwnKey(data, 'partner_ingredient_id')
+      ? data.partner_ingredient_id
+      : hasOwnKey(data, 'ingredient_b_id')
+        ? data.ingredient_b_id
+        : existing.partner_type === 'ingredient'
+          ? existing.partner_ingredient_id
+          : undefined
+    const parsedPartnerIngredientId = normalizeInteger(rawPartnerIngredientId)
+    if (parsedPartnerIngredientId === undefined || parsedPartnerIngredientId <= 0) {
+      return validationError('partner_ingredient_id must be a positive integer')
+    }
+    if (parsedPartnerIngredientId === ingredientId) {
+      return validationError('ingredient_id and partner_ingredient_id must not be identical')
+    }
+    partnerIngredientId = parsedPartnerIngredientId
+  } else {
+    const partnerLabelResult = hasOwnKey(data, 'partner_label')
+      ? requiredTextField(data, 'partner_label', 250)
+      : existing.partner_type === partnerType && existing.partner_label
+        ? { ok: true as const, value: existing.partner_label }
+        : validationError('partner_label is required')
+    if (!partnerLabelResult.ok) return partnerLabelResult
+    partnerLabel = partnerLabelResult.value
+  }
+
+  let interactionType: InteractionTypeValue
+  if (hasOwnKey(data, 'type')) {
+    const interactionTypeResult = optionalTextField(data, 'type', 120)
+    if (!interactionTypeResult.ok) return interactionTypeResult
+    if (interactionTypeResult.value === null || interactionTypeResult.value === undefined) {
+      return validationError('type must be a non-empty string')
+    }
+    interactionType = interactionTypeResult.value
+  } else {
+    interactionType = existing.type ?? 'avoid'
+  }
+
+  const severity = hasOwnKey(data, 'severity')
+    ? enumValue(data.severity, INTERACTION_SEVERITIES)
+    : existing.severity && INTERACTION_SEVERITIES.includes(existing.severity)
+      ? existing.severity
+      : severityFromLegacyInteractionType(interactionType)
+  if (!severity) {
+    return validationError(`severity must be one of: ${INTERACTION_SEVERITIES.join(', ')}`)
+  }
+
+  const commentResult = optionalTextField(data, 'comment', 2000)
+  if (!commentResult.ok) return commentResult
+
+  const mechanismResult = optionalTextField(data, 'mechanism', 2000)
+  if (!mechanismResult.ok) return mechanismResult
+
+  const sourceUrlResult = normalizeSourceUrl(hasOwnKey(data, 'source_url') ? data.source_url : undefined)
+  if (!sourceUrlResult.ok) return sourceUrlResult
+
+  const sourceLabelResult = optionalTextField(data, 'source_label', 250)
+  if (!sourceLabelResult.ok) return sourceLabelResult
+
+  const isActiveResult = optionalBooleanField(data, 'is_active')
+  if (!isActiveResult.ok) return isActiveResult
+
+  return {
+    ok: true,
+    value: {
+      ingredient_id: ingredientId,
+      partner_type: partnerType,
+      partner_ingredient_id: partnerIngredientId,
+      partner_label: partnerLabel,
+      type: interactionType,
+      severity,
+      mechanism: mechanismResult.value === undefined ? existing.mechanism : mechanismResult.value,
+      comment: commentResult.value === undefined ? existing.comment : commentResult.value,
+      source_url: sourceUrlResult.value === undefined ? existing.source_url : sourceUrlResult.value,
+      source_label: sourceLabelResult.value === undefined ? existing.source_label : sourceLabelResult.value,
+      is_active: isActiveResult.value ?? existing.is_active,
+    },
+  }
+}
+
+// GET /api/admin/interactions/:id (admin only)
+admin.get('/interactions/:id', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const id = parsePositiveId(c.req.param('id'))
+  if (id === null) return c.json({ error: 'Invalid interaction id' }, 400)
+
+  const interaction = await loadAdminInteractionById(c.env.DB, id)
+  if (!interaction) return c.json({ error: 'Interaction not found' }, 404)
+
+  return c.json({ interaction: formatAdminInteraction(interaction) })
+})
+
+// PUT /api/admin/interactions/:id (admin only)
+admin.put('/interactions/:id', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const id = parsePositiveId(c.req.param('id'))
+  if (id === null) return c.json({ error: 'Invalid interaction id' }, 400)
+
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const columns = await getTableColumns(c.env.DB, 'interactions')
+  const existing = await loadAdminInteractionById(c.env.DB, id, columns)
+  if (!existing) return c.json({ error: 'Interaction not found' }, 404)
+
+  const lock = validateOptimisticLock(columns.has('version'), existing.version, requestVersion(c, body))
+  if (!lock.ok) return c.json({ error: lock.error, current_version: existing.version }, 409)
+
+  const validation = validateInteractionMutation(body, existing)
+  if (!validation.ok) return c.json({ error: validation.error }, validation.status)
+  const data = validation.value
+
+  const ingredient = await c.env.DB.prepare('SELECT id FROM ingredients WHERE id = ?')
+    .bind(data.ingredient_id)
+    .first<{ id: number }>()
+  if (!ingredient) return c.json({ error: 'Ingredient not found' }, 404)
+
+  if (data.partner_type === 'ingredient') {
+    const partnerIngredient = await c.env.DB.prepare('SELECT id FROM ingredients WHERE id = ?')
+      .bind(data.partner_ingredient_id)
+      .first<{ id: number }>()
+    if (!partnerIngredient) return c.json({ error: 'Partner ingredient not found' }, 404)
+  }
+
+  const versionSet = lock.value.enforce ? ', version = COALESCE(version, 0) + 1' : ''
+  const whereSql = lock.value.enforce ? 'id = ? AND version = ?' : 'id = ?'
+  const bindings: Array<string | number | null> = [
+    data.ingredient_id,
+    data.partner_type,
+    data.partner_ingredient_id,
+    data.partner_label,
+    data.type,
+    data.severity,
+    data.mechanism,
+    data.comment,
+    data.source_url,
+    data.source_label,
+    data.is_active,
+    id,
+  ]
+  if (lock.value.enforce) bindings.push(lock.value.expectedVersion)
+
+  let updateResult: D1Result
+  try {
+    updateResult = await c.env.DB.prepare(`
+      UPDATE interactions
+      SET ingredient_id = ?,
+          partner_type = ?,
+          partner_ingredient_id = ?,
+          partner_label = ?,
+          type = ?,
+          severity = ?,
+          mechanism = ?,
+          comment = ?,
+          source_url = ?,
+          source_label = ?,
+          is_active = ?${versionSet}
+      WHERE ${whereSql}
+    `).bind(...bindings).run()
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      return c.json({ error: 'Interaction relation already exists' }, 409)
+    }
+    throw error
+  }
+
+  if (lock.value.enforce && d1ChangeCount(updateResult) === 0) {
+    const current = await loadAdminInteractionById(c.env.DB, id, columns)
+    return c.json({ error: 'Version conflict', current_version: current?.version ?? existing.version }, 409)
+  }
+
+  const updated = await loadAdminInteractionById(c.env.DB, id, columns)
+  if (!updated) return c.json({ error: 'Interaction not found after update' }, 404)
+
+  await logAdminAction(c, {
+    action: 'update_interaction',
+    entity_type: 'interaction',
+    entity_id: id,
+    changes: {
+      before: {
+        ingredient_id: existing.ingredient_id,
+        partner_type: existing.partner_type,
+        partner_ingredient_id: existing.partner_ingredient_id,
+        partner_label: existing.partner_label,
+        type: existing.type,
+        severity: existing.severity,
+        mechanism: existing.mechanism,
+        comment: existing.comment,
+        source_url: existing.source_url,
+        source_label: existing.source_label,
+        is_active: existing.is_active,
+        version: existing.version,
+      },
+      after: {
+        ...data,
+        version: updated.version,
+      },
+    },
+  })
+
+  return c.json({ interaction: formatAdminInteraction(updated) })
+})
+
+// DELETE /api/admin/interactions/:id (admin only)
+admin.delete('/interactions/:id', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const id = parsePositiveId(c.req.param('id'))
+  if (id === null) return c.json({ error: 'Invalid interaction id' }, 400)
+
+  const columns = await getTableColumns(c.env.DB, 'interactions')
+  const interaction = await loadAdminInteractionById(c.env.DB, id, columns)
+  if (!interaction) return c.json({ error: 'Interaction not found' }, 404)
+
+  const expectedVersion = await requestVersionFromRequest(c)
+  const lock = validateOptimisticLock(columns.has('version'), interaction.version, expectedVersion)
+  if (!lock.ok) return c.json({ error: lock.error, current_version: interaction.version }, 409)
+
+  const deleteResult = lock.value.enforce
+    ? await c.env.DB.prepare('DELETE FROM interactions WHERE id = ? AND version = ?')
+      .bind(id, lock.value.expectedVersion)
+      .run()
+    : await c.env.DB.prepare('DELETE FROM interactions WHERE id = ?').bind(id).run()
+  if (lock.value.enforce && d1ChangeCount(deleteResult) === 0) {
+    const current = await loadAdminInteractionById(c.env.DB, id, columns)
+    return c.json({ error: 'Version conflict', current_version: current?.version ?? interaction.version }, 409)
+  }
+
+  await logAdminAction(c, {
+    action: 'delete_interaction',
+    entity_type: 'interaction',
+    entity_id: id,
+    changes: {
+      before: formatAdminInteraction(interaction),
+    },
+  })
+
+  return c.json({ ok: true })
+})
+
 // GET /api/interactions
 interactionsApp.get('/', async (c) => {
-  const { results: interactions } = await c.env.DB.prepare(`
-    SELECT ix.*,
-           ia.name as ingredient_a_name,
-           ib.name as ingredient_b_name
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const columns = await getTableColumns(c.env.DB, 'interactions')
+  const ingredientFilter = c.req.query('ingredient_id')
+  const ingredientId = ingredientFilter === undefined ? null : parsePositiveId(ingredientFilter)
+  if (ingredientFilter !== undefined && ingredientId === null) {
+    return c.json({ error: 'Invalid ingredient_id' }, 400)
+  }
+
+  const filterSql = ingredientId === null
+    ? ''
+    : 'WHERE ix.ingredient_id = ? OR ix.partner_ingredient_id = ?'
+  const stmt = c.env.DB.prepare(`
+    SELECT
+      ix.id,
+      ix.ingredient_id,
+      ix.partner_type,
+      ix.partner_ingredient_id,
+      ix.partner_label,
+      ix.type,
+      ix.severity,
+      ix.mechanism,
+      ix.comment,
+      ix.source_url,
+      ix.source_label,
+      ix.is_active,
+      ${versionSelect(columns, 'ix')},
+      ia.name AS ingredient_a_name,
+      COALESCE(ib.name, ix.partner_label) AS ingredient_b_name,
+      ix.ingredient_id AS ingredient_a_id,
+      CASE
+        WHEN ix.partner_type = 'ingredient' THEN ix.partner_ingredient_id
+        ELSE NULL
+      END AS ingredient_b_id
     FROM interactions ix
-    JOIN ingredients ia ON ia.id = ix.ingredient_a_id
-    JOIN ingredients ib ON ib.id = ix.ingredient_b_id
+    JOIN ingredients ia ON ia.id = ix.ingredient_id
+    LEFT JOIN ingredients ib ON ib.id = ix.partner_ingredient_id
+    ${filterSql}
     ORDER BY ix.id DESC
-  `).all()
+  `)
+  const { results: interactions } = ingredientId === null
+    ? await stmt.all()
+    : await stmt.bind(ingredientId, ingredientId).all()
   return c.json({ interactions })
 })
 
 // POST /api/interactions (admin only)
 interactionsApp.post('/', async (c) => {
-  const authErr = await ensureAuth(c)
+  const authErr = await ensureAdmin(c)
   if (authErr) return authErr
-  const user = c.get('user')
-  if (user.role !== 'admin') return c.json({ error: 'Forbidden' }, 403)
   let data: Record<string, unknown>
   try {
     data = await c.req.json()
   } catch {
     return c.json({ error: 'Invalid JSON' }, 400)
   }
-  if (!data.ingredient_a_id || !data.ingredient_b_id) return c.json({ error: 'Missing fields' }, 400)
-  const interactionResult = await c.env.DB.prepare(
-    'INSERT OR REPLACE INTO interactions (ingredient_a_id, ingredient_b_id, type, comment) VALUES (?, ?, ?, ?)'
-  ).bind(
-    data.ingredient_a_id,
-    data.ingredient_b_id,
-    (data.type as string) || 'avoid',
-    (data.comment as string) || null,
-  ).run()
+
+  const rawIngredientId = hasOwnKey(data, 'ingredient_id') ? data.ingredient_id : data.ingredient_a_id
+  const ingredientId = normalizeInteger(rawIngredientId)
+  if (ingredientId === undefined || ingredientId <= 0) {
+    return c.json({ error: 'ingredient_id is required and must be a positive integer' }, 400)
+  }
+
+  const rawPartnerType = data.partner_type
+  const partnerType = hasOwnKey(data, 'partner_type')
+    ? enumValue(rawPartnerType, INTERACTION_PARTNER_TYPES)
+    : 'ingredient'
+  if (rawPartnerType !== undefined && !partnerType) {
+    return c.json({ error: `partner_type must be one of: ${INTERACTION_PARTNER_TYPES.join(', ')}` }, 400)
+  }
+
+  let partnerIngredientId: number | null = null
+  let partnerLabel: string | null = null
+
+  if (partnerType === 'ingredient') {
+    const rawPartnerIngredientId = hasOwnKey(data, 'partner_ingredient_id')
+      ? data.partner_ingredient_id
+      : data.ingredient_b_id
+    const parsedPartnerIngredientId = normalizeInteger(rawPartnerIngredientId)
+    if (!hasOwnKey(data, 'partner_ingredient_id') && !hasOwnKey(data, 'ingredient_b_id')) {
+      return c.json({ error: 'partner_ingredient_id is required for ingredient partner_type' }, 400)
+    }
+    if (parsedPartnerIngredientId === undefined || parsedPartnerIngredientId <= 0) {
+      return c.json({ error: 'partner_ingredient_id must be a positive integer' }, 400)
+    }
+    if (parsedPartnerIngredientId === ingredientId) {
+      return c.json({ error: 'ingredient_id and partner_ingredient_id must not be identical' }, 400)
+    }
+    partnerIngredientId = parsedPartnerIngredientId
+  } else {
+    const partnerLabelResult = requiredTextField(data, 'partner_label', 250)
+    if (!partnerLabelResult.ok) return c.json({ error: partnerLabelResult.error }, 400)
+    partnerLabel = partnerLabelResult.value
+  }
+
+  let interactionType: InteractionTypeValue
+  if (hasOwnKey(data, 'type')) {
+    const interactionTypeResult = optionalTextField(data, 'type', 120)
+    if (!interactionTypeResult.ok) return c.json({ error: interactionTypeResult.error }, 400)
+    if (interactionTypeResult.value === null || interactionTypeResult.value === undefined) {
+      return c.json({ error: 'type must be a non-empty string' }, 400)
+    }
+    interactionType = interactionTypeResult.value
+  } else {
+    interactionType = 'avoid'
+  }
+
+  const rawSeverity = data.severity
+  const severity = hasOwnKey(data, 'severity')
+    ? enumValue(rawSeverity, INTERACTION_SEVERITIES)
+    : severityFromLegacyInteractionType(interactionType)
+  if (rawSeverity !== undefined && !severity) {
+    return c.json({ error: `severity must be one of: ${INTERACTION_SEVERITIES.join(', ')}` }, 400)
+  }
+
+  const commentResult = optionalTextField(data, 'comment', 2000)
+  if (!commentResult.ok) return c.json({ error: commentResult.error }, 400)
+
+  const mechanismResult = optionalTextField(data, 'mechanism', 2000)
+  if (!mechanismResult.ok) return c.json({ error: mechanismResult.error }, 400)
+
+  const sourceUrlResult = normalizeSourceUrl(data.source_url)
+  if (!sourceUrlResult.ok) return c.json({ error: sourceUrlResult.error }, 400)
+
+  const sourceLabelResult = optionalTextField(data, 'source_label', 250)
+  if (!sourceLabelResult.ok) return c.json({ error: sourceLabelResult.error }, 400)
+
+  const isActiveResult = optionalBooleanField(data, 'is_active')
+  if (!isActiveResult.ok) return c.json({ error: isActiveResult.error }, 400)
+  const isActive = isActiveResult.value ?? 1
+  const mechanism = mechanismResult.value ?? null
+  const comment = commentResult.value ?? null
+  const sourceUrl = sourceUrlResult.value ?? null
+  const sourceLabel = sourceLabelResult.value ?? null
+  const columns = await getTableColumns(c.env.DB, 'interactions')
+  const rawInteractionId = hasOwnKey(data, 'id') ? normalizeInteger(data.id) : undefined
+  if (hasOwnKey(data, 'id') && (rawInteractionId === undefined || rawInteractionId <= 0)) {
+    return c.json({ error: 'id must be a positive integer' }, 400)
+  }
+  const existing = await c.env.DB.prepare(`
+    SELECT
+      id,
+      ${versionSelect(columns)}
+    FROM interactions
+    WHERE ingredient_id = ?
+      AND partner_type = ?
+      AND COALESCE(partner_ingredient_id, -1) = COALESCE(?, -1)
+      AND COALESCE(partner_label, '_') = COALESCE(?, '_')
+    ORDER BY id DESC
+    LIMIT 1
+  `).bind(
+    ingredientId,
+    partnerType,
+    partnerIngredientId,
+    partnerLabel,
+  ).first<{ id: number; version: number | null }>()
+  if (columns.has('version') && existing && rawInteractionId !== undefined && rawInteractionId !== existing.id) {
+    return c.json({ error: 'Version conflict', current_version: existing.version }, 409)
+  }
+  const shouldLockExisting = Boolean(columns.has('version') && existing && (rawInteractionId !== undefined || hasOwnKey(data, 'version')))
+  const lock = shouldLockExisting
+    ? validateOptimisticLock(true, existing?.version ?? null, requestVersion(c, data))
+    : { ok: true as const, value: { enforce: false, expectedVersion: null } }
+  if (!lock.ok) return c.json({ error: lock.error, current_version: existing?.version ?? null }, 409)
+  const versionSet = columns.has('version') ? ', version = COALESCE(interactions.version, 0) + 1' : ''
+  const conflictWhere = lock.value.enforce ? ' WHERE interactions.version = ?' : ''
+  const upsertBindings: Array<string | number | null> = [
+    ingredientId,
+    partnerType,
+    partnerIngredientId,
+    partnerLabel,
+    interactionType,
+    severity,
+    mechanism,
+    comment,
+    sourceUrl,
+    sourceLabel,
+    isActive,
+  ]
+  if (lock.value.enforce) upsertBindings.push(lock.value.expectedVersion)
+
+  const upsertResult = await c.env.DB.prepare(`
+    INSERT INTO interactions (
+      ingredient_id,
+      partner_type,
+      partner_ingredient_id,
+      partner_label,
+      type,
+      severity,
+      mechanism,
+      comment,
+      source_url,
+      source_label,
+      is_active
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(
+      ingredient_id,
+      partner_type,
+      COALESCE(partner_ingredient_id, -1),
+      COALESCE(partner_label, '_')
+    ) DO UPDATE SET
+      type = excluded.type,
+      severity = excluded.severity,
+      mechanism = excluded.mechanism,
+      comment = excluded.comment,
+      source_url = excluded.source_url,
+      source_label = excluded.source_label,
+      is_active = excluded.is_active${versionSet}${conflictWhere}
+  `).bind(...upsertBindings).run()
+  if (lock.value.enforce && d1ChangeCount(upsertResult) === 0) {
+    const current = await c.env.DB.prepare(`
+      SELECT ${versionSelect(columns)}
+      FROM interactions
+      WHERE id = ?
+    `).bind(existing?.id ?? rawInteractionId).first<{ version: number | null }>()
+    return c.json({ error: 'Version conflict', current_version: current?.version ?? existing?.version ?? null }, 409)
+  }
+
+  const { results: interactions } = await c.env.DB.prepare(`
+    SELECT
+      ix.id,
+      ix.ingredient_id,
+      ix.partner_type,
+      ix.partner_ingredient_id,
+      ix.partner_label,
+      ix.type,
+      ix.severity,
+      ix.mechanism,
+      ix.comment,
+      ix.source_url,
+      ix.source_label,
+      ix.is_active,
+      ${versionSelect(columns, 'ix')},
+      ia.name AS ingredient_a_name,
+      COALESCE(ib.name, ix.partner_label) AS ingredient_b_name
+    FROM interactions ix
+    JOIN ingredients ia ON ia.id = ix.ingredient_id
+    LEFT JOIN ingredients ib ON ib.id = ix.partner_ingredient_id
+    WHERE ix.ingredient_id = ?
+      AND ix.partner_type = ?
+      AND COALESCE(ix.partner_ingredient_id, -1) = COALESCE(?, -1)
+      AND COALESCE(ix.partner_label, '_') = COALESCE(?, '_')
+    ORDER BY ix.id DESC
+    LIMIT 1
+  `).bind(
+    ingredientId,
+    partnerType,
+    partnerIngredientId,
+    partnerLabel,
+  ).all<{
+    id: number
+    ingredient_id: number
+    partner_type: InteractionPartnerType
+    partner_ingredient_id: number | null
+    partner_label: string | null
+    type: InteractionTypeValue | null
+    severity: InteractionSeverity | null
+    mechanism: string | null
+    comment: string | null
+    source_url: string | null
+    source_label: string | null
+    is_active: number
+    version: number | null
+    ingredient_a_name: string
+    ingredient_b_name: string | null
+  }>()
+
+  const interaction = interactions[0]
+  const responseInteraction = interaction
+    ? {
+        ...interaction,
+        ingredient_a_id: interaction.ingredient_id,
+        ingredient_b_id: interaction.partner_type === 'ingredient'
+          ? interaction.partner_ingredient_id
+          : null,
+        ingredient_b_name: interaction.partner_type === 'ingredient'
+          ? interaction.ingredient_b_name
+          : interaction.partner_label ?? interaction.ingredient_b_name,
+      }
+    : null
+
   await logAdminAction(c, {
     action: 'upsert_interaction',
     entity_type: 'interaction',
-    entity_id: interactionResult.meta.last_row_id as number ?? null,
-    changes: data,
+    entity_id: interaction?.id ?? null,
+    changes: {
+      ingredient_id: ingredientId,
+      partner_type: partnerType,
+      partner_ingredient_id: partnerIngredientId,
+      partner_label: partnerLabel,
+      type: interactionType,
+      severity,
+      mechanism,
+      comment,
+      source_url: sourceUrl,
+      source_label: sourceLabel,
+      is_active: isActive,
+    },
   })
-  return c.json({ ok: true })
+  return c.json({ interaction: responseInteraction })
 })
 
 // DELETE /api/interactions/:id (admin only)
 interactionsApp.delete('/:id', async (c) => {
-  const authErr = await ensureAuth(c)
+  const authErr = await ensureAdmin(c)
   if (authErr) return authErr
-  const admErr = requireAdmin(c)
-  if (admErr) return admErr
   const id = c.req.param('id')
-  const interaction = await c.env.DB.prepare('SELECT id FROM interactions WHERE id = ?').bind(id).first<InteractionRow>()
+  const columns = await getTableColumns(c.env.DB, 'interactions')
+  const interaction = await c.env.DB.prepare(`
+    SELECT
+      id,
+      ${versionSelect(columns)}
+    FROM interactions
+    WHERE id = ?
+  `).bind(id).first<{ id: number; version: number | null }>()
   if (!interaction) return c.json({ error: 'Not found' }, 404)
-  await c.env.DB.prepare('DELETE FROM interactions WHERE id = ?').bind(id).run()
+  const expectedVersion = await requestVersionFromRequest(c)
+  const lock = validateOptimisticLock(columns.has('version'), interaction.version, expectedVersion)
+  if (!lock.ok) return c.json({ error: lock.error, current_version: interaction.version }, 409)
+  const deleteResult = lock.value.enforce
+    ? await c.env.DB.prepare('DELETE FROM interactions WHERE id = ? AND version = ?').bind(id, lock.value.expectedVersion).run()
+    : await c.env.DB.prepare('DELETE FROM interactions WHERE id = ?').bind(id).run()
+  if (lock.value.enforce && d1ChangeCount(deleteResult) === 0) {
+    const current = await c.env.DB.prepare(`
+      SELECT ${versionSelect(columns)}
+      FROM interactions
+      WHERE id = ?
+    `).bind(id).first<{ version: number | null }>()
+    return c.json({ error: 'Version conflict', current_version: current?.version ?? interaction.version }, 409)
+  }
   await logAdminAction(c, {
     action: 'delete_interaction',
     entity_type: 'interaction',

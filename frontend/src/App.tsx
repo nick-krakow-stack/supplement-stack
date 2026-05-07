@@ -1,25 +1,46 @@
-import { Routes, Route, Link } from 'react-router-dom';
+import { Navigate, Route, Routes, Link, useLocation } from 'react-router-dom';
+import { lazy, Suspense } from 'react';
 import { AuthProvider } from './contexts/AuthContext';
 import Layout from './components/Layout';
-import AdminLayout from './components/AdminLayout';
 import ProtectedRoute from './components/ProtectedRoute';
 import CookieConsentBanner from './components/CookieConsentBanner';
 
-import LandingPage from './pages/LandingPage';
-import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
-import ProfilePage from './pages/ProfilePage';
-import StacksPage from './pages/StacksPage';
-import AdminPage from './pages/AdminPage';
-import DemoPage from './pages/DemoPage';
-import MyProductsPage from './pages/MyProductsPage';
-import ForgotPasswordPage from './pages/ForgotPasswordPage';
-import ResetPasswordPage from './pages/ResetPasswordPage';
-import VerifyEmailPage from './pages/VerifyEmailPage';
-import PrivacyPage from './pages/PrivacyPage';
-import ImprintPage from './pages/ImprintPage';
-import TermsPage from './pages/TermsPage';
-import KnowledgeArticlePage from './pages/KnowledgeArticlePage';
+const LandingPage = lazy(() => import('./pages/LandingPage'));
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const RegisterPage = lazy(() => import('./pages/RegisterPage'));
+const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const StacksPage = lazy(() => import('./pages/StacksPage'));
+const DemoPage = lazy(() => import('./pages/DemoPage'));
+const MyProductsPage = lazy(() => import('./pages/MyProductsPage'));
+const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
+const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
+const VerifyEmailPage = lazy(() => import('./pages/VerifyEmailPage'));
+const PrivacyPage = lazy(() => import('./pages/PrivacyPage'));
+const ImprintPage = lazy(() => import('./pages/ImprintPage'));
+const TermsPage = lazy(() => import('./pages/TermsPage'));
+const KnowledgeArticlePage = lazy(() => import('./pages/KnowledgeArticlePage'));
+
+const AdministratorShell = lazy(() => import('./pages/administrator/AdministratorShell'));
+const AdministratorDashboardPage = lazy(() => import('./pages/administrator/AdministratorDashboardPage'));
+const AdministratorInteractionsPage = lazy(() => import('./pages/administrator/AdministratorInteractionsPage'));
+const AdministratorProductsPage = lazy(() => import('./pages/administrator/AdministratorProductsPage'));
+const AdministratorDosingPage = lazy(() => import('./pages/administrator/AdministratorDosingPage'));
+const AdministratorHealthPage = lazy(() => import('./pages/administrator/AdministratorHealthPage'));
+const AdministratorIngredientsPage = lazy(() => import('./pages/administrator/AdministratorIngredientsPage'));
+const AdministratorAuditLogPage = lazy(() => import('./pages/administrator/AdministratorAuditLogPage'));
+const AdministratorUserProductsPage = lazy(() => import('./pages/administrator/AdministratorUserProductsPage'));
+const AdministratorProductDetailPage = lazy(() => import('./pages/administrator/AdministratorProductDetailPage'));
+const AdministratorIngredientDetailPage = lazy(() => import('./pages/administrator/AdministratorIngredientDetailPage'));
+const AdministratorProductQAPage = lazy(() => import('./pages/administrator/AdministratorProductQAPage'));
+const AdministratorLinkReportsPage = lazy(() => import('./pages/administrator/AdministratorLinkReportsPage'));
+const AdministratorKnowledgePage = lazy(() => import('./pages/administrator/AdministratorKnowledgePage'));
+const AdministratorLaunchChecksPage = lazy(() => import('./pages/administrator/AdministratorLaunchChecksPage'));
+const AdministratorShopDomainsPage = lazy(() => import('./pages/administrator/AdministratorShopDomainsPage'));
+const AdministratorRankingsPage = lazy(() => import('./pages/administrator/AdministratorRankingsPage'));
+const AdministratorTranslationsPage = lazy(() => import('./pages/administrator/AdministratorTranslationsPage'));
+const AdministratorSubIngredientsPage = lazy(() => import('./pages/administrator/AdministratorSubIngredientsPage'));
+const AdministratorUsersPage = lazy(() => import('./pages/administrator/AdministratorUsersPage'));
+const AdministratorSettingsPage = lazy(() => import('./pages/administrator/AdministratorSettingsPage'));
 
 function NotFoundPage() {
   return (
@@ -41,73 +62,99 @@ function NotFoundPage() {
   );
 }
 
+function RouteLoadingFallback() {
+  return (
+    <div className="min-h-[40vh] flex items-center justify-center px-6">
+      <div className="text-sm text-slate-500">Laden...</div>
+    </div>
+  );
+}
+
 export default function App() {
+  const location = useLocation();
+  const hideCookieBanner = location.pathname.startsWith('/administrator');
+
   return (
     <AuthProvider>
-      <CookieConsentBanner />
-      <Routes>
-        {/* Admin — completely separate layout, no normal navbar/footer */}
-        <Route
-          path="/admin"
-          element={
-            <AdminLayout>
-              <AdminPage />
-            </AdminLayout>
-          }
-        />
+      {!hideCookieBanner && <CookieConsentBanner />}
+      <Suspense fallback={<RouteLoadingFallback />}>
+        <Routes>
+          <Route path="/administrator" element={<AdministratorShell />}>
+            <Route index element={<Navigate to="/administrator/dashboard" replace />} />
+            <Route path="dashboard" element={<AdministratorDashboardPage />} />
+            <Route path="ingredients" element={<AdministratorIngredientsPage />} />
+            <Route path="ingredients/:id" element={<AdministratorIngredientDetailPage />} />
+            <Route path="products" element={<AdministratorProductsPage />} />
+            <Route path="products/:id" element={<AdministratorProductDetailPage />} />
+            <Route path="dosing" element={<AdministratorDosingPage />} />
+            <Route path="interactions" element={<AdministratorInteractionsPage />} />
+            <Route path="health" element={<AdministratorHealthPage />} />
+            <Route path="knowledge" element={<AdministratorKnowledgePage />} />
+            <Route path="translations" element={<AdministratorTranslationsPage />} />
+            <Route path="user-products" element={<AdministratorUserProductsPage />} />
+            <Route path="product-qa" element={<AdministratorProductQAPage />} />
+            <Route path="link-reports" element={<AdministratorLinkReportsPage />} />
+            <Route path="launch-checks" element={<AdministratorLaunchChecksPage />} />
+            <Route path="audit-log" element={<AdministratorAuditLogPage />} />
+            <Route path="users" element={<AdministratorUsersPage />} />
+            <Route path="shop-domains" element={<AdministratorShopDomainsPage />} />
+            <Route path="rankings" element={<AdministratorRankingsPage />} />
+            <Route path="sub-ingredients" element={<AdministratorSubIngredientsPage />} />
+            <Route path="settings" element={<AdministratorSettingsPage />} />
+            <Route path="*" element={<Navigate to="/administrator/dashboard" replace />} />
+          </Route>
 
-        {/* Stacks / Demo — bypass standard Layout (own standalone header) */}
-        <Route
-          path="/stacks"
-          element={
-            <Layout>
-              <ProtectedRoute>
-                <StacksPage />
-              </ProtectedRoute>
-            </Layout>
-          }
-        />
-        <Route path="/demo" element={<DemoPage />} />
+          <Route
+            path="/stacks"
+            element={
+              <Layout>
+                <ProtectedRoute>
+                  <StacksPage />
+                </ProtectedRoute>
+              </Layout>
+            }
+          />
+          <Route path="/demo" element={<DemoPage />} />
 
-        {/* All other routes use the normal Layout */}
-        <Route
-          path="*"
-          element={
-            <Layout>
-              <Routes>
-                <Route path="/" element={<LandingPage />} />
-                <Route path="/login" element={<LoginPage />} />
-                <Route path="/register" element={<RegisterPage />} />
-                <Route
-                  path="/profile"
-                  element={
-                    <ProtectedRoute>
-                      <ProfilePage />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-                <Route path="/reset-password" element={<ResetPasswordPage />} />
-                <Route path="/verify-email" element={<VerifyEmailPage />} />
-                <Route path="/impressum" element={<ImprintPage />} />
-                <Route path="/datenschutz" element={<PrivacyPage />} />
-                <Route path="/nutzungsbedingungen" element={<TermsPage />} />
-                <Route path="/agb" element={<TermsPage />} />
-                <Route path="/wissen/:slug" element={<KnowledgeArticlePage />} />
-                <Route
-                  path="/my-products"
-                  element={
-                    <ProtectedRoute>
-                      <MyProductsPage />
-                    </ProtectedRoute>
-                  }
-                />
-                <Route path="*" element={<NotFoundPage />} />
-              </Routes>
-            </Layout>
-          }
-        />
-      </Routes>
+          <Route
+            path="*"
+            element={
+              <Layout>
+                <Routes>
+                  <Route path="/" element={<LandingPage />} />
+                  <Route path="/login" element={<LoginPage />} />
+                  <Route path="/register" element={<RegisterPage />} />
+                  <Route
+                    path="/profile"
+                    element={
+                      <ProtectedRoute>
+                        <ProfilePage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                  <Route path="/reset-password" element={<ResetPasswordPage />} />
+                  <Route path="/verify-email" element={<VerifyEmailPage />} />
+                  <Route path="/impressum" element={<ImprintPage />} />
+                  <Route path="/datenschutz" element={<PrivacyPage />} />
+                  <Route path="/nutzungsbedingungen" element={<TermsPage />} />
+                  <Route path="/agb" element={<TermsPage />} />
+                  <Route path="/wissen/:slug" element={<KnowledgeArticlePage />} />
+                  <Route
+                    path="/my-products"
+                    element={
+                      <ProtectedRoute>
+                        <MyProductsPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route path="*" element={<NotFoundPage />} />
+                </Routes>
+              </Layout>
+            }
+          />
+        </Routes>
+      </Suspense>
     </AuthProvider>
   );
 }

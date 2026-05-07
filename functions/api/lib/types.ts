@@ -75,6 +75,8 @@ export type ProductRow = {
   visibility: string
   created_at: string
   is_affiliate: number
+  affiliate_owner_type: 'none' | 'nick' | 'user' | null
+  affiliate_owner_user_id: number | null
   image_r2_key: string | null
   discontinued_at: string | null
   replacement_id: number | null

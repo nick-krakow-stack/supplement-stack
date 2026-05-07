@@ -110,7 +110,7 @@ Das Projekt existiert bereits. Vor jeder Implementierung den bestehenden Code an
 - `SearchPage` — Wirkstoffsuche
 - `StacksPage` — Stack-Verwaltung
 - `WishlistPage` — Wunschliste
-- `AdminPage` — Backend-Verwaltung für Nick
+- `AdministratorShell` — Backend-Verwaltung für Nick unter `/administrator`
 - `LoginPage` / `RegisterPage` — Auth
 - `ProfilePage` — Nutzerprofil
 - `MyProductsPage` — eigene Produkte verwalten
@@ -353,8 +353,8 @@ Das beste Supplement-Management-Tool am Markt. Kostenlos für User.
 ---
 
 ## 🧠 Memory & Kontext-Kontinuität
-Vor jedem Compact wird `.claude/memory.md` aktualisiert.
-Nach jedem Compact: zuerst `.claude/memory.md` lesen, dann weitermachen.
+Kanonisches Memory liegt in `.agent-memory/*` (siehe Pflichtstart oben).
+`.claude/memory.md` ist nur noch ein Legacy-Pointer für ältere Claude-Workflows.
 
 ---
 

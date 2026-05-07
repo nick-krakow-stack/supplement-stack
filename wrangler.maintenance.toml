@@ -1,0 +1,12 @@
+name = "supplement-stack-maintenance"
+main = "functions/api/scheduled.ts"
+compatibility_date = "2024-09-23"
+
+[triggers]
+crons = ["17 2 * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "supplementstack-production"
+database_id = "f1336769-9231-4cfa-a54b-91a261f07b08"
+migrations_dir = "./d1-migrations"
