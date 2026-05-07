@@ -12,7 +12,7 @@ Last updated: 2026-05-07
   - Cloudflare config: `wrangler.toml` and `wrangler.maintenance.toml`
 - Live domain: `https://supplementstack.de`.
 - Latest documented deployed preview:
-  `https://4f190a86.supplementstack.pages.dev`.
+  `https://a9e5e4d0.supplementstack.pages.dev`.
 - The active admin frontend is `/administrator`.
 - `/api/admin` remains the backend API namespace.
 - The old frontend `/admin` route was removed during cleanup. Use
@@ -37,6 +37,29 @@ Last updated: 2026-05-07
   refactor candidate.
 
 ## Latest Completed Work
+
+### 2026-05-07 Admin Sidebar Density Retune - Deployed
+
+- Applied the new owner-provided `.agent-memory/deployment_images` references:
+  - `menu_soll.png`
+  - `menu_ist.png`
+- Scope was intentionally limited to admin menu typography and spacing, not
+  menu content:
+  - desktop admin sidebar width reduced from `286px` to `248px`
+  - brand logo/name/subtitle scaled down to keep `Supplement Stack` on one
+    line
+  - nav group, label, item, icon, badge, and active-state spacing reduced
+  - active nav outline changed from heavy dark border to a quieter compact
+    card treatment
+- Completed reference images were removed after implementation:
+  - `.agent-memory/deployment_images/menu_soll.png`
+  - `.agent-memory/deployment_images/menu_ist.png`
+- The `.agent-memory/deployment_images/` folder was intentionally retained for
+  future open visual TODO images and now has a `.gitkeep` sentinel.
+- Deployed preview: `https://a9e5e4d0.supplementstack.pages.dev`.
+- Preview/live route smokes passed for `/administrator/dashboard` and
+  `/administrator/interactions`; unauthenticated `/api/interactions` returned
+  HTTP 401.
 
 ### 2026-05-07 Admin Typography And Interaction Matrix Redesign - Deployed
 
@@ -214,6 +237,12 @@ Last updated: 2026-05-07
   - `frontend`: `npm run lint --if-present`
   - `frontend`: `npm run build`
   - `node --check scripts/admin-browser-smoke.mjs`
+- Admin sidebar density retune validation passed:
+  - `frontend`: `npx tsc --noEmit`
+  - `frontend`: `npm run lint --if-present`
+  - `frontend`: `npm run build`
+  - `node --check scripts/admin-browser-smoke.mjs`
+  - `git diff --check` passed with existing LF/CRLF warnings only.
 - Remote D1 postflight passed:
   - no old references to ingredient IDs `60`, `65`, or `66`
   - no old form `189`

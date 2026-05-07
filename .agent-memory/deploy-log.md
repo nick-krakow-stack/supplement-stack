@@ -2,6 +2,40 @@
 
 Last updated: 2026-05-07
 
+## 2026-05-07 Admin Sidebar Density Retune Deployed
+
+- Scope:
+  - Applied owner-provided `menu_soll.png` / `menu_ist.png` references to
+    admin menu typography and spacing only.
+  - Reduced desktop sidebar width, brand logo/name/subtitle sizing, nav row
+    height, icon size, label spacing, badge size, and group gaps.
+  - Replaced the heavy active navigation outline with a compact neutral card
+    treatment matching the denser target menu.
+  - Deleted only the completed images:
+    `.agent-memory/deployment_images/menu_soll.png` and
+    `.agent-memory/deployment_images/menu_ist.png`.
+  - Retained `.agent-memory/deployment_images/` for future open visual TODO
+    images and added `.gitkeep` so the folder persists.
+- Remote D1 migrations:
+  - No migration required.
+- Pages deploy:
+  - Project: `supplementstack`.
+  - Preview URL: `https://a9e5e4d0.supplementstack.pages.dev`.
+  - Live URL: `https://supplementstack.de`.
+- Validation:
+  - `frontend`: `npx tsc --noEmit` passed.
+  - `frontend`: `npm run lint --if-present` passed.
+  - `frontend`: `npm run build` passed.
+  - `node --check scripts/admin-browser-smoke.mjs` passed.
+  - `git diff --check` passed with existing LF/CRLF warnings only.
+- Smoke checks:
+  - Preview/live `/administrator/dashboard` returned HTTP 200.
+  - Preview/live `/administrator/interactions` returned HTTP 200.
+  - Preview/live unauthenticated `/api/interactions` returned HTTP 401.
+- Notes:
+  - Authenticated visual QA remains open because no admin browser session was
+    available locally.
+
 ## 2026-05-07 Admin Typography And Interaction Matrix Redesign Deployed
 
 - Scope:
@@ -13,8 +47,9 @@ Last updated: 2026-05-07
     legend, and hover detail.
   - Moved the interaction create form behind the `Hinzufuegen` action so the
     matrix is the primary first-viewport surface.
-  - Deleted the completed reference image folder
-    `.agent-memory/deployment_images/`.
+  - Deleted the completed reference images from that pass. The
+    `.agent-memory/deployment_images/` folder is now retained for future open
+    visual TODO images.
 - Remote D1 migrations:
   - No migration required.
 - Pages deploy:

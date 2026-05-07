@@ -73,7 +73,7 @@
 
 .admin-shell {
   display: grid;
-  grid-template-columns: 286px minmax(0, 1fr);
+  grid-template-columns: 248px minmax(0, 1fr);
   min-height: 100vh;
 }
 
@@ -83,11 +83,11 @@
   display: flex;
   height: 100vh;
   flex-direction: column;
-  gap: 24px;
+  gap: 18px;
   overflow-y: auto;
   border-right: 1px solid var(--admin-line);
   background: var(--admin-bg-elev);
-  padding: 28px 16px 18px;
+  padding: 18px 18px 14px;
   scrollbar-width: thin;
   scrollbar-color: var(--admin-line-strong) transparent;
 }
@@ -95,29 +95,29 @@
 .admin-brand {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   border-bottom: 1px solid var(--admin-line);
-  padding: 4px 10px 26px;
+  padding: 0 0 18px;
 }
 
 .admin-brand-mark {
   display: grid;
-  width: 44px;
-  height: 44px;
+  width: 34px;
+  height: 34px;
   flex-shrink: 0;
   place-items: center;
 }
 
 .admin-brand-mark svg {
-  width: 44px;
-  height: 44px;
+  width: 34px;
+  height: 34px;
 }
 
 .admin-brand-name {
   font-family: var(--admin-serif);
-  font-size: 26px;
+  font-size: 20px;
   font-weight: 700;
-  line-height: 1;
+  line-height: 1.05;
 }
 
 .admin-brand-sub,
@@ -129,9 +129,9 @@
 }
 
 .admin-brand-sub {
-  margin-top: 6px;
+  margin-top: 2px;
   font-family: var(--admin-serif);
-  font-size: 15px;
+  font-size: 12.5px;
   font-weight: 500;
   letter-spacing: 0.08em;
 }
@@ -139,27 +139,28 @@
 .admin-nav-group {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
 }
 
 .admin-nav-label {
-  padding: 0 10px 8px;
-  font-size: 14px;
-  letter-spacing: 0.14em;
+  padding: 0 8px 6px;
+  font-size: 11.5px;
+  letter-spacing: 0.13em;
 }
 
 .admin-nav-item {
   display: flex;
   width: 100%;
   align-items: center;
-  min-height: 46px;
-  gap: 16px;
-  border: 3px solid transparent;
-  border-radius: 10px;
+  min-height: 36px;
+  gap: 12px;
+  border: 1px solid transparent;
+  border-radius: 8px;
   background: transparent;
   color: var(--admin-ink);
-  padding: 8px 10px;
-  font-size: 18px;
+  padding: 6px 8px;
+  font-size: 16px;
+  line-height: 1.15;
   text-align: left;
   text-decoration: none;
   cursor: pointer;
@@ -172,15 +173,15 @@
 }
 
 .admin-nav-item.active {
-  border-color: #10100e;
+  border-color: var(--admin-line);
   background: var(--admin-bg-elev);
-  box-shadow: 3px 3px 0 rgba(16, 16, 14, 0.08);
+  box-shadow: 0 1px 4px rgba(16, 16, 14, 0.08);
   color: var(--admin-ink);
 }
 
 .admin-nav-item svg {
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
   color: #5f5a4e;
   stroke-width: 1.9;
 }
@@ -191,8 +192,8 @@
   border-radius: 999px;
   background: var(--admin-bg-sunk);
   color: var(--admin-ink-3);
-  padding: 2px 10px;
-  font-size: 15px;
+  padding: 1px 8px;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -208,7 +209,7 @@
   align-items: center;
   gap: 10px;
   border-top: 1px solid var(--admin-line);
-  padding-top: 14px;
+  padding-top: 12px;
 }
 
 .admin-avatar {
@@ -1048,11 +1049,11 @@
 
 @media (max-width: 1180px) {
   .admin-shell {
-    grid-template-columns: 264px minmax(0, 1fr);
+    grid-template-columns: 238px minmax(0, 1fr);
   }
 
   .admin-nav-item {
-    font-size: 16px;
+    font-size: 15px;
   }
 
   .admin-health-grid {

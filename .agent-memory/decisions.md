@@ -10,9 +10,11 @@ Decision: the current admin visual system follows the owner-provided
 Operational rules:
 
 - Admin sidebar typography should stay serif-forward for the brand and larger,
-  calmer, high-contrast navigation labels.
-- Admin active navigation uses a strong dark outline instead of the previous
-  subtle neutral card treatment.
+  calmer, high-contrast navigation labels, but the desktop menu must remain
+  compact enough to avoid routine sidebar scrolling.
+- Admin active navigation uses a subtle neutral card treatment rather than a
+  heavy outline, so the compact menu density stays close to the owner
+  `menu_soll.png` reference.
 - Admin palette remains warm off-white with muted taupe text and soft semantic
   pills for info/medium/high/danger.
 - The interaction matrix is the preferred visual pattern for ingredient-pair
@@ -111,6 +113,10 @@ Operational rules:
   it.
 - Do not commit local browser-QA screenshots, root-level scratch logos, or
   one-off design reference dumps such as `admin-preview/`.
+- Keep `.agent-memory/deployment_images/` as the inbox for open owner-provided
+  visual TODOs. Delete completed images inside it after implementation, but do
+  not delete the folder itself; `.gitkeep` exists only to keep the empty folder
+  tracked.
 - Temporary analysis plans should be deleted or reduced once their outcome is
   reflected in current state, handoff, next steps, and durable decisions.
 

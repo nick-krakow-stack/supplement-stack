@@ -4,6 +4,28 @@ Last updated: 2026-05-07
 
 ## Exact Continuation Point
 
+Admin sidebar density retune is implemented and deployed:
+
+- Preview: `https://a9e5e4d0.supplementstack.pages.dev`
+- Live: `https://supplementstack.de`
+- The new `menu_soll.png` / `menu_ist.png` references were applied only to
+  admin menu typography and spacing; menu items were not changed.
+- Desktop sidebar width, brand sizing, nav row height, icon size, group gaps,
+  badges, and active-state border/shadow were compacted so the full menu fits
+  much closer to the owner reference.
+- Completed images were deleted:
+  - `.agent-memory/deployment_images/menu_soll.png`
+  - `.agent-memory/deployment_images/menu_ist.png`
+- `.agent-memory/deployment_images/` still exists and should be retained for
+  future open visual TODO images. It has a `.gitkeep` sentinel; delete
+  completed images only, not the folder.
+- Validation passed: frontend typecheck, frontend lint, frontend build,
+  admin smoke-script syntax, and `git diff --check` with existing LF/CRLF
+  warnings only.
+- Preview/live `/administrator/dashboard` and
+  `/administrator/interactions` returned HTTP 200.
+- Preview/live unauthenticated `/api/interactions` returned HTTP 401.
+
 Admin typography and Wechselwirkungs-Matrix redesign is implemented and
 deployed:
 
@@ -13,8 +35,9 @@ deployed:
 - `/administrator/interactions` follows the `Wechselwirkungs-Matrix.png`
   reference with a primary visual grid, count pills, legend, and hover detail.
 - The create form opens from `Hinzufuegen`.
-- The completed reference images and `.agent-memory/deployment_images/` were
-  deleted.
+- The completed reference images from that pass were deleted. The
+  `.agent-memory/deployment_images/` folder was later recreated and should be
+  retained.
 - Validation passed: frontend typecheck, frontend lint, frontend build, and
   admin smoke-script syntax.
 - Preview/live `/administrator/interactions` and
@@ -49,7 +72,7 @@ Remote D1 `supplementstack-production` has these migrations applied:
 
 Latest deployed preview:
 
-- `https://4f190a86.supplementstack.pages.dev`
+- `https://a9e5e4d0.supplementstack.pages.dev`
 - Live domain: `https://supplementstack.de`
 
 ## What Changed
