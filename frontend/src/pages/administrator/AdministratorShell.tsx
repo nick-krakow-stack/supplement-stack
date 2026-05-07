@@ -261,7 +261,7 @@ export default function AdministratorShell() {
             </div>
             <div>
               <div className="admin-brand-name">Supplement Stack</div>
-              <div className="admin-brand-sub">Admin - v0.42</div>
+              <div className="admin-brand-sub">ADMIN · V0.42</div>
             </div>
           </div>
           <button
@@ -290,7 +290,7 @@ export default function AdministratorShell() {
             </div>
             <div>
               <div className="admin-brand-name">Supplement Stack</div>
-              <div className="admin-brand-sub">Admin - v0.42</div>
+              <div className="admin-brand-sub">ADMIN · V0.42</div>
             </div>
           </div>
 

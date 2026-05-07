@@ -4,6 +4,23 @@ Last updated: 2026-05-07
 
 ## Exact Continuation Point
 
+Admin typography and Wechselwirkungs-Matrix redesign is implemented and
+deployed:
+
+- Preview: `https://4f190a86.supplementstack.pages.dev`
+- Live: `https://supplementstack.de`
+- The admin sidebar follows the `Schriftarten.png` typography/color reference.
+- `/administrator/interactions` follows the `Wechselwirkungs-Matrix.png`
+  reference with a primary visual grid, count pills, legend, and hover detail.
+- The create form opens from `Hinzufuegen`.
+- The completed reference images and `.agent-memory/deployment_images/` were
+  deleted.
+- Validation passed: frontend typecheck, frontend lint, frontend build, and
+  admin smoke-script syntax.
+- Preview/live `/administrator/interactions` and
+  `/administrator/user-products` returned HTTP 200.
+- Preview/live unauthenticated `/api/interactions` returned HTTP 401.
+
 Product image WebP normalization is implemented and deployed:
 
 - Preview: `https://c07d6e4d.supplementstack.pages.dev`
@@ -32,7 +49,7 @@ Remote D1 `supplementstack-production` has these migrations applied:
 
 Latest deployed preview:
 
-- `https://c07d6e4d.supplementstack.pages.dev`
+- `https://4f190a86.supplementstack.pages.dev`
 - Live domain: `https://supplementstack.de`
 
 ## What Changed
@@ -79,6 +96,7 @@ Latest deployed preview:
 ## Remaining Work
 
 - Authenticated owner browser QA remains open:
+  - redesigned Wechselwirkungs-Matrix and admin sidebar visual QA
   - login/session persistence
   - stack create/edit/product add/remove/replacement
   - stack form selection for Wirkstoffe with forms

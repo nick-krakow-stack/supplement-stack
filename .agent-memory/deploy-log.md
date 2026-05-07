@@ -2,6 +2,38 @@
 
 Last updated: 2026-05-07
 
+## 2026-05-07 Admin Typography And Interaction Matrix Redesign Deployed
+
+- Scope:
+  - Applied the owner-provided `Schriftarten.png` admin typography/color
+    direction to the admin shell/sidebar.
+  - Reworked `/administrator/interactions` toward the provided
+    `Wechselwirkungs-Matrix.png` reference: page hero, severity count pills,
+    compact grid matrix, vertical column labels, diagonal self markers,
+    legend, and hover detail.
+  - Moved the interaction create form behind the `Hinzufuegen` action so the
+    matrix is the primary first-viewport surface.
+  - Deleted the completed reference image folder
+    `.agent-memory/deployment_images/`.
+- Remote D1 migrations:
+  - No migration required.
+- Pages deploy:
+  - Project: `supplementstack`.
+  - Preview URL: `https://4f190a86.supplementstack.pages.dev`.
+  - Live URL: `https://supplementstack.de`.
+- Validation:
+  - `frontend`: `npx tsc --noEmit` passed.
+  - `frontend`: `npm run lint --if-present` passed.
+  - `frontend`: `npm run build` passed.
+  - `node --check scripts/admin-browser-smoke.mjs` passed.
+- Smoke checks:
+  - Preview/live `/administrator/interactions` returned HTTP 200.
+  - Preview/live `/administrator/user-products` returned HTTP 200.
+  - Preview/live unauthenticated `/api/interactions` returned HTTP 401.
+- Notes:
+  - Authenticated visual QA remains open because no admin browser session was
+    available locally.
+
 ## 2026-05-07 Product Image WebP Normalization Deployed
 
 - Scope:

@@ -6,7 +6,7 @@ Last updated: 2026-05-07
 
 - Wirkstoffe/Formen rebuild is remote-migrated and deployed. Use
   `https://supplementstack.de` or preview
-  `https://c07d6e4d.supplementstack.pages.dev` for follow-up QA.
+  `https://4f190a86.supplementstack.pages.dev` for follow-up QA.
 - Run authenticated owner QA for the new user/admin flows, especially stack
   form selection, user-product ingredient entry, and Administrator Ingredient
   `Wirkstoffteile`.
@@ -32,6 +32,8 @@ Last updated: 2026-05-07
 ## Admin QA
 
 - Use the next owner browser-QA pass for detailed usability notes on:
+  - redesigned Wechselwirkungs-Matrix
+  - revised admin sidebar typography/palette
   - Product-QA
   - Product Detail
   - Ingredient Detail

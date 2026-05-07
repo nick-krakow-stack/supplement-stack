@@ -2,6 +2,30 @@
 
 Last updated: 2026-05-07
 
+## 2026-05-07 - Admin Visual Reference Applied
+
+Decision: the current admin visual system follows the owner-provided
+`Schriftarten.png` and `Wechselwirkungs-Matrix.png` references.
+
+Operational rules:
+
+- Admin sidebar typography should stay serif-forward for the brand and larger,
+  calmer, high-contrast navigation labels.
+- Admin active navigation uses a strong dark outline instead of the previous
+  subtle neutral card treatment.
+- Admin palette remains warm off-white with muted taupe text and soft semantic
+  pills for info/medium/high/danger.
+- The interaction matrix is the preferred visual pattern for ingredient-pair
+  interactions: vertical column labels, compact horizontal rows, small
+  severity cells, a legend, and hover details.
+- Create/edit controls should not dominate the first viewport of the matrix;
+  the add form opens from `Hinzufuegen`.
+
+Rationale:
+
+- The owner provided these references as the desired admin look, and they are
+  materially clearer and more scannable than the previous dense table.
+
 ## 2026-05-07 - Product Image Upload Normalization
 
 Decision: product-image uploads should be normalized before storage instead of

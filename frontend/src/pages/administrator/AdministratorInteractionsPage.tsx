@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, LayoutGrid, List, Plus, Trash2 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
-import { AdminBadge, AdminButton, AdminCard, AdminEmpty, AdminError, AdminPageHeader } from './AdminUi';
+import { AdminBadge, AdminButton, AdminCard, AdminEmpty, AdminError } from './AdminUi';
 
 type PartnerType = 'ingredient' | 'food' | 'medication' | 'condition';
 type InteractionSeverity = 'info' | 'medium' | 'high' | 'danger';
@@ -42,6 +42,12 @@ type MatrixCell = {
   activeCount: number;
   inactiveCount: number;
   maxSeverity: InteractionSeverity;
+};
+
+type HoveredMatrixCell = {
+  rowName: string;
+  partnerName: string;
+  cell: MatrixCell;
 };
 
 const ALL_ACTIVE_OPTIONS: ActiveFilter[] = ['all', 'active', 'inactive'];
@@ -186,6 +192,10 @@ function severityBadge(severity: InteractionSeverity) {
   return <AdminBadge tone={interactionSeverityTone(severity)}>{severityLabel(severity)}</AdminBadge>;
 }
 
+function matrixCellSymbol(severity: InteractionSeverity): string {
+  return severity === 'info' || severity === 'medium' ? '·' : '!';
+}
+
 export default function AdministratorInteractionsPage() {
   const [searchParams] = useSearchParams();
   const [ingredients, setIngredients] = useState<IngredientLookup[]>([]);
@@ -217,6 +227,8 @@ export default function AdministratorInteractionsPage() {
     return /^\d+$/.test(value) ? value : '';
   });
   const [query, setQuery] = useState(() => searchParams.get('q') ?? '');
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [hoveredMatrixCell, setHoveredMatrixCell] = useState<HoveredMatrixCell | null>(null);
 
   const ingredientNameById = useMemo(() => {
     const map = new Map<number, string>();
@@ -338,33 +350,25 @@ export default function AdministratorInteractionsPage() {
     [filteredInteractions],
   );
 
-  const ingredientMatrixColumns = useMemo(() => {
-    const columnNames = new Map<number, string>();
-    ingredientIngredientInteractions.forEach((interaction) => {
-      const columnId = interaction.partner_ingredient_id;
-      if (columnId == null) return;
-      const label =
-        ingredientNameById.get(columnId) ??
-        interaction.ingredient_b_name ??
-        `Wirkstoff #${columnId}`;
-      columnNames.set(columnId, label);
-    });
-    return [...columnNames.entries()].sort((left, right) =>
-      left[1].localeCompare(right[1], undefined, { sensitivity: 'base' }),
-    );
-  }, [ingredientIngredientInteractions, ingredientNameById]);
-
-  const ingredientMatrixRows = useMemo(() => {
-    const rowNames = new Map<number, string>();
+  const matrixIngredients = useMemo(() => {
+    const ingredientNames = new Map<number, string>();
     ingredientIngredientInteractions.forEach((interaction) => {
       const rowId = interaction.ingredient_a_id;
       const rowLabel =
         ingredientNameById.get(rowId) ??
         interaction.ingredient_a_name ??
         `Wirkstoff #${rowId}`;
-      rowNames.set(rowId, rowLabel);
+      ingredientNames.set(rowId, rowLabel);
+
+      const partnerId = interaction.partner_ingredient_id;
+      if (partnerId == null) return;
+      const partnerLabel =
+        ingredientNameById.get(partnerId) ??
+        interaction.ingredient_b_name ??
+        `Wirkstoff #${partnerId}`;
+      ingredientNames.set(partnerId, partnerLabel);
     });
-    return [...rowNames.entries()].sort((left, right) =>
+    return [...ingredientNames.entries()].sort((left, right) =>
       left[1].localeCompare(right[1], undefined, { sensitivity: 'base' }),
     );
   }, [ingredientIngredientInteractions, ingredientNameById]);
@@ -400,6 +404,19 @@ export default function AdministratorInteractionsPage() {
 
     return matrix;
   }, [ingredientIngredientInteractions]);
+
+  const severityCounts = useMemo(() => {
+    const counts: Record<InteractionSeverity, number> = {
+      info: 0,
+      medium: 0,
+      high: 0,
+      danger: 0,
+    };
+    filteredInteractions.forEach((interaction) => {
+      counts[interaction.severity] += 1;
+    });
+    return counts;
+  }, [filteredInteractions]);
 
   const resetForm = () => {
     setIngredientId('');
@@ -523,18 +540,23 @@ export default function AdministratorInteractionsPage() {
 
   return (
     <>
-      <AdminPageHeader
-        title="Wechselwirkungs-Matrix"
-        subtitle="Wechselwirkungen zwischen Wirkstoffen, Lebensmitteln, Medikamenten und Erkrankungen prüfen und pflegen."
-        meta={
-          <span className="admin-toolbar-inline">
-            <AdminBadge tone="info">{interactions.length} insgesamt</AdminBadge>
-            <AdminBadge tone="neutral">{filteredInteractions.length} gefiltert</AdminBadge>
-            <AdminBadge tone="ok">{ingredientIngredientInteractions.length} Wirkstoff-Paare</AdminBadge>
-          </span>
-        }
-      />
+      <section className="admin-matrix-hero">
+        <div>
+          <h1>Wechselwirkungs-Matrix</h1>
+          <p>Wirkstoff x Wirkstoff · Quelle: interactions nach Migration 0034</p>
+        </div>
+        <div className="admin-matrix-hero-actions">
+          <span className="admin-matrix-count admin-matrix-count-info">{severityCounts.info} info</span>
+          <span className="admin-matrix-count admin-matrix-count-medium">{severityCounts.medium} mittel</span>
+          <span className="admin-matrix-count admin-matrix-count-high">{severityCounts.high} hoch</span>
+          <AdminButton variant="default" onClick={() => setShowCreateForm((value) => !value)}>
+            <Plus size={18} />
+            Hinzufügen
+          </AdminButton>
+        </div>
+      </section>
 
+      {showCreateForm ? (
       <AdminCard
         title={
           <span className="inline-flex items-center gap-2">
@@ -696,6 +718,7 @@ export default function AdministratorInteractionsPage() {
           </AdminButton>
         </div>
       </AdminCard>
+      ) : null}
 
       {error && <AdminError>{error}</AdminError>}
 
@@ -801,65 +824,82 @@ export default function AdministratorInteractionsPage() {
         ) : filteredInteractions.length === 0 ? (
           <AdminEmpty>Keine Einträge für die aktuelle Filterung.</AdminEmpty>
         ) : viewMode === 'matrix' ? (
-          <div className="admin-table-wrap">
-            <table className="admin-table admin-table-matrix">
-              <thead>
-                <tr>
-                  <th>Erster Wirkstoff</th>
-                  {ingredientMatrixColumns.map(([partnerId, partnerName]) => (
-                    <th key={partnerId} title={partnerName}>
-                      {partnerName}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {ingredientMatrixRows.map(([ingredientIdRow, rowName]) => {
-                  const row = ingredientMatrix.get(ingredientIdRow);
-                  return (
-                    <tr key={ingredientIdRow}>
-                      <td>
-                        <strong>{rowName}</strong>
-                        <p className="admin-muted text-xs">ID {ingredientIdRow}</p>
-                      </td>
-                      {ingredientMatrixColumns.map(([partnerId]) => {
-                        const cell = row?.get(partnerId);
-                        if (!cell) {
-                          return (
-                            <td key={partnerId} className="admin-matrix-empty">
-                              -
-                            </td>
-                          );
-                        }
+          <div className="admin-interaction-matrix-wrap">
+            <div
+              className="admin-interaction-matrix"
+              style={{ gridTemplateColumns: `210px repeat(${matrixIngredients.length}, 72px)` }}
+            >
+              <div className="admin-interaction-matrix-corner" aria-hidden="true" />
+              {matrixIngredients.map(([partnerId, partnerName]) => (
+                <div key={`head-${partnerId}`} className="admin-interaction-matrix-col" title={partnerName}>
+                  <span>{partnerName}</span>
+                </div>
+              ))}
 
-                        const typeLabels = new Set(cell.interactions.map((item) => interactionTypeLabel(String(item.type))));
-                        return (
-                          <td key={partnerId} className="admin-matrix-cell">
-                            <div className="admin-toolbar-inline">
-                              {severityBadge(cell.maxSeverity)}
-                              <AdminBadge tone="neutral">
-                                {cell.activeCount > 0 ? 'aktiv' : 'inaktiv'}
-                              </AdminBadge>
-                            </div>
-                            <div className="admin-muted mt-1 text-xs">
-                              {Array.from(typeLabels).slice(0, 2).join(', ') || '-'}
-                            </div>
-                            {cell.inactiveCount > 0 && cell.activeCount > 0 ? (
-                              <div className="admin-muted mt-1 text-[11px]">
-                                {cell.activeCount} A / {cell.inactiveCount} I
-                              </div>
-                            ) : null}
-                            {cell.interactions.length > 1 ? (
-                              <div className="admin-muted mt-1 text-[11px]">{cell.interactions.length}x</div>
-                            ) : null}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+              {matrixIngredients.map(([ingredientIdRow, rowName]) => {
+                const row = ingredientMatrix.get(ingredientIdRow);
+                return (
+                  <div key={`row-${ingredientIdRow}`} className="contents">
+                    <div className="admin-interaction-matrix-row">{rowName}</div>
+                    {matrixIngredients.map(([partnerId, partnerName]) => {
+                      const cell = row?.get(partnerId);
+                      if (ingredientIdRow === partnerId) {
+                        return <div key={partnerId} className="admin-interaction-matrix-self" aria-hidden="true" />;
+                      }
+                      if (!cell) {
+                        return <div key={partnerId} className="admin-interaction-matrix-empty" aria-hidden="true" />;
+                      }
+
+                      const summary = cell.interactions
+                        .map((item) => [interactionTypeLabel(String(item.type)), item.mechanism, item.comment].filter(Boolean).join(': '))
+                        .join('\n');
+                      return (
+                        <button
+                          key={partnerId}
+                          type="button"
+                          className={`admin-interaction-matrix-cell admin-interaction-matrix-cell-${cell.maxSeverity}`}
+                          title={summary}
+                          aria-label={`${rowName} mit ${partnerName}: ${severityLabel(cell.maxSeverity)}`}
+                          onMouseEnter={() => setHoveredMatrixCell({ rowName, partnerName, cell })}
+                          onFocus={() => setHoveredMatrixCell({ rowName, partnerName, cell })}
+                        >
+                          <span>{matrixCellSymbol(cell.maxSeverity)}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="admin-interaction-matrix-footer">
+              <div>
+                <div className="admin-interaction-matrix-footer-label">Legende</div>
+                <div className="admin-interaction-legend">
+                  <span className="admin-matrix-count admin-matrix-count-info">Info</span>
+                  <span className="admin-matrix-count admin-matrix-count-medium">Mittel</span>
+                  <span className="admin-matrix-count admin-matrix-count-high">Hoch</span>
+                  <span className="admin-matrix-count admin-matrix-count-danger">Gefährlich</span>
+                </div>
+              </div>
+              <div className="admin-interaction-hover-detail">
+                <div className="admin-interaction-matrix-footer-label">Hover-Detail</div>
+                {hoveredMatrixCell ? (
+                  <>
+                    <p className="font-medium text-[color:var(--admin-ink)]">
+                      {hoveredMatrixCell.rowName} x {hoveredMatrixCell.partnerName}
+                    </p>
+                    <p>
+                      {severityLabel(hoveredMatrixCell.cell.maxSeverity)} · {hoveredMatrixCell.cell.activeCount} aktiv
+                      {hoveredMatrixCell.cell.inactiveCount > 0 ? ` · ${hoveredMatrixCell.cell.inactiveCount} inaktiv` : ''}
+                    </p>
+                    <p>{hoveredMatrixCell.cell.interactions[0]?.mechanism || hoveredMatrixCell.cell.interactions[0]?.comment || 'Kein Mechanismus hinterlegt.'}</p>
+                  </>
+                ) : (
+                  <p>Zelle hovern für Mechanismus.</p>
+                )}
+              </div>
+            </div>
           </div>
         ) : (
           <div className="admin-table-wrap">

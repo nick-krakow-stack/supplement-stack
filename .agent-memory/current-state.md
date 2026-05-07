@@ -12,7 +12,7 @@ Last updated: 2026-05-07
   - Cloudflare config: `wrangler.toml` and `wrangler.maintenance.toml`
 - Live domain: `https://supplementstack.de`.
 - Latest documented deployed preview:
-  `https://c07d6e4d.supplementstack.pages.dev`.
+  `https://4f190a86.supplementstack.pages.dev`.
 - The active admin frontend is `/administrator`.
 - `/api/admin` remains the backend API namespace.
 - The old frontend `/admin` route was removed during cleanup. Use
@@ -37,6 +37,24 @@ Last updated: 2026-05-07
   refactor candidate.
 
 ## Latest Completed Work
+
+### 2026-05-07 Admin Typography And Interaction Matrix Redesign - Deployed
+
+- Applied the two `.agent-memory/deployment_images` visual references:
+  - admin sidebar typography, spacing, palette, logo sizing, and active nav
+    style now follow `Schriftarten.png`
+  - `/administrator/interactions` now uses a quieter visual matrix inspired by
+    `Wechselwirkungs-Matrix.png`, with vertical column labels, compact
+    severity cells, count pills, legend, and hover detail
+- The interaction create form is now behind the `Hinzufuegen` action instead
+  of always occupying the top of the page.
+- Reference images were removed after implementation:
+  - `.agent-memory/deployment_images/Schriftarten.png`
+  - `.agent-memory/deployment_images/Wechselwirkungs-Matrix.png`
+- Deployed preview: `https://4f190a86.supplementstack.pages.dev`.
+- Preview/live route smokes passed for `/administrator/interactions` and
+  `/administrator/user-products`; unauthenticated `/api/interactions` returned
+  HTTP 401.
 
 ### 2026-05-07 Product Image WebP Normalization - Deployed
 
@@ -191,6 +209,11 @@ Last updated: 2026-05-07
   - `node --check scripts/admin-browser-smoke.mjs`
   - `node --check scripts/user-browser-smoke.mjs`
   - `git diff --check`
+- Admin typography/matrix redesign validation passed:
+  - `frontend`: `npx tsc --noEmit`
+  - `frontend`: `npm run lint --if-present`
+  - `frontend`: `npm run build`
+  - `node --check scripts/admin-browser-smoke.mjs`
 - Remote D1 postflight passed:
   - no old references to ingredient IDs `60`, `65`, or `66`
   - no old form `189`
