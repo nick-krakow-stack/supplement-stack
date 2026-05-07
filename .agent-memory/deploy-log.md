@@ -2,6 +2,42 @@
 
 Last updated: 2026-05-07
 
+## 2026-05-07 Product Image WebP Normalization Deployed
+
+- Scope:
+  - `ImageCropModal` now exports cropped product images as 512 x 512 px WebP
+    at quality `0.84`, with automatic JPEG fallback when WebP export is not
+    available.
+  - Product image uploads keep the same user-facing flow; conversion happens
+    invisibly before upload.
+  - Admin and legacy product image upload routes now share
+    `functions/api/lib/product-images.ts` for supported content types and a
+    1 MB post-optimization upload limit.
+  - R2 filenames now use the actual uploaded content type, so modern browser
+    uploads are stored as `.webp`.
+- Remote D1 migrations:
+  - No migration required.
+- Pages deploy:
+  - Project: `supplementstack`.
+  - Preview URL: `https://c07d6e4d.supplementstack.pages.dev`.
+  - Live URL: `https://supplementstack.de`.
+- Validation:
+  - `functions`: `npx tsc -p tsconfig.json --noEmit` passed.
+  - `frontend`: `npx tsc --noEmit` passed.
+  - `frontend`: `npm run lint --if-present` passed.
+  - `frontend`: `npm run build` passed.
+  - `node --check scripts/admin-browser-smoke.mjs` passed.
+  - `node --check scripts/user-browser-smoke.mjs` passed.
+  - `git diff --check` passed with existing LF/CRLF warnings only.
+- Smoke checks:
+  - Preview/live `/administrator/product-qa` returned HTTP 200.
+  - Preview/live `/administrator/products/1` returned HTTP 200.
+  - Preview/live unauthenticated `POST /api/admin/products/1/image` returned
+    HTTP 401.
+- Notes:
+  - Authenticated image upload QA remains open because no admin session was
+    available locally.
+
 ## 2026-05-07 Wirkstoffe/Formen Rebuild Remote-Migrated And Deployed
 
 - Scope:

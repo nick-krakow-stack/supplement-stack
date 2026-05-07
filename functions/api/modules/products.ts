@@ -14,6 +14,11 @@
 import { Hono } from 'hono'
 import type { AppContext, ProductRow } from '../lib/types'
 import { checkRateLimit, ensureAuth, requireAdmin, logAdminAction } from '../lib/helpers'
+import {
+  getProductImageExtension,
+  isSupportedProductImageType,
+  PRODUCT_IMAGE_MAX_UPLOAD_BYTES,
+} from '../lib/product-images'
 import { attachWarningsToProducts, loadCatalogProductSafetyWarnings } from './knowledge'
 
 const products = new Hono<AppContext>()
@@ -722,11 +727,9 @@ products.post('/:id/image', async (c) => {
   // Accept both 'image' (new) and 'file' (legacy) field names
   const file = (formData.get('image') ?? formData.get('file')) as File | null
   if (!file) return c.json({ error: 'image field required' }, 400)
-  const allowedTypes = ['image/jpeg', 'image/png', 'image/webp']
-  if (!allowedTypes.includes(file.type)) return c.json({ error: 'Only JPEG, PNG or WebP images are allowed' }, 415)
-  if (file.size > 5 * 1024 * 1024) return c.json({ error: 'Max 5 MB' }, 413)
-  const extMap: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }
-  const ext = extMap[file.type] ?? 'jpg'
+  if (!isSupportedProductImageType(file.type)) return c.json({ error: 'Only JPEG, PNG or WebP images are allowed' }, 415)
+  if (file.size > PRODUCT_IMAGE_MAX_UPLOAD_BYTES) return c.json({ error: 'Max 1 MB after image optimization' }, 413)
+  const ext = getProductImageExtension(file.type) ?? 'jpg'
   const filename = `${crypto.randomUUID()}.${ext}`
   const r2Key = `products/${id}/${filename}`
   const buffer = await file.arrayBuffer()

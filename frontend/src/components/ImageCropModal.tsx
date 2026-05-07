@@ -2,7 +2,61 @@ import { useRef, useState, useEffect, useCallback } from 'react';
 import { Upload, ZoomIn, ZoomOut, Check, X, RotateCcw, Loader } from 'lucide-react';
 
 const CANVAS_SIZE = 272; // viewport circle diameter (px)
-const OUTPUT_SIZE = 200; // output image size (px)
+const OUTPUT_SIZE = 512; // stored product image size (px)
+const WEBP_QUALITY = 0.84;
+const JPEG_FALLBACK_QUALITY = 0.88;
+
+type EncodedImage = {
+  blob: Blob;
+  dataUrl: string;
+  filename: string;
+};
+
+async function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number): Promise<Blob | null> {
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => resolve(blob), type, quality);
+  });
+}
+
+async function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ''));
+    reader.onerror = () => reject(new Error('Blob to data URL failed'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+function flattenForJpeg(source: HTMLCanvasElement): HTMLCanvasElement {
+  const canvas = document.createElement('canvas');
+  canvas.width = source.width;
+  canvas.height = source.height;
+  const ctx = canvas.getContext('2d')!;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(source, 0, 0);
+  return canvas;
+}
+
+async function encodeProductImage(canvas: HTMLCanvasElement): Promise<EncodedImage> {
+  const webpBlob = await canvasToBlob(canvas, 'image/webp', WEBP_QUALITY);
+  if (webpBlob && webpBlob.type === 'image/webp') {
+    return {
+      blob: webpBlob,
+      dataUrl: await blobToDataUrl(webpBlob),
+      filename: 'product.webp',
+    };
+  }
+
+  const jpegCanvas = flattenForJpeg(canvas);
+  const jpegBlob = await canvasToBlob(jpegCanvas, 'image/jpeg', JPEG_FALLBACK_QUALITY);
+  if (!jpegBlob) throw new Error('Canvas toBlob failed');
+  return {
+    blob: jpegBlob,
+    dataUrl: await blobToDataUrl(jpegBlob),
+    filename: 'product.jpg',
+  };
+}
 
 interface ImageCropModalProps {
   onCrop?: (dataUrl: string) => void;
@@ -150,18 +204,14 @@ export default function ImageCropModal({
     ctx.drawImage(image, drawX, drawY, drawW, drawH);
     ctx.restore();
 
-    const dataUrl = out.toDataURL('image/jpeg', 0.88);
-
     // If an upload target + onSuccess are provided, upload directly to backend.
     if (resolvedUploadEndpoint && onSuccess) {
       setUploading(true);
       setUploadError(null);
       try {
-        const blob = await new Promise<Blob>((resolve, reject) => {
-          out.toBlob((b) => { if (b) resolve(b); else reject(new Error('Canvas toBlob failed')); }, 'image/jpeg', 0.88);
-        });
+        const encoded = await encodeProductImage(out);
         const formData = new FormData();
-        formData.append('image', blob, 'product.jpg');
+        formData.append('image', encoded.blob, encoded.filename);
         if (uploadVersion !== null && uploadVersion !== undefined) {
           formData.append('version', String(uploadVersion));
         }
@@ -197,7 +247,8 @@ export default function ImageCropModal({
 
     // Fallback: pass dataUrl to parent via onCrop callback
     if (onCrop) {
-      onCrop(dataUrl);
+      const encoded = await encodeProductImage(out);
+      onCrop(encoded.dataUrl);
     }
   };
 

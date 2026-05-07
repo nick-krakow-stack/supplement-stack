@@ -1088,7 +1088,7 @@ export default function AdministratorProductDetailPage() {
             <div className="min-w-0 text-xs">
               <p className="font-semibold text-[color:var(--admin-ink)]">Produktbild hochladen</p>
               <p className="admin-muted mt-1">
-                JPEG, PNG oder WebP bis 5 MB. Der Upload schreibt R2-Key und Bild-URL versioniert auf das Produkt.
+                Bilder werden automatisch als WebP auf 512 x 512 px optimiert und versioniert in R2 gespeichert.
               </p>
               <p className="admin-mono admin-muted mt-1 break-all">
                 {selected.image_r2_key || selected.image_url || 'Noch kein Bild gespeichert.'}

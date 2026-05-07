@@ -2,6 +2,31 @@
 
 Last updated: 2026-05-07
 
+## 2026-05-07 - Product Image Upload Normalization
+
+Decision: product-image uploads should be normalized before storage instead of
+storing arbitrary original camera files.
+
+Operational rules:
+
+- The user upload flow stays unchanged: select/drop image, choose crop, save.
+- The browser cropper renders the selected image to 512 x 512 px.
+- Preferred stored format is WebP with quality `0.84`.
+- JPEG remains an automatic fallback only for browsers that cannot export WebP.
+- Backend upload routes accept JPEG/PNG/WebP for compatibility, but enforce a
+  1 MB post-optimization limit and store the R2 object extension/content type
+  from the actual uploaded blob.
+- Cloudflare Worker-side image decoding/resizing is not introduced for this
+  pass; if full server-side image processing is required later, use Cloudflare
+  Images/Image Resizing or a separate processing service.
+
+Rationale:
+
+- Normalizing in the browser avoids extra user steps and keeps the Worker
+  inside Cloudflare runtime constraints.
+- 512 x 512 WebP is sharp enough for product cards and stack views while
+  avoiding oversized 4000 px source images in R2/page loads.
+
 ## 2026-05-07 - Wirkstoffe Forms And Precursors Model
 
 Decision: the ingredient rebuild keeps `ingredients` canonical and uses

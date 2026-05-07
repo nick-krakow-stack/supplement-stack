@@ -62,6 +62,11 @@ import { Hono } from 'hono'
 import type { Context } from 'hono'
 import type { AppContext, CountRow, ProductRow } from '../lib/types'
 import { ensureAuth, requireAdmin, ensureAdmin, logAdminAction } from '../lib/helpers'
+import {
+  getProductImageExtension,
+  isSupportedProductImageType,
+  PRODUCT_IMAGE_MAX_UPLOAD_BYTES,
+} from '../lib/product-images'
 import { loadCatalogProductSafetyWarnings } from './knowledge'
 
 const admin = new Hono<AppContext>()
@@ -5967,16 +5972,14 @@ admin.post('/products/:id/image', async (c) => {
     arrayBuffer(): Promise<ArrayBuffer>
   }
 
-  const allowedTypes = new Set(['image/jpeg', 'image/png', 'image/webp'])
-  if (!allowedTypes.has(file.type)) return c.json({ error: 'Only JPEG, PNG or WebP images are allowed' }, 415)
-  if (file.size > 5 * 1024 * 1024) return c.json({ error: 'Max 5 MB' }, 413)
+  if (!isSupportedProductImageType(file.type)) return c.json({ error: 'Only JPEG, PNG or WebP images are allowed' }, 415)
+  if (file.size > PRODUCT_IMAGE_MAX_UPLOAD_BYTES) return c.json({ error: 'Max 1 MB after image optimization' }, 413)
 
   const expectedVersion = parseVersionValue(c.req.header('If-Match')) ?? parseVersionValue(formData.get('version'))
   const lock = validateOptimisticLock(productColumns.has('version'), existing.version, expectedVersion)
   if (!lock.ok) return c.json({ error: lock.error, current_version: existing.version }, 409)
 
-  const extMap: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' }
-  const ext = extMap[file.type] ?? 'jpg'
+  const ext = getProductImageExtension(file.type) ?? 'jpg'
   const filename = `${crypto.randomUUID()}.${ext}`
   const r2Key = `products/${id}/${filename}`
   const imageUrl = `/api/r2/products/${id}/${filename}`

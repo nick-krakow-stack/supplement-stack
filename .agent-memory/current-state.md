@@ -12,7 +12,7 @@ Last updated: 2026-05-07
   - Cloudflare config: `wrangler.toml` and `wrangler.maintenance.toml`
 - Live domain: `https://supplementstack.de`.
 - Latest documented deployed preview:
-  `https://e3bb987b.supplementstack.pages.dev`.
+  `https://c07d6e4d.supplementstack.pages.dev`.
 - The active admin frontend is `/administrator`.
 - `/api/admin` remains the backend API namespace.
 - The old frontend `/admin` route was removed during cleanup. Use
@@ -37,6 +37,23 @@ Last updated: 2026-05-07
   refactor candidate.
 
 ## Latest Completed Work
+
+### 2026-05-07 Product Image WebP Normalization - Deployed
+
+- Product image crop/upload now keeps the user flow unchanged but stores
+  browser-normalized images:
+  - `ImageCropModal` renders the selected crop to 512 x 512 px
+  - preferred output is `image/webp` at quality `0.84`
+  - browsers without WebP support fall back to JPEG
+- Product image upload endpoints now share a central content-type/limit helper:
+  - `functions/api/lib/product-images.ts`
+  - `/api/admin/products/:id/image`
+  - `/api/products/:id/image`
+- Upload endpoints still accept JPEG/PNG/WebP for compatibility, but enforce a
+  1 MB post-optimization limit and store R2 filenames by actual content type.
+- Deployed preview: `https://c07d6e4d.supplementstack.pages.dev`.
+- Live route smokes passed for `/administrator/product-qa` and
+  `/administrator/products/1`; unauthenticated upload guard returned HTTP 401.
 
 ### 2026-05-07 Wirkstoffe/Formen Rebuild - Remote-Migrated And Deployed
 
@@ -166,6 +183,14 @@ Last updated: 2026-05-07
   - `functions`: `npx tsc -p tsconfig.json --noEmit`
   - `frontend`: `npm run build`
   - `git diff --check`
+- Product image WebP normalization validation passed:
+  - `functions`: `npx tsc -p tsconfig.json --noEmit`
+  - `frontend`: `npx tsc --noEmit`
+  - `frontend`: `npm run lint --if-present`
+  - `frontend`: `npm run build`
+  - `node --check scripts/admin-browser-smoke.mjs`
+  - `node --check scripts/user-browser-smoke.mjs`
+  - `git diff --check`
 - Remote D1 postflight passed:
   - no old references to ingredient IDs `60`, `65`, or `66`
   - no old form `189`
@@ -188,6 +213,7 @@ Last updated: 2026-05-07
   - user product submit
   - Product Detail overview/moderation/affiliate/Wirkstoffe/image flows
   - Product-QA harmless save
+  - Product Detail and Product-QA image upload with WebP normalization
   - product warnings
   - Dosing source links
   - Interaction edit/delete

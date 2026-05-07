@@ -6,10 +6,12 @@ Last updated: 2026-05-07
 
 - Wirkstoffe/Formen rebuild is remote-migrated and deployed. Use
   `https://supplementstack.de` or preview
-  `https://e3bb987b.supplementstack.pages.dev` for follow-up QA.
+  `https://c07d6e4d.supplementstack.pages.dev` for follow-up QA.
 - Run authenticated owner QA for the new user/admin flows, especially stack
   form selection, user-product ingredient entry, and Administrator Ingredient
   `Wirkstoffteile`.
+- In the same owner QA pass, upload one Product Detail/Product-QA image and
+  confirm the stored R2 URL ends in `.webp` on modern browsers.
 - Review L-Carnitin/ALCAR display copy in admin content if the migrated legacy
   notes should be rewritten into final editorial wording.
 - Fix or reset the local D1 migration journal/schema mismatch if local

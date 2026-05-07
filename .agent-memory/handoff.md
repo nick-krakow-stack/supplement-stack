@@ -4,6 +4,23 @@ Last updated: 2026-05-07
 
 ## Exact Continuation Point
 
+Product image WebP normalization is implemented and deployed:
+
+- Preview: `https://c07d6e4d.supplementstack.pages.dev`
+- Live: `https://supplementstack.de`
+- `ImageCropModal` exports 512 x 512 px WebP at quality `0.84`.
+- JPEG fallback is automatic if a browser cannot export WebP.
+- `/api/admin/products/:id/image` and `/api/products/:id/image` share
+  `functions/api/lib/product-images.ts`.
+- Upload routes enforce a 1 MB post-optimization limit and store R2 filenames
+  by actual uploaded content type.
+- Validation passed: functions typecheck, frontend typecheck, frontend lint,
+  frontend build, smoke script syntax checks, and `git diff --check`.
+- Preview/live `/administrator/product-qa` and `/administrator/products/1`
+  returned HTTP 200.
+- Preview/live unauthenticated `POST /api/admin/products/1/image` returned
+  HTTP 401.
+
 The Wirkstoffe/Formen rebuild has been implemented, remote-migrated, deployed,
 and postflight-checked.
 
@@ -13,9 +30,9 @@ Remote D1 `supplementstack-production` has these migrations applied:
 - `0070_ingredient_precursors.sql`
 - `0071_consolidate_l_carnitine_forms.sql`
 
-Final deployed preview:
+Latest deployed preview:
 
-- `https://e3bb987b.supplementstack.pages.dev`
+- `https://c07d6e4d.supplementstack.pages.dev`
 - Live domain: `https://supplementstack.de`
 
 ## What Changed
@@ -66,6 +83,7 @@ Final deployed preview:
   - stack create/edit/product add/remove/replacement
   - stack form selection for Wirkstoffe with forms
   - user product submit with ingredient/form rows
+  - Product Detail/Product-QA image upload and `.webp` R2 URL confirmation
   - Product Detail overview/moderation/affiliate/Wirkstoffe/image flows
   - Product-QA harmless save
   - product warnings

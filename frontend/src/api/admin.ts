@@ -2406,7 +2406,12 @@ export async function uploadAdminProductImage(
   options: AdminMutationOptions = {},
 ): Promise<AdminProductImageUploadResponse> {
   const formData = new FormData();
-  formData.append('image', file, 'product.jpg');
+  const filename = file.type === 'image/webp'
+    ? 'product.webp'
+    : file.type === 'image/png'
+      ? 'product.png'
+      : 'product.jpg';
+  formData.append('image', file, filename);
   if (options.version !== null && options.version !== undefined) {
     formData.append('version', String(options.version));
   }
