@@ -1,6 +1,38 @@
 # Deploy Log
 
-Last updated: 2026-05-08
+Last updated: 2026-05-10
+
+## 2026-05-10 Backend P2 Hardening Deployed
+
+- Scope:
+  - Hardened `/api/auth/register`, `/api/auth/login`,
+    `/api/auth/forgot-password`, and `/api/auth/reset-password` so malformed
+    JSON returns HTTP 400 instead of HTTP 500.
+  - Removed raw mail transport debug fields from password-reset and stack-mail
+    API JSON responses.
+  - Hardened admin CSV exports against spreadsheet formula prefixes.
+  - Added `scripts/backend-regression-check.mjs` for lightweight backend
+    regression checks without Vite/esbuild.
+- Remote D1 migrations:
+  - No new migration required.
+- GitHub:
+  - Commit: `78a3565` (`Harden backend error handling and exports`).
+  - Pushed to `origin/main`.
+- Pages deploy:
+  - Project: `supplementstack`.
+  - Preview URL: `https://e0367e43.supplementstack.pages.dev`.
+  - Live URL: `https://supplementstack.de`.
+  - Cloudflare API reported production deployment success for commit
+    `78a3565`.
+- Validation:
+  - `node scripts/backend-regression-check.mjs` passed.
+  - `functions`: `npx tsc -p tsconfig.json --noEmit` passed.
+  - `node --check scripts/backend-regression-check.mjs` passed.
+  - `git diff --check` passed with existing LF/CRLF warnings only.
+- Smoke checks:
+  - Preview/live malformed JSON POSTs to `/api/auth/login`,
+    `/api/auth/forgot-password`, `/api/auth/reset-password`, and
+    `/api/auth/register` returned HTTP 400 with `{"error":"Invalid JSON"}`.
 
 ## 2026-05-08 Admin Post-Launch Dashboard And Human Copy Pass Deployed
 

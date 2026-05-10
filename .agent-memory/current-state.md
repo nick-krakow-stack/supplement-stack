@@ -39,7 +39,7 @@ Last updated: 2026-05-08
 
 ## Latest Completed Work
 
-### 2026-05-10 Backend P2 Hardening - Local
+### 2026-05-10 Backend P2 Hardening - Deployed
 
 - Implemented the backend review P2 fixes:
   - malformed JSON on `/api/auth/register`, `/api/auth/login`,
@@ -57,6 +57,13 @@ Last updated: 2026-05-08
   - `functions`: `npx tsc -p tsconfig.json --noEmit`
   - `node --check scripts/backend-regression-check.mjs`
   - `git diff --check` passed with the existing LF/CRLF warnings only.
+- Commit `78a3565` was pushed to `origin/main`.
+- Cloudflare Pages production deployment succeeded for commit `78a3565`.
+  - Preview URL: `https://e0367e43.supplementstack.pages.dev`
+  - Live URL: `https://supplementstack.de`
+- Preview and live malformed JSON smokes passed for `/api/auth/login`,
+  `/api/auth/forgot-password`, `/api/auth/reset-password`, and
+  `/api/auth/register`: each returned HTTP 400 with `{"error":"Invalid JSON"}`.
 
 ### 2026-05-08 Admin Post-Launch Dashboard And Human Copy Pass - Deployed
 
