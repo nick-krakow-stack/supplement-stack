@@ -13,3 +13,19 @@ assert.equal(
   false,
   'Admin dosing list must not hide unpublished dose recommendations',
 )
+
+assert.match(
+  dosingPage,
+  /useSearchParams/,
+  'AdministratorDosingPage must initialize filters from URL search params',
+)
+assert.match(
+  dosingPage,
+  /searchParams\.get\('ingredient_id'\)/,
+  'AdministratorDosingPage must read ingredient_id from URL search params',
+)
+assert.match(
+  dosingPage,
+  /searchParams\.get\('q'\)/,
+  'AdministratorDosingPage must read q from URL search params',
+)
