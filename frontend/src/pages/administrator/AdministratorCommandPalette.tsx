@@ -87,6 +87,22 @@ function normalizeResults(data: unknown): SearchResult[] {
   return resultItems(data).map(normalizeResult).filter((result): result is SearchResult => Boolean(result));
 }
 
+function groupResults(results: SearchResult[]): Array<{ category: string; items: SearchResult[] }> {
+  const groups = new Map<string, SearchResult[]>();
+
+  for (const result of results) {
+    const key = result.category || 'Route';
+    const existing = groups.get(key);
+    if (existing) {
+      existing.push(result);
+    } else {
+      groups.set(key, [result]);
+    }
+  }
+
+  return Array.from(groups, ([category, items]) => ({ category, items }));
+}
+
 export default function AdministratorCommandPalette() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -100,6 +116,7 @@ export default function AdministratorCommandPalette() {
 
   const activeResult = results[activeIndex] ?? null;
   const trimmedQuery = query.trim();
+  const groupedResults = useMemo(() => groupResults(results), [results]);
 
   const openPalette = useCallback(() => {
     setOpen(true);
@@ -251,28 +268,40 @@ export default function AdministratorCommandPalette() {
 
             {!error && results.length > 0 && (
               <div id="administrator-command-results" className="admin-command-results" role="listbox">
-                {results.map((result, index) => (
-                  <button
-                    key={`${result.id}-${result.path}`}
-                    id={`administrator-command-result-${result.id}`}
-                    type="button"
-                    role="option"
-                    aria-selected={index === activeIndex}
-                    className={`admin-command-result${index === activeIndex ? ' active' : ''}`}
-                    onMouseEnter={() => setActiveIndex(index)}
-                    onClick={() => openResult(result)}
-                  >
-                    <span className="admin-command-result-main">
-                      <span className="admin-command-result-title">{result.title}</span>
-                      {result.description && <span className="admin-command-result-desc">{result.description}</span>}
-                      <span className="admin-command-result-path">{result.path}</span>
-                    </span>
-                    <span className="admin-command-result-side">
-                      {result.badge && <span className="admin-badge admin-badge-neutral">{result.badge}</span>}
-                      <span className="admin-command-result-category">{result.category}</span>
-                      {index === activeIndex && <CornerDownLeft size={14} aria-hidden="true" />}
-                    </span>
-                  </button>
+                {groupedResults.map((group) => (
+                  <div key={group.category} className="admin-command-group">
+                    <div className="admin-command-group-title">{group.category}</div>
+                    {group.items.map((result) => {
+                      const index = results.indexOf(result);
+
+                      return (
+                        <button
+                          key={`${result.id}-${result.path}`}
+                          id={`administrator-command-result-${result.id}`}
+                          type="button"
+                          role="option"
+                          aria-selected={index === activeIndex}
+                          className={`admin-command-result${index === activeIndex ? ' active' : ''}`}
+                          onMouseEnter={() => setActiveIndex(index)}
+                          onClick={() => openResult(result)}
+                        >
+                          <span className="admin-command-result-initial" aria-hidden="true">
+                            {result.title.slice(0, 1).toLocaleUpperCase('de-DE')}
+                          </span>
+                          <span className="admin-command-result-main">
+                            <span className="admin-command-result-title">{result.title}</span>
+                            {result.description && <span className="admin-command-result-desc">{result.description}</span>}
+                            <span className="admin-command-result-path">{result.path}</span>
+                          </span>
+                          <span className="admin-command-result-side">
+                            {result.badge && <span className="admin-badge admin-badge-neutral">{result.badge}</span>}
+                            <span className="admin-command-result-category">{result.category}</span>
+                            {index === activeIndex && <CornerDownLeft size={14} aria-hidden="true" />}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
                 ))}
               </div>
             )}
@@ -284,6 +313,23 @@ export default function AdministratorCommandPalette() {
                   : 'Der Backend-Suchindex hat aktuell keine Schnellzugriffe geliefert.'}
               </div>
             )}
+
+            <div className="admin-command-footer">
+              <span>
+                <kbd>↑</kbd>
+                <kbd>↓</kbd>
+                navigieren
+              </span>
+              <span>
+                <kbd>↵</kbd>
+                öffnen
+              </span>
+              <span>
+                <kbd>Esc</kbd>
+                schließen
+              </span>
+              <strong>Ctrl K von überall</strong>
+            </div>
           </div>
         </div>
       )}

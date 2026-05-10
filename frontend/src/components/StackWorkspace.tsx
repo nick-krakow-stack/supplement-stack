@@ -72,8 +72,8 @@ export interface DemoProduct {
   alternative_note?: string;
   warnings?: ProductSafetyWarning[];
   ingredient_category?: string;
-  status?: 'pending' | 'approved' | 'rejected';
-  user_product_status?: 'pending' | 'approved' | 'rejected';
+  status?: 'pending' | 'approved' | 'rejected' | 'blocked';
+  user_product_status?: 'pending' | 'approved' | 'rejected' | 'blocked';
   published_product_id?: number | null;
   ingredients?: Array<{
     ingredient_id: number;

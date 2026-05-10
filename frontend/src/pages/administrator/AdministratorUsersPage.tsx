@@ -1,5 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, MailCheck, RefreshCw, Search, ShieldCheck, UserCog, X } from 'lucide-react';
+import {
+  ArrowLeft,
+  Calendar,
+  ChevronLeft,
+  ChevronRight,
+  Eye,
+  Mail,
+  MailCheck,
+  MousePointerClick,
+  PackageCheck,
+  RefreshCw,
+  Search,
+  ShieldCheck,
+  UserCog,
+  X,
+} from 'lucide-react';
 import { AdminBadge, AdminButton, AdminCard, AdminEmpty, AdminError, AdminPageHeader } from './AdminUi';
 
 type UserRole = 'user' | 'admin';
@@ -8,6 +23,9 @@ type BooleanFilter = '' | 'true' | 'false';
 type AdminUser = {
   id: number;
   email: string;
+  name?: string | null;
+  display_name?: string | null;
+  full_name?: string | null;
   role: UserRole;
   created_at: string;
   health_consent: number | null;
@@ -15,17 +33,28 @@ type AdminUser = {
   email_verified_at: string | null;
   deleted_at: string | null;
   is_trusted_product_submitter: number;
+  is_blocked_product_submitter: number;
+  product_submission_blocked_at: string | null;
+  product_submission_block_reason: string | null;
   stack_count: number;
   last_stack_at: string | null;
+  stack_item_count?: number | null;
+  product_in_stack_count?: number | null;
+  products_in_stack_count?: number | null;
+  link_click_count?: number | null;
+  product_link_click_count?: number | null;
   user_product_count: number;
   pending_user_product_count: number;
   approved_user_product_count: number;
+  verified_user_product_count?: number | null;
+  blocked_user_product_count: number;
 };
 
 type UsersSummary = {
   total: number;
   admins: number;
   trusted: number;
+  blocked_submitters: number;
   verified: number;
   unverified: number;
   deleted: number;
@@ -41,15 +70,14 @@ type UsersResponse = {
 
 type UserPatchResponse = {
   ok?: boolean;
-  user?: Partial<Pick<AdminUser, 'id' | 'email' | 'role' | 'is_trusted_product_submitter'>>;
+  user?: Partial<Pick<AdminUser, 'id' | 'email' | 'role' | 'is_trusted_product_submitter' | 'is_blocked_product_submitter'>>;
   error?: string;
 };
 
 type UserFilters = {
   q: string;
-  role: '' | UserRole;
   trusted: BooleanFilter;
-  verified: BooleanFilter;
+  blocked: BooleanFilter;
 };
 
 const LIMIT_OPTIONS = [10, 25, 50, 100] as const;
@@ -66,13 +94,19 @@ async function parseError(response: Response, fallback: string): Promise<string>
 function emptyFilters(): UserFilters {
   return {
     q: '',
-    role: '',
     trusted: '',
-    verified: '',
+    blocked: '',
   };
 }
 
 function formatDate(value: string | null): string {
+  if (!value) return '-';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return 'unbekannt';
+  return parsed.toLocaleDateString('de-DE');
+}
+
+function formatDateTime(value: string | null): string {
   if (!value) return '-';
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return 'unbekannt';
@@ -83,23 +117,24 @@ function formatCount(value: number | null | undefined): string {
   return new Intl.NumberFormat('de-DE').format(value ?? 0);
 }
 
-function roleTone(role: UserRole): 'neutral' | 'ok' | 'warn' | 'danger' | 'info' {
-  return role === 'admin' ? 'info' : 'neutral';
+function formatOptionalCount(value: number | null | undefined): string {
+  return value == null ? '-' : formatCount(value);
 }
 
-function statusBadges(user: AdminUser) {
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      <AdminBadge tone={roleTone(user.role)}>{user.role === 'admin' ? 'Admin' : 'Nutzer'}</AdminBadge>
-      <AdminBadge tone={user.is_trusted_product_submitter ? 'ok' : 'neutral'}>
-        {user.is_trusted_product_submitter ? 'Trusted' : 'Nicht trusted'}
-      </AdminBadge>
-      <AdminBadge tone={user.email_verified_at ? 'ok' : 'warn'}>
-        {user.email_verified_at ? 'Verifiziert' : 'Unverifiziert'}
-      </AdminBadge>
-      {user.deleted_at && <AdminBadge tone="danger">Gelöscht</AdminBadge>}
-    </div>
-  );
+function displayName(user: AdminUser): string {
+  return user.name?.trim() || user.display_name?.trim() || user.full_name?.trim() || '';
+}
+
+function stackProductCount(user: AdminUser): number | null | undefined {
+  return user.products_in_stack_count ?? user.product_in_stack_count ?? user.stack_item_count;
+}
+
+function linkClickCount(user: AdminUser): number | null | undefined {
+  return user.link_click_count ?? user.product_link_click_count;
+}
+
+function approvedProductCount(user: AdminUser): number {
+  return user.verified_user_product_count ?? user.approved_user_product_count ?? 0;
 }
 
 function normalizeSummary(summary?: Partial<UsersSummary>): UsersSummary {
@@ -107,6 +142,7 @@ function normalizeSummary(summary?: Partial<UsersSummary>): UsersSummary {
     total: summary?.total ?? 0,
     admins: summary?.admins ?? 0,
     trusted: summary?.trusted ?? 0,
+    blocked_submitters: summary?.blocked_submitters ?? 0,
     verified: summary?.verified ?? 0,
     unverified: summary?.unverified ?? 0,
     deleted: summary?.deleted ?? 0,
@@ -118,15 +154,17 @@ function UserActions({
   busy,
   onRoleChange,
   onTrustedToggle,
+  onBlockedToggle,
 }: {
   user: AdminUser;
   busy: boolean;
   onRoleChange: (user: AdminUser, role: UserRole) => void;
   onTrustedToggle: (user: AdminUser) => void;
+  onBlockedToggle: (user: AdminUser) => void;
 }) {
   return (
-    <div className="flex flex-wrap items-end gap-2">
-      <label className="min-w-[116px] text-xs font-medium text-[color:var(--admin-ink-2)]">
+    <div className="grid gap-3">
+      <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
         Rolle
         <select
           value={user.role}
@@ -138,10 +176,136 @@ function UserActions({
           <option value="admin">Admin</option>
         </select>
       </label>
-      <AdminButton size="sm" onClick={() => onTrustedToggle(user)} disabled={busy}>
-        <ShieldCheck size={13} />
-        {user.is_trusted_product_submitter ? 'Trusted entfernen' : 'Trusted setzen'}
-      </AdminButton>
+      <div className="flex flex-wrap gap-2">
+        <AdminButton size="sm" onClick={() => onTrustedToggle(user)} disabled={busy}>
+          <ShieldCheck size={13} />
+          {user.is_trusted_product_submitter ? 'Trusted entfernen' : 'Trusted setzen'}
+        </AdminButton>
+        <AdminButton
+          size="sm"
+          variant={user.is_blocked_product_submitter ? 'danger' : 'default'}
+          onClick={() => onBlockedToggle(user)}
+          disabled={busy}
+        >
+          <X size={13} />
+          {user.is_blocked_product_submitter ? 'Sperre entfernen' : 'Einreichungen sperren'}
+        </AdminButton>
+      </div>
+    </div>
+  );
+}
+
+function DetailMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] bg-white/70 px-3 py-2">
+      <div className="text-[11px] uppercase tracking-[0.12em] text-[color:var(--admin-ink-3)]">{label}</div>
+      <div className="mt-1 font-medium text-[color:var(--admin-ink)]">{value}</div>
+    </div>
+  );
+}
+
+function UserDetailPanel({
+  user,
+  busy,
+  onClose,
+  onRoleChange,
+  onTrustedToggle,
+  onBlockedToggle,
+}: {
+  user: AdminUser;
+  busy: boolean;
+  onClose: () => void;
+  onRoleChange: (user: AdminUser, role: UserRole) => void;
+  onTrustedToggle: (user: AdminUser) => void;
+  onBlockedToggle: (user: AdminUser) => void;
+}) {
+  const name = displayName(user);
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end bg-black/25" role="dialog" aria-modal="true" aria-labelledby="admin-user-detail-title">
+      <button type="button" className="absolute inset-0 hidden md:block" aria-label="Details schliessen" onClick={onClose} />
+      <aside className="relative z-10 flex h-full w-full flex-col overflow-y-auto border-l border-[color:var(--admin-line)] bg-[color:var(--admin-bg)] p-4 shadow-2xl md:max-w-[480px] md:p-5">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <button type="button" className="admin-btn admin-btn-sm md:hidden" onClick={onClose}>
+            <ArrowLeft size={14} />
+            Zurueck
+          </button>
+          <button type="button" className="admin-icon-btn ml-auto" onClick={onClose} aria-label="Details schliessen">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="admin-card admin-card-pad">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h2 id="admin-user-detail-title" className="admin-card-title">
+                {name || user.email}
+              </h2>
+              {name && <p className="admin-muted mt-1 truncate">{user.email}</p>}
+            </div>
+            <AdminBadge tone={user.role === 'admin' ? 'info' : 'neutral'}>
+              {user.role === 'admin' ? 'Admin' : 'Nutzer'}
+            </AdminBadge>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-1.5">
+            <AdminBadge tone={user.email_verified_at ? 'ok' : 'warn'}>
+              {user.email_verified_at ? 'Aktiv' : 'Nicht aktiv'}
+            </AdminBadge>
+            <AdminBadge tone={user.is_trusted_product_submitter ? 'ok' : 'neutral'}>
+              {user.is_trusted_product_submitter ? 'Trusted' : 'Nicht trusted'}
+            </AdminBadge>
+            <AdminBadge tone={user.is_blocked_product_submitter ? 'danger' : 'neutral'}>
+              {user.is_blocked_product_submitter ? 'Einreichungen gesperrt' : 'Einreichungen offen'}
+            </AdminBadge>
+            {user.deleted_at && <AdminBadge tone="danger">Geloescht</AdminBadge>}
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <DetailMetric label="Erstellt" value={formatDateTime(user.created_at)} />
+          <DetailMetric label="E-Mail aktiv" value={formatDateTime(user.email_verified_at)} />
+          <DetailMetric label="Health Consent" value={user.health_consent ? formatDateTime(user.health_consent_at) : '-'} />
+          <DetailMetric label="Letzter Stack" value={formatDateTime(user.last_stack_at)} />
+        </div>
+
+        <div className="mt-4 admin-card admin-card-pad">
+          <h3 className="admin-card-title text-base">Nutzung</h3>
+          <div className="mt-3 grid gap-2 text-sm text-[color:var(--admin-ink-2)]">
+            <div>Stacks: {formatCount(user.stack_count)}</div>
+            <div>Produkte im Stack: {formatOptionalCount(stackProductCount(user))}</div>
+            <div>Link-Klicks: {formatOptionalCount(linkClickCount(user))}</div>
+          </div>
+        </div>
+
+        <div className="mt-4 admin-card admin-card-pad">
+          <h3 className="admin-card-title text-base">Beitrag</h3>
+          <div className="mt-3 grid gap-2 text-sm text-[color:var(--admin-ink-2)]">
+            <div>Eingereichte Produkte: {formatCount(user.user_product_count)}</div>
+            <div>Freigegeben/verifiziert: {formatCount(approvedProductCount(user))}</div>
+            <div>Gesperrte Produkte: {formatCount(user.blocked_user_product_count)}</div>
+          </div>
+        </div>
+
+        <div className="mt-4 admin-card admin-card-pad">
+          <h3 className="admin-card-title text-base">Administrative Details</h3>
+          <div className="mt-3">
+            <UserActions
+              user={user}
+              busy={busy}
+              onRoleChange={onRoleChange}
+              onTrustedToggle={onTrustedToggle}
+              onBlockedToggle={onBlockedToggle}
+            />
+          </div>
+          {user.product_submission_blocked_at && (
+            <p className="admin-muted mt-3 text-xs">
+              Sperre seit {formatDateTime(user.product_submission_blocked_at)}
+              {user.product_submission_block_reason ? `: ${user.product_submission_block_reason}` : ''}
+            </p>
+          )}
+        </div>
+      </aside>
     </div>
   );
 }
@@ -157,10 +321,12 @@ export default function AdministratorUsersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [busyUserId, setBusyUserId] = useState<number | null>(null);
+  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
 
   const totalPages = Math.max(1, Math.ceil(total / limit));
   const canLoadPrevious = page > 1;
   const canLoadNext = page < totalPages;
+  const selectedUser = selectedUserId == null ? null : users.find((user) => user.id === selectedUserId) ?? null;
 
   const activeFilterCount = useMemo(() => {
     return Object.values(filters).filter((value) => value.trim().length > 0).length;
@@ -172,9 +338,8 @@ export default function AdministratorUsersPage() {
     try {
       const params = new URLSearchParams();
       if (filters.q.trim()) params.set('q', filters.q.trim());
-      if (filters.role) params.set('role', filters.role);
       if (filters.trusted) params.set('trusted', filters.trusted);
-      if (filters.verified) params.set('verified', filters.verified);
+      if (filters.blocked) params.set('blocked', filters.blocked);
       params.set('page', String(page));
       params.set('limit', String(limit));
 
@@ -216,6 +381,14 @@ export default function AdministratorUsersPage() {
     setError('');
   };
 
+  const selectFilter = (partial: Partial<UserFilters>) => {
+    const next = { ...emptyFilters(), ...partial };
+    setDraftFilters(next);
+    setFilters(next);
+    setPage(1);
+    setError('');
+  };
+
   const patchUser = async (user: AdminUser, body: Record<string, unknown>, fallback: string) => {
     setBusyUserId(user.id);
     setError('');
@@ -238,6 +411,8 @@ export default function AdministratorUsersPage() {
                 role: data.user?.role ?? entry.role,
                 is_trusted_product_submitter:
                   data.user?.is_trusted_product_submitter ?? entry.is_trusted_product_submitter,
+                is_blocked_product_submitter:
+                  data.user?.is_blocked_product_submitter ?? entry.is_blocked_product_submitter,
               }
             : entry,
         ),
@@ -253,8 +428,8 @@ export default function AdministratorUsersPage() {
   const handleRoleChange = (user: AdminUser, role: UserRole) => {
     if (role === user.role) return;
     const text = role === 'admin'
-      ? `Nutzer #${user.id} wirklich zum Admin machen?`
-      : `Admin-Rechte für Nutzer #${user.id} wirklich entfernen?`;
+      ? `${user.email} wirklich zum Admin machen?`
+      : `Admin-Rechte für ${user.email} wirklich entfernen?`;
     if (!window.confirm(text)) return;
     void patchUser(user, { role }, 'Rolle konnte nicht gespeichert werden.');
   };
@@ -267,11 +442,24 @@ export default function AdministratorUsersPage() {
     );
   };
 
+  const handleBlockedToggle = (user: AdminUser) => {
+    const nextBlocked = !user.is_blocked_product_submitter;
+    const text = nextBlocked
+      ? `Neue Produkte von ${user.email} automatisch sperren?`
+      : `Sperre für ${user.email} entfernen?`;
+    if (!window.confirm(text)) return;
+    void patchUser(
+      user,
+      { blocked_submitter: nextBlocked },
+      'Sperrstatus konnte nicht gespeichert werden.',
+    );
+  };
+
   return (
     <>
       <AdminPageHeader
         title="Benutzerverwaltung"
-        subtitle="Konten suchen, Rollen prüfen und den Vertrauensstatus für eingereichte Produkte verwalten. Passwort-, Token- und Session-Daten werden hier nicht angezeigt."
+        subtitle="Konten prüfen, Rollen und Einreichungen steuern."
         meta={<AdminBadge tone="info">{formatCount(total)} Treffer</AdminBadge>}
       />
 
@@ -284,16 +472,15 @@ export default function AdministratorUsersPage() {
           <span className="admin-health-value">{formatCount(summary.total)}</span>
           <span className="admin-health-delta">{formatCount(summary.admins)} Admins</span>
         </button>
-        <button
-          type="button"
-          className="admin-health-card"
-          data-tone="ok"
-          onClick={() => {
-            setDraftFilters((previous) => ({ ...previous, trusted: 'true' }));
-            setFilters((previous) => ({ ...previous, trusted: 'true' }));
-            setPage(1);
-          }}
-        >
+        <button type="button" className="admin-health-card" data-tone="ok" onClick={clearFilters}>
+          <span className="admin-health-label">
+            <MailCheck size={14} />
+            Aktiv
+          </span>
+          <span className="admin-health-value">{formatCount(summary.verified)}</span>
+          <span className="admin-health-delta">E-Mail bestaetigt</span>
+        </button>
+        <button type="button" className="admin-health-card" data-tone="ok" onClick={() => selectFilter({ trusted: 'true' })}>
           <span className="admin-health-label">
             <ShieldCheck size={14} />
             Trusted
@@ -304,47 +491,29 @@ export default function AdministratorUsersPage() {
         <button
           type="button"
           className="admin-health-card"
-          data-tone="ok"
-          onClick={() => {
-            setDraftFilters((previous) => ({ ...previous, verified: 'true' }));
-            setFilters((previous) => ({ ...previous, verified: 'true' }));
-            setPage(1);
-          }}
+          data-tone={summary.blocked_submitters > 0 ? 'danger' : 'neutral'}
+          onClick={() => selectFilter({ blocked: 'true' })}
         >
           <span className="admin-health-label">
-            <MailCheck size={14} />
-            Verifiziert
+            <X size={14} />
+            Gesperrt
           </span>
-          <span className="admin-health-value">{formatCount(summary.verified)}</span>
-          <span className="admin-health-delta">E-Mail bestaetigt</span>
-        </button>
-        <button
-          type="button"
-          className="admin-health-card"
-          data-tone="warn"
-          onClick={() => {
-            setDraftFilters((previous) => ({ ...previous, verified: 'false' }));
-            setFilters((previous) => ({ ...previous, verified: 'false' }));
-            setPage(1);
-          }}
-        >
-          <span className="admin-health-label">Unverifiziert</span>
-          <span className="admin-health-value">{formatCount(summary.unverified)}</span>
-          <span className="admin-health-delta">kein Verifizierungsdatum</span>
+          <span className="admin-health-value">{formatCount(summary.blocked_submitters)}</span>
+          <span className="admin-health-delta">Neue Einreichungen werden blockiert</span>
         </button>
         <div className="admin-health-card" data-tone={summary.deleted > 0 ? 'danger' : 'neutral'}>
           <span className="admin-health-label">
             <X size={14} />
-            Gelöscht
+            Geloescht
           </span>
           <span className="admin-health-value">{formatCount(summary.deleted)}</span>
           <span className="admin-health-delta">deleted_at gesetzt</span>
         </div>
       </div>
 
-      <AdminCard className="mb-4" title="Filter" subtitle="Serverseitige Suche und Paginierung." padded>
-        <div className="admin-toolbar-inline">
-          <label className="relative min-w-[240px] flex-1">
+      <div className="mb-4 admin-filter-bar">
+        <div className="admin-filter-main">
+          <label className="relative flex-1">
             <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[color:var(--admin-ink-3)]" />
             <input
               value={draftFilters.q}
@@ -352,24 +521,16 @@ export default function AdministratorUsersPage() {
               onKeyDown={(event) => {
                 if (event.key === 'Enter') applyFilters();
               }}
-              placeholder="E-Mail oder Nutzer-ID suchen"
-              className="admin-input pl-9"
+              placeholder="E-Mail suchen"
+              className="admin-input admin-filter-search pl-9"
             />
           </label>
-          <select
-            value={draftFilters.role}
-            onChange={(event) => setDraftFilters((previous) => ({ ...previous, role: event.target.value as UserFilters['role'] }))}
-            className="admin-select min-w-[150px]"
-            aria-label="Rolle filtern"
-          >
-            <option value="">Alle Rollen</option>
-            <option value="user">Nutzer</option>
-            <option value="admin">Admin</option>
-          </select>
+        </div>
+        <div className="admin-filter-controls">
           <select
             value={draftFilters.trusted}
             onChange={(event) => setDraftFilters((previous) => ({ ...previous, trusted: event.target.value as BooleanFilter }))}
-            className="admin-select min-w-[170px]"
+            className="admin-select"
             aria-label="Trusted filtern"
           >
             <option value="">Trusted: alle</option>
@@ -377,40 +538,42 @@ export default function AdministratorUsersPage() {
             <option value="false">Nicht trusted</option>
           </select>
           <select
-            value={draftFilters.verified}
-            onChange={(event) => setDraftFilters((previous) => ({ ...previous, verified: event.target.value as BooleanFilter }))}
-            className="admin-select min-w-[190px]"
-            aria-label="Verifizierung filtern"
+            value={draftFilters.blocked}
+            onChange={(event) => setDraftFilters((previous) => ({ ...previous, blocked: event.target.value as BooleanFilter }))}
+            className="admin-select"
+            aria-label="Sperrstatus"
           >
-            <option value="">Verifizierung: alle</option>
-            <option value="true">Verifiziert</option>
-            <option value="false">Unverifiziert</option>
+            <option value="">Alle Sperren</option>
+            <option value="true">Gesperrt</option>
+            <option value="false">Nicht gesperrt</option>
           </select>
+        </div>
+        <div className="admin-filter-actions">
           <AdminButton variant="primary" onClick={applyFilters}>
             <Search size={13} />
             Suchen
           </AdminButton>
           <AdminButton onClick={clearFilters} disabled={activeFilterCount === 0 && draftFilters.q === ''}>
             <X size={13} />
-            Zurücksetzen
+            Zuruecksetzen
           </AdminButton>
           <AdminButton onClick={() => void load()} disabled={loading}>
             <RefreshCw size={13} />
             Aktualisieren
           </AdminButton>
         </div>
-      </AdminCard>
+      </div>
 
       {error && <AdminError>{error}</AdminError>}
 
       <AdminCard
         title="Benutzerkonten"
-        subtitle="Nur Rolle und Trusted-Submitter-Status sind editierbar. Weitere Kontodaten bleiben bewusst read-only."
+        subtitle="Nutzung, Beiträge und Sperren im Überblick."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <AdminButton size="sm" onClick={() => setPage((previous) => Math.max(1, previous - 1))} disabled={!canLoadPrevious || loading}>
               <ChevronLeft size={13} />
-              Zurück
+              Zurueck
             </AdminButton>
             <AdminBadge tone="neutral">
               Seite {page} / {totalPages}
@@ -426,7 +589,7 @@ export default function AdministratorUsersPage() {
                 setPage(1);
               }}
               className="admin-select w-[96px]"
-              aria-label="Einträge pro Seite"
+              aria-label="Eintraege pro Seite"
             >
               {LIMIT_OPTIONS.map((option) => (
                 <option key={option} value={option}>
@@ -446,33 +609,37 @@ export default function AdministratorUsersPage() {
         {!loading && users.length > 0 && (
           <>
             <div className="grid gap-3 md:hidden">
-              {users.map((user) => (
-                <article key={user.id} className="admin-card admin-card-pad">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="truncate font-medium" style={{ fontFamily: 'var(--admin-serif)' }}>
-                        {user.email}
+              {users.map((user) => {
+                const name = displayName(user);
+                return (
+                  <article key={user.id} className="admin-card admin-card-pad">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="truncate font-medium" style={{ fontFamily: 'var(--admin-serif)' }}>
+                          {name || user.email}
+                        </div>
+                        {name && <div className="admin-muted mt-1 truncate">{user.email}</div>}
+                        <div className="admin-muted mt-1 text-xs">Erstellt am {formatDate(user.created_at)}</div>
                       </div>
-                      <div className="admin-muted admin-mono mt-1">#{user.id}</div>
+                      {user.is_blocked_product_submitter && <AdminBadge tone="danger">Gesperrt</AdminBadge>}
                     </div>
-                    {statusBadges(user)}
-                  </div>
-                  <div className="mt-3 grid gap-2 text-xs text-[color:var(--admin-ink-2)]">
-                    <div>Erstellt: {formatDate(user.created_at)}</div>
-                    <div>E-Mail verifiziert: {formatDate(user.email_verified_at)}</div>
-                    <div>Stacks: {formatCount(user.stack_count)} / Einreichungen: {formatCount(user.user_product_count)}</div>
-                    <div>Wartende Produkte: {formatCount(user.pending_user_product_count)}</div>
-                  </div>
-                  <div className="mt-3">
-                    <UserActions
-                      user={user}
-                      busy={busyUserId === user.id}
-                      onRoleChange={handleRoleChange}
-                      onTrustedToggle={handleTrustedToggle}
-                    />
-                  </div>
-                </article>
-              ))}
+                    <div className="mt-3 grid gap-2 text-xs text-[color:var(--admin-ink-2)]">
+                      <div>Stacks: {formatCount(user.stack_count)} / Produkte im Stack: {formatOptionalCount(stackProductCount(user))}</div>
+                      <div>Link-Klicks: {formatOptionalCount(linkClickCount(user))}</div>
+                      <div>
+                        Beitrag: {formatCount(user.user_product_count)} eingereicht, {formatCount(approvedProductCount(user))} freigegeben,{' '}
+                        {formatCount(user.blocked_user_product_count)} gesperrt
+                      </div>
+                    </div>
+                    <div className="mt-3">
+                      <AdminButton size="sm" onClick={() => setSelectedUserId(user.id)}>
+                        <Eye size={13} />
+                        Details
+                      </AdminButton>
+                    </div>
+                  </article>
+                );
+              })}
             </div>
 
             <div className="admin-table-wrap hidden md:block">
@@ -480,66 +647,82 @@ export default function AdministratorUsersPage() {
                 <thead>
                   <tr>
                     <th>Nutzer</th>
-                    <th>Status</th>
                     <th>Nutzung</th>
-                    <th>Verifizierung</th>
-                    <th>Aktionen</th>
+                    <th>Beitrag</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {users.map((user) => (
-                    <tr key={user.id}>
-                      <td className="min-w-[260px]">
-                        <div className="font-medium" style={{ fontFamily: 'var(--admin-serif)' }}>
-                          {user.email}
-                        </div>
-                        <div className="admin-muted mt-1 text-xs">
-                          <span className="admin-mono">#{user.id}</span>
-                          {' - '}
-                          Erstellt {formatDate(user.created_at)}
-                        </div>
-                        {user.deleted_at && (
-                          <div className="mt-1 text-xs text-[color:var(--admin-danger-ink)]">
-                            Gelöscht: {formatDate(user.deleted_at)}
+                  {users.map((user) => {
+                    const name = displayName(user);
+                    return (
+                      <tr key={user.id}>
+                        <td className="min-w-[260px]">
+                          <div className="font-medium" style={{ fontFamily: 'var(--admin-serif)' }}>
+                            {name || user.email}
                           </div>
-                        )}
-                      </td>
-                      <td className="min-w-[180px]">{statusBadges(user)}</td>
-                      <td className="min-w-[200px]">
-                        <div className="text-xs text-[color:var(--admin-ink-2)]">
-                          {formatCount(user.stack_count)} Stack(s)
-                        </div>
-                        <div className="admin-muted mt-1 text-xs">
-                          {formatCount(user.user_product_count)} Nutzer-Produkte, {formatCount(user.pending_user_product_count)} offen
-                        </div>
-                        <div className="admin-muted mt-1 text-xs">
-                          Letzter Stack: {formatDate(user.last_stack_at)}
-                        </div>
-                      </td>
-                      <td className="min-w-[180px]">
-                        <div className="text-xs text-[color:var(--admin-ink-2)]">
-                          E-Mail: {formatDate(user.email_verified_at)}
-                        </div>
-                        <div className="admin-muted mt-1 text-xs">
-                          Health Consent: {user.health_consent ? formatDate(user.health_consent_at) : 'fehlt'}
-                        </div>
-                      </td>
-                      <td className="min-w-[260px]">
-                        <UserActions
-                          user={user}
-                          busy={busyUserId === user.id}
-                          onRoleChange={handleRoleChange}
-                          onTrustedToggle={handleTrustedToggle}
-                        />
-                      </td>
-                    </tr>
-                  ))}
+                          {name && <div className="admin-muted mt-1 text-xs">{user.email}</div>}
+                          <div className="admin-muted mt-1 flex items-center gap-1 text-xs">
+                            <Calendar size={12} />
+                            Erstellt am {formatDate(user.created_at)}
+                          </div>
+                          {user.deleted_at && (
+                            <div className="mt-1 text-xs text-[color:var(--admin-danger-ink)]">
+                              Geloescht: {formatDate(user.deleted_at)}
+                            </div>
+                          )}
+                        </td>
+                        <td className="min-w-[220px]">
+                          <div className="flex items-center gap-2 text-xs text-[color:var(--admin-ink-2)]">
+                            <PackageCheck size={13} />
+                            {formatCount(user.stack_count)} Stacks
+                          </div>
+                          <div className="admin-muted mt-1 text-xs">
+                            Produkte im Stack: {formatOptionalCount(stackProductCount(user))}
+                          </div>
+                          <div className="admin-muted mt-1 flex items-center gap-2 text-xs">
+                            <MousePointerClick size={13} />
+                            Link-Klicks: {formatOptionalCount(linkClickCount(user))}
+                          </div>
+                        </td>
+                        <td className="min-w-[240px]">
+                          <div className="flex items-center gap-2 text-xs text-[color:var(--admin-ink-2)]">
+                            <Mail size={13} />
+                            {formatCount(user.user_product_count)} eingereicht
+                          </div>
+                          <div className="admin-muted mt-1 text-xs">
+                            {formatCount(approvedProductCount(user))} freigegeben/verifiziert
+                          </div>
+                          <div className="admin-muted mt-1 text-xs">
+                            {formatCount(user.blocked_user_product_count)} gesperrt
+                          </div>
+                        </td>
+                        <td className="w-[1%] whitespace-nowrap text-right">
+                          <AdminButton size="sm" onClick={() => setSelectedUserId(user.id)}>
+                            <Eye size={13} />
+                            Details
+                          </AdminButton>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           </>
         )}
       </AdminCard>
+
+      {selectedUser && (
+        <UserDetailPanel
+          user={selectedUser}
+          busy={busyUserId === selectedUser.id}
+          onClose={() => setSelectedUserId(null)}
+          onRoleChange={handleRoleChange}
+          onTrustedToggle={handleTrustedToggle}
+          onBlockedToggle={handleBlockedToggle}
+        />
+      )}
     </>
   );
 }

@@ -565,7 +565,7 @@ export default function AdministratorProductQAPage() {
     <>
       <AdminPageHeader
         title="Produktprüfung"
-        subtitle="Produkte mit fehlenden Bildern, Links oder Packungsdaten finden und direkt korrigieren."
+        subtitle="Fehlende Bilder, Links und Packungsdaten korrigieren."
         meta={<AdminBadge tone="info">{total} Treffer</AdminBadge>}
       />
 

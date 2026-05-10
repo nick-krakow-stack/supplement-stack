@@ -1,6 +1,223 @@
 # Deploy Log
 
-Last updated: 2026-05-07
+Last updated: 2026-05-08
+
+## 2026-05-08 Admin Post-Launch Dashboard And Human Copy Pass Deployed
+
+- Scope:
+  - Rebuilt `/administrator/dashboard` as a post-launch operator dashboard:
+    `Heute zu tun`, range-aware KPIs, `Umsatzsignale`, catalog/content
+    maintenance modules, and recent admin activity.
+  - Extended `/api/admin/stats` with current/previous range windows, trends,
+    top clicked products, top shops, affiliate/non-affiliate click signals,
+    open link reports, deadlink counts, and link-potential counts.
+  - Reviewed visible admin subtitles from a human/operator perspective and
+    rewrote them across the admin pages; removed technical migration copy and
+    obvious ASCII-only German text remnants from those surfaces.
+- Remote D1 migrations:
+  - No new migration required.
+- Pages deploy:
+  - Project: `supplementstack`.
+  - Preview URL: `https://89b9f726.supplementstack.pages.dev`.
+  - Live URL: `https://supplementstack.de`.
+- Validation:
+  - `functions`: `npx tsc -p tsconfig.json --noEmit` passed.
+  - `frontend`: `npx tsc --noEmit` passed.
+  - `frontend`: `npm run build` passed.
+  - `git diff --check` passed with existing LF/CRLF warnings only.
+- Smoke checks:
+  - Preview/live `/` returned HTTP 200 and served `index-vSLb5La9.js` plus
+    `index-C0Tt9RG_.css`.
+  - Preview/live `/administrator/dashboard` returned HTTP 200.
+  - Preview/live `/api/products` returned HTTP 200.
+  - Preview/live unauthenticated `/api/admin/stats` and
+    `/api/admin/ops-dashboard` returned HTTP 401.
+- Notes:
+  - Authenticated browser QA is still open because no admin session or
+    credentials are available in the environment.
+
+## 2026-05-08 Admin QA Knowledge/Wirkstoff Remainder Deployed
+
+- Scope:
+  - Wissensdatenbank gained structured sources (`Name` + `Link`) backed by
+    `knowledge_article_sources`, with `sources_json` retained as a
+    compatibility mirror/fallback.
+  - Added article conclusion, optional image upload/URL, dose min/max/unit,
+    ingredient assignments, and optional product note.
+  - Public knowledge article route can render the new fields.
+  - Wirkstoff task modals now support inline edit for existing forms,
+    synonyms, precursor notes/order, and DGE source add/edit/delete.
+  - DGE source detection was broadened to recognize spelled-out Deutsche
+    Gesellschaft fuer Ernaehrung variants.
+- Remote D1 migrations:
+  - Applied to `supplementstack-production`:
+    `0074_knowledge_article_admin_fields.sql`.
+  - Post-apply migration list reported no pending migrations.
+- Pages deploy:
+  - Project: `supplementstack`.
+  - Preview URL: `https://39db2d7f.supplementstack.pages.dev`.
+  - Live URL: `https://supplementstack.de`.
+- Validation:
+  - `functions`: `npx tsc -p tsconfig.json --noEmit` passed.
+  - `frontend`: `npx tsc --noEmit` passed.
+  - `frontend`: `npm run build` passed.
+  - `git diff --check` passed with existing LF/CRLF warnings only.
+- Remote D1 postflight:
+  - `knowledge_articles` has `conclusion`, `featured_image_r2_key`,
+    `featured_image_url`, `dose_min`, `dose_max`, `dose_unit`, and
+    `product_note`.
+  - `knowledge_article_sources` and `knowledge_article_ingredients` exist.
+- Smoke checks:
+  - Preview/live `/` returned HTTP 200 and served `index-CSf4JTu0.js`.
+  - Preview/live `/api/products` returned HTTP 200.
+  - Preview `/administrator/ingredients` returned HTTP 200.
+  - Preview/live unauthenticated `/api/admin/knowledge-articles` returned
+    HTTP 401.
+- Notes:
+  - Authenticated browser QA is still open because no admin session or
+    credentials are available in the environment.
+
+## 2026-05-08 Admin QA Consolidated Pass Deployed
+
+- Scope:
+  - Dashboard compacted after `dashboard_riesig.png`: smaller cards/gaps and
+    range selector moved into the header meta beside `live`.
+  - Shared compact admin filter/list pattern added and applied to the main
+    Admin-QA list surfaces.
+  - Benutzerverwaltung rebuilt with compact columns, usage/contribution
+    counts, desktop detail drawer, mobile full-screen sheet, and blocked
+    submitter controls in details.
+  - Added `/administrator/profile` and made the admin sidebar footer/avatar
+    link to the profile/password-change page.
+  - Produkte list now keeps quick edit for the main link, affiliate yes/no,
+    moderation status, image modal/delete, and a `weitere Links` modal for
+    multi-shop-link CRUD/recheck.
+  - Wirkstoffe list restored and rebuilt with `Bearbeitungsstand` badges,
+    task-status modals, recommendation slots, and `Richtwerte` links.
+  - Richtwerte, Uebersetzungen, Wechselwirkungs-Matrix, and Shop-Domains were
+    compacted/polished according to `admin_qa.md`.
+  - Deleted completed reference PNGs:
+    `dashboard_riesig.png`, `filter_ansicht.png`, and
+    `benutzerkonten_liste.png`; `.agent-memory/deployment_images/.gitkeep`
+    remains.
+- Remote D1 migrations:
+  - Applied to `supplementstack-production`:
+    `0073_ingredient_admin_task_status.sql`.
+  - Post-apply migration list reported no pending migrations.
+- Pages deploy:
+  - Project: `supplementstack`.
+  - Preview URL: `https://bd3e3f6e.supplementstack.pages.dev`.
+  - Live URL: `https://supplementstack.de`.
+- Validation:
+  - `functions`: `npx tsc -p tsconfig.json --noEmit` passed.
+  - `frontend`: `npx tsc --noEmit` passed.
+  - `frontend`: `npm run build` passed.
+  - `git diff --check` passed with existing LF/CRLF warnings only.
+- Remote D1 postflight:
+  - Latest migrations returned `0073_ingredient_admin_task_status.sql`,
+    `0072_admin_operations_core.sql`, and
+    `0071_consolidate_l_carnitine_forms.sql`.
+  - `sqlite_master` confirmed `ingredient_admin_task_status` exists.
+- Smoke checks:
+  - Preview/live `/`, `/administrator/dashboard`,
+    `/administrator/ingredients`, `/administrator/products`,
+    `/administrator/users`, `/administrator/dosing`,
+    `/administrator/interactions`, `/administrator/shop-domains`, and
+    `/api/products` returned HTTP 200.
+  - Preview/live unauthenticated `/api/admin/stats`,
+    `/api/admin/ingredients?limit=1`, and
+    `/api/admin/products/1/shop-links` returned HTTP 401.
+  - Preview/live `/api/admin/audit-log` returned HTTP 404.
+- Notes:
+  - Authenticated browser QA is still open because no admin session or
+    credentials are available in the environment.
+  - Lightweight Wirkstoff modals intentionally stop short of full inline edit
+    for existing Formen/Synonyme and full DGE source add/edit; those remain in
+    the detailed research/admin flows if needed later.
+
+## 2026-05-07 Admin QA Shop-Link/Legal/Audit Finalization Deployed
+
+- Scope:
+  - Completed Product Detail multi-shop-link UI on top of
+    `product_shop_links`.
+  - Added admin shop-link create/edit/delete, primary link, active status,
+    owner labels, sorting, and manual recheck controls.
+  - Wired public Impressum, Datenschutz, and Nutzungsbedingungen pages to
+    published `legal_documents` records with static fallback.
+  - Removed the visible Audit-Log page, route, and admin API endpoint.
+  - Deleted completed visual TODO PNGs from `.agent-memory/deployment_images/`
+    and kept the folder with `.gitkeep`.
+- Remote D1 migrations:
+  - No migrations pending; latest remote migration is
+    `0072_admin_operations_core.sql`.
+- Pages deploy:
+  - Project: `supplementstack`.
+  - Preview URL: `https://417e6dc4.supplementstack.pages.dev`.
+  - Live URL: `https://supplementstack.de`.
+- Validation:
+  - `functions`: `npx tsc -p tsconfig.json --noEmit` passed.
+  - `frontend`: `npx tsc --noEmit` passed.
+  - `frontend`: `npm run build` passed.
+  - `git diff --check` passed with existing LF/CRLF warnings only.
+- Remote D1 postflight:
+  - Latest migration returned `0072_admin_operations_core.sql`.
+  - Products count returned `33`.
+  - Product shop links count returned `13`.
+- Smoke checks:
+  - Preview/live `/api/products` returned HTTP 200.
+  - Preview/live unauthenticated `/api/admin/stats` and
+    `/api/admin/products/1/shop-links` returned HTTP 401.
+  - Preview/live `/api/legal-documents/impressum` returned HTTP 404 when no
+    published DB legal document exists.
+  - Preview/live `/impressum`, `/datenschutz`, and `/nutzungsbedingungen`
+    returned HTTP 200 through static fallback.
+  - Preview/live `/api/admin/audit-log` returned HTTP 404.
+- Notes:
+  - Authenticated admin browser QA is still open because no admin session or
+    credentials are available in the environment.
+
+## 2026-05-07 Admin Operations Core Migration Deployed
+
+- Scope:
+  - Implemented the Admin-QA core migration slice from
+    `.agent-memory/admin_qa.md`.
+  - Dashboard signup analytics now uses `Anmeldungen` for registrations in
+    the selected range and activation subtext for users with
+    `email_verified_at IS NOT NULL`; no separate "Neue Besucher" card is used.
+  - Added product shop-link core tables, link-health storage, first-party
+    product link click tracking, and editable legal-document storage.
+  - Backfilled `product_shop_links` from legacy `products.shop_link`.
+  - Added `/api/products/:id/out` redirect tracking for catalog product cards.
+  - Added admin product filters for moderation, affiliate status, image status,
+    and link health; added product image delete and `blocked` moderation.
+  - Added blocked product-submitter controls to admin user management.
+  - Added `/administrator/legal` backed by admin legal-document CRUD.
+  - Reduced visible admin sidebar menu to the owner-approved primary areas.
+- Remote D1 migrations:
+  - Applied to `supplementstack-production`:
+    `0072_admin_operations_core.sql`.
+- Pages deploy:
+  - Project: `supplementstack`.
+  - Preview URL: `https://e44d85f2.supplementstack.pages.dev`.
+  - Live URL: `https://supplementstack.de`.
+- Validation:
+  - `functions`: `npx tsc -p tsconfig.json --noEmit` passed.
+  - `frontend`: `npx tsc --noEmit` passed.
+  - `frontend`: `npm run build` passed.
+  - `git diff --check` passed with existing LF/CRLF warnings only.
+- Remote D1 postflight:
+  - `product_shop_links`, `product_link_clicks`, and `legal_documents`
+    returned expected table counts after migration/backfill.
+- Smoke checks:
+  - Preview/live `/api/products` returned HTTP 200.
+  - Preview/live unauthenticated `/api/admin/stats` returned HTTP 401.
+- Notes:
+  - Authenticated browser QA remains open because no admin session was
+    available locally.
+  - `.agent-memory/deployment_images/search_modal.png`,
+    `.agent-memory/deployment_images/user_stacks_card.png`, and
+    `.agent-memory/deployment_images/was_passiert.png` remain open TODO
+    references and were intentionally not deleted.
 
 ## 2026-05-07 Admin Sidebar Density Retune Deployed
 

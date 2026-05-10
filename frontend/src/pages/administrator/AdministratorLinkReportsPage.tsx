@@ -236,7 +236,7 @@ export default function AdministratorLinkReportsPage() {
     <>
       <AdminPageHeader
         title="Linkmeldungen"
-        subtitle="Nutzer melden fehlende oder defekte Produkt-Links. Hier kann der Status der Meldung direkt gesetzt werden."
+        subtitle="Gemeldete Linkprobleme prüfen und schließen."
         meta={
           <div className="admin-toolbar-inline">
             <Flag size={14} />

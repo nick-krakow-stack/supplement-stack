@@ -2317,13 +2317,13 @@ export default function AdministratorIngredientDetailPage() {
           <div className="md:col-span-2">
             <AdminButton onClick={() => void handleCreatePrecursor()} disabled={precursorSaving}>
               <Plus size={14} />
-              {precursorSaving ? 'Speichere...' : 'Wirkstoffteil hinzufuegen'}
+              {precursorSaving ? 'Speichere...' : 'Wirkstoffteil hinzufügen'}
             </AdminButton>
           </div>
         </div>
       </AdminCard>
 
-      <AdminCard title="Verknuepfte Wirkstoffteile" subtitle={`${precursors.length} Eintraege`}>
+      <AdminCard title="Verknüpfte Wirkstoffteile" subtitle={`${precursors.length} Einträge`}>
         {precursors.length === 0 ? (
           <AdminEmpty>Noch keine Wirkstoffteile hinterlegt.</AdminEmpty>
         ) : (
@@ -2350,7 +2350,7 @@ export default function AdministratorIngredientDetailPage() {
                       to={`/administrator/ingredients/${precursor.precursor_ingredient_id}`}
                       className="admin-btn admin-btn-sm"
                     >
-                      Oeffnen
+                      Öffnen
                     </Link>
                     <AdminButton
                       variant="danger"

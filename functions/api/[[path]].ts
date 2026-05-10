@@ -8,6 +8,7 @@ import demo from './modules/demo'
 import family from './modules/family'
 import ingredients, { recommendationsApp } from './modules/ingredients'
 import knowledge from './modules/knowledge'
+import legal from './modules/legal'
 import products, { r2App } from './modules/products'
 import stacks, { stackWarningsApp } from './modules/stacks'
 import userProducts from './modules/user-products'
@@ -38,5 +39,6 @@ app.route('/api/user-products', userProducts)
 app.route('/api/demo', demo)
 app.route('/api/family', family)
 app.route('/api/knowledge', knowledge)
+app.route('/api/legal-documents', legal)
 
 export const onRequest = handle(app)

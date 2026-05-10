@@ -1,6 +1,6 @@
 # Current State
 
-Last updated: 2026-05-07
+Last updated: 2026-05-08
 
 ## Active Baseline
 
@@ -12,7 +12,7 @@ Last updated: 2026-05-07
   - Cloudflare config: `wrangler.toml` and `wrangler.maintenance.toml`
 - Live domain: `https://supplementstack.de`.
 - Latest documented deployed preview:
-  `https://a9e5e4d0.supplementstack.pages.dev`.
+  `https://89b9f726.supplementstack.pages.dev`.
 - The active admin frontend is `/administrator`.
 - `/api/admin` remains the backend API namespace.
 - The old frontend `/admin` route was removed during cleanup. Use
@@ -25,10 +25,11 @@ Last updated: 2026-05-07
   - `frontend/src/components/AdminLayout.tsx`
   - `frontend/src/pages/admin/*`
 - Active admin pages live in `frontend/src/pages/administrator/*`.
-- Active admin routes include dashboard, health, interactions, products,
-  product detail, ingredients, ingredient detail, dosing, user-products,
-  audit-log, product-qa, link-reports, knowledge, launch-checks, translations,
-  sub-ingredients, shop-domains, rankings, users, and settings.
+- Active admin menu now shows the reduced operator set: Dashboard,
+  Wirkstoffe, Produkte, Richtwerte, Wissensdatenbank, Uebersetzungen,
+  Wechselwirkungs-Matrix, Benutzerverwaltung, Shop-Domains, and Rechtliches.
+- Several older admin pages still have direct routes for compatibility or later
+  cleanup, but they are no longer primary sidebar destinations.
 - Admin pages use scoped shared UI/CSS in:
   - `frontend/src/pages/administrator/AdminUi.tsx`
   - `frontend/src/pages/administrator/admin.css`
@@ -37,6 +38,217 @@ Last updated: 2026-05-07
   refactor candidate.
 
 ## Latest Completed Work
+
+### 2026-05-08 Admin Post-Launch Dashboard And Human Copy Pass - Deployed
+
+- Pages deploy completed:
+  - preview `https://89b9f726.supplementstack.pages.dev`
+  - live `https://supplementstack.de`
+- Admin dashboard is now a post-launch operator dashboard:
+  - `Heute zu tun` is the first focus area.
+  - KPI cards cover registrations/activations, active users, link clicks, and
+    catalog risk.
+  - `Umsatzsignale` separates affiliate/non-affiliate click signals, top
+    products, top shops, deadlinks, and link-report potential.
+  - `Katalogpflege`, `Content & Vertrauen`, and `Was passiert gerade` group the
+    ongoing operator work.
+- `/api/admin/stats` now returns range-aware current/previous values, trend
+  metadata, top clicked products, top shops, open link reports, and link-health
+  signal counts for the dashboard.
+- Admin page subtitles were reviewed from an operator/human perspective and
+  rewritten across the visible admin pages; technical wording such as migration
+  notes and ASCII-only copy remnants was removed from those surfaces.
+- Validation passed:
+  - `frontend`: `npx tsc --noEmit`
+  - `functions`: `npx tsc -p tsconfig.json --noEmit`
+  - `frontend`: `npm run build`
+  - `git diff --check` with existing LF/CRLF warnings only
+- Preview/live smoke checks passed for `/`, `/administrator/dashboard`,
+  `/api/products`, and unauthenticated admin guards for `/api/admin/stats` and
+  `/api/admin/ops-dashboard`.
+
+### 2026-05-08 Admin QA Remaining Knowledge/Wirkstoff Pass - Remote-Migrated And Deployed
+
+- Remote D1 migration `0074_knowledge_article_admin_fields.sql` was applied to
+  `supplementstack-production`.
+- Pages deploy completed:
+  - preview `https://39db2d7f.supplementstack.pages.dev`
+  - live `https://supplementstack.de`
+- Wissensdatenbank now has structured admin fields for:
+  - sources as repeated `Name` + `Link` rows, with `sources_json` retained as
+    a compatibility mirror/fallback
+  - article conclusion
+  - optional article image upload/URL
+  - dose minimum, maximum, and unit
+  - ingredient relation rows through `knowledge_article_ingredients`
+  - optional product note
+- Public knowledge articles can render the new image, dose details,
+  ingredient relations, product note, and conclusion where present.
+- Wirkstoff task modals now support inline editing of existing forms,
+  synonyms, and precursor notes/order.
+- The DGE task modal now supports DGE source add/edit/delete directly and uses
+  the existing ingredient research source storage.
+- DGE source detection now also recognizes spelled-out Deutsche Gesellschaft
+  fuer Ernaehrung variants, not only `dge`/`dge.de`.
+- Validation passed:
+  - `frontend`: `npx tsc --noEmit`
+  - `functions`: `npx tsc -p tsconfig.json --noEmit`
+  - `frontend`: `npm run build`
+  - `git diff --check` with existing LF/CRLF warnings only
+- Remote postflight confirmed no pending migrations and the new
+  `knowledge_articles` columns plus `knowledge_article_sources` /
+  `knowledge_article_ingredients` tables.
+- Preview/live smoke checks passed for `/`, `/administrator/ingredients`,
+  `/api/products`, and unauthenticated `/api/admin/knowledge-articles` guard.
+
+### 2026-05-08 Admin QA Consolidated Pass - Remote-Migrated And Deployed
+
+- Remote D1 migration `0073_ingredient_admin_task_status.sql` was applied to
+  `supplementstack-production`.
+- Pages deploy completed:
+  - preview `https://bd3e3f6e.supplementstack.pages.dev`
+  - live `https://supplementstack.de`
+- Admin dashboard was compacted after the owner reference image:
+  - smaller cards/gaps
+  - range selector moved into `AdminPageHeader.meta`
+  - refresh as compact header icon
+- Admin list/filter UI now uses the compact filter-bar pattern across the main
+  QA surfaces: Benutzer, Produkte, Wirkstoffe, Richtwerte, Uebersetzungen,
+  Matrix, and Shop-Domains.
+- Benutzerverwaltung now has:
+  - header `XX Benutzer, davon XX aktiv`
+  - compact Nutzer/Nutzung/Beitrag columns
+  - role/trusted/blocked controls moved into desktop drawer/mobile sheet
+  - backend counts for stack items and product link clicks
+- Added `/administrator/profile` and made the admin sidebar footer/avatar
+  clickable; password change uses the existing `/api/me/password` flow.
+- Produkte now has compact operations:
+  - main-link quick edit
+  - affiliate yes/no
+  - moderation status including `blocked`
+  - image modal/delete
+  - `weitere Links` modal backed by product shop-link CRUD/recheck APIs
+- Wirkstoffe now has:
+  - `Bearbeitungsstand` badges
+  - task status persistence through `ingredient_admin_task_status`
+  - lightweight modals for Formen, DGE, Wirkstoffteile, and Synonyme
+  - Hauptempfehlung, Alternative 1, Alternative 2 with optional concrete
+    `shop_link_id`
+  - public ingredient product ordering now prefers recommendation slots.
+- Richtwerte, Uebersetzungen, Wechselwirkungs-Matrix, and Shop-Domains were
+  compacted/polished per `admin_qa.md`.
+- Completed reference PNGs were removed from
+  `.agent-memory/deployment_images/`; the folder remains with `.gitkeep`.
+- Validation passed:
+  - `frontend`: `npx tsc --noEmit`
+  - `functions`: `npx tsc -p tsconfig.json --noEmit`
+  - `frontend`: `npm run build`
+  - `git diff --check` with existing LF/CRLF warnings only
+- Preview/live smoke checks passed for core admin routes, `/api/products`,
+  unauthenticated admin API guards, and removed Audit-Log API behavior.
+
+### 2026-05-08 Wirkstoff Admin QA Recovery - Local
+
+- Restored the deleted active page
+  `frontend/src/pages/administrator/AdministratorIngredientsPage.tsx` from
+  `HEAD` and rebuilt it for the owner Wirkstoff-QA requirements.
+- `/administrator/ingredients` now shows:
+  - header subtitle `XX Wirkstoffe gelistet`
+  - compact search/status toolbar with refresh and `Richtwerte` link
+  - simplified table without visible ingredient ID/unit/weight details
+  - `Bearbeitungsstand` badges for Formen, DGE, Wirkstoffteile, Synonyme,
+    Blog/Wissen, and Richtwerte
+  - recommendation slots for Hauptempfehlung, Alternative 1, and Alternative 2
+- Added modal flows on the page using existing APIs:
+  - forms and synonyms display/add/delete plus persistent task status
+  - DGE source display plus persistent task status/comment
+  - precursors display/add/delete plus persistent task status
+  - product recommendation product search and optional shop-link selection
+- Reviewed the existing intermediate admin API changes and fixed two scoped
+  backend issues:
+  - ingredient task status now writes `updated_by_user_id` from `userId`
+  - product recommendation delete now checks ingredient existence and slot
+    column availability before issuing slot-column SQL
+- Validation passed:
+  - `frontend`: `npx tsc --noEmit`
+  - `functions`: `npx tsc -p tsconfig.json --noEmit`
+  - scoped `git diff --check` for the requested files passed with only the
+    existing LF/CRLF warnings.
+
+### 2026-05-07 Product Shop-Link Admin API - Deployed
+
+- Added admin CRUD APIs in `functions/api/modules/admin.ts` for catalog
+  product shop links:
+  - `GET /api/admin/products/:id/shop-links`
+  - `POST /api/admin/products/:id/shop-links`
+  - `PATCH /api/admin/products/:id/shop-links/:shopLinkId`
+  - `DELETE /api/admin/products/:id/shop-links/:shopLinkId`
+  - `POST /api/admin/products/:id/shop-links/:shopLinkId/recheck`
+- Responses include `product_shop_link_health` data as `health` when the
+  table is present.
+- Create/update/delete keeps legacy `products.shop_link` and affiliate owner
+  fields synced from the active primary/first shop link.
+- Manual recheck uses Worker-compatible `fetch` with a 6s abort timeout,
+  redirect limit, and basic unsafe-host guards before writing
+  `product_shop_link_health`.
+- Validation passed:
+  - `functions`: `npx tsc -p tsconfig.json --noEmit`
+  - `git diff --check -- functions/api/modules/admin.ts` passed with the
+    existing LF/CRLF warning only.
+
+### 2026-05-07 Admin Dashboard Visual TODO Polish - Local
+
+- Implemented the remaining `.agent-memory/deployment_images` visual TODOs in
+  the active administrator UI:
+  - `search_modal.png`: command palette now uses grouped result sections,
+    larger search field treatment, result initials, side labels, and a
+    keyboard shortcut footer
+  - `user_stacks_card.png`: dashboard metric cards now use the softer bordered
+    card treatment with larger serif values and warmer secondary copy
+  - `was_passiert.png`: Dashboard "Was passiert gerade" now uses a more
+    structured activity-feed layout
+- Completed reference images were removed:
+  - `.agent-memory/deployment_images/search_modal.png`
+  - `.agent-memory/deployment_images/user_stacks_card.png`
+  - `.agent-memory/deployment_images/was_passiert.png`
+- `.agent-memory/deployment_images/` remains in place with `.gitkeep`.
+- Validation passed:
+  - `frontend`: `npx tsc --noEmit`
+  - `frontend`: `npm run lint --if-present`
+  - `frontend`: `npm run build`
+
+### 2026-05-07 Admin Operations Core Migration - Remote-Migrated And Deployed
+
+- `.agent-memory/admin_qa.md` was expanded with the agreed implementation plan
+  and the latest analytics decision:
+  - dashboard uses `Anmeldungen` as the registration metric in the selected
+    date range
+  - card subtext counts activations where `email_verified_at IS NOT NULL`
+  - no separate "Neue Besucher" card is used for signup calls-to-action
+- Remote D1 migration `0072_admin_operations_core.sql` was applied to
+  `supplementstack-production`.
+- Added operational tables for product shop links, shop-link health, product
+  link click tracking, and editable legal documents.
+- Backfilled `product_shop_links` from legacy `products.shop_link` and kept
+  the primary shop link synced from existing product-admin write paths.
+- Public catalog product cards now route shop clicks through
+  `/api/products/:id/out`, logging minimal first-party click rows without IP or
+  User-Agent storage before redirecting.
+- Admin dashboard now supports date ranges and shows Benutzer, Link-Klicks,
+  Deadlinks, and Anmeldungen with activation subtext.
+- Admin products gained moderation/affiliate/image/link-health filters, product
+  image delete, and `blocked` moderation status handling.
+- User management gained product-submission block/unblock support; blocked
+  submitters can still see their own blocked products in stack workflows.
+- Added admin legal-document CRUD at `/administrator/legal` with DB storage;
+  public legal-page DB reading was completed in the later
+  shop-link/legal/audit finalization pass.
+- Admin sidebar menu was reduced per owner QA; Audit-Log and other secondary
+  admin pages are no longer visible in the main menu.
+- Deployed preview: `https://e44d85f2.supplementstack.pages.dev`.
+- Live domain: `https://supplementstack.de`.
+- Remote postflight confirmed `product_shop_links`, `product_link_clicks`, and
+  `legal_documents` are present and populated/backfilled as expected.
 
 ### 2026-05-07 Admin Sidebar Density Retune - Deployed
 
@@ -202,6 +414,24 @@ Last updated: 2026-05-07
   - remote D1 migration list reported no pending migrations
   - preview/live route and unauthenticated API guard smokes.
 
+### 2026-05-07 Admin QA Shop-Link/Legal/Audit Finalization - Deployed
+
+- Product Detail `Shop-Link` now uses the multi-shop-link editor backed by
+  `product_shop_links`.
+- Admins can create, edit, delete, activate/deactivate, sort, mark primary,
+  assign owner type, and manually recheck product shop links.
+- Primary/first active shop links continue to mirror into the legacy
+  `products.shop_link` and affiliate owner columns for compatibility.
+- Public legal pages now read published documents from
+  `/api/legal-documents/:slug` and fall back to the static legal copy when no
+  published DB document exists.
+- The visible Audit-Log admin route/page/API was removed. Internal audit rows
+  remain available to product-detail data where existing code still reads them,
+  but there is no active `/administrator/audit-log` route or
+  `/api/admin/audit-log` endpoint.
+- Completed visual TODO images were deleted; `.agent-memory/deployment_images/`
+  remains with `.gitkeep`.
+
 ## Validation Status
 
 - Cleanup validation passed before commit `cec3f89`:
@@ -243,6 +473,32 @@ Last updated: 2026-05-07
   - `frontend`: `npm run build`
   - `node --check scripts/admin-browser-smoke.mjs`
   - `git diff --check` passed with existing LF/CRLF warnings only.
+- Admin operations core migration validation passed:
+  - `functions`: `npx tsc -p tsconfig.json --noEmit`
+  - `frontend`: `npx tsc --noEmit`
+  - `frontend`: `npm run build`
+  - `git diff --check` passed with existing LF/CRLF warnings only.
+  - Remote D1 migration `0072_admin_operations_core.sql` applied successfully.
+  - Preview/live `/api/products` returned HTTP 200.
+  - Preview/live unauthenticated `/api/admin/stats` returned HTTP 401.
+  - Remote D1 postflight counted shop-link, click, and legal-document tables.
+- Admin QA shop-link/legal/audit finalization validation passed:
+  - `functions`: `npx tsc -p tsconfig.json --noEmit`
+  - `frontend`: `npx tsc --noEmit`
+  - `frontend`: `npm run build`
+  - `git diff --check` passed with existing LF/CRLF warnings only.
+  - Remote D1 migration list reported no pending migrations.
+  - Remote D1 postflight confirmed latest migration `0072_admin_operations_core.sql`,
+    `33` products, and `13` product shop links.
+  - Pages deployed preview `https://417e6dc4.supplementstack.pages.dev`;
+    live `https://supplementstack.de` smoke checks passed.
+  - Preview/live `/api/products` returned HTTP 200.
+  - Preview/live unauthenticated `/api/admin/stats` and
+    `/api/admin/products/1/shop-links` returned HTTP 401.
+  - Preview/live `/api/legal-documents/impressum` returned HTTP 404 when no
+    published DB document exists; public static fallback pages for Impressum,
+    Datenschutz, and Nutzungsbedingungen returned HTTP 200.
+  - Preview/live `/api/admin/audit-log` returned HTTP 404.
 - Remote D1 postflight passed:
   - no old references to ingredient IDs `60`, `65`, or `66`
   - no old form `189`
@@ -259,11 +515,17 @@ Last updated: 2026-05-07
 ## Known Remaining Work
 
 - Final authenticated owner browser QA:
+  - Admin dashboard range cards, especially `Anmeldungen` and activation
+    subtext
+  - Admin products filters, blocked status, product image delete, and redirect
+    click tracking
+  - User-management blocked-submitter toggle
+  - Legal-document editor save flow
   - login/session persistence
   - stack create/edit/product add/remove/replacement
   - stack form selection for ingredients with forms
   - user product submit
-  - Product Detail overview/moderation/affiliate/Wirkstoffe/image flows
+  - Product Detail overview/moderation/shop-link/Wirkstoffe/image flows
   - Product-QA harmless save
   - Product Detail and Product-QA image upload with WebP normalization
   - product warnings
@@ -275,3 +537,6 @@ Last updated: 2026-05-07
   `/administrator/ingredients`.
 - Content/science/legal review remains before SEO indexing/go-live confidence.
 - External inbox mail tests remain before launch confidence.
+- No open `.agent-memory/deployment_images` PNG visual TODOs remain; keep the
+  folder and `.gitkeep` for future owner reference images.
+- Authenticated owner browser QA remains open for the new admin flows.

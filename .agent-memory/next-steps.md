@@ -1,14 +1,55 @@
 # Next Steps
 
-Last updated: 2026-05-07
+Last updated: 2026-05-08
 
 ## Immediate
 
-- Wirkstoffe/Formen rebuild is remote-migrated and deployed. Use
-  `https://supplementstack.de` or preview
-  `https://a9e5e4d0.supplementstack.pages.dev` for follow-up QA.
+- Admin post-launch dashboard and human admin-copy pass is deployed:
+  - preview `https://89b9f726.supplementstack.pages.dev`
+  - live `https://supplementstack.de`
+  - no new D1 migration was required
+  - frontend/functions typechecks, frontend build, and `git diff --check`
+    passed
+  - preview/live route and unauthenticated admin API smokes passed
+- Dashboard is now oriented around post-launch operation:
+  - `Heute zu tun`
+  - registrations plus activations
+  - active users
+  - link clicks and affiliate signal
+  - catalog risk, deadlinks, link reports, product/shop click leaders
+  - content/trust maintenance and recent admin activity
+- Visible admin subtitles were reviewed from a human/operator perspective and
+  rewritten; obvious admin-page ASCII copy remnants were removed.
+- Remaining Admin-QA limit is authenticated owner browser QA. The previously
+  open lightweight-modal implementation gaps are now closed:
+  - DGE source add/edit/delete exists in the modal.
+  - existing forms/synonyms can be inline-edited in the modal.
+  - existing precursor notes/order can be inline-edited in the modal.
+  - Wissensdatenbank sources are entered as `Name` + `Link`, not raw JSON.
+- `.agent-memory/admin_qa_todo.md` is now the current Admin-QA status file.
+  It records the completed pass and the few remaining authenticated/browser
+  QA limits.
+- Dashboard signup analytics decision is implemented: main metric
+  `Anmeldungen` counts registrations in the selected range; subtext counts
+  activations where the email verification link was clicked
+  (`email_verified_at IS NOT NULL`). Do not add a separate "Neue Besucher"
+  signup card.
 - For future visual TODOs, keep `.agent-memory/deployment_images/` and delete
   only completed images inside it.
+- No open `.agent-memory/deployment_images` PNG visual TODOs remain. Keep the
+  folder and `.gitkeep` for future owner reference images.
+- Run authenticated owner QA for:
+  - admin dashboard ranges and the `Anmeldungen`/activation card
+  - admin product filters, image delete, and `blocked` moderation status
+  - Product Detail multi-shop-link editor, including create/edit/delete,
+    primary link, active status, owner label, sort order, and manual recheck
+  - Wissensdatenbank structured sources, article image upload, conclusion,
+    dose details, ingredient assignment, and product note
+  - Wirkstoff task modals: forms/synonyms edit, DGE source edit, and precursor
+    edit
+  - user blocked-submitter toggle
+  - `/administrator/legal` document editing
+  - public shop-link redirect behavior from product cards
 - Run authenticated owner QA for the new user/admin flows, especially stack
   form selection, user-product ingredient entry, and Administrator Ingredient
   `Wirkstoffteile`.
@@ -34,6 +75,10 @@ Last updated: 2026-05-07
 ## Admin QA
 
 - Use the next owner browser-QA pass for detailed usability notes on:
+  - new reduced admin menu and Dashboard
+  - Products filter/edit/image delete flow
+  - user blocked-submitter controls
+  - Legal documents editor
   - redesigned Wechselwirkungs-Matrix
   - compact revised admin sidebar typography/palette/menu density
   - Product-QA
@@ -44,7 +89,7 @@ Last updated: 2026-05-07
 - Final authenticated QA order:
   1. Login/session persistence.
   2. Stack create/edit/product add/remove/replacement and user product submit.
-  3. Product Detail overview/moderation/affiliate save.
+  3. Product Detail overview/moderation/shop-link save.
   4. Product Detail Wirkstoff row add/edit/delete.
   5. Product Detail image upload and image URL save.
   6. Product-QA harmless save.

@@ -27,7 +27,6 @@ const AdministratorProductsPage = lazy(() => import('./pages/administrator/Admin
 const AdministratorDosingPage = lazy(() => import('./pages/administrator/AdministratorDosingPage'));
 const AdministratorHealthPage = lazy(() => import('./pages/administrator/AdministratorHealthPage'));
 const AdministratorIngredientsPage = lazy(() => import('./pages/administrator/AdministratorIngredientsPage'));
-const AdministratorAuditLogPage = lazy(() => import('./pages/administrator/AdministratorAuditLogPage'));
 const AdministratorUserProductsPage = lazy(() => import('./pages/administrator/AdministratorUserProductsPage'));
 const AdministratorProductDetailPage = lazy(() => import('./pages/administrator/AdministratorProductDetailPage'));
 const AdministratorIngredientDetailPage = lazy(() => import('./pages/administrator/AdministratorIngredientDetailPage'));
@@ -41,6 +40,8 @@ const AdministratorTranslationsPage = lazy(() => import('./pages/administrator/A
 const AdministratorSubIngredientsPage = lazy(() => import('./pages/administrator/AdministratorSubIngredientsPage'));
 const AdministratorUsersPage = lazy(() => import('./pages/administrator/AdministratorUsersPage'));
 const AdministratorSettingsPage = lazy(() => import('./pages/administrator/AdministratorSettingsPage'));
+const AdministratorLegalPage = lazy(() => import('./pages/administrator/AdministratorLegalPage'));
+const AdministratorProfilePage = lazy(() => import('./pages/administrator/AdministratorProfilePage'));
 
 function NotFoundPage() {
   return (
@@ -95,9 +96,10 @@ export default function App() {
             <Route path="product-qa" element={<AdministratorProductQAPage />} />
             <Route path="link-reports" element={<AdministratorLinkReportsPage />} />
             <Route path="launch-checks" element={<AdministratorLaunchChecksPage />} />
-            <Route path="audit-log" element={<AdministratorAuditLogPage />} />
             <Route path="users" element={<AdministratorUsersPage />} />
             <Route path="shop-domains" element={<AdministratorShopDomainsPage />} />
+            <Route path="legal" element={<AdministratorLegalPage />} />
+            <Route path="profile" element={<AdministratorProfilePage />} />
             <Route path="rankings" element={<AdministratorRankingsPage />} />
             <Route path="sub-ingredients" element={<AdministratorSubIngredientsPage />} />
             <Route path="settings" element={<AdministratorSettingsPage />} />

@@ -5,7 +5,7 @@ import { ArrowLeft, Languages, Loader2, RefreshCw, Save, Search, XCircle } from 
 import { apiClient } from '../../api/client';
 import { AdminBadge, AdminButton, AdminCard, AdminEmpty, AdminError, AdminPageHeader } from './AdminUi';
 
-type AdminEntity = 'ingredients' | 'dose-recommendations' | 'verified-profiles' | 'blog-posts';
+type AdminEntity = 'ingredients' | 'dose-recommendations' | 'blog-posts';
 type TranslationStatus = 'missing' | 'translated';
 type TranslationFilter = 'all' | 'missing' | 'translated';
 
@@ -157,12 +157,6 @@ const ENTITY_CONFIG: Record<AdminEntity, EntityConfig> = {
     endpoint: '/admin/translations/dose-recommendations',
     searchPlaceholder: 'Wirkstoff, Quelle oder Hinweis suchen',
     emptyLabel: 'Keine Dosierungen f\u00fcr diese Suche gefunden.',
-  },
-  'verified-profiles': {
-    label: 'Expertenprofile',
-    endpoint: '/admin/translations/verified-profiles',
-    searchPlaceholder: 'Name, Slug, Qualifikation oder Bio suchen',
-    emptyLabel: 'Keine Expertenprofile f\u00fcr diese Suche gefunden.',
   },
   'blog-posts': {
     label: 'Blogartikel',
@@ -541,22 +535,25 @@ export default function AdministratorTranslationsPage() {
   const renderSource = (row: TranslationRow) => {
     if ('ingredient_id' in row) {
       return (
-        <div className="admin-empty mt-2">
-          <p className="admin-muted">Original: {row.source_name}</p>
-          <p className="admin-muted">{row.source_description || 'Keine Beschreibung vorhanden.'}</p>
+        <div className="admin-empty mt-2 space-y-1">
+          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--admin-ink-3)]">Original</p>
+          <p className="admin-muted"><span className="font-medium text-[color:var(--admin-ink-2)]">Name:</span> {row.source_name}</p>
+          <p className="admin-muted"><span className="font-medium text-[color:var(--admin-ink-2)]">Beschreibung:</span> {row.source_description || 'Keine Beschreibung vorhanden.'}</p>
+          <p className="admin-muted"><span className="font-medium text-[color:var(--admin-ink-2)]">Mangel-Symptome:</span> aus dem deutschen Basisdatensatz, wenn vorhanden.</p>
+          <p className="admin-muted"><span className="font-medium text-[color:var(--admin-ink-2)]">Überschuss-Symptome:</span> aus dem deutschen Basisdatensatz, wenn vorhanden.</p>
         </div>
       );
     }
     if ('dose_recommendation_id' in row) {
       return (
-        <div className="admin-empty mt-2">
-          <p className="admin-muted">
-            {row.ingredient_name} - {row.source_type}
-          </p>
-          <p className="admin-muted">Originale Quellenbezeichnung: {row.base_source_label || 'nicht gesetzt'}</p>
-          <p className="admin-muted">Dosierung: {formatDose(row)}</p>
-          {row.base_timing ? <p className="admin-muted">Originaler Einnahmezeitpunkt: {row.base_timing}</p> : null}
-          {row.base_context_note ? <p className="admin-muted">Originaler Hinweis: {row.base_context_note}</p> : null}
+        <div className="admin-empty mt-2 space-y-1">
+          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--admin-ink-3)]">Original</p>
+          <p className="admin-muted"><span className="font-medium text-[color:var(--admin-ink-2)]">Wirkstoff:</span> {row.ingredient_name}</p>
+          <p className="admin-muted"><span className="font-medium text-[color:var(--admin-ink-2)]">Quellentyp:</span> {row.source_type}</p>
+          <p className="admin-muted"><span className="font-medium text-[color:var(--admin-ink-2)]">Quellenbezeichnung:</span> {row.base_source_label || 'nicht gesetzt'}</p>
+          <p className="admin-muted"><span className="font-medium text-[color:var(--admin-ink-2)]">Dosierung:</span> {formatDose(row)}</p>
+          {row.base_timing ? <p className="admin-muted"><span className="font-medium text-[color:var(--admin-ink-2)]">Einnahmezeitpunkt:</span> {row.base_timing}</p> : null}
+          {row.base_context_note ? <p className="admin-muted"><span className="font-medium text-[color:var(--admin-ink-2)]">Hinweis:</span> {row.base_context_note}</p> : null}
         </div>
       );
     }
@@ -570,9 +567,10 @@ export default function AdministratorTranslationsPage() {
       );
     }
     return (
-      <div className="admin-empty mt-2">
-        <p className="admin-muted">{row.r2_key}</p>
-        <p className="admin-muted">Status: {row.post_status}</p>
+      <div className="admin-empty mt-2 space-y-1">
+        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--admin-ink-3)]">Original</p>
+        <p className="admin-muted"><span className="font-medium text-[color:var(--admin-ink-2)]">Artikel-Schluessel:</span> {row.r2_key}</p>
+        <p className="admin-muted"><span className="font-medium text-[color:var(--admin-ink-2)]">Status:</span> {row.post_status}</p>
         <p className="admin-muted">Veröffentlicht: {formatTimestamp(row.published_at)}</p>
       </div>
     );
@@ -677,7 +675,7 @@ export default function AdministratorTranslationsPage() {
     <>
       <AdminPageHeader
         title="Übersetzungen"
-        subtitle="Englische, französische und spanische Inhalte aus der deutschen Basis pflegen."
+        subtitle="Übersetzungen prüfen und fehlende Texte ergänzen."
         meta={
           <div className="flex flex-wrap items-center gap-2">
             <AdminBadge tone={readOnlyMessage ? 'warn' : 'info'}>{rows.length} Zeilen</AdminBadge>
@@ -695,8 +693,8 @@ export default function AdministratorTranslationsPage() {
         </div>
       ) : null}
 
-      <div className="admin-toolbar">
-        <div className="admin-toolbar-inline">
+      <div className="admin-filter-bar mb-3">
+        <div className="admin-filter-main">
           <label className="flex min-h-[38px] min-w-[220px] flex-1 items-center gap-2 rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg)] px-3">
             <Search size={16} className="admin-muted" />
             <input
@@ -709,6 +707,8 @@ export default function AdministratorTranslationsPage() {
               className="min-w-0 flex-1 bg-transparent text-[13px] outline-none"
             />
           </label>
+        </div>
+        <div className="admin-filter-controls">
           <select
             value={language}
             onChange={(event) => {
@@ -744,8 +744,8 @@ export default function AdministratorTranslationsPage() {
         </div>
       </div>
 
-      <div className="admin-toolbar">
-        <div className="admin-toolbar-inline">
+      <div className="admin-filter-bar admin-filter-bar-flat mb-4">
+        <div className="admin-filter-controls">
           {(Object.keys(ENTITY_CONFIG) as AdminEntity[]).map((key) => (
             <AdminButton
               key={key}
@@ -764,7 +764,8 @@ export default function AdministratorTranslationsPage() {
 
       <AdminCard
         title={config.label}
-        subtitle={`Seite ${page}${totalPages ? ` / ${totalPages}` : ''} ${total != null ? `- ${total} Treffer` : ''}`}
+        subtitle={`${total != null ? `${total} Treffer` : 'Einträge'} für ${normalizedLanguage}${totalPages != null && totalPages > 1 ? `, Seite ${page} von ${totalPages}` : ''}`}
+        className="admin-compact-card"
       >
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3 text-sm">
           <p className="admin-muted">
@@ -822,7 +823,7 @@ export default function AdministratorTranslationsPage() {
               return (
                 <article
                   key={key}
-                  className="admin-card"
+                  className="admin-compact-card admin-card p-3"
                   style={
                     isFocused
                       ? {

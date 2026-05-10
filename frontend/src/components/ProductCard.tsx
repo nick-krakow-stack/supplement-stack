@@ -12,6 +12,7 @@ interface ProductCardProduct {
   brand?: string;
   price: number;
   shop_link?: string;
+  click_url?: string;
   image_url?: string;
   visibility?: string;
   moderation_status?: string;
@@ -228,7 +229,10 @@ export default function ProductCard({
   const timing = TIMING_STYLES[timingKey];
 
   const productHost = normalizeShopHostname(product.shop_link);
-  const shopHref = normalizeShopHref(product.shop_link);
+  const directShopHref = normalizeShopHref(product.shop_link);
+  const shopHref = directShopHref
+    ? product.click_url ?? (product.product_type === 'user_product' ? directShopHref : `/api/products/${product.id}/out?context=product_card`)
+    : null;
   const matchedShop = productHost
     ? shopDomains?.find((s) => {
         const domain = normalizeShopHostname(s.domain);

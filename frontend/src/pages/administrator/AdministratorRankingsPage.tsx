@@ -181,7 +181,7 @@ export default function AdministratorRankingsPage() {
     <>
       <AdminPageHeader
         title="Rankings"
-        subtitle="Produkt-Rankings werden hier gepflegt. Score und Notizen nur mit explizitem Speichern aktualisieren."
+        subtitle="Rankings sortieren, bewerten und bewusst speichern."
         meta={<AdminBadge tone={loading ? 'warn' : 'ok'}>{rankings.length} Einträge</AdminBadge>}
       />
 

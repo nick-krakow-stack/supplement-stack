@@ -25,7 +25,7 @@ export interface UserProduct {
   container_count?: number;
   is_affiliate?: number | boolean;
   notes?: string;
-  status?: 'pending' | 'approved' | 'rejected';
+  status?: 'pending' | 'approved' | 'rejected' | 'blocked';
   approved_at?: string | null;
   created_at?: string;
   published_product_id?: number | null;

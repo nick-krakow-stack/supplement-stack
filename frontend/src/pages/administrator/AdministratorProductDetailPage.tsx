@@ -3,19 +3,26 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Edit3, ExternalLink, Loader2, Plus, RefreshCw, Save, Trash2, Upload, X } from 'lucide-react';
 import {
   createAdminProductIngredient,
+  createAdminProductShopLink,
   createAdminProductWarning,
   deleteAdminProductIngredient,
+  deleteAdminProductShopLink,
   deleteAdminProductWarning,
   getAdminProduct,
+  getAdminProductShopLinks,
   getAllIngredients,
+  recheckAdminProductShopLink,
   searchIngredients,
   updateAdminProductIngredient,
+  updateAdminProductShopLink,
   updateAdminProductWarning,
   updateProductQA,
   type AdminCatalogProduct,
   type AdminProductDetail,
   type AdminProductIngredient,
   type AdminProductIngredientPayload,
+  type AdminProductShopLink,
+  type AdminProductShopLinkPayload,
   type AdminProductWarning,
   type AdminProductWarningPayload,
   type AdminProductWarningSeverity,
@@ -26,10 +33,10 @@ import {
 import ImageCropModal from '../../components/ImageCropModal';
 import { AdminBadge, AdminButton, AdminCard, AdminEmpty, AdminError, AdminPageHeader, type AdminTone } from './AdminUi';
 
-type TabName = 'overview' | 'wirkstoffe' | 'moderation' | 'affiliate' | 'warnungen' | 'audit';
+type TabName = 'overview' | 'wirkstoffe' | 'moderation' | 'affiliate' | 'warnungen';
 
 type AffiliateOwnerType = 'none' | 'nick' | 'user';
-type ProductModerationStatus = 'pending' | 'approved' | 'rejected';
+type ProductModerationStatus = 'pending' | 'approved' | 'rejected' | 'blocked';
 type ProductVisibility = 'hidden' | 'public';
 
 type ProductEditForm = {
@@ -46,6 +53,16 @@ type ProductEditForm = {
   shop_link: string;
   affiliate_owner_type: AffiliateOwnerType;
   affiliate_owner_user_id: string;
+};
+
+type ShopLinkForm = {
+  shop_name: string;
+  url: string;
+  affiliate_owner_type: AffiliateOwnerType;
+  affiliate_owner_user_id: string;
+  is_primary: boolean;
+  active: boolean;
+  sort_order: string;
 };
 
 type WarningItem = {
@@ -93,7 +110,6 @@ const TAB_OPTIONS: { key: TabName; label: string }[] = [
   { key: 'moderation', label: 'Freigabe' },
   { key: 'affiliate', label: 'Shop-Link' },
   { key: 'warnungen', label: 'Warnungen' },
-  { key: 'audit', label: 'Änderungen' },
 ];
 
 function getTabFromSection(section: string | null): TabName {
@@ -139,6 +155,73 @@ function emptyProductEditForm(): ProductEditForm {
   };
 }
 
+function emptyShopLinkForm(): ShopLinkForm {
+  return {
+    shop_name: '',
+    url: '',
+    affiliate_owner_type: 'none',
+    affiliate_owner_user_id: '',
+    is_primary: false,
+    active: true,
+    sort_order: '0',
+  };
+}
+
+function shopLinkFormFromLink(link: AdminProductShopLink): ShopLinkForm {
+  return {
+    shop_name: link.shop_name ?? '',
+    url: link.url,
+    affiliate_owner_type: link.affiliate_owner_type,
+    affiliate_owner_user_id: link.affiliate_owner_type === 'user' && link.affiliate_owner_user_id !== null
+      ? String(link.affiliate_owner_user_id)
+      : '',
+    is_primary: link.is_primary === 1,
+    active: link.active !== 0,
+    sort_order: String(link.sort_order ?? 0),
+  };
+}
+
+function payloadFromShopLinkForm(form: ShopLinkForm): AdminProductShopLinkPayload {
+  const url = form.url.trim();
+  if (!url) throw new Error('URL ist erforderlich.');
+  const parsedSortOrder = Number(form.sort_order.trim() || '0');
+  if (!Number.isInteger(parsedSortOrder)) throw new Error('Sortierung muss eine ganze Zahl sein.');
+
+  let ownerUserId: number | null = null;
+  if (form.affiliate_owner_type === 'user') {
+    const parsedUserId = Number(form.affiliate_owner_user_id.trim());
+    if (!Number.isInteger(parsedUserId) || parsedUserId <= 0) {
+      throw new Error('Nutzer-ID muss eine positive ganze Zahl sein.');
+    }
+    ownerUserId = parsedUserId;
+  }
+
+  return {
+    shop_name: textValue(form.shop_name),
+    url,
+    affiliate_owner_type: form.affiliate_owner_type,
+    affiliate_owner_user_id: ownerUserId,
+    is_affiliate: form.affiliate_owner_type === 'none' ? 0 : 1,
+    is_primary: form.is_primary ? 1 : 0,
+    active: form.active ? 1 : 0,
+    sort_order: parsedSortOrder,
+  };
+}
+
+function shopLinkOwnerLabel(link: AdminProductShopLink): string {
+  if (link.affiliate_owner_type === 'nick') return 'Nick';
+  if (link.affiliate_owner_type === 'user') {
+    return link.affiliate_owner_user_id ? `Nutzer #${link.affiliate_owner_user_id}` : 'Nutzer-ID fehlt';
+  }
+  return 'Kein Partnerlink';
+}
+
+function shopLinkOwnerTone(link: AdminProductShopLink): AdminTone {
+  if (link.affiliate_owner_type === 'nick') return 'ok';
+  if (link.affiliate_owner_type === 'user') return link.affiliate_owner_user_id ? 'info' : 'warn';
+  return 'neutral';
+}
+
 function formFromProduct(product: AdminCatalogProduct): ProductEditForm {
   const ownerType = ownerTypeFromProduct(product);
   return {
@@ -155,7 +238,7 @@ function formFromProduct(product: AdminCatalogProduct): ProductEditForm {
     container_count:
       product.container_count === null || product.container_count === undefined ? '' : numberText(product.container_count),
     moderation_status:
-      product.moderation_status === 'approved' || product.moderation_status === 'rejected'
+      product.moderation_status === 'approved' || product.moderation_status === 'rejected' || product.moderation_status === 'blocked'
         ? product.moderation_status
         : 'pending',
     visibility: product.visibility === 'public' ? 'public' : 'hidden',
@@ -190,6 +273,7 @@ function moderationTone(value: string | null): AdminTone {
   if (!value || value === 'approved') return 'ok';
   if (value === 'pending') return 'warn';
   if (value === 'rejected') return 'danger';
+  if (value === 'blocked') return 'danger';
   return 'neutral';
 }
 
@@ -203,6 +287,7 @@ function moderationStatusLabel(value?: string | null): string {
   if (value === 'pending') return 'wartet auf Prüfung';
   if (value === 'approved') return 'freigegeben';
   if (value === 'rejected') return 'abgelehnt';
+  if (value === 'blocked') return 'gesperrt';
   return 'unbekannt';
 }
 
@@ -534,23 +619,6 @@ function buildModerationPatch(form: ProductEditForm, product: AdminCatalogProduc
   return patch;
 }
 
-function buildAffiliatePatch(form: ProductEditForm): AdminProductQAPatch {
-  const ownerUserIdText = form.affiliate_owner_user_id.trim();
-  let ownerUserId: number | null = null;
-  if (form.affiliate_owner_type === 'user') {
-    const parsed = Number(ownerUserIdText);
-    if (!Number.isInteger(parsed) || parsed <= 0) {
-      throw new Error('Nutzer-ID muss eine positive ganze Zahl sein.');
-    }
-    ownerUserId = parsed;
-  }
-  return {
-    shop_link: form.shop_link.trim() || null,
-    affiliate_owner_type: form.affiliate_owner_type,
-    affiliate_owner_user_id: ownerUserId,
-  };
-}
-
 function getWarnings(product: AdminProductDetail): WarningItem[] {
   const warnings: WarningItem[] = [];
   const raw = product.raw ?? {};
@@ -663,21 +731,6 @@ function deriveIngredientSummary(product: AdminCatalogProduct): string {
   return 'Keine Wirkstoff-Zusammenfassung vorhanden.';
 }
 
-function deriveAuditMeta(product: AdminCatalogProduct): Array<{ label: string; value: string }> {
-  const raw = product.raw ?? {};
-  const auditKeys = ['created_at', 'updated_at', 'updated_by_user_id', 'updated_by_admin_id', 'updated_by'];
-  return auditKeys
-    .map((key) => {
-      const value = raw[key];
-      const text = value === undefined || value === null ? '-' : String(value);
-      return {
-        label: key,
-        value: text.trim().length === 0 ? '-' : text,
-      };
-    })
-    .filter((entry) => entry.value !== '-');
-}
-
 export default function AdministratorProductDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -696,6 +749,12 @@ export default function AdministratorProductDetailPage() {
   const [editingWarningId, setEditingWarningId] = useState<number | null>(null);
   const [warningForm, setWarningForm] = useState<ProductWarningForm>(() => emptyProductWarningForm());
   const [form, setForm] = useState<ProductEditForm>(() => emptyProductEditForm());
+  const [shopLinks, setShopLinks] = useState<AdminProductShopLink[]>([]);
+  const [shopLinksLoading, setShopLinksLoading] = useState(false);
+  const [shopLinkHealthAvailable, setShopLinkHealthAvailable] = useState(false);
+  const [shopLinkSavingId, setShopLinkSavingId] = useState<string | null>(null);
+  const [editingShopLinkId, setEditingShopLinkId] = useState<number | null>(null);
+  const [shopLinkForm, setShopLinkForm] = useState<ShopLinkForm>(() => emptyShopLinkForm());
   const [ingredientOptions, setIngredientOptions] = useState<IngredientLookup[]>([]);
   const [ingredientLookupQuery, setIngredientLookupQuery] = useState('');
   const [ingredientLookupLoading, setIngredientLookupLoading] = useState(false);
@@ -708,6 +767,7 @@ export default function AdministratorProductDetailPage() {
   const loadProduct = useCallback(async () => {
     if (!productId) {
       setProduct(null);
+      setShopLinks([]);
       setError('Ungültige Produkt-ID.');
       setLoading(false);
       return;
@@ -722,6 +782,26 @@ export default function AdministratorProductDetailPage() {
       setProduct(null);
     } finally {
       setLoading(false);
+    }
+  }, [productId]);
+
+  const loadShopLinks = useCallback(async (idToLoad = productId) => {
+    if (!idToLoad) {
+      setShopLinks([]);
+      setShopLinkHealthAvailable(false);
+      return;
+    }
+    setShopLinksLoading(true);
+    try {
+      const response = await getAdminProductShopLinks(idToLoad);
+      setShopLinks(response.links);
+      setShopLinkHealthAvailable(response.health_available);
+    } catch (errorValue) {
+      setShopLinks([]);
+      setShopLinkHealthAvailable(false);
+      setError(getErrorMessage(errorValue));
+    } finally {
+      setShopLinksLoading(false);
     }
   }, [productId]);
 
@@ -744,6 +824,10 @@ export default function AdministratorProductDetailPage() {
   }, [loadProduct]);
 
   useEffect(() => {
+    void loadShopLinks();
+  }, [loadShopLinks]);
+
+  useEffect(() => {
     void loadIngredientOptions();
   }, [loadIngredientOptions]);
 
@@ -756,6 +840,10 @@ export default function AdministratorProductDetailPage() {
 
   const updateField = <K extends keyof ProductEditForm>(field: K, value: ProductEditForm[K]) => {
     setForm((previous) => ({ ...previous, [field]: value }));
+  };
+
+  const updateShopLinkField = <K extends keyof ShopLinkForm>(field: K, value: ShopLinkForm[K]) => {
+    setShopLinkForm((previous) => ({ ...previous, [field]: value }));
   };
 
   const updateWarningField = <K extends keyof ProductWarningForm>(field: K, value: ProductWarningForm[K]) => {
@@ -812,12 +900,124 @@ export default function AdministratorProductDetailPage() {
     }
   };
 
-  const handleSaveAffiliate = async () => {
+  const refreshProductAndShopLinks = async (idToRefresh: number) => {
+    const [freshProduct] = await Promise.all([
+      getAdminProduct(idToRefresh),
+      loadShopLinks(idToRefresh),
+    ]);
+    setProduct(freshProduct);
+  };
+
+  const handleStartCreateShopLink = () => {
+    setEditingShopLinkId(null);
+    setShopLinkForm({
+      ...emptyShopLinkForm(),
+      is_primary: shopLinks.length === 0,
+      sort_order: String(shopLinks.length * 10),
+    });
+    setError('');
+    setMessage('');
+  };
+
+  const handleStartEditShopLink = (link: AdminProductShopLink) => {
+    setEditingShopLinkId(link.id);
+    setShopLinkForm(shopLinkFormFromLink(link));
+    setError('');
+    setMessage('');
+  };
+
+  const handleCancelShopLinkEdit = () => {
+    setEditingShopLinkId(null);
+    setShopLinkForm(emptyShopLinkForm());
+  };
+
+  const handleSaveShopLink = async () => {
     if (!product) return;
+    const savingId = editingShopLinkId ? `save-${editingShopLinkId}` : 'create';
+    setShopLinkSavingId(savingId);
+    setError('');
+    setMessage('');
     try {
-      await saveProductPatch(buildAffiliatePatch(form), 'Shop-Link-Daten gespeichert.');
+      const payload = payloadFromShopLinkForm(shopLinkForm);
+      if (editingShopLinkId) {
+        const existing = shopLinks.find((link) => link.id === editingShopLinkId);
+        await updateAdminProductShopLink(product.id, editingShopLinkId, payload, { version: existing?.version ?? null });
+        setMessage('Shop-Link gespeichert.');
+      } else {
+        if (shopLinks.length === 0) payload.is_primary = 1;
+        await createAdminProductShopLink(product.id, payload);
+        setMessage('Shop-Link erstellt.');
+      }
+      setEditingShopLinkId(null);
+      setShopLinkForm(emptyShopLinkForm());
+      await refreshProductAndShopLinks(product.id);
     } catch (errorValue) {
       setError(getErrorMessage(errorValue));
+    } finally {
+      setShopLinkSavingId(null);
+      setTimeout(() => setMessage(''), 2200);
+    }
+  };
+
+  const handleSetPrimaryShopLink = async (link: AdminProductShopLink) => {
+    if (!product) return;
+    setShopLinkSavingId(`primary-${link.id}`);
+    setError('');
+    setMessage('');
+    try {
+      await updateAdminProductShopLink(
+        product.id,
+        link.id,
+        { is_primary: 1, active: 1, version: link.version },
+        { version: link.version },
+      );
+      await refreshProductAndShopLinks(product.id);
+      setMessage('Hauptlink gesetzt.');
+    } catch (errorValue) {
+      setError(getErrorMessage(errorValue));
+    } finally {
+      setShopLinkSavingId(null);
+      setTimeout(() => setMessage(''), 2200);
+    }
+  };
+
+  const handleRecheckShopLink = async (link: AdminProductShopLink) => {
+    if (!product) return;
+    setShopLinkSavingId(`recheck-${link.id}`);
+    setError('');
+    setMessage('');
+    try {
+      const response = await recheckAdminProductShopLink(product.id, link.id);
+      if (response.link) {
+        setShopLinks((previous) => previous.map((entry) => (entry.id === response.link?.id ? response.link : entry)));
+      } else {
+        await loadShopLinks(product.id);
+      }
+      setMessage('Link erneut geprüft.');
+    } catch (errorValue) {
+      setError(getErrorMessage(errorValue));
+    } finally {
+      setShopLinkSavingId(null);
+      setTimeout(() => setMessage(''), 2200);
+    }
+  };
+
+  const handleDeleteShopLink = async (link: AdminProductShopLink) => {
+    if (!product) return;
+    if (!window.confirm(`Shop-Link "${link.shop_name || linkHost(link.url)}" löschen?`)) return;
+    setShopLinkSavingId(`delete-${link.id}`);
+    setError('');
+    setMessage('');
+    try {
+      await deleteAdminProductShopLink(product.id, link.id, { version: link.version });
+      await refreshProductAndShopLinks(product.id);
+      if (editingShopLinkId === link.id) handleCancelShopLinkEdit();
+      setMessage('Shop-Link gelöscht.');
+    } catch (errorValue) {
+      setError(getErrorMessage(errorValue));
+    } finally {
+      setShopLinkSavingId(null);
+      setTimeout(() => setMessage(''), 2200);
     }
   };
 
@@ -981,7 +1181,6 @@ export default function AdministratorProductDetailPage() {
   };
 
   const warnings = useMemo(() => (product ? getWarnings(product) : []), [product]);
-  const auditMeta = useMemo(() => (product ? deriveAuditMeta(product) : []), [product]);
   const linkHealth = useMemo(() => (product ? readLinkHealth(product.raw) : null), [product]);
 
   const renderLinkHealthSummary = (health: AdminProductLinkHealth | null) => (
@@ -1462,6 +1661,7 @@ export default function AdministratorProductDetailPage() {
               <option value="pending">wartet auf Prüfung</option>
               <option value="approved">freigegeben</option>
               <option value="rejected">abgelehnt</option>
+              <option value="blocked">gesperrt</option>
             </select>
           </label>
           <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
@@ -1511,73 +1711,156 @@ export default function AdministratorProductDetailPage() {
         <div>
           <dt className="admin-muted">Kontext</dt>
           <dd>
-            {selected.qa_counts.link_report_count} Linkmeldung(en), {selected.qa_counts.product_warning_count} Produktwarnung(en), {selected.qa_counts.warning_count} Sicherheitswarnung(en), {selected.qa_counts.audit_count} Änderung(en)
+            {selected.qa_counts.link_report_count} Linkmeldung(en), {selected.qa_counts.product_warning_count} Produktwarnung(en), {selected.qa_counts.warning_count} Sicherheitswarnung(en)
           </dd>
         </div>
       </dl>
     </AdminCard>
   );
 
-  const renderAffiliateTab = (selected: AdminProductDetail) => (
-    <AdminCard title="Shop-Link" subtitle="Shop-Link und Zuordnung bearbeiten.">
-      <div className="grid gap-3 md:grid-cols-[minmax(260px,1fr)_160px_160px_auto]">
-        <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
-          Shop-Link
-          <input
-            value={form.shop_link}
-            onChange={(event) => updateField('shop_link', event.target.value)}
-            className="admin-input mt-1"
-          />
-        </label>
-        <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
-          Link gehört zu
-          <select
-            value={form.affiliate_owner_type}
-            onChange={(event) => updateField('affiliate_owner_type', event.target.value as AffiliateOwnerType)}
-            className="admin-select mt-1"
-          >
-            <option value="none">Keiner</option>
-            <option value="nick">Nick</option>
-            <option value="user">Nutzer</option>
-          </select>
-        </label>
-        <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
-          Nutzer-ID
-          <input
-            value={form.affiliate_owner_user_id}
-            onChange={(event) => updateField('affiliate_owner_user_id', event.target.value)}
-            inputMode="numeric"
-            disabled={form.affiliate_owner_type !== 'user'}
-            className="admin-input mt-1"
-          />
-        </label>
-        <div className="flex items-end gap-2">
-          {selected.shop_link && (
-            <a
-              href={selected.shop_link}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="admin-icon-btn"
-              title="Shop-Link öffnen"
-              aria-label="Shop-Link öffnen"
-            >
-              <ExternalLink size={16} />
-            </a>
-          )}
-          <AdminButton variant="primary" onClick={() => void handleSaveAffiliate()} disabled={saving}>
-            <Save size={15} />
-            {saving ? 'Speichere...' : 'Shop-Link speichern'}
+  const renderShopLinksTab = (selected: AdminProductDetail) => (
+    <div className="grid gap-4">
+      <AdminCard
+        title="Shop-Links"
+        subtitle="Der Hauptlink wird im Katalog angezeigt."
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <AdminButton size="sm" onClick={() => void loadShopLinks(selected.id)} disabled={shopLinksLoading}>
+              <RefreshCw size={13} />
+              Aktualisieren
+            </AdminButton>
+            <AdminButton size="sm" variant="primary" onClick={handleStartCreateShopLink}>
+              <Plus size={13} />
+              Neuer Link
+            </AdminButton>
+          </div>
+        }
+      >
+        {!shopLinkHealthAvailable ? (
+          <p className="admin-muted mb-3 text-xs">Linkcheck-Daten sind in dieser Umgebung nicht verfuegbar.</p>
+        ) : null}
+        {shopLinksLoading ? (
+          <AdminEmpty>Lade Shop-Links...</AdminEmpty>
+        ) : shopLinks.length === 0 ? (
+          <AdminEmpty>Keine Shop-Links vorhanden. Lege unten den ersten Link an.</AdminEmpty>
+        ) : (
+          <div className="grid gap-3">
+            {shopLinks.map((link) => (
+              <article key={link.id} className="rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg)] p-3 text-sm">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium">{link.shop_name || linkHost(link.url)}</span>
+                      {link.is_primary ? <AdminBadge tone="ok">Hauptlink</AdminBadge> : null}
+                      <AdminBadge tone={link.active ? 'info' : 'neutral'}>{link.active ? 'aktiv' : 'inaktiv'}</AdminBadge>
+                      <AdminBadge tone={shopLinkOwnerTone(link)}>{shopLinkOwnerLabel(link)}</AdminBadge>
+                      <AdminBadge tone={linkHealthTone(link.health)}>{linkHealthLabel(link.health)}</AdminBadge>
+                    </div>
+                    <a
+                      href={link.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="admin-mono mt-2 block break-all text-xs text-[color:var(--admin-info-ink)] hover:underline"
+                    >
+                      {link.url}
+                    </a>
+                    <div className="admin-muted mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                      <span>Sortierung: {link.sort_order}</span>
+                      <span>Quelle: {link.source_type}</span>
+                      <span>Check: {formatDate(link.health?.last_checked_at ?? null)}</span>
+                      {link.health?.http_status ? <span>HTTP {link.health.http_status}</span> : null}
+                    </div>
+                    {link.health?.failure_reason ? (
+                      <p className="admin-muted mt-1 text-xs">Fehler: {link.health.failure_reason}</p>
+                    ) : null}
+                  </div>
+                  <div className="flex shrink-0 flex-wrap gap-2">
+                    <a href={link.url} target="_blank" rel="noopener noreferrer" className="admin-icon-btn" title="Shop-Link öffnen" aria-label="Shop-Link öffnen">
+                      <ExternalLink size={15} />
+                    </a>
+                    {!link.is_primary ? (
+                      <AdminButton size="sm" variant="ghost" onClick={() => void handleSetPrimaryShopLink(link)} disabled={shopLinkSavingId !== null}>
+                        Hauptlink
+                      </AdminButton>
+                    ) : null}
+                    <AdminButton size="sm" variant="ghost" onClick={() => void handleRecheckShopLink(link)} disabled={shopLinkSavingId !== null || !shopLinkHealthAvailable}>
+                      <RefreshCw size={13} />
+                      {shopLinkSavingId === `recheck-${link.id}` ? 'Prüfe...' : 'Erneut prüfen'}
+                    </AdminButton>
+                    <AdminButton size="sm" variant="ghost" onClick={() => handleStartEditShopLink(link)} disabled={shopLinkSavingId !== null}>
+                      <Edit3 size={13} />
+                      Bearbeiten
+                    </AdminButton>
+                    <AdminButton size="sm" variant="danger" onClick={() => void handleDeleteShopLink(link)} disabled={shopLinkSavingId !== null}>
+                      <Trash2 size={13} />
+                      Loeschen
+                    </AdminButton>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </AdminCard>
+
+      <AdminCard
+        title={editingShopLinkId ? 'Shop-Link bearbeiten' : 'Neuen Shop-Link anlegen'}
+        subtitle="Der aktive Hauptlink bleibt als Legacy-Shop-Link am Produkt gespiegelt."
+        actions={editingShopLinkId ? (
+          <AdminButton size="sm" variant="ghost" onClick={handleCancelShopLinkEdit} disabled={shopLinkSavingId !== null}>
+            <X size={13} />
+            Abbrechen
           </AdminButton>
+        ) : null}
+      >
+        <div className="grid gap-3 md:grid-cols-[180px_minmax(260px,1fr)_150px_140px]">
+          <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
+            Shop
+            <input value={shopLinkForm.shop_name} onChange={(event) => updateShopLinkField('shop_name', event.target.value)} className="admin-input mt-1" placeholder="z. B. Amazon" />
+          </label>
+          <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
+            URL
+            <input value={shopLinkForm.url} onChange={(event) => updateShopLinkField('url', event.target.value)} className="admin-input mt-1" placeholder="https://..." />
+          </label>
+          <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
+            Link gehoert zu
+            <select value={shopLinkForm.affiliate_owner_type} onChange={(event) => updateShopLinkField('affiliate_owner_type', event.target.value as AffiliateOwnerType)} className="admin-select mt-1">
+              <option value="none">Keiner</option>
+              <option value="nick">Nick</option>
+              <option value="user">Nutzer</option>
+            </select>
+          </label>
+          <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
+            Nutzer-ID
+            <input value={shopLinkForm.affiliate_owner_user_id} onChange={(event) => updateShopLinkField('affiliate_owner_user_id', event.target.value)} inputMode="numeric" disabled={shopLinkForm.affiliate_owner_type !== 'user'} className="admin-input mt-1" />
+          </label>
+          <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
+            Sortierung
+            <input value={shopLinkForm.sort_order} onChange={(event) => updateShopLinkField('sort_order', event.target.value)} inputMode="numeric" className="admin-input mt-1" />
+          </label>
+          <div className="flex flex-wrap items-end gap-4 md:col-span-2">
+            <label className="inline-flex min-h-[38px] items-center gap-2 text-xs font-medium text-[color:var(--admin-ink-2)]">
+              <input type="checkbox" checked={shopLinkForm.is_primary} onChange={(event) => updateShopLinkField('is_primary', event.target.checked)} />
+              Hauptlink
+            </label>
+            <label className="inline-flex min-h-[38px] items-center gap-2 text-xs font-medium text-[color:var(--admin-ink-2)]">
+              <input type="checkbox" checked={shopLinkForm.active} onChange={(event) => updateShopLinkField('active', event.target.checked)} />
+              Aktiv
+            </label>
+          </div>
+          <div className="flex items-end justify-end">
+            <AdminButton variant="primary" onClick={() => void handleSaveShopLink()} disabled={shopLinkSavingId !== null}>
+              <Save size={15} />
+              {shopLinkSavingId === 'create' || (editingShopLinkId && shopLinkSavingId === `save-${editingShopLinkId}`)
+                ? 'Speichere...'
+                : editingShopLinkId ? 'Speichern' : 'Anlegen'}
+            </AdminButton>
+          </div>
         </div>
-      </div>
-      <p className="admin-muted mt-2 text-xs">Aktuelle Zuordnung: {ownerLabel(selected)}</p>
-      <div className="mt-4">
-        <h3 className="mb-2 text-sm font-semibold">Linkstatus</h3>
-        {renderLinkHealthSummary(linkHealth)}
-      </div>
-      <div className="mt-5 border-t border-[color:var(--admin-line)] pt-4">
-        <div className="mb-2 flex flex-wrap items-center gap-2">
-          <h3 className="text-sm font-semibold">Linkmeldungen</h3>
+      </AdminCard>
+
+      <AdminCard title="Linkmeldungen" subtitle="Gemeldete fehlende oder defekte Shop-Links.">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
           <AdminBadge tone={selected.qa_counts.open_link_report_count > 0 ? 'warn' : 'ok'}>
             {selected.qa_counts.open_link_report_count} offen
           </AdminBadge>
@@ -1610,8 +1893,8 @@ export default function AdministratorProductDetailPage() {
             ))}
           </div>
         )}
-      </div>
-    </AdminCard>
+      </AdminCard>
+    </div>
   );
 
   const renderWarnungenTab = (selected: AdminProductDetail, warningList: WarningItem[]) => {
@@ -1787,55 +2070,6 @@ export default function AdministratorProductDetailPage() {
     );
   };
 
-  const renderAuditTab = (selected: AdminProductDetail) => (
-    <div className="grid gap-4">
-      <AdminCard title="Änderungshistorie" subtitle="Letzte gespeicherte Änderungen an diesem Produkt.">
-        <div className="grid gap-2 text-[13px]">
-          {selected.audit_logs.length === 0 ? (
-            <AdminEmpty>Keine Änderungen für dieses Produkt gefunden.</AdminEmpty>
-          ) : (
-            selected.audit_logs.map((entry) => (
-              <article key={entry.id} className="rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg)] p-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <AdminBadge tone="info">{entry.action || 'audit'}</AdminBadge>
-                  <span className="admin-muted">{formatDate(entry.created_at)}</span>
-                  <span className="admin-muted">{entry.user_email ?? (entry.user_id ? `Nutzer #${entry.user_id}` : 'System')}</span>
-                </div>
-                {entry.reason ? <p className="admin-muted mt-2 text-xs">Grund: {entry.reason}</p> : null}
-                {entry.changes ? (
-                  <pre className="mt-2 max-h-40 overflow-auto rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg-sunk)] p-2 text-[11px]">
-                    {JSON.stringify(entry.changes, null, 2)}
-                  </pre>
-                ) : null}
-              </article>
-            ))
-          )}
-          {auditMeta.length > 0 ? (
-            <div className="mt-2 rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg)] p-3">
-              <p className="font-medium">Produkt-Felder</p>
-              {auditMeta.map((entry) => (
-                <div key={entry.label} className="mt-2">
-                  <p className="admin-muted">{entry.label}</p>
-                  <p className="admin-mono text-[12px] break-all">{entry.value || '-'}</p>
-                </div>
-              ))}
-            </div>
-          ) : null}
-          <div className="mt-2">
-            <Link to="/administrator/audit-log" className="admin-btn admin-btn-ghost">
-              Zum Audit-Log
-            </Link>
-          </div>
-        </div>
-      </AdminCard>
-      <AdminCard title="Produkt-Rohdaten" subtitle="Technische Rohdaten für die Fehleranalyse.">
-        <pre className="max-h-64 overflow-auto rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg)] p-3 text-[12px]">
-          {JSON.stringify(selected.raw ?? {}, null, 2)}
-        </pre>
-      </AdminCard>
-    </div>
-  );
-
   return (
     <>
       <div className="mb-4">
@@ -1847,11 +2081,12 @@ export default function AdministratorProductDetailPage() {
 
       <AdminPageHeader
         title={product ? product.name : `Produkt #${id || ''}`}
-        subtitle={product ? `ID: ${product.id}` : 'Lade Produktdaten'}
+        subtitle={product ? 'Produktdaten, Links, Wirkstoffe und Warnungen bearbeiten.' : 'Lade Produktdaten'}
         meta={
           product ? (
             <div className="flex flex-wrap items-center gap-2">
               <AdminBadge tone={ownerTone(product)}>{`Link: ${ownerLabel(product)}`}</AdminBadge>
+              <AdminBadge tone="neutral">{`ID: ${product.id}`}</AdminBadge>
               <AdminBadge tone={moderationTone(product.moderation_status)}>{`Freigabe: ${moderationStatusLabel(product.moderation_status)}`}</AdminBadge>
               <AdminBadge tone={visibilityTone(product.visibility)}>{`Sichtbarkeit: ${visibilityLabel(product.visibility)}`}</AdminBadge>
             </div>
@@ -1903,9 +2138,8 @@ export default function AdministratorProductDetailPage() {
           {activeTab === 'overview' && renderOverviewTab(product)}
           {activeTab === 'wirkstoffe' && renderWirkstoffeTab(product)}
           {activeTab === 'moderation' && renderModerationTab(product)}
-          {activeTab === 'affiliate' && renderAffiliateTab(product)}
+          {activeTab === 'affiliate' && renderShopLinksTab(product)}
           {activeTab === 'warnungen' && renderWarnungenTab(product, warnings)}
-          {activeTab === 'audit' && renderAuditTab(product)}
         </div>
       ) : null}
 

@@ -2,6 +2,11 @@
 // Admin module
 // Routes (mounted at /api/admin):
 //   GET /products           — all products list (admin)
+//   GET /products/:id/shop-links — product shop-link list (admin)
+//   POST /products/:id/shop-links — create product shop link (admin)
+//   PATCH /products/:id/shop-links/:shopLinkId — update product shop link (admin)
+//   DELETE /products/:id/shop-links/:shopLinkId — delete product shop link (admin)
+//   POST /products/:id/shop-links/:shopLinkId/recheck — recheck product shop link (admin)
 //   GET /stats              — platform statistics (admin)
 //   GET /shop-domains       — shop domains list (admin)
 //   POST /shop-domains      — create shop domain (admin)
@@ -17,6 +22,11 @@
 //   GET /ingredient-sub-ingredients (admin)
 //   PUT /ingredient-sub-ingredients (admin)
 //   DELETE /ingredient-sub-ingredients/:parentId/:childId (admin)
+//   GET /ingredients/:id/task-status (admin)
+//   PUT /ingredients/:id/task-status/:taskKey (admin)
+//   GET /ingredients/:id/product-recommendations (admin)
+//   PUT /ingredients/:id/product-recommendations/:slot (admin)
+//   DELETE /ingredients/:id/product-recommendations/:slot (admin)
 //   GET /ingredients/:id/precursors (admin)
 //   POST /ingredients/:id/precursors (admin)
 //   DELETE /ingredients/:id/precursors/:precursorId (admin)
@@ -200,10 +210,13 @@ type AdminUserRow = {
   deleted_at: string | null
   is_trusted_product_submitter: number
   stack_count: number
+  stack_item_count: number
+  link_click_count: number
   last_stack_at: string | null
   user_product_count: number
   pending_user_product_count: number
   approved_user_product_count: number
+  blocked_user_product_count: number
 }
 
 type IngredientSubIngredientAdminRow = {
@@ -550,6 +563,13 @@ type KnowledgeArticleDbRow = {
   status: KnowledgeArticleStatus
   reviewed_at: string | null
   sources_json: string
+  conclusion: string | null
+  featured_image_r2_key: string | null
+  featured_image_url: string | null
+  dose_min: number | null
+  dose_max: number | null
+  dose_unit: string | null
+  product_note: string | null
   created_at: string
   updated_at: string
   version: number | null
@@ -565,12 +585,57 @@ type KnowledgeArticlePayload = {
   status: KnowledgeArticleStatus
   reviewed_at: string | null
   sources_json: string
+  sources: KnowledgeArticleSourceInput[]
+  ingredient_ids: number[]
+  conclusion: string | null
+  featured_image_r2_key: string | null
+  featured_image_url: string | null
+  dose_min: number | null
+  dose_max: number | null
+  dose_unit: string | null
+  product_note: string | null
 }
 
 type ParsedKnowledgeArticle<T extends KnowledgeArticleDbRow | KnowledgeArticleListDbRow> =
   Omit<T, 'sources_json'> & {
     sources_json: unknown[]
+    sources: KnowledgeArticleSourcePayload[]
+    ingredient_ids: number[]
+    ingredients: KnowledgeArticleIngredientPayload[]
   }
+
+type KnowledgeArticleSourceInput = {
+  label: string
+  url: string
+  sort_order: number
+}
+
+type KnowledgeArticleSourcePayload = KnowledgeArticleSourceInput & {
+  id: number | null
+  name: string
+  link: string
+}
+
+type KnowledgeArticleIngredientPayload = {
+  ingredient_id: number
+  name: string | null
+  sort_order: number
+}
+
+type KnowledgeArticleSourceRow = {
+  id: number
+  article_slug: string
+  label: string
+  url: string
+  sort_order: number
+}
+
+type KnowledgeArticleIngredientRow = {
+  article_slug: string
+  ingredient_id: number
+  name: string | null
+  sort_order: number
+}
 
 type ProductQaIssue = typeof PRODUCT_QA_ISSUES[number]
 type AffiliateLinkHealthStatus = 'unchecked' | 'ok' | 'failed' | 'timeout' | 'invalid'
@@ -588,6 +653,8 @@ type AffiliateLinkHealth = {
   redirected: number | null
 }
 
+type ProductShopLinkHealth = AffiliateLinkHealth
+
 type AffiliateLinkHealthSelectRow = {
   lh_product_id: number | null
   lh_url: string | null
@@ -600,6 +667,99 @@ type AffiliateLinkHealthSelectRow = {
   lh_response_time_ms: number | null
   lh_final_url: string | null
   lh_redirected: number | null
+}
+
+type ProductShopLinkHealthSelectRow = {
+  pslh_shop_link_id: number | null
+  pslh_url: string | null
+  pslh_status: string | null
+  pslh_http_status: number | null
+  pslh_failure_reason: string | null
+  pslh_last_checked_at: string | null
+  pslh_last_success_at: string | null
+  pslh_consecutive_failures: number | null
+  pslh_response_time_ms: number | null
+  pslh_final_url: string | null
+  pslh_redirected: number | null
+}
+
+type ProductShopLinkRow = {
+  id: number
+  product_id: number
+  shop_domain_id: number | null
+  shop_name: string | null
+  url: string
+  normalized_host: string | null
+  is_affiliate: number
+  affiliate_owner_type: AffiliateOwnerType
+  affiliate_owner_user_id: number | null
+  source_type: string
+  submitted_by_user_id: number | null
+  is_primary: number
+  active: number
+  sort_order: number
+  version: number | null
+  created_at: string | null
+  updated_at: string | null
+} & Partial<ProductShopLinkHealthSelectRow>
+
+type ProductShopLink = Omit<ProductShopLinkRow, keyof ProductShopLinkHealthSelectRow> & {
+  health: ProductShopLinkHealth | null
+}
+
+type IngredientAdminTaskStatusRow = {
+  ingredient_id: number
+  task_key: IngredientAdminTaskKey
+  status: IngredientAdminTaskStatus
+  note: string | null
+  updated_at: string | null
+  updated_by_user_id: number | null
+}
+
+type IngredientProductRecommendationRow = {
+  id: number
+  ingredient_id: number
+  product_id: number
+  type: string
+  shop_link_id: number | null
+  recommendation_slot: IngredientProductRecommendationSlot
+  sort_order: number
+  product_name: string
+  product_brand: string | null
+  product_shop_link: string | null
+  product_moderation_status: string | null
+  product_visibility: string | null
+  shop_link_url: string | null
+  shop_link_name: string | null
+  shop_link_host: string | null
+}
+
+type ProductShopLinkMutation = {
+  shop_domain_id?: number | null
+  shop_name?: string | null
+  url?: string
+  normalized_host?: string | null
+  is_affiliate?: number
+  affiliate_owner_type?: AffiliateOwnerType
+  affiliate_owner_user_id?: number | null
+  source_type?: string
+  is_primary?: number
+  active?: number
+  sort_order?: number
+}
+
+type ProductShopLinkCheckStatus = Exclude<AffiliateLinkHealthStatus, 'unchecked'>
+type ProductShopLinkCheckMethod = 'HEAD' | 'GET'
+type ProductShopLinkCheckResult = {
+  status: ProductShopLinkCheckStatus
+  url: string
+  host: string
+  http_status: number | null
+  failure_reason: string | null
+  check_method: ProductShopLinkCheckMethod | null
+  final_url: string | null
+  redirected: number
+  response_time_ms: number | null
 }
 
 type ProductQaRow = {
@@ -748,11 +908,21 @@ const EVIDENCE_GRADES = ['A', 'B', 'C', 'D', 'F'] as const
 const NUTRIENT_REFERENCE_VALUE_KINDS = ['rda', 'ai', 'ear', 'ul', 'pri', 'ar', 'lti', 'ri', 'nrv'] as const
 const KNOWLEDGE_ARTICLE_STATUSES = ['draft', 'published', 'archived'] as const
 const AFFILIATE_OWNER_TYPES = ['none', 'nick', 'user'] as const
-const PRODUCT_MODERATION_STATUSES = ['pending', 'approved', 'rejected'] as const
+const PRODUCT_MODERATION_STATUSES = ['pending', 'approved', 'rejected', 'blocked'] as const
 const PRODUCT_VISIBILITIES = ['hidden', 'public'] as const
+const PRODUCT_SHOP_LINK_SOURCE_TYPES = ['admin', 'legacy_product', 'user_product', 'user_submission'] as const
+const INGREDIENT_ADMIN_TASK_KEYS = ['forms', 'dge', 'precursors', 'synonyms'] as const
+const INGREDIENT_ADMIN_TASK_STATUSES = ['open', 'done', 'none'] as const
+const INGREDIENT_PRODUCT_RECOMMENDATION_SLOTS = ['primary', 'alternative_1', 'alternative_2'] as const
+const PRODUCT_SHOP_LINK_RECHECK_TIMEOUT_MS = 6000
+const PRODUCT_SHOP_LINK_RECHECK_MAX_REDIRECTS = 5
 type AffiliateOwnerType = typeof AFFILIATE_OWNER_TYPES[number]
 type ProductModerationStatus = typeof PRODUCT_MODERATION_STATUSES[number]
 type ProductVisibility = typeof PRODUCT_VISIBILITIES[number]
+type ProductShopLinkSourceType = typeof PRODUCT_SHOP_LINK_SOURCE_TYPES[number]
+type IngredientAdminTaskKey = typeof INGREDIENT_ADMIN_TASK_KEYS[number]
+type IngredientAdminTaskStatus = typeof INGREDIENT_ADMIN_TASK_STATUSES[number]
+type IngredientProductRecommendationSlot = typeof INGREDIENT_PRODUCT_RECOMMENDATION_SLOTS[number]
 type AffiliateOwnership = {
   affiliate_owner_type: AffiliateOwnerType
   affiliate_owner_user_id: number | null
@@ -1247,8 +1417,8 @@ function buildAdminExportQuery(entity: AdminExportEntity, query: {
     const where: string[] = []
     const bindings: Array<string | number> = []
     if (statusParam && statusParam !== 'all') {
-      if (!['pending', 'approved', 'rejected'].includes(statusParam)) {
-        return validationError('status must be one of pending, approved, rejected, all')
+      if (!['pending', 'approved', 'rejected', 'blocked'].includes(statusParam)) {
+        return validationError('status must be one of pending, approved, rejected, blocked, all')
       }
       where.push('up.status = ?')
       bindings.push(statusParam)
@@ -2448,6 +2618,36 @@ function enumValue<T extends readonly string[]>(value: unknown, allowed: T): T[n
   return (allowed as readonly string[]).includes(normalized) ? normalized as T[number] : null
 }
 
+function ingredientAdminTaskKey(value: string): IngredientAdminTaskKey | null {
+  return enumValue(value, INGREDIENT_ADMIN_TASK_KEYS)
+}
+
+function ingredientAdminTaskStatus(value: unknown): IngredientAdminTaskStatus | null {
+  return enumValue(value, INGREDIENT_ADMIN_TASK_STATUSES)
+}
+
+function ingredientProductRecommendationSlot(value: string): IngredientProductRecommendationSlot | null {
+  return enumValue(value, INGREDIENT_PRODUCT_RECOMMENDATION_SLOTS)
+}
+
+function ingredientProductRecommendationType(slot: IngredientProductRecommendationSlot): 'recommended' | 'alternative' {
+  return slot === 'primary' ? 'recommended' : 'alternative'
+}
+
+function ingredientProductRecommendationSortOrder(slot: IngredientProductRecommendationSlot): number {
+  if (slot === 'primary') return 0
+  if (slot === 'alternative_1') return 10
+  return 20
+}
+
+function emptyIngredientProductRecommendationSlots(): Record<IngredientProductRecommendationSlot, IngredientProductRecommendationRow | null> {
+  return {
+    primary: null,
+    alternative_1: null,
+    alternative_2: null,
+  }
+}
+
 function requiredTextField(data: Record<string, unknown>, key: string, maxLength: number): ValidationResult<string> {
   const value = optionalText(data[key])
   if (!value) return validationError(`${key} is required`)
@@ -2746,6 +2946,53 @@ function parseKnowledgeSourcesJson(value: string): unknown[] {
   }
 }
 
+function normalizeKnowledgeSourceObject(source: unknown, sortOrder: number): KnowledgeArticleSourceInput | null {
+  if (!source || typeof source !== 'object') return null
+  const row = source as Record<string, unknown>
+  const label = typeof row.name === 'string'
+    ? row.name.trim()
+    : typeof row.label === 'string'
+      ? row.label.trim()
+      : ''
+  const url = typeof row.link === 'string'
+    ? row.link.trim()
+    : typeof row.url === 'string'
+      ? row.url.trim()
+      : ''
+  if (!label && !url) return null
+  if (!label || !url) return null
+  try {
+    const parsed = new URL(url)
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null
+  } catch {
+    return null
+  }
+  return { label, url, sort_order: sortOrder }
+}
+
+function parseKnowledgeSources(value: unknown): ValidationResult<KnowledgeArticleSourceInput[]> {
+  if (value === undefined || value === null || value === '') return { ok: true, value: [] }
+  const parsed = typeof value === 'string'
+    ? (() => {
+        try {
+          return JSON.parse(value) as unknown
+        } catch {
+          return null
+        }
+      })()
+    : value
+  if (!Array.isArray(parsed)) return validationError('sources must be an array')
+  const sources: KnowledgeArticleSourceInput[] = []
+  for (let index = 0; index < parsed.length; index += 1) {
+    const normalized = normalizeKnowledgeSourceObject(parsed[index], index)
+    if (!normalized) {
+      return validationError('Each source needs a name and a valid http(s) link')
+    }
+    sources.push(normalized)
+  }
+  return { ok: true, value: sources }
+}
+
 function serializeKnowledgeSources(value: unknown): ValidationResult<string> {
   if (value === undefined || value === null || value === '') return { ok: true, value: '[]' }
   if (typeof value === 'string') {
@@ -2761,12 +3008,165 @@ function serializeKnowledgeSources(value: unknown): ValidationResult<string> {
   return { ok: true, value: JSON.stringify(value) }
 }
 
+function serializeKnowledgeSourcesFromStructured(sources: KnowledgeArticleSourceInput[]): string {
+  return JSON.stringify(sources.map((source) => ({
+    label: source.label,
+    url: source.url,
+  })))
+}
+
+function parseKnowledgeIngredientIds(value: unknown, existing?: number[]): ValidationResult<number[]> {
+  if (value === undefined) return { ok: true, value: existing ?? [] }
+  if (value === null || value === '') return { ok: true, value: [] }
+  if (!Array.isArray(value)) return validationError('ingredient_ids must be an array')
+  const ids: number[] = []
+  for (const raw of value) {
+    const id = normalizeInteger(raw)
+    if (!id || id <= 0) return validationError('ingredient_ids must contain positive integers')
+    if (!ids.includes(id)) ids.push(id)
+  }
+  return { ok: true, value: ids }
+}
+
+function sourcePayloadFromInput(source: KnowledgeArticleSourceInput, id: number | null = null): KnowledgeArticleSourcePayload {
+  return {
+    id,
+    label: source.label,
+    url: source.url,
+    name: source.label,
+    link: source.url,
+    sort_order: source.sort_order,
+  }
+}
+
 function parseKnowledgeArticle<T extends KnowledgeArticleDbRow | KnowledgeArticleListDbRow>(
   row: T,
 ): ParsedKnowledgeArticle<T> {
+  const sources = parseKnowledgeSourcesJson(row.sources_json)
+    .map((source, index) => normalizeKnowledgeSourceObject(source, index))
+    .filter((source): source is KnowledgeArticleSourceInput => source !== null)
   return {
     ...row,
     sources_json: parseKnowledgeSourcesJson(row.sources_json),
+    sources: sources.map((source) => sourcePayloadFromInput(source)),
+    ingredient_ids: [],
+    ingredients: [],
+  }
+}
+
+async function loadKnowledgeArticleSources(
+  db: D1Database,
+  slugs: string[],
+): Promise<Map<string, KnowledgeArticleSourcePayload[]>> {
+  const uniqueSlugs = [...new Set(slugs.filter(Boolean))]
+  const mapped = new Map<string, KnowledgeArticleSourcePayload[]>()
+  if (uniqueSlugs.length === 0 || !(await hasTable(db, 'knowledge_article_sources'))) return mapped
+  const placeholders = uniqueSlugs.map(() => '?').join(',')
+  const { results } = await db.prepare(`
+    SELECT id, article_slug, label, url, sort_order
+    FROM knowledge_article_sources
+    WHERE article_slug IN (${placeholders})
+    ORDER BY article_slug ASC, sort_order ASC, id ASC
+  `).bind(...uniqueSlugs).all<KnowledgeArticleSourceRow>()
+  for (const row of results ?? []) {
+    const list = mapped.get(row.article_slug) ?? []
+    list.push(sourcePayloadFromInput({
+      label: row.label,
+      url: row.url,
+      sort_order: row.sort_order,
+    }, row.id))
+    mapped.set(row.article_slug, list)
+  }
+  return mapped
+}
+
+async function loadKnowledgeArticleIngredients(
+  db: D1Database,
+  slugs: string[],
+): Promise<Map<string, KnowledgeArticleIngredientPayload[]>> {
+  const uniqueSlugs = [...new Set(slugs.filter(Boolean))]
+  const mapped = new Map<string, KnowledgeArticleIngredientPayload[]>()
+  if (uniqueSlugs.length === 0 || !(await hasTable(db, 'knowledge_article_ingredients'))) return mapped
+  const placeholders = uniqueSlugs.map(() => '?').join(',')
+  const { results } = await db.prepare(`
+    SELECT kai.article_slug, kai.ingredient_id, i.name, kai.sort_order
+    FROM knowledge_article_ingredients kai
+    LEFT JOIN ingredients i ON i.id = kai.ingredient_id
+    WHERE kai.article_slug IN (${placeholders})
+    ORDER BY kai.article_slug ASC, kai.sort_order ASC, i.name ASC
+  `).bind(...uniqueSlugs).all<KnowledgeArticleIngredientRow>()
+  for (const row of results ?? []) {
+    const list = mapped.get(row.article_slug) ?? []
+    list.push({
+      ingredient_id: row.ingredient_id,
+      name: row.name,
+      sort_order: row.sort_order,
+    })
+    mapped.set(row.article_slug, list)
+  }
+  return mapped
+}
+
+async function hydrateKnowledgeArticles<T extends KnowledgeArticleDbRow | KnowledgeArticleListDbRow>(
+  db: D1Database,
+  rows: T[],
+): Promise<Array<ParsedKnowledgeArticle<T>>> {
+  const parsed = rows.map((row) => parseKnowledgeArticle(row))
+  const slugs = parsed.map((row) => row.slug)
+  const [sourcesBySlug, ingredientsBySlug] = await Promise.all([
+    loadKnowledgeArticleSources(db, slugs),
+    loadKnowledgeArticleIngredients(db, slugs),
+  ])
+  return parsed.map((article) => {
+    const structuredSources = sourcesBySlug.get(article.slug)
+    const ingredients = ingredientsBySlug.get(article.slug) ?? []
+    return {
+      ...article,
+      sources: structuredSources && structuredSources.length > 0 ? structuredSources : article.sources,
+      ingredient_ids: ingredients.map((ingredient) => ingredient.ingredient_id),
+      ingredients,
+    }
+  })
+}
+
+async function validateKnowledgeArticleIngredientIds(db: D1Database, ids: number[]): Promise<ValidationResult<true>> {
+  if (ids.length === 0) return { ok: true, value: true }
+  const placeholders = ids.map(() => '?').join(',')
+  const { results } = await db.prepare(`
+    SELECT id
+    FROM ingredients
+    WHERE id IN (${placeholders})
+  `).bind(...ids).all<{ id: number }>()
+  const found = new Set((results ?? []).map((row) => row.id))
+  const missing = ids.filter((id) => !found.has(id))
+  if (missing.length > 0) return validationError(`Unknown ingredient_ids: ${missing.join(', ')}`, 400)
+  return { ok: true, value: true }
+}
+
+async function syncKnowledgeArticleRelations(
+  db: D1Database,
+  slug: string,
+  sources: KnowledgeArticleSourceInput[],
+  ingredientIds: number[],
+): Promise<void> {
+  if (await hasTable(db, 'knowledge_article_sources')) {
+    await db.prepare('DELETE FROM knowledge_article_sources WHERE article_slug = ?').bind(slug).run()
+    for (const source of sources) {
+      await db.prepare(`
+        INSERT INTO knowledge_article_sources (article_slug, label, url, sort_order, created_at, updated_at)
+        VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
+      `).bind(slug, source.label, source.url, source.sort_order).run()
+    }
+  }
+
+  if (await hasTable(db, 'knowledge_article_ingredients')) {
+    await db.prepare('DELETE FROM knowledge_article_ingredients WHERE article_slug = ?').bind(slug).run()
+    for (let index = 0; index < ingredientIds.length; index += 1) {
+      await db.prepare(`
+        INSERT OR IGNORE INTO knowledge_article_ingredients (article_slug, ingredient_id, sort_order, created_at)
+        VALUES (?, ?, ?, datetime('now'))
+      `).bind(slug, ingredientIds[index], index).run()
+    }
   }
 }
 
@@ -2782,6 +3182,20 @@ const AFFILIATE_LINK_HEALTH_SELECT = `
   lh.response_time_ms AS lh_response_time_ms,
   lh.final_url AS lh_final_url,
   lh.redirected AS lh_redirected
+`
+
+const PRODUCT_SHOP_LINK_HEALTH_SELECT = `
+  pslh.shop_link_id AS pslh_shop_link_id,
+  pslh.url AS pslh_url,
+  pslh.status AS pslh_status,
+  pslh.http_status AS pslh_http_status,
+  pslh.failure_reason AS pslh_failure_reason,
+  pslh.last_checked_at AS pslh_last_checked_at,
+  pslh.last_success_at AS pslh_last_success_at,
+  pslh.consecutive_failures AS pslh_consecutive_failures,
+  pslh.response_time_ms AS pslh_response_time_ms,
+  pslh.final_url AS pslh_final_url,
+  pslh.redirected AS pslh_redirected
 `
 
 const AFFILIATE_LINK_HEALTH_STATUSES = new Set<string>(['unchecked', 'ok', 'failed', 'timeout', 'invalid'])
@@ -2845,6 +3259,165 @@ async function getTableColumns(db: D1Database, tableName: string): Promise<Set<s
   } catch {
     return new Set()
   }
+}
+
+function ingredientTaskStatusSelect(hasTaskStatusTable: boolean): string {
+  if (!hasTaskStatusTable) {
+    return `
+        NULL AS forms_task_status,
+        NULL AS dge_task_status,
+        NULL AS precursors_task_status,
+        NULL AS synonyms_task_status`
+  }
+  return `
+        task_status.forms_task_status,
+        task_status.dge_task_status,
+        task_status.precursors_task_status,
+        task_status.synonyms_task_status`
+}
+
+function ingredientTaskStatusJoin(hasTaskStatusTable: boolean): string {
+  if (!hasTaskStatusTable) return ''
+  return `
+      LEFT JOIN (
+        SELECT
+          ingredient_id,
+          MAX(CASE WHEN task_key = 'forms' THEN status END) AS forms_task_status,
+          MAX(CASE WHEN task_key = 'dge' THEN status END) AS dge_task_status,
+          MAX(CASE WHEN task_key = 'precursors' THEN status END) AS precursors_task_status,
+          MAX(CASE WHEN task_key = 'synonyms' THEN status END) AS synonyms_task_status
+        FROM ingredient_admin_task_status
+        GROUP BY ingredient_id
+      ) task_status ON task_status.ingredient_id = i.id
+    `
+}
+
+function ingredientTaskDoneCondition(taskKey: IngredientAdminTaskKey, hasTaskStatusTable: boolean): string {
+  if (!hasTaskStatusTable) return '0 = 1'
+  return `EXISTS (
+    SELECT 1
+    FROM ingredient_admin_task_status its
+    WHERE its.ingredient_id = i.id
+      AND its.task_key = '${taskKey}'
+      AND its.status IN ('done', 'none')
+  )`
+}
+
+function ingredientTaskMissingCondition(
+  task: IngredientAdminTaskKey | 'knowledge' | 'dosing',
+  hasTaskStatusTable: boolean,
+  hasPrecursorsTable: boolean,
+): string {
+  if (task === 'forms') {
+    return `NOT EXISTS (SELECT 1 FROM ingredient_forms f WHERE f.ingredient_id = i.id)
+      AND NOT ${ingredientTaskDoneCondition('forms', hasTaskStatusTable)}`
+  }
+  if (task === 'dge') {
+    return `NOT EXISTS (
+        SELECT 1
+        FROM ingredient_research_sources irs
+        WHERE irs.ingredient_id = i.id
+          AND irs.source_kind = 'official'
+          AND (
+            lower(COALESCE(irs.organization, '')) LIKE '%dge%'
+            OR lower(COALESCE(irs.source_title, '')) LIKE '%dge%'
+            OR lower(COALESCE(irs.source_url, '')) LIKE '%dge.de%'
+            OR lower(COALESCE(irs.organization, '')) LIKE '%deutsche gesellschaft%'
+            OR lower(COALESCE(irs.source_title, '')) LIKE '%deutsche gesellschaft%'
+            OR lower(COALESCE(irs.organization, '')) LIKE '%gesellschaft fuer ernaehrung%'
+            OR lower(COALESCE(irs.source_title, '')) LIKE '%gesellschaft fuer ernaehrung%'
+            OR lower(COALESCE(irs.organization, '')) LIKE '%gesellschaft fur ernahrung%'
+            OR lower(COALESCE(irs.source_title, '')) LIKE '%gesellschaft fur ernahrung%'
+          )
+      )
+      AND NOT ${ingredientTaskDoneCondition('dge', hasTaskStatusTable)}`
+  }
+  if (task === 'precursors') {
+    const precursorMissing = hasPrecursorsTable
+      ? 'NOT EXISTS (SELECT 1 FROM ingredient_precursors ip WHERE ip.ingredient_id = i.id)'
+      : '1 = 1'
+    return `${precursorMissing}
+      AND NOT ${ingredientTaskDoneCondition('precursors', hasTaskStatusTable)}`
+  }
+  if (task === 'synonyms') {
+    return `NOT EXISTS (SELECT 1 FROM ingredient_synonyms s WHERE s.ingredient_id = i.id)
+      AND NOT ${ingredientTaskDoneCondition('synonyms', hasTaskStatusTable)}`
+  }
+  if (task === 'dosing') {
+    return 'NOT EXISTS (SELECT 1 FROM dose_recommendations dr WHERE dr.ingredient_id = i.id)'
+  }
+  return `(
+    COALESCE((SELECT rs.blog_url FROM ingredient_research_status rs WHERE rs.ingredient_id = i.id), '') = ''
+    AND NOT EXISTS (
+      SELECT 1
+      FROM ingredient_safety_warnings w
+      JOIN knowledge_articles a ON a.slug = w.article_slug
+      WHERE w.ingredient_id = i.id
+        AND w.active = 1
+        AND w.article_slug IS NOT NULL
+        AND a.status <> 'archived'
+    )
+  )`
+}
+
+function ingredientRecommendationSummarySelect(hasRecommendationSlots: boolean, hasShopLinks: boolean): string {
+  if (!hasRecommendationSlots) {
+    return INGREDIENT_PRODUCT_RECOMMENDATION_SLOTS.map((slot) => `
+        NULL AS ${slot}_recommendation_id,
+        NULL AS ${slot}_recommendation_product_id,
+        NULL AS ${slot}_recommendation_product_name,
+        NULL AS ${slot}_recommendation_shop_link_id,
+        NULL AS ${slot}_recommendation_shop_name`).join(',')
+  }
+
+  return INGREDIENT_PRODUCT_RECOMMENDATION_SLOTS.map((slot) => {
+    const shopNameExpression = hasShopLinks
+      ? `(
+          SELECT COALESCE(psl.shop_name, psl.normalized_host, psl.url)
+          FROM product_recommendations r
+          LEFT JOIN product_shop_links psl ON psl.id = r.shop_link_id
+          WHERE r.ingredient_id = i.id
+            AND r.recommendation_slot = '${slot}'
+          ORDER BY r.sort_order ASC, r.id ASC
+          LIMIT 1
+        )`
+      : 'NULL'
+    return `
+        (
+          SELECT r.id
+          FROM product_recommendations r
+          WHERE r.ingredient_id = i.id
+            AND r.recommendation_slot = '${slot}'
+          ORDER BY r.sort_order ASC, r.id ASC
+          LIMIT 1
+        ) AS ${slot}_recommendation_id,
+        (
+          SELECT r.product_id
+          FROM product_recommendations r
+          WHERE r.ingredient_id = i.id
+            AND r.recommendation_slot = '${slot}'
+          ORDER BY r.sort_order ASC, r.id ASC
+          LIMIT 1
+        ) AS ${slot}_recommendation_product_id,
+        (
+          SELECT p.name
+          FROM product_recommendations r
+          JOIN products p ON p.id = r.product_id
+          WHERE r.ingredient_id = i.id
+            AND r.recommendation_slot = '${slot}'
+          ORDER BY r.sort_order ASC, r.id ASC
+          LIMIT 1
+        ) AS ${slot}_recommendation_product_name,
+        (
+          SELECT r.shop_link_id
+          FROM product_recommendations r
+          WHERE r.ingredient_id = i.id
+            AND r.recommendation_slot = '${slot}'
+          ORDER BY r.sort_order ASC, r.id ASC
+          LIMIT 1
+        ) AS ${slot}_recommendation_shop_link_id,
+        ${shopNameExpression} AS ${slot}_recommendation_shop_name`
+  }).join(',')
 }
 
 function versionSelect(columns: Set<string>, alias?: string): string {
@@ -2937,6 +3510,573 @@ function withAffiliateLinkHealth<T extends object>(
     ...(rest as T),
     link_health: formatAffiliateLinkHealth(row),
   }
+}
+
+function formatProductShopLinkHealth(row: Partial<ProductShopLinkHealthSelectRow>): ProductShopLinkHealth | null {
+  if (row.pslh_shop_link_id === undefined || row.pslh_shop_link_id === null) return null
+  const status = row.pslh_status && AFFILIATE_LINK_HEALTH_STATUSES.has(row.pslh_status)
+    ? row.pslh_status as AffiliateLinkHealthStatus
+    : null
+
+  return {
+    url: row.pslh_url ?? null,
+    status,
+    http_status: row.pslh_http_status ?? null,
+    failure_reason: row.pslh_failure_reason ?? null,
+    last_checked_at: row.pslh_last_checked_at ?? null,
+    last_success_at: row.pslh_last_success_at ?? null,
+    consecutive_failures: row.pslh_consecutive_failures ?? null,
+    response_time_ms: row.pslh_response_time_ms ?? null,
+    final_url: row.pslh_final_url ?? null,
+    redirected: row.pslh_redirected ?? null,
+  }
+}
+
+function formatProductShopLink(row: ProductShopLinkRow): ProductShopLink {
+  const {
+    pslh_shop_link_id: _pslhShopLinkId,
+    pslh_url: _pslhUrl,
+    pslh_status: _pslhStatus,
+    pslh_http_status: _pslhHttpStatus,
+    pslh_failure_reason: _pslhFailureReason,
+    pslh_last_checked_at: _pslhLastCheckedAt,
+    pslh_last_success_at: _pslhLastSuccessAt,
+    pslh_consecutive_failures: _pslhConsecutiveFailures,
+    pslh_response_time_ms: _pslhResponseTimeMs,
+    pslh_final_url: _pslhFinalUrl,
+    pslh_redirected: _pslhRedirected,
+    ...link
+  } = row
+
+  return {
+    ...link,
+    health: formatProductShopLinkHealth(row),
+  }
+}
+
+function normalizedHostFromUrl(url: string): string | null {
+  return normalizeShopHostname(url)
+}
+
+function validateProductShopLinkMutation(
+  body: Record<string, unknown>,
+  existing: ProductShopLinkRow | null,
+): ValidationResult<ProductShopLinkMutation> {
+  const allowedFields = new Set([
+    'shop_domain_id',
+    'shop_name',
+    'url',
+    'is_affiliate',
+    'affiliate_owner_type',
+    'affiliate_owner_user_id',
+    'source_type',
+    'is_primary',
+    'active',
+    'sort_order',
+    'version',
+  ])
+  for (const key of Object.keys(body)) {
+    if (!allowedFields.has(key)) return validationError(`${key} cannot be updated on product shop links`)
+  }
+
+  const url = normalizeHttpUrlField(body, 'url')
+  if (!url.ok) return url
+  if (!existing && !url.value) return validationError('url is required')
+
+  const shopDomainId = optionalPositiveIntegerField(body, 'shop_domain_id')
+  if (!shopDomainId.ok) return shopDomainId
+  const shopName = optionalTextField(body, 'shop_name', 255)
+  if (!shopName.ok) return shopName
+  const isPrimary = optionalBooleanField(body, 'is_primary')
+  if (!isPrimary.ok) return isPrimary
+  const active = optionalBooleanField(body, 'active')
+  if (!active.ok) return active
+  const sortOrder = optionalNumberField(body, 'sort_order', { integer: true, min: -1000000, max: 1000000 })
+  if (!sortOrder.ok) return sortOrder
+
+  let sourceType: ProductShopLinkSourceType | undefined
+  if (hasOwnKey(body, 'source_type')) {
+    const parsedSourceType = enumValue(body.source_type, PRODUCT_SHOP_LINK_SOURCE_TYPES)
+    if (!parsedSourceType) return validationError(`source_type must be one of ${PRODUCT_SHOP_LINK_SOURCE_TYPES.join(', ')}`)
+    sourceType = parsedSourceType
+  }
+
+  const hasAffiliateInput = hasOwnKey(body, 'affiliate_owner_type') ||
+    hasOwnKey(body, 'affiliate_owner_user_id') ||
+    hasOwnKey(body, 'is_affiliate')
+  const ownership = normalizeAffiliateOwnership(body, existing ? {
+    affiliate_owner_type: existing.affiliate_owner_type,
+    affiliate_owner_user_id: existing.affiliate_owner_user_id,
+    is_affiliate: existing.is_affiliate,
+  } : {})
+  if (!ownership.ok) return ownership
+
+  return {
+    ok: true,
+    value: {
+      ...(shopDomainId.value !== undefined ? { shop_domain_id: shopDomainId.value } : {}),
+      ...(shopName.value !== undefined ? { shop_name: shopName.value } : {}),
+      ...(url.value !== undefined && url.value !== null ? { url: url.value, normalized_host: normalizedHostFromUrl(url.value) } : {}),
+      ...(sourceType !== undefined ? { source_type: sourceType } : {}),
+      ...(isPrimary.value !== undefined ? { is_primary: isPrimary.value } : {}),
+      ...(active.value !== undefined ? { active: active.value } : {}),
+      ...(sortOrder.value !== undefined ? { sort_order: sortOrder.value ?? 0 } : {}),
+      ...(!existing || hasAffiliateInput ? {
+        is_affiliate: ownership.value.is_affiliate,
+        affiliate_owner_type: ownership.value.affiliate_owner_type,
+        affiliate_owner_user_id: ownership.value.affiliate_owner_user_id,
+      } : {}),
+    },
+  }
+}
+
+async function syncPrimaryProductShopLinkFromProduct(db: D1Database, productId: number): Promise<void> {
+  if (!(await hasTable(db, 'product_shop_links'))) return
+
+  const product = await db.prepare(`
+    SELECT
+      id,
+      shop_link,
+      COALESCE(is_affiliate, 0) AS is_affiliate,
+      COALESCE(
+        affiliate_owner_type,
+        CASE WHEN COALESCE(is_affiliate, 0) = 1 THEN 'nick' ELSE 'none' END
+      ) AS affiliate_owner_type,
+      affiliate_owner_user_id
+    FROM products
+    WHERE id = ?
+  `).bind(productId).first<{
+    id: number
+    shop_link: string | null
+    is_affiliate: number
+    affiliate_owner_type: AffiliateOwnerType
+    affiliate_owner_user_id: number | null
+  }>()
+  if (!product) return
+
+  await db.prepare(`
+    UPDATE product_shop_links
+    SET is_primary = 0,
+        updated_at = datetime('now'),
+        version = COALESCE(version, 0) + 1
+    WHERE product_id = ?
+  `).bind(productId).run()
+
+  const shopLink = typeof product.shop_link === 'string' ? product.shop_link.trim() : ''
+  if (!shopLink) return
+
+  const existing = await db.prepare(`
+    SELECT id
+    FROM product_shop_links
+    WHERE product_id = ?
+      AND url = ?
+    ORDER BY id ASC
+    LIMIT 1
+  `).bind(productId, shopLink).first<{ id: number }>()
+
+  if (existing) {
+    await db.prepare(`
+      UPDATE product_shop_links
+      SET is_primary = 1,
+          active = 1,
+          is_affiliate = ?,
+          affiliate_owner_type = ?,
+          affiliate_owner_user_id = ?,
+          source_type = COALESCE(source_type, 'admin'),
+          updated_at = datetime('now'),
+          version = COALESCE(version, 0) + 1
+      WHERE id = ?
+    `).bind(
+      product.is_affiliate,
+      product.affiliate_owner_type,
+      product.affiliate_owner_user_id,
+      existing.id,
+    ).run()
+    return
+  }
+
+  await db.prepare(`
+    INSERT INTO product_shop_links (
+      product_id,
+      url,
+      is_affiliate,
+      affiliate_owner_type,
+      affiliate_owner_user_id,
+      source_type,
+      is_primary,
+      active,
+      sort_order,
+      created_at,
+      updated_at
+    )
+    VALUES (?, ?, ?, ?, ?, 'admin', 1, 1, 0, datetime('now'), datetime('now'))
+  `).bind(
+    productId,
+    shopLink,
+    product.is_affiliate,
+    product.affiliate_owner_type,
+    product.affiliate_owner_user_id,
+  ).run()
+}
+
+async function syncProductLegacyShopLinkFromPrimary(db: D1Database, productId: number): Promise<void> {
+  if (!(await hasTable(db, 'product_shop_links'))) return
+
+  const primary = await db.prepare(`
+    SELECT
+      url,
+      COALESCE(is_affiliate, 0) AS is_affiliate,
+      COALESCE(affiliate_owner_type, 'none') AS affiliate_owner_type,
+      affiliate_owner_user_id
+    FROM product_shop_links
+    WHERE product_id = ?
+      AND active = 1
+    ORDER BY is_primary DESC, sort_order ASC, id ASC
+    LIMIT 1
+  `).bind(productId).first<{
+    url: string
+    is_affiliate: number
+    affiliate_owner_type: AffiliateOwnerType
+    affiliate_owner_user_id: number | null
+  }>()
+
+  await db.prepare(`
+    UPDATE products
+    SET shop_link = ?,
+        is_affiliate = ?,
+        affiliate_owner_type = ?,
+        affiliate_owner_user_id = ?
+    WHERE id = ?
+  `).bind(
+    primary?.url ?? null,
+    primary?.is_affiliate ?? 0,
+    primary?.affiliate_owner_type ?? 'none',
+    primary?.affiliate_owner_user_id ?? null,
+    productId,
+  ).run()
+}
+
+function isPrivateIpv4Host(host: string): boolean {
+  const parts = host.split('.')
+  if (parts.length !== 4) return false
+  const octets = parts.map((part) => Number(part))
+  if (octets.some((octet, index) => !Number.isInteger(octet) || octet < 0 || octet > 255 || String(octet) !== parts[index])) {
+    return false
+  }
+  const [first, second] = octets
+  return (
+    first === 0 ||
+    first === 10 ||
+    first === 127 ||
+    (first === 169 && second === 254) ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && second === 168) ||
+    (first === 100 && second >= 64 && second <= 127)
+  )
+}
+
+function isUnsafeLinkHealthHost(host: string): boolean {
+  const normalized = host.toLowerCase().replace(/\.$/, '')
+  const withoutBrackets = normalized.replace(/^\[(.*)\]$/, '$1')
+  if (!withoutBrackets) return true
+  if (withoutBrackets === 'localhost' || withoutBrackets.endsWith('.localhost')) return true
+  if (withoutBrackets.includes(':')) return true
+  return isPrivateIpv4Host(withoutBrackets)
+}
+
+function normalizeShopLinkForCheck(rawUrl: string): ValidationResult<{ url: string; host: string }> {
+  const trimmed = rawUrl.trim()
+  if (!trimmed) return validationError('empty_url')
+  if (trimmed.length > 2048) return validationError('url_too_long')
+
+  let parsed: URL
+  try {
+    parsed = new URL(trimmed)
+  } catch {
+    return validationError('invalid_url')
+  }
+
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return validationError('unsupported_protocol')
+  if (parsed.username || parsed.password) return validationError('url_credentials_not_allowed')
+  if (parsed.port && parsed.port !== '80' && parsed.port !== '443') return validationError('non_standard_port')
+
+  const host = parsed.hostname.toLowerCase().replace(/\.$/, '')
+  if (isUnsafeLinkHealthHost(host)) return validationError('unsafe_host')
+
+  parsed.hash = ''
+  return { ok: true, value: { url: parsed.toString(), host } }
+}
+
+function isShopLinkRedirectStatus(status: number): boolean {
+  return status === 301 || status === 302 || status === 303 || status === 307 || status === 308
+}
+
+function isHealthyShopLinkStatus(status: number): boolean {
+  return status >= 200 && status < 400
+}
+
+function shopLinkCheckErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+async function fetchShopLinkOnce(url: string, method: ProductShopLinkCheckMethod): Promise<{
+  response: Response | null
+  responseTimeMs: number
+  timedOut: boolean
+  error: string | null
+}> {
+  const controller = new AbortController()
+  const startedAt = Date.now()
+  const timeoutId = setTimeout(() => controller.abort('timeout'), PRODUCT_SHOP_LINK_RECHECK_TIMEOUT_MS)
+
+  try {
+    const response = await fetch(url, {
+      method,
+      redirect: 'manual',
+      signal: controller.signal,
+      headers: {
+        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Cache-Control': 'no-cache',
+        'User-Agent': 'SupplementStack-LinkHealth/1.0 (+https://supplementstack.de)',
+        ...(method === 'GET' ? { Range: 'bytes=0-0' } : {}),
+      },
+    })
+    return {
+      response,
+      responseTimeMs: Date.now() - startedAt,
+      timedOut: false,
+      error: null,
+    }
+  } catch (error) {
+    return {
+      response: null,
+      responseTimeMs: Date.now() - startedAt,
+      timedOut: controller.signal.aborted,
+      error: shopLinkCheckErrorMessage(error).slice(0, 240),
+    }
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
+
+async function closeShopLinkResponseBody(response: Response): Promise<void> {
+  if (!response.body) return
+  try {
+    await response.body.cancel()
+  } catch {
+    // The status line is enough for this health check.
+  }
+}
+
+async function performProductShopLinkHttpCheck(
+  normalized: { url: string; host: string },
+  method: ProductShopLinkCheckMethod,
+): Promise<ProductShopLinkCheckResult> {
+  let currentUrl = normalized.url
+  let redirected = false
+  let responseTimeMs = 0
+
+  for (let redirectCount = 0; redirectCount <= PRODUCT_SHOP_LINK_RECHECK_MAX_REDIRECTS; redirectCount += 1) {
+    const attempt = await fetchShopLinkOnce(currentUrl, method)
+    responseTimeMs += attempt.responseTimeMs
+
+    if (!attempt.response) {
+      return {
+        status: attempt.timedOut ? 'timeout' : 'failed',
+        url: normalized.url,
+        host: normalized.host,
+        http_status: null,
+        failure_reason: attempt.timedOut ? 'timeout' : attempt.error ?? 'fetch_error',
+        check_method: method,
+        final_url: currentUrl,
+        redirected: redirected ? 1 : 0,
+        response_time_ms: responseTimeMs,
+      }
+    }
+
+    const response = attempt.response
+    await closeShopLinkResponseBody(response)
+
+    if (!isShopLinkRedirectStatus(response.status)) {
+      return {
+        status: isHealthyShopLinkStatus(response.status) ? 'ok' : 'failed',
+        url: normalized.url,
+        host: normalized.host,
+        http_status: response.status,
+        failure_reason: isHealthyShopLinkStatus(response.status) ? null : `http_${response.status}`,
+        check_method: method,
+        final_url: currentUrl,
+        redirected: redirected ? 1 : 0,
+        response_time_ms: responseTimeMs,
+      }
+    }
+
+    const location = response.headers.get('Location')
+    if (!location) {
+      return {
+        status: 'failed',
+        url: normalized.url,
+        host: normalized.host,
+        http_status: response.status,
+        failure_reason: 'redirect_without_location',
+        check_method: method,
+        final_url: currentUrl,
+        redirected: redirected ? 1 : 0,
+        response_time_ms: responseTimeMs,
+      }
+    }
+
+    let nextUrl: string
+    try {
+      nextUrl = new URL(location, currentUrl).toString()
+    } catch {
+      return {
+        status: 'failed',
+        url: normalized.url,
+        host: normalized.host,
+        http_status: response.status,
+        failure_reason: 'invalid_redirect_location',
+        check_method: method,
+        final_url: currentUrl,
+        redirected: redirected ? 1 : 0,
+        response_time_ms: responseTimeMs,
+      }
+    }
+
+    const next = normalizeShopLinkForCheck(nextUrl)
+    if (!next.ok) {
+      return {
+        status: 'failed',
+        url: normalized.url,
+        host: normalized.host,
+        http_status: response.status,
+        failure_reason: `unsafe_redirect:${next.error}`,
+        check_method: method,
+        final_url: nextUrl.slice(0, 2048),
+        redirected: 1,
+        response_time_ms: responseTimeMs,
+      }
+    }
+
+    currentUrl = next.value.url
+    redirected = true
+  }
+
+  return {
+    status: 'failed',
+    url: normalized.url,
+    host: normalized.host,
+    http_status: null,
+    failure_reason: 'too_many_redirects',
+    check_method: method,
+    final_url: currentUrl,
+    redirected: redirected ? 1 : 0,
+    response_time_ms: responseTimeMs,
+  }
+}
+
+function shouldRetryShopLinkHeadWithGet(result: ProductShopLinkCheckResult): boolean {
+  return (
+    result.status !== 'ok' &&
+    result.http_status !== null &&
+    [400, 403, 404, 405, 406, 408, 409, 410, 418, 421, 425, 429, 500, 501, 502, 503, 504].includes(result.http_status)
+  )
+}
+
+async function checkProductShopLink(rawUrl: string): Promise<ProductShopLinkCheckResult> {
+  const normalized = normalizeShopLinkForCheck(rawUrl)
+  if (!normalized.ok) {
+    return {
+      status: 'invalid',
+      url: rawUrl.trim().slice(0, 2048),
+      host: '',
+      http_status: null,
+      failure_reason: normalized.error,
+      check_method: null,
+      final_url: null,
+      redirected: 0,
+      response_time_ms: null,
+    }
+  }
+
+  const headResult = await performProductShopLinkHttpCheck(normalized.value, 'HEAD')
+  if (headResult.status === 'ok') return headResult
+  return shouldRetryShopLinkHeadWithGet(headResult)
+    ? await performProductShopLinkHttpCheck(normalized.value, 'GET')
+    : headResult
+}
+
+async function persistProductShopLinkHealth(
+  db: D1Database,
+  shopLinkId: number,
+  result: ProductShopLinkCheckResult,
+  checkedAt: string,
+): Promise<void> {
+  await db.prepare(`
+    INSERT INTO product_shop_link_health (
+      shop_link_id,
+      url,
+      status,
+      http_status,
+      failure_reason,
+      final_url,
+      redirected,
+      response_time_ms,
+      consecutive_failures,
+      last_success_at,
+      last_checked_at,
+      updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(shop_link_id) DO UPDATE SET
+      url = excluded.url,
+      status = excluded.status,
+      http_status = excluded.http_status,
+      failure_reason = excluded.failure_reason,
+      final_url = excluded.final_url,
+      redirected = excluded.redirected,
+      response_time_ms = excluded.response_time_ms,
+      last_checked_at = excluded.last_checked_at,
+      last_success_at = CASE
+        WHEN excluded.status = 'ok' THEN excluded.last_checked_at
+        ELSE product_shop_link_health.last_success_at
+      END,
+      consecutive_failures = CASE
+        WHEN excluded.status = 'ok' THEN 0
+        WHEN product_shop_link_health.url <> excluded.url THEN 1
+        ELSE product_shop_link_health.consecutive_failures + 1
+      END,
+      updated_at = datetime('now')
+  `).bind(
+    shopLinkId,
+    result.url,
+    result.status,
+    result.http_status,
+    result.failure_reason,
+    result.final_url,
+    result.redirected,
+    result.response_time_ms,
+    result.status === 'ok' ? 0 : 1,
+    result.status === 'ok' ? checkedAt : null,
+    checkedAt,
+  ).run()
+}
+
+async function getProductShopLinkRow(
+  db: D1Database,
+  productId: number,
+  shopLinkId: number,
+  includeHealth: boolean,
+): Promise<ProductShopLinkRow | null> {
+  const healthSelect = includeHealth ? `,${PRODUCT_SHOP_LINK_HEALTH_SELECT}` : ``
+  const healthJoin = includeHealth ? 'LEFT JOIN product_shop_link_health pslh ON pslh.shop_link_id = psl.id' : ''
+  return await db.prepare(`
+    SELECT
+      psl.*${healthSelect}
+    FROM product_shop_links psl
+    ${healthJoin}
+    WHERE psl.product_id = ?
+      AND psl.id = ?
+  `).bind(productId, shopLinkId).first<ProductShopLinkRow>()
 }
 
 async function productExists(db: D1Database, productId: number): Promise<boolean> {
@@ -3332,14 +4472,44 @@ function validateKnowledgeArticlePayload(
   const reviewedAt = optionalDateTextField(body, 'reviewed_at')
   if (!reviewedAt.ok) return reviewedAt
 
-  const sources = serializeKnowledgeSources(
-    hasOwnKey(body, 'sources_json') ? body.sources_json : existing?.sources_json ?? undefined,
-  )
+  const legacySources = serializeKnowledgeSources(existing?.sources_json ?? undefined)
+  if (!legacySources.ok) return legacySources
+  const sourceInput = hasOwnKey(body, 'sources')
+    ? body.sources
+    : hasOwnKey(body, 'sources_json')
+      ? body.sources_json
+      : parseKnowledgeSourcesJson(legacySources.value)
+  const sources = parseKnowledgeSources(sourceInput)
   if (!sources.ok) return sources
-  const parsedSources = parseKnowledgeSourcesJson(sources.value)
+  const sourcesJson = serializeKnowledgeSourcesFromStructured(sources.value)
+
+  const ingredientIds = parseKnowledgeIngredientIds(body.ingredient_ids)
+  if (!ingredientIds.ok) return ingredientIds
+
+  const conclusion = optionalTextField(body, 'conclusion', 10000)
+  if (!conclusion.ok) return conclusion
+  const featuredImageR2Key = optionalTextField(body, 'featured_image_r2_key', 1000)
+  if (!featuredImageR2Key.ok) return featuredImageR2Key
+  const featuredImageUrl = normalizeHttpUrlField(body, 'featured_image_url')
+  if (!featuredImageUrl.ok) return featuredImageUrl
+  const doseMin = optionalNumberField(body, 'dose_min', { min: 0 })
+  if (!doseMin.ok) return doseMin
+  const doseMax = optionalNumberField(body, 'dose_max', { min: 0 })
+  if (!doseMax.ok) return doseMax
+  const doseUnit = optionalTextField(body, 'dose_unit', 50)
+  if (!doseUnit.ok) return doseUnit
+  const productNote = optionalTextField(body, 'product_note', 10000)
+  if (!productNote.ok) return productNote
+
+  const finalDoseMin = doseMin.value === undefined ? existing?.dose_min ?? null : doseMin.value
+  const finalDoseMax = doseMax.value === undefined ? existing?.dose_max ?? null : doseMax.value
+  if (finalDoseMin !== null && finalDoseMax !== null && finalDoseMin > finalDoseMax) {
+    return validationError('dose_min must be <= dose_max')
+  }
+
   if (status === 'published') {
     if (!bodyText.value.trim()) return validationError('Published knowledge articles need a non-empty body')
-    if (parsedSources.length === 0) return validationError('Published knowledge articles need at least one source')
+    if (sources.value.length === 0) return validationError('Published knowledge articles need at least one source')
   }
 
   return {
@@ -3351,7 +4521,16 @@ function validateKnowledgeArticlePayload(
       body: bodyText.value,
       status,
       reviewed_at: reviewedAt.value === undefined ? existing?.reviewed_at ?? null : reviewedAt.value,
-      sources_json: sources.value,
+      sources_json: sourcesJson,
+      sources: sources.value,
+      ingredient_ids: ingredientIds.value,
+      conclusion: conclusion.value === undefined ? existing?.conclusion ?? null : conclusion.value,
+      featured_image_r2_key: featuredImageR2Key.value === undefined ? existing?.featured_image_r2_key ?? null : featuredImageR2Key.value,
+      featured_image_url: featuredImageUrl.value === undefined ? existing?.featured_image_url ?? null : featuredImageUrl.value,
+      dose_min: finalDoseMin,
+      dose_max: finalDoseMax,
+      dose_unit: doseUnit.value === undefined ? existing?.dose_unit ?? null : doseUnit.value,
+      product_note: productNote.value === undefined ? existing?.product_note ?? null : productNote.value,
     },
   }
 }
@@ -3379,16 +4558,6 @@ function parseAuditChanges(changes: string | null): unknown {
   } catch {
     return null
   }
-}
-
-function parseAuditDate(value: string | undefined, endOfDay: boolean): number | null | undefined {
-  if (!value) return undefined
-  if (/^\d+$/.test(value)) return Number(value)
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null
-  const suffix = endOfDay ? 'T23:59:59Z' : 'T00:00:00Z'
-  const timestamp = Date.parse(`${value}${suffix}`)
-  if (!Number.isFinite(timestamp)) return null
-  return Math.floor(timestamp / 1000)
 }
 
 function formatDoseRecommendationValidation(error: ValidationFailure): { error: string; status: 400 | 404 | 409 | 502 } {
@@ -3424,6 +4593,87 @@ async function loadIngredientPrecursors(
   return results ?? []
 }
 
+function formatIngredientTaskStatuses(rows: IngredientAdminTaskStatusRow[]): Record<IngredientAdminTaskKey, IngredientAdminTaskStatusRow | null> {
+  const statuses: Record<IngredientAdminTaskKey, IngredientAdminTaskStatusRow | null> = {
+    forms: null,
+    dge: null,
+    precursors: null,
+    synonyms: null,
+  }
+  for (const row of rows) {
+    if (INGREDIENT_ADMIN_TASK_KEYS.includes(row.task_key)) statuses[row.task_key] = row
+  }
+  return statuses
+}
+
+async function loadIngredientTaskStatuses(
+  db: D1Database,
+  ingredientId: number,
+): Promise<Record<IngredientAdminTaskKey, IngredientAdminTaskStatusRow | null>> {
+  if (!(await hasTable(db, 'ingredient_admin_task_status'))) {
+    return formatIngredientTaskStatuses([])
+  }
+  const { results } = await db.prepare(`
+    SELECT ingredient_id, task_key, status, note, updated_at, updated_by_user_id
+    FROM ingredient_admin_task_status
+    WHERE ingredient_id = ?
+    ORDER BY task_key ASC
+  `).bind(ingredientId).all<IngredientAdminTaskStatusRow>()
+  return formatIngredientTaskStatuses(results ?? [])
+}
+
+async function loadIngredientProductRecommendations(
+  db: D1Database,
+  ingredientId: number,
+): Promise<{
+  recommendations: IngredientProductRecommendationRow[]
+  slots: Record<IngredientProductRecommendationSlot, IngredientProductRecommendationRow | null>
+}> {
+  const recommendationColumns = await getTableColumns(db, 'product_recommendations')
+  if (!recommendationColumns.has('recommendation_slot') || !recommendationColumns.has('shop_link_id')) {
+    return { recommendations: [], slots: emptyIngredientProductRecommendationSlots() }
+  }
+  const hasShopLinks = await hasTable(db, 'product_shop_links')
+  const shopLinkSelect = hasShopLinks
+    ? `
+      psl.url AS shop_link_url,
+      psl.shop_name AS shop_link_name,
+      psl.normalized_host AS shop_link_host`
+    : `
+      NULL AS shop_link_url,
+      NULL AS shop_link_name,
+      NULL AS shop_link_host`
+  const shopLinkJoin = hasShopLinks ? 'LEFT JOIN product_shop_links psl ON psl.id = r.shop_link_id' : ''
+  const { results } = await db.prepare(`
+    SELECT
+      r.id,
+      r.ingredient_id,
+      r.product_id,
+      r.type,
+      r.shop_link_id,
+      r.recommendation_slot,
+      COALESCE(r.sort_order, 0) AS sort_order,
+      p.name AS product_name,
+      p.brand AS product_brand,
+      p.shop_link AS product_shop_link,
+      p.moderation_status AS product_moderation_status,
+      p.visibility AS product_visibility,
+      ${shopLinkSelect}
+    FROM product_recommendations r
+    JOIN products p ON p.id = r.product_id
+    ${shopLinkJoin}
+    WHERE r.ingredient_id = ?
+      AND r.recommendation_slot IN ('primary', 'alternative_1', 'alternative_2')
+    ORDER BY r.sort_order ASC, r.id ASC
+  `).bind(ingredientId).all<IngredientProductRecommendationRow>()
+  const recommendations = results ?? []
+  const slots = emptyIngredientProductRecommendationSlots()
+  for (const row of recommendations) {
+    if (!slots[row.recommendation_slot]) slots[row.recommendation_slot] = row
+  }
+  return { recommendations, slots }
+}
+
 async function formBelongsToIngredient(db: D1Database, formId: number, ingredientId: number): Promise<boolean> {
   const row = await db.prepare('SELECT id FROM ingredient_forms WHERE id = ? AND ingredient_id = ?')
     .bind(formId, ingredientId)
@@ -3449,6 +4699,13 @@ async function getKnowledgeArticleRow(db: D1Database, slug: string): Promise<Kno
       status,
       reviewed_at,
       sources_json,
+      ${columns.has('conclusion') ? 'conclusion' : 'NULL AS conclusion'},
+      ${columns.has('featured_image_r2_key') ? 'featured_image_r2_key' : 'NULL AS featured_image_r2_key'},
+      ${columns.has('featured_image_url') ? 'featured_image_url' : 'NULL AS featured_image_url'},
+      ${columns.has('dose_min') ? 'dose_min' : 'NULL AS dose_min'},
+      ${columns.has('dose_max') ? 'dose_max' : 'NULL AS dose_max'},
+      ${columns.has('dose_unit') ? 'dose_unit' : 'NULL AS dose_unit'},
+      ${columns.has('product_note') ? 'product_note' : 'NULL AS product_note'},
       created_at,
       updated_at,
       ${versionSelect(columns)}
@@ -4954,7 +6211,7 @@ admin.get('/search', async (c) => {
         `).bind(like, like, like, like, like, like, limit).all<AdminUserProductSearchRow>()
 
         return (results ?? []).map((row) => {
-          const hrefStatus = row.status && ['pending', 'approved', 'rejected'].includes(row.status)
+          const hrefStatus = row.status && ['pending', 'approved', 'rejected', 'blocked'].includes(row.status)
             ? row.status
             : 'pending'
           return {
@@ -5107,14 +6364,38 @@ admin.get('/products', async (c) => {
   if (authErr) return authErr
 
   const includeLinkHealth = await hasAffiliateLinkHealthTable(c.env.DB)
+  const includeShopLinkHealth = await hasTable(c.env.DB, 'product_shop_link_health')
   const linkHealthSelect = includeLinkHealth ? `,${AFFILIATE_LINK_HEALTH_SELECT}` : ''
   const linkHealthJoin = includeLinkHealth ? 'LEFT JOIN affiliate_link_health lh ON lh.product_id = p.id' : ''
   const hasPagedRequest = (
     c.req.query('q') !== undefined ||
     c.req.query('page') !== undefined ||
-    c.req.query('limit') !== undefined
+    c.req.query('limit') !== undefined ||
+    c.req.query('moderation') !== undefined ||
+    c.req.query('affiliate') !== undefined ||
+    c.req.query('image') !== undefined ||
+    c.req.query('deadlinks') !== undefined ||
+    c.req.query('link_status') !== undefined
   )
   const q = c.req.query('q')?.trim() ?? ''
+  const moderation = c.req.query('moderation')?.trim() ?? ''
+  const affiliate = c.req.query('affiliate')?.trim() ?? ''
+  const image = c.req.query('image')?.trim() ?? ''
+  const deadlinks = c.req.query('deadlinks') === '1' || c.req.query('link_status') === 'dead'
+  const linkStatus = c.req.query('link_status')?.trim() ?? ''
+
+  if (moderation && moderation !== 'all' && !PRODUCT_MODERATION_STATUSES.includes(moderation as ProductModerationStatus)) {
+    return c.json({ error: `moderation must be one of all, ${PRODUCT_MODERATION_STATUSES.join(', ')}` }, 400)
+  }
+  if (affiliate && !['all', 'partner', 'no_partner', 'nick', 'user'].includes(affiliate)) {
+    return c.json({ error: 'affiliate must be one of all, partner, no_partner, nick, user' }, 400)
+  }
+  if (image && !['all', 'with', 'without'].includes(image)) {
+    return c.json({ error: 'image must be one of all, with, without' }, 400)
+  }
+  if (linkStatus && !['all', 'dead', 'unchecked', 'ok'].includes(linkStatus)) {
+    return c.json({ error: 'link_status must be one of all, dead, unchecked, ok' }, 400)
+  }
 
   if (!hasPagedRequest) {
     const { results } = await c.env.DB.prepare(`
@@ -5149,12 +6430,72 @@ admin.get('/products', async (c) => {
     )`)
     bindings.push(like, like, like, like)
   }
+  if (moderation && moderation !== 'all') {
+    where.push('p.moderation_status = ?')
+    bindings.push(moderation)
+  }
+  if (affiliate === 'partner') {
+    where.push('COALESCE(p.is_affiliate, 0) = 1')
+  } else if (affiliate === 'no_partner') {
+    where.push('COALESCE(p.is_affiliate, 0) = 0')
+  } else if (affiliate === 'nick' || affiliate === 'user') {
+    where.push('COALESCE(p.affiliate_owner_type, CASE WHEN COALESCE(p.is_affiliate, 0) = 1 THEN ? ELSE ? END) = ?')
+    bindings.push('nick', 'none', affiliate)
+  }
+  if (image === 'with') {
+    where.push("(COALESCE(p.image_url, '') <> '' OR COALESCE(p.image_r2_key, '') <> '')")
+  } else if (image === 'without') {
+    where.push("COALESCE(p.image_url, '') = '' AND COALESCE(p.image_r2_key, '') = ''")
+  }
+  if (deadlinks || linkStatus === 'dead') {
+    if (includeShopLinkHealth) {
+      where.push(`EXISTS (
+        SELECT 1
+        FROM product_shop_links psl
+        JOIN product_shop_link_health pslh ON pslh.shop_link_id = psl.id
+        WHERE psl.product_id = p.id
+          AND psl.active = 1
+          AND pslh.status IN ('failed', 'timeout', 'invalid')
+      )`)
+    } else if (includeLinkHealth) {
+      where.push("lh.status IN ('failed', 'timeout', 'invalid')")
+    } else {
+      where.push('1 = 0')
+    }
+  } else if (linkStatus === 'unchecked') {
+    if (includeShopLinkHealth) {
+      where.push(`EXISTS (
+        SELECT 1
+        FROM product_shop_links psl
+        LEFT JOIN product_shop_link_health pslh ON pslh.shop_link_id = psl.id
+        WHERE psl.product_id = p.id
+          AND psl.active = 1
+          AND COALESCE(pslh.status, 'unchecked') = 'unchecked'
+      )`)
+    } else if (includeLinkHealth) {
+      where.push("COALESCE(lh.status, 'unchecked') = 'unchecked'")
+    }
+  } else if (linkStatus === 'ok') {
+    if (includeShopLinkHealth) {
+      where.push(`EXISTS (
+        SELECT 1
+        FROM product_shop_links psl
+        JOIN product_shop_link_health pslh ON pslh.shop_link_id = psl.id
+        WHERE psl.product_id = p.id
+          AND psl.active = 1
+          AND pslh.status = 'ok'
+      )`)
+    } else if (includeLinkHealth) {
+      where.push("lh.status = 'ok'")
+    }
+  }
 
   const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''
   const [totalRow, listResult] = await Promise.all([
     c.env.DB.prepare(`
       SELECT COUNT(*) AS count
       FROM products p
+      ${linkHealthJoin}
       ${whereSql}
     `).bind(...bindings).first<CountRow>(),
     c.env.DB.prepare(`
@@ -5184,10 +6525,18 @@ admin.get('/ingredients', async (c) => {
 
   const hasPagedRequest = (
     c.req.query('q') !== undefined ||
+    c.req.query('task') !== undefined ||
     c.req.query('page') !== undefined ||
     c.req.query('limit') !== undefined
   )
   const q = c.req.query('q')?.trim() ?? ''
+  const taskFilterRaw = c.req.query('task')?.trim() ?? ''
+  const taskFilter = taskFilterRaw
+    ? (ingredientAdminTaskKey(taskFilterRaw) ?? (taskFilterRaw === 'knowledge' || taskFilterRaw === 'dosing' ? taskFilterRaw : null))
+    : null
+  if (taskFilterRaw && taskFilter === null) {
+    return c.json({ error: 'task must be one of forms, dge, precursors, synonyms, knowledge, dosing' }, 400)
+  }
   const page = Math.max(1, parsePagination(c.req.query('page'), 1, 100000))
   const limit = Math.max(1, parsePagination(c.req.query('limit'), hasPagedRequest ? 50 : 250, 250))
   const offset = (page - 1) * limit
@@ -5205,8 +6554,15 @@ admin.get('/ingredients', async (c) => {
     bindings.push(like, like, like, like)
   }
 
-  const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''
   const hasPrecursorsTable = await hasTable(c.env.DB, 'ingredient_precursors')
+  const hasTaskStatusTable = await hasTable(c.env.DB, 'ingredient_admin_task_status')
+  const recommendationColumns = await getTableColumns(c.env.DB, 'product_recommendations')
+  const hasRecommendationSlots = recommendationColumns.has('recommendation_slot') && recommendationColumns.has('shop_link_id')
+  const hasShopLinks = await hasTable(c.env.DB, 'product_shop_links')
+  if (taskFilter !== null) {
+    where.push(ingredientTaskMissingCondition(taskFilter, hasTaskStatusTable, hasPrecursorsTable))
+  }
+  const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''
   const precursorCountSelect = hasPrecursorsTable
     ? 'COALESCE(precursor_counts.precursor_count, 0) AS precursor_count'
     : '0 AS precursor_count'
@@ -5252,7 +6608,9 @@ admin.get('/ingredients', async (c) => {
         COALESCE(warning_counts.warning_count, 0) AS warning_count,
         COALESCE(form_counts.form_count, 0) AS form_count,
         COALESCE(synonym_counts.synonym_count, 0) AS synonym_count,
-        ${precursorCountSelect}
+        ${precursorCountSelect},
+        ${ingredientTaskStatusSelect(hasTaskStatusTable)},
+        ${ingredientRecommendationSummarySelect(hasRecommendationSlots, hasShopLinks)}
       FROM ingredients i
       LEFT JOIN ingredient_research_status rs ON rs.ingredient_id = i.id
       LEFT JOIN (
@@ -5278,6 +6636,12 @@ admin.get('/ingredients', async (c) => {
                 lower(COALESCE(organization, '')) LIKE '%dge%'
                 OR lower(COALESCE(source_title, '')) LIKE '%dge%'
                 OR lower(COALESCE(source_url, '')) LIKE '%dge.de%'
+                OR lower(COALESCE(organization, '')) LIKE '%deutsche gesellschaft%'
+                OR lower(COALESCE(source_title, '')) LIKE '%deutsche gesellschaft%'
+                OR lower(COALESCE(organization, '')) LIKE '%gesellschaft fuer ernaehrung%'
+                OR lower(COALESCE(source_title, '')) LIKE '%gesellschaft fuer ernaehrung%'
+                OR lower(COALESCE(organization, '')) LIKE '%gesellschaft fur ernahrung%'
+                OR lower(COALESCE(source_title, '')) LIKE '%gesellschaft fur ernahrung%'
               )
             THEN 1
             ELSE 0
@@ -5337,6 +6701,7 @@ admin.get('/ingredients', async (c) => {
         GROUP BY ingredient_id
       ) synonym_counts ON synonym_counts.ingredient_id = i.id
       ${precursorCountJoin}
+      ${ingredientTaskStatusJoin(hasTaskStatusTable)}
       ${whereSql}
       ORDER BY COALESCE(i.category, '') ASC, i.name ASC, i.id ASC
       LIMIT ? OFFSET ?
@@ -5354,6 +6719,207 @@ admin.get('/ingredients', async (c) => {
       total,
     },
   })
+})
+
+// GET /api/admin/ingredients/:id/task-status (admin only)
+admin.get('/ingredients/:id/task-status', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const ingredientId = parsePositiveId(c.req.param('id'))
+  if (ingredientId === null) return c.json({ error: 'Invalid ingredient id' }, 400)
+  if (!(await ingredientExists(c.env.DB, ingredientId))) return c.json({ error: 'Ingredient not found' }, 404)
+
+  return c.json({ statuses: await loadIngredientTaskStatuses(c.env.DB, ingredientId) })
+})
+
+// PUT /api/admin/ingredients/:id/task-status/:taskKey (admin only)
+admin.put('/ingredients/:id/task-status/:taskKey', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const ingredientId = parsePositiveId(c.req.param('id'))
+  if (ingredientId === null) return c.json({ error: 'Invalid ingredient id' }, 400)
+  if (!(await ingredientExists(c.env.DB, ingredientId))) return c.json({ error: 'Ingredient not found' }, 404)
+  if (!(await hasTable(c.env.DB, 'ingredient_admin_task_status'))) {
+    return c.json({ error: 'ingredient_admin_task_status migration is not applied' }, 409)
+  }
+
+  const taskKey = ingredientAdminTaskKey(c.req.param('taskKey'))
+  if (!taskKey) return c.json({ error: `taskKey must be one of ${INGREDIENT_ADMIN_TASK_KEYS.join(', ')}` }, 400)
+
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const status = ingredientAdminTaskStatus(body.status)
+  if (!status) return c.json({ error: `status must be one of ${INGREDIENT_ADMIN_TASK_STATUSES.join(', ')}` }, 400)
+  const note = optionalText(body.note)
+  const user = c.get('user')
+  const existing = await c.env.DB.prepare(`
+    SELECT ingredient_id, task_key, status, note, updated_at, updated_by_user_id
+    FROM ingredient_admin_task_status
+    WHERE ingredient_id = ? AND task_key = ?
+  `).bind(ingredientId, taskKey).first<IngredientAdminTaskStatusRow>()
+
+  await c.env.DB.prepare(`
+    INSERT INTO ingredient_admin_task_status (
+      ingredient_id,
+      task_key,
+      status,
+      note,
+      updated_at,
+      updated_by_user_id
+    )
+    VALUES (?, ?, ?, ?, datetime('now'), ?)
+    ON CONFLICT(ingredient_id, task_key) DO UPDATE SET
+      status = excluded.status,
+      note = excluded.note,
+      updated_at = datetime('now'),
+      updated_by_user_id = excluded.updated_by_user_id
+  `).bind(ingredientId, taskKey, status, note, user?.userId ?? null).run()
+
+  const statuses = await loadIngredientTaskStatuses(c.env.DB, ingredientId)
+  await logAdminAction(c, {
+    action: 'upsert_ingredient_admin_task_status',
+    entity_type: 'ingredient_admin_task_status',
+    entity_id: ingredientId,
+    changes: { before: existing, after: statuses[taskKey] },
+  })
+
+  return c.json({ status: statuses[taskKey], statuses })
+})
+
+// GET /api/admin/ingredients/:id/product-recommendations (admin only)
+admin.get('/ingredients/:id/product-recommendations', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const ingredientId = parsePositiveId(c.req.param('id'))
+  if (ingredientId === null) return c.json({ error: 'Invalid ingredient id' }, 400)
+  if (!(await ingredientExists(c.env.DB, ingredientId))) return c.json({ error: 'Ingredient not found' }, 404)
+
+  const payload = await loadIngredientProductRecommendations(c.env.DB, ingredientId)
+  return c.json(payload)
+})
+
+// PUT /api/admin/ingredients/:id/product-recommendations/:slot (admin only)
+admin.put('/ingredients/:id/product-recommendations/:slot', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const ingredientId = parsePositiveId(c.req.param('id'))
+  if (ingredientId === null) return c.json({ error: 'Invalid ingredient id' }, 400)
+  if (!(await ingredientExists(c.env.DB, ingredientId))) return c.json({ error: 'Ingredient not found' }, 404)
+
+  const slot = ingredientProductRecommendationSlot(c.req.param('slot'))
+  if (!slot) return c.json({ error: `slot must be one of ${INGREDIENT_PRODUCT_RECOMMENDATION_SLOTS.join(', ')}` }, 400)
+
+  const recommendationColumns = await getTableColumns(c.env.DB, 'product_recommendations')
+  if (!recommendationColumns.has('recommendation_slot') || !recommendationColumns.has('shop_link_id')) {
+    return c.json({ error: 'product_recommendations slot columns are not available' }, 409)
+  }
+
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const productId = optionalPositiveIntegerField(body, 'product_id')
+  if (!productId.ok) return c.json({ error: productId.error }, productId.status ?? 400)
+  if (productId.value === undefined || productId.value === null) {
+    return c.json({ error: 'product_id is required' }, 400)
+  }
+  if (!(await productExists(c.env.DB, productId.value))) return c.json({ error: 'Product not found' }, 404)
+
+  const shopLinkId = optionalPositiveIntegerField(body, 'shop_link_id')
+  if (!shopLinkId.ok) return c.json({ error: shopLinkId.error }, shopLinkId.status ?? 400)
+  if (shopLinkId.value !== undefined && shopLinkId.value !== null) {
+    if (!(await hasTable(c.env.DB, 'product_shop_links'))) {
+      return c.json({ error: 'product_shop_links is not available in this environment' }, 409)
+    }
+    const link = await c.env.DB.prepare(`
+      SELECT id
+      FROM product_shop_links
+      WHERE id = ?
+        AND product_id = ?
+    `).bind(shopLinkId.value, productId.value).first<{ id: number }>()
+    if (!link) return c.json({ error: 'shop_link_id must belong to the selected product' }, 400)
+  }
+
+  const before = await loadIngredientProductRecommendations(c.env.DB, ingredientId)
+  const type = ingredientProductRecommendationType(slot)
+  const sortOrder = ingredientProductRecommendationSortOrder(slot)
+
+  await c.env.DB.batch([
+    c.env.DB.prepare(`
+      DELETE FROM product_recommendations
+      WHERE ingredient_id = ?
+        AND recommendation_slot = ?
+    `).bind(ingredientId, slot),
+    c.env.DB.prepare(`
+      INSERT INTO product_recommendations (
+        ingredient_id,
+        product_id,
+        type,
+        shop_link_id,
+        recommendation_slot,
+        sort_order
+      )
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).bind(ingredientId, productId.value, type, shopLinkId.value ?? null, slot, sortOrder),
+  ])
+
+  const after = await loadIngredientProductRecommendations(c.env.DB, ingredientId)
+  await logAdminAction(c, {
+    action: 'upsert_ingredient_product_recommendation',
+    entity_type: 'product_recommendation',
+    entity_id: after.slots[slot]?.id ?? ingredientId,
+    changes: { ingredient_id: ingredientId, slot, before: before.slots[slot], after: after.slots[slot] },
+  })
+
+  return c.json(after)
+})
+
+// DELETE /api/admin/ingredients/:id/product-recommendations/:slot (admin only)
+admin.delete('/ingredients/:id/product-recommendations/:slot', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const ingredientId = parsePositiveId(c.req.param('id'))
+  if (ingredientId === null) return c.json({ error: 'Invalid ingredient id' }, 400)
+  if (!(await ingredientExists(c.env.DB, ingredientId))) return c.json({ error: 'Ingredient not found' }, 404)
+
+  const slot = ingredientProductRecommendationSlot(c.req.param('slot'))
+  if (!slot) return c.json({ error: `slot must be one of ${INGREDIENT_PRODUCT_RECOMMENDATION_SLOTS.join(', ')}` }, 400)
+
+  const recommendationColumns = await getTableColumns(c.env.DB, 'product_recommendations')
+  if (!recommendationColumns.has('recommendation_slot') || !recommendationColumns.has('shop_link_id')) {
+    return c.json({ error: 'product_recommendations slot columns are not available' }, 409)
+  }
+
+  const before = await loadIngredientProductRecommendations(c.env.DB, ingredientId)
+  const result = await c.env.DB.prepare(`
+    DELETE FROM product_recommendations
+    WHERE ingredient_id = ?
+      AND recommendation_slot = ?
+  `).bind(ingredientId, slot).run()
+  if ((d1ChangeCount(result) ?? 0) === 0) return c.json({ error: 'Not found' }, 404)
+
+  const after = await loadIngredientProductRecommendations(c.env.DB, ingredientId)
+  await logAdminAction(c, {
+    action: 'delete_ingredient_product_recommendation',
+    entity_type: 'product_recommendation',
+    entity_id: before.slots[slot]?.id ?? ingredientId,
+    changes: { ingredient_id: ingredientId, slot, before: before.slots[slot] },
+  })
+
+  return c.json(after)
 })
 
 // GET /api/admin/ingredients/:id/precursors (admin only)
@@ -5433,6 +6999,69 @@ admin.post('/ingredients/:id/precursors', async (c) => {
   const created = (await loadIngredientPrecursors(c.env.DB, ingredientId))
     .find((row) => row.precursor_ingredient_id === precursorId.value)
   return c.json({ precursor: created ?? null }, 201)
+})
+
+// DELETE /api/admin/ingredients/:id/precursors/:precursorId (admin only)
+admin.patch('/ingredients/:id/precursors/:precursorId', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const ingredientId = parsePositiveId(c.req.param('id'))
+  const precursorId = parsePositiveId(c.req.param('precursorId'))
+  if (ingredientId === null) return c.json({ error: 'Invalid ingredient id' }, 400)
+  if (precursorId === null) return c.json({ error: 'Invalid precursor ingredient id' }, 400)
+  if (!(await hasTable(c.env.DB, 'ingredient_precursors'))) {
+    return c.json({ error: 'ingredient_precursors migration is not applied' }, 503)
+  }
+
+  const existing = await c.env.DB.prepare(`
+    SELECT ingredient_id, precursor_ingredient_id, sort_order, note, created_at
+    FROM ingredient_precursors
+    WHERE ingredient_id = ? AND precursor_ingredient_id = ?
+  `).bind(ingredientId, precursorId).first<{
+    ingredient_id: number
+    precursor_ingredient_id: number
+    sort_order: number
+    note: string | null
+    created_at: string | null
+  }>()
+  if (!existing) return c.json({ error: 'Not found' }, 404)
+
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const fields: Array<[string, string | number | null]> = []
+  if (hasOwnKey(body, 'note')) fields.push(['note', optionalText(body.note)])
+  if (hasOwnKey(body, 'sort_order')) {
+    const sortOrder = normalizeInteger(body.sort_order)
+    if (sortOrder === undefined) return c.json({ error: 'sort_order must be an integer' }, 400)
+    fields.push(['sort_order', sortOrder])
+  }
+  if (fields.length === 0) return c.json({ error: 'No supported fields provided' }, 400)
+
+  await c.env.DB.prepare(`
+    UPDATE ingredient_precursors
+    SET ${fields.map(([key]) => `${key} = ?`).join(', ')}
+    WHERE ingredient_id = ? AND precursor_ingredient_id = ?
+  `).bind(...fields.map(([, value]) => value), ingredientId, precursorId).run()
+
+  const updated = (await loadIngredientPrecursors(c.env.DB, ingredientId))
+    .find((row) => row.precursor_ingredient_id === precursorId)
+  await logAdminAction(c, {
+    action: 'update_ingredient_precursor',
+    entity_type: 'ingredient_precursor',
+    entity_id: ingredientId,
+    changes: {
+      before: existing,
+      after: updated ?? null,
+    },
+  })
+
+  return c.json({ precursor: updated ?? null })
 })
 
 // DELETE /api/admin/ingredients/:id/precursors/:precursorId (admin only)
@@ -5756,6 +7385,376 @@ admin.delete('/nutrient-reference-values/:id', async (c) => {
   return c.json({ ok: true })
 })
 
+// GET /api/admin/products/:id/shop-links (admin only)
+admin.get('/products/:id/shop-links', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const productId = parsePositiveId(c.req.param('id'))
+  if (productId === null) return c.json({ error: 'Invalid product id' }, 400)
+  if (!(await hasTable(c.env.DB, 'product_shop_links'))) {
+    return c.json({ error: 'product_shop_links is not available in this environment' }, 409)
+  }
+  if (!(await productExists(c.env.DB, productId))) return c.json({ error: 'Product not found' }, 404)
+
+  const includeHealth = await hasTable(c.env.DB, 'product_shop_link_health')
+  const healthSelect = includeHealth ? `,${PRODUCT_SHOP_LINK_HEALTH_SELECT}` : ''
+  const healthJoin = includeHealth ? 'LEFT JOIN product_shop_link_health pslh ON pslh.shop_link_id = psl.id' : ''
+  const { results } = await c.env.DB.prepare(`
+    SELECT
+      psl.*${healthSelect}
+    FROM product_shop_links psl
+    ${healthJoin}
+    WHERE psl.product_id = ?
+    ORDER BY psl.active DESC, psl.is_primary DESC, psl.sort_order ASC, psl.id ASC
+  `).bind(productId).all<ProductShopLinkRow>()
+
+  return c.json({
+    links: (results ?? []).map(formatProductShopLink),
+    health_available: includeHealth,
+  })
+})
+
+// POST /api/admin/products/:id/shop-links (admin only)
+admin.post('/products/:id/shop-links', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const productId = parsePositiveId(c.req.param('id'))
+  if (productId === null) return c.json({ error: 'Invalid product id' }, 400)
+  if (!(await hasTable(c.env.DB, 'product_shop_links'))) {
+    return c.json({ error: 'product_shop_links is not available in this environment' }, 409)
+  }
+  if (!(await productExists(c.env.DB, productId))) return c.json({ error: 'Product not found' }, 404)
+
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const validation = validateProductShopLinkMutation(body, null)
+  if (!validation.ok) return c.json({ error: validation.error }, validation.status)
+  const data = validation.value
+  if (!data.url) return c.json({ error: 'url is required' }, 400)
+  const url = data.url
+  const affiliateOwner = await validateAffiliateOwnerUser(c.env.DB, {
+    affiliate_owner_type: data.affiliate_owner_type ?? 'none',
+    affiliate_owner_user_id: data.affiliate_owner_user_id ?? null,
+    is_affiliate: data.is_affiliate ?? 0,
+  })
+  if (!affiliateOwner.ok) return c.json({ error: affiliateOwner.error }, affiliateOwner.status)
+
+  if (data.shop_domain_id !== undefined && data.shop_domain_id !== null) {
+    const domain = await c.env.DB.prepare('SELECT id FROM shop_domains WHERE id = ?')
+      .bind(data.shop_domain_id)
+      .first<{ id: number }>()
+    if (!domain) return c.json({ error: 'shop_domain_id must reference an existing shop domain' }, 400)
+  }
+
+  const activeLinkCount = await c.env.DB.prepare(`
+    SELECT COUNT(*) AS count
+    FROM product_shop_links
+    WHERE product_id = ?
+      AND active = 1
+  `).bind(productId).first<CountRow>()
+  const maxSortRow = await c.env.DB.prepare(`
+    SELECT MAX(sort_order) AS sort_order
+    FROM product_shop_links
+    WHERE product_id = ?
+  `).bind(productId).first<{ sort_order: number | null }>()
+
+  const active = data.active ?? 1
+  const isPrimary = data.is_primary ?? ((activeLinkCount?.count ?? 0) === 0 && active === 1 ? 1 : 0)
+  const sortOrder = data.sort_order ?? ((maxSortRow?.sort_order ?? -10) + 10)
+
+  if (isPrimary === 1 && active === 1) {
+    await c.env.DB.prepare(`
+      UPDATE product_shop_links
+      SET is_primary = 0,
+          updated_at = datetime('now'),
+          version = COALESCE(version, 0) + 1
+      WHERE product_id = ?
+    `).bind(productId).run()
+  }
+
+  const result = await c.env.DB.prepare(`
+    INSERT INTO product_shop_links (
+      product_id,
+      shop_domain_id,
+      shop_name,
+      url,
+      normalized_host,
+      is_affiliate,
+      affiliate_owner_type,
+      affiliate_owner_user_id,
+      source_type,
+      is_primary,
+      active,
+      sort_order,
+      created_at,
+      updated_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+  `).bind(
+    productId,
+    data.shop_domain_id ?? null,
+    data.shop_name ?? null,
+    url,
+    data.normalized_host ?? null,
+    affiliateOwner.value.is_affiliate,
+    affiliateOwner.value.affiliate_owner_type,
+    affiliateOwner.value.affiliate_owner_user_id,
+    data.source_type ?? 'admin',
+    isPrimary,
+    active,
+    sortOrder,
+  ).run()
+
+  const shopLinkId = result.meta.last_row_id as number
+  const includeHealth = await hasTable(c.env.DB, 'product_shop_link_health')
+  if (includeHealth) {
+    await c.env.DB.prepare(`
+      INSERT OR IGNORE INTO product_shop_link_health (
+        shop_link_id,
+        url,
+        status,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, 'unchecked', datetime('now'), datetime('now'))
+    `).bind(shopLinkId, url).run()
+  }
+
+  await syncProductLegacyShopLinkFromPrimary(c.env.DB, productId)
+  const row = await getProductShopLinkRow(c.env.DB, productId, shopLinkId, includeHealth)
+
+  await logAdminAction(c, {
+    action: 'create_product_shop_link',
+    entity_type: 'product_shop_link',
+    entity_id: shopLinkId,
+    changes: { product_id: productId, after: row },
+  })
+
+  return c.json({ ok: true, link: row ? formatProductShopLink(row) : null }, 201)
+})
+
+// PATCH /api/admin/products/:id/shop-links/:shopLinkId (admin only)
+admin.patch('/products/:id/shop-links/:shopLinkId', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const productId = parsePositiveId(c.req.param('id'))
+  if (productId === null) return c.json({ error: 'Invalid product id' }, 400)
+  const shopLinkId = parsePositiveId(c.req.param('shopLinkId'))
+  if (shopLinkId === null) return c.json({ error: 'Invalid product shop link id' }, 400)
+  if (!(await hasTable(c.env.DB, 'product_shop_links'))) {
+    return c.json({ error: 'product_shop_links is not available in this environment' }, 409)
+  }
+
+  const includeHealth = await hasTable(c.env.DB, 'product_shop_link_health')
+  const existing = await getProductShopLinkRow(c.env.DB, productId, shopLinkId, includeHealth)
+  if (!existing) return c.json({ error: 'Product shop link not found' }, 404)
+
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const validation = validateProductShopLinkMutation(body, existing)
+  if (!validation.ok) return c.json({ error: validation.error }, validation.status)
+  const data = validation.value
+  if (Object.keys(data).length === 0) return c.json({ error: 'At least one product shop link field is required' }, 400)
+
+  if (
+    data.affiliate_owner_type !== undefined ||
+    data.affiliate_owner_user_id !== undefined ||
+    data.is_affiliate !== undefined
+  ) {
+    const affiliateOwner = await validateAffiliateOwnerUser(c.env.DB, {
+      affiliate_owner_type: data.affiliate_owner_type ?? existing.affiliate_owner_type,
+      affiliate_owner_user_id: data.affiliate_owner_user_id ?? existing.affiliate_owner_user_id,
+      is_affiliate: data.is_affiliate ?? existing.is_affiliate,
+    })
+    if (!affiliateOwner.ok) return c.json({ error: affiliateOwner.error }, affiliateOwner.status)
+    data.affiliate_owner_type = affiliateOwner.value.affiliate_owner_type
+    data.affiliate_owner_user_id = affiliateOwner.value.affiliate_owner_user_id
+    data.is_affiliate = affiliateOwner.value.is_affiliate
+  }
+
+  if (data.shop_domain_id !== undefined && data.shop_domain_id !== null) {
+    const domain = await c.env.DB.prepare('SELECT id FROM shop_domains WHERE id = ?')
+      .bind(data.shop_domain_id)
+      .first<{ id: number }>()
+    if (!domain) return c.json({ error: 'shop_domain_id must reference an existing shop domain' }, 400)
+  }
+
+  const lock = validateOptimisticLock(true, existing.version, requestVersion(c, body))
+  if (!lock.ok) return c.json({ error: lock.error, current_version: existing.version }, 409)
+
+  const nextActive = data.active ?? existing.active
+  const nextPrimary = data.is_primary ?? existing.is_primary
+  if (nextPrimary === 1 && nextActive === 1) {
+    await c.env.DB.prepare(`
+      UPDATE product_shop_links
+      SET is_primary = 0,
+          updated_at = datetime('now'),
+          version = COALESCE(version, 0) + 1
+      WHERE product_id = ?
+        AND id <> ?
+    `).bind(productId, shopLinkId).run()
+  }
+
+  const fields = [
+    'shop_domain_id',
+    'shop_name',
+    'url',
+    'normalized_host',
+    'is_affiliate',
+    'affiliate_owner_type',
+    'affiliate_owner_user_id',
+    'source_type',
+    'is_primary',
+    'active',
+    'sort_order',
+  ] as const
+  const setClauses: string[] = []
+  const bindings: Array<string | number | null> = []
+  const before: Record<string, unknown> = {}
+  const after: Record<string, unknown> = {}
+  for (const field of fields) {
+    if (!hasOwnKey(data, field)) continue
+    setClauses.push(`${field} = ?`)
+    bindings.push(data[field] ?? null)
+    before[field] = existing[field]
+    after[field] = data[field] ?? null
+  }
+  setClauses.push("updated_at = datetime('now')", 'version = COALESCE(version, 0) + 1')
+  const whereSql = lock.value.enforce ? 'product_id = ? AND id = ? AND version = ?' : 'product_id = ? AND id = ?'
+
+  const updateResult = await c.env.DB.prepare(`
+    UPDATE product_shop_links
+    SET ${setClauses.join(', ')}
+    WHERE ${whereSql}
+  `).bind(
+    ...bindings,
+    productId,
+    shopLinkId,
+    ...(lock.value.enforce ? [lock.value.expectedVersion] : []),
+  ).run()
+  if (lock.value.enforce && d1ChangeCount(updateResult) === 0) {
+    const current = await getProductShopLinkRow(c.env.DB, productId, shopLinkId, includeHealth)
+    return c.json({ error: 'Version conflict', current_version: current?.version ?? existing.version }, 409)
+  }
+
+  if (hasOwnKey(data, 'url') && includeHealth) {
+    await c.env.DB.prepare('DELETE FROM product_shop_link_health WHERE shop_link_id = ?').bind(shopLinkId).run()
+    await c.env.DB.prepare(`
+      INSERT INTO product_shop_link_health (
+        shop_link_id,
+        url,
+        status,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, 'unchecked', datetime('now'), datetime('now'))
+    `).bind(shopLinkId, data.url).run()
+  }
+
+  await syncProductLegacyShopLinkFromPrimary(c.env.DB, productId)
+  const row = await getProductShopLinkRow(c.env.DB, productId, shopLinkId, includeHealth)
+
+  await logAdminAction(c, {
+    action: 'update_product_shop_link',
+    entity_type: 'product_shop_link',
+    entity_id: shopLinkId,
+    changes: { product_id: productId, before, after },
+  })
+
+  return c.json({ ok: true, link: row ? formatProductShopLink(row) : null })
+})
+
+// DELETE /api/admin/products/:id/shop-links/:shopLinkId (admin only)
+admin.delete('/products/:id/shop-links/:shopLinkId', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const productId = parsePositiveId(c.req.param('id'))
+  if (productId === null) return c.json({ error: 'Invalid product id' }, 400)
+  const shopLinkId = parsePositiveId(c.req.param('shopLinkId'))
+  if (shopLinkId === null) return c.json({ error: 'Invalid product shop link id' }, 400)
+  if (!(await hasTable(c.env.DB, 'product_shop_links'))) {
+    return c.json({ error: 'product_shop_links is not available in this environment' }, 409)
+  }
+
+  const includeHealth = await hasTable(c.env.DB, 'product_shop_link_health')
+  const existing = await getProductShopLinkRow(c.env.DB, productId, shopLinkId, includeHealth)
+  if (!existing) return c.json({ error: 'Product shop link not found' }, 404)
+
+  const lock = validateOptimisticLock(true, existing.version, await requestVersionFromRequest(c))
+  if (!lock.ok) return c.json({ error: lock.error, current_version: existing.version }, 409)
+  const whereSql = lock.value.enforce ? 'product_id = ? AND id = ? AND version = ?' : 'product_id = ? AND id = ?'
+  const deleteResult = await c.env.DB.prepare(`
+    DELETE FROM product_shop_links
+    WHERE ${whereSql}
+  `).bind(
+    productId,
+    shopLinkId,
+    ...(lock.value.enforce ? [lock.value.expectedVersion] : []),
+  ).run()
+  if (lock.value.enforce && d1ChangeCount(deleteResult) === 0) {
+    const current = await getProductShopLinkRow(c.env.DB, productId, shopLinkId, includeHealth)
+    return c.json({ error: 'Version conflict', current_version: current?.version ?? existing.version }, 409)
+  }
+
+  await syncProductLegacyShopLinkFromPrimary(c.env.DB, productId)
+  await logAdminAction(c, {
+    action: 'delete_product_shop_link',
+    entity_type: 'product_shop_link',
+    entity_id: shopLinkId,
+    changes: { product_id: productId, before: existing },
+  })
+
+  return c.json({ ok: true })
+})
+
+// POST /api/admin/products/:id/shop-links/:shopLinkId/recheck (admin only)
+admin.post('/products/:id/shop-links/:shopLinkId/recheck', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const productId = parsePositiveId(c.req.param('id'))
+  if (productId === null) return c.json({ error: 'Invalid product id' }, 400)
+  const shopLinkId = parsePositiveId(c.req.param('shopLinkId'))
+  if (shopLinkId === null) return c.json({ error: 'Invalid product shop link id' }, 400)
+  if (!(await hasTable(c.env.DB, 'product_shop_links'))) {
+    return c.json({ error: 'product_shop_links is not available in this environment' }, 409)
+  }
+  if (!(await hasTable(c.env.DB, 'product_shop_link_health'))) {
+    return c.json({ error: 'product_shop_link_health is not available in this environment' }, 409)
+  }
+
+  const existing = await getProductShopLinkRow(c.env.DB, productId, shopLinkId, true)
+  if (!existing) return c.json({ error: 'Product shop link not found' }, 404)
+
+  const checkedAt = new Date().toISOString()
+  const result = await checkProductShopLink(existing.url)
+  await persistProductShopLinkHealth(c.env.DB, shopLinkId, result, checkedAt)
+
+  const row = await getProductShopLinkRow(c.env.DB, productId, shopLinkId, true)
+  await logAdminAction(c, {
+    action: 'recheck_product_shop_link',
+    entity_type: 'product_shop_link',
+    entity_id: shopLinkId,
+    changes: { product_id: productId, result },
+  })
+
+  return c.json({ ok: true, result, link: row ? formatProductShopLink(row) : null })
+})
+
 // GET /api/admin/products/:id (admin only)
 admin.get('/products/:id', async (c) => {
   const authErr = await ensureAdmin(c)
@@ -6029,6 +8028,82 @@ admin.post('/products/:id/image', async (c) => {
   return c.json({
     image_url: imageUrl,
     image_r2_key: r2Key,
+    product_version: current?.version ?? null,
+  })
+})
+
+// DELETE /api/admin/products/:id/image (admin only)
+admin.delete('/products/:id/image', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const id = parsePositiveId(c.req.param('id'))
+  if (id === null) return c.json({ error: 'Invalid product id' }, 400)
+
+  const productColumns = await getTableColumns(c.env.DB, 'products')
+  if (!productColumns.has('image_url') || !productColumns.has('image_r2_key')) {
+    return c.json({ error: 'Product image columns are not available in this environment' }, 409)
+  }
+
+  const productVersionSelect = productColumns.has('version') ? 'version' : 'NULL AS version'
+  const existing = await c.env.DB.prepare(`
+    SELECT id, image_url, image_r2_key, ${productVersionSelect}
+    FROM products
+    WHERE id = ?
+  `).bind(id).first<{
+    id: number
+    image_url: string | null
+    image_r2_key: string | null
+    version: number | null
+  }>()
+  if (!existing) return c.json({ error: 'Product not found' }, 404)
+
+  const expectedVersion = await requestVersionFromRequest(c)
+  const lock = validateOptimisticLock(productColumns.has('version'), existing.version, expectedVersion)
+  if (!lock.ok) return c.json({ error: lock.error, current_version: existing.version }, 409)
+
+  const versionSet = lock.value.enforce ? ', version = COALESCE(version, 0) + 1' : ''
+  const whereSql = lock.value.enforce ? optimisticWhere() : 'id = ?'
+  const updateResult = await c.env.DB.prepare(`
+    UPDATE products
+    SET image_url = NULL,
+        image_r2_key = NULL${versionSet}
+    WHERE ${whereSql}
+  `).bind(
+    id,
+    ...(lock.value.enforce ? [lock.value.expectedVersion] : []),
+  ).run()
+
+  if (lock.value.enforce && d1ChangeCount(updateResult) === 0) {
+    const current = await getProductVersionRow(c.env.DB, id, productColumns)
+    return c.json({ error: 'Version conflict', current_version: current?.version ?? existing.version }, 409)
+  }
+
+  if (existing.image_r2_key && c.env.PRODUCT_IMAGES) {
+    await c.env.PRODUCT_IMAGES.delete(existing.image_r2_key).catch(() => undefined)
+  }
+
+  const current = await getProductVersionRow(c.env.DB, id, productColumns)
+  await logAdminAction(c, {
+    action: 'delete_admin_product_image',
+    entity_type: 'product',
+    entity_id: id,
+    changes: {
+      before: {
+        image_url: existing.image_url,
+        image_r2_key: existing.image_r2_key,
+      },
+      after: {
+        image_url: null,
+        image_r2_key: null,
+      },
+    },
+  })
+
+  return c.json({
+    ok: true,
+    image_url: null,
+    image_r2_key: null,
     product_version: current?.version ?? null,
   })
 })
@@ -6399,120 +8474,353 @@ admin.get('/stats', async (c) => {
   if (authErr) return authErr
   const admErr = requireAdmin(c)
   if (admErr) return admErr
-  const usersRow = await c.env.DB.prepare('SELECT COUNT(*) as count FROM users').first<CountRow>()
-  const ingredientsRow = await c.env.DB.prepare('SELECT COUNT(*) as count FROM ingredients').first<CountRow>()
-  const productsRow = await c.env.DB.prepare('SELECT COUNT(*) as count FROM products').first<CountRow>()
-  const stacksRow = await c.env.DB.prepare('SELECT COUNT(*) as count FROM stacks').first<CountRow>()
-  const pendingRow = await c.env.DB.prepare(
-    `SELECT COUNT(*) as count FROM products WHERE moderation_status = 'pending'`
-  ).first<CountRow>()
+
+  const rangeParam = c.req.query('range') ?? '30d'
+  const range = ['30d', '60d', '1y', 'this_month', 'last_month', 'all'].includes(rangeParam)
+    ? rangeParam
+    : '30d'
+  const rangeWindow = (column: string, period: 'current' | 'previous'): string => {
+    if (range === 'all') return period === 'current' ? '1 = 1' : '0 = 1'
+    if (range === '60d') {
+      return period === 'current'
+        ? `${column} >= datetime('now', '-60 days')`
+        : `${column} >= datetime('now', '-120 days') AND ${column} < datetime('now', '-60 days')`
+    }
+    if (range === '1y') {
+      return period === 'current'
+        ? `${column} >= datetime('now', '-1 year')`
+        : `${column} >= datetime('now', '-2 years') AND ${column} < datetime('now', '-1 year')`
+    }
+    if (range === 'this_month') {
+      return period === 'current'
+        ? `${column} >= date('now', 'start of month')`
+        : `${column} >= date('now', 'start of month', '-1 month') AND ${column} < date('now', 'start of month')`
+    }
+    if (range === 'last_month') {
+      return period === 'current'
+        ? `${column} >= date('now', 'start of month', '-1 month') AND ${column} < date('now', 'start of month')`
+        : `${column} >= date('now', 'start of month', '-2 months') AND ${column} < date('now', 'start of month', '-1 month')`
+    }
+    return period === 'current'
+      ? `${column} >= datetime('now', '-30 days')`
+      : `${column} >= datetime('now', '-60 days') AND ${column} < datetime('now', '-30 days')`
+  }
+  const currentRangeCondition = (column: string): string => rangeWindow(column, 'current')
+  const previousRangeCondition = (column: string): string => rangeWindow(column, 'previous')
+  const buildTrend = (current: number, previous: number) => ({
+    current,
+    previous,
+    delta: current - previous,
+    delta_percent: previous > 0 ? ((current - previous) / previous) * 100 : null,
+  })
+
+  const hasLinkClicks = await hasTable(c.env.DB, 'product_link_clicks')
+  const hasShopLinkHealth = await hasTable(c.env.DB, 'product_shop_link_health')
+  const hasLegacyLinkHealth = await hasAffiliateLinkHealthTable(c.env.DB)
+  const hasShopLinks = await hasTable(c.env.DB, 'product_shop_links')
+  const hasLinkReports = await hasTable(c.env.DB, 'product_link_reports')
+
+  const [
+    usersRow,
+    activeUsersRow,
+    registrationsRow,
+    previousRegistrationsRow,
+    activationsRow,
+    previousActivationsRow,
+    ingredientsRow,
+    productsRow,
+    stacksRow,
+    stacksRangeRow,
+    previousStacksRangeRow,
+    pendingRow,
+    blockedRow,
+    linkClicksRow,
+    previousLinkClicksRow,
+    affiliateLinkClicksRow,
+    previousAffiliateLinkClicksRow,
+    nonAffiliateLinkClicksRow,
+    productsClickedWithoutActiveLinkRow,
+    openLinkReportsRow,
+    deadlinksRow,
+    staleDeadlinksRow,
+    topProductsResult,
+    topShopsResult,
+  ] = await Promise.all([
+    c.env.DB.prepare('SELECT COUNT(*) as count FROM users').first<CountRow>(),
+    c.env.DB.prepare('SELECT COUNT(*) as count FROM users WHERE email_verified_at IS NOT NULL').first<CountRow>(),
+    c.env.DB.prepare(`SELECT COUNT(*) as count FROM users WHERE ${currentRangeCondition('created_at')}`).first<CountRow>(),
+    c.env.DB.prepare(`SELECT COUNT(*) as count FROM users WHERE ${previousRangeCondition('created_at')}`).first<CountRow>(),
+    c.env.DB.prepare(`SELECT COUNT(*) as count FROM users WHERE email_verified_at IS NOT NULL AND ${currentRangeCondition('email_verified_at')}`).first<CountRow>(),
+    c.env.DB.prepare(`SELECT COUNT(*) as count FROM users WHERE email_verified_at IS NOT NULL AND ${previousRangeCondition('email_verified_at')}`).first<CountRow>(),
+    c.env.DB.prepare('SELECT COUNT(*) as count FROM ingredients').first<CountRow>(),
+    c.env.DB.prepare('SELECT COUNT(*) as count FROM products').first<CountRow>(),
+    c.env.DB.prepare('SELECT COUNT(*) as count FROM stacks').first<CountRow>(),
+    c.env.DB.prepare(`SELECT COUNT(*) as count FROM stacks WHERE ${currentRangeCondition('created_at')}`).first<CountRow>(),
+    c.env.DB.prepare(`SELECT COUNT(*) as count FROM stacks WHERE ${previousRangeCondition('created_at')}`).first<CountRow>(),
+    c.env.DB.prepare(
+      `SELECT COUNT(*) as count FROM products WHERE moderation_status = 'pending'`
+    ).first<CountRow>(),
+    c.env.DB.prepare(
+      `SELECT COUNT(*) as count FROM products WHERE moderation_status = 'blocked'`
+    ).first<CountRow>(),
+    hasLinkClicks
+      ? c.env.DB.prepare(`SELECT COUNT(*) as count FROM product_link_clicks WHERE ${currentRangeCondition('clicked_at')}`).first<CountRow>()
+      : Promise.resolve({ count: 0 }),
+    hasLinkClicks
+      ? c.env.DB.prepare(`SELECT COUNT(*) as count FROM product_link_clicks WHERE ${previousRangeCondition('clicked_at')}`).first<CountRow>()
+      : Promise.resolve({ count: 0 }),
+    hasLinkClicks
+      ? c.env.DB.prepare(`
+          SELECT COUNT(*) as count
+          FROM product_link_clicks
+          WHERE is_affiliate = 1
+            AND ${currentRangeCondition('clicked_at')}
+        `).first<CountRow>()
+      : Promise.resolve({ count: 0 }),
+    hasLinkClicks
+      ? c.env.DB.prepare(`
+          SELECT COUNT(*) as count
+          FROM product_link_clicks
+          WHERE is_affiliate = 1
+            AND ${previousRangeCondition('clicked_at')}
+        `).first<CountRow>()
+      : Promise.resolve({ count: 0 }),
+    hasLinkClicks
+      ? c.env.DB.prepare(`
+          SELECT COUNT(*) as count
+          FROM product_link_clicks
+          WHERE COALESCE(is_affiliate, 0) = 0
+            AND ${currentRangeCondition('clicked_at')}
+        `).first<CountRow>()
+      : Promise.resolve({ count: 0 }),
+    hasLinkClicks && hasShopLinks
+      ? c.env.DB.prepare(`
+          SELECT COUNT(DISTINCT plc.product_id) as count
+          FROM product_link_clicks plc
+          WHERE plc.product_type = 'catalog'
+            AND ${currentRangeCondition('plc.clicked_at')}
+            AND NOT EXISTS (
+              SELECT 1
+              FROM product_shop_links psl
+              WHERE psl.product_id = plc.product_id
+                AND psl.active = 1
+            )
+        `).first<CountRow>()
+      : Promise.resolve({ count: 0 }),
+    hasLinkReports
+      ? c.env.DB.prepare("SELECT COUNT(*) as count FROM product_link_reports WHERE status = 'open'").first<CountRow>()
+      : Promise.resolve({ count: 0 }),
+    hasShopLinkHealth
+      ? c.env.DB.prepare(`
+          SELECT COUNT(*) as count
+          FROM product_shop_link_health
+          WHERE status IN ('failed', 'timeout', 'invalid')
+        `).first<CountRow>()
+      : hasLegacyLinkHealth
+        ? c.env.DB.prepare(`
+            SELECT COUNT(*) as count
+            FROM affiliate_link_health
+            WHERE status IN ('failed', 'timeout', 'invalid')
+          `).first<CountRow>()
+        : Promise.resolve({ count: 0 }),
+    hasShopLinkHealth
+      ? c.env.DB.prepare(`
+          SELECT COUNT(*) as count
+          FROM product_shop_link_health
+          WHERE status IN ('failed', 'timeout', 'invalid')
+            AND COALESCE(last_checked_at, updated_at, created_at) <= datetime('now', '-7 days')
+        `).first<CountRow>()
+      : hasLegacyLinkHealth
+        ? c.env.DB.prepare(`
+            SELECT COUNT(*) as count
+            FROM affiliate_link_health
+            WHERE status IN ('failed', 'timeout', 'invalid')
+              AND COALESCE(last_checked_at, updated_at, created_at) <= datetime('now', '-7 days')
+          `).first<CountRow>()
+        : Promise.resolve({ count: 0 }),
+    hasLinkClicks
+      ? c.env.DB.prepare(`
+          SELECT
+            plc.product_id,
+            COALESCE(p.name, 'Produkt ' || plc.product_id) AS name,
+            p.brand,
+            COUNT(*) AS clicks,
+            SUM(CASE WHEN COALESCE(plc.is_affiliate, 0) = 1 THEN 1 ELSE 0 END) AS affiliate_clicks
+          FROM product_link_clicks plc
+          LEFT JOIN products p ON plc.product_type = 'catalog' AND p.id = plc.product_id
+          WHERE plc.product_type = 'catalog'
+            AND ${currentRangeCondition('plc.clicked_at')}
+          GROUP BY plc.product_id, COALESCE(p.name, 'Produkt ' || plc.product_id), p.brand
+          ORDER BY clicks DESC, affiliate_clicks DESC, name ASC
+          LIMIT 5
+        `).all<{
+          product_id: number
+          name: string
+          brand: string | null
+          clicks: number
+          affiliate_clicks: number
+        }>()
+      : Promise.resolve({ results: [] }),
+    hasLinkClicks && hasShopLinks
+      ? c.env.DB.prepare(`
+          SELECT
+            COALESCE(NULLIF(psl.shop_name, ''), NULLIF(psl.normalized_host, ''), 'Unbekannter Shop') AS shop,
+            COUNT(*) AS clicks,
+            SUM(CASE WHEN COALESCE(plc.is_affiliate, 0) = 1 THEN 1 ELSE 0 END) AS affiliate_clicks
+          FROM product_link_clicks plc
+          LEFT JOIN product_shop_links psl ON psl.id = plc.shop_link_id
+          WHERE ${currentRangeCondition('plc.clicked_at')}
+          GROUP BY COALESCE(NULLIF(psl.shop_name, ''), NULLIF(psl.normalized_host, ''), 'Unbekannter Shop')
+          ORDER BY clicks DESC, affiliate_clicks DESC, shop ASC
+          LIMIT 5
+        `).all<{
+          shop: string
+          clicks: number
+          affiliate_clicks: number
+        }>()
+      : Promise.resolve({ results: [] }),
+  ])
+
+  const registrations = registrationsRow?.count ?? 0
+  const previousRegistrations = previousRegistrationsRow?.count ?? 0
+  const activatedUsers = activationsRow?.count ?? 0
+  const previousActivatedUsers = previousActivationsRow?.count ?? 0
+  const stacksInRange = stacksRangeRow?.count ?? 0
+  const previousStacksInRange = previousStacksRangeRow?.count ?? 0
+  const linkClicks = linkClicksRow?.count ?? 0
+  const previousLinkClicks = previousLinkClicksRow?.count ?? 0
+  const affiliateLinkClicks = affiliateLinkClicksRow?.count ?? 0
+  const previousAffiliateLinkClicks = previousAffiliateLinkClicksRow?.count ?? 0
+
   return c.json({
+    range,
     users: usersRow?.count ?? 0,
+    active_users: activeUsersRow?.count ?? 0,
+    registrations,
+    activated_users: activatedUsers,
     ingredients: ingredientsRow?.count ?? 0,
     products: productsRow?.count ?? 0,
+    products_total: productsRow?.count ?? 0,
     stacks: stacksRow?.count ?? 0,
+    stacks_in_range: stacksInRange,
     pending_products: pendingRow?.count ?? 0,
+    products_pending: pendingRow?.count ?? 0,
+    blocked_products: blockedRow?.count ?? 0,
+    link_clicks: linkClicks,
+    affiliate_link_clicks: affiliateLinkClicks,
+    non_affiliate_link_clicks: nonAffiliateLinkClicksRow?.count ?? 0,
+    products_clicked_without_active_link: productsClickedWithoutActiveLinkRow?.count ?? 0,
+    open_link_reports: openLinkReportsRow?.count ?? 0,
+    deadlinks: deadlinksRow?.count ?? 0,
+    deadlinks_over_7_days: staleDeadlinksRow?.count ?? 0,
+    previous: {
+      registrations: previousRegistrations,
+      activated_users: previousActivatedUsers,
+      stacks_in_range: previousStacksInRange,
+      link_clicks: previousLinkClicks,
+      affiliate_link_clicks: previousAffiliateLinkClicks,
+    },
+    trends: {
+      registrations: buildTrend(registrations, previousRegistrations),
+      activated_users: buildTrend(activatedUsers, previousActivatedUsers),
+      stacks_in_range: buildTrend(stacksInRange, previousStacksInRange),
+      link_clicks: buildTrend(linkClicks, previousLinkClicks),
+      affiliate_link_clicks: buildTrend(affiliateLinkClicks, previousAffiliateLinkClicks),
+    },
+    top_clicked_products: topProductsResult.results ?? [],
+    top_shops: topShopsResult.results ?? [],
   })
 })
 
-// GET /api/admin/audit-log?action=&entity_type=&user_id=&date=&date_from=&date_to=&page=1&limit=50 (admin only)
-admin.get('/audit-log', async (c) => {
+// GET /api/admin/legal-documents (admin only)
+admin.get('/legal-documents', async (c) => {
   const authErr = await ensureAdmin(c)
   if (authErr) return authErr
-
-  const action = optionalText(c.req.query('action'))
-  const entityType = optionalText(c.req.query('entity_type'))
-  const userIdParam = c.req.query('user_id')
-  let userId: number | null | undefined
-  if (userIdParam === 'system') {
-    userId = null
-  } else if (userIdParam) {
-    const parsedUserId = parsePositiveId(userIdParam)
-    if (parsedUserId === null) return c.json({ error: 'Invalid user_id' }, 400)
-    userId = parsedUserId
+  if (!(await hasTable(c.env.DB, 'legal_documents'))) {
+    return c.json({ documents: [], total: 0 })
   }
-
-  const singleDate = c.req.query('date')
-  const dateFrom = parseAuditDate(c.req.query('date_from') ?? singleDate, false)
-  const dateTo = parseAuditDate(c.req.query('date_to') ?? singleDate, true)
-  if (dateFrom === null) return c.json({ error: 'date/date_from must be YYYY-MM-DD or unix seconds' }, 400)
-  if (dateTo === null) return c.json({ error: 'date/date_to must be YYYY-MM-DD or unix seconds' }, 400)
-  if (dateFrom !== undefined && dateTo !== undefined && dateFrom > dateTo) {
-    return c.json({ error: 'date_from must be <= date_to' }, 400)
-  }
-
-  const page = Math.max(1, parsePagination(c.req.query('page'), 1, 100000))
-  const limit = parsePagination(c.req.query('limit'), 50, 100)
-  const offset = (page - 1) * limit
-
-  const where: string[] = []
-  const bindings: Array<string | number | null> = []
-  if (action) {
-    where.push('aal.action = ?')
-    bindings.push(action)
-  }
-  if (entityType) {
-    where.push('aal.entity_type = ?')
-    bindings.push(entityType)
-  }
-  if (userId !== undefined) {
-    where.push(userId === null ? 'aal.user_id IS NULL' : 'aal.user_id = ?')
-    if (userId !== null) bindings.push(userId)
-  }
-  if (dateFrom !== undefined) {
-    where.push('aal.created_at >= ?')
-    bindings.push(dateFrom)
-  }
-  if (dateTo !== undefined) {
-    where.push('aal.created_at <= ?')
-    bindings.push(dateTo)
-  }
-
-  const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''
-  const totalRow = await c.env.DB.prepare(`
-    SELECT COUNT(*) AS count
-    FROM admin_audit_log aal
-    ${whereSql}
-  `).bind(...bindings).first<CountRow>()
 
   const { results } = await c.env.DB.prepare(`
-    SELECT
-      aal.id,
-      aal.user_id,
-      u.email AS user_email,
-      aal.action,
-      aal.entity_type,
-      aal.entity_id,
-      aal.changes,
-      aal.reason,
-      aal.ip_address,
-      aal.user_agent,
-      aal.created_at
-    FROM admin_audit_log aal
-    LEFT JOIN users u ON u.id = aal.user_id
-    ${whereSql}
-    ORDER BY aal.created_at DESC, aal.id DESC
-    LIMIT ? OFFSET ?
-  `).bind(...bindings, limit, offset).all<AuditLogDbRow>()
+    SELECT slug, title, body_md, status, published_at, updated_by_user_id, version, created_at, updated_at
+    FROM legal_documents
+    ORDER BY
+      CASE slug
+        WHEN 'impressum' THEN 1
+        WHEN 'datenschutz' THEN 2
+        WHEN 'nutzungsbedingungen' THEN 3
+        WHEN 'cookie-consent' THEN 4
+        WHEN 'affiliate-disclosure' THEN 5
+        ELSE 99
+      END,
+      slug ASC
+  `).all()
 
-  return c.json({
-    logs: results.map((row) => ({
-      id: row.id,
-      user_id: row.user_id,
-      user_email: row.user_email,
-      action: row.action,
-      entity_type: row.entity_type,
-      entity_id: row.entity_id,
-      changes: parseAuditChanges(row.changes),
-      reason: row.reason,
-      ip_address: row.ip_address,
-      user_agent: row.user_agent,
-      created_at: row.created_at,
-    })),
-    page,
-    limit,
-    total: totalRow?.count ?? 0,
+  return c.json({ documents: results ?? [], total: results?.length ?? 0 })
+})
+
+// PUT /api/admin/legal-documents/:slug (admin only)
+admin.put('/legal-documents/:slug', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+  if (!(await hasTable(c.env.DB, 'legal_documents'))) {
+    return c.json({ error: 'Legal documents table is not available' }, 409)
+  }
+
+  const slug = normalizeSlug(c.req.param('slug'))
+  if (!slug) return c.json({ error: 'Invalid slug' }, 400)
+
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const title = optionalText(body.title)
+  if (!title) return c.json({ error: 'title is required' }, 400)
+  const bodyMd = typeof body.body_md === 'string' ? body.body_md : ''
+  const status = typeof body.status === 'string' && ['draft', 'published'].includes(body.status)
+    ? body.status
+    : 'draft'
+  const user = c.get('user')
+
+  await c.env.DB.prepare(`
+    INSERT INTO legal_documents (
+      slug,
+      title,
+      body_md,
+      status,
+      published_at,
+      updated_by_user_id,
+      version,
+      created_at,
+      updated_at
+    )
+    VALUES (?, ?, ?, ?, CASE WHEN ? = 'published' THEN datetime('now') ELSE NULL END, ?, 0, datetime('now'), datetime('now'))
+    ON CONFLICT(slug) DO UPDATE SET
+      title = excluded.title,
+      body_md = excluded.body_md,
+      status = excluded.status,
+      published_at = CASE WHEN excluded.status = 'published' THEN COALESCE(legal_documents.published_at, datetime('now')) ELSE legal_documents.published_at END,
+      updated_by_user_id = excluded.updated_by_user_id,
+      version = COALESCE(legal_documents.version, 0) + 1,
+      updated_at = datetime('now')
+  `).bind(slug, title, bodyMd, status, status, user?.userId ?? null).run()
+
+  const document = await c.env.DB.prepare(`
+    SELECT slug, title, body_md, status, published_at, updated_by_user_id, version, created_at, updated_at
+    FROM legal_documents
+    WHERE slug = ?
+  `).bind(slug).first()
+
+  await logAdminAction(c, {
+    action: 'update_legal_document',
+    entity_type: 'legal_document',
+    entity_id: null,
+    changes: { slug, title, status },
   })
+
+  return c.json({ document })
 })
 
 // GET /api/admin/knowledge-articles?q=&status= (admin only)
@@ -6548,6 +8856,13 @@ admin.get('/knowledge-articles', async (c) => {
       status,
       reviewed_at,
       sources_json,
+      ${columns.has('conclusion') ? 'conclusion' : 'NULL AS conclusion'},
+      ${columns.has('featured_image_r2_key') ? 'featured_image_r2_key' : 'NULL AS featured_image_r2_key'},
+      ${columns.has('featured_image_url') ? 'featured_image_url' : 'NULL AS featured_image_url'},
+      ${columns.has('dose_min') ? 'dose_min' : 'NULL AS dose_min'},
+      ${columns.has('dose_max') ? 'dose_max' : 'NULL AS dose_max'},
+      ${columns.has('dose_unit') ? 'dose_unit' : 'NULL AS dose_unit'},
+      ${columns.has('product_note') ? 'product_note' : 'NULL AS product_note'},
       updated_at,
       ${versionSelect(columns)}
     FROM knowledge_articles
@@ -6555,8 +8870,9 @@ admin.get('/knowledge-articles', async (c) => {
     ORDER BY updated_at DESC, slug ASC
   `).bind(...bindings).all<KnowledgeArticleListDbRow>()
 
+  const articles = await hydrateKnowledgeArticles(c.env.DB, results)
   return c.json({
-    articles: results.map((row) => parseKnowledgeArticle(row)),
+    articles,
     total: results.length,
   })
 })
@@ -6577,6 +8893,17 @@ admin.post('/knowledge-articles', async (c) => {
   if (!validation.ok) return c.json({ error: validation.error }, validation.status ?? 400)
 
   const data = validation.value
+  const ingredientValidation = await validateKnowledgeArticleIngredientIds(c.env.DB, data.ingredient_ids)
+  if (!ingredientValidation.ok) return c.json({ error: ingredientValidation.error }, ingredientValidation.status ?? 400)
+  const columns = await getTableColumns(c.env.DB, 'knowledge_articles')
+  const extraFields: Array<[string, string | number | null]> = []
+  if (columns.has('conclusion')) extraFields.push(['conclusion', data.conclusion])
+  if (columns.has('featured_image_r2_key')) extraFields.push(['featured_image_r2_key', data.featured_image_r2_key])
+  if (columns.has('featured_image_url')) extraFields.push(['featured_image_url', data.featured_image_url])
+  if (columns.has('dose_min')) extraFields.push(['dose_min', data.dose_min])
+  if (columns.has('dose_max')) extraFields.push(['dose_max', data.dose_max])
+  if (columns.has('dose_unit')) extraFields.push(['dose_unit', data.dose_unit])
+  if (columns.has('product_note')) extraFields.push(['product_note', data.product_note])
   try {
     await c.env.DB.prepare(`
       INSERT INTO knowledge_articles (
@@ -6587,10 +8914,11 @@ admin.post('/knowledge-articles', async (c) => {
         status,
         reviewed_at,
         sources_json,
+        ${extraFields.length > 0 ? `${extraFields.map(([key]) => key).join(',\n        ')},` : ''}
         created_at,
         updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+      VALUES (?, ?, ?, ?, ?, ?, ?, ${extraFields.map(() => '?').join(', ')}${extraFields.length > 0 ? ', ' : ''}datetime('now'), datetime('now'))
     `).bind(
       data.slug,
       data.title,
@@ -6599,21 +8927,24 @@ admin.post('/knowledge-articles', async (c) => {
       data.status,
       data.reviewed_at,
       data.sources_json,
+      ...extraFields.map(([, value]) => value),
     ).run()
   } catch (error) {
     if (isUniqueConstraintError(error)) return c.json({ error: `Knowledge article "${data.slug}" already exists` }, 409)
     throw error
   }
+  await syncKnowledgeArticleRelations(c.env.DB, data.slug, data.sources, data.ingredient_ids)
 
   const article = await getKnowledgeArticleRow(c.env.DB, data.slug)
+  const hydrated = article ? (await hydrateKnowledgeArticles(c.env.DB, [article]))[0] : null
   await logAdminAction(c, {
     action: 'create_knowledge_article',
     entity_type: 'knowledge_article',
     entity_id: null,
-    changes: { slug: data.slug, article },
+    changes: { slug: data.slug, article: hydrated },
   })
 
-  return c.json({ article: article ? parseKnowledgeArticle(article) : null }, 201)
+  return c.json({ article: hydrated }, 201)
 })
 
 // GET /api/admin/knowledge-articles/:slug (admin only)
@@ -6626,7 +8957,8 @@ admin.get('/knowledge-articles/:slug', async (c) => {
 
   const article = await getKnowledgeArticleRow(c.env.DB, slug)
   if (!article) return c.json({ error: 'Knowledge article not found' }, 404)
-  return c.json({ article: parseKnowledgeArticle(article) })
+  const hydrated = (await hydrateKnowledgeArticles(c.env.DB, [article]))[0]
+  return c.json({ article: hydrated })
 })
 
 // PUT /api/admin/knowledge-articles/:slug (admin only; slug is immutable)
@@ -6659,8 +8991,22 @@ admin.put('/knowledge-articles/:slug', async (c) => {
   const validation = validateKnowledgeArticlePayload(body, existing)
   if (!validation.ok) return c.json({ error: validation.error }, validation.status ?? 400)
   const data = validation.value
+  if (!hasOwnKey(body, 'ingredient_ids')) {
+    const currentIngredients = (await loadKnowledgeArticleIngredients(c.env.DB, [slug])).get(slug) ?? []
+    data.ingredient_ids = currentIngredients.map((ingredient) => ingredient.ingredient_id)
+  }
+  const ingredientValidation = await validateKnowledgeArticleIngredientIds(c.env.DB, data.ingredient_ids)
+  if (!ingredientValidation.ok) return c.json({ error: ingredientValidation.error }, ingredientValidation.status ?? 400)
   const versionSet = lock.value.enforce ? ', version = COALESCE(version, 0) + 1' : ''
   const whereSql = lock.value.enforce ? optimisticWhere('slug') : 'slug = ?'
+  const extraFields: Array<[string, string | number | null]> = []
+  if (columns.has('conclusion')) extraFields.push(['conclusion', data.conclusion])
+  if (columns.has('featured_image_r2_key')) extraFields.push(['featured_image_r2_key', data.featured_image_r2_key])
+  if (columns.has('featured_image_url')) extraFields.push(['featured_image_url', data.featured_image_url])
+  if (columns.has('dose_min')) extraFields.push(['dose_min', data.dose_min])
+  if (columns.has('dose_max')) extraFields.push(['dose_max', data.dose_max])
+  if (columns.has('dose_unit')) extraFields.push(['dose_unit', data.dose_unit])
+  if (columns.has('product_note')) extraFields.push(['product_note', data.product_note])
   const updateBindings: Array<string | number | null> = [
     data.title,
     data.summary,
@@ -6668,6 +9014,7 @@ admin.put('/knowledge-articles/:slug', async (c) => {
     data.status,
     data.reviewed_at,
     data.sources_json,
+    ...extraFields.map(([, value]) => value),
     slug,
   ]
   if (lock.value.enforce && lock.value.expectedVersion !== null) updateBindings.push(lock.value.expectedVersion)
@@ -6681,23 +9028,26 @@ admin.put('/knowledge-articles/:slug', async (c) => {
       status = ?,
       reviewed_at = ?,
       sources_json = ?,
+      ${extraFields.length > 0 ? `${extraFields.map(([key]) => `${key} = ?`).join(',\n      ')},` : ''}
       updated_at = datetime('now')${versionSet}
     WHERE ${whereSql}
   `).bind(...updateBindings).run()
   if (lock.value.enforce && d1ChangeCount(updateResult) === 0) {
-    const current = await getKnowledgeArticleRow(c.env.DB, slug)
-    return c.json({ error: 'Version conflict', current_version: current?.version ?? existing.version }, 409)
+      const current = await getKnowledgeArticleRow(c.env.DB, slug)
+      return c.json({ error: 'Version conflict', current_version: current?.version ?? existing.version }, 409)
   }
+  await syncKnowledgeArticleRelations(c.env.DB, slug, data.sources, data.ingredient_ids)
 
   const article = await getKnowledgeArticleRow(c.env.DB, slug)
+  const hydrated = article ? (await hydrateKnowledgeArticles(c.env.DB, [article]))[0] : null
   await logAdminAction(c, {
     action: 'update_knowledge_article',
     entity_type: 'knowledge_article',
     entity_id: null,
-    changes: { slug, before: existing, after: article },
+    changes: { slug, before: existing, after: hydrated },
   })
 
-  return c.json({ article: article ? parseKnowledgeArticle(article) : null })
+  return c.json({ article: hydrated })
 })
 
 // DELETE /api/admin/knowledge-articles/:slug (admin only; archive instead of hard delete)
@@ -6730,6 +9080,7 @@ admin.delete('/knowledge-articles/:slug', async (c) => {
   }
 
   const article = await getKnowledgeArticleRow(c.env.DB, slug)
+  const hydrated = article ? (await hydrateKnowledgeArticles(c.env.DB, [article]))[0] : null
   await logAdminAction(c, {
     action: 'archive_knowledge_article',
     entity_type: 'knowledge_article',
@@ -6737,7 +9088,92 @@ admin.delete('/knowledge-articles/:slug', async (c) => {
     changes: { slug, before: { status: existing.status }, after: { status: article?.status ?? 'archived' } },
   })
 
-  return c.json({ ok: true, article: article ? parseKnowledgeArticle(article) : null })
+  return c.json({ ok: true, article: hydrated })
+})
+
+// POST /api/admin/knowledge-articles/:slug/image (admin only)
+admin.post('/knowledge-articles/:slug/image', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const slug = normalizeSlug(c.req.param('slug'))
+  if (!slug) return c.json({ error: 'Invalid article slug' }, 400)
+  if (!c.env.PRODUCT_IMAGES) return c.json({ error: 'Image storage is not configured' }, 501)
+
+  const columns = await getTableColumns(c.env.DB, 'knowledge_articles')
+  if (!columns.has('featured_image_url') || !columns.has('featured_image_r2_key')) {
+    return c.json({ error: 'Knowledge article image columns are not available' }, 409)
+  }
+
+  const existing = await c.env.DB.prepare(`
+    SELECT slug, featured_image_url, featured_image_r2_key, ${versionSelect(columns)}
+    FROM knowledge_articles
+    WHERE slug = ?
+  `).bind(slug).first<{
+    slug: string
+    featured_image_url: string | null
+    featured_image_r2_key: string | null
+    version: number | null
+  }>()
+  if (!existing) return c.json({ error: 'Knowledge article not found' }, 404)
+
+  const formData = await c.req.formData()
+  const fileEntry = formData.get('image') ?? formData.get('file')
+  if (!fileEntry || typeof fileEntry === 'string') return c.json({ error: 'image field required' }, 400)
+  const file = fileEntry as File
+  if (!isSupportedProductImageType(file.type)) return c.json({ error: 'Only JPEG, PNG or WebP images are allowed' }, 415)
+  if (file.size > PRODUCT_IMAGE_MAX_UPLOAD_BYTES) return c.json({ error: 'Max 1 MB after image optimization' }, 413)
+
+  const ext = getProductImageExtension(file.type) ?? 'jpg'
+  const filename = `${crypto.randomUUID()}.${ext}`
+  const r2Key = `knowledge/${slug}/${filename}`
+  const buffer = await file.arrayBuffer()
+  await c.env.PRODUCT_IMAGES.put(r2Key, buffer, {
+    httpMetadata: { contentType: file.type },
+  })
+  const imageUrl = `/api/r2/knowledge/${slug}/${filename}`
+  const versionSet = columns.has('version') ? ', version = COALESCE(version, 0) + 1' : ''
+
+  try {
+    await c.env.DB.prepare(`
+      UPDATE knowledge_articles
+      SET featured_image_url = ?,
+          featured_image_r2_key = ?,
+          updated_at = datetime('now')${versionSet}
+      WHERE slug = ?
+    `).bind(imageUrl, r2Key, slug).run()
+  } catch (error) {
+    await c.env.PRODUCT_IMAGES.delete(r2Key).catch(() => undefined)
+    throw error
+  }
+
+  if (existing.featured_image_r2_key && existing.featured_image_r2_key !== r2Key) {
+    await c.env.PRODUCT_IMAGES.delete(existing.featured_image_r2_key).catch(() => undefined)
+  }
+
+  const article = await getKnowledgeArticleRow(c.env.DB, slug)
+  await logAdminAction(c, {
+    action: 'upload_knowledge_article_image',
+    entity_type: 'knowledge_article',
+    entity_id: null,
+    changes: {
+      slug,
+      before: {
+        featured_image_url: existing.featured_image_url,
+        featured_image_r2_key: existing.featured_image_r2_key,
+      },
+      after: {
+        featured_image_url: imageUrl,
+        featured_image_r2_key: r2Key,
+      },
+    },
+  })
+
+  return c.json({
+    image_url: imageUrl,
+    image_r2_key: r2Key,
+    version: article?.version ?? null,
+  })
 })
 
 // GET /api/admin/ops-dashboard (admin only)
@@ -6755,8 +9191,8 @@ admin.get('/ops-dashboard', async (c) => {
     warningsWithoutArticle,
     knowledgeDrafts,
     productsTotal,
-    productQaIssues,
     linkReportsOpen,
+    productQaIssues,
     productQaTopItems,
     linkReportTopItems,
     researchDueItems,
@@ -7710,6 +10146,15 @@ admin.patch('/product-qa/:id', async (c) => {
       WHERE product_id = ?
         AND COALESCE(url, '') <> COALESCE(?, '')
     `).bind(id, data.shop_link ?? null).run()
+  }
+
+  if (
+    hasOwnKey(data, 'shop_link') ||
+    hasOwnKey(data, 'is_affiliate') ||
+    hasOwnKey(data, 'affiliate_owner_type') ||
+    hasOwnKey(data, 'affiliate_owner_user_id')
+  ) {
+    await syncPrimaryProductShopLinkFromProduct(c.env.DB, id)
   }
 
   const updated = await getProductQaRow(c.env.DB, id, includeLinkHealth)
@@ -9248,7 +11693,7 @@ admin.get('/user-products', async (c) => {
   const authErr = await ensureAdmin(c)
   if (authErr) return authErr
   const status = c.req.query('status') ?? 'pending'
-  if (!['pending', 'approved', 'rejected'].includes(status)) {
+  if (!['pending', 'approved', 'rejected', 'blocked'].includes(status)) {
     return c.json({ error: 'Invalid status' }, 400)
   }
   const page = Math.max(1, parsePagination(c.req.query('page'), 1, 100000))
@@ -9266,9 +11711,10 @@ admin.get('/user-products', async (c) => {
         COUNT(*) AS total,
         COALESCE(SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), 0) AS pending,
         COALESCE(SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END), 0) AS approved,
-        COALESCE(SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END), 0) AS rejected
+        COALESCE(SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END), 0) AS rejected,
+        COALESCE(SUM(CASE WHEN status = 'blocked' THEN 1 ELSE 0 END), 0) AS blocked
       FROM user_products
-    `).first<Record<'total' | 'pending' | 'approved' | 'rejected', number>>(),
+    `).first<Record<'total' | 'pending' | 'approved' | 'rejected' | 'blocked', number>>(),
     c.env.DB.prepare(`
       SELECT up.*, u.email as user_email, u.is_trusted_product_submitter as user_is_trusted_product_submitter
       FROM user_products up
@@ -9285,6 +11731,7 @@ admin.get('/user-products', async (c) => {
     pending: Number(summaryRow?.pending ?? 0),
     approved: Number(summaryRow?.approved ?? 0),
     rejected: Number(summaryRow?.rejected ?? 0),
+    blocked: Number(summaryRow?.blocked ?? 0),
   }
   return c.json({
     products,
@@ -9609,6 +12056,8 @@ admin.put('/user-products/:id/publish', async (c) => {
     throw error
   }
 
+  await syncPrimaryProductShopLinkFromProduct(c.env.DB, productId)
+
   const payload = await getProductPublishPayloadByProductId(c.env.DB, productId)
 
   await logAdminAction(c, {
@@ -9670,6 +12119,9 @@ admin.get('/users', async (c) => {
   const verified = parseBooleanFilter(c.req.query('verified'))
   if (verified === null) return c.json({ error: 'verified must be true or false' }, 400)
 
+  const blocked = parseBooleanFilter(c.req.query('blocked'))
+  if (blocked === null) return c.json({ error: 'blocked must be true or false' }, 400)
+
   const page = Math.max(1, parsePagination(c.req.query('page'), 1, 100000))
   const limit = parsePagination(c.req.query('limit'), 25, 100)
   const offset = (page - 1) * limit
@@ -9692,8 +12144,34 @@ admin.get('/users', async (c) => {
   if (verified !== undefined) {
     where.push(verified ? 'u.email_verified_at IS NOT NULL' : 'u.email_verified_at IS NULL')
   }
+  if (blocked !== undefined) {
+    where.push('u.is_blocked_product_submitter = ?')
+    bindings.push(blocked ? 1 : 0)
+  }
 
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : ''
+  const hasStackItems = await hasTable(c.env.DB, 'stack_items')
+  const hasLinkClicks = await hasTable(c.env.DB, 'product_link_clicks')
+  const stackItemSelect = hasStackItems ? 'COALESCE(sic.stack_item_count, 0) AS stack_item_count' : '0 AS stack_item_count'
+  const stackItemJoin = hasStackItems
+    ? `
+    LEFT JOIN (
+      SELECT s.user_id, COUNT(si.id) AS stack_item_count
+      FROM stacks s
+      JOIN stack_items si ON si.stack_id = s.id
+      GROUP BY s.user_id
+    ) sic ON sic.user_id = u.id`
+    : ''
+  const linkClickSelect = hasLinkClicks ? 'COALESCE(plc.link_click_count, 0) AS link_click_count' : '0 AS link_click_count'
+  const linkClickJoin = hasLinkClicks
+    ? `
+    LEFT JOIN (
+      SELECT user_id, COUNT(*) AS link_click_count
+      FROM product_link_clicks
+      WHERE user_id IS NOT NULL
+      GROUP BY user_id
+    ) plc ON plc.user_id = u.id`
+    : ''
   const countQuery = `SELECT COUNT(*) AS count FROM users u ${whereSql}`
   const countStmt = c.env.DB.prepare(countQuery)
   const totalRow = bindings.length
@@ -9712,23 +12190,32 @@ admin.get('/users', async (c) => {
       u.email_verified_at,
       u.deleted_at,
       u.is_trusted_product_submitter,
+      u.is_blocked_product_submitter,
+      u.product_submission_blocked_at,
+      u.product_submission_block_reason,
       COALESCE(sc.stack_count, 0) AS stack_count,
+      ${stackItemSelect},
+      ${linkClickSelect},
       sc.last_stack_at,
       COALESCE(upc.user_product_count, 0) AS user_product_count,
       COALESCE(upc.pending_user_product_count, 0) AS pending_user_product_count,
-      COALESCE(upc.approved_user_product_count, 0) AS approved_user_product_count
+      COALESCE(upc.approved_user_product_count, 0) AS approved_user_product_count,
+      COALESCE(upc.blocked_user_product_count, 0) AS blocked_user_product_count
     FROM users u
     LEFT JOIN (
       SELECT user_id, COUNT(*) AS stack_count, MAX(created_at) AS last_stack_at
       FROM stacks
       GROUP BY user_id
     ) sc ON sc.user_id = u.id
+    ${stackItemJoin}
+    ${linkClickJoin}
     LEFT JOIN (
       SELECT
         user_id,
         COUNT(*) AS user_product_count,
         SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending_user_product_count,
-        SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) AS approved_user_product_count
+        SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) AS approved_user_product_count,
+        SUM(CASE WHEN status = 'blocked' THEN 1 ELSE 0 END) AS blocked_user_product_count
       FROM user_products
       GROUP BY user_id
     ) upc ON upc.user_id = u.id
@@ -9742,6 +12229,7 @@ admin.get('/users', async (c) => {
       COUNT(*) AS total,
       SUM(CASE WHEN COALESCE(role, 'user') = 'admin' THEN 1 ELSE 0 END) AS admins,
       SUM(CASE WHEN is_trusted_product_submitter = 1 THEN 1 ELSE 0 END) AS trusted,
+      SUM(CASE WHEN is_blocked_product_submitter = 1 THEN 1 ELSE 0 END) AS blocked_submitters,
       SUM(CASE WHEN email_verified_at IS NOT NULL THEN 1 ELSE 0 END) AS verified,
       SUM(CASE WHEN email_verified_at IS NULL THEN 1 ELSE 0 END) AS unverified,
       SUM(CASE WHEN deleted_at IS NOT NULL THEN 1 ELSE 0 END) AS deleted
@@ -9750,6 +12238,7 @@ admin.get('/users', async (c) => {
     total: number
     admins: number | null
     trusted: number | null
+    blocked_submitters: number | null
     verified: number | null
     unverified: number | null
     deleted: number | null
@@ -9764,6 +12253,7 @@ admin.get('/users', async (c) => {
       total: summaryRow?.total ?? 0,
       admins: summaryRow?.admins ?? 0,
       trusted: summaryRow?.trusted ?? 0,
+      blocked_submitters: summaryRow?.blocked_submitters ?? 0,
       verified: summaryRow?.verified ?? 0,
       unverified: summaryRow?.unverified ?? 0,
       deleted: summaryRow?.deleted ?? 0,
@@ -9787,7 +12277,7 @@ admin.patch('/users/:id', async (c) => {
   }
 
   const existing = await c.env.DB.prepare(`
-    SELECT id, email, COALESCE(role, 'user') AS role, is_trusted_product_submitter
+    SELECT id, email, COALESCE(role, 'user') AS role, is_trusted_product_submitter, is_blocked_product_submitter
     FROM users
     WHERE id = ?
   `).bind(userId).first<{
@@ -9795,11 +12285,12 @@ admin.patch('/users/:id', async (c) => {
     email: string
     role: string
     is_trusted_product_submitter: number
+    is_blocked_product_submitter: number
   }>()
   if (!existing) return c.json({ error: 'User not found' }, 404)
 
   const setClauses: string[] = []
-  const values: Array<string | number> = []
+  const values: Array<string | number | null> = []
   const changes: Record<string, { before: string | number; after: string | number }> = {}
 
   if (hasOwnKey(body, 'role')) {
@@ -9843,6 +12334,32 @@ admin.patch('/users/:id', async (c) => {
     }
   }
 
+  if (hasOwnKey(body, 'blocked_submitter') || hasOwnKey(body, 'is_blocked_product_submitter')) {
+    const rawBlocked = hasOwnKey(body, 'blocked_submitter')
+      ? body.blocked_submitter
+      : body.is_blocked_product_submitter
+    const blockedSubmitter = parseBooleanMutation(rawBlocked)
+    if (blockedSubmitter === null) return c.json({ error: 'blocked_submitter must be true or false' }, 400)
+    const nextBlocked = blockedSubmitter ? 1 : 0
+    if (nextBlocked !== existing.is_blocked_product_submitter) {
+      setClauses.push('is_blocked_product_submitter = ?')
+      values.push(nextBlocked)
+      setClauses.push('product_submission_blocked_at = ?')
+      values.push(nextBlocked === 1 ? new Date().toISOString() : null)
+      setClauses.push('product_submission_blocked_by_user_id = ?')
+      values.push(nextBlocked === 1 ? c.get('user')?.userId ?? null : null)
+      setClauses.push('product_submission_block_reason = ?')
+      const reason = typeof body.product_submission_block_reason === 'string'
+        ? body.product_submission_block_reason.trim().slice(0, 500)
+        : ''
+      values.push(nextBlocked === 1 ? reason || null : null)
+      changes.is_blocked_product_submitter = {
+        before: existing.is_blocked_product_submitter,
+        after: nextBlocked,
+      }
+    }
+  }
+
   if (setClauses.length === 0) {
     return c.json({
       ok: true,
@@ -9851,6 +12368,7 @@ admin.patch('/users/:id', async (c) => {
         email: existing.email,
         role: existing.role,
         is_trusted_product_submitter: existing.is_trusted_product_submitter,
+        is_blocked_product_submitter: existing.is_blocked_product_submitter,
       },
       unchanged: true,
     })
@@ -9870,7 +12388,7 @@ admin.patch('/users/:id', async (c) => {
   })
 
   const updated = await c.env.DB.prepare(`
-    SELECT id, email, COALESCE(role, 'user') AS role, is_trusted_product_submitter
+    SELECT id, email, COALESCE(role, 'user') AS role, is_trusted_product_submitter, is_blocked_product_submitter
     FROM users
     WHERE id = ?
   `).bind(userId).first<{
@@ -9878,6 +12396,7 @@ admin.patch('/users/:id', async (c) => {
     email: string
     role: string
     is_trusted_product_submitter: number
+    is_blocked_product_submitter: number
   }>()
 
   return c.json({ ok: true, user: updated })

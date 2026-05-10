@@ -6,7 +6,6 @@ import {
   Database,
   ExternalLink,
   FileCheck2,
-  KeyRound,
   MailCheck,
   RefreshCw,
   ServerCog,
@@ -174,15 +173,6 @@ export default function AdministratorSettingsPage() {
         'SMTP-Passwort, Tokens und API-Schlüssel dürfen nicht in UI, Memory oder Repo angezeigt werden. Prüfung erfolgt nur im Anbieter-Dashboard.',
       evidence: 'Manuelle Kontrolle in Cloudflare Pages Secrets / Provider-Konsole; keine Secret-Werte im Frontend.',
     },
-    {
-      title: 'Auditierbare Admin-Aenderungen',
-      state: 'live',
-      description:
-        'Bestehende Admin-Werkzeuge schreiben relevante Aenderungen in den Audit-Log. Diese Seite selbst fuehrt keine Schreiboperationen aus.',
-      evidence: 'Das Änderungsprotokoll ist als eigener Administrator-Bereich verfügbar.',
-      href: '/administrator/audit-log',
-      linkLabel: 'Audit',
-    },
   ];
 
   const mailDeploymentItems: StatusItem[] = [
@@ -261,12 +251,6 @@ export default function AdministratorSettingsPage() {
       tone: 'warn',
     },
     {
-      label: 'Audit-Log',
-      href: '/administrator/audit-log',
-      description: 'Nachvollziehen, welche Admin-Aktion welchen Datensatz geändert hat.',
-      tone: 'ok',
-    },
-    {
       label: 'Shop-Domains',
       href: '/administrator/shop-domains',
       description: 'Domain-Regeln für externe Kauf- und Anbieterlinks pflegen.',
@@ -290,11 +274,11 @@ export default function AdministratorSettingsPage() {
     <>
       <AdminPageHeader
         title="Einstellungen"
-        subtitle="Systemüberblick für Konfiguration, Anmeldung, Mail/DNS, Backups und offene Aufgaben. Geheimwerte werden nicht angezeigt."
+        subtitle="Wichtige Einstellungen und offene Prüfungen sehen."
         meta={
           <>
             <span className="admin-live-dot" />
-            <span>{loading ? 'laedt ops' : ops ? 'ops live' : 'statisch'}</span>
+            <span>{loading ? 'lädt Ops' : ops ? 'Ops live' : 'statisch'}</span>
           </>
         }
       />
@@ -345,10 +329,6 @@ export default function AdministratorSettingsPage() {
           <FileCheck2 size={14} />
           Go-Live-Checks
         </Link>
-        <Link className="admin-btn" to="/administrator/audit-log">
-          <KeyRound size={14} />
-          Audit-Log
-        </Link>
       </div>
 
       <div className="space-y-4">
@@ -387,7 +367,7 @@ export default function AdministratorSettingsPage() {
         </AdminCard>
 
         <AdminCard
-          title="Verknuepfte Admin-Bereiche"
+          title="Verknüpfte Admin-Bereiche"
           subtitle="Konkrete Ziele für die nächsten Schritte."
           actions={<CheckCircle2 size={16} className="admin-muted" />}
           padded

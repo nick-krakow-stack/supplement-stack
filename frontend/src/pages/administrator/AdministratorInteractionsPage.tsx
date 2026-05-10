@@ -229,6 +229,7 @@ export default function AdministratorInteractionsPage() {
   const [query, setQuery] = useState(() => searchParams.get('q') ?? '');
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [hoveredMatrixCell, setHoveredMatrixCell] = useState<HoveredMatrixCell | null>(null);
+  const [selectedMatrixIngredientIds, setSelectedMatrixIngredientIds] = useState<number[]>([]);
 
   const ingredientNameById = useMemo(() => {
     const map = new Map<number, string>();
@@ -373,10 +374,40 @@ export default function AdministratorInteractionsPage() {
     );
   }, [ingredientIngredientInteractions, ingredientNameById]);
 
+  useEffect(() => {
+    setSelectedMatrixIngredientIds((previous) => {
+      const available = new Set(matrixIngredients.map(([id]) => id));
+      const retained = previous.filter((id) => available.has(id));
+      if (retained.length > 0) return retained;
+      return matrixIngredients.map(([id]) => id);
+    });
+  }, [matrixIngredients]);
+
+  const selectedMatrixIngredientSet = useMemo(
+    () => new Set(selectedMatrixIngredientIds),
+    [selectedMatrixIngredientIds],
+  );
+
+  const visibleMatrixIngredients = useMemo(
+    () => matrixIngredients.filter(([id]) => selectedMatrixIngredientSet.has(id)),
+    [matrixIngredients, selectedMatrixIngredientSet],
+  );
+
+  const visibleIngredientIngredientInteractions = useMemo(
+    () =>
+      ingredientIngredientInteractions.filter(
+        (interaction) =>
+          selectedMatrixIngredientSet.has(interaction.ingredient_a_id) &&
+          interaction.partner_ingredient_id != null &&
+          selectedMatrixIngredientSet.has(interaction.partner_ingredient_id),
+      ),
+    [ingredientIngredientInteractions, selectedMatrixIngredientSet],
+  );
+
   const ingredientMatrix = useMemo(() => {
     const matrix = new Map<number, Map<number, MatrixCell>>();
 
-    ingredientIngredientInteractions.forEach((interaction) => {
+    visibleIngredientIngredientInteractions.forEach((interaction) => {
       const rowId = interaction.ingredient_a_id;
       const colId = interaction.partner_ingredient_id;
       if (colId == null) return;
@@ -403,7 +434,7 @@ export default function AdministratorInteractionsPage() {
     });
 
     return matrix;
-  }, [ingredientIngredientInteractions]);
+  }, [visibleIngredientIngredientInteractions]);
 
   const severityCounts = useMemo(() => {
     const counts: Record<InteractionSeverity, number> = {
@@ -538,12 +569,18 @@ export default function AdministratorInteractionsPage() {
     }
   };
 
+  const toggleMatrixIngredient = (id: number) => {
+    setSelectedMatrixIngredientIds((previous) =>
+      previous.includes(id) ? previous.filter((currentId) => currentId !== id) : [...previous, id],
+    );
+  };
+
   return (
     <>
       <section className="admin-matrix-hero">
         <div>
           <h1>Wechselwirkungs-Matrix</h1>
-          <p>Wirkstoff x Wirkstoff · Quelle: interactions nach Migration 0034</p>
+          <p>Wechselwirkungen zwischen Wirkstoffen und anderen Faktoren prüfen.</p>
         </div>
         <div className="admin-matrix-hero-actions">
           <span className="admin-matrix-count admin-matrix-count-info">{severityCounts.info} info</span>
@@ -564,7 +601,7 @@ export default function AdministratorInteractionsPage() {
             Wechselwirkung anlegen
           </span>
         }
-        subtitle="Neue Hinweise so eintragen, wie sie später im Produkt- und Stack-Kontext erscheinen sollen."
+        subtitle="Hinweis so formulieren, dass er später verständlich angezeigt wird."
         padded
         className="mb-5"
       >
@@ -722,8 +759,8 @@ export default function AdministratorInteractionsPage() {
 
       {error && <AdminError>{error}</AdminError>}
 
-      <AdminCard title="Übersicht" className="mb-5" subtitle="Filter setzen und zwischen Matrix und Liste wechseln.">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6 mb-3">
+      <AdminCard title="Übersicht" className="admin-compact-card mb-5" subtitle="Wechselwirkungen prüfen, filtern und bearbeiten.">
+        <div className="admin-filter-bar mb-3">
           <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
             Wirkstoff
             <select
@@ -804,7 +841,7 @@ export default function AdministratorInteractionsPage() {
               ))}
             </select>
           </label>
-          <div className="admin-toolbar-inline admin-btn-group md:col-span-2 xl:col-span-6">
+          <div className="admin-filter-actions admin-btn-group">
             {VIEW_MODES.map((mode) => (
               <AdminButton
                 key={mode.value}
@@ -824,30 +861,65 @@ export default function AdministratorInteractionsPage() {
         ) : filteredInteractions.length === 0 ? (
           <AdminEmpty>Keine Einträge für die aktuelle Filterung.</AdminEmpty>
         ) : viewMode === 'matrix' ? (
-          <div className="admin-interaction-matrix-wrap">
+          <>
+          <div className="admin-filter-bar admin-filter-bar-flat mb-3">
+            <div className="admin-filter-main">
+              <span className="text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--admin-ink-3)]">
+                Aktive Wirkstoffe
+              </span>
+            </div>
+            <div className="admin-filter-controls">
+              {matrixIngredients.map(([id, name]) => (
+                <label key={id} className="inline-flex min-h-[32px] items-center gap-2 rounded-full border border-[color:var(--admin-line)] bg-[color:var(--admin-bg)] px-3 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={selectedMatrixIngredientSet.has(id)}
+                    onChange={() => toggleMatrixIngredient(id)}
+                    className="h-3.5 w-3.5"
+                  />
+                  <span className="max-w-[160px] truncate">{name}</span>
+                </label>
+              ))}
+            </div>
+            <div className="admin-filter-actions">
+              <AdminButton size="sm" onClick={() => setSelectedMatrixIngredientIds(matrixIngredients.map(([id]) => id))}>
+                Alle
+              </AdminButton>
+              <AdminButton size="sm" variant="ghost" onClick={() => setSelectedMatrixIngredientIds([])}>
+                Keine
+              </AdminButton>
+            </div>
+          </div>
+          {visibleMatrixIngredients.length === 0 ? (
+            <AdminEmpty>Bitte mindestens einen Wirkstoff für die Matrix auswählen.</AdminEmpty>
+          ) : (
+          <div className="admin-interaction-matrix-wrap" style={{ padding: '24px 18px 18px', borderRadius: 12 }}>
             <div
               className="admin-interaction-matrix"
-              style={{ gridTemplateColumns: `210px repeat(${matrixIngredients.length}, 72px)` }}
+              style={{
+                gridTemplateColumns: `160px repeat(${visibleMatrixIngredients.length}, 48px)`,
+                rowGap: 10,
+              }}
             >
-              <div className="admin-interaction-matrix-corner" aria-hidden="true" />
-              {matrixIngredients.map(([partnerId, partnerName]) => (
-                <div key={`head-${partnerId}`} className="admin-interaction-matrix-col" title={partnerName}>
-                  <span>{partnerName}</span>
+              <div className="admin-interaction-matrix-corner" aria-hidden="true" style={{ height: 120 }} />
+              {visibleMatrixIngredients.map(([partnerId, partnerName]) => (
+                <div key={`head-${partnerId}`} className="admin-interaction-matrix-col" title={partnerName} style={{ height: 120, fontSize: 12 }}>
+                  <span style={{ maxWidth: 118 }}>{partnerName}</span>
                 </div>
               ))}
 
-              {matrixIngredients.map(([ingredientIdRow, rowName]) => {
+              {visibleMatrixIngredients.map(([ingredientIdRow, rowName]) => {
                 const row = ingredientMatrix.get(ingredientIdRow);
                 return (
                   <div key={`row-${ingredientIdRow}`} className="contents">
-                    <div className="admin-interaction-matrix-row">{rowName}</div>
-                    {matrixIngredients.map(([partnerId, partnerName]) => {
+                    <div className="admin-interaction-matrix-row" style={{ paddingRight: 12, fontSize: 12 }}>{rowName}</div>
+                    {visibleMatrixIngredients.map(([partnerId, partnerName]) => {
                       const cell = row?.get(partnerId);
                       if (ingredientIdRow === partnerId) {
-                        return <div key={partnerId} className="admin-interaction-matrix-self" aria-hidden="true" />;
+                        return <div key={partnerId} className="admin-interaction-matrix-self" aria-hidden="true" style={{ width: 36 }} />;
                       }
                       if (!cell) {
-                        return <div key={partnerId} className="admin-interaction-matrix-empty" aria-hidden="true" />;
+                        return <div key={partnerId} className="admin-interaction-matrix-empty" aria-hidden="true" style={{ width: 36 }} />;
                       }
 
                       const summary = cell.interactions
@@ -862,6 +934,7 @@ export default function AdministratorInteractionsPage() {
                           aria-label={`${rowName} mit ${partnerName}: ${severityLabel(cell.maxSeverity)}`}
                           onMouseEnter={() => setHoveredMatrixCell({ rowName, partnerName, cell })}
                           onFocus={() => setHoveredMatrixCell({ rowName, partnerName, cell })}
+                          style={{ width: 38, height: 26, fontSize: 14 }}
                         >
                           <span>{matrixCellSymbol(cell.maxSeverity)}</span>
                         </button>
@@ -872,7 +945,18 @@ export default function AdministratorInteractionsPage() {
               })}
             </div>
 
-            <div className="admin-interaction-matrix-footer">
+            <div
+              className="admin-interaction-matrix-footer"
+              style={{
+                position: 'sticky',
+                bottom: 0,
+                zIndex: 3,
+                marginTop: 16,
+                gap: 16,
+                padding: '12px 0 0',
+                background: 'var(--admin-bg-elev)',
+              }}
+            >
               <div>
                 <div className="admin-interaction-matrix-footer-label">Legende</div>
                 <div className="admin-interaction-legend">
@@ -901,6 +985,8 @@ export default function AdministratorInteractionsPage() {
               </div>
             </div>
           </div>
+          )}
+          </>
         ) : (
           <div className="admin-table-wrap">
             <table className="admin-table">

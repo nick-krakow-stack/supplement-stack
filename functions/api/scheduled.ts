@@ -18,6 +18,7 @@ type CheckMethod = 'HEAD' | 'GET'
 
 type ProductLinkRow = {
   id: number
+  shop_link_id: number | null
   shop_link: string
 }
 
@@ -57,6 +58,20 @@ function jsonResponse(data: unknown, status = 404): Response {
       'Cache-Control': 'no-store',
     },
   })
+}
+
+async function hasTable(db: D1Database, tableName: string): Promise<boolean> {
+  try {
+    const row = await db.prepare(`
+      SELECT name
+      FROM sqlite_master
+      WHERE type = 'table'
+        AND name = ?
+    `).bind(tableName).first<{ name: string }>()
+    return row?.name === tableName
+  } catch {
+    return false
+  }
 }
 
 export const onRequest: PagesFunction<Env> = async () => {
@@ -322,8 +337,30 @@ async function checkShopLink(rawUrl: string): Promise<LinkCheckResult> {
 }
 
 async function loadProductsToCheck(db: D1Database, limit: number): Promise<ProductLinkRow[]> {
+  if ((await hasTable(db, 'product_shop_links')) && (await hasTable(db, 'product_shop_link_health'))) {
+    const { results } = await db.prepare(`
+      SELECT
+        p.id,
+        psl.id AS shop_link_id,
+        TRIM(psl.url) AS shop_link
+      FROM product_shop_links psl
+      JOIN products p ON p.id = psl.product_id
+      LEFT JOIN product_shop_link_health lh ON lh.shop_link_id = psl.id
+      WHERE psl.active = 1
+        AND NULLIF(TRIM(psl.url), '') IS NOT NULL
+        AND (p.discontinued_at IS NULL OR TRIM(p.discontinued_at) = '')
+      ORDER BY
+        CASE WHEN lh.last_checked_at IS NULL THEN 0 ELSE 1 END,
+        lh.last_checked_at ASC,
+        psl.is_primary DESC,
+        psl.id ASC
+      LIMIT ?
+    `).bind(limit).all<ProductLinkRow>()
+    return results
+  }
+
   const { results } = await db.prepare(`
-    SELECT p.id, TRIM(p.shop_link) AS shop_link
+    SELECT p.id, NULL AS shop_link_id, TRIM(p.shop_link) AS shop_link
     FROM products p
     LEFT JOIN affiliate_link_health lh ON lh.product_id = p.id
     WHERE NULLIF(TRIM(p.shop_link), '') IS NOT NULL
@@ -337,7 +374,7 @@ async function loadProductsToCheck(db: D1Database, limit: number): Promise<Produ
   return results
 }
 
-async function persistResult(db: D1Database, productId: number, result: LinkCheckResult, checkedAt: string): Promise<void> {
+async function persistResult(db: D1Database, product: ProductLinkRow, result: LinkCheckResult, checkedAt: string): Promise<void> {
   await db.prepare(`
     INSERT INTO affiliate_link_health (
       product_id,
@@ -389,7 +426,7 @@ async function persistResult(db: D1Database, productId: number, result: LinkChec
       END,
       updated_at = CURRENT_TIMESTAMP
   `).bind(
-    productId,
+    product.id,
     result.url,
     result.host,
     result.status,
@@ -405,12 +442,62 @@ async function persistResult(db: D1Database, productId: number, result: LinkChec
     result.status === 'ok' ? checkedAt : null,
     checkedAt,
   ).run()
+
+  if (product.shop_link_id === null || !(await hasTable(db, 'product_shop_link_health'))) return
+
+  await db.prepare(`
+    INSERT INTO product_shop_link_health (
+      shop_link_id,
+      url,
+      status,
+      http_status,
+      failure_reason,
+      final_url,
+      redirected,
+      response_time_ms,
+      consecutive_failures,
+      last_success_at,
+      last_checked_at,
+      updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(shop_link_id) DO UPDATE SET
+      url = excluded.url,
+      status = excluded.status,
+      http_status = excluded.http_status,
+      failure_reason = excluded.failure_reason,
+      final_url = excluded.final_url,
+      redirected = excluded.redirected,
+      response_time_ms = excluded.response_time_ms,
+      last_checked_at = excluded.last_checked_at,
+      last_success_at = CASE
+        WHEN excluded.status = 'ok' THEN excluded.last_checked_at
+        ELSE product_shop_link_health.last_success_at
+      END,
+      consecutive_failures = CASE
+        WHEN excluded.status = 'ok' THEN 0
+        WHEN product_shop_link_health.url <> excluded.url THEN 1
+        ELSE product_shop_link_health.consecutive_failures + 1
+      END,
+      updated_at = CURRENT_TIMESTAMP
+  `).bind(
+    product.shop_link_id,
+    result.url,
+    result.status,
+    result.httpStatus,
+    result.failureReason,
+    result.finalUrl,
+    result.redirected ? 1 : 0,
+    result.responseTimeMs,
+    result.status === 'ok' ? 0 : 1,
+    result.status === 'ok' ? checkedAt : null,
+    checkedAt,
+  ).run()
 }
 
 async function processProduct(db: D1Database, product: ProductLinkRow, checkedAt: string): Promise<LinkCheckResult | null> {
   try {
     const result = await checkShopLink(product.shop_link)
-    await persistResult(db, product.id, result, checkedAt)
+    await persistResult(db, product, result, checkedAt)
     return result
   } catch (error) {
     const result: LinkCheckResult = {
@@ -425,7 +512,7 @@ async function processProduct(db: D1Database, product: ProductLinkRow, checkedAt
       responseTimeMs: null,
     }
     try {
-      await persistResult(db, product.id, result, checkedAt)
+      await persistResult(db, product, result, checkedAt)
     } catch (persistError) {
       console.error('affiliate link health persist failed', {
         productId: product.id,

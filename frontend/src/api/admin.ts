@@ -87,7 +87,55 @@ export interface AdminIngredientListItem extends IngredientLookup {
   synonym_count: number;
   precursor_count: number;
   has_blog_url: boolean;
+  task_statuses: AdminIngredientTaskStatusMap;
+  product_recommendations: AdminIngredientProductRecommendationSlots;
   raw?: Record<string, unknown>;
+}
+
+export type AdminIngredientTaskKey = 'forms' | 'dge' | 'precursors' | 'synonyms';
+export type AdminIngredientTaskStatusValue = 'open' | 'done' | 'none';
+
+export interface AdminIngredientTaskStatus {
+  ingredient_id: number;
+  task_key: AdminIngredientTaskKey;
+  status: AdminIngredientTaskStatusValue;
+  note: string | null;
+  updated_at: string | null;
+  updated_by_user_id: number | null;
+  raw?: Record<string, unknown>;
+}
+
+export type AdminIngredientTaskStatusMap = Partial<Record<AdminIngredientTaskKey, AdminIngredientTaskStatus>>;
+
+export type AdminIngredientProductRecommendationSlot = 'primary' | 'alternative_1' | 'alternative_2';
+
+export interface AdminIngredientProductRecommendation {
+  id: number;
+  ingredient_id: number;
+  product_id: number;
+  type: string;
+  shop_link_id: number | null;
+  recommendation_slot: AdminIngredientProductRecommendationSlot;
+  sort_order: number;
+  product_name: string;
+  product_brand: string | null;
+  product_shop_link: string | null;
+  product_moderation_status: string | null;
+  product_visibility: string | null;
+  shop_link_url: string | null;
+  shop_link_name: string | null;
+  shop_link_host: string | null;
+  raw?: Record<string, unknown>;
+}
+
+export type AdminIngredientProductRecommendationSlots = Record<
+  AdminIngredientProductRecommendationSlot,
+  AdminIngredientProductRecommendation | null
+>;
+
+export interface AdminIngredientProductRecommendationsResponse {
+  recommendations: AdminIngredientProductRecommendation[];
+  slots: AdminIngredientProductRecommendationSlots;
 }
 
 export interface AdminIngredientsResponse {
@@ -215,15 +263,6 @@ export interface AdminAuditLogEntry {
   created_at: string;
 }
 
-export interface AdminAuditLogResponse {
-  entries: AdminAuditLogEntry[];
-  total?: number | null;
-  limit?: number;
-  page?: number;
-  offset?: number;
-  source: string;
-}
-
 export interface AdminBulkApproveUserProductResult {
   id: number;
   ok: boolean;
@@ -242,7 +281,7 @@ export interface AdminBulkApproveUserProductsResponse {
   results: AdminBulkApproveUserProductResult[];
 }
 
-export type AdminUserProductStatus = 'pending' | 'approved' | 'rejected';
+export type AdminUserProductStatus = 'pending' | 'approved' | 'rejected' | 'blocked';
 
 export interface AdminUserProductIngredient {
   ingredient_id: number;
@@ -495,6 +534,7 @@ export interface AdminIngredientResearchStatusPayload {
 }
 
 export interface AdminIngredientResearchSourcePayload {
+  ingredient_id?: number | null;
   source_kind?: string | null;
   source_title?: string | null;
   source_url?: string | null;
@@ -569,11 +609,36 @@ export interface AdminKnowledgeArticle {
   status: string;
   reviewed_at: string | null;
   sources_json: unknown;
+  sources: AdminKnowledgeArticleSource[];
+  ingredient_ids: number[];
+  ingredients: AdminKnowledgeArticleIngredient[];
+  conclusion: string | null;
+  featured_image_r2_key: string | null;
+  featured_image_url: string | null;
+  dose_min: number | null;
+  dose_max: number | null;
+  dose_unit: string | null;
+  product_note: string | null;
   created_at?: string | null;
   updated_at?: string | null;
   archived_at?: string | null;
   version: number | null;
   raw?: Record<string, unknown>;
+}
+
+export interface AdminKnowledgeArticleSource {
+  id?: number | null;
+  name: string;
+  link: string;
+  label?: string;
+  url?: string;
+  sort_order?: number | null;
+}
+
+export interface AdminKnowledgeArticleIngredient {
+  ingredient_id: number;
+  name: string | null;
+  sort_order?: number | null;
 }
 
 export interface AdminKnowledgeArticlePayload {
@@ -584,6 +649,15 @@ export interface AdminKnowledgeArticlePayload {
   status?: string | null;
   reviewed_at?: string | null;
   sources_json?: unknown;
+  sources?: AdminKnowledgeArticleSource[];
+  ingredient_ids?: number[];
+  conclusion?: string | null;
+  featured_image_r2_key?: string | null;
+  featured_image_url?: string | null;
+  dose_min?: number | null;
+  dose_max?: number | null;
+  dose_unit?: string | null;
+  product_note?: string | null;
   version?: number | null;
 }
 
@@ -706,6 +780,61 @@ export interface AdminAffiliateLinkHealth {
   redirected: number | null;
 }
 
+export type AdminProductShopLinkOwnerType = 'none' | 'nick' | 'user';
+
+export interface AdminProductShopLink {
+  id: number;
+  product_id: number;
+  shop_domain_id: number | null;
+  shop_name: string | null;
+  url: string;
+  normalized_host: string | null;
+  is_affiliate: number;
+  affiliate_owner_type: AdminProductShopLinkOwnerType;
+  affiliate_owner_user_id: number | null;
+  source_type: string;
+  submitted_by_user_id: number | null;
+  is_primary: number;
+  active: number;
+  sort_order: number;
+  version: number | null;
+  created_at: string | null;
+  updated_at: string | null;
+  health: AdminAffiliateLinkHealth | null;
+  raw?: Record<string, unknown>;
+}
+
+export interface AdminProductShopLinksResponse {
+  links: AdminProductShopLink[];
+  health_available: boolean;
+}
+
+export interface AdminProductShopLinkPayload {
+  shop_domain_id?: number | null;
+  shop_name?: string | null;
+  url?: string;
+  is_affiliate?: number | boolean;
+  affiliate_owner_type?: AdminProductShopLinkOwnerType;
+  affiliate_owner_user_id?: number | null;
+  source_type?: string;
+  is_primary?: number | boolean;
+  active?: number | boolean;
+  sort_order?: number;
+  version?: number | null;
+}
+
+export interface AdminProductShopLinkCheckResult {
+  status: Exclude<AdminAffiliateLinkHealthStatus, 'unchecked'> | string;
+  url: string;
+  host: string;
+  http_status: number | null;
+  failure_reason: string | null;
+  check_method: 'HEAD' | 'GET' | string | null;
+  final_url: string | null;
+  redirected: number;
+  response_time_ms: number | null;
+}
+
 export interface AdminProductQAProduct {
   id: number;
   name: string;
@@ -751,7 +880,7 @@ export interface AdminProductQAPatch {
   is_affiliate?: number | boolean | null;
   affiliate_owner_type?: 'none' | 'nick' | 'user' | null;
   affiliate_owner_user_id?: number | null;
-  moderation_status?: 'pending' | 'approved' | 'rejected';
+  moderation_status?: 'pending' | 'approved' | 'rejected' | 'blocked';
   visibility?: 'hidden' | 'public';
   serving_size?: number | null;
   serving_unit?: string | null;
@@ -926,19 +1055,6 @@ export interface AdminProductLinkReportsResponse {
   available_statuses?: AdminProductLinkReportStatus[];
 }
 
-interface AuditFilterParams {
-  action?: string;
-  entity_type?: string;
-  user_id?: number | string;
-  date_from?: string;
-  date_to?: string;
-  date?: string;
-  from?: string;
-  to?: string;
-  page?: number;
-  limit?: number;
-}
-
 interface IngredientListResponse {
   ingredients: IngredientLookup[];
   limit?: number;
@@ -982,12 +1098,6 @@ type QueryParams = Record<string, string | number | boolean | undefined | null>;
 const DOSE_RECOMMENDATION_ENDPOINTS = [
   '/admin/dose-recommendations',
   '/admin/dose_recommendments',
-] as const;
-
-const AUDIT_LOG_ENDPOINTS = [
-  '/admin/audit-log',
-  '/admin/audit-logs',
-  '/admin/audit',
 ] as const;
 
 function toQueryParams(input: QueryParams): Record<string, string> {
@@ -1106,6 +1216,39 @@ function parseTotals(payload: Record<string, unknown>): Record<string, number> {
 
 function parseKnowledgeArticle(raw: Record<string, unknown>): AdminKnowledgeArticle {
   const slug = toTextOrNull(raw.slug) || '';
+  const sourcesRaw = Array.isArray(raw.sources) ? raw.sources : [];
+  const sources: AdminKnowledgeArticleSource[] = sourcesRaw
+    .map((entry, index) => {
+      const source = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>;
+      const name = toTextOrNull(source.name) ?? toTextOrNull(source.label) ?? '';
+      const link = toTextOrNull(source.link) ?? toTextOrNull(source.url) ?? '';
+      if (!name && !link) return null;
+      return {
+        id: toIntOrNull(source.id),
+        name,
+        link,
+        label: name,
+        url: link,
+        sort_order: toIntOrNull(source.sort_order) ?? index,
+      };
+    })
+    .filter((source) => source !== null);
+  const ingredientsRaw = Array.isArray(raw.ingredients) ? raw.ingredients : [];
+  const ingredients: AdminKnowledgeArticleIngredient[] = ingredientsRaw
+    .map((entry, index) => {
+      const ingredient = (entry && typeof entry === 'object' ? entry : {}) as Record<string, unknown>;
+      const ingredientId = toIntOrNull(ingredient.ingredient_id ?? ingredient.id);
+      if (!ingredientId) return null;
+      return {
+        ingredient_id: ingredientId,
+        name: toTextOrNull(ingredient.name),
+        sort_order: toIntOrNull(ingredient.sort_order) ?? index,
+      };
+    })
+    .filter((ingredient) => ingredient !== null);
+  const ingredientIds = Array.isArray(raw.ingredient_ids)
+    ? raw.ingredient_ids.map((value) => toIntOrNull(value)).filter((value): value is number => value !== null)
+    : ingredients.map((ingredient) => ingredient.ingredient_id);
   return {
     slug,
     title: toTextOrNull(raw.title) || slug || 'Unbenannter Artikel',
@@ -1114,6 +1257,16 @@ function parseKnowledgeArticle(raw: Record<string, unknown>): AdminKnowledgeArti
     status: toTextOrNull(raw.status) || 'draft',
     reviewed_at: toDateOrNull(raw.reviewed_at),
     sources_json: raw.sources_json ?? raw.sources ?? null,
+    sources,
+    ingredient_ids: ingredientIds,
+    ingredients,
+    conclusion: toTextOrNull(raw.conclusion),
+    featured_image_r2_key: toTextOrNull(raw.featured_image_r2_key),
+    featured_image_url: toTextOrNull(raw.featured_image_url),
+    dose_min: toNumberOrNull(raw.dose_min),
+    dose_max: toNumberOrNull(raw.dose_max),
+    dose_unit: toTextOrNull(raw.dose_unit),
+    product_note: toTextOrNull(raw.product_note),
     created_at: toDateOrNull(raw.created_at),
     updated_at: toDateOrNull(raw.updated_at),
     archived_at: toDateOrNull(raw.archived_at),
@@ -1132,7 +1285,20 @@ function normalizeKnowledgeArticlePayload(
     body: toTextOrNull(payload.body),
     status: toTextOrNull(payload.status) ?? 'draft',
     reviewed_at: payload.reviewed_at !== undefined ? toDateOrNull(payload.reviewed_at) : null,
-    sources_json: payload.sources_json ?? null,
+    sources_json: payload.sources_json ?? payload.sources?.map((source) => ({ label: source.name, url: source.link })) ?? null,
+    sources: payload.sources?.map((source, index) => ({
+      name: toTextOrNull(source.name) ?? '',
+      link: toTextOrNull(source.link) ?? '',
+      sort_order: source.sort_order ?? index,
+    })),
+    ingredient_ids: payload.ingredient_ids ?? [],
+    conclusion: toTextOrNull(payload.conclusion),
+    featured_image_r2_key: toTextOrNull(payload.featured_image_r2_key),
+    featured_image_url: toTextOrNull(payload.featured_image_url),
+    dose_min: toNumberOrNull(payload.dose_min),
+    dose_max: toNumberOrNull(payload.dose_max),
+    dose_unit: toTextOrNull(payload.dose_unit),
+    product_note: toTextOrNull(payload.product_note),
     version: payload.version ?? null,
   };
 }
@@ -1237,6 +1403,145 @@ function parseAffiliateLinkHealth(value: unknown): AdminAffiliateLinkHealth | nu
   };
 }
 
+function parseProductShopLink(raw: Record<string, unknown>): AdminProductShopLink {
+  const ownerType = toTextOrNull(raw.affiliate_owner_type);
+  return {
+    id: toIntOrNull(raw.id) ?? 0,
+    product_id: toIntOrNull(raw.product_id) ?? 0,
+    shop_domain_id: toIntOrNull(raw.shop_domain_id),
+    shop_name: toTextOrNull(raw.shop_name),
+    url: toTextOrNull(raw.url) ?? '',
+    normalized_host: toTextOrNull(raw.normalized_host),
+    is_affiliate: toIntOrNull(raw.is_affiliate) ?? (toBooleanOrNull(raw.is_affiliate) ? 1 : 0),
+    affiliate_owner_type: ownerType === 'nick' || ownerType === 'user' || ownerType === 'none' ? ownerType : 'none',
+    affiliate_owner_user_id: toIntOrNull(raw.affiliate_owner_user_id),
+    source_type: toTextOrNull(raw.source_type) ?? 'admin',
+    submitted_by_user_id: toIntOrNull(raw.submitted_by_user_id),
+    is_primary: toIntOrNull(raw.is_primary) ?? (toBooleanOrNull(raw.is_primary) ? 1 : 0),
+    active: toIntOrNull(raw.active) ?? (toBooleanOrNull(raw.active) === false ? 0 : 1),
+    sort_order: toIntOrNull(raw.sort_order) ?? 0,
+    version: toIntOrNull(raw.version),
+    created_at: toDateOrNull(raw.created_at),
+    updated_at: toDateOrNull(raw.updated_at),
+    health: parseAffiliateLinkHealth(raw.health),
+    raw,
+  };
+}
+
+function normalizeProductShopLinkPayload(payload: AdminProductShopLinkPayload): AdminProductShopLinkPayload {
+  const normalized: AdminProductShopLinkPayload = { ...payload };
+  if (typeof normalized.is_affiliate === 'boolean') normalized.is_affiliate = normalized.is_affiliate ? 1 : 0;
+  if (typeof normalized.is_primary === 'boolean') normalized.is_primary = normalized.is_primary ? 1 : 0;
+  if (typeof normalized.active === 'boolean') normalized.active = normalized.active ? 1 : 0;
+  return normalized;
+}
+
+function parseIngredientTaskStatus(raw: Record<string, unknown>): AdminIngredientTaskStatus | null {
+  const taskKey = toTextOrNull(raw.task_key);
+  const status = toTextOrNull(raw.status);
+  if (taskKey !== 'forms' && taskKey !== 'dge' && taskKey !== 'precursors' && taskKey !== 'synonyms') return null;
+  if (status !== 'open' && status !== 'done' && status !== 'none') return null;
+  return {
+    ingredient_id: toIntOrNull(raw.ingredient_id) ?? 0,
+    task_key: taskKey,
+    status,
+    note: toTextOrNull(raw.note),
+    updated_at: toDateOrNull(raw.updated_at),
+    updated_by_user_id: toIntOrNull(raw.updated_by_user_id),
+    raw,
+  };
+}
+
+function emptyIngredientTaskStatusMap(): AdminIngredientTaskStatusMap {
+  return {};
+}
+
+function parseIngredientTaskStatusMap(value: unknown): AdminIngredientTaskStatusMap {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return emptyIngredientTaskStatusMap();
+  const result: AdminIngredientTaskStatusMap = {};
+  for (const key of ['forms', 'dge', 'precursors', 'synonyms'] as const) {
+    const rawEntry = (value as Record<string, unknown>)[key];
+    if (!rawEntry || typeof rawEntry !== 'object' || Array.isArray(rawEntry)) continue;
+    const parsed = parseIngredientTaskStatus(rawEntry as Record<string, unknown>);
+    if (parsed) result[key] = parsed;
+  }
+  return result;
+}
+
+function parseIngredientRecommendationSlot(value: unknown): AdminIngredientProductRecommendationSlot | null {
+  const text = toTextOrNull(value);
+  return text === 'primary' || text === 'alternative_1' || text === 'alternative_2' ? text : null;
+}
+
+function parseIngredientProductRecommendation(raw: Record<string, unknown>): AdminIngredientProductRecommendation | null {
+  const slot = parseIngredientRecommendationSlot(raw.recommendation_slot);
+  if (!slot) return null;
+  return {
+    id: toIntOrNull(raw.id) ?? 0,
+    ingredient_id: toIntOrNull(raw.ingredient_id) ?? 0,
+    product_id: toIntOrNull(raw.product_id) ?? 0,
+    type: toTextOrNull(raw.type) ?? (slot === 'primary' ? 'recommended' : 'alternative'),
+    shop_link_id: toIntOrNull(raw.shop_link_id),
+    recommendation_slot: slot,
+    sort_order: toIntOrNull(raw.sort_order) ?? 0,
+    product_name: toTextOrNull(raw.product_name) ?? `Produkt ${toIntOrNull(raw.product_id) ?? ''}`,
+    product_brand: toTextOrNull(raw.product_brand),
+    product_shop_link: toTextOrNull(raw.product_shop_link),
+    product_moderation_status: toTextOrNull(raw.product_moderation_status),
+    product_visibility: toTextOrNull(raw.product_visibility),
+    shop_link_url: toTextOrNull(raw.shop_link_url),
+    shop_link_name: toTextOrNull(raw.shop_link_name),
+    shop_link_host: toTextOrNull(raw.shop_link_host),
+    raw,
+  };
+}
+
+function emptyIngredientProductRecommendationSlots(): AdminIngredientProductRecommendationSlots {
+  return {
+    primary: null,
+    alternative_1: null,
+    alternative_2: null,
+  };
+}
+
+function parseIngredientProductRecommendationSlots(value: unknown): AdminIngredientProductRecommendationSlots {
+  const slots = emptyIngredientProductRecommendationSlots();
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return slots;
+  for (const key of ['primary', 'alternative_1', 'alternative_2'] as const) {
+    const rawEntry = (value as Record<string, unknown>)[key];
+    if (!rawEntry || typeof rawEntry !== 'object' || Array.isArray(rawEntry)) continue;
+    slots[key] = parseIngredientProductRecommendation(rawEntry as Record<string, unknown>);
+  }
+  return slots;
+}
+
+function parseIngredientRecommendationSummary(
+  raw: Record<string, unknown>,
+  slot: AdminIngredientProductRecommendationSlot,
+): AdminIngredientProductRecommendation | null {
+  const id = toIntOrNull(raw[`${slot}_recommendation_id`]);
+  const productId = toIntOrNull(raw[`${slot}_recommendation_product_id`]);
+  if (!id || !productId) return null;
+  return {
+    id,
+    ingredient_id: toIntOrNull(raw.id ?? raw.ingredient_id) ?? 0,
+    product_id: productId,
+    type: slot === 'primary' ? 'recommended' : 'alternative',
+    shop_link_id: toIntOrNull(raw[`${slot}_recommendation_shop_link_id`]),
+    recommendation_slot: slot,
+    sort_order: slot === 'primary' ? 0 : slot === 'alternative_1' ? 10 : 20,
+    product_name: toTextOrNull(raw[`${slot}_recommendation_product_name`]) ?? `Produkt ${productId}`,
+    product_brand: null,
+    product_shop_link: null,
+    product_moderation_status: null,
+    product_visibility: null,
+    shop_link_url: null,
+    shop_link_name: toTextOrNull(raw[`${slot}_recommendation_shop_name`]),
+    shop_link_host: null,
+    raw,
+  };
+}
+
 function parseProductQAProduct(raw: Record<string, unknown>): AdminProductQAProduct {
   const issues = Array.isArray(raw.issues)
     ? raw.issues.map((issue) => toTextOrNull(issue)).filter((issue): issue is string => Boolean(issue))
@@ -1304,8 +1609,27 @@ function parseCatalogProduct(raw: Record<string, unknown>): AdminCatalogProduct 
 }
 
 function parseAdminIngredientListItem(raw: Record<string, unknown>): AdminIngredientListItem {
+  const ingredientId = toIntOrNull(raw.id ?? raw.ingredient_id) ?? 0;
+  const task_statuses: AdminIngredientTaskStatusMap = {};
+  for (const key of ['forms', 'dge', 'precursors', 'synonyms'] as const) {
+    const status = toTextOrNull(raw[`${key}_task_status`]);
+    if (status === 'open' || status === 'done' || status === 'none') {
+      task_statuses[key] = {
+        ingredient_id: ingredientId,
+        task_key: key,
+        status,
+        note: null,
+        updated_at: null,
+        updated_by_user_id: null,
+      };
+    }
+  }
+  const product_recommendations = emptyIngredientProductRecommendationSlots();
+  for (const slot of ['primary', 'alternative_1', 'alternative_2'] as const) {
+    product_recommendations[slot] = parseIngredientRecommendationSummary(raw, slot);
+  }
   return {
-    id: toIntOrNull(raw.id ?? raw.ingredient_id) ?? 0,
+    id: ingredientId,
     name: toTextOrNull(raw.name ?? raw.ingredient_name) || `Wirkstoff ${toIntOrNull(raw.id ?? raw.ingredient_id) ?? ''}`,
     unit: toTextOrNull(raw.unit ?? raw.ingredient_unit),
     category: toTextOrNull(raw.category),
@@ -1328,6 +1652,8 @@ function parseAdminIngredientListItem(raw: Record<string, unknown>): AdminIngred
     synonym_count: toIntOrNull(raw.synonym_count) ?? 0,
     precursor_count: toIntOrNull(raw.precursor_count) ?? 0,
     has_blog_url: toBooleanOrNull(raw.has_blog_url) ?? (toIntOrNull(raw.has_blog_url) ?? 0) > 0,
+    task_statuses,
+    product_recommendations,
     raw,
   };
 }
@@ -1796,6 +2122,7 @@ function normalizeStatusPayload(payload: AdminIngredientResearchStatusPayload): 
 
 function normalizeSourcePayload(payload: AdminIngredientResearchSourcePayload): AdminIngredientResearchSourcePayload {
   return {
+    ingredient_id: toIntOrNull(payload.ingredient_id),
     source_kind: toTextOrNull(payload.source_kind),
     source_title: toTextOrNull(payload.source_title),
     source_url: toTextOrNull(payload.source_url),
@@ -2007,7 +2334,7 @@ function parseAdminUserProduct(raw: Record<string, unknown>): AdminUserProduct {
     container_count: toNumberOrNull(raw.container_count),
     is_affiliate: toIntOrNull(raw.is_affiliate),
     notes: toTextOrNull(raw.notes),
-    status: status === 'approved' || status === 'rejected' ? status : 'pending',
+    status: status === 'approved' || status === 'rejected' || status === 'blocked' ? status : 'pending',
     approved_at: toDateOrNull(raw.approved_at),
     created_at: toDateOrNull(raw.created_at) ?? '',
     user_is_trusted_product_submitter: toIntOrNull(raw.user_is_trusted_product_submitter),
@@ -2200,8 +2527,10 @@ function parseDoseMutationResponse(data: unknown): AdminDoseRecommendation {
   return recommendation;
 }
 
-export async function getAdminStats(): Promise<AdminStats> {
-  const res = await apiClient.get('/admin/stats');
+export async function getAdminStats(range?: string): Promise<AdminStats> {
+  const res = await apiClient.get('/admin/stats', {
+    params: range ? { range } : undefined,
+  });
   return res.data;
 }
 
@@ -2303,6 +2632,7 @@ export async function getAdminUserProducts(params: {
     pending: toIntOrNull(statusSummaryRaw.pending) ?? 0,
     approved: toIntOrNull(statusSummaryRaw.approved) ?? 0,
     rejected: toIntOrNull(statusSummaryRaw.rejected) ?? 0,
+    blocked: toIntOrNull(statusSummaryRaw.blocked) ?? 0,
   };
   return {
     products: products.map((product) => parseAdminUserProduct(product as Record<string, unknown>)),
@@ -2311,7 +2641,7 @@ export async function getAdminUserProducts(params: {
     limit,
     total_pages: toIntOrNull(res.data.total_pages) ?? Math.max(1, Math.ceil(total / limit)),
     summary: {
-      total: toIntOrNull(summaryRaw.total) ?? statuses.pending + statuses.approved + statuses.rejected,
+      total: toIntOrNull(summaryRaw.total) ?? statuses.pending + statuses.approved + statuses.rejected + statuses.blocked,
       statuses,
     },
     status_summary: statuses,
@@ -2375,11 +2705,21 @@ export async function getAdminProducts(params: {
   q?: string;
   page?: number;
   limit?: number;
+  moderation?: string;
+  affiliate?: string;
+  image?: string;
+  link_status?: string;
+  deadlinks?: boolean;
 } = {}): Promise<AdminCatalogProductsResponse> {
   const query = toQueryParams({
     q: params.q,
     page: params.page,
     limit: params.limit,
+    moderation: params.moderation,
+    affiliate: params.affiliate,
+    image: params.image,
+    link_status: params.link_status,
+    deadlinks: params.deadlinks ? '1' : undefined,
   });
   const res = await apiClient.get<Record<string, unknown>>('/admin/products', { params: query });
   const products = Array.isArray(res.data.products) ? res.data.products : [];
@@ -2398,6 +2738,63 @@ export async function getAdminProducts(params: {
 export async function getAdminProduct(productId: number): Promise<AdminProductDetail> {
   const res = await apiClient.get<{ product?: unknown }>(`/admin/products/${productId}`);
   return parseProductDetail(res.data as Record<string, unknown>);
+}
+
+export async function getAdminProductShopLinks(productId: number): Promise<AdminProductShopLinksResponse> {
+  const res = await apiClient.get<Record<string, unknown>>(`/admin/products/${productId}/shop-links`);
+  const links = Array.isArray(res.data.links) ? res.data.links : [];
+  return {
+    links: links.map((entry) => parseProductShopLink(entry as Record<string, unknown>)),
+    health_available: toBooleanOrNull(res.data.health_available) ?? false,
+  };
+}
+
+export async function createAdminProductShopLink(
+  productId: number,
+  payload: AdminProductShopLinkPayload,
+): Promise<AdminProductShopLink> {
+  const normalized = normalizeProductShopLinkPayload(payload);
+  const res = await apiClient.post<Record<string, unknown>>(`/admin/products/${productId}/shop-links`, normalized);
+  const link = (res.data.link ?? res.data) as Record<string, unknown>;
+  return parseProductShopLink(link);
+}
+
+export async function updateAdminProductShopLink(
+  productId: number,
+  shopLinkId: number,
+  payload: AdminProductShopLinkPayload,
+  options: AdminMutationOptions = {},
+): Promise<AdminProductShopLink> {
+  const normalized = normalizeProductShopLinkPayload(payload);
+  const res = await apiClient.patch<Record<string, unknown>>(
+    `/admin/products/${productId}/shop-links/${shopLinkId}`,
+    normalized,
+    withIfMatch(normalized, options),
+  );
+  const link = (res.data.link ?? res.data) as Record<string, unknown>;
+  return parseProductShopLink(link);
+}
+
+export async function deleteAdminProductShopLink(
+  productId: number,
+  shopLinkId: number,
+  options: AdminMutationOptions = {},
+): Promise<void> {
+  await apiClient.delete(`/admin/products/${productId}/shop-links/${shopLinkId}`, withIfMatch(undefined, options));
+}
+
+export async function recheckAdminProductShopLink(
+  productId: number,
+  shopLinkId: number,
+): Promise<{ link: AdminProductShopLink | null; result: AdminProductShopLinkCheckResult | null }> {
+  const res = await apiClient.post<Record<string, unknown>>(`/admin/products/${productId}/shop-links/${shopLinkId}/recheck`);
+  const link = res.data.link && typeof res.data.link === 'object'
+    ? parseProductShopLink(res.data.link as Record<string, unknown>)
+    : null;
+  const result = res.data.result && typeof res.data.result === 'object'
+    ? res.data.result as AdminProductShopLinkCheckResult
+    : null;
+  return { link, result };
 }
 
 export async function uploadAdminProductImage(
@@ -2424,6 +2821,43 @@ export async function uploadAdminProductImage(
     image_url: toTextOrNull(res.data.image_url) ?? '',
     image_r2_key: toTextOrNull(res.data.image_r2_key),
     product_version: toIntOrNull(res.data.product_version),
+  };
+}
+
+export async function deleteAdminProductImage(
+  productId: number,
+  options: AdminMutationOptions = {},
+): Promise<AdminProductImageUploadResponse> {
+  const res = await apiClient.delete<Record<string, unknown>>(
+    `/admin/products/${productId}/image`,
+    withIfMatch(undefined, options),
+  );
+  return {
+    image_url: toTextOrNull(res.data.image_url) ?? '',
+    image_r2_key: toTextOrNull(res.data.image_r2_key),
+    product_version: toIntOrNull(res.data.product_version),
+  };
+}
+
+export async function uploadKnowledgeArticleImage(
+  slug: string,
+  file: Blob,
+): Promise<{ image_url: string; image_r2_key: string | null; version: number | null }> {
+  const formData = new FormData();
+  const filename = file.type === 'image/webp'
+    ? 'article.webp'
+    : file.type === 'image/png'
+      ? 'article.png'
+      : 'article.jpg';
+  formData.append('image', file, filename);
+  const res = await apiClient.post<Record<string, unknown>>(
+    `/admin/knowledge-articles/${encodeURIComponent(slug)}/image`,
+    formData,
+  );
+  return {
+    image_url: toTextOrNull(res.data.image_url) ?? '',
+    image_r2_key: toTextOrNull(res.data.image_r2_key),
+    version: toIntOrNull(res.data.version),
   };
 }
 
@@ -2506,11 +2940,13 @@ export async function deleteAdminProductWarning(
 
 export async function getAdminIngredients(params: {
   q?: string;
+  task?: string;
   page?: number;
   limit?: number;
 } = {}): Promise<AdminIngredientsResponse> {
   const query = toQueryParams({
     q: params.q,
+    task: params.task,
     page: params.page,
     limit: params.limit,
   });
@@ -2743,6 +3179,83 @@ export async function getIngredientResearchDetail(ingredientId: number): Promise
   return normalizeIngredientResearchDetailResponse(data);
 }
 
+export async function getAdminIngredientTaskStatuses(ingredientId: number): Promise<AdminIngredientTaskStatusMap> {
+  const { data } = await apiClient.get<Record<string, unknown>>(`/admin/ingredients/${ingredientId}/task-status`);
+  return parseIngredientTaskStatusMap(data.statuses);
+}
+
+export async function updateAdminIngredientTaskStatus(
+  ingredientId: number,
+  taskKey: AdminIngredientTaskKey,
+  payload: {
+    status: AdminIngredientTaskStatusValue;
+    note?: string | null;
+  },
+): Promise<AdminIngredientTaskStatusMap> {
+  const { data } = await apiClient.put<Record<string, unknown>>(
+    `/admin/ingredients/${ingredientId}/task-status/${taskKey}`,
+    {
+      status: payload.status,
+      note: toTrimmedOrNull(payload.note),
+    },
+  );
+  return parseIngredientTaskStatusMap(data.statuses);
+}
+
+export async function getAdminIngredientProductRecommendations(
+  ingredientId: number,
+): Promise<AdminIngredientProductRecommendationsResponse> {
+  const { data } = await apiClient.get<Record<string, unknown>>(
+    `/admin/ingredients/${ingredientId}/product-recommendations`,
+  );
+  const recommendationsRaw = Array.isArray(data.recommendations) ? data.recommendations : [];
+  const recommendations = recommendationsRaw
+    .map((entry) => parseIngredientProductRecommendation(entry as Record<string, unknown>))
+    .filter((entry): entry is AdminIngredientProductRecommendation => entry !== null);
+  return {
+    recommendations,
+    slots: parseIngredientProductRecommendationSlots(data.slots),
+  };
+}
+
+export async function upsertAdminIngredientProductRecommendation(
+  ingredientId: number,
+  slot: AdminIngredientProductRecommendationSlot,
+  payload: {
+    product_id: number;
+    shop_link_id?: number | null;
+  },
+): Promise<AdminIngredientProductRecommendationsResponse> {
+  const { data } = await apiClient.put<Record<string, unknown>>(
+    `/admin/ingredients/${ingredientId}/product-recommendations/${slot}`,
+    {
+      product_id: payload.product_id,
+      shop_link_id: payload.shop_link_id ?? null,
+    },
+  );
+  return {
+    recommendations: (Array.isArray(data.recommendations) ? data.recommendations : [])
+      .map((entry) => parseIngredientProductRecommendation(entry as Record<string, unknown>))
+      .filter((entry): entry is AdminIngredientProductRecommendation => entry !== null),
+    slots: parseIngredientProductRecommendationSlots(data.slots),
+  };
+}
+
+export async function deleteAdminIngredientProductRecommendation(
+  ingredientId: number,
+  slot: AdminIngredientProductRecommendationSlot,
+): Promise<AdminIngredientProductRecommendationsResponse> {
+  const { data } = await apiClient.delete<Record<string, unknown>>(
+    `/admin/ingredients/${ingredientId}/product-recommendations/${slot}`,
+  );
+  return {
+    recommendations: (Array.isArray(data.recommendations) ? data.recommendations : [])
+      .map((entry) => parseIngredientProductRecommendation(entry as Record<string, unknown>))
+      .filter((entry): entry is AdminIngredientProductRecommendation => entry !== null),
+    slots: parseIngredientProductRecommendationSlots(data.slots),
+  };
+}
+
 export async function getIngredientPrecursors(ingredientId: number): Promise<AdminIngredientPrecursor[]> {
   const { data } = await apiClient.get<Record<string, unknown>>(`/admin/ingredients/${ingredientId}/precursors`);
   const rows = Array.isArray(data.precursors) ? data.precursors : [];
@@ -2768,6 +3281,28 @@ export async function createIngredientPrecursor(
   const created = data.precursor ?? data;
   if (created && typeof created === 'object') {
     return parseIngredientPrecursor(created as Record<string, unknown>);
+  }
+  throw new Error('Could not parse precursor response.');
+}
+
+export async function updateIngredientPrecursor(
+  ingredientId: number,
+  precursorIngredientId: number,
+  payload: {
+    sort_order?: number | null;
+    note?: string | null;
+  },
+): Promise<AdminIngredientPrecursor> {
+  const { data } = await apiClient.patch<Record<string, unknown>>(
+    `/admin/ingredients/${ingredientId}/precursors/${precursorIngredientId}`,
+    {
+      sort_order: payload.sort_order ?? 0,
+      note: toTrimmedOrNull(payload.note),
+    },
+  );
+  const updated = data.precursor ?? data;
+  if (updated && typeof updated === 'object') {
+    return parseIngredientPrecursor(updated as Record<string, unknown>);
   }
   throw new Error('Could not parse precursor response.');
 }
@@ -3074,50 +3609,4 @@ export async function deleteDoseRecommendation(
     await apiClient.delete(path, withIfMatch(undefined, options));
     return { ok: true };
   });
-}
-
-export async function getAuditLog(filters: AuditFilterParams = {}): Promise<AdminAuditLogResponse> {
-  const page = filters.page && filters.page > 0 ? Math.floor(filters.page) : 1;
-  const limit = filters.limit && filters.limit > 0 ? Math.floor(filters.limit) : 50;
-  const from = filters.date_from ?? filters.from;
-  const to = filters.date_to ?? filters.to;
-  const query = toQueryParams({
-    action: filters.action,
-    entity_type: filters.entity_type,
-    user_id: filters.user_id,
-    date_from: from,
-    date_to: to,
-    date: filters.date,
-    page,
-    limit,
-  });
-
-  try {
-    const { path, data } = await requestWithFallback<Record<string, unknown>>(AUDIT_LOG_ENDPOINTS, (endpoint) =>
-      apiClient.get(endpoint, { params: query }).then((response) => response.data),
-    );
-    const count = data.total ?? data.count ?? null;
-    const resolvedLimit = typeof data.limit === 'number' ? data.limit : limit;
-    const resolvedOffset = typeof data.offset === 'number' ? data.offset : (page - 1) * resolvedLimit;
-    return {
-      entries: parseAuditEntries(data),
-      total: typeof count === 'number' ? count : undefined,
-      page: typeof data.page === 'number' ? data.page : page,
-      limit: resolvedLimit,
-      offset: resolvedOffset,
-      source: path,
-    };
-  } catch (error) {
-    if (isEndpointMissingError(error)) {
-      return {
-        entries: [],
-        total: 0,
-        page,
-        limit,
-        offset: (page - 1) * limit,
-        source: 'audlog-endpoint-unavailable',
-      };
-    }
-    throw error;
-  }
 }

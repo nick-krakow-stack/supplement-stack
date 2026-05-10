@@ -1,6 +1,9 @@
+import LegalDocumentPage from '../components/LegalDocumentPage';
+
 export default function ImprintPage() {
   return (
-    <article className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+    <LegalDocumentPage slug="impressum" eyebrow="Impressum" title="Impressum">
+      <article className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
       <p className="mb-2 text-sm font-bold uppercase tracking-wide text-blue-600">Impressum</p>
       <h1 className="mb-6 text-3xl font-black text-slate-900">Impressum</h1>
 
@@ -59,6 +62,7 @@ export default function ImprintPage() {
           bleibt kostenlos.
         </p>
       </section>
-    </article>
+      </article>
+    </LegalDocumentPage>
   );
 }

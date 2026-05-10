@@ -47,12 +47,39 @@ export async function deleteSynonym(ingredientId: number, synId: number): Promis
   await apiClient.delete(`/ingredients/${ingredientId}/synonyms/${synId}`);
 }
 
+export async function updateSynonym(
+  ingredientId: number,
+  synId: number,
+  data: Partial<IngredientSynonym>,
+): Promise<IngredientSynonym> {
+  const res = await apiClient.patch<{ synonym?: IngredientSynonym } | IngredientSynonym>(
+    `/ingredients/${ingredientId}/synonyms/${synId}`,
+    data,
+  );
+  const payload = res.data as Record<string, unknown>;
+  return payload.synonym && typeof payload.synonym === 'object'
+    ? payload.synonym as IngredientSynonym
+    : res.data as IngredientSynonym;
+}
+
 export async function addForm(
   ingredientId: number,
   data: Partial<IngredientForm>
 ): Promise<IngredientForm> {
   const res = await apiClient.post<IngredientForm>(`/ingredients/${ingredientId}/forms`, data);
   return res.data;
+}
+
+export async function updateForm(
+  ingredientId: number,
+  formId: number,
+  data: Partial<IngredientForm>,
+): Promise<IngredientForm> {
+  const res = await apiClient.patch<{ form?: IngredientForm } | IngredientForm>(
+    `/ingredients/${ingredientId}/forms/${formId}`,
+    data,
+  );
+  return 'form' in res.data && res.data.form ? res.data.form : res.data as IngredientForm;
 }
 
 export async function deleteForm(ingredientId: number, formId: number): Promise<void> {

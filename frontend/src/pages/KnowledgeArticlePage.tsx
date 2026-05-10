@@ -75,6 +75,9 @@ export default function KnowledgeArticlePage() {
 
       {!loading && article && (
         <article className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+          {article.featured_image_url && (
+            <img src={article.featured_image_url} alt="" className="mb-6 aspect-[16/9] w-full rounded-lg object-cover" />
+          )}
           <div className="mb-6 border-b border-slate-100 pb-6">
             <p className="mb-3 text-xs font-black uppercase tracking-[0.12em] text-blue-600">Wissen</p>
             <h1 className="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">{article.title}</h1>
@@ -84,11 +87,30 @@ export default function KnowledgeArticlePage() {
             )}
           </div>
 
+          {(article.dose_min != null || article.dose_max != null || article.product_note || article.ingredients?.length) && (
+            <section className="mb-6 grid gap-3 rounded-lg border border-blue-100 bg-blue-50 p-4 text-sm font-semibold text-slate-700">
+              {(article.dose_min != null || article.dose_max != null) && (
+                <p>Dosisdetails: {article.dose_min ?? 'offen'}{article.dose_max != null ? ` bis ${article.dose_max}` : ''} {article.dose_unit ?? ''}</p>
+              )}
+              {article.ingredients && article.ingredients.length > 0 && (
+                <p>Wirkstoffe: {article.ingredients.map((ingredient) => ingredient.name || `#${ingredient.ingredient_id}`).join(', ')}</p>
+              )}
+              {article.product_note && <p>{article.product_note}</p>}
+            </section>
+          )}
+
           <div className="space-y-4 text-[15px] font-medium leading-7 text-slate-700">
             {paragraphs.map((paragraph) => (
               <p key={paragraph}>{paragraph}</p>
             ))}
           </div>
+
+          {article.conclusion && (
+            <section className="mt-8 rounded-lg border border-emerald-100 bg-emerald-50 p-5">
+              <h2 className="text-sm font-black uppercase tracking-[0.12em] text-emerald-700">Fazit</h2>
+              <p className="mt-3 text-[15px] font-semibold leading-7 text-slate-700">{article.conclusion}</p>
+            </section>
+          )}
 
           {article.sources.length > 0 && (
             <section className="mt-8 border-t border-slate-100 pt-6">

@@ -1,25 +1,18 @@
 import { Link, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import {
-  ArrowUpWideNarrow,
   BookOpen,
   ChevronRight,
   Download,
   ExternalLink,
+  FileText,
   FlaskConical,
   Grid3X3,
-  HeartPulse,
-  History,
-  Inbox,
   Languages,
   LayoutDashboard,
-  Link2,
   LogOut,
   Menu,
   Package,
-  Rocket,
-  Settings,
-  ShieldQuestion,
   Users,
   X,
 } from 'lucide-react';
@@ -47,20 +40,9 @@ const NAV_GROUPS: NavigationGroup[] = [
       { label: 'Dashboard', path: '/administrator/dashboard', icon: <LayoutDashboard size={15} /> },
       { label: 'Wirkstoffe', path: '/administrator/ingredients', icon: <FlaskConical size={15} /> },
       { label: 'Produkte', path: '/administrator/products', icon: <Package size={15} /> },
-      { label: 'Dosis-Richtwerte', path: '/administrator/dosing', icon: <FlaskConical size={15} /> },
-      { label: 'Wissen', path: '/administrator/knowledge', icon: <BookOpen size={15} /> },
+      { label: 'Richtwerte', path: '/administrator/dosing', icon: <FlaskConical size={15} /> },
+      { label: 'Wissensdatenbank', path: '/administrator/knowledge', icon: <BookOpen size={15} /> },
       { label: 'Übersetzungen', path: '/administrator/translations', icon: <Languages size={15} /> },
-    ],
-  },
-  {
-    title: 'Operations',
-    items: [
-      { label: 'Nutzer-Produkte', path: '/administrator/user-products', icon: <Inbox size={15} /> },
-      { label: 'Produktprüfung', path: '/administrator/product-qa', icon: <ShieldQuestion size={15} /> },
-      { label: 'Linkmeldungen', path: '/administrator/link-reports', icon: <Link2 size={15} /> },
-      { label: 'Go-Live-Checks', path: '/administrator/launch-checks', icon: <Rocket size={15} /> },
-      { label: 'Audit-Log', path: '/administrator/audit-log', icon: <History size={15} /> },
-      { label: 'Health', path: '/administrator/health', icon: <HeartPulse size={15} /> },
       {
         label: 'Wechselwirkungs-Matrix',
         path: '/administrator/interactions',
@@ -74,9 +56,7 @@ const NAV_GROUPS: NavigationGroup[] = [
     items: [
       { label: 'Benutzerverwaltung', path: '/administrator/users', icon: <Users size={15} /> },
       { label: 'Shop-Domains', path: '/administrator/shop-domains', icon: <ExternalLink size={15} /> },
-      { label: 'Rankings', path: '/administrator/rankings', icon: <ArrowUpWideNarrow size={15} /> },
-      { label: 'Sub-Wirkstoffe', path: '/administrator/sub-ingredients', icon: <FlaskConical size={15} /> },
-      { label: 'Einstellungen', path: '/administrator/settings', icon: <Settings size={15} /> },
+      { label: 'Rechtliches', path: '/administrator/legal', icon: <FileText size={15} /> },
     ],
   },
 ];
@@ -85,29 +65,19 @@ const ROUTE_TITLES: Record<string, { group: string; title: string }> = {
   '/administrator/dashboard': { group: 'Katalog', title: 'Dashboard' },
   '/administrator/ingredients': { group: 'Katalog', title: 'Wirkstoffe' },
   '/administrator/products': { group: 'Katalog', title: 'Produkte' },
-  '/administrator/dosing': { group: 'Katalog', title: 'Dosis-Richtwerte' },
-  '/administrator/knowledge': { group: 'Katalog', title: 'Wissen' },
+  '/administrator/dosing': { group: 'Katalog', title: 'Richtwerte' },
+  '/administrator/knowledge': { group: 'Katalog', title: 'Wissensdatenbank' },
   '/administrator/translations': { group: 'Katalog', title: 'Übersetzungen' },
-  '/administrator/user-products': { group: 'Offene Aufgaben', title: 'Nutzer-Produkte' },
-  '/administrator/product-qa': { group: 'Offene Aufgaben', title: 'Produktprüfung' },
-  '/administrator/link-reports': { group: 'Operations', title: 'Linkmeldungen' },
-  '/administrator/launch-checks': { group: 'Operations', title: 'Go-Live-Checks' },
-  '/administrator/audit-log': { group: 'Operations', title: 'Audit-Log' },
-  '/administrator/health': { group: 'Operations', title: 'Health' },
-  '/administrator/interactions': { group: 'Operations', title: 'Wechselwirkungs-Matrix' },
+  '/administrator/interactions': { group: 'Katalog', title: 'Wechselwirkungs-Matrix' },
   '/administrator/users': { group: 'Konfiguration', title: 'Benutzerverwaltung' },
   '/administrator/shop-domains': { group: 'Konfiguration', title: 'Shop-Domains' },
-  '/administrator/rankings': { group: 'Konfiguration', title: 'Rankings' },
-  '/administrator/sub-ingredients': { group: 'Konfiguration', title: 'Sub-Wirkstoffe' },
-  '/administrator/settings': { group: 'Konfiguration', title: 'Einstellungen' },
+  '/administrator/legal': { group: 'Konfiguration', title: 'Rechtliches' },
+  '/administrator/profile': { group: 'Konto', title: 'Admin-Profil' },
 };
 
 const EXPORT_ENTITIES: Record<string, string> = {
   '/administrator/products': 'products',
   '/administrator/ingredients': 'ingredients',
-  '/administrator/user-products': 'user-products',
-  '/administrator/product-qa': 'product-qa',
-  '/administrator/link-reports': 'link-reports',
 };
 
 function isActive(pathname: string, item: NavigationItem): boolean {
@@ -296,13 +266,13 @@ export default function AdministratorShell() {
 
           <Navigation pathname={location.pathname} />
 
-          <div className="admin-sidebar-footer">
+          <Link to="/administrator/profile" className="admin-sidebar-footer" title="Admin-Profil oeffnen">
             <div className="admin-avatar">{userInitials}</div>
             <div className="min-w-0 text-xs leading-tight">
               <div className="truncate font-medium text-[color:var(--admin-ink)]">{user.email}</div>
               <div className="admin-muted">Admin - /administrator</div>
             </div>
-          </div>
+          </Link>
         </aside>
 
         <div className="admin-main">

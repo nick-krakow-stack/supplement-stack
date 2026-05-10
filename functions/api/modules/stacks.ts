@@ -358,7 +358,7 @@ async function validateStackProductReferences(
       FROM user_products
       WHERE id IN (${placeholders})
         AND user_id = ?
-        AND status IN ('pending', 'approved')
+        AND status IN ('pending', 'approved', 'blocked')
     `).bind(...userProductIds, userId).first<{ count: number }>()
     if ((row?.count ?? 0) !== userProductIds.length) return false
   }
@@ -704,7 +704,7 @@ stacks.post('/', async (c) => {
     return c.json({ error: normalized.error ?? 'Invalid product_ids' }, 400)
   }
   if (!(await validateStackProductReferences(c.env.DB, user.userId, normalized.items))) {
-    return c.json({ error: 'Stacks can only use public catalog products or your own pending/approved products' }, 400)
+    return c.json({ error: 'Stacks can only use public catalog products or your own pending/approved/blocked products' }, 400)
   }
 
   const stackResult = await c.env.DB.prepare(
@@ -768,7 +768,7 @@ stacks.post('/link-report', async (c) => {
     ? await c.env.DB.prepare(`
         SELECT id, name, shop_link
         FROM user_products
-        WHERE id = ? AND user_id = ? AND status IN ('pending', 'approved')
+        WHERE id = ? AND user_id = ? AND status IN ('pending', 'approved', 'blocked')
       `).bind(productId, user.userId).first<StackLinkReportProduct>()
     : await c.env.DB.prepare(`
         SELECT id, name, shop_link
@@ -897,7 +897,7 @@ stacks.put('/:id', async (c) => {
       return c.json({ error: normalized.error ?? 'Invalid product_ids' }, 400)
     }
     if (!(await validateStackProductReferences(c.env.DB, stack.user_id, normalized.items))) {
-      return c.json({ error: 'Stacks can only use public catalog products or your own pending/approved products' }, 400)
+      return c.json({ error: 'Stacks can only use public catalog products or your own pending/approved/blocked products' }, 400)
     }
     normalizedItems = normalized.items
   }

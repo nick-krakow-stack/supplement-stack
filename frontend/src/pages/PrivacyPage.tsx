@@ -1,6 +1,9 @@
+import LegalDocumentPage from '../components/LegalDocumentPage';
+
 export default function PrivacyPage() {
   return (
-    <article className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
+    <LegalDocumentPage slug="datenschutz" eyebrow="Datenschutz" title="Datenschutz">
+      <article className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
       <p className="mb-2 text-sm font-bold uppercase tracking-wide text-blue-600">Datenschutz</p>
       <h1 className="mb-6 text-3xl font-black text-slate-900">Datenschutzerklärung</h1>
 
@@ -177,6 +180,7 @@ export default function PrivacyPage() {
           . Eingeloggte Nutzer können Profil- und Account-Funktionen direkt in der App nutzen.
         </p>
       </section>
-    </article>
+      </article>
+    </LegalDocumentPage>
   );
 }

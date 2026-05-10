@@ -227,11 +227,11 @@ export default function AdministratorHealthPage() {
     <>
       <AdminPageHeader
         title="Health"
-        subtitle="Systemzustand, offene Aufgaben und prüfbare Hinweise auf einen Blick."
+        subtitle="Status prüfen und offene Aufgaben sehen."
         meta={
           <div className="admin-toolbar-inline items-center">
             <span className="admin-live-dot" />
-            <span>{loading ? 'laedt' : data ? 'live' : 'offline'}</span>
+            <span>{loading ? 'lädt' : data ? 'live' : 'offline'}</span>
             <AdminButton size="sm" onClick={() => void load()} disabled={loading}>
               <RefreshCw size={13} />
               Aktualisieren

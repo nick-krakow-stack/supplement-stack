@@ -33,12 +33,14 @@ function getShopHost(shopLink?: string | null): string {
 function statusLabel(status: AdminUserProductStatus, publishedId?: number | null): string {
   if (status === 'pending') return 'Ausstehend';
   if (status === 'rejected') return 'Abgelehnt';
+  if (status === 'blocked') return 'Gesperrt';
   return publishedId ? 'Im Katalog' : 'Freigegeben';
 }
 
 function statusTone(status: AdminUserProductStatus, publishedId?: number | null): 'neutral' | 'ok' | 'warn' | 'danger' | 'info' {
   if (status === 'pending') return 'warn';
   if (status === 'rejected') return 'danger';
+  if (status === 'blocked') return 'danger';
   return publishedId ? 'ok' : 'info';
 }
 
@@ -75,6 +77,7 @@ export default function AdministratorUserProductsPage() {
     pending: 0,
     approved: 0,
     rejected: 0,
+    blocked: 0,
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -289,7 +292,7 @@ export default function AdministratorUserProductsPage() {
 
       <div className="mb-4 admin-toolbar">
         <div className="admin-toolbar-inline">
-          {(['pending', 'approved', 'rejected'] as const).map((status) => (
+          {(['pending', 'approved', 'rejected', 'blocked'] as const).map((status) => (
             <AdminButton
               key={status}
               variant={statusFilter === status ? 'primary' : 'default'}
@@ -298,7 +301,7 @@ export default function AdministratorUserProductsPage() {
                 setStatusFilter(status);
               }}
             >
-              {status === 'pending' ? 'Ausstehend' : status === 'approved' ? 'Freigegeben' : 'Abgelehnt'}
+              {status === 'pending' ? 'Ausstehend' : status === 'approved' ? 'Freigegeben' : status === 'blocked' ? 'Gesperrt' : 'Abgelehnt'}
               <AdminBadge tone={status === 'pending' ? 'warn' : status === 'approved' ? 'info' : 'danger'}>
                 {statusSummary[status]}
               </AdminBadge>

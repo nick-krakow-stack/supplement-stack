@@ -343,7 +343,7 @@ export default function AdministratorSubIngredientsPage() {
     <>
       <AdminPageHeader
         title="Wirkstoff-Beziehungen"
-        subtitle="Pflegt Beziehungen zwischen übergeordneten und untergeordneten Wirkstoffen."
+        subtitle="Zusammenhänge zwischen Wirkstoffen pflegen."
         meta={<AdminBadge tone="info">{mappings.length} Zuordnungen</AdminBadge>}
       />
 

@@ -1,6 +1,112 @@
 # Decisions
 
-Last updated: 2026-05-07
+Last updated: 2026-05-08
+
+## 2026-05-08 - Admin Dashboard Is Post-Launch Operations
+
+Decision: the admin dashboard should represent the post-launch operator view,
+not a temporary pre-launch checklist.
+
+Operational rules:
+
+- Lead with `Heute zu tun`, because urgent maintenance work is the first thing
+  an operator needs to see.
+- Show registrations and activations together; activations remain defined by
+  `users.email_verified_at IS NOT NULL`.
+- Use `Umsatzsignale` rather than revenue promises. The dashboard can show
+  affiliate clicks, non-affiliate clicks, top clicked products, top shops,
+  deadlinks, and link reports as operational signals.
+- Keep catalog/content maintenance visible: product QA, link reports, due
+  Wirkstoff reviews, warnings without articles, and knowledge drafts.
+- Write admin subtitles for humans doing work, not for system taxonomy. Counts
+  belong in meta text or cards; subtitles should explain what the operator can
+  understand or act on.
+
+Rationale:
+
+- After launch, the owner needs a fast operational overview: what needs
+  attention, where users are active, where link revenue may be leaking, and
+  which content/catalog areas need maintenance.
+
+## 2026-05-08 - Knowledge Article Structured Sources
+
+Decision: Wissensdatenbank sources are edited as structured rows, while
+`sources_json` remains a compatibility mirror/fallback.
+
+Operational rules:
+
+- Admin users enter article sources as repeated `Name` + `Link` fields.
+- Canonical storage for new edits is `knowledge_article_sources`.
+- `knowledge_articles.sources_json` may remain populated as a JSON mirror so
+  existing public/API code and older content keep working during transition.
+- Article-to-ingredient links are stored in `knowledge_article_ingredients`;
+  selecting the article from a Wirkstoff context or selecting Wirkstoffe from
+  the article editor should represent the same relation.
+- Optional article image, conclusion, dose min/max/unit, and product note live
+  on `knowledge_articles`.
+
+Rationale:
+
+- The owner should not have to write JSON for one to five sources.
+- Keeping the JSON mirror avoids a brittle one-shot compatibility break while
+  still moving the editor and data model to normal relational rows.
+
+## 2026-05-08 - Admin QA Task Status And Recommendation Slots
+
+Decision: lightweight admin completion states for Wirkstoffe use a generic
+task-status table, while product ordering per Wirkstoff uses explicit
+recommendation slots.
+
+Operational rules:
+
+- `ingredient_admin_task_status` stores per-ingredient statuses for
+  `forms`, `dge`, `precursors`, and `synonyms`.
+- Status values are `open`, `done`, and `none`.
+- `none` means the admin intentionally confirmed that no special entry exists,
+  e.g. no special forms or no DGE recommendation/restriction.
+- Product recommendation slots are `primary`, `alternative_1`, and
+  `alternative_2`.
+- A recommendation slot points to a product and may optionally point to a
+  concrete `product_shop_links.id`.
+- When a concrete `shop_link_id` is set, the API validates that the shop link
+  belongs to the selected product.
+- Public ingredient product ordering may use these slots for sorting, but the
+  user-facing UI should not force the word `Empfehlung`.
+
+Rationale:
+
+- The status table avoids schema churn for each admin checklist item.
+- Explicit slots match the owner's editing workflow and preserve flexibility
+  for multiple shop links per product.
+
+## 2026-05-07 - Admin Operations Metrics And Shop-Link Core
+
+Decision: admin operations should track registrations and verified activations,
+not a separate signup-callout metric based on visitor copy.
+
+Operational rules:
+
+- Dashboard card label is `Anmeldungen`.
+- The main number counts users created in the selected date range.
+- The subtext counts activations in the same selected range, defined by
+  `users.email_verified_at IS NOT NULL`.
+- Do not add a separate "Neue Besucher" card for registration-callout copy.
+- Product shop clicks use first-party redirect tracking through
+  `/api/products/:id/out`; store only minimal click context and avoid IP or
+  User-Agent storage.
+- Product shop-link data should move toward `product_shop_links` as the
+  canonical multi-link model while legacy `products.shop_link` remains synced
+  for compatibility during the transition.
+- Audit-Log is no longer a primary admin navigation item and may be removed
+  from the visible operator menu.
+
+Rationale:
+
+- Activated users are the meaningful post-registration signal because the
+  product uses email-link verification as the second factor in the signup
+  funnel.
+- The multi-shoplink/link-health/click tables let admin operations evolve
+  without overloading the legacy single `products.shop_link` field.
 
 ## 2026-05-07 - Admin Visual Reference Applied
 
@@ -1074,3 +1180,29 @@ Rationale:
   admin mutations.
 - The existing non-versioned route remains useful compatibility surface, but
   should not be the write path for the rebuilt admin editor.
+
+## 2026-05-07 - Admin Shop Links, Public Legal Fallback, Audit-Log Removal
+
+Decision: Product Detail owns product shop-link editing, public legal pages use
+published DB documents with static fallback, and the visible Audit-Log surface is
+removed.
+
+Operational rule:
+- Use `/api/admin/products/:id/shop-links` for product shop-link CRUD.
+- A product may have multiple shop links, but the active primary link is mirrored
+  into legacy `products.shop_link` and affiliate owner columns for older public
+  and admin compatibility paths.
+- Manual link rechecks use the admin recheck endpoint and persist
+  `product_shop_link_health`.
+- Public legal pages fetch `/api/legal-documents/:slug`; if no published
+  document exists, they render the static legal copy.
+- Do not re-add `/administrator/audit-log` or `/api/admin/audit-log` unless the
+  owner explicitly requests a new audit review surface.
+
+Rationale:
+- The owner wants shop management directly at the product, including multiple
+  shops and link-health handling.
+- Legal copy should be editable from admin without risking empty public legal
+  pages during transition.
+- Audit-Log was explicitly removed from the admin workflow to reduce surface
+  area before launch.

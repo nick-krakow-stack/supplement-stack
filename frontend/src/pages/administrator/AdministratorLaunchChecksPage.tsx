@@ -195,11 +195,11 @@ export default function AdministratorLaunchChecksPage() {
     <>
       <AdminPageHeader
         title="Go-Live-Checks"
-        subtitle="Prüft Datenbank, offene Aufgaben, Konfiguration und Domain. Geheimwerte werden nicht angezeigt."
+        subtitle="Startklarheit prüfen, ohne sensible Werte zu zeigen."
         meta={
           <div className="admin-toolbar-inline items-center">
             <span className="admin-live-dot" />
-            <span>{loading ? 'laedt' : data ? 'live' : 'offline'}</span>
+            <span>{loading ? 'lädt' : data ? 'live' : 'offline'}</span>
             <AdminButton size="sm" onClick={() => void load()} disabled={loading}>
               <RefreshCw size={13} />
               Aktualisieren

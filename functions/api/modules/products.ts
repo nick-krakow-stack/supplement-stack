@@ -34,6 +34,13 @@ type AffiliateOwnership = {
   is_affiliate: number
 }
 
+type ProductShopLinkRedirectRow = {
+  product_id: number
+  shop_link_id: number | null
+  url: string | null
+  is_affiliate: number | null
+}
+
 type ProductIngredientInput = {
   ingredient_id: number
   is_main: boolean
@@ -117,6 +124,11 @@ function positiveInteger(value: unknown): number | undefined {
   return parsed !== undefined && Number.isInteger(parsed) ? parsed : undefined
 }
 
+function positiveIntegerOrNull(value: unknown): number | null {
+  const parsed = positiveInteger(value)
+  return parsed ?? null
+}
+
 function optionalPositiveIntegerOrNull(value: unknown): number | null | undefined {
   if (value === undefined) return undefined
   if (value === null || value === '') return null
@@ -142,6 +154,93 @@ function parseAffiliateOwnerType(value: unknown): AffiliateOwnerType | undefined
   return (AFFILIATE_OWNER_TYPES as readonly string[]).includes(normalized)
     ? normalized as AffiliateOwnerType
     : undefined
+}
+
+async function hasTable(db: D1Database, tableName: string): Promise<boolean> {
+  try {
+    const row = await db.prepare(`
+      SELECT name
+      FROM sqlite_master
+      WHERE type = 'table'
+        AND name = ?
+    `).bind(tableName).first<{ name: string }>()
+    return row?.name === tableName
+  } catch {
+    return false
+  }
+}
+
+function outboundUrl(value: string | null | undefined): string | null {
+  if (!value) return null
+  try {
+    const parsed = new URL(value)
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null
+    return parsed.toString()
+  } catch {
+    return null
+  }
+}
+
+function compactQueryText(value: unknown, fallback: string): string {
+  if (typeof value !== 'string') return fallback
+  const trimmed = value.trim().slice(0, 80)
+  return trimmed || fallback
+}
+
+async function primaryProductShopLink(
+  db: D1Database,
+  productId: number,
+  preferredShopLinkId: number | null = null,
+): Promise<ProductShopLinkRedirectRow | null> {
+  if (await hasTable(db, 'product_shop_links')) {
+    if (preferredShopLinkId !== null) {
+      return await db.prepare(`
+        SELECT
+          p.id AS product_id,
+          psl.id AS shop_link_id,
+          psl.url,
+          COALESCE(psl.is_affiliate, p.is_affiliate, 0) AS is_affiliate
+        FROM products p
+        JOIN product_shop_links psl ON psl.product_id = p.id
+        WHERE p.id = ?
+          AND p.visibility = 'public'
+          AND p.moderation_status = 'approved'
+          AND psl.id = ?
+          AND psl.active = 1
+        LIMIT 1
+      `).bind(productId, preferredShopLinkId).first<ProductShopLinkRedirectRow>()
+    }
+
+    const row = await db.prepare(`
+      SELECT
+        p.id AS product_id,
+        psl.id AS shop_link_id,
+        psl.url,
+        COALESCE(psl.is_affiliate, p.is_affiliate, 0) AS is_affiliate
+      FROM products p
+      JOIN product_shop_links psl ON psl.product_id = p.id
+      WHERE p.id = ?
+        AND p.visibility = 'public'
+        AND p.moderation_status = 'approved'
+        AND psl.active = 1
+      ORDER BY psl.is_primary DESC, psl.sort_order ASC, psl.id ASC
+      LIMIT 1
+    `).bind(productId).first<ProductShopLinkRedirectRow>()
+    if (row) return row
+  }
+
+  return await db.prepare(`
+    SELECT
+      p.id AS product_id,
+      NULL AS shop_link_id,
+      p.shop_link AS url,
+      COALESCE(p.is_affiliate, 0) AS is_affiliate
+    FROM products p
+    WHERE p.id = ?
+      AND p.visibility = 'public'
+      AND p.moderation_status = 'approved'
+    LIMIT 1
+  `).bind(productId).first<ProductShopLinkRedirectRow>()
 }
 
 function normalizeAffiliateOwnership(
@@ -452,6 +551,59 @@ products.get('/', async (c) => {
   return c.json({ products: attachWarningsToProducts(results, warningsByProduct) })
 })
 
+// GET /api/products/:id/out
+products.get('/:id/out', async (c) => {
+  const productId = positiveIntegerOrNull(c.req.param('id'))
+  if (productId === null) return c.json({ error: 'Invalid product id' }, 400)
+  const rawShopLinkId = c.req.query('shop_link_id')?.trim()
+  const shopLinkId = rawShopLinkId ? positiveIntegerOrNull(rawShopLinkId) : null
+  if (rawShopLinkId && shopLinkId === null) return c.json({ error: 'Invalid shop link id' }, 400)
+
+  const link = await primaryProductShopLink(c.env.DB, productId, shopLinkId)
+  const targetUrl = outboundUrl(link?.url)
+  if (!link || !targetUrl) return c.json({ error: 'Product link not found' }, 404)
+
+  if (await hasTable(c.env.DB, 'product_link_clicks')) {
+    const stackId = positiveIntegerOrNull(c.req.query('stack_id'))
+    const context = compactQueryText(c.req.query('context'), 'product_card')
+    const referrerPath = (() => {
+      const referer = c.req.header('Referer')
+      if (!referer) return null
+      try {
+        const parsed = new URL(referer)
+        return `${parsed.pathname}${parsed.search}`.slice(0, 240)
+      } catch {
+        return null
+      }
+    })()
+
+    await c.env.DB.prepare(`
+      INSERT INTO product_link_clicks (
+        product_type,
+        product_id,
+        shop_link_id,
+        user_id,
+        stack_id,
+        is_affiliate,
+        url_snapshot,
+        context,
+        referrer_path
+      )
+      VALUES ('catalog', ?, ?, NULL, ?, ?, ?, ?, ?)
+    `).bind(
+      link.product_id,
+      link.shop_link_id,
+      stackId,
+      link.is_affiliate === 1 ? 1 : 0,
+      targetUrl,
+      context,
+      referrerPath,
+    ).run()
+  }
+
+  return c.redirect(targetUrl, 302)
+})
+
 // GET /api/products/:id
 products.get('/:id', async (c) => {
   const id = c.req.param('id')
@@ -481,6 +633,8 @@ products.get('/:id', async (c) => {
      AND idp_base.form_id IS NULL
      AND idp_base.sub_ingredient_id IS NULL
     WHERE p.id = ?
+      AND p.visibility = 'public'
+      AND p.moderation_status = 'approved'
   `).bind(id).first<ProductRow>()
   if (!product) return c.json({ error: 'Not found' }, 404)
   const { results: ingredients } = await c.env.DB.prepare(`
@@ -551,6 +705,11 @@ products.post('/', async (c) => {
   ).bind(data.name, data.brand).first()
   if (dup) return c.json({ error: 'Duplicate product detected' }, 409)
 
+  const submitter = await c.env.DB.prepare(
+    'SELECT is_blocked_product_submitter FROM users WHERE id = ?'
+  ).bind(user.userId).first<{ is_blocked_product_submitter: number | null }>()
+  const moderationStatus = submitter?.is_blocked_product_submitter === 1 ? 'blocked' : 'pending'
+
   const result = await c.env.DB.prepare(
     `INSERT INTO products (
       name, brand, form, price, shop_link, image_url, moderation_status, visibility,
@@ -564,7 +723,7 @@ products.post('/', async (c) => {
     data.price,
     data.shop_link ?? null,
     data.image_url ?? null,
-    'pending',
+    moderationStatus,
     'hidden',
     ownership.is_affiliate,
     ownership.affiliate_owner_type,
@@ -759,7 +918,7 @@ products.put('/:id/status', async (c) => {
   const product = await c.env.DB.prepare('SELECT id FROM products WHERE id = ?').bind(id).first()
   if (!product) return c.json({ error: 'Not found' }, 404)
   const body = await c.req.json()
-  if (body.moderation_status && !['pending', 'approved', 'rejected'].includes(body.moderation_status as string))
+  if (body.moderation_status && !['pending', 'approved', 'rejected', 'blocked'].includes(body.moderation_status as string))
     return c.json({ error: 'Invalid moderation_status' }, 400)
   if (body.visibility && !['public', 'hidden'].includes(body.visibility as string))
     return c.json({ error: 'Invalid visibility' }, 400)
@@ -794,6 +953,27 @@ r2App.get('/products/:productId/:filename', async (c) => {
   const productId = c.req.param('productId')
   const filename = c.req.param('filename')
   const r2Key = `products/${productId}/${filename}`
+  const object = await c.env.PRODUCT_IMAGES.get(r2Key)
+  if (!object) return c.json({ error: 'Not found' }, 404)
+  const contentType = object.httpMetadata?.contentType ?? 'application/octet-stream'
+  const body = await object.arrayBuffer()
+  return new Response(body, {
+    headers: {
+      'Content-Type': contentType,
+      'Cache-Control': 'public, max-age=31536000, immutable',
+    },
+  })
+})
+
+// GET /api/r2/knowledge/:slug/:filename (public - R2 proxy)
+r2App.get('/knowledge/:slug/:filename', async (c) => {
+  if (!c.env.PRODUCT_IMAGES) return c.json({ error: 'Image storage not configured' }, 501)
+  const slug = c.req.param('slug')
+  const filename = c.req.param('filename')
+  if (!/^[a-z0-9-]+$/.test(slug) || !/^[a-f0-9-]+\.(?:jpg|png|webp)$/i.test(filename)) {
+    return c.json({ error: 'Invalid image path' }, 400)
+  }
+  const r2Key = `knowledge/${slug}/${filename}`
   const object = await c.env.PRODUCT_IMAGES.get(r2Key)
   if (!object) return c.json({ error: 'Not found' }, 404)
   const contentType = object.httpMetadata?.contentType ?? 'application/octet-stream'

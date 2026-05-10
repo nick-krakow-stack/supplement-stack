@@ -17,7 +17,6 @@ import {
   type DoseDraft,
   type SelectedDoseId,
   type SourceLinkDraft,
-  SOURCE_TYPES,
   blankDoseDraft,
   doseLabel,
   draftFromRecommendation,
@@ -34,6 +33,66 @@ function statusChip(label: string, active: boolean, tone: 'green' | 'blue' | 'am
   return <AdminBadge tone={tone === 'green' ? 'ok' : tone === 'amber' ? 'warn' : 'info'}>{label}</AdminBadge>;
 }
 
+type SourceStatusFilter = '' | 'official' | 'with-studies' | 'without-studies';
+type LinkTypeFilter = '' | 'internal' | 'external' | 'none';
+
+function isHiddenAdminDose(row: AdminDoseRecommendation, ingredientName: string): boolean {
+  const normalizedName = ingredientName.trim().toLowerCase();
+  if (normalizedName === 'eha' || normalizedName === 'dpa') return true;
+  if (row.created_by_user_id != null) return true;
+  if (row.is_public === 0) return true;
+  return false;
+}
+
+function hasOfficialSource(row: AdminDoseRecommendation): boolean {
+  const haystack = [
+    row.source_type,
+    row.source_label,
+    row.source_url,
+    ...(row.sources ?? []).flatMap((source) => [
+      source.source_kind,
+      source.source_title,
+      source.source_url,
+      source.organization,
+    ]),
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  return /\b(official|dge|efsa|bfr|nih|ods|rki|who|beh[oö]rde|leitlinie)\b/.test(haystack);
+}
+
+function hasStudySource(row: AdminDoseRecommendation): boolean {
+  if ((row.sources ?? []).length > 0) return true;
+  const haystack = [row.source_type, row.source_label, row.source_url].filter(Boolean).join(' ').toLowerCase();
+  return /\b(study|studie|rct|meta|review|pubmed|doi|pmid)\b/.test(haystack);
+}
+
+function getPrimarySourceUrl(row: AdminDoseRecommendation): string {
+  return row.source_url || row.sources?.find((source) => source.is_primary === 1)?.source_url || row.sources?.find((source) => source.source_url)?.source_url || '';
+}
+
+function getLinkType(row: AdminDoseRecommendation): LinkTypeFilter {
+  const url = getPrimarySourceUrl(row).trim();
+  if (!url) return 'none';
+  if (url.startsWith('/') || url.startsWith('#')) return 'internal';
+  try {
+    const parsed = new URL(url, window.location.origin);
+    return parsed.origin === window.location.origin ? 'internal' : 'external';
+  } catch {
+    return 'external';
+  }
+}
+
+function sourceStatusMatches(row: AdminDoseRecommendation, filter: SourceStatusFilter): boolean {
+  if (!filter) return true;
+  if (filter === 'official') return hasOfficialSource(row);
+  const hasStudies = hasStudySource(row);
+  if (filter === 'with-studies') return hasStudies;
+  return !hasStudies;
+}
+
 export default function AdministratorDosingPage() {
   const [recommendations, setRecommendations] = useState<AdminDoseRecommendation[]>([]);
   const [ingredients, setIngredients] = useState<IngredientLookup[]>([]);
@@ -43,9 +102,8 @@ export default function AdministratorDosingPage() {
   const [sourceLinks, setSourceLinks] = useState<SourceLinkDraft[]>([]);
   const [query, setQuery] = useState('');
   const [ingredientFilter, setIngredientFilter] = useState('');
-  const [sourceTypeFilter, setSourceTypeFilter] = useState('');
-  const [activeFilter, setActiveFilter] = useState('');
-  const [publicFilter, setPublicFilter] = useState('');
+  const [sourceStatusFilter, setSourceStatusFilter] = useState<SourceStatusFilter>('');
+  const [linkTypeFilter, setLinkTypeFilter] = useState<LinkTypeFilter>('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -87,11 +145,14 @@ export default function AdministratorDosingPage() {
         q: query,
         limit: 100,
         ingredient_id: ingredientFilter ? Number(ingredientFilter) : undefined,
-        source_type: sourceTypeFilter || undefined,
-        active: activeFilter || undefined,
-        public: publicFilter || undefined,
       });
-      const rows = response.recommendations;
+      const rows = response.recommendations.filter((row) => {
+        const ingredientName = row.ingredient_name || ingredientNameById.get(row.ingredient_id ?? 0) || '';
+        if (isHiddenAdminDose(row, ingredientName)) return false;
+        if (!sourceStatusMatches(row, sourceStatusFilter)) return false;
+        if (linkTypeFilter && getLinkType(row) !== linkTypeFilter) return false;
+        return true;
+      });
       setRecommendations(rows);
       setSelectedId((previous) => {
         if (previous === 'new') return previous;
@@ -105,7 +166,7 @@ export default function AdministratorDosingPage() {
     } finally {
       setLoading(false);
     }
-  }, [activeFilter, ingredientFilter, publicFilter, query, sourceTypeFilter]);
+  }, [ingredientFilter, ingredientNameById, linkTypeFilter, query, sourceStatusFilter]);
 
   useEffect(() => {
     void loadIngredients();
@@ -248,12 +309,57 @@ export default function AdministratorDosingPage() {
   return (
     <>
       <AdminPageHeader
-        title="Dosis-Richtwerte"
-        subtitle="Richtwerte, Quellen und verknüpfte Studien je Wirkstoff pflegen."
+        title="Richtwerte"
+        subtitle="Dosierungen prüfen und mit Quellen belegen."
         meta={<AdminBadge tone="info">{recommendations.length} Richtwerte</AdminBadge>}
       />
 
-      <div className="mb-4 flex flex-wrap gap-2">
+      <div className="admin-filter-bar mb-4">
+        <div className="admin-filter-main">
+          <label className="admin-filter-search flex min-h-[34px] items-center gap-2 rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg)] px-3">
+            <Search size={15} className="admin-muted" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Wirkstoff, Quelle, Kontext suchen"
+              className="min-w-0 flex-1 bg-transparent text-[12.5px] outline-none"
+            />
+          </label>
+        </div>
+        <div className="admin-filter-controls">
+          <select
+            value={ingredientFilter}
+            onChange={(event) => setIngredientFilter(event.target.value)}
+            className="admin-select"
+          >
+            {ingredientOptions.map((option) => (
+              <option key={option.value || option.label} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <select
+            value={sourceStatusFilter}
+            onChange={(event) => setSourceStatusFilter(event.target.value as SourceStatusFilter)}
+            className="admin-select"
+          >
+            <option value="">Alle Quellen</option>
+            <option value="official">Offiziell</option>
+            <option value="with-studies">Studien vorhanden</option>
+            <option value="without-studies">Keine Studien vorhanden</option>
+          </select>
+          <select
+            value={linkTypeFilter}
+            onChange={(event) => setLinkTypeFilter(event.target.value as LinkTypeFilter)}
+            className="admin-select"
+          >
+            <option value="">Alle Links</option>
+            <option value="internal">Interner Link</option>
+            <option value="external">Externer Link</option>
+            <option value="none">Kein Link</option>
+          </select>
+        </div>
+        <div className="admin-filter-actions">
           <AdminButton onClick={handleNew}>
             <Plus size={15} />
             Neu
@@ -262,60 +368,8 @@ export default function AdministratorDosingPage() {
             <RefreshCw size={15} />
             Aktualisieren
           </AdminButton>
+        </div>
       </div>
-
-      <section className="admin-toolbar mb-4 lg:grid-cols-[minmax(180px,1fr)_180px_150px_150px_150px]">
-        <label className="flex min-h-[38px] items-center gap-2 rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg)] px-3">
-          <Search size={16} className="admin-muted" />
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Wirkstoff, Quelle, Kontext suchen"
-            className="min-w-0 flex-1 bg-transparent text-[13px] outline-none"
-          />
-        </label>
-        <select
-          value={ingredientFilter}
-          onChange={(event) => setIngredientFilter(event.target.value)}
-          className="admin-select"
-        >
-          {ingredientOptions.map((option) => (
-            <option key={option.value || option.label} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        <select
-          value={sourceTypeFilter}
-          onChange={(event) => setSourceTypeFilter(event.target.value)}
-          className="admin-select"
-        >
-          <option value="">Alle Quellen</option>
-          {SOURCE_TYPES.map((type) => (
-            <option key={type} value={type}>
-              {type}
-            </option>
-          ))}
-        </select>
-        <select
-          value={activeFilter}
-          onChange={(event) => setActiveFilter(event.target.value)}
-          className="admin-select"
-        >
-          <option value="">Aktiv/Inaktiv</option>
-          <option value="1">Aktiv</option>
-          <option value="0">Inaktiv</option>
-        </select>
-        <select
-          value={publicFilter}
-          onChange={(event) => setPublicFilter(event.target.value)}
-          className="admin-select"
-        >
-          <option value="">Public/Privat</option>
-          <option value="1">Public</option>
-          <option value="0">Privat</option>
-        </select>
-      </section>
 
       {error && <AdminError>{error}</AdminError>}
 
@@ -337,14 +391,14 @@ export default function AdministratorDosingPage() {
                   key={row.id}
                   type="button"
                   onClick={() => setSelectedId(row.id)}
-                  className={`admin-card block w-full p-4 text-left transition-colors ${
+                  className={`admin-compact-card admin-card block w-full p-3 text-left transition-colors ${
                     active ? 'border-[color:var(--admin-green)] ring-2 ring-[rgba(74,176,107,0.18)]' : 'hover:bg-[color:var(--admin-bg-sunk)]'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="truncate font-medium" style={{ fontFamily: 'var(--admin-serif)' }}>
-                        #{row.id} {ingredientName}
+                        {ingredientName}
                       </p>
                       <p className="mt-1 text-[13px] text-[color:var(--admin-ink-2)]">{doseLabel(row)}</p>
                     </div>
@@ -354,9 +408,14 @@ export default function AdministratorDosingPage() {
                     {row.source_label || 'Kein Quellenname'} {row.context_note ? `- ${row.context_note}` : ''}
                   </p>
                   <div className="mt-3 flex flex-wrap gap-1.5">
-                    {statusChip('aktiv', row.is_active !== 0, 'green')}
                     {statusChip('default', row.is_default === 1, 'amber')}
-                    {statusChip('public', row.is_public === 1)}
+                    {getLinkType(row) === 'internal' ? (
+                      <AdminBadge tone="ok">Interner Link</AdminBadge>
+                    ) : getLinkType(row) === 'external' ? (
+                      <AdminBadge tone="danger">Externer Link</AdminBadge>
+                    ) : (
+                      <AdminBadge>Kein Link</AdminBadge>
+                    )}
                     {row.sources?.length
                       ? statusChip(`${row.sources.length} Quellen`, true, 'green')
                       : statusChip('keine Links', false)}

@@ -7,6 +7,8 @@ const knowledge = new Hono<AppContext>()
 type ArticleSource = {
   label: string
   url: string
+  name?: string
+  link?: string
 }
 
 type KnowledgeArticleRow = {
@@ -17,8 +19,26 @@ type KnowledgeArticleRow = {
   status: string
   reviewed_at: string | null
   sources_json: string
+  conclusion: string | null
+  featured_image_url: string | null
+  dose_min: number | null
+  dose_max: number | null
+  dose_unit: string | null
+  product_note: string | null
   created_at: string
   updated_at: string
+}
+
+type ArticleSourceRow = {
+  label: string
+  url: string
+  sort_order: number
+}
+
+type ArticleIngredientRow = {
+  ingredient_id: number
+  name: string | null
+  sort_order: number
 }
 
 export type ProductSafetyWarning = {
@@ -71,6 +91,61 @@ function parseSources(value: string): ArticleSource[] {
   } catch {
     return []
   }
+}
+
+async function hasTable(db: D1Database, tableName: string): Promise<boolean> {
+  try {
+    const row = await db.prepare(`
+      SELECT name
+      FROM sqlite_master
+      WHERE type = 'table'
+        AND name = ?
+    `).bind(tableName).first<{ name: string }>()
+    return row?.name === tableName
+  } catch {
+    return false
+  }
+}
+
+async function getTableColumns(db: D1Database, tableName: string): Promise<Set<string>> {
+  try {
+    const { results } = await db.prepare(`PRAGMA table_info(${tableName})`).all<{ name: string }>()
+    return new Set((results ?? []).map((row) => row.name))
+  } catch {
+    return new Set()
+  }
+}
+
+async function loadArticleSources(db: D1Database, slug: string, fallbackJson: string): Promise<ArticleSource[]> {
+  if (await hasTable(db, 'knowledge_article_sources')) {
+    const { results } = await db.prepare(`
+      SELECT label, url, sort_order
+      FROM knowledge_article_sources
+      WHERE article_slug = ?
+      ORDER BY sort_order ASC, id ASC
+    `).bind(slug).all<ArticleSourceRow>()
+    if ((results ?? []).length > 0) {
+      return (results ?? []).map((source) => ({
+        label: source.label,
+        url: source.url,
+        name: source.label,
+        link: source.url,
+      }))
+    }
+  }
+  return parseSources(fallbackJson)
+}
+
+async function loadArticleIngredients(db: D1Database, slug: string): Promise<ArticleIngredientRow[]> {
+  if (!(await hasTable(db, 'knowledge_article_ingredients'))) return []
+  const { results } = await db.prepare(`
+    SELECT kai.ingredient_id, i.name, kai.sort_order
+    FROM knowledge_article_ingredients kai
+    LEFT JOIN ingredients i ON i.id = kai.ingredient_id
+    WHERE kai.article_slug = ?
+    ORDER BY kai.sort_order ASC, i.name ASC
+  `).bind(slug).all<ArticleIngredientRow>()
+  return results ?? []
 }
 
 function normalizeMassUnit(unit?: string | null): 'ug' | 'mg' | 'g' | null {
@@ -245,15 +320,35 @@ export function attachWarningsToProducts<T extends ProductWithId>(
 knowledge.get('/:slug', async (c) => {
   const slug = c.req.param('slug')
   if (!/^[a-z0-9-]+$/.test(slug)) return c.json({ error: 'Invalid slug' }, 400)
+  const columns = await getTableColumns(c.env.DB, 'knowledge_articles')
 
   const article = await c.env.DB.prepare(`
-    SELECT slug, title, summary, body, status, reviewed_at, sources_json, created_at, updated_at
+    SELECT
+      slug,
+      title,
+      summary,
+      body,
+      status,
+      reviewed_at,
+      sources_json,
+      ${columns.has('conclusion') ? 'conclusion' : 'NULL AS conclusion'},
+      ${columns.has('featured_image_url') ? 'featured_image_url' : 'NULL AS featured_image_url'},
+      ${columns.has('dose_min') ? 'dose_min' : 'NULL AS dose_min'},
+      ${columns.has('dose_max') ? 'dose_max' : 'NULL AS dose_max'},
+      ${columns.has('dose_unit') ? 'dose_unit' : 'NULL AS dose_unit'},
+      ${columns.has('product_note') ? 'product_note' : 'NULL AS product_note'},
+      created_at,
+      updated_at
     FROM knowledge_articles
     WHERE slug = ?
       AND status = 'published'
   `).bind(slug).first<KnowledgeArticleRow>()
 
   if (!article) return c.json({ error: 'Not found' }, 404)
+  const [sources, ingredients] = await Promise.all([
+    loadArticleSources(c.env.DB, article.slug, article.sources_json),
+    loadArticleIngredients(c.env.DB, article.slug),
+  ])
 
   return c.json({
     article: {
@@ -262,7 +357,15 @@ knowledge.get('/:slug', async (c) => {
       summary: article.summary,
       body: article.body,
       reviewed_at: article.reviewed_at,
-      sources: parseSources(article.sources_json),
+      conclusion: article.conclusion,
+      featured_image_url: article.featured_image_url,
+      dose_min: article.dose_min,
+      dose_max: article.dose_max,
+      dose_unit: article.dose_unit,
+      product_note: article.product_note,
+      sources,
+      ingredients,
+      ingredient_ids: ingredients.map((ingredient) => ingredient.ingredient_id),
       created_at: article.created_at,
       updated_at: article.updated_at,
     },

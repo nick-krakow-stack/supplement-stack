@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ExternalLink, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { ExternalLink, Plus, RefreshCw, Trash2, X } from 'lucide-react';
 import { AdminBadge, AdminButton, AdminCard, AdminEmpty, AdminError, AdminPageHeader } from './AdminUi';
 
 type ShopDomain = {
@@ -38,6 +38,7 @@ export default function AdministratorShopDomainsPage() {
   const [savingId, setSavingId] = useState<number | 'create' | null>(null);
   const [feedback, setFeedback] = useState('');
   const [query, setQuery] = useState('');
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   const visibleShops = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -104,6 +105,7 @@ export default function AdministratorShopDomainsPage() {
       setNewDomain('');
       setNewName('');
       setFeedback('Domain gespeichert.');
+      setShowCreateModal(false);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Shop-Domain konnte nicht angelegt werden.');
@@ -139,50 +141,88 @@ export default function AdministratorShopDomainsPage() {
     <>
       <AdminPageHeader
         title="Shop-Domains"
-        subtitle="Domainnamen auf Kauf-Links pflegen. Neue Domains direkt als Marken- oder Hostnamen speichern."
+        subtitle="Shops für Kauf-Links verwalten."
         meta={<AdminBadge tone="info">{shops.length} Domains</AdminBadge>}
       />
 
-      <div className="admin-toolbar mb-4">
-        <div className="admin-toolbar-inline">
+      <div className="admin-filter-bar mb-4">
+        <div className="admin-filter-main">
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Suchen: domain oder anzeige"
-            className="admin-input min-w-[220px]"
+            className="admin-input admin-filter-search"
           />
+        </div>
+        <div className="admin-filter-actions">
           <AdminButton onClick={() => void load()} disabled={loading}>
             <RefreshCw size={14} />
             Aktualisieren
           </AdminButton>
+          <AdminButton
+            onClick={() => setShowCreateModal(true)}
+            aria-label="Neue Domain anlegen"
+            title="Neue Domain anlegen"
+            style={{ background: 'var(--admin-green)', color: '#fff', borderColor: 'var(--admin-green)' }}
+          >
+            <Plus size={16} />
+          </AdminButton>
         </div>
+        {feedback && <p className="admin-muted mt-2 text-xs">{feedback}</p>}
       </div>
 
-      <AdminCard title="Neu anlegen" subtitle="Domain und Anzeigenamen erfassen. Beispiel: domain + Markenname.">
-        <div className="admin-toolbar">
-          <div className="admin-toolbar-inline">
-            <input
-              value={newDomain}
-              onChange={(event) => setNewDomain(event.target.value)}
-              placeholder="amazon.de"
-              className="admin-input min-w-[220px]"
-            />
-            <input
-              value={newName}
-              onChange={(event) => setNewName(event.target.value)}
-              placeholder="Amazon"
-              className="admin-input min-w-[220px]"
-            />
-            <AdminButton variant="primary" onClick={() => void handleAdd()} disabled={savingId === 'create'}>
-              <Plus size={14} />
-              Domain speichern
-            </AdminButton>
-          </div>
-          {feedback && <p className="admin-muted mt-2 text-xs">{feedback}</p>}
-        </div>
-      </AdminCard>
-
       {error && <AdminError>{error}</AdminError>}
+
+      {showCreateModal ? (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/35 p-4">
+          <div className="admin-card w-full max-w-[480px] p-4 shadow-[var(--admin-shadow-md)]">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h2 className="admin-card-title">Neue Domain</h2>
+                <p className="admin-card-sub">Domain und Anzeigenamen speichern.</p>
+              </div>
+              <AdminButton
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowCreateModal(false)}
+                aria-label="Modal schliessen"
+                title="Schliessen"
+              >
+                <X size={15} />
+              </AdminButton>
+            </div>
+            <div className="space-y-3">
+              <label className="block text-xs font-medium text-[color:var(--admin-ink-2)]">
+                Domain
+                <input
+                  value={newDomain}
+                  onChange={(event) => setNewDomain(event.target.value)}
+                  placeholder="amazon.de"
+                  className="admin-input mt-1"
+                />
+              </label>
+              <label className="block text-xs font-medium text-[color:var(--admin-ink-2)]">
+                Name
+                <input
+                  value={newName}
+                  onChange={(event) => setNewName(event.target.value)}
+                  placeholder="Amazon"
+                  className="admin-input mt-1"
+                />
+              </label>
+              <div className="flex flex-wrap justify-end gap-2 pt-2">
+                <AdminButton variant="ghost" onClick={() => setShowCreateModal(false)}>
+                  Abbrechen
+                </AdminButton>
+                <AdminButton variant="primary" onClick={() => void handleAdd()} disabled={savingId === 'create' || !newDomain.trim() || !newName.trim()}>
+                  <Plus size={14} />
+                  Speichern
+                </AdminButton>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <AdminCard title="Domainliste">
         {loading && <AdminEmpty>Lade Shop-Domains...</AdminEmpty>}

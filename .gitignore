@@ -31,3 +31,6 @@ functions/.dev.vars
 .claude/settings.local.json
 .claude/worktrees/
 .claude/commands/
+
+# Codex local-only app hooks/state
+.codex/

@@ -104,6 +104,34 @@ function parsePositiveInteger(value: string): number | null {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null
 }
 
+function optionalTrimmedText(value: unknown): string | null | undefined {
+  if (value === undefined) return undefined
+  if (value === null) return null
+  if (typeof value !== 'string') return undefined
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
+function optionalNumber(value: unknown): number | null | undefined {
+  if (value === undefined) return undefined
+  if (value === null || value === '') return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
+function optionalBooleanInt(value: unknown): number | null | undefined {
+  if (value === undefined) return undefined
+  if (value === null || value === '') return null
+  if (value === true || value === 1) return 1
+  if (value === false || value === 0) return 0
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase()
+    if (['1', 'true', 'yes', 'ja'].includes(normalized)) return 1
+    if (['0', 'false', 'no', 'nein'].includes(normalized)) return 0
+  }
+  return undefined
+}
+
 async function hasTable(db: D1Database, tableName: string): Promise<boolean> {
   try {
     const row = await db.prepare(`
@@ -115,6 +143,15 @@ async function hasTable(db: D1Database, tableName: string): Promise<boolean> {
     return row?.name === tableName
   } catch {
     return false
+  }
+}
+
+async function getTableColumns(db: D1Database, tableName: string): Promise<Set<string>> {
+  try {
+    const { results } = await db.prepare(`PRAGMA table_info(${tableName})`).all<{ name: string }>()
+    return new Set((results ?? []).map((row) => row.name))
+  } catch {
+    return new Set()
   }
 }
 
@@ -624,6 +661,48 @@ ingredients.get('/:id/products', async (c) => {
     ).bind(formId, id).first<{ id: number }>()
     if (!form) return c.json({ error: 'form_id does not belong to this ingredient' }, 400)
   }
+  const recommendationColumns = await getTableColumns(c.env.DB, 'product_recommendations')
+  const hasRecommendationSlots = recommendationColumns.has('recommendation_slot') && recommendationColumns.has('shop_link_id')
+  const hasShopLinks = hasRecommendationSlots && await hasTable(c.env.DB, 'product_shop_links')
+  const recommendationSelect = hasRecommendationSlots
+    ? `
+        CASE rec.recommendation_slot
+          WHEN 'primary' THEN 0
+          WHEN 'alternative_1' THEN 1
+          WHEN 'alternative_2' THEN 2
+          ELSE 99
+        END AS recommendation_rank,
+        COALESCE(rec.sort_order, 999) AS recommendation_sort_order,
+        rec.recommendation_slot,
+        rec.shop_link_id AS recommendation_shop_link_id,
+        ${hasShopLinks ? 'psl.url' : 'NULL'} AS recommendation_shop_link_url,`
+    : `
+        99 AS recommendation_rank,
+        999 AS recommendation_sort_order,
+        NULL AS recommendation_slot,
+        NULL AS recommendation_shop_link_id,
+        NULL AS recommendation_shop_link_url,`
+  const recommendationJoin = hasRecommendationSlots
+    ? `
+      LEFT JOIN product_recommendations rec
+        ON rec.ingredient_id = ?
+       AND rec.product_id = p.id
+       AND rec.recommendation_slot IN ('primary', 'alternative_1', 'alternative_2')
+      ${hasShopLinks ? 'LEFT JOIN product_shop_links psl ON psl.id = rec.shop_link_id AND psl.product_id = p.id' : ''}`
+    : ''
+  const recommendationOrder = hasRecommendationSlots
+    ? `
+            CASE rec.recommendation_slot
+              WHEN 'primary' THEN 0
+              WHEN 'alternative_1' THEN 1
+              WHEN 'alternative_2' THEN 2
+              ELSE 99
+            END ASC,
+            COALESCE(rec.sort_order, 999) ASC,`
+    : ''
+  const bindings: Array<number | null> = hasRecommendationSlots
+    ? [id, id, id, id, formId, formId]
+    : [id, id, id, formId, formId]
   const { results: products } = await c.env.DB.prepare(`
     WITH matching_rows AS (
       SELECT
@@ -643,9 +722,11 @@ ingredients.get('/:id/products', async (c) => {
         COALESCE(idp_form.timing, idp_base.timing) AS ingredient_timing,
         COALESCE(idp_form.timing_note, idp_base.timing_note) AS ingredient_timing_note,
         COALESCE(idp_form.intake_hint, idp_base.intake_hint) AS ingredient_intake_hint,
+        ${recommendationSelect}
         ROW_NUMBER() OVER (
           PARTITION BY p.id
           ORDER BY
+            ${recommendationOrder}
             CASE WHEN pi.ingredient_id = ? THEN 0 ELSE 1 END ASC,
             pi.is_main DESC,
             pi.id ASC
@@ -660,6 +741,7 @@ ingredients.get('/:id/products', async (c) => {
         ON idp_base.ingredient_id = pi.ingredient_id
        AND idp_base.form_id IS NULL
        AND idp_base.sub_ingredient_id IS NULL
+      ${recommendationJoin}
       WHERE (pi.ingredient_id = ? OR pi.parent_ingredient_id = ?)
         AND (? IS NULL OR pi.form_id = ?)
         AND pi.search_relevant = 1
@@ -669,10 +751,25 @@ ingredients.get('/:id/products', async (c) => {
     SELECT *
     FROM matching_rows
     WHERE row_rank = 1
-    ORDER BY is_main DESC, name ASC
-  `).bind(id, id, id, formId, formId).all<IngredientProductRow>()
-  const warningsByProduct = await loadCatalogProductSafetyWarnings(c.env.DB, products.map((product) => product.id))
-  return c.json({ products: attachWarningsToProducts(products, warningsByProduct) })
+    ORDER BY recommendation_rank ASC, recommendation_sort_order ASC, is_main DESC, name ASC
+  `).bind(...bindings).all<IngredientProductRow>()
+  const normalizedProducts = (products ?? []).map((product) => {
+    const shopLinkId = typeof product.recommendation_shop_link_id === 'number'
+      ? product.recommendation_shop_link_id
+      : null
+    const shopLinkUrl = typeof product.recommendation_shop_link_url === 'string'
+      ? product.recommendation_shop_link_url
+      : null
+    if (!shopLinkId || !shopLinkUrl) return product
+    return {
+      ...product,
+      shop_link: shopLinkUrl,
+      shop_link_id: shopLinkId,
+      click_url: `/api/products/${product.id}/out?shop_link_id=${shopLinkId}&context=product_card`,
+    }
+  })
+  const warningsByProduct = await loadCatalogProductSafetyWarnings(c.env.DB, normalizedProducts.map((product) => product.id))
+  return c.json({ products: attachWarningsToProducts(normalizedProducts, warningsByProduct) })
 })
 
 // POST /api/ingredients (admin only)
@@ -769,6 +866,54 @@ ingredients.post('/:id/synonyms', async (c) => {
   return c.json({ id: result.meta.last_row_id }, 201)
 })
 
+// PATCH /api/ingredients/:id/synonyms/:synId (admin only)
+ingredients.patch('/:id/synonyms/:synId', async (c) => {
+  const authErr = await ensureAuth(c)
+  if (authErr) return authErr
+  const admErr = requireAdmin(c)
+  if (admErr) return admErr
+  const id = c.req.param('id')
+  const synId = c.req.param('synId')
+  const existing = await c.env.DB.prepare(
+    'SELECT * FROM ingredient_synonyms WHERE id = ? AND ingredient_id = ?'
+  ).bind(synId, id).first<Record<string, unknown>>()
+  if (!existing) return c.json({ error: 'Not found' }, 404)
+
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const columns = await getTableColumns(c.env.DB, 'ingredient_synonyms')
+  const fields: Array<[string, string | number | null]> = []
+  if (Object.prototype.hasOwnProperty.call(body, 'synonym')) {
+    const synonym = optionalTrimmedText(body.synonym)
+    if (synonym === undefined || synonym === null) return c.json({ error: 'synonym is required' }, 400)
+    fields.push(['synonym', synonym])
+  }
+  if (columns.has('language') && Object.prototype.hasOwnProperty.call(body, 'language')) {
+    const language = optionalTrimmedText(body.language)
+    fields.push(['language', language ?? 'de'])
+  }
+  if (fields.length === 0) return c.json({ error: 'No supported fields provided' }, 400)
+
+  await c.env.DB.prepare(`
+    UPDATE ingredient_synonyms
+    SET ${fields.map(([key]) => `${key} = ?`).join(', ')}
+    WHERE id = ? AND ingredient_id = ?
+  `).bind(...fields.map(([, value]) => value), synId, id).run()
+  const updated = await c.env.DB.prepare('SELECT * FROM ingredient_synonyms WHERE id = ?').bind(synId).first()
+  await logAdminAction(c, {
+    action: 'update_ingredient_synonym',
+    entity_type: 'ingredient_synonym',
+    entity_id: Number(synId),
+    changes: { ingredient_id: Number(id), before: existing, after: updated },
+  })
+  return c.json({ synonym: updated })
+})
+
 // DELETE /api/ingredients/:id/synonyms/:synId (admin only)
 ingredients.delete('/:id/synonyms/:synId', async (c) => {
   const authErr = await ensureAuth(c)
@@ -814,6 +959,62 @@ ingredients.post('/:id/forms', async (c) => {
     changes: { ingredient_id: Number(id), ...data },
   })
   return c.json({ id: result.meta.last_row_id }, 201)
+})
+
+// PATCH /api/ingredients/:id/forms/:formId (admin only)
+ingredients.patch('/:id/forms/:formId', async (c) => {
+  const authErr = await ensureAuth(c)
+  if (authErr) return authErr
+  const admErr = requireAdmin(c)
+  if (admErr) return admErr
+  const id = c.req.param('id')
+  const formId = c.req.param('formId')
+  const existing = await c.env.DB.prepare(
+    'SELECT * FROM ingredient_forms WHERE id = ? AND ingredient_id = ?'
+  ).bind(formId, id).first<Record<string, unknown>>()
+  if (!existing) return c.json({ error: 'Not found' }, 404)
+
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const columns = await getTableColumns(c.env.DB, 'ingredient_forms')
+  const fields: Array<[string, string | number | null]> = []
+  const textFields = ['name', 'comment', 'tags', 'bioavailability', 'timing'] as const
+  for (const field of textFields) {
+    if (!columns.has(field) || !Object.prototype.hasOwnProperty.call(body, field)) continue
+    const value = optionalTrimmedText(body[field])
+    if (field === 'name' && (value === undefined || value === null)) return c.json({ error: 'name is required' }, 400)
+    if (value !== undefined) fields.push([field, value])
+  }
+  if (columns.has('score') && Object.prototype.hasOwnProperty.call(body, 'score')) {
+    const score = optionalNumber(body.score)
+    if (score === undefined) return c.json({ error: 'score must be a number' }, 400)
+    fields.push(['score', score ?? 0])
+  }
+  if (columns.has('is_recommended') && Object.prototype.hasOwnProperty.call(body, 'is_recommended')) {
+    const recommended = optionalBooleanInt(body.is_recommended)
+    if (recommended === undefined) return c.json({ error: 'is_recommended must be boolean' }, 400)
+    fields.push(['is_recommended', recommended ?? 0])
+  }
+  if (fields.length === 0) return c.json({ error: 'No supported fields provided' }, 400)
+
+  await c.env.DB.prepare(`
+    UPDATE ingredient_forms
+    SET ${fields.map(([key]) => `${key} = ?`).join(', ')}
+    WHERE id = ? AND ingredient_id = ?
+  `).bind(...fields.map(([, value]) => value), formId, id).run()
+  const updated = await c.env.DB.prepare('SELECT * FROM ingredient_forms WHERE id = ?').bind(formId).first()
+  await logAdminAction(c, {
+    action: 'update_ingredient_form',
+    entity_type: 'ingredient_form',
+    entity_id: Number(formId),
+    changes: { ingredient_id: Number(id), before: existing, after: updated },
+  })
+  return c.json({ form: updated })
 })
 
 // DELETE /api/ingredients/:id/forms/:formId (admin only)

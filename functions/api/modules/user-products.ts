@@ -321,9 +321,11 @@ userProducts.post('/', async (c) => {
   const ingredientReferenceError = await validateUserProductIngredientReferences(c.env.DB, ingredients)
   if (ingredientReferenceError) return c.json({ error: ingredientReferenceError }, 400)
   const submitter = await c.env.DB.prepare(
-    'SELECT is_trusted_product_submitter FROM users WHERE id = ?'
-  ).bind(user.userId).first<{ is_trusted_product_submitter: number }>()
+    'SELECT is_trusted_product_submitter, is_blocked_product_submitter FROM users WHERE id = ?'
+  ).bind(user.userId).first<{ is_trusted_product_submitter: number; is_blocked_product_submitter: number | null }>()
+  const blockedSubmitter = submitter?.is_blocked_product_submitter === 1
   const autoApproved = submitter?.is_trusted_product_submitter === 1
+  const status = blockedSubmitter ? 'blocked' : autoApproved ? 'approved' : 'pending'
   const result = await c.env.DB.prepare(`
     INSERT INTO user_products (
       user_id, name, brand, form, price, shop_link, image_url,
@@ -345,7 +347,7 @@ userProducts.post('/', async (c) => {
     data.container_count,
     data.is_affiliate ?? 0,
     data.notes ?? null,
-    autoApproved ? 'approved' : 'pending',
+    status,
     autoApproved ? new Date().toISOString() : null,
   ).run()
   if (ingredients.length > 0) {
@@ -423,9 +425,11 @@ userProducts.put('/:id', async (c) => {
     if (ingredientReferenceError) return c.json({ error: ingredientReferenceError }, 400)
   }
   const submitter = await c.env.DB.prepare(
-    'SELECT is_trusted_product_submitter FROM users WHERE id = ?'
-  ).bind(user.userId).first<{ is_trusted_product_submitter: number }>()
+    'SELECT is_trusted_product_submitter, is_blocked_product_submitter FROM users WHERE id = ?'
+  ).bind(user.userId).first<{ is_trusted_product_submitter: number; is_blocked_product_submitter: number | null }>()
+  const blockedSubmitter = submitter?.is_blocked_product_submitter === 1
   const autoApproved = submitter?.is_trusted_product_submitter === 1
+  const status = blockedSubmitter ? 'blocked' : autoApproved ? 'approved' : 'pending'
   const imageUrlProvided = hasOwnKey(body, 'image_url')
   const imageUrlValue = data.image_url === '' ? null : data.image_url ?? null
   const updateStatement = c.env.DB.prepare(`
@@ -451,7 +455,7 @@ userProducts.put('/:id', async (c) => {
     data.serving_size ?? null, data.serving_unit ?? null,
     data.servings_per_container ?? null, data.container_count ?? null,
     data.is_affiliate ?? null, data.notes ?? null,
-    autoApproved ? 'approved' : 'pending',
+    status,
     autoApproved ? 1 : 0,
     id, user.userId,
   )
