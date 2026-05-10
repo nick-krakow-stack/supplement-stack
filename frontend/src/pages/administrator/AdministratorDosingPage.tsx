@@ -40,7 +40,6 @@ function isHiddenAdminDose(row: AdminDoseRecommendation, ingredientName: string)
   const normalizedName = ingredientName.trim().toLowerCase();
   if (normalizedName === 'eha' || normalizedName === 'dpa') return true;
   if (row.created_by_user_id != null) return true;
-  if (row.is_public === 0) return true;
   return false;
 }
 
