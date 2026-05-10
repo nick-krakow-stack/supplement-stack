@@ -26,7 +26,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/pre-deploy-check.sh\""
+            "command": "powershell -ExecutionPolicy Bypass -File ./scripts/orchestrator-guard.ps1"
+          },
+          {
+            "type": "command",
+            "command": "bash ./.claude/hooks/pre-deploy-check.sh"
           }
         ]
       }
@@ -41,7 +45,7 @@
           },
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/error-capture.sh\""
+            "command": "bash ./.claude/hooks/error-capture.sh"
           }
         ]
       }
