@@ -39,6 +39,25 @@ Last updated: 2026-05-08
 
 ## Latest Completed Work
 
+### 2026-05-10 Backend P2 Hardening - Local
+
+- Implemented the backend review P2 fixes:
+  - malformed JSON on `/api/auth/register`, `/api/auth/login`,
+    `/api/auth/forgot-password`, and `/api/auth/reset-password` now returns
+    HTTP 400 instead of bubbling into HTTP 500.
+  - password-reset and stack-mail failures no longer expose raw transport
+    debug details in JSON responses; details are kept in server logs.
+  - admin CSV export escaping now neutralizes spreadsheet formula prefixes
+    before attachment download.
+- Added `scripts/backend-regression-check.mjs` as a lightweight regression
+  check that runs without Vite/esbuild, because Vitest is blocked in the
+  current Codex sandbox by `spawn EPERM`.
+- Validation passed:
+  - `node scripts/backend-regression-check.mjs`
+  - `functions`: `npx tsc -p tsconfig.json --noEmit`
+  - `node --check scripts/backend-regression-check.mjs`
+  - `git diff --check` passed with the existing LF/CRLF warnings only.
+
 ### 2026-05-08 Admin Post-Launch Dashboard And Human Copy Pass - Deployed
 
 - Pages deploy completed:

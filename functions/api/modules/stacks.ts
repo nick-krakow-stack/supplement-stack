@@ -842,7 +842,10 @@ stacks.post('/:id/email', async (c) => {
     html: buildStackEmailHtml(stack, preparedItems, totalOnce, totalMonthly),
   })
 
-  if (!result.ok) return c.json({ error: 'E-Mail konnte nicht gesendet werden.', debug: result.error }, 500)
+  if (!result.ok) {
+    console.error('[stacks] stack mail failed:', result.error)
+    return c.json({ error: 'E-Mail konnte nicht gesendet werden.' }, 500)
+  }
   return c.json({ ok: true })
 })
 

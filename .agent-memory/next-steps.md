@@ -4,6 +4,11 @@ Last updated: 2026-05-08
 
 ## Immediate
 
+- Backend review P2 hardening is implemented locally:
+  - malformed auth JSON -> HTTP 400
+  - mail transport debug fields removed from API JSON responses
+  - admin CSV export formula cells neutralized
+  - next step is commit/push and then deploy or verify Cloudflare Pages build.
 - Admin post-launch dashboard and human admin-copy pass is deployed:
   - preview `https://89b9f726.supplementstack.pages.dev`
   - live `https://supplementstack.de`

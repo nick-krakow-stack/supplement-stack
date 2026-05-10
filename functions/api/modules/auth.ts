@@ -93,7 +93,12 @@ auth.post('/register', async (c) => {
   const allowed = await checkRateLimit(c.env.RATE_LIMITER, `register:${ip}`, 5, 15 * 60)
   if (!allowed) return c.json({ error: 'Zu viele Versuche. Bitte warte kurz.' }, 429)
 
-  const body = await c.req.json()
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
   if (!body.email || typeof body.email !== 'string' || !body.email.includes('@'))
     return c.json({ error: 'Valid email required' }, 400)
   if (!body.password || typeof body.password !== 'string' || body.password.length < 8)
@@ -247,7 +252,12 @@ auth.post('/resend-verification', async (c) => {
 
 // POST /api/auth/forgot-password
 auth.post('/forgot-password', async (c) => {
-  const body = await c.req.json()
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
   const ok = () => c.json({ message: 'Falls ein Account mit dieser E-Mail existiert, wurde ein Link verschickt.' })
 
@@ -268,7 +278,8 @@ auth.post('/forgot-password', async (c) => {
 
   const result = await sendPasswordResetEmail(c.env, frontendUrl(c.env), user.email, rawToken)
   if (!result.ok) {
-    return c.json({ error: 'E-Mail konnte nicht gesendet werden.', debug: result.error }, 500)
+    console.error('[auth] password reset mail failed:', result.error)
+    return c.json({ error: 'E-Mail konnte nicht gesendet werden.' }, 500)
   }
 
   return ok()
@@ -276,7 +287,12 @@ auth.post('/forgot-password', async (c) => {
 
 // POST /api/auth/reset-password
 auth.post('/reset-password', async (c) => {
-  const body = await c.req.json()
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
   const rawToken = typeof body.token === 'string' ? body.token.trim() : ''
   const password = typeof body.password === 'string' ? body.password : ''
 
@@ -311,7 +327,12 @@ auth.post('/login', async (c) => {
   const allowed = await checkRateLimit(c.env.RATE_LIMITER, `login:${ip}`, 10, 15 * 60)
   if (!allowed) return c.json({ error: 'Zu viele Versuche. Bitte warte kurz.' }, 429)
 
-  const body = await c.req.json()
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
   if (!body.email || typeof body.email !== 'string') return c.json({ error: 'Email required' }, 400)
   if (!body.password || typeof body.password !== 'string') return c.json({ error: 'Password required' }, 400)
   const data = body as { email: string; password: string }

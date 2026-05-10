@@ -71,6 +71,7 @@
 import { Hono } from 'hono'
 import type { Context } from 'hono'
 import type { AppContext, CountRow, ProductRow } from '../lib/types'
+import { csvEscape } from '../lib/csv'
 import { ensureAuth, requireAdmin, ensureAdmin, logAdminAction } from '../lib/helpers'
 import {
   getProductImageExtension,
@@ -1247,13 +1248,6 @@ function adminSearchPreview(value: string | null | undefined, maxLength = 90): s
 
 function isAdminExportEntity(value: string): value is AdminExportEntity {
   return (ADMIN_EXPORT_ENTITIES as readonly string[]).includes(value)
-}
-
-function csvEscape(value: unknown): string {
-  if (value === null || value === undefined) return ''
-  const text = String(value)
-  const escaped = text.replace(/"/g, '""')
-  return /[",\r\n]/.test(escaped) ? `"${escaped}"` : escaped
 }
 
 function rowsToCsv(columns: AdminExportColumn[], rows: Array<Record<string, unknown>>): string {
