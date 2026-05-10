@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Loader2, Plus, RefreshCw, Search } from 'lucide-react';
 import {
   createDoseRecommendation,
@@ -93,14 +94,15 @@ function sourceStatusMatches(row: AdminDoseRecommendation, filter: SourceStatusF
 }
 
 export default function AdministratorDosingPage() {
+  const [searchParams] = useSearchParams();
   const [recommendations, setRecommendations] = useState<AdminDoseRecommendation[]>([]);
   const [ingredients, setIngredients] = useState<IngredientLookup[]>([]);
   const [researchSources, setResearchSources] = useState<AdminIngredientResearchSource[]>([]);
   const [selectedId, setSelectedId] = useState<SelectedDoseId>(null);
   const [draft, setDraft] = useState<DoseDraft>(() => blankDoseDraft());
   const [sourceLinks, setSourceLinks] = useState<SourceLinkDraft[]>([]);
-  const [query, setQuery] = useState('');
-  const [ingredientFilter, setIngredientFilter] = useState('');
+  const [query, setQuery] = useState(() => searchParams.get('q') ?? '');
+  const [ingredientFilter, setIngredientFilter] = useState(() => searchParams.get('ingredient_id') ?? '');
   const [sourceStatusFilter, setSourceStatusFilter] = useState<SourceStatusFilter>('');
   const [linkTypeFilter, setLinkTypeFilter] = useState<LinkTypeFilter>('');
   const [loading, setLoading] = useState(true);
