@@ -45,7 +45,7 @@ function HeroSection({ isLoggedIn }: { isLoggedIn: boolean }) {
           </span>
           <br />
           <span className="text-3xl md:text-4xl lg:text-5xl font-semibold text-gray-700">
-            Wissenschaftlich. Einfach. Kosteneffizient.
+            Wissenschaftlich. Einfach. Kostenlos.
           </span>
         </h1>
 

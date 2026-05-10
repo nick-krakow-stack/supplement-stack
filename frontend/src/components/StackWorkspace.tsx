@@ -325,7 +325,7 @@ function productDoseSignature(product: DemoProduct): string {
 type ProductViewMode = 'grid' | 'list';
 
 // ---------------------------------------------------------------------------
-// AddProductModal (unchanged styling from original — 3-step flow preserved)
+// AddProductModal
 // ---------------------------------------------------------------------------
 
 function AddProductModal({
@@ -347,7 +347,7 @@ function AddProductModal({
   submitLabel?: string;
   ignoredExistingProductKey?: string;
 }) {
-  const [step, setStep] = useState<'search' | 'form' | 'dosage' | 'products'>('search');
+  const [step, setStep] = useState<'search' | 'dosage' | 'products'>('search');
   const [ingredient, setIngredient] = useState<Ingredient | null>(null);
   const [forms, setForms] = useState<IngredientFormOption[]>([]);
   const [selectedFormId, setSelectedFormId] = useState<number | null>(null);
@@ -415,13 +415,8 @@ function AddProductModal({
           ? data.forms.filter((form) => Number.isInteger(form.id) && form.id > 0 && typeof form.name === 'string')
           : [];
         setForms(loadedForms);
-        const matchedFormId = selected.matched_form_id ?? null;
-        setSelectedFormId(loadedForms.some((form) => form.id === matchedFormId) ? matchedFormId : null);
-        if (loadedForms.length > 0) {
-          setStep('form');
-        } else {
-          loadDosageGuidelines(selected);
-        }
+        setSelectedFormId(null);
+        loadDosageGuidelines(selected);
       })
       .catch(() => {
         setForms([]);
@@ -431,18 +426,13 @@ function AddProductModal({
       .finally(() => setIngredientLoading(false));
   };
 
-  const continueToDosage = () => {
-    if (!ingredient) return;
-    loadDosageGuidelines(ingredient);
-  };
-
-  const loadProducts = () => {
+  const loadProducts = (formId = selectedFormId) => {
     if (!ingredient) return;
     setStep('products');
     setProductsLoading(true);
     setError('');
     const productParams = new URLSearchParams();
-    if (selectedFormId !== null) productParams.set('form_id', String(selectedFormId));
+    if (formId !== null) productParams.set('form_id', String(formId));
     const productQuery = productParams.toString();
     const catalogPromise = credentialedFetch(apiPath(`/ingredients/${ingredient.id}/products${productQuery ? `?${productQuery}` : ''}`))
       .then((response) => {
@@ -469,12 +459,12 @@ function AddProductModal({
           .filter((product) => product.ingredients?.some((row) => (
             (row.ingredient_id === ingredient.id || row.parent_ingredient_id === ingredient.id) &&
             Boolean(row.search_relevant ?? 1) &&
-            (selectedFormId === null || row.form_id === selectedFormId)
+            (formId === null || row.form_id === formId)
           )))
           .map((product) => {
             const matchingIngredient = product.ingredients?.find((row) => (
               (row.ingredient_id === ingredient.id || row.parent_ingredient_id === ingredient.id) &&
-              (selectedFormId === null || row.form_id === selectedFormId)
+              (formId === null || row.form_id === formId)
             ));
             return {
               ...product,
@@ -565,79 +555,6 @@ function AddProductModal({
               <p className="mt-3 text-sm font-bold text-blue-700">Wirkstoffdaten werden geladen...</p>
             )}
           </div>
-        )}
-
-        {step === 'form' && ingredient && (
-          <>
-            <div className="rounded-2xl border border-sky-200 bg-sky-50/50 p-4 sm:p-5">
-              <div className="mb-4 flex items-center gap-3 text-sky-800">
-                <List size={24} />
-                <h3 className="text-xl font-black sm:text-2xl">Form auswahlen</h3>
-              </div>
-              <p className="mb-4 text-sm font-semibold text-slate-600">
-                Optional fuer {ingredient.name}. Mit einer Form zeigen wir spaeter nur passende Produkte.
-              </p>
-              <div className="grid gap-3 md:grid-cols-2">
-                <button
-                  type="button"
-                  onClick={() => setSelectedFormId(null)}
-                  className={`rounded-2xl border p-4 text-left transition ${
-                    selectedFormId === null
-                      ? 'border-sky-500 bg-white shadow-sm'
-                      : 'border-slate-200 bg-white/70 hover:border-sky-300'
-                  }`}
-                >
-                  <p className="text-base font-black text-slate-950">Alle Formen</p>
-                  <p className="mt-1 text-sm font-semibold text-slate-500">
-                    Produktliste nicht nach Form einschraenken.
-                  </p>
-                </button>
-                {forms.map((form) => (
-                  <button
-                    key={form.id}
-                    type="button"
-                    onClick={() => setSelectedFormId(form.id)}
-                    className={`rounded-2xl border p-4 text-left transition ${
-                      selectedFormId === form.id
-                        ? 'border-sky-500 bg-white shadow-sm'
-                        : 'border-slate-200 bg-white/70 hover:border-sky-300'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <p className="text-base font-black text-slate-950">{form.name}</p>
-                      {typeof form.score === 'number' && form.score > 0 && (
-                        <span className="rounded-full bg-sky-100 px-2 py-0.5 text-xs font-black text-sky-700">
-                          Score {form.score}
-                        </span>
-                      )}
-                    </div>
-                    {form.comment && (
-                      <p className="mt-2 line-clamp-2 text-sm font-semibold text-slate-500">{form.comment}</p>
-                    )}
-                    {form.timing && (
-                      <p className="mt-2 text-xs font-bold uppercase tracking-wide text-slate-400">{form.timing}</p>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <button
-                onClick={() => setStep('search')}
-                className="inline-flex items-center gap-2 rounded-xl px-2 py-2 text-base font-semibold text-blue-600 hover:text-blue-800"
-              >
-                <ArrowLeft size={20} />
-                Zuruck zur Suche
-              </button>
-              <button
-                onClick={continueToDosage}
-                className="inline-flex items-center justify-center gap-3 rounded-xl bg-sky-600 px-6 py-3 text-lg font-black text-white shadow-lg shadow-sky-600/20 hover:bg-sky-700"
-              >
-                Weiter zur Dosierung
-                <ArrowRight size={24} />
-              </button>
-            </div>
-          </>
         )}
 
         {step === 'dosage' && ingredient && (
@@ -758,14 +675,14 @@ function AddProductModal({
 
             <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <button
-                onClick={() => setStep(forms.length > 0 ? 'form' : 'search')}
+                onClick={() => setStep('search')}
                 className="inline-flex items-center gap-2 rounded-xl px-2 py-2 text-base font-semibold text-blue-600 hover:text-blue-800"
               >
                 <ArrowLeft size={20} />
-                {forms.length > 0 ? 'Zuruck zur Formauswahl' : 'Zuruck zur Suche'}
+                Zuruck zur Suche
               </button>
               <button
-                onClick={loadProducts}
+                onClick={() => loadProducts()}
                 className="inline-flex items-center justify-center gap-3 rounded-xl bg-emerald-600 px-6 py-3 text-lg font-black text-white shadow-lg shadow-emerald-600/20 hover:bg-emerald-700"
               >
                 Weiter zu Produkten
@@ -784,6 +701,30 @@ function AddProductModal({
                 {selectedForm ? ` · ${selectedForm.name}` : ''}
               </p>
             </div>
+            {forms.length > 0 && (
+              <div className="mb-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <label className="block text-sm font-black text-slate-700" htmlFor="product-form-filter">
+                  Form
+                </label>
+                <select
+                  id="product-form-filter"
+                  value={selectedFormId === null ? '' : String(selectedFormId)}
+                  onChange={(event) => {
+                    const nextFormId = event.target.value ? Number(event.target.value) : null;
+                    setSelectedFormId(nextFormId);
+                    loadProducts(nextFormId);
+                  }}
+                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base font-semibold text-slate-950 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-4 focus:ring-blue-100"
+                >
+                  <option value="">Alle Formen</option>
+                  {forms.map((form) => (
+                    <option key={form.id} value={form.id}>
+                      {form.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="border-y border-slate-200 py-5">
               {productsLoading && (
                 <div className="flex justify-center py-12">
