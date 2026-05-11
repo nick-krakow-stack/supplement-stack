@@ -5,7 +5,22 @@ param(
 
 $ErrorActionPreference = "SilentlyContinue"
 
-$repoRoot = Split-Path -Parent $PSScriptRoot
+function Get-RepoRoot {
+  $current = Split-Path -Parent $PSScriptRoot
+  while ($current -and -not (Test-Path (Join-Path $current ".git"))) {
+    $parent = Split-Path -Parent $current
+    if ($parent -eq $current) { break }
+    $current = $parent
+  }
+  return $current
+}
+
+$repoRoot = Get-RepoRoot
+if (-not $repoRoot) {
+  Write-Output "Skipped handoff update: repository root not found"
+  exit 0
+}
+
 $memoryDir = Join-Path $repoRoot ".agent-memory"
 $handoffPath = Join-Path $memoryDir "handoff.md"
 
@@ -45,7 +60,7 @@ if (Test-Path $currentStatePath) {
 }
 
 if ([string]::IsNullOrWhiteSpace($Notes)) {
-  $Notes = "Automatic handoff snapshot written by scripts/update-agent-handoff.ps1."
+  $Notes = "Automatic handoff snapshot written by .codex/hooks/update-agent-handoff.ps1."
 }
 
 $statusBlock = if ($changedFiles.Count -gt 0) {
@@ -118,3 +133,4 @@ Set-Content -Path $handoffPath -Value $content -Encoding UTF8
 Pop-Location
 
 Write-Output "Updated .agent-memory/handoff.md ($Mode)"
+exit 0

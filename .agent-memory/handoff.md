@@ -1,40 +1,42 @@
 ﻿# Handoff
 
-Last updated: 2026-05-11 19:44:36 +02:00
-Update mode: PostToolUseBash
+Last updated: 2026-05-11 21:23:20 +02:00
+Update mode: ManualHookFinal
 
 ## Latest Notes
 
-Automatic handoff snapshot written by scripts/update-agent-handoff.ps1.
+Automatic handoff snapshot written by .codex/hooks/update-agent-handoff.ps1.
 
 ## Git Snapshot
 
 - Branch: codex/website-ux-fixes
-- Last commit: bbc9410 Document website UX preview deploy
+- Last commit: 1986997 Polish stack demo and knowledge index
 
 ## Working Tree
 
 ~~~text
 M .agent-memory/current-state.md
 M .agent-memory/decisions.md
-M .agent-memory/deploy-log.md
 M .agent-memory/handoff.md
 M .agent-memory/next-steps.md
-M frontend/src/App.tsx
-M frontend/src/components/Layout.tsx
-M frontend/src/components/ProductCard.tsx
-M frontend/src/components/StackWorkspace.tsx
-M frontend/src/lib/stackCalculations.test.ts
-M frontend/src/lib/stackCalculations.ts
-M frontend/src/styles.css
-M functions/api/lib/stack-calculations.ts
-M scripts/user-ux-regression-check.mjs
-?? d1-migrations/0075_fix_black_seed_oil_volume.sql
-?? frontend/src/pages/KnowledgeIndexPage.tsx
+D .claude/hooks/error-capture.sh
+D .claude/hooks/pre-deploy-check.sh
+M .claude/settings.json
+M .gitignore
+D scripts/orchestrator-guard.ps1
+D scripts/update-agent-handoff.ps1
+?? .codex/
 ~~~
 
 ## Current State Summary
 
+- Hook failures in the Codex App were traced to Bash-only hook commands on
+- Hook entry points are now centralized under `.codex/hooks/` as PowerShell
+- `.codex/hooks.json` points to those PowerShell scripts.
+- `.claude/settings.json` also points to the same `.codex/hooks/*.ps1` scripts
+- `.gitignore` now keeps Codex local app state ignored while allowing the
+- Old duplicate Bash hook files under `.codex/hooks/*.sh` and
+- Manual verification passed:
 - Production-like line is the Cloudflare Pages/Workers line:
 - Live domain: `https://supplementstack.de`.
 - Latest documented deployed preview:
@@ -53,16 +55,13 @@ M scripts/user-ux-regression-check.mjs
 - Routine mail uses its own stricter rate-limit key:
 - `frontend/src/pages/RoutinePage.tsx` now calls the real endpoint from
 - Added regression coverage to `scripts/backend-regression-check.mjs` for
-- Verification:
-- Implemented the post-QA user UX follow-ups and deployed them to the
-- Stack create/edit now owns family/profile assignment:
-- Product replacement from `Produkt bearbeiten` now preserves the current
-- Stack deletion now uses an in-app confirmation dialog instead of native
-- Product selection now explains DGE vs. study values and the product ordering.
-- Bottom selection bar now explicitly describes the sum of selected products.
 
 ## Next Planned Work
 
+## Hook Maintenance
+- Codex/Claude hook files are centralized under `.codex/hooks/` and should stay
+- Do not reintroduce Bash-only hooks unless the Windows Codex environment is
+- Hook failure logs are written to `.agent-memory/deploy-errors.log`, which is
 ## Immediate
 - Admin knowledge/users deep-link filter fix is implemented and deployed to
 - User UX follow-ups from the authenticated Tobias QA are implemented locally
@@ -94,10 +93,6 @@ M scripts/user-ux-regression-check.mjs
 - Model canonical Wirkstoffe in `ingredients`.
 - Model salts, esters, derivatives, and forms in `ingredient_forms`.
 - Model spelling variants and abbreviations in `ingredient_synonyms`.
-- Use `ingredient_precursors` for editorial precursor relationships.
-- Treat L-Carnitin as canonical and Acetyl-L-Carnitin as a form/derivative of
-## Admin QA
-- Use the next owner browser-QA pass for detailed usability notes on:
 
 ## Required Startup For Next Agent
 

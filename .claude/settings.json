@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell -ExecutionPolicy Bypass -File ./scripts/update-agent-handoff.ps1 -Mode PreCompactAuto"
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File ./.codex/hooks/update-agent-handoff.ps1 -Mode PreCompactAuto"
           }
         ]
       },
@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell -ExecutionPolicy Bypass -File ./scripts/update-agent-handoff.ps1 -Mode PreCompactManual"
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File ./.codex/hooks/update-agent-handoff.ps1 -Mode PreCompactManual"
           }
         ]
       }
@@ -26,11 +26,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell -ExecutionPolicy Bypass -File ./scripts/orchestrator-guard.ps1"
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File ./.codex/hooks/orchestrator-guard.ps1"
           },
           {
             "type": "command",
-            "command": "bash ./.claude/hooks/pre-deploy-check.sh"
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File ./.codex/hooks/pre-deploy-check.ps1"
           }
         ]
       }
@@ -41,11 +41,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell -ExecutionPolicy Bypass -File ./scripts/update-agent-handoff.ps1 -Mode PostToolUseBash"
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File ./.codex/hooks/update-agent-handoff.ps1 -Mode PostToolUseBash"
           },
           {
             "type": "command",
-            "command": "bash ./.claude/hooks/error-capture.sh"
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File ./.codex/hooks/error-capture.ps1"
           }
         ]
       }

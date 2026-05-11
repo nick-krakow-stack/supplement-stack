@@ -2,6 +2,15 @@
 
 Last updated: 2026-05-11
 
+## Hook Maintenance
+
+- Codex/Claude hook files are centralized under `.codex/hooks/` and should stay
+  PowerShell-based for Windows Codex App compatibility.
+- Do not reintroduce Bash-only hooks unless the Windows Codex environment is
+  explicitly changed to provide `bash`.
+- Hook failure logs are written to `.agent-memory/deploy-errors.log`, which is
+  ignored as local runtime output.
+
 ## Immediate
 
 - Admin knowledge/users deep-link filter fix is implemented and deployed to

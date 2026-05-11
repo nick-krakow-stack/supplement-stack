@@ -2,6 +2,33 @@
 
 Last updated: 2026-05-11
 
+## 2026-05-11 Codex/Claude Hook Centralization - Local
+
+- Hook failures in the Codex App were traced to Bash-only hook commands on
+  Windows: `bash ./.codex/hooks/*.sh` and `bash ./.claude/hooks/*.sh` failed
+  because `bash` is not available in the current Codex App environment.
+- Hook entry points are now centralized under `.codex/hooks/` as PowerShell
+  scripts:
+  - `pre-deploy-check.ps1`
+  - `error-capture.ps1`
+  - `orchestrator-guard.ps1`
+  - `update-agent-handoff.ps1`
+- `.codex/hooks.json` points to those PowerShell scripts.
+- `.claude/settings.json` also points to the same `.codex/hooks/*.ps1` scripts
+  so Codex and Claude no longer maintain duplicate hook implementations.
+- `.gitignore` now keeps Codex local app state ignored while allowing the
+  reviewed hook entry points in `.codex/hooks.json` and `.codex/hooks/*.ps1`
+  to be versioned.
+- Old duplicate Bash hook files under `.codex/hooks/*.sh` and
+  `.claude/hooks/*.sh` were removed.
+- Manual verification passed:
+  - `orchestrator-guard.ps1` runs and exits 0.
+  - `pre-deploy-check.ps1` exits 0 with empty input and prints the checklist for
+    a simulated Wrangler deploy command.
+  - `error-capture.ps1` exits 0 with empty input and records a simulated
+    Wrangler error to `.agent-memory/deploy-errors.log`.
+  - `update-agent-handoff.ps1` updates `.agent-memory/handoff.md`.
+
 ## Active Baseline
 
 - Production-like line is the Cloudflare Pages/Workers line:

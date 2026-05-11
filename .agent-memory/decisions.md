@@ -825,12 +825,14 @@ Decision: Initial Codex model-routing policy was recorded in commit `2457345`.
 
 ## Automatic Handoff Snapshots
 
-Decision: use `scripts/update-agent-handoff.ps1` for cheap automatic handoff snapshots.
+Decision: use `.codex/hooks/update-agent-handoff.ps1` for cheap automatic handoff snapshots.
 
-Claude Code integration:
+Codex and Claude integration:
 
-- `.claude/settings.json` runs the script on `PreCompact`.
-- `.claude/settings.json` also runs the script after Bash tool use.
+- `.codex/hooks.json` runs the script on `PreCompact`.
+- `.codex/hooks.json` runs the script after shell tool use.
+- `.claude/settings.json` points to the same `.codex/hooks/*.ps1` scripts so
+  hook behavior is centralized and reviewable in one directory.
 
 Rationale:
 
