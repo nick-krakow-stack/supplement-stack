@@ -1,6 +1,32 @@
 # Decisions
 
-Last updated: 2026-05-11
+Last updated: 2026-05-12
+
+## 2026-05-12 - Single Hook Dispatcher And Durable Owner Feedback
+
+Decision: keep one active hook entry point, `.codex/hooks/agent-protocol.ps1`,
+for Codex and Claude hook events.
+
+Operational rules:
+
+- `.codex/hooks.json` and `.claude/settings.json` should wire only
+  `.codex/hooks/agent-protocol.ps1` for routine hooks.
+- Do not reintroduce separate active hook files such as `pre-deploy-check.ps1`,
+  `orchestrator-guard.ps1`, `error-capture.ps1`, or
+  `update-agent-handoff.ps1`.
+- PreToolUse and UserPromptSubmit hook runs must produce no stdout or stderr.
+- Pending owner browser QA, diff comments, and multi-point website/admin
+  requests belong in `.agent-memory/owner-feedback.md`.
+- Manual fallback capture uses `scripts/append-owner-feedback.ps1`.
+- Keep `scripts/hook-regression-check.mjs` passing after hook changes.
+
+Rationale:
+
+- The Codex App treats normal PreToolUse output as invalid/noisy hook output.
+  A single dispatcher makes the silent-output rule enforceable in one place.
+- Owner feedback must survive context compression.
+- Orchestrator/sub-agent protocol reminders should be centralized and tested,
+  not spread across multiple small scripts.
 
 ## 2026-05-11 - Phase 1 Referral Attribution Instead Of Backlink Crawling
 

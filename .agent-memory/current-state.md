@@ -1,6 +1,52 @@
 # Current State
 
-Last updated: 2026-05-11
+Last updated: 2026-05-12
+
+## 2026-05-12 Hook Owner Feedback Capture - Local
+
+- Implemented local hook infrastructure changes only; no dashboard,
+  ingredient, migration, or deployment work was done.
+- Added durable owner-feedback capture:
+  - `.agent-memory/owner-feedback.md` is the pending Markdown log for owner
+    browser QA, diff feedback, and multi-change website/admin requests that
+    must survive context compression.
+  - `.codex/hooks/agent-protocol.ps1` reads `UserPromptSubmit` JSON payloads,
+    extracts prompt text when available, and appends relevant structured
+    pending entries to `.agent-memory/owner-feedback.md`.
+  - `scripts/append-owner-feedback.ps1` is the manual fallback when a hook
+    payload has no prompt text.
+- Strengthened the orchestrator/sub-agent guard:
+  - `.codex/hooks/agent-protocol.ps1` records the rule that the Orchestrator
+    plans/delegates/reviews and implementation must be delegated to the
+    responsible Sub-Agent, with Dev-Agent as the code implementation role.
+  - PreToolUse and UserPromptSubmit hook runs intentionally write no stdout or
+    stderr because the Codex App treats normal hook output as invalid
+    pre-tool-use JSON/noise.
+- Hook wiring remains centralized under `.codex/hooks/` and PowerShell-based:
+  - `.codex/hooks.json` and `.claude/settings.json` both wire
+    hook events through `.codex/hooks/agent-protocol.ps1`.
+  - `.claude/settings.json` no longer runs `update-agent-handoff.ps1` on every
+    `PostToolUse` shell command.
+- Replaced the previous separate hook entry points with the single
+  `.codex/hooks/agent-protocol.ps1` dispatcher.
+- Added `scripts/hook-regression-check.mjs` to prevent silent regressions in
+  hook centralization, feedback capture, orchestrator guard wording, and the
+  disabled `PostToolUse` handoff updater.
+- Pending owner feedback was moved into `.agent-memory/owner-feedback.md`,
+  including the production dashboard deploy mismatch and the admin Wirkstoffe
+  page comments.
+- Verification passed:
+  - TDD red: `node scripts/hook-regression-check.mjs` failed before
+    implementation with `UserPromptSubmit must run centralized
+    owner feedback hook wiring.
+  - `node scripts/hook-regression-check.mjs`
+  - `node --check scripts/hook-regression-check.mjs`
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File
+    ./.codex/hooks/agent-protocol.ps1 -Event PreToolUse`
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File
+    ./.codex/hooks/agent-protocol.ps1 -Event UserPromptSubmit`
+  - Simulated `UserPromptSubmit` payload captured a test entry with no
+    stdout/stderr; verification-only entries were removed afterward.
 
 ## 2026-05-11 Phase 1 Referral Attribution - Production Deployed
 

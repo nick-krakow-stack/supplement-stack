@@ -11,8 +11,17 @@ This directory is the canonical hook location for this repository.
 
 Current hooks:
 
-- `pre-deploy-check.ps1`: lightweight Wrangler deploy/migration checklist.
-- `error-capture.ps1`: records Wrangler failures to
-  `.agent-memory/deploy-errors.log`.
-- `orchestrator-guard.ps1`: brief protocol reminder.
-- `update-agent-handoff.ps1`: automatic `.agent-memory/handoff.md` snapshot.
+- `agent-protocol.ps1`: single centralized dispatcher for all hook events.
+  It handles orchestrator/sub-agent reminders, owner feedback capture,
+  pre-deploy logging, deploy error capture, and pre-compact handoff updates.
+
+PreToolUse hooks must not write plain-text stdout in the Codex App. The
+dispatcher therefore sends reminders/check output to stderr or durable memory
+files instead of stdout.
+
+If a `UserPromptSubmit` payload does not expose prompt text, capture important
+owner feedback manually:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/append-owner-feedback.ps1 -Text "<feedback>"
+```

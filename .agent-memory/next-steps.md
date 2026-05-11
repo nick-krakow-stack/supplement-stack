@@ -1,6 +1,6 @@
 # Next Steps
 
-Last updated: 2026-05-11
+Last updated: 2026-05-12
 
 ## Hook Maintenance
 
@@ -10,9 +10,22 @@ Last updated: 2026-05-11
   explicitly changed to provide `bash`.
 - Hook failure logs are written to `.agent-memory/deploy-errors.log`, which is
   ignored as local runtime output.
-- Do not wire `update-agent-handoff.ps1` back into every `PostToolUse` shell
-  command; it makes `.agent-memory/handoff.md` dirty after normal commands.
-  Keep handoff updates on PreCompact/manual/session-end paths.
+- Owner browser QA, diff feedback, and multi-change website/admin requests
+  should be preserved in `.agent-memory/owner-feedback.md` before context
+  compression can lose them.
+- `UserPromptSubmit` is wired through the single
+  `.codex/hooks/agent-protocol.ps1` dispatcher for Codex and Claude settings.
+  If prompt text is not present in the hook payload,
+  capture important feedback manually:
+  `powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/append-owner-feedback.ps1 -Text "<feedback>"`.
+- Keep `scripts/hook-regression-check.mjs` passing whenever hook settings or
+  `.codex/hooks/*.ps1` change.
+- Do not reintroduce multiple hook entry-point scripts for routine behavior.
+  Keep `.codex/hooks/agent-protocol.ps1` as the single active dispatcher.
+  It must stay silent on stdout/stderr for PreToolUse/UserPromptSubmit.
+- Check `.agent-memory/owner-feedback.md` before continuing after context
+  compression. Current pending entries include the production dashboard deploy
+  mismatch and the admin Wirkstoffe page owner comments.
 
 ## Immediate
 

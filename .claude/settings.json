@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File ./.codex/hooks/update-agent-handoff.ps1 -Mode PreCompactAuto"
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File ./.codex/hooks/agent-protocol.ps1 -Event PreCompactAuto"
           }
         ]
       },
@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File ./.codex/hooks/update-agent-handoff.ps1 -Mode PreCompactManual"
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File ./.codex/hooks/agent-protocol.ps1 -Event PreCompactManual"
           }
         ]
       }
@@ -26,11 +26,18 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File ./.codex/hooks/orchestrator-guard.ps1"
-          },
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File ./.codex/hooks/agent-protocol.ps1 -Event PreToolUse"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
           {
             "type": "command",
-            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File ./.codex/hooks/pre-deploy-check.ps1"
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File ./.codex/hooks/agent-protocol.ps1 -Event UserPromptSubmit"
           }
         ]
       }
@@ -41,11 +48,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File ./.codex/hooks/update-agent-handoff.ps1 -Mode PostToolUseBash"
-          },
-          {
-            "type": "command",
-            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File ./.codex/hooks/error-capture.ps1"
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File ./.codex/hooks/agent-protocol.ps1 -Event PostToolUse"
           }
         ]
       }
