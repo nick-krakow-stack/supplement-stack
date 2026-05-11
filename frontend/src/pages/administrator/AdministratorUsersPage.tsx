@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
   Calendar,
@@ -97,6 +98,27 @@ function emptyFilters(): UserFilters {
     trusted: '',
     blocked: '',
   };
+}
+
+function booleanFilterFromSearchParams(searchParams: URLSearchParams, key: 'trusted' | 'blocked'): BooleanFilter {
+  const value = searchParams.get(key);
+  return value === 'true' || value === 'false' ? value : '';
+}
+
+function filtersFromSearchParams(searchParams: URLSearchParams): UserFilters {
+  return {
+    q: searchParams.get('q') ?? '',
+    trusted: booleanFilterFromSearchParams(searchParams, 'trusted'),
+    blocked: booleanFilterFromSearchParams(searchParams, 'blocked'),
+  };
+}
+
+function searchParamsFromFilters(filters: UserFilters): URLSearchParams {
+  const next = new URLSearchParams();
+  if (filters.q.trim()) next.set('q', filters.q.trim());
+  if (filters.trusted) next.set('trusted', filters.trusted);
+  if (filters.blocked) next.set('blocked', filters.blocked);
+  return next;
 }
 
 function formatDate(value: string | null): string {
@@ -311,10 +333,11 @@ function UserDetailPanel({
 }
 
 export default function AdministratorUsersPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [summary, setSummary] = useState<UsersSummary>(() => normalizeSummary());
-  const [draftFilters, setDraftFilters] = useState<UserFilters>(() => emptyFilters());
-  const [filters, setFilters] = useState<UserFilters>(() => emptyFilters());
+  const [draftFilters, setDraftFilters] = useState<UserFilters>(() => filtersFromSearchParams(searchParams));
+  const [filters, setFilters] = useState<UserFilters>(() => filtersFromSearchParams(searchParams));
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(25);
   const [total, setTotal] = useState(0);
@@ -371,12 +394,14 @@ export default function AdministratorUsersPage() {
     setError('');
     setPage(1);
     setFilters(draftFilters);
+    setSearchParams(searchParamsFromFilters(draftFilters));
   };
 
   const clearFilters = () => {
     const next = emptyFilters();
     setDraftFilters(next);
     setFilters(next);
+    setSearchParams(new URLSearchParams());
     setPage(1);
     setError('');
   };
@@ -385,6 +410,7 @@ export default function AdministratorUsersPage() {
     const next = { ...emptyFilters(), ...partial };
     setDraftFilters(next);
     setFilters(next);
+    setSearchParams(searchParamsFromFilters(next));
     setPage(1);
     setError('');
   };

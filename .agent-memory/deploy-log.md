@@ -2,6 +2,40 @@
 
 Last updated: 2026-05-11
 
+## 2026-05-11 Website UX Fixes Preview
+
+- Scope:
+  - Added combined `/routine` email delivery through
+    `POST /api/stacks/routine/email`.
+  - Completed user stack UX follow-ups: target-stack-aware duplicate Wirkstoff
+    handling, touch/click warning details, demo mail/PDF account CTA modal,
+    list-view add row, and empty demo-stack transfer on registration.
+  - Fixed admin Knowledge/User deep-link filters so dashboard/query URLs
+    initialize the matching admin filters.
+- Remote D1 migrations:
+  - No new migration required.
+- Pages preview:
+  - Project: `supplementstack`.
+  - Preview URL: `https://252197e5.supplementstack.pages.dev`.
+  - Alias URL: `https://codex-website-ux-fixes.supplementstack.pages.dev`.
+- Validation:
+  - `node scripts/backend-regression-check.mjs` passed.
+  - `node scripts/user-ux-regression-check.mjs` passed.
+  - `functions`: `npx tsc -p tsconfig.json --noEmit` passed.
+  - `frontend`: `npx tsc --noEmit` passed.
+  - `frontend`: `npm test -- --run` passed with 11 tests.
+  - `frontend`: `npm run lint --if-present` passed.
+  - `frontend`: `npm run build` passed.
+  - `git diff --check` passed with existing LF/CRLF warnings only.
+- Smoke checks:
+  - Preview `/`, `/demo`, and `/api/products` returned HTTP 200.
+  - Preview unauthenticated `POST /api/stacks/routine/email` returned HTTP
+    401.
+  - Browser QA on preview confirmed the demo shared header, demo mail CTA
+    modal, list-view add row, and product delete confirmation.
+- Notes:
+  - Authenticated admin preview QA is pending a preview-domain login session.
+
 ## 2026-05-11 Tobias QA Landing/Demo Product Flow Deployed
 
 - Scope:

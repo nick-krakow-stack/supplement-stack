@@ -26,6 +26,7 @@ import { getFamilyMembers } from '../api/family';
 import { reportProductLink } from '../api/stacks';
 import type { FamilyMember, ProductSafetyWarning } from '../types';
 import type { DosageGuideline, Ingredient, ShopDomain } from '../types/local';
+import { writeDemoStackSnapshot } from '../lib/stackFlow';
 import {
   calculateProductUsage,
   intakeIntervalDays as calculateIntakeIntervalDays,
@@ -120,7 +121,6 @@ const DEMO_NOTICE =
 const DEMO_SHARE_NOTICE =
   'Stack mailen und Plan drucken/PDF sind kostenlos verfuegbar, sobald du dich registriert hast.';
 const DESC_STORAGE_KEY = 'ss_stack_descriptions';
-const DEMO_CARRYOVER_KEY = 'ss_demo_stack_carryover';
 
 function newStackId(): string {
   return `stack_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -350,6 +350,7 @@ function AddProductModal({
   const [savingProductKey, setSavingProductKey] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [duplicateIngredientProduct, setDuplicateIngredientProduct] = useState<DemoProduct | null>(null);
+  const [duplicateBypass, setDuplicateBypass] = useState<{ ingredientId: number; stackId: string } | null>(null);
   const [demoOwnProductNoticeOpen, setDemoOwnProductNoticeOpen] = useState(false);
   const targetStack = stacks.find((stack) => stack.id === targetStackId);
   const existingProductKeys = useMemo(
@@ -365,6 +366,23 @@ function AddProductModal({
   const selectedForm = useMemo(
     () => forms.find((form) => form.id === selectedFormId) ?? null,
     [forms, selectedFormId],
+  );
+
+  const findDuplicateForIngredient = useCallback(
+    (selected: Ingredient, stackId = targetStackId): DemoProduct | null => {
+      const stack = stacks.find((item) => item.id === stackId);
+      return (stack?.products ?? []).find((product) => {
+        const key = productStackKey(product);
+        return key !== ignoredExistingProductKey && productMatchesIngredient(product, selected.id);
+      }) ?? null;
+    },
+    [ignoredExistingProductKey, stacks, targetStackId],
+  );
+
+  const duplicateBypassApplies = useCallback(
+    (selected: Ingredient, stackId = targetStackId) =>
+      duplicateBypass?.ingredientId === selected.id && duplicateBypass.stackId === stackId,
+    [duplicateBypass, targetStackId],
   );
 
   const loadDosageGuidelines = useCallback((selected: Ingredient) => {
@@ -419,11 +437,8 @@ function AddProductModal({
   };
 
   const chooseIngredient = (selected: Ingredient) => {
-    const duplicate = (targetStack?.products ?? []).find((product) => {
-      const key = productStackKey(product);
-      return key !== ignoredExistingProductKey && productMatchesIngredient(product, selected.id);
-    });
-    if (duplicate) {
+    const duplicate = findDuplicateForIngredient(selected);
+    if (duplicate && !duplicateBypassApplies(selected)) {
       setIngredient(selected);
       setError('');
       setDuplicateIngredientProduct(duplicate);
@@ -431,6 +446,23 @@ function AddProductModal({
       return;
     }
     continueWithIngredient(selected);
+  };
+
+  const handleTargetStackChange = (nextStackId: string) => {
+    setTargetStackId(nextStackId);
+    setError('');
+    setDuplicateBypass(null);
+    if (!ingredient) return;
+    const duplicate = findDuplicateForIngredient(ingredient, nextStackId);
+    if (duplicate) {
+      setDuplicateIngredientProduct(duplicate);
+      setStep('duplicate');
+      return;
+    }
+    setDuplicateIngredientProduct(null);
+    if (step === 'duplicate') {
+      continueWithIngredient(ingredient);
+    }
   };
 
   const loadProducts = (formId = selectedFormId) => {
@@ -487,6 +519,17 @@ function AddProductModal({
       })
       .catch(() => setError('Produkte konnten nicht geladen werden.'))
       .finally(() => setProductsLoading(false));
+  };
+
+  const handleContinueFromDosage = () => {
+    if (!ingredient) return;
+    const duplicate = findDuplicateForIngredient(ingredient);
+    if (duplicate && !duplicateBypassApplies(ingredient)) {
+      setDuplicateIngredientProduct(duplicate);
+      setStep('duplicate');
+      return;
+    }
+    loadProducts();
   };
 
   const addProduct = async (product: DemoProduct) => {
@@ -553,6 +596,16 @@ function AddProductModal({
               <Search size={26} />
               <h3 className="text-xl font-black sm:text-2xl">Wirkstoff suchen</h3>
             </div>
+            <label className="mb-2 block text-base font-black text-slate-700">Ziel-Stack</label>
+            <select
+              value={targetStackId}
+              onChange={(event) => handleTargetStackChange(event.target.value)}
+              className="mb-5 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-lg font-semibold text-slate-950 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-4 focus:ring-blue-100"
+            >
+              {stacks.map((stack) => (
+                <option key={stack.id} value={stack.id}>{stack.name}</option>
+              ))}
+            </select>
             <p className="mb-3 text-base font-black text-slate-700">Nach Wirkstoff suchen</p>
             <SearchBar onSelect={chooseIngredient} placeholder="z.B. D3, Cobalamin, Magnesium..." autoFocus />
             <p className="mt-3 text-sm font-semibold text-slate-500">
@@ -617,7 +670,10 @@ function AddProductModal({
               <button
                 type="button"
                 className="rounded-xl border border-amber-300 bg-amber-100 px-4 py-3 text-sm font-black text-amber-800 hover:bg-amber-200"
-                onClick={() => continueWithIngredient(ingredient)}
+                onClick={() => {
+                  setDuplicateBypass({ ingredientId: ingredient.id, stackId: targetStackId });
+                  continueWithIngredient(ingredient);
+                }}
               >
                 Trotzdem weiteres Produkt hinzufuegen
               </button>
@@ -729,7 +785,7 @@ function AddProductModal({
               <label className="mt-5 block text-base font-black text-slate-700">Stack auswÃ¤hlen</label>
               <select
                 value={targetStackId}
-                onChange={(event) => setTargetStackId(event.target.value)}
+                onChange={(event) => handleTargetStackChange(event.target.value)}
                 className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-lg font-semibold text-slate-950 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-4 focus:ring-blue-100"
               >
                 {stacks.map((stack) => (
@@ -750,7 +806,7 @@ function AddProductModal({
                 Zuruck zur Suche
               </button>
               <button
-                onClick={() => loadProducts()}
+                onClick={() => handleContinueFromDosage()}
                 className="inline-flex items-center justify-center gap-3 rounded-xl bg-emerald-600 px-6 py-3 text-lg font-black text-white shadow-lg shadow-emerald-600/20 hover:bg-emerald-700"
               >
                 Weiter zu Produkten
@@ -1275,6 +1331,7 @@ export function StackWorkspace({
   const [error, setError] = useState('');
   const [emailSending, setEmailSending] = useState(false);
   const [emailStatus, setEmailStatus] = useState('');
+  const [demoShareNoticeOpen, setDemoShareNoticeOpen] = useState(false);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [linkReportStatus, setLinkReportStatus] = useState('');
   const [productViewMode, setProductViewMode] = useState<ProductViewMode>(loadProductViewMode);
@@ -1291,11 +1348,14 @@ export function StackWorkspace({
   useEffect(() => {
     if (!isDemo) return;
     try {
-      window.localStorage.setItem(DEMO_CARRYOVER_KEY, JSON.stringify(state.stacks));
+      writeDemoStackSnapshot(window.localStorage, {
+        activeStackId: state.activeStackId,
+        stacks: state.stacks,
+      });
     } catch {
       // Demo carryover is optional; storage failures must not block the demo.
     }
-  }, [isDemo, state.stacks]);
+  }, [isDemo, state.activeStackId, state.stacks]);
 
   // Fetch shop domains
   useEffect(() => {
@@ -1791,7 +1851,7 @@ export function StackWorkspace({
 
   const handleEmailStack = async () => {
     if (isDemo) {
-      window.alert(DEMO_SHARE_NOTICE);
+      setDemoShareNoticeOpen(true);
       return;
     }
     if (!activeStack) return;
@@ -1816,7 +1876,7 @@ export function StackWorkspace({
 
   const handlePrintStack = () => {
     if (isDemo) {
-      window.alert(DEMO_SHARE_NOTICE);
+      setDemoShareNoticeOpen(true);
       return;
     }
     window.print();
@@ -2104,6 +2164,21 @@ export function StackWorkspace({
                 <Plus size={56} strokeWidth={2.4} />
               </button>
             )}
+            {productViewMode === 'list' && (
+              <button
+                type="button"
+                className="product-list-add-row"
+                onClick={() => setAddModalOpen(true)}
+                aria-label="Produkt hinzufuegen"
+                title="Produkt hinzufuegen"
+              >
+                <Plus size={20} strokeWidth={2.5} />
+                <span>
+                  <strong>Produkt hinzufuegen</strong>
+                  <small>Produkt als kompakte Zeile hinzufuegen</small>
+                </span>
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -2214,6 +2289,56 @@ export function StackWorkspace({
           }}
           onClose={() => setPendingDeleteProductKey(null)}
         />
+      )}
+
+      {demoShareNoticeOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/55 px-3 py-6 backdrop-blur-sm sm:px-6"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setDemoShareNoticeOpen(false);
+          }}
+        >
+          <div className="w-full max-w-md rounded-[1.6rem] bg-white p-5 shadow-[0_30px_80px_rgba(15,23,42,0.35)] sm:p-6">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-2xl font-black tracking-tight text-slate-950">Kostenlos mit Konto verfuegbar</h2>
+                <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-600">
+                  Funktion ist kostenlos verfuegbar, sobald man angemeldet ist. Registriere dich oder melde dich an,
+                  um Stack-Mail und PDF dauerhaft mit deinem echten Stack zu nutzen.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDemoShareNoticeOpen(false)}
+                className="rounded-2xl p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                aria-label="Schliessen"
+              >
+                <X size={22} />
+              </button>
+            </div>
+            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setDemoShareNoticeOpen(false)}
+                className="rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-600 hover:bg-slate-50"
+              >
+                In der Demo bleiben
+              </button>
+              <Link
+                to="/login?redirect=/stacks"
+                className="inline-flex justify-center rounded-xl border border-emerald-200 bg-white px-5 py-3 text-sm font-black text-emerald-700 hover:bg-emerald-50"
+              >
+                Anmelden
+              </Link>
+              <Link
+                to="/register?redirect=/stacks"
+                className="inline-flex justify-center rounded-xl bg-emerald-600 px-5 py-3 text-sm font-black text-white hover:bg-emerald-700"
+              >
+                Kostenlos registrieren
+              </Link>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

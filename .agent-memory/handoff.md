@@ -1,6 +1,6 @@
 ﻿# Handoff
 
-Last updated: 2026-05-11 03:23:36 +02:00
+Last updated: 2026-05-11 03:59:50 +02:00
 Update mode: PostToolUseBash
 
 ## Latest Notes
@@ -10,12 +10,27 @@ Automatic handoff snapshot written by scripts/update-agent-handoff.ps1.
 ## Git Snapshot
 
 - Branch: codex/website-ux-fixes
-- Last commit: a4f42d9 Improve stack UX flows
+- Last commit: 953d988 Improve stack UX flows
 
 ## Working Tree
 
 ~~~text
+M .agent-memory/current-state.md
+M .agent-memory/decisions.md
+M .agent-memory/deploy-log.md
 M .agent-memory/handoff.md
+M .agent-memory/next-steps.md
+M frontend/src/components/ProductCard.tsx
+M frontend/src/components/StackWorkspace.tsx
+M frontend/src/lib/stackFlow.test.ts
+M frontend/src/pages/RegisterPage.tsx
+M frontend/src/pages/RoutinePage.tsx
+M frontend/src/pages/administrator/AdministratorKnowledgePage.tsx
+M frontend/src/pages/administrator/AdministratorUsersPage.tsx
+M frontend/src/styles.css
+M functions/api/modules/stacks.ts
+M scripts/backend-regression-check.mjs
+?? scripts/user-ux-regression-check.mjs
 ~~~
 
 ## Current State Summary
@@ -32,23 +47,24 @@ M .agent-memory/handoff.md
 - Several older admin pages still have direct routes for compatibility or later
 - Admin pages use scoped shared UI/CSS in:
 - Backend admin code is still concentrated in
-- Implemented the post-QA user UX follow-ups locally; not deployed yet.
+- Implemented real authenticated `/routine` mail sending locally; not deployed
+- Added `POST /api/stacks/routine/email` under the existing stacks module and
+- The endpoint loads all stacks for the current user, prepares stack items with
+- Routine mail uses its own stricter rate-limit key:
+- `frontend/src/pages/RoutinePage.tsx` now calls the real endpoint from
+- Added regression coverage to `scripts/backend-regression-check.mjs` for
+- Verification:
+- Implemented the post-QA user UX follow-ups and deployed them to the
 - Stack create/edit now owns family/profile assignment:
 - Product replacement from `Produkt bearbeiten` now preserves the current
 - Stack deletion now uses an in-app confirmation dialog instead of native
 - Product selection now explains DGE vs. study values and the product ordering.
 - Bottom selection bar now explicitly describes the sum of selected products.
-- Stack product list mode was rebuilt as a compact scan-friendly list with
-- `/profile` now uses a responsive desktop layout instead of a narrow
-- Own-product creation now has clearer guidance that it should be used only
-- `Influencer` remains the stored profile value for compatibility, but the
-- Verification:
-- Authenticated user QA was run on live `https://supplementstack.de` as
-- Covered:
 
 ## Next Planned Work
 
 ## Immediate
+- Admin knowledge/users deep-link filter fix is implemented and deployed to
 - User UX follow-ups from the authenticated Tobias QA are implemented locally
 - Before deployment, do one final local/source review of the changed user
 - After deployment, run live authenticated owner QA for:
@@ -82,7 +98,6 @@ M .agent-memory/handoff.md
 - Treat L-Carnitin as canonical and Acetyl-L-Carnitin as a form/derivative of
 ## Admin QA
 - Use the next owner browser-QA pass for detailed usability notes on:
-- Final authenticated QA order:
 
 ## Required Startup For Next Agent
 

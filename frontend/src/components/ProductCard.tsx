@@ -243,6 +243,7 @@ export default function ProductCard({
   shopDomains, selected = false, warning, display = 'card',
 }: ProductCardProps) {
   const [openSafetyWarningId, setOpenSafetyWarningId] = useState<number | null>(null);
+  const [warningDetailOpen, setWarningDetailOpen] = useState<null | 'list' | 'card'>(null);
   const price = product.product_price ?? product.price;
   const brand = product.product_brand ?? product.brand;
   const name = product.product_name ?? product.name;
@@ -285,6 +286,7 @@ export default function ProductCard({
   const cardWarning = warning ?? productWarning ?? getFallbackWarning(product);
   const warningHintMessage = cardWarning ? shortenWarningMessage(cardWarning.message) : '';
   const isList = display === 'list';
+  const warningDetailId = `product-warning-${product.product_type ?? 'catalog'}-${product.id}-${isList ? 'list' : 'card'}`;
 
   const actions = (
     <div className={`ss-product-card-actions flex gap-[7px] ${isList ? 'ss-product-card-actions-list' : ''}`}>
@@ -417,17 +419,38 @@ export default function ProductCard({
             <div className="ss-product-card-list-label">Dosierung</div>
             <div className="ss-product-card-list-value">{dose}</div>
             {showInterval && <div className="ss-product-card-list-meta">{intervalLabel}</div>}
-            {warningHintMessage && (
-              <div className="ss-product-card-list-warning" title={cardWarning?.message}>
+            {warningHintMessage && cardWarning && (
+              <div className="ss-product-card-list-warning relative">
                 <span className="ss-product-card-list-warning-text">Achtung: {warningHintMessage}</span>
                 <button
                   type="button"
                   className="ss-product-card-list-warning-info inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-orange-500 transition-colors hover:bg-orange-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-300 focus-visible:ring-offset-2"
-                  title={cardWarning?.message}
-                  aria-label={`Warnung vollständig anzeigen: ${cardWarning?.message}`}
+                  aria-label={`Warnung vollstaendig anzeigen: ${cardWarning.message}`}
+                  aria-expanded={warningDetailOpen === 'list'}
+                  aria-controls={warningDetailId}
+                  onClick={(e) => { e.stopPropagation(); setWarningDetailOpen('list'); }}
                 >
                   <Info size={12} />
                 </button>
+                {warningDetailOpen === 'list' && (
+                  <div
+                    id={warningDetailId}
+                    role="dialog"
+                    aria-label={cardWarning.title || 'Warnhinweis'}
+                    className="absolute left-0 top-full z-30 mt-2 w-[280px] max-w-[calc(100vw-2rem)] rounded-xl border border-orange-200 bg-white p-3 text-left text-[12px] font-semibold leading-relaxed text-slate-700 shadow-xl"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <p className="text-[12px] font-black text-orange-700">{cardWarning.title || 'Warnhinweis'}</p>
+                    <p className="mt-1">{cardWarning.message}</p>
+                    <button
+                      type="button"
+                      className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-black text-slate-600 hover:bg-slate-50"
+                      onClick={(e) => { e.stopPropagation(); setWarningDetailOpen(null); }}
+                    >
+                      Schliessen
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -601,7 +624,10 @@ export default function ProductCard({
 
       {/* Warning box */}
       {!isList && cardWarning && (
-        <div className="ss-product-card-warning-box rounded-lg bg-[#fff8f0] border border-[#fed7aa] px-3 py-2.5 mb-2.5">
+        <div
+          className="ss-product-card-warning-box relative rounded-lg bg-[#fff8f0] border border-[#fed7aa] px-3 py-2.5 mb-2.5"
+          onClick={(e) => e.stopPropagation()}
+        >
           <div className="flex items-center gap-1.5 text-[11.5px] font-extrabold text-orange-600 mb-1.5">
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
               <path d="M6 1.5L11.5 10.5H.5L6 1.5Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
@@ -612,13 +638,33 @@ export default function ProductCard({
             <button
               type="button"
               className="ss-product-card-warning-info-button inline-flex shrink-0 rounded-full p-0.5 text-orange-500 transition-colors hover:bg-orange-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-300 focus-visible:ring-offset-2"
-              title={cardWarning.message}
-              aria-label={`Warnung vollständig anzeigen: ${cardWarning.message}`}
+              aria-label={`Warnung vollstaendig anzeigen: ${cardWarning.message}`}
+              aria-expanded={warningDetailOpen === 'card'}
+              aria-controls={warningDetailId}
+              onClick={(e) => { e.stopPropagation(); setWarningDetailOpen('card'); }}
             >
               <Info size={12} />
             </button>
           </div>
           <div className="text-[12px] leading-snug text-orange-900 font-medium">{warningHintMessage}</div>
+          {warningDetailOpen === 'card' && (
+            <div
+              id={warningDetailId}
+              role="dialog"
+              aria-label={cardWarning.title || 'Warnhinweis'}
+              className="absolute left-2 right-2 top-full z-30 mt-2 rounded-xl border border-orange-200 bg-white p-3 text-left text-[12px] font-semibold leading-relaxed text-slate-700 shadow-xl"
+            >
+              <p className="text-[12px] font-black text-orange-700">{cardWarning.title || 'Warnhinweis'}</p>
+              <p className="mt-1">{cardWarning.message}</p>
+              <button
+                type="button"
+                className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-black text-slate-600 hover:bg-slate-50"
+                onClick={(e) => { e.stopPropagation(); setWarningDetailOpen(null); }}
+              >
+                Schliessen
+              </button>
+            </div>
+          )}
         </div>
       )}
 

@@ -39,9 +39,38 @@ Last updated: 2026-05-11
 
 ## Latest Completed Work
 
-### 2026-05-11 User UX Follow-Ups - Local Implementation
+### 2026-05-11 Routine Email Endpoint - Local Implementation
 
-- Implemented the post-QA user UX follow-ups locally; not deployed yet.
+- Implemented real authenticated `/routine` mail sending locally; not deployed
+  yet.
+- Added `POST /api/stacks/routine/email` under the existing stacks module and
+  placed it before dynamic `/:id` routes so Hono does not match `routine` as a
+  stack id.
+- The endpoint loads all stacks for the current user, prepares stack items with
+  the existing Stack-Mail helpers, groups the email by timing
+  (`morning`/`noon`/`evening`/`flexible`), includes warnings, and adds a total
+  Wirkstoff overview.
+- Routine mail uses its own stricter rate-limit key:
+  `routine-email:${user.userId}` with 3 sends/hour.
+- `frontend/src/pages/RoutinePage.tsx` now calls the real endpoint from
+  `Plan mailen`, shows sending/success/error states, and no longer uses the
+  placeholder status text.
+- Added regression coverage to `scripts/backend-regression-check.mjs` for
+  route existence/order, routine rate-limit key, dedicated HTML builder, and
+  frontend endpoint usage.
+- Verification:
+  - TDD red: `node scripts/backend-regression-check.mjs` failed before
+    implementation with `Routine email endpoint must exist`.
+  - `node scripts/backend-regression-check.mjs` passed.
+  - `functions`: `npx tsc -p tsconfig.json --noEmit` passed.
+  - `frontend`: `npx tsc --noEmit` passed.
+  - `frontend`: `npm run build` passed.
+  - `git diff --check` passed with existing LF/CRLF warnings only.
+
+### 2026-05-11 User UX Follow-Ups - Preview Implementation
+
+- Implemented the post-QA user UX follow-ups and deployed them to the
+  `codex-website-ux-fixes` Pages preview.
 - Stack create/edit now owns family/profile assignment:
   - `Stack erstellen` opens a modal for name, description, and profile instead
     of immediately creating `Stack 2`.
@@ -734,10 +763,11 @@ Last updated: 2026-05-11
 - Authenticated owner browser QA remains the final acceptance gate for the new
   admin/user workflows.
 
-## 2026-05-11 - Website UX Fixes Local
+## 2026-05-11 - Website UX Fixes Preview
 
-- Local website UX fixes for the stack/demo surface are implemented on branch
-  `codex/website-ux-fixes`; not deployed yet.
+- Website UX fixes for the stack/demo surface are implemented on branch
+  `codex/website-ux-fixes` and deployed to the Pages preview alias
+  `https://codex-website-ux-fixes.supplementstack.pages.dev`.
 - Demo now renders inside the shared public `Layout` header instead of the
   standalone StackWorkspace header.
 - Demo mail/PDF actions no longer show a static unavailable text; buttons stay
@@ -765,6 +795,39 @@ Last updated: 2026-05-11
   - Browser smoke on local Vite: `/demo` shared header, demo mail tooltip,
     protected `/family` login redirect. Local demo products stayed empty
     because the pure Vite dev server does not serve `/api/demo/products`.
+
+### 2026-05-11 Website UX QA Gaps - Preview Follow-Up
+
+- Fixed the remaining QA UX gaps and deployed them to the
+  `codex-website-ux-fixes` Pages preview.
+- Add-product duplicate Wirkstoff checks now follow the selected target stack:
+  - target stack selection appears before ingredient search
+  - changing the target stack after choosing an ingredient re-runs the duplicate
+    check
+  - continuing from dosage re-checks the current target stack before products
+- Short product warnings in card and list view now open click/touch in-app
+  detail popovers instead of relying on `title`/hover text.
+- Demo `Stack mailen` and `Plan drucken/PDF` now open an in-app account CTA
+  modal instead of native `window.alert`.
+- List view now renders a compact add-product row at the end, matching the
+  grid view plus tile affordance.
+- Demo stack carryover now uses the shared `stackFlow` snapshot/transfer helper
+  and imports empty demo stacks with `product_ids: []` when the API accepts the
+  create call.
+- Added `scripts/user-ux-regression-check.mjs` plus stackFlow coverage for
+  empty demo stack transfer.
+- Verification passed:
+  - `node scripts/user-ux-regression-check.mjs`
+  - `node --check scripts/user-ux-regression-check.mjs`
+  - `frontend`: `npx tsc --noEmit`
+  - `frontend`: `npm test -- --run src/lib/stackFlow.test.ts`
+  - `frontend`: `npm test -- --run`
+  - `frontend`: `npm run lint --if-present`
+  - `frontend`: `npm run build`
+  - `git diff --check` passed with existing LF/CRLF warnings only.
+- Preview browser smoke confirmed the demo shared header, account CTA modal,
+  list-view add row, and product delete confirmation. Authenticated admin
+  preview QA still requires a preview-domain login session.
 
 ## Known Remaining Work
 
@@ -797,3 +860,20 @@ Last updated: 2026-05-11
 - No open `.agent-memory/deployment_images` PNG visual TODOs remain; keep the
   folder and `.gitkeep` for future owner reference images.
 - Authenticated owner browser QA remains open for the new admin flows.
+
+## 2026-05-11 Admin Knowledge/Users Deep-Link Filters - Preview
+
+- Admin deep-link filter fix implemented and deployed to the
+  `codex-website-ux-fixes` Pages preview.
+- `/administrator/knowledge` now initializes `q` and `status` from URL search
+  params and keeps the URL in sync when those filters change. This fixes
+  dashboard links such as `/administrator/knowledge?status=draft`.
+- `/administrator/users` now initializes `q`, `trusted`, and `blocked` from URL
+  search params and updates the URL when filters are applied, cleared, or set
+  from the summary cards.
+- Added a static guard to `scripts/user-ux-regression-check.mjs` that ensures
+  `AdministratorKnowledgePage` uses `useSearchParams` and initializes `status`
+  from the URL.
+- Verification passed:
+  - `node scripts/user-ux-regression-check.mjs`
+  - `frontend`: `npx tsc --noEmit`

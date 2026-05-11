@@ -1357,3 +1357,23 @@ Rationale:
   intake.
 - Some users legitimately need split formats for the same Wirkstoff, so the
   flow should warn and explain rather than hard-block every duplicate.
+
+## 2026-05-11 - Combined Routine Email
+
+Decision: `/routine` sends one combined Einnahmeplan email through the stacks
+API namespace instead of mailing each stack separately.
+
+Operational rule:
+- Use `POST /api/stacks/routine/email` for the combined plan.
+- Keep the route before dynamic stack routes such as `/:id` and `/:id/email`.
+- Load only the authenticated user's stacks.
+- Reuse the Stack-Mail item, ingredient, warning, and SMTP helpers.
+- Use the dedicated rate-limit key `routine-email:${user.userId}`.
+- The email must include both a timing overview and a total Wirkstoff overview.
+
+Rationale:
+- `/api/stacks` is already the mounted namespace for stack/routine data.
+- Reusing the existing Stack-Mail helpers keeps warning and dose formatting
+  consistent with single-stack mail.
+- A separate rate-limit key prevents routine mail from sharing quota or route
+  ambiguity with single-stack mail.

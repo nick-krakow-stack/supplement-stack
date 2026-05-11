@@ -59,7 +59,9 @@ function amountLabel(quantity?: number | null, unit?: string | null): string {
 export default function RoutinePage() {
   const [stacks, setStacks] = useState<RoutineStack[]>([]);
   const [status, setStatus] = useState('');
+  const [statusType, setStatusType] = useState<'idle' | 'success' | 'error'>('idle');
   const [loading, setLoading] = useState(true);
+  const [emailSending, setEmailSending] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -86,7 +88,10 @@ export default function RoutinePage() {
         if (!cancelled) setStacks(detailed);
       })
       .catch((err) => {
-        if (!cancelled) setStatus(err instanceof Error ? err.message : 'Einnahmeplan konnte nicht geladen werden.');
+        if (!cancelled) {
+          setStatusType('error');
+          setStatus(err instanceof Error ? err.message : 'Einnahmeplan konnte nicht geladen werden.');
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -117,6 +122,30 @@ export default function RoutinePage() {
     return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, 'de'));
   }, [products]);
 
+  const handleEmailRoutine = async () => {
+    setEmailSending(true);
+    setStatus('');
+    setStatusType('idle');
+    try {
+      const response = await fetch(apiPath('/stacks/routine/email'), {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(typeof data.error === 'string' ? data.error : 'Einnahmeplan-Mail konnte nicht gesendet werden.');
+      }
+      setStatusType('success');
+      setStatus('Einnahmeplan wurde an deine E-Mail-Adresse gesendet.');
+    } catch (err) {
+      setStatusType('error');
+      setStatus(err instanceof Error ? err.message : 'Einnahmeplan-Mail konnte nicht gesendet werden.');
+    } finally {
+      setEmailSending(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -128,11 +157,25 @@ export default function RoutinePage() {
         </div>
         <div className="flex gap-2">
           <button type="button" onClick={() => window.print()}>Plan drucken/PDF</button>
-          <button type="button" onClick={() => setStatus('E-Mail-Versand fuer den Einnahmeplan wird vorbereitet.')}>Plan mailen</button>
+          <button type="button" onClick={handleEmailRoutine} disabled={emailSending}>
+            {emailSending ? 'Wird gesendet...' : 'Plan mailen'}
+          </button>
         </div>
       </div>
 
-      {status && <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-600">{status}</div>}
+      {status && (
+        <div
+          className={`rounded-xl border px-4 py-3 text-sm font-bold ${
+            statusType === 'error'
+              ? 'border-rose-200 bg-rose-50 text-rose-700'
+              : statusType === 'success'
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                : 'border-slate-200 bg-white text-slate-600'
+          }`}
+        >
+          {status}
+        </div>
+      )}
 
       {loading ? (
         <div className="text-sm font-semibold text-slate-500">Laden...</div>

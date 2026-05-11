@@ -4,6 +4,13 @@ Last updated: 2026-05-11
 
 ## Immediate
 
+- Admin knowledge/users deep-link filter fix is implemented and deployed to
+  the `codex-website-ux-fixes` preview. It still needs authenticated
+  preview/live smoke with an admin session:
+  - `/administrator/knowledge?status=draft` should show draft knowledge
+    articles, not published ones.
+  - `/administrator/users?q=...&trusted=true&blocked=false` should initialize
+    the visible filters and API request from the URL.
 - User UX follow-ups from the authenticated Tobias QA are implemented locally
   and still need final deploy/live owner QA:
   - family/profile assignment lives in `Stack anlegen` / `Stack bearbeiten`
@@ -189,7 +196,7 @@ Last updated: 2026-05-11
 ## Launch Confidence
 
 - Run external inbox mail tests for registration, verification, password reset,
-  and stack mail.
+  single stack mail, and combined routine mail.
 - Verify outbound headers include DKIM alignment for
   `supplementstack.de`.
 - Keep content/science/legal review as a separate pre-indexing gate.
@@ -202,17 +209,25 @@ Last updated: 2026-05-11
 - Consider table-rebuild cleanup migrations only after the current admin panel
   is QA-accepted.
 
-## Website UX Fixes Before Deployment
+## Website UX Fixes Preview QA
 
 - Run authenticated browser QA against the local Pages/Workers stack or preview
   deployment for the new stack flows:
-  - duplicate Wirkstoff modal
+  - duplicate Wirkstoff modal with target-stack selection before search and
+    stack changes after ingredient selection
   - own-product CTA from product selection
   - stack create/edit family assignment
   - product delete confirmation
+  - short warning detail popovers in card and list view on touch/click
+  - demo mail/PDF account CTA modal instead of native alert
+  - list-view compact add-product row
   - `/family` and `/routine` as logged-in user
-  - demo stack import after registration
+  - `/routine` Plan mailen against the real `POST /api/stacks/routine/email`
+    endpoint with a configured external inbox
+  - demo stack import after registration, including an empty created demo stack
 - The local Vite smoke cannot verify demo catalog products because `/api` is not
   available from Vite alone.
-- The `/routine` mail action is a frontend placeholder until a dedicated backend
-  endpoint for emailing the combined Einnahmeplan exists.
+- Preview browser QA has confirmed the demo header, demo account CTA modal,
+  list-view add row, and product delete confirmation. Remaining browser QA is
+  authenticated preview/live admin and logged-in user smoke, especially
+  `/routine` mail with an external inbox.

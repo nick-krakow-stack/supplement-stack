@@ -4,6 +4,7 @@ import {
   findDuplicateIngredientInStack,
   readDemoStackSnapshot,
   summarizeDailyIngredientTotals,
+  transferDemoStacksToAccount,
   writeDemoStackSnapshot,
 } from './stackFlow';
 
@@ -82,6 +83,42 @@ describe('stackFlow', () => {
         timing: 'evening',
       },
     ]);
+  });
+
+  it('transfers empty demo stacks to the account', async () => {
+    const storage = createStorage();
+    writeDemoStackSnapshot(storage, {
+      activeStackId: 'stack-empty',
+      stacks: [
+        {
+          id: 'stack-empty',
+          name: 'Leerer Demo Stack',
+          products: [],
+        },
+      ],
+    });
+    const requests: Array<{ url: string; body: unknown }> = [];
+    const fetcher = async (input: RequestInfo | URL, init?: RequestInit) => {
+      requests.push({
+        url: String(input),
+        body: init?.body ? JSON.parse(String(init.body)) : null,
+      });
+      return new Response(JSON.stringify({ id: 123 }), { status: 200 });
+    };
+
+    const result = await transferDemoStacksToAccount(storage, fetcher, (path) => `/api${path}`);
+
+    expect(result).toEqual({ importedStacks: 1, importedProducts: 0 });
+    expect(requests).toEqual([
+      {
+        url: '/api/stacks',
+        body: {
+          name: 'Leerer Demo Stack',
+          product_ids: [],
+        },
+      },
+    ]);
+    expect(readDemoStackSnapshot(storage)).toBeNull();
   });
 
   it('finds an existing stack product with the same effective ingredient', () => {
