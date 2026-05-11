@@ -16,7 +16,7 @@ Last updated: 2026-05-11
   - No new migration required.
 - Pages preview:
   - Project: `supplementstack`.
-  - Preview URL: `https://252197e5.supplementstack.pages.dev`.
+  - Preview URL: `https://6c3c538e.supplementstack.pages.dev`.
   - Alias URL: `https://codex-website-ux-fixes.supplementstack.pages.dev`.
 - Validation:
   - `node scripts/backend-regression-check.mjs` passed.
