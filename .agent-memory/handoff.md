@@ -1,6 +1,6 @@
 ﻿# Handoff
 
-Last updated: 2026-05-12 00:48:20 +02:00
+Last updated: 2026-05-12 01:07:13 +02:00
 Update mode: PreCompactManual
 
 ## Latest Notes
@@ -10,25 +10,18 @@ Automatic handoff snapshot written by .codex/hooks/agent-protocol.ps1.
 ## Git Snapshot
 
 - Branch: codex/website-ux-fixes
-- Last commit: d9c8916 Add referral attribution dashboard
+- Last commit: 1007516 Centralize agent hook protocol
 
 ## Working Tree
 
 ~~~text
  M .agent-memory/current-state.md
- M .agent-memory/handoff.md
+ M .agent-memory/decisions.md
  M .agent-memory/next-steps.md
  M .claude/settings.json
  M .codex/hooks.json
  M .codex/hooks/README.md
- D .codex/hooks/error-capture.ps1
- D .codex/hooks/orchestrator-guard.ps1
- D .codex/hooks/pre-deploy-check.ps1
- D .codex/hooks/update-agent-handoff.ps1
-?? .agent-memory/owner-feedback.md
-?? .codex/hooks/agent-protocol.ps1
-?? scripts/append-owner-feedback.ps1
-?? scripts/hook-regression-check.mjs
+ M scripts/hook-regression-check.mjs
 ~~~
 
 ## Required Startup For Next Agent

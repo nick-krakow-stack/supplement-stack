@@ -23,10 +23,14 @@ Last updated: 2026-05-12
     stderr because the Codex App treats normal hook output as invalid
     pre-tool-use JSON/noise.
 - Hook wiring remains centralized under `.codex/hooks/` and PowerShell-based:
-  - `.codex/hooks.json` and `.claude/settings.json` both wire
-    hook events through `.codex/hooks/agent-protocol.ps1`.
-  - `.claude/settings.json` no longer runs `update-agent-handoff.ps1` on every
-    `PostToolUse` shell command.
+  - `.codex/hooks.json` and `.claude/settings.json` wire
+    `UserPromptSubmit` and `PreCompact` through
+    `.codex/hooks/agent-protocol.ps1`.
+  - `PreToolUse` and `PostToolUse` are intentionally not wired because the
+    Codex App surfaced those tool hooks as unreviewable approval prompts in
+    this repo.
+  - The consolidated tool-hook behavior remains inside `agent-protocol.ps1`
+    for manual use or future re-enable when review is usable.
 - Replaced the previous separate hook entry points with the single
   `.codex/hooks/agent-protocol.ps1` dispatcher.
 - Added `scripts/hook-regression-check.mjs` to prevent silent regressions in

@@ -11,10 +11,12 @@ Operational rules:
 
 - `.codex/hooks.json` and `.claude/settings.json` should wire only
   `.codex/hooks/agent-protocol.ps1` for routine hooks.
+- `PreToolUse` and `PostToolUse` are not actively wired while the Codex App
+  surfaces those tool hooks as unreviewable approvals in this repo.
 - Do not reintroduce separate active hook files such as `pre-deploy-check.ps1`,
   `orchestrator-guard.ps1`, `error-capture.ps1`, or
   `update-agent-handoff.ps1`.
-- PreToolUse and UserPromptSubmit hook runs must produce no stdout or stderr.
+- UserPromptSubmit hook runs must produce no stdout or stderr.
 - Pending owner browser QA, diff comments, and multi-point website/admin
   requests belong in `.agent-memory/owner-feedback.md`.
 - Manual fallback capture uses `scripts/append-owner-feedback.ps1`.

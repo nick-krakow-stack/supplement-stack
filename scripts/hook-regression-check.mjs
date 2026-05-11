@@ -42,6 +42,19 @@ const codexCommands = hookCommands(codexHooks)
 const claudeCommands = hookCommands(claudeHooks)
 const allCommands = [...codexCommands, ...claudeCommands]
 
+for (const settings of [codexHooks, claudeHooks]) {
+  assert.equal(
+    (settings.hooks?.PreToolUse ?? []).length,
+    0,
+    'PreToolUse must stay disabled so Codex does not require unreviewable tool-hook approvals',
+  )
+  assert.equal(
+    (settings.hooks?.PostToolUse ?? []).length,
+    0,
+    'PostToolUse must stay disabled so Codex does not require unreviewable tool-hook approvals',
+  )
+}
+
 for (const command of allCommands) {
   assert.match(command, /^powershell\b/i, `hook command must be PowerShell-compatible: ${command}`)
   assert.match(command, /\.\/\.codex\/hooks\//, `hook command must use centralized .codex/hooks scripts: ${command}`)
@@ -82,8 +95,8 @@ assert.match(protocolHook, /ConvertFrom-Json/, 'protocol hook must parse hook JS
 assert.match(protocolHook, /prompt/i, 'protocol hook must extract prompt text when available')
 assert.match(protocolHook, /browser|diff|website|admin/i, 'protocol hook must identify feedback-style prompts')
 assert.match(protocolHook, /agent-protocol\.log/, 'protocol hook must record orchestrator guard reminders')
-assert.match(protocolHook, /pre-deploy-check\.log/, 'protocol hook must record pre-deploy checks without stdout')
-assert.match(protocolHook, /deploy-errors\.log/, 'protocol hook must record deploy errors')
+assert.match(protocolHook, /pre-deploy-check\.log/, 'protocol hook must retain manual/future pre-deploy check logic')
+assert.match(protocolHook, /deploy-errors\.log/, 'protocol hook must retain manual/future deploy error capture logic')
 assert.match(protocolHook, /Update-Handoff/, 'protocol hook must update handoff on PreCompact')
 
 const manualFeedbackScript = read('scripts/append-owner-feedback.ps1')
@@ -105,39 +118,6 @@ for (const phrase of [
     protocolHook,
     new RegExp(phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'),
     `protocol hook must remind agents: ${phrase}`,
-  )
-}
-
-const preToolPayload = JSON.stringify({
-  tool_name: 'Bash',
-  tool_input: {
-    command: 'git status --short',
-  },
-})
-
-for (const command of eventCommands(codexHooks, 'PreToolUse')) {
-  const match = command.match(/-File\s+(.+?\.ps1)(?:\s|$)/i)
-  assert.ok(match, `PreToolUse hook command must call a PowerShell file: ${command}`)
-  const scriptPath = match[1].replaceAll('/', '\\')
-  const result = spawnSync(
-    'powershell',
-    ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath],
-    {
-      cwd: new URL('..', import.meta.url),
-      input: preToolPayload,
-      encoding: 'utf8',
-    },
-  )
-  assert.equal(result.status, 0, `PreToolUse hook must exit 0 for normal commands: ${scriptPath}\n${result.stderr}`)
-  assert.equal(
-    result.stdout.trim(),
-    '',
-    `PreToolUse hook must not write plain text stdout because Codex expects JSON-compatible output: ${scriptPath}`,
-  )
-  assert.equal(
-    result.stderr.trim(),
-    '',
-    `PreToolUse hook must not write stderr because the Codex App surfaces hook output as failures/noise: ${scriptPath}`,
   )
 }
 

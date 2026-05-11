@@ -12,12 +12,15 @@ This directory is the canonical hook location for this repository.
 Current hooks:
 
 - `agent-protocol.ps1`: single centralized dispatcher for all hook events.
-  It handles orchestrator/sub-agent reminders, owner feedback capture,
-  pre-deploy logging, deploy error capture, and pre-compact handoff updates.
+  It contains the consolidated logic for orchestrator/sub-agent reminders,
+  owner feedback capture, pre-deploy logging, deploy error capture, and
+  pre-compact handoff updates.
 
-PreToolUse hooks must not write plain-text stdout in the Codex App. The
-dispatcher therefore sends reminders/check output to stderr or durable memory
-files instead of stdout.
+`PreToolUse` and `PostToolUse` are intentionally not wired in the active
+Codex/Claude hook settings. The Codex App currently surfaces those tool hooks
+as unreviewable hook approvals in this repo. Keep tool-hook behavior available
+inside `agent-protocol.ps1`, but trigger it manually or re-enable it only after
+the app review flow is usable.
 
 If a `UserPromptSubmit` payload does not expose prompt text, capture important
 owner feedback manually:

@@ -22,7 +22,10 @@ Last updated: 2026-05-12
   `.codex/hooks/*.ps1` change.
 - Do not reintroduce multiple hook entry-point scripts for routine behavior.
   Keep `.codex/hooks/agent-protocol.ps1` as the single active dispatcher.
-  It must stay silent on stdout/stderr for PreToolUse/UserPromptSubmit.
+- `PreToolUse` and `PostToolUse` are currently not wired because the Codex App
+  surfaced them as unreviewable hook approvals. Re-enable only when the app
+  review flow is usable.
+- `UserPromptSubmit` must stay silent on stdout/stderr.
 - Check `.agent-memory/owner-feedback.md` before continuing after context
   compression. Current pending entries include the production dashboard deploy
   mismatch and the admin Wirkstoffe page owner comments.
