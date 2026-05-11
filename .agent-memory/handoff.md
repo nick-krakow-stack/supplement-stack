@@ -1,6 +1,6 @@
 ﻿# Handoff
 
-Last updated: 2026-05-11 03:59:50 +02:00
+Last updated: 2026-05-11 04:00:49 +02:00
 Update mode: PostToolUseBash
 
 ## Latest Notes
@@ -10,27 +10,44 @@ Automatic handoff snapshot written by scripts/update-agent-handoff.ps1.
 ## Git Snapshot
 
 - Branch: codex/website-ux-fixes
-- Last commit: 953d988 Improve stack UX flows
+- Last commit: e8a5401 Merge remote-tracking branch 'origin/main' into codex/website-ux-fixes
 
 ## Working Tree
 
 ~~~text
-M .agent-memory/current-state.md
-M .agent-memory/decisions.md
-M .agent-memory/deploy-log.md
 M .agent-memory/handoff.md
-M .agent-memory/next-steps.md
-M frontend/src/components/ProductCard.tsx
-M frontend/src/components/StackWorkspace.tsx
-M frontend/src/lib/stackFlow.test.ts
-M frontend/src/pages/RegisterPage.tsx
-M frontend/src/pages/RoutinePage.tsx
-M frontend/src/pages/administrator/AdministratorKnowledgePage.tsx
-M frontend/src/pages/administrator/AdministratorUsersPage.tsx
-M frontend/src/styles.css
-M functions/api/modules/stacks.ts
-M scripts/backend-regression-check.mjs
-?? scripts/user-ux-regression-check.mjs
+~~~
+
+## Current State Summary
+
+- Production-like line is the Cloudflare Pages/Workers line:
+- Live domain: `https://supplementstack.de`.
+- Latest documented deployed preview:
+- The active admin frontend is `/administrator`.
+- `/api/admin` remains the backend API namespace.
+- The old frontend `/admin` route was removed during cleanup. Use
+- The old frontend admin monolith has been removed from active code:
+- Active admin pages live in `frontend/src/pages/administrator/*`.
+- Active admin menu now shows the reduced operator set: Dashboard,
+- Several older admin pages still have direct routes for compatibility or later
+- Admin pages use scoped shar# Handoff
+
+Last updated: 2026-05-11 04:00:49 +02:00
+Update mode: PostToolUseBash
+
+## Latest Notes
+
+Automatic handoff snapshot written by scripts/update-agent-handoff.ps1.
+
+## Git Snapshot
+
+- Branch: codex/website-ux-fixes
+- Last commit: e8a5401 Merge remote-tracking branch 'origin/main' into codex/website-ux-fixes
+
+## Working Tree
+
+~~~text
+M .agent-memory/handoff.md
 ~~~
 
 ## Current State Summary
