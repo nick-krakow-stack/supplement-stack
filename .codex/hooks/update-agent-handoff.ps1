@@ -5,6 +5,11 @@ param(
 
 $ErrorActionPreference = "SilentlyContinue"
 
+if ($Mode -eq "PostToolUseBash") {
+  Write-Output "Skipped handoff update: PostToolUseBash is disabled to avoid dirtying the worktree after every command."
+  exit 0
+}
+
 function Get-RepoRoot {
   $current = Split-Path -Parent $PSScriptRoot
   while ($current -and -not (Test-Path (Join-Path $current ".git"))) {

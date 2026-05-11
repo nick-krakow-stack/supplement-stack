@@ -21,10 +21,6 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File ./.codex/hooks/update-agent-handoff.ps1 -Mode PostToolUseBash"
-          },
-          {
-            "type": "command",
             "command": "powershell -NoProfile -ExecutionPolicy Bypass -File ./.codex/hooks/error-capture.ps1"
           }
         ]

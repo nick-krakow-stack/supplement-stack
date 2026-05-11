@@ -10,9 +10,27 @@ Last updated: 2026-05-11
   explicitly changed to provide `bash`.
 - Hook failure logs are written to `.agent-memory/deploy-errors.log`, which is
   ignored as local runtime output.
+- Do not wire `update-agent-handoff.ps1` back into every `PostToolUse` shell
+  command; it makes `.agent-memory/handoff.md` dirty after normal commands.
+  Keep handoff updates on PreCompact/manual/session-end paths.
 
 ## Immediate
 
+- Admin dashboard owner comments are implemented and deployed to the
+  `codex-website-ux-fixes` preview. Next useful QA:
+  - open
+    `https://codex-website-ux-fixes.supplementstack.pages.dev/administrator/dashboard`
+    with an authenticated preview admin session, or deploy/merge to production
+    before doing live `https://supplementstack.de` admin review.
+  - confirm the new cards `Neuanmeldungen`, `Neue Stacks`, `Backlinks`, and
+    `Abmeldungen`.
+  - confirm dashboard links for `User-Partnerlink`, `Linkmeldungen`,
+    `offene Freigaben`, and `Wirkstoffe ohne Artikel`.
+  - Decide whether the current app-measured `Backlinks` metric is sufficient or
+    whether a real external backlink source should be integrated later.
+- The new dashboard metrics only have history from 2026-05-11 onward:
+  stack emails, account deletions, last-seen activity, referrer events, and
+  Google pageviews were not tracked before migration `0076`.
 - Admin knowledge/users deep-link filter fix is implemented and deployed to
   the `codex-website-ux-fixes` preview. It still needs authenticated
   preview/live smoke with an admin session:

@@ -130,4 +130,17 @@ export function trackPageView(path: string) {
     page_location: `${window.location.origin}${path}`,
     page_path: path,
   });
+
+  void fetch('/api/analytics/pageview', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      path,
+      referrer: document.referrer || null,
+    }),
+    credentials: 'include',
+    keepalive: true,
+  }).catch(() => {
+    // Analytics must never interrupt normal page usage.
+  });
 }

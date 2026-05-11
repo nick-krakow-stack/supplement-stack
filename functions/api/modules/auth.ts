@@ -60,6 +60,27 @@ function publicProfile(user: UserRow) {
   }
 }
 
+async function markUserSeen(db: D1Database, userId: number) {
+  try {
+    await db.prepare("UPDATE users SET last_seen_at = datetime('now') WHERE id = ?")
+      .bind(userId)
+      .run()
+  } catch {
+    // Older preview databases may not have the optional dashboard column yet.
+  }
+}
+
+async function countUserRows(db: D1Database, table: string, userId: number): Promise<number> {
+  try {
+    const row = await db.prepare(`SELECT COUNT(*) AS count FROM ${table} WHERE user_id = ?`)
+      .bind(userId)
+      .first<{ count: number }>()
+    return row?.count ?? 0
+  } catch {
+    return 0
+  }
+}
+
 function parseVerificationExpiry(value: number | string): number {
   if (typeof value === 'number') return value
   const numeric = Number(value)
@@ -343,6 +364,8 @@ auth.post('/login', async (c) => {
   const valid = await verifyPassword(data.password, user.password_hash)
   if (!valid) return c.json({ error: 'Invalid credentials' }, 401)
 
+  await markUserSeen(c.env.DB, user.id)
+
   const token = await sign(
     { userId: user.id, email: user.email, role: user.role ?? 'user', exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS },
     c.env.JWT_SECRET,
@@ -365,6 +388,7 @@ meApp.get('/', async (c) => {
   const authErr = await ensureAuth(c)
   if (authErr) return authErr
   const user = c.get('user')
+  await markUserSeen(c.env.DB, user.userId)
   const row = await c.env.DB.prepare(
     'SELECT id, email, age, guideline_source, health_consent, health_consent_at, email_verified_at, role FROM users WHERE id = ?'
   ).bind(user.userId).first<UserRow>()
@@ -390,9 +414,9 @@ meApp.patch('/password', async (c) => {
   if (newPassword.length < 8) return c.json({ error: 'Neues Passwort muss mindestens 8 Zeichen lang sein.' }, 400)
   if (newPassword === currentPassword) return c.json({ error: 'Neues Passwort muss sich vom aktuellen unterscheiden.' }, 400)
 
-  const row = await c.env.DB.prepare('SELECT password_hash FROM users WHERE id = ?')
+  const row = await c.env.DB.prepare('SELECT id, email, password_hash, email_verified_at FROM users WHERE id = ?')
     .bind(user.userId)
-    .first<{ password_hash: string }>()
+    .first<{ id: number; email: string; password_hash: string; email_verified_at: string | null }>()
   if (!row) return c.json({ error: 'User not found' }, 404)
 
   const valid = await verifyPassword(currentPassword, row.password_hash)
@@ -419,9 +443,9 @@ meApp.delete('/', async (c) => {
   const password = body && typeof body.password === 'string' ? body.password : ''
   if (!password) return c.json({ error: 'Passwort erforderlich.' }, 400)
 
-  const row = await c.env.DB.prepare('SELECT password_hash FROM users WHERE id = ?')
+  const row = await c.env.DB.prepare('SELECT id, email, password_hash, email_verified_at FROM users WHERE id = ?')
     .bind(user.userId)
-    .first<{ password_hash: string }>()
+    .first<{ id: number; email: string; password_hash: string; email_verified_at: string | null }>()
   if (!row) return c.json({ error: 'User not found' }, 404)
 
   const valid = await verifyPassword(password, row.password_hash)
@@ -432,6 +456,28 @@ meApp.delete('/', async (c) => {
   // Reihenfolge: Kinder vor Eltern. stack_items hängt an stacks(id), nicht an
   // users(id) direkt — daher zuerst stack_items via Sub-Select, dann stacks.
   const userId = user.userId
+  const [stackCountRow, userProductCountRow] = await Promise.all([
+    countUserRows(c.env.DB, 'stacks', userId),
+    countUserRows(c.env.DB, 'user_products', userId),
+  ])
+  try {
+    await c.env.DB.prepare(`
+      INSERT INTO account_deletion_events (
+        deleted_user_id,
+        had_verified_email,
+        stack_count,
+        user_product_count
+      )
+      VALUES (?, ?, ?, ?)
+    `).bind(
+      userId,
+      row.email_verified_at ? 1 : 0,
+      stackCountRow,
+      userProductCountRow,
+    ).run()
+  } catch {
+    // Dashboard tracking table may not be migrated yet; deletion must still work.
+  }
   const coreStmts = [
     c.env.DB.prepare('DELETE FROM stack_items WHERE stack_id IN (SELECT id FROM stacks WHERE user_id = ?)').bind(userId),
     c.env.DB.prepare('DELETE FROM stacks WHERE user_id = ?').bind(userId),

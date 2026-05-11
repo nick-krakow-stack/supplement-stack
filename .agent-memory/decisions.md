@@ -2,6 +2,37 @@
 
 Last updated: 2026-05-11
 
+## 2026-05-11 - Admin Dashboard Metrics After Owner Review
+
+Decision: the admin dashboard KPI row should use owner-facing operational
+business language instead of implementation-oriented labels.
+
+Operational rules:
+
+- `Neuanmeldungen` is the selected-range registration count; subtext is
+  `davon XX aktiv`, counted from verified users created in the same selected
+  range.
+- `Neue Stacks` is the selected-range stack creation count; subtext counts
+  successfully emailed stacks from `stack_email_events`.
+- `Abmeldungen` counts recorded self-service account deletions from
+  `account_deletion_events`; subtext counts non-admin users inactive beyond
+  the selected range using `users.last_seen_at`.
+- `Backlinks` currently means observed external referrer hosts captured by
+  first-party pageview tracking. `Aufrufe über Google` counts Google referrer
+  pageviews. Full SEO backlink counting remains out of scope until an external
+  data source is added.
+- Dashboard action links should lead directly to operational review surfaces:
+  user-owned affiliate links in Products, link reports, pending user products,
+  and ingredients without related articles.
+
+Rationale:
+
+- The owner wants the dashboard to answer operational questions quickly:
+  signups, sent stacks, account churn/inactivity, link opportunities, link
+  reports, and missing content coverage.
+- Several requested values were not historically tracked, so additive event
+  tables are required and historical values begin at the migration date.
+
 ## 2026-05-11 - Family Member Assignment Belongs To Stack Create/Edit
 
 Decision: family/profile assignment should be part of `Stack anlegen` and

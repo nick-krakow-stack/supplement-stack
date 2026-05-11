@@ -2,6 +2,54 @@
 
 Last updated: 2026-05-11
 
+## 2026-05-11 Admin Dashboard Owner Comments - Preview Deployed
+
+- Implemented the owner comments from live `/administrator/dashboard` on branch
+  `codex/website-ux-fixes` and deployed them to the Pages branch preview.
+- Remote D1 migration `0076_admin_dashboard_tracking.sql` was applied to
+  `supplementstack-production`.
+- New dashboard tracking/storage:
+  - `users.last_seen_at` is updated on login and authenticated `/api/me`.
+  - `stack_email_events` records successful stack/routine email sends.
+  - `account_deletion_events` records self-service account deletions before the
+    user row is hard-deleted.
+  - `page_view_events` records consented page views plus referrer source/host.
+- Dashboard KPI copy and order now follows the owner comments:
+  - `Neuanmeldungen`, subtext `davon XX aktiv`.
+  - `Neue Stacks`, subtext `XX Stacks wurden verschickt`.
+  - `Backlinks`, subtext `XXX Aufrufe über Google`.
+  - `Abmeldungen`, subtext `XX seit mehr als ZEITRAUM inaktiv`, placed last.
+- Katalog/Content module labels and links were adjusted:
+  - `offene Freigaben`, `Ohne Affiliate-Link`, `Wirkstoffe ohne Artikel`.
+  - Empty product-click state now links to user-owned affiliate links.
+  - Empty shop-signal state now links to link reports and counts users who
+    submitted link reports.
+  - `Deadlinks als Potenzial` is now `Deadlinks`, with deadlink-click subtext.
+- Admin Products affiliate filter now includes `Nick-Partnerlink` and
+  `User-Partnerlink`; backend filtering includes active `product_shop_links`.
+- Important limitation: `Backlinks` is currently an app-measured external
+  referrer-host count from `page_view_events`, not a full SEO backlink crawl.
+  True web-wide backlink counts require a later external data source such as
+  Search Console or an SEO provider.
+- Verification passed:
+  - `node scripts/admin-qa-regression-check.mjs`
+  - `functions`: `npx tsc -p tsconfig.json --noEmit`
+  - `frontend`: `npx tsc --noEmit`
+  - `frontend`: `npm run lint --if-present`
+  - `frontend`: `npm test -- --run`
+  - `frontend`: `npm run build`
+  - `git diff --check` with CRLF warnings only
+- Preview deployment:
+  - `https://8f774ddf.supplementstack.pages.dev`
+  - alias `https://codex-website-ux-fixes.supplementstack.pages.dev`
+- Remote postflight:
+  - `wrangler d1 migrations list supplementstack-production --remote` reported
+    no pending migrations.
+  - Preview `/` returned 200.
+  - Preview `/api/products` returned 200.
+  - Preview unauthenticated `/api/admin/stats` returned 401.
+  - Preview `POST /api/analytics/pageview` returned 200.
+
 ## 2026-05-11 Codex/Claude Hook Centralization - Local
 
 - Hook failures in the Codex App were traced to Bash-only hook commands on
@@ -14,6 +62,10 @@ Last updated: 2026-05-11
   - `orchestrator-guard.ps1`
   - `update-agent-handoff.ps1`
 - `.codex/hooks.json` points to those PowerShell scripts.
+- `update-agent-handoff.ps1` remains available for PreCompact/manual handoff
+  updates, but it is no longer wired into every `PostToolUse` shell command.
+  Running it after every shell command dirtied the Git tree continuously in the
+  Codex App.
 - `.claude/settings.json` also points to the same `.codex/hooks/*.ps1` scripts
   so Codex and Claude no longer maintain duplicate hook implementations.
 - `.gitignore` now keeps Codex local app state ignored while allowing the

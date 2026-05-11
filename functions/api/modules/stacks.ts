@@ -95,6 +95,35 @@ type RoutineIngredientTotal = {
   open: number
 }
 
+function emailDomain(email: string): string | null {
+  const domain = email.split('@')[1]?.trim().toLowerCase()
+  return domain || null
+}
+
+async function recordStackEmailEvent(
+  db: D1Database,
+  userId: number,
+  stackId: number | null,
+  eventType: 'single_stack' | 'routine',
+  stackCount: number,
+  recipientEmail: string,
+) {
+  try {
+    await db.prepare(`
+      INSERT INTO stack_email_events (
+        user_id,
+        stack_id,
+        event_type,
+        stack_count,
+        recipient_domain
+      )
+      VALUES (?, ?, ?, ?, ?)
+    `).bind(userId, stackId, eventType, stackCount, emailDomain(recipientEmail)).run()
+  } catch {
+    // Dashboard tracking table may not be migrated yet; mail sending must still work.
+  }
+}
+
 function escapeHtml(value: unknown): string {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -978,6 +1007,7 @@ stacks.post('/routine/email', async (c) => {
     return c.json({ error: 'Einnahmeplan-Mail konnte nicht gesendet werden.' }, 500)
   }
 
+  await recordStackEmailEvent(c.env.DB, user.userId, null, 'routine', userStacks.length, user.email)
   return c.json({ ok: true, stacks: userStacks.length, items: preparedItems.length })
 })
 
@@ -1029,6 +1059,7 @@ stacks.post('/:id/email', async (c) => {
     console.error('[stacks] stack mail failed:', result.error)
     return c.json({ error: 'E-Mail konnte nicht gesendet werden.' }, 500)
   }
+  await recordStackEmailEvent(c.env.DB, user.userId, stack.id, 'single_stack', 1, user.email)
   return c.json({ ok: true })
 })
 

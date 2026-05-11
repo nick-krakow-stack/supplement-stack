@@ -3061,4 +3061,48 @@ When a future agent deploys or applies migrations, append the exact date, commit
   - Toolbar share/import buttons and modals rendered.
   - Schwarzkümmelöl rendered `40 ml täglich`, `12 Tage`, and `28,48 €/Mo`.
   - `/wissen` rendered the new headline, search field, tag cloud, and filtered
-    results for `magnesium`.
+   results for `magnesium`.
+
+## 2026-05-11 Admin Dashboard Owner Comments Preview Deployed
+
+- Scope:
+  - Owner comments from live `/administrator/dashboard` implemented on branch
+    `codex/website-ux-fixes`.
+  - Dashboard KPI labels/order changed to `Neuanmeldungen`, `Neue Stacks`,
+    `Backlinks`, and `Abmeldungen`.
+  - Added stack email send tracking, account deletion tracking, last-seen user
+    activity, and consented referrer/pageview tracking for Google/external
+    referrer metrics.
+  - Katalog/Content module labels changed to `offene Freigaben`,
+    `Ohne Affiliate-Link`, `Wirkstoffe ohne Artikel`, and `Deadlinks`.
+  - Product filters now support `Nick-Partnerlink` and `User-Partnerlink`
+    across legacy product fields and active `product_shop_links`.
+- Remote D1 migrations:
+  - Applied `0076_admin_dashboard_tracking.sql` to
+    `supplementstack-production`.
+- Validation:
+  - `node scripts/admin-qa-regression-check.mjs` passed.
+  - `npx tsc -p tsconfig.json --noEmit` from `functions/` passed.
+  - `npx tsc --noEmit` from `frontend/` passed.
+  - `npm run lint --if-present` from `frontend/` passed.
+  - `npm test -- --run` from `frontend/` passed, 12 tests.
+  - `npm run build` from `frontend/` passed.
+  - `git diff --check` passed with CRLF warnings only.
+- Deploy prep:
+  - Built `frontend/dist`.
+  - Copied `functions/` to `frontend/dist/functions`.
+  - Verified `frontend/dist/functions/api/[[path]].ts` exists.
+  - Copied `frontend/dist` into stable temp snapshot before Wrangler upload.
+- Deploy command:
+  - `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy <snapshot> --project-name supplementstack --branch codex-website-ux-fixes --commit-dirty=true`
+- Preview URL:
+  - `https://8f774ddf.supplementstack.pages.dev`
+- Branch alias:
+  - `https://codex-website-ux-fixes.supplementstack.pages.dev`
+- Remote postflight:
+  - `wrangler d1 migrations list supplementstack-production --remote` reported
+    no pending migrations.
+  - Preview `/` returned 200.
+  - Preview `/api/products` returned 200.
+  - Preview unauthenticated `/api/admin/stats` returned 401.
+  - Preview `POST /api/analytics/pageview` returned 200.

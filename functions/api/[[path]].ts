@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { handle } from 'hono/cloudflare-pages'
 import { cors } from 'hono/cors'
 
+import analytics from './modules/analytics'
 import admin, { interactionsApp, shopDomainsPublicApp } from './modules/admin'
 import auth, { meApp } from './modules/auth'
 import demo from './modules/demo'
@@ -25,6 +26,7 @@ app.use('*', cors({
 }))
 
 app.route('/api/auth', auth)
+app.route('/api/analytics', analytics)
 app.route('/api/me', meApp)
 app.route('/api/ingredients', ingredients)
 app.route('/api/recommendations', recommendationsApp)
