@@ -2978,3 +2978,87 @@ When a future agent deploys or applies migrations, append the exact date, commit
 - Notes:
   - Authenticated cookie-only login/logout and admin browser/mobile QA remain
     open because no admin/user credentials are available in the environment.
+
+## 2026-05-11 Demo Stack UI Polish Preview Deployed
+
+- Scope:
+  - Public demo/stack text encoding cleanup for German umlauts and Euro signs.
+  - Demo toolbar polish: `Stack erstellen` in dropdown, stack actions as
+    icon-only buttons, delete icon before divider, green `Produkt hinzufügen`
+    after divider.
+  - Demo banner copy updated to the approved reset/signup wording.
+  - Public `Studien & mehr` header nav plus `/wissen` index page.
+  - Larger list-view product images/placeholders.
+- Remote D1 migrations:
+  - No new migration required.
+- Validation:
+  - `node scripts/user-ux-regression-check.mjs` passed.
+  - `npx tsc --noEmit` from `frontend/` passed.
+  - `npm run lint --if-present` from `frontend/` passed.
+  - `npm test -- --run` from `frontend/` passed, 11 tests.
+  - `npm run build` from `frontend/` passed.
+  - `git diff --check` passed with CRLF warnings only.
+- Deploy prep:
+  - Built `frontend/dist`.
+  - Copied `functions/` to `frontend/dist/functions`.
+  - Verified `frontend/dist/functions/api/[[path]].ts` exists.
+  - Copied `frontend/dist` into stable temp snapshot before Wrangler upload.
+- Deploy command:
+  - `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy <snapshot> --project-name supplementstack --branch codex-website-ux-fixes --commit-dirty=true`
+- Preview URL:
+  - `https://be7266ea.supplementstack.pages.dev`
+- Branch alias:
+  - `https://codex-website-ux-fixes.supplementstack.pages.dev`
+- Browser smoke:
+  - `/demo` rendered with no mojibake.
+  - Approved banner copy was visible.
+  - `Studien & mehr` header nav was visible.
+  - Toolbar order verified: stack select, edit/mail/PDF/delete icon buttons,
+    divider, `Produkt hinzufügen`.
+  - List-view images measured `58x58`.
+  - `/wissen` rendered with no mojibake and the knowledge index content.
+
+## 2026-05-11 Website UX Review Follow-Ups Preview Deployed
+
+- Scope:
+  - Owner review comments for `/demo` and `/wissen` on branch
+    `codex/website-ux-fixes`.
+  - Stack toolbar icon polish, JSON share/import modals, demo banner copy,
+    draggable product ordering, compact list/list-add refinements, and
+    left-aligned `Link melden` card action.
+  - `/wissen` rebuilt with approved headline/copy, search, keyword chips,
+    masonry feature cards, remaining-entry list, and a source-interpretation
+    disclaimer.
+  - Schwarzkümmelöl product metadata corrected from mg-based demo data to a
+    500 ml bottle with 40 ml daily dose.
+- Remote D1 migrations:
+  - Applied `0075_fix_black_seed_oil_volume.sql` to
+    `supplementstack-production`.
+- Validation:
+  - `node scripts/user-ux-regression-check.mjs` passed.
+  - `npx tsc --noEmit` from `frontend/` passed.
+  - `npx tsc -p tsconfig.json --noEmit` from `functions/` passed.
+  - `npm run lint --if-present` from `frontend/` passed.
+  - `npm test -- --run` from `frontend/` passed, 12 tests.
+  - `npm run build` from `frontend/` passed.
+  - `git diff --check` passed with CRLF warnings only.
+- Deploy prep:
+  - Built `frontend/dist`.
+  - Copied `functions/` to `frontend/dist/functions`.
+  - Verified `frontend/dist/functions/api/[[path]].ts` exists.
+  - Copied `frontend/dist` into a stable temp snapshot before Wrangler upload.
+- Deploy command:
+  - `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy <snapshot> --project-name supplementstack --branch codex-website-ux-fixes --commit-dirty=true`
+- Preview URL:
+  - `https://59a52a7d.supplementstack.pages.dev`
+- Branch alias:
+  - `https://codex-website-ux-fixes.supplementstack.pages.dev`
+- Browser smoke:
+  - `/demo` rendered with no mojibake.
+  - Demo banner contains `um deinen Stack dauerhaft zu speichern`.
+  - `Übersicht` title rendered.
+  - Six draggable product cards were detected; add tile/row remains separate.
+  - Toolbar share/import buttons and modals rendered.
+  - Schwarzkümmelöl rendered `40 ml täglich`, `12 Tage`, and `28,48 €/Mo`.
+  - `/wissen` rendered the new headline, search field, tag cloud, and filtered
+    results for `magnesium`.

@@ -211,6 +211,15 @@ Last updated: 2026-05-11
 
 ## Website UX Fixes Preview QA
 
+- Current demo/stack UI polish is deployed to
+  `https://codex-website-ux-fixes.supplementstack.pages.dev`.
+- Preview browser smoke passed for:
+  - no mojibake on `/demo`
+  - approved demo reset/signup banner copy
+  - `Studien & mehr` header nav and `/wissen`
+  - stack toolbar order: stack icons, delete icon, divider, then
+    `Produkt hinzufügen`
+  - compact list card layout and larger `58px` list images
 - Run authenticated browser QA against the local Pages/Workers stack or preview
   deployment for the new stack flows:
   - duplicate Wirkstoff modal with target-stack selection before search and
@@ -231,3 +240,25 @@ Last updated: 2026-05-11
   list-view add row, and product delete confirmation. Remaining browser QA is
   authenticated preview/live admin and logged-in user smoke, especially
   `/routine` mail with an external inbox.
+
+## Website UX Review Follow-Ups
+
+- Owner review follow-ups for `/demo` and `/wissen` are implemented and
+  deployed to
+  `https://codex-website-ux-fixes.supplementstack.pages.dev`.
+- Remote D1 migration `0075_fix_black_seed_oil_volume.sql` was applied to
+  `supplementstack-production`.
+- Preview browser smoke passed for:
+  - no mojibake on `/demo`
+  - banner copy `um deinen Stack dauerhaft zu speichern`
+  - `Übersicht` product section title
+  - draggable product cards with the add tile/row fixed at the end
+  - JSON share/import toolbar buttons and modals
+  - Schwarzkümmelöl as `40 ml täglich`, `12 Tage`, `28,48 €/Mo`
+  - `/wissen` headline, search field, tag cloud, and filtered search results
+- Next useful QA:
+  - authenticated user smoke for reorder persistence on a real stack
+  - share/import JSON roundtrip with a non-demo account
+  - admin/content review of the new `/wissen` placeholder entries before SEO
+    indexing
+  - legal/science wording review of the public source-interpretation disclaimer

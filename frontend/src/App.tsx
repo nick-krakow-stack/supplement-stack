@@ -20,6 +20,7 @@ const VerifyEmailPage = lazy(() => import('./pages/VerifyEmailPage'));
 const PrivacyPage = lazy(() => import('./pages/PrivacyPage'));
 const ImprintPage = lazy(() => import('./pages/ImprintPage'));
 const TermsPage = lazy(() => import('./pages/TermsPage'));
+const KnowledgeIndexPage = lazy(() => import('./pages/KnowledgeIndexPage'));
 const KnowledgeArticlePage = lazy(() => import('./pages/KnowledgeArticlePage'));
 
 const AdministratorShell = lazy(() => import('./pages/administrator/AdministratorShell'));
@@ -142,6 +143,7 @@ export default function App() {
                   <Route path="/datenschutz" element={<PrivacyPage />} />
                   <Route path="/nutzungsbedingungen" element={<TermsPage />} />
                   <Route path="/agb" element={<TermsPage />} />
+                  <Route path="/wissen" element={<KnowledgeIndexPage />} />
                   <Route path="/wissen/:slug" element={<KnowledgeArticlePage />} />
                   <Route
                     path="/my-products"

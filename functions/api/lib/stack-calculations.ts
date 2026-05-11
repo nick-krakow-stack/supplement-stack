@@ -38,7 +38,7 @@ export interface ProductUsage {
   matchedIngredient?: CalculableIngredient
 }
 
-type UnitKind = 'mass' | 'iu' | 'count' | 'other'
+type UnitKind = 'mass' | 'volume' | 'iu' | 'count' | 'other'
 
 interface NormalizedUnit {
   key: string
@@ -76,6 +76,7 @@ export function normalizeCalculationUnit(unit?: string | null): NormalizedUnit {
   if (['\u00b5g', 'ug', 'mcg'].includes(normalized)) return { key: 'ug', kind: 'mass' }
   if (normalized === 'mg') return { key: 'mg', kind: 'mass' }
   if (normalized === 'g') return { key: 'g', kind: 'mass' }
+  if (['ml', 'milliliter'].includes(normalized)) return { key: 'ml', kind: 'volume' }
   if (['kapsel', 'kapseln', 'capsule', 'capsules'].includes(normalized)) return { key: 'kapsel', kind: 'count' }
   if (['tablette', 'tabletten', 'tablet', 'tablets'].includes(normalized)) return { key: 'tablette', kind: 'count' }
   if (['tropfen', 'drop', 'drops'].includes(normalized)) return { key: 'tropfen', kind: 'count' }
@@ -128,7 +129,7 @@ function parseGermanNumber(value: string): number | null {
 
 export function parseDoseFromText(text?: string | null): ParsedDose | null {
   if (!text) return null
-  const match = /(\d+(?:[.,]\d{1,3})?(?:\.\d{3})*)\s*(IE|IU|\u00b5g|\u03bcg|ug|mcg|mg|g|Kapseln?|Tabletten?|Tropfen|Softgels?|Portionen?)/i.exec(text)
+  const match = /(\d+(?:[.,]\d{1,3})?(?:\.\d{3})*)\s*(IE|IU|\u00b5g|\u03bcg|ug|mcg|mg|g|ml|Milliliter|Kapseln?|Tabletten?|Tropfen|Softgels?|Portionen?)/i.exec(text)
   if (!match) return null
   const value = parseGermanNumber(match[1])
   return value ? { value, unit: match[2] } : null

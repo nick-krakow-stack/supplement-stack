@@ -877,3 +877,98 @@ Last updated: 2026-05-11
 - Verification passed:
   - `node scripts/user-ux-regression-check.mjs`
   - `frontend`: `npx tsc --noEmit`
+
+## 2026-05-11 Demo Stack UI Polish - Local
+
+- Implemented the current demo/stack UI polish locally on
+  `codex/website-ux-fixes`; not deployed yet.
+- Stack/Demo visible copy in `StackWorkspace.tsx` was normalized from
+  mojibake and ASCII transliterations to proper German umlauts, including
+  `Produkt hinzufügen`, `Stack löschen`, `Übersicht`, `verfügbar`,
+  `Änderungen`, Euro signs, and close/delete labels.
+- Grid add-product tile now has its own `masonry-add-tile` styling: same
+  column width as product tiles, lower height than normal product cards.
+- List-view product cards now use a compact scan layout:
+  Wirkstoff + timing in the header, product name and dosage below, ingredient
+  amount parentheses stripped from list dosage, Kosten/Reicht-für in one
+  column, and buy/edit/delete actions arranged as one wide buy row plus two
+  narrow icon buttons.
+- `scripts/user-ux-regression-check.mjs` now guards the new layout/copy
+  requirements and fails on mojibake in the public stack/demo components.
+- Verification passed:
+  - TDD red: `node scripts/user-ux-regression-check.mjs` failed before
+    implementation with `StackWorkspace.tsx must not contain mojibake on
+    public stack/demo screens`.
+  - `node scripts/user-ux-regression-check.mjs`
+  - `node --check scripts/user-ux-regression-check.mjs`
+  - `frontend`: `npx tsc --noEmit`
+  - `frontend`: `npm run lint --if-present`
+  - `frontend`: `npm test -- --run`
+  - `frontend`: `npm run build`
+- Browser visual smoke was not run in this Codex session because the Browser
+  plugin did not expose a usable navigate/screenshot tool through
+  `tool_search`; preview/local browser QA remains useful before deploy.
+
+## 2026-05-11 Demo Stack UI Polish - Preview Deployed
+
+- Demo/stack UI polish is deployed to the Pages branch alias:
+  `https://codex-website-ux-fixes.supplementstack.pages.dev`.
+- Public stack/demo surfaces now have normalized German umlauts and Euro signs
+  in `StackWorkspace.tsx` and `ProductCard.tsx`; browser smoke confirmed no
+  mojibake in `/demo`.
+- Toolbar updates:
+  - `Stack erstellen` moved into the stack dropdown as the last option.
+  - Stack edit/mail/PDF/delete are icon-only accessible buttons.
+  - Delete icon sits before a vertical divider, followed by the green
+    `Produkt hinzufügen` button.
+- Demo banner copy now says the demo stack resets on reload and points to free
+  signup for permanent storage.
+- Header now includes a public `Studien & mehr` nav item backed by `/wissen`
+  and a simple knowledge index page.
+- List view product images/placeholders are larger (`58px`), and list dosage
+  remains compact without ingredient amount parentheses.
+- Verification passed:
+  - `node scripts/user-ux-regression-check.mjs`
+  - `frontend`: `npx tsc --noEmit`
+  - `frontend`: `npm run lint --if-present`
+  - `frontend`: `npm test -- --run`
+  - `frontend`: `npm run build`
+  - `git diff --check` with CRLF warnings only
+  - Playwright browser smoke on `/demo` and `/wissen`
+
+## 2026-05-11 Website UX Review Follow-Ups - Preview Deployed
+
+- Implemented and deployed the owner review follow-ups to the
+  `codex-website-ux-fixes` Pages preview.
+- Stack toolbar now has distinct icon backgrounds for mail/PDF, plus new
+  JSON share and JSON import actions with in-app modals.
+- Product cards place `Link melden` as the leftmost grid action.
+- Demo banner now says `um deinen Stack dauerhaft zu speichern`.
+- Product section title is shortened to `Übersicht`.
+- Demo product cards are draggable for manual ordering; the green add tile/row
+  remains fixed at the end. Authenticated reorder persists through the existing
+  stack update flow.
+- List cards vertically center their columns and the list add row now only says
+  `Produkt hinzufügen`.
+- `/wissen` now has the approved headline/copy, search field, keyword-backed
+  filtering, tag cloud, masonry-style feature cards, a remaining-entry list, and
+  a source-interpretation disclaimer.
+- Schwarzkümmelöl product metadata was corrected through D1 migration
+  `0075_fix_black_seed_oil_volume.sql`: 500 ml bottle, 40 ml daily dose, ml
+  calculation support in frontend and backend.
+- Remote D1 migration `0075_fix_black_seed_oil_volume.sql` was applied to
+  `supplementstack-production`.
+- Latest preview deploy:
+  `https://59a52a7d.supplementstack.pages.dev`, alias
+  `https://codex-website-ux-fixes.supplementstack.pages.dev`.
+- Verification passed:
+  - `node scripts/user-ux-regression-check.mjs`
+  - `frontend`: `npx tsc --noEmit`
+  - `functions`: `npx tsc -p tsconfig.json --noEmit`
+  - `frontend`: `npm run lint --if-present`
+  - `frontend`: `npm test -- --run`
+  - `frontend`: `npm run build`
+  - `git diff --check` with CRLF warnings only
+  - Playwright preview smoke confirmed `/demo` and `/wissen`, including
+    no mojibake, drag affordance count, share/import modals, and
+    Schwarzkümmelöl now showing `40 ml täglich`, `12 Tage`, `28,48 €/Mo`.

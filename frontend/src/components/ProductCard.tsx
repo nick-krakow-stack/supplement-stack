@@ -132,6 +132,14 @@ function getDose(product: ProductCardProduct): string {
   return '\u2014';
 }
 
+function getListDose(product: ProductCardProduct, fallbackDose: string): string {
+  const source = product.dosage_text ?? fallbackDose;
+  return source
+    .replace(/\s*\((?:[^)]*\d[^)]*)?(?:mg|g|µg|mcg|ie|iu)[^)]*\)/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 type TimingKey = 'morning' | 'evening' | 'noon' | 'trial' | 'anytime';
 
 type KnownTimingLabel = 'Zum Frühstück' | 'Zum Abendessen' | 'Mittags' | 'Zum Probieren' | 'Jederzeit';
@@ -276,6 +284,7 @@ export default function ProductCard({
   const intervalDays = getIntakeIntervalDays(product);
   const intervalLabel = intervalDays === 1 ? 't\u00e4glich' : `alle ${intervalDays} Tage`;
   const showInterval = product.intake_interval_days != null;
+  const listDose = getListDose(product, dose);
   const ingredientTitle = product.ingredient_name
     || product.ingredients?.find((ingredient) => ingredient.ingredient_name?.trim())?.ingredient_name
     || product.name;
@@ -288,64 +297,84 @@ export default function ProductCard({
   const isList = display === 'list';
   const warningDetailId = `product-warning-${product.product_type ?? 'catalog'}-${product.id}-${isList ? 'list' : 'card'}`;
 
-  const actions = (
-    <div className={`ss-product-card-actions flex gap-[7px] ${isList ? 'ss-product-card-actions-list' : ''}`}>
-      {shopHref && (
-        <a
-          href={shopHref}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={(e) => e.stopPropagation()}
-          className={`ss-product-card-buy ss-product-card-action inline-flex items-center justify-center gap-1.5 rounded-[10px] px-3 text-[12.5px] font-bold text-white transition-colors ${isList ? 'ss-product-card-action--compact' : 'min-h-11 flex-1'}`}
-          style={{ background: '#3b82f6' }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = '#2563eb')}
-          onMouseLeave={(e) => (e.currentTarget.style.background = '#3b82f6')}
-        >
-          <ExternalLink size={13} />
-          {buttonText}
-        </a>
+  const buyAction = shopHref ? (
+    <a
+      href={shopHref}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      className={`ss-product-card-buy ss-product-card-action inline-flex items-center justify-center gap-1.5 rounded-[10px] px-3 text-[12.5px] font-bold text-white transition-colors ${isList ? 'ss-product-card-action--compact' : 'min-h-11 flex-1'}`}
+      style={{ background: '#3b82f6' }}
+      onMouseEnter={(e) => (e.currentTarget.style.background = '#2563eb')}
+      onMouseLeave={(e) => (e.currentTarget.style.background = '#3b82f6')}
+    >
+      <ExternalLink size={13} />
+      {buttonText}
+    </a>
+  ) : null;
+
+  const editAction = onEdit ? (
+    <button
+      onClick={(e) => { e.stopPropagation(); onEdit(); }}
+      aria-label="Produkt bearbeiten"
+      className={`ss-product-card-action-icon ss-product-card-action ${isList ? 'h-10' : 'h-11 w-11'} flex shrink-0 items-center justify-center rounded-[10px] transition-colors`}
+      style={{ background: '#fef3c7', border: '1.5px solid #fbbf24', color: '#b45309' }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = '#fde68a'; e.currentTarget.style.borderColor = '#f59e0b'; }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = '#fef3c7'; e.currentTarget.style.borderColor = '#fbbf24'; }}
+    >
+      <Pencil size={15} />
+    </button>
+  ) : null;
+
+  const deleteAction = onDelete ? (
+    <button
+      onClick={(e) => { e.stopPropagation(); onDelete(); }}
+      aria-label="Produkt entfernen"
+      className={`ss-product-card-action-icon ss-product-card-action ${isList ? 'h-10' : 'h-11 w-11'} flex shrink-0 items-center justify-center rounded-[10px] transition-colors`}
+      style={{ background: '#fee2e2', border: '1.5px solid #fca5a5', color: '#dc2626' }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = '#fecaca'; e.currentTarget.style.borderColor = '#f87171'; }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.borderColor = '#fca5a5'; }}
+    >
+      <Trash2 size={15} />
+    </button>
+  ) : null;
+
+  const missingLinkAction = !shopHref && onReportMissingLink ? (
+    <button
+      onClick={(e) => { e.stopPropagation(); onReportMissingLink(product, reportReason); }}
+      className={`ss-product-card-action-flag ss-product-card-action inline-flex items-center justify-center gap-1.5 rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2 text-[12.5px] font-bold text-amber-700 transition-colors ${isList ? 'ss-product-card-action--compact' : 'min-h-11 flex-1'} hover:bg-amber-100`}
+    >
+      <Flag size={13} />
+      Link melden
+    </button>
+  ) : null;
+
+  const selectAction = showSelectButton && onSelect ? (
+    <button
+      onClick={(e) => { e.stopPropagation(); onSelect(); }}
+      className={`ss-product-card-action-select ss-product-card-action ${isList ? 'w-full min-h-10' : 'rounded-[10px] border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 min-h-11 hover:bg-slate-50'}`}
+    >
+      Alternative
+    </button>
+  ) : null;
+
+  const actions = isList ? (
+    <div className="ss-product-card-actions ss-product-card-actions-list">
+      {buyAction ?? missingLinkAction ?? selectAction}
+      {(editAction || deleteAction) && (
+        <div className="ss-product-card-list-icon-row">
+          {editAction}
+          {deleteAction}
+        </div>
       )}
-      {onEdit && (
-        <button
-          onClick={(e) => { e.stopPropagation(); onEdit(); }}
-          aria-label="Produkt bearbeiten"
-          className={`ss-product-card-action-icon ss-product-card-action ${isList ? 'h-10 w-full' : 'h-11 w-11'} flex shrink-0 items-center justify-center rounded-[10px] transition-colors`}
-          style={{ background: '#fef3c7', border: '1.5px solid #fbbf24', color: '#b45309' }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = '#fde68a'; e.currentTarget.style.borderColor = '#f59e0b'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = '#fef3c7'; e.currentTarget.style.borderColor = '#fbbf24'; }}
-        >
-          <Pencil size={15} />
-        </button>
-      )}
-      {onDelete && (
-        <button
-          onClick={(e) => { e.stopPropagation(); onDelete(); }}
-          aria-label="Produkt entfernen"
-          className={`ss-product-card-action-icon ss-product-card-action ${isList ? 'h-10 w-full' : 'h-11 w-11'} flex shrink-0 items-center justify-center rounded-[10px] transition-colors`}
-          style={{ background: '#fee2e2', border: '1.5px solid #fca5a5', color: '#dc2626' }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = '#fecaca'; e.currentTarget.style.borderColor = '#f87171'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.borderColor = '#fca5a5'; }}
-        >
-          <Trash2 size={15} />
-        </button>
-      )}
-      {!shopHref && onReportMissingLink && (
-        <button
-          onClick={(e) => { e.stopPropagation(); onReportMissingLink(product, reportReason); }}
-          className={`ss-product-card-action-flag ss-product-card-action inline-flex items-center justify-center gap-1.5 rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2 text-[12.5px] font-bold text-amber-700 transition-colors ${isList ? 'ss-product-card-action--compact' : 'min-h-11 flex-1'} hover:bg-amber-100`}
-        >
-          <Flag size={13} />
-          Link melden
-        </button>
-      )}
-      {showSelectButton && onSelect && (
-        <button
-          onClick={(e) => { e.stopPropagation(); onSelect(); }}
-          className={`ss-product-card-action-select ss-product-card-action ${isList ? 'w-full min-h-10' : 'rounded-[10px] border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 min-h-11 hover:bg-slate-50'}`}
-        >
-          Alternative
-        </button>
-      )}
+    </div>
+  ) : (
+    <div className="ss-product-card-actions flex gap-[7px]">
+      {missingLinkAction}
+      {buyAction}
+      {editAction}
+      {deleteAction}
+      {selectAction}
     </div>
   );
 
@@ -382,28 +411,30 @@ export default function ProductCard({
               <img
                 src={product.image_url}
                 alt={name}
-                className="w-[44px] h-[44px] shrink-0 rounded-lg border border-[#e5e7eb] bg-[#f3f4f6] object-cover"
+                className="ss-product-card-list-image shrink-0 rounded-lg border border-[#e5e7eb] bg-[#f3f4f6] object-cover"
                 onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
               />
             ) : (
               <div
-                className="w-[44px] h-[44px] shrink-0 rounded-lg border border-[#e5e7eb] bg-[#f3f4f6] flex items-center justify-center select-none"
-                style={{ fontSize: '20px' }}
+                className="ss-product-card-list-image shrink-0 rounded-lg border border-[#e5e7eb] bg-[#f3f4f6] flex items-center justify-center select-none"
               >
                 {emoji}
               </div>
             )}
             <div className="min-w-0">
-              <div className="ss-product-card-list-ingredient-title text-[10px] font-bold tracking-[0.8px] text-slate-500 uppercase mb-0.5">
-                {ingredientTitle}
+              <div className="ss-product-card-list-header">
+                <div className="ss-product-card-list-ingredient-title">
+                  {ingredientTitle}
+                </div>
+                <span className={`inline-flex shrink-0 items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-extrabold ${timing.cls}`}>
+                  {timing.label}
+                </span>
               </div>
               <div className="ss-product-card-list-name leading-snug text-slate-900" title={name}>
                 {name}
               </div>
+              <div className="ss-product-card-list-dose">{listDose}</div>
               <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-extrabold ${timing.cls}`}>
-                  {timing.label}
-                </span>
                 {recommendationType && (
                   <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-extrabold ${
                     recommendationType === 'recommended' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
@@ -415,9 +446,16 @@ export default function ProductCard({
             </div>
           </div>
 
-          <div className="ss-product-card-list-col">
-            <div className="ss-product-card-list-label">Dosierung</div>
-            <div className="ss-product-card-list-value">{dose}</div>
+          <div className="ss-product-card-list-cost">
+            <div className="ss-product-card-list-label">Kosten</div>
+            <div className="ss-product-card-list-value">
+              {formatEur(price)}
+              {monthlyPrice !== null && (
+                <span className="ss-product-card-list-inline-meta">({formatEur(monthlyPrice)}/Monat)</span>
+              )}
+            </div>
+            <div className="ss-product-card-list-label ss-product-card-list-label--stacked">Reicht für</div>
+            <div className="ss-product-card-list-value">{daysSupply ? `${daysSupply} Tage` : '\u2014'}</div>
             {showInterval && <div className="ss-product-card-list-meta">{intervalLabel}</div>}
             {warningHintMessage && cardWarning && (
               <div className="ss-product-card-list-warning relative">
@@ -425,7 +463,7 @@ export default function ProductCard({
                 <button
                   type="button"
                   className="ss-product-card-list-warning-info inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-orange-500 transition-colors hover:bg-orange-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-300 focus-visible:ring-offset-2"
-                  aria-label={`Warnung vollstaendig anzeigen: ${cardWarning.message}`}
+                  aria-label={`Warnung vollständig anzeigen: ${cardWarning.message}`}
                   aria-expanded={warningDetailOpen === 'list'}
                   aria-controls={warningDetailId}
                   onClick={(e) => { e.stopPropagation(); setWarningDetailOpen('list'); }}
@@ -447,27 +485,12 @@ export default function ProductCard({
                       className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-black text-slate-600 hover:bg-slate-50"
                       onClick={(e) => { e.stopPropagation(); setWarningDetailOpen(null); }}
                     >
-                      Schliessen
+                      Schließen
                     </button>
                   </div>
                 )}
               </div>
             )}
-          </div>
-          <div className="ss-product-card-list-col">
-            <div className="ss-product-card-list-label">Reicht für</div>
-            <div className="ss-product-card-list-value">{daysSupply ? `${daysSupply} Tage` : '\u2014'}</div>
-          </div>
-          <div className="ss-product-card-list-col">
-            <div className="ss-product-card-list-label">Kosten</div>
-            <div className="ss-product-card-list-value">
-              <span className="ss-product-card-list-meta-label">Einmalig</span>
-              {formatEur(price)}
-            </div>
-            <div className="ss-product-card-list-value">
-              <span className="ss-product-card-list-meta-label">Monat</span>
-              {monthlyPrice === null ? '\u2014' : `${formatEur(monthlyPrice)} / Monat`}
-            </div>
           </div>
         </>
       ) : (
@@ -638,7 +661,7 @@ export default function ProductCard({
             <button
               type="button"
               className="ss-product-card-warning-info-button inline-flex shrink-0 rounded-full p-0.5 text-orange-500 transition-colors hover:bg-orange-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-300 focus-visible:ring-offset-2"
-              aria-label={`Warnung vollstaendig anzeigen: ${cardWarning.message}`}
+              aria-label={`Warnung vollständig anzeigen: ${cardWarning.message}`}
               aria-expanded={warningDetailOpen === 'card'}
               aria-controls={warningDetailId}
               onClick={(e) => { e.stopPropagation(); setWarningDetailOpen('card'); }}
@@ -661,7 +684,7 @@ export default function ProductCard({
                 className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-black text-slate-600 hover:bg-slate-50"
                 onClick={(e) => { e.stopPropagation(); setWarningDetailOpen(null); }}
               >
-                Schliessen
+                Schließen
               </button>
             </div>
           )}

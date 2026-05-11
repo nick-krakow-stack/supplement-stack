@@ -1377,3 +1377,31 @@ Rationale:
   consistent with single-stack mail.
 - A separate rate-limit key prevents routine mail from sharing quota or route
   ambiguity with single-stack mail.
+
+## 2026-05-11 - Demo Ordering, Knowledge Index, And Oil Volume Data
+
+Decision: demo/stack product ordering is user-adjustable, `/wissen` becomes a
+searchable public evidence index, and volume-based product calculations are
+first-class for liquid products.
+
+Operational rule:
+- Product cards in the stack overview may be reordered by drag/drop; add-product
+  tiles/rows remain fixed at the end.
+- Persist authenticated ordering through the existing stack product persistence
+  path; demo ordering may stay local/demo-scoped.
+- Public knowledge entries should expose search terms and keyword chips that
+  match likely user language, not only internal taxonomy.
+- Source summaries must state that studies and sources are summarized and
+  interpreted, may be incomplete or wrong, and include links so users can check
+  the original material themselves.
+- Liquid products use volume units such as `ml` in product ingredient potency,
+  serving units, and dose parsing instead of forcing mass units.
+
+Rationale:
+- Stack order is part of personal organization and should not be locked to the
+  insertion order.
+- The public knowledge surface needs to answer normal user questions such as
+  "Magnesium", "Risiko", or "DGE" before it becomes a large article archive.
+- Oil products such as Schwarzkümmelöl are materially wrong when modeled as mg
+  doses against ml bottles; volume support prevents distorted days-supply and
+  monthly-cost calculations.

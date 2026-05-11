@@ -1,6 +1,6 @@
 ﻿# Handoff
 
-Last updated: 2026-05-11 04:01:42 +02:00
+Last updated: 2026-05-11 19:44:36 +02:00
 Update mode: PostToolUseBash
 
 ## Latest Notes
@@ -10,12 +10,27 @@ Automatic handoff snapshot written by scripts/update-agent-handoff.ps1.
 ## Git Snapshot
 
 - Branch: codex/website-ux-fixes
-- Last commit: a84edd2 Update website UX handoff
+- Last commit: bbc9410 Document website UX preview deploy
 
 ## Working Tree
 
 ~~~text
+M .agent-memory/current-state.md
+M .agent-memory/decisions.md
+M .agent-memory/deploy-log.md
 M .agent-memory/handoff.md
+M .agent-memory/next-steps.md
+M frontend/src/App.tsx
+M frontend/src/components/Layout.tsx
+M frontend/src/components/ProductCard.tsx
+M frontend/src/components/StackWorkspace.tsx
+M frontend/src/lib/stackCalculations.test.ts
+M frontend/src/lib/stackCalculations.ts
+M frontend/src/styles.css
+M functions/api/lib/stack-calculations.ts
+M scripts/user-ux-regression-check.mjs
+?? d1-migrations/0075_fix_black_seed_oil_volume.sql
+?? frontend/src/pages/KnowledgeIndexPage.tsx
 ~~~
 
 ## Current State Summary

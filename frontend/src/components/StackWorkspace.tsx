@@ -12,7 +12,6 @@ import {
   List,
   Package,
   Plus,
-  Printer,
   Search,
   X,
 } from 'lucide-react';
@@ -70,6 +69,10 @@ export interface DemoProduct {
   alternative_note?: string;
   warnings?: ProductSafetyWarning[];
   ingredient_category?: string;
+  ingredient_id?: number;
+  form_id?: number | null;
+  search_relevant?: number | boolean;
+  parent_ingredient_id?: number | null;
   status?: 'pending' | 'approved' | 'rejected' | 'blocked';
   user_product_status?: 'pending' | 'approved' | 'rejected' | 'blocked';
   published_product_id?: number | null;
@@ -117,10 +120,17 @@ export interface StackWorkspaceProps {
 // ---------------------------------------------------------------------------
 
 const DEMO_NOTICE =
-  'Diese Funktion ist nur in der kostenlosen Vollversion verfÃ¼gbar. Registriere dich, damit deine Ã„nderungen dauerhaft gespeichert werden.';
+  'Diese Funktion ist nur in der kostenlosen Vollversion verfügbar. Registriere dich, damit deine Änderungen dauerhaft gespeichert werden.';
 const DEMO_SHARE_NOTICE =
-  'Stack mailen und Plan drucken/PDF sind kostenlos verfuegbar, sobald du dich registriert hast.';
+  'Stack mailen und Plan drucken/PDF sind kostenlos verfügbar, sobald du dich registriert hast.';
 const DESC_STORAGE_KEY = 'ss_stack_descriptions';
+const CREATE_STACK_SELECT_VALUE = '__create_stack__';
+
+interface StackExportPayload {
+  supplementStackExportVersion: 1;
+  exportedAt: string;
+  stack: DemoStack & { description?: string };
+}
 
 function newStackId(): string {
   return `stack_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -194,6 +204,23 @@ function productMatchesIngredient(product: DemoProduct, ingredientId: number): b
   )) ?? false;
 }
 
+function productWithIngredientRows(product: DemoProduct): DemoProduct {
+  if (product.ingredients?.length || !product.ingredient_id) return product;
+  return {
+    ...product,
+    ingredients: [{
+      ingredient_id: product.ingredient_id,
+      form_id: product.form_id ?? null,
+      quantity: product.quantity ?? null,
+      unit: product.unit ?? null,
+      basis_quantity: product.basis_quantity ?? null,
+      basis_unit: product.basis_unit ?? null,
+      search_relevant: product.search_relevant ?? true,
+      parent_ingredient_id: product.parent_ingredient_id ?? null,
+    }],
+  };
+}
+
 interface ManualDose {
   value: number;
   unit: string;
@@ -243,7 +270,7 @@ function productContentLabel(product: DemoProduct, previewProduct: DemoProduct):
     : null;
   const unit = product.serving_unit?.trim();
   const usage = calculateProductUsage(previewProduct, previewProduct.price, { fallbackTotalServings: 30 });
-  const daysLabel = usage.daysSupply ? ` (reicht fÃ¼r ${usage.daysSupply} Tage)` : '';
+  const daysLabel = usage.daysSupply ? ` (reicht für ${usage.daysSupply} Tage)` : '';
 
   if (totalServings > 0 && servingSize && unit) {
     const totalUnits = totalServings * servingSize;
@@ -269,7 +296,7 @@ function productIntakeIntervalDays(product: DemoProduct): number {
 }
 
 function formatIntakeInterval(days: number): string {
-  return days === 1 ? 'tÃ¤glich' : `alle ${days} Tage`;
+  return days === 1 ? 'täglich' : `alle ${days} Tage`;
 }
 
 function productMonthlyPrice(product: DemoProduct): number {
@@ -282,7 +309,73 @@ function formatEuro(value: number): string {
 
 function stackProfileLabel(stack: DemoStack | undefined): string {
   if (!stack?.family_member_id) return 'Mein Stack';
-  return stack.family_member_first_name ? `FÃ¼r ${stack.family_member_first_name}` : 'Familienprofil';
+  return stack.family_member_first_name ? `Für ${stack.family_member_first_name}` : 'Familienprofil';
+}
+
+function buildStackExportPayload(stack: DemoStack, description = ''): StackExportPayload {
+  return {
+    supplementStackExportVersion: 1,
+    exportedAt: new Date().toISOString(),
+    stack: {
+      ...stack,
+      description,
+      products: stack.products.map((product) => ({ ...product })),
+    },
+  };
+}
+
+function stackExportFileName(stack: DemoStack): string {
+  const slug = stack.name
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48) || 'stack';
+  return `supplement-stack-${slug}.json`;
+}
+
+function importedStackFromJson(raw: string): DemoStack {
+  const parsed = JSON.parse(raw) as unknown;
+  const parsedObject = parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : null;
+  const source = parsedObject && parsedObject.stack && typeof parsedObject.stack === 'object'
+    ? parsedObject.stack as Record<string, unknown>
+    : parsedObject;
+  if (!source || !Array.isArray(source.products)) {
+    throw new Error('Die Datei enthält keinen gültigen Stack.');
+  }
+  const products = source.products as unknown[];
+  const name = typeof source.name === 'string' && source.name.trim()
+    ? source.name.trim()
+    : 'Importierter Stack';
+  return {
+    id: newStackId(),
+    name,
+    description: typeof source.description === 'string' ? source.description : undefined,
+    family_member_id: null,
+    family_member_first_name: null,
+    products: products
+      .filter((product): product is Record<string, unknown> => Boolean(product && typeof product === 'object'))
+      .map((product): DemoProduct | null => {
+        const id = Number(product.id);
+        if (!Number.isFinite(id) || typeof product.name !== 'string') return null;
+        return {
+          ...(product as Partial<DemoProduct>),
+          id,
+          name: product.name,
+          price: typeof product.price === 'number' ? product.price : 0,
+          product_type: product.product_type === 'user_product' ? 'user_product' : 'catalog',
+        };
+      })
+      .filter((product): product is DemoProduct => product !== null),
+  };
+}
+
+function newCaptchaChallenge(): { a: number; b: number } {
+  return {
+    a: Math.floor(Math.random() * 8) + 2,
+    b: Math.floor(Math.random() * 8) + 2,
+  };
 }
 
 function productDoseSignature(product: DemoProduct): string {
@@ -320,8 +413,8 @@ function AddProductModal({
   onAdd,
   onClose,
   ignoredExistingProductKey,
-  title = 'Produkt hinzufÃ¼gen',
-  submitLabel = 'HinzufÃ¼gen',
+  title = 'Produkt hinzufügen',
+  submitLabel = 'Hinzufügen',
   onEditExisting,
   onReplaceExisting,
 }: {
@@ -539,12 +632,12 @@ function AddProductModal({
       return;
     }
     const targetDosageText = dose.value > 0 && dose.unit
-      ? `${dose.value} ${dose.unit} tÃ¤glich`
-      : product.dosage_text || '1 Portion tÃ¤glich';
+      ? `${dose.value} ${dose.unit} täglich`
+      : product.dosage_text || '1 Portion täglich';
     const enhanced: DemoProduct = {
       ...product,
       dosage_text: targetDosageText,
-      timing: product.ingredient_timing || product.timing || 'Zum FrÃ¼hstÃ¼ck',
+      timing: product.ingredient_timing || product.timing || 'Zum Frühstück',
       intake_interval_days: product.intake_interval_days ?? 1,
     };
     enhanced.quantity = productServingsPerDay(enhanced);
@@ -584,7 +677,7 @@ function AddProductModal({
           <button
             onClick={onClose}
             className="rounded-2xl p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
-            aria-label="SchlieÃŸen"
+            aria-label="Schließen"
           >
             <X size={24} />
           </button>
@@ -626,7 +719,7 @@ function AddProductModal({
                   Dieser Wirkstoff ist bereits in deinem Stack vorhanden
                 </h3>
                 <p className="mt-2 text-sm font-semibold text-amber-900">
-                  {ingredient.name} ist schon ueber dieses Produkt abgedeckt:
+                  {ingredient.name} ist schon über dieses Produkt abgedeckt:
                 </p>
               </div>
             </div>
@@ -658,7 +751,7 @@ function AddProductModal({
                   onClose();
                 }}
               >
-                Produkt aendern
+                Produkt ändern
               </button>
               <button
                 type="button"
@@ -675,7 +768,7 @@ function AddProductModal({
                   continueWithIngredient(ingredient);
                 }}
               >
-                Trotzdem weiteres Produkt hinzufuegen
+                Trotzdem weiteres Produkt hinzufügen
               </button>
             </div>
           </div>
@@ -687,7 +780,7 @@ function AddProductModal({
               <div className="mb-4 flex items-center gap-3 text-emerald-800">
                 <Calculator size={24} />
                 <h3 className="text-xl font-black sm:text-2xl">
-                  Dosierung fÃ¼r {ingredient.name} festlegen
+                  Dosierung für {ingredient.name} festlegen
                 </h3>
               </div>
 
@@ -712,14 +805,14 @@ function AddProductModal({
                         {primaryDose(dgeGuideline)!.unit}
                       </p>
                       <span className="mt-4 flex justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-black text-white">
-                        Referenzwert Ã¼bernehmen
+                        Referenzwert übernehmen
                       </span>
                     </button>
                   ) : (
                     <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left cursor-default">
                       <p className="text-base font-black text-slate-500">DGE-Referenzwert</p>
                       <p className="mt-2 text-sm font-semibold text-slate-400">
-                        Kein offizieller Referenzwert verfÃ¼gbar
+                        Kein offizieller Referenzwert verfügbar
                       </p>
                     </div>
                   )}
@@ -782,7 +875,7 @@ function AddProductModal({
                 </div>
               )}
 
-              <label className="mt-5 block text-base font-black text-slate-700">Stack auswÃ¤hlen</label>
+              <label className="mt-5 block text-base font-black text-slate-700">Stack auswählen</label>
               <select
                 value={targetStackId}
                 onChange={(event) => handleTargetStackChange(event.target.value)}
@@ -793,7 +886,7 @@ function AddProductModal({
                 ))}
               </select>
               <p className="mt-2 text-sm font-semibold text-slate-500">
-                Produkt wird diesem Stack hinzugefÃ¼gt.
+                Produkt wird diesem Stack hinzugefügt.
               </p>
             </div>
 
@@ -820,10 +913,10 @@ function AddProductModal({
           <>
             <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
-                <h3 className="text-2xl font-black tracking-tight text-slate-950">Produkt auswÃ¤hlen</h3>
+                <h3 className="text-2xl font-black tracking-tight text-slate-950">Produkt auswählen</h3>
                 <p className="mt-1 text-base font-semibold text-slate-500">
-                  {ingredient.name} Â· {dose.value || 1} {dose.unit || normalizeUnitToGerman(ingredient.unit)}
-                  {selectedForm ? ` Â· ${selectedForm.name}` : ''}
+                  {ingredient.name} · {dose.value || 1} {dose.unit || normalizeUnitToGerman(ingredient.unit)}
+                  {selectedForm ? ` · ${selectedForm.name}` : ''}
                 </p>
               </div>
               {isDemo ? (
@@ -832,14 +925,14 @@ function AddProductModal({
                   className="inline-flex items-center justify-center rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-700 hover:bg-emerald-100"
                   onClick={() => setDemoOwnProductNoticeOpen(true)}
                 >
-                  Eigenes Produkt hinzufuegen
+                  Eigenes Produkt hinzufügen
                 </button>
               ) : (
                 <Link
                   to="/my-products"
                   className="inline-flex items-center justify-center rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-700 hover:bg-emerald-100"
                 >
-                  Eigenes Produkt hinzufuegen
+                  Eigenes Produkt hinzufügen
                 </Link>
               )}
             </div>
@@ -876,7 +969,7 @@ function AddProductModal({
               {error && <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
               {!productsLoading && products.length === 0 && !error && (
                 <p className="py-10 text-center text-sm font-semibold text-slate-500">
-                  Keine Produkte fÃ¼r diesen Wirkstoff gefunden.
+                  Keine Produkte für diesen Wirkstoff gefunden.
                 </p>
               )}
               <div className="grid gap-4">
@@ -886,7 +979,7 @@ function AddProductModal({
                   const previewProduct: DemoProduct = {
                     ...product,
                     dosage_text: dose.value > 0 && dose.unit
-                      ? `${dose.value} ${dose.unit} tÃ¤glich`
+                      ? `${dose.value} ${dose.unit} täglich`
                       : product.dosage_text,
                   };
                   return (
@@ -910,7 +1003,7 @@ function AddProductModal({
                       </div>
                       <div className="shrink-0 text-right">
                         <p className="text-xl font-black text-emerald-600">
-                          â‚¬{formatEuro(productMonthlyPrice(previewProduct))}
+                          €{formatEuro(productMonthlyPrice(previewProduct))}
                         </p>
                         <p className="text-xs font-semibold text-slate-500">pro Monat</p>
                       </div>
@@ -932,12 +1025,12 @@ function AddProductModal({
                     <div className="mt-3 grid grid-cols-2 gap-3">
                       <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3">
                         <p className="text-xs font-semibold text-slate-500">Einmalpreis</p>
-                        <p className="mt-1 text-lg font-black text-slate-950">â‚¬{formatEuro(product.price)}</p>
+                        <p className="mt-1 text-lg font-black text-slate-950">€{formatEuro(product.price)}</p>
                       </div>
                       <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3">
                         <p className="text-xs font-semibold text-emerald-700">Pro Monat</p>
                         <p className="mt-1 text-lg font-black text-emerald-700">
-                          â‚¬{formatEuro(productMonthlyPrice(previewProduct))}
+                          €{formatEuro(productMonthlyPrice(previewProduct))}
                         </p>
                       </div>
                     </div>
@@ -960,12 +1053,12 @@ function AddProductModal({
                 className="inline-flex items-center gap-2 rounded-xl px-2 py-3 text-lg font-semibold text-blue-600 hover:text-blue-800"
               >
                 <ArrowLeft size={20} />
-                ZurÃ¼ck zur Dosierung
+                Zurück zur Dosierung
               </button>
               {isDemo && (
                 <p className="hidden items-center gap-2 text-sm font-semibold text-slate-500 sm:flex">
                   <Info size={18} />
-                  Demo-Modus: Ã„nderungen werden nach Neuladen zurÃ¼ckgesetzt.
+                  Demo-Modus: Änderungen werden nach Neuladen zurückgesetzt.
                 </p>
               )}
             </div>
@@ -980,10 +1073,10 @@ function AddProductModal({
             }}
           >
             <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl">
-              <h3 className="text-xl font-black text-slate-950">Produkt zur Datenbank hinzufuegen</h3>
+              <h3 className="text-xl font-black text-slate-950">Produkt zur Datenbank hinzufügen</h3>
               <p className="mt-3 text-sm font-semibold leading-relaxed text-slate-600">
-                Danke, dass du ein neues Produkt zu unserer Datenbank hinzufuegen moechtest.
-                Diese Funktion steht dir kostenlos zur Verfuegung, sobald du dich als Nutzer angemeldet hast.
+                Danke, dass du ein neues Produkt zu unserer Datenbank hinzufügen möchtest.
+                Diese Funktion steht dir kostenlos zur Verfügung, sobald du dich als Nutzer angemeldet hast.
               </p>
               <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
                 <button
@@ -1036,7 +1129,7 @@ function EditProductModal({
     const parsedQuantity = Number(quantity);
     const parsedInterval = Number(interval);
     if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
-      setError('Portionen pro Einnahmetag mÃ¼ssen grÃ¶ÃŸer als 0 sein.');
+      setError('Portionen pro Einnahmetag müssen größer als 0 sein.');
       return;
     }
     if (!Number.isInteger(parsedInterval) || parsedInterval < 1) {
@@ -1081,7 +1174,7 @@ function EditProductModal({
             type="button"
             onClick={onClose}
             className="rounded-2xl p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
-            aria-label="SchlieÃŸen"
+            aria-label="Schließen"
           >
             <X size={24} />
           </button>
@@ -1095,7 +1188,7 @@ function EditProductModal({
             <input
               value={dosageText}
               onChange={(event) => setDosageText(event.target.value)}
-              placeholder="z.B. 2000 IE tÃ¤glich"
+              placeholder="z.B. 2000 IE täglich"
               className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base font-semibold text-slate-950 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-4 focus:ring-blue-100"
             />
           </label>
@@ -1120,7 +1213,7 @@ function EditProductModal({
             <input
               value={timing}
               onChange={(event) => setTiming(event.target.value)}
-              placeholder="z.B. Zum FrÃ¼hstÃ¼ck"
+              placeholder="z.B. Zum Frühstück"
               className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base font-semibold text-slate-950 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-4 focus:ring-blue-100"
             />
           </label>
@@ -1164,7 +1257,7 @@ function EditProductModal({
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <IconPencil />
-            {saving ? 'Speichert...' : 'Ã„nderungen speichern'}
+            {saving ? 'Speichert...' : 'Änderungen speichern'}
           </button>
         </div>
       </form>
@@ -1209,7 +1302,7 @@ function ConfirmDialog({
             type="button"
             onClick={onClose}
             className="rounded-2xl p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
-            aria-label="Schliessen"
+            aria-label="Schließen"
           >
             <X size={22} />
           </button>
@@ -1246,14 +1339,6 @@ function IconPlus() {
     </svg>
   );
 }
-function IconStackPlus() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-      <rect x="1.5" y="1.5" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M4.5 6.5h4M6.5 4.5v4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-    </svg>
-  );
-}
 function IconPencil() {
   return (
     <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
@@ -1265,12 +1350,37 @@ function IconPencil() {
 function IconMail() {
   return (
     <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-      <path d="M2 3.5h9M2 6.5h9M2 9.5h5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      <rect x="1.5" y="3" width="10" height="7" rx="1.4" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M2.2 3.8l4.3 3.4 4.3-3.4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
-function IconPrint() {
-  return <Printer size={14} />;
+function IconPdf() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+      <path d="M3.5 1.5h5l3 3v9h-8v-12Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+      <path d="M8.5 1.5v3h3" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+      <path d="M4.8 10.8h5.4M4.8 8.6h5.4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  );
+}
+function IconShareStack() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+      <circle cx="4" cy="7.5" r="1.7" stroke="currentColor" strokeWidth="1.4" />
+      <circle cx="10.8" cy="3.5" r="1.7" stroke="currentColor" strokeWidth="1.4" />
+      <circle cx="10.8" cy="11.5" r="1.7" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M5.5 6.6l3.8-2.2M5.5 8.4l3.8 2.2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  );
+}
+function IconImportStack() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+      <path d="M3 2.2h9v10.6H3V2.2Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+      <path d="M7.5 4.2v5.2M5.4 7.3l2.1 2.1 2.1-2.1" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
 }
 function IconTrash() {
   return (
@@ -1332,6 +1442,15 @@ export function StackWorkspace({
   const [emailSending, setEmailSending] = useState(false);
   const [emailStatus, setEmailStatus] = useState('');
   const [demoShareNoticeOpen, setDemoShareNoticeOpen] = useState(false);
+  const [stackShareModalOpen, setStackShareModalOpen] = useState(false);
+  const [stackImportModalOpen, setStackImportModalOpen] = useState(false);
+  const [shareEmail, setShareEmail] = useState('');
+  const [shareCaptchaInput, setShareCaptchaInput] = useState('');
+  const [shareCaptcha, setShareCaptcha] = useState(newCaptchaChallenge);
+  const [shareStatus, setShareStatus] = useState('');
+  const [importText, setImportText] = useState('');
+  const [importStatus, setImportStatus] = useState('');
+  const [draggedProductKey, setDraggedProductKey] = useState<string | null>(null);
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
   const [linkReportStatus, setLinkReportStatus] = useState('');
   const [productViewMode, setProductViewMode] = useState<ProductViewMode>(loadProductViewMode);
@@ -1446,7 +1565,7 @@ export function StackWorkspace({
       .then((res) => (res.ok ? res.json() : { products: [] }))
       .then((data) => {
         const products = ((data.products ?? []) as DemoProduct[]).slice(0, 6).map((product) => {
-          const next = { ...product, intake_interval_days: product.intake_interval_days ?? 1 };
+          const next = productWithIngredientRows({ ...product, intake_interval_days: product.intake_interval_days ?? 1 });
           return { ...next, quantity: productServingsPerDay(next) };
         });
         setState({
@@ -1500,6 +1619,33 @@ export function StackWorkspace({
       if (!res.ok) throw new Error(data.error ?? 'Stack konnte nicht gespeichert werden.');
     },
     [mode],
+  );
+
+  const reorderActiveProducts = useCallback(
+    async (sourceKey: string, targetKey: string) => {
+      if (!activeStack || sourceKey === targetKey) return;
+      const fromIndex = activeStack.products.findIndex((product) => productStackKey(product) === sourceKey);
+      const toIndex = activeStack.products.findIndex((product) => productStackKey(product) === targetKey);
+      if (fromIndex < 0 || toIndex < 0) return;
+
+      const nextProducts = [...activeStack.products];
+      const [moved] = nextProducts.splice(fromIndex, 1);
+      nextProducts.splice(toIndex, 0, moved);
+
+      setState((prev) => ({
+        ...prev,
+        stacks: prev.stacks.map((stack) => (
+          stack.id === activeStack.id ? { ...stack, products: nextProducts } : stack
+        )),
+      }));
+
+      try {
+        await persistStackProducts(activeStack.id, nextProducts, activeStack.name, activeStack.family_member_id ?? null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Reihenfolge konnte nicht gespeichert werden.');
+      }
+    },
+    [activeStack, persistStackProducts],
   );
 
   const handleReportMissingLink = useCallback(
@@ -1577,21 +1723,21 @@ export function StackWorkspace({
     async (id: string) => {
       if (state.stacks.length <= 1) {
         if (isDemo) demoRestrictedNotice();
-        else setError('Der letzte Stack kann nicht gelÃ¶scht werden.');
+        else setError('Der letzte Stack kann nicht gelöscht werden.');
         return;
       }
       const stack = state.stacks.find((s) => s.id === id);
       if (!stack) return;
-      if (!window.confirm(`Stack "${stack.name}" wirklich lÃ¶schen?`)) return;
+      if (!window.confirm(`Stack "${stack.name}" wirklich löschen?`)) return;
       if (mode === 'authenticated') {
         try {
           const res = await credentialedFetch(apiPath(`/stacks/${id}`), {
             method: 'DELETE',
             headers: JSON_HEADERS,
           });
-          if (!res.ok) throw new Error('Stack konnte nicht gelÃ¶scht werden.');
+          if (!res.ok) throw new Error('Stack konnte nicht gelöscht werden.');
         } catch (err) {
-          setError(err instanceof Error ? err.message : 'Stack konnte nicht gelÃ¶scht werden.');
+          setError(err instanceof Error ? err.message : 'Stack konnte nicht gelöscht werden.');
           return;
         }
       }
@@ -1753,7 +1899,7 @@ export function StackWorkspace({
         && productDoseSignature(previousProduct) !== productDoseSignature(replacement);
       if (preservesOldDosageOnDifferentProduct) {
         const confirmed = window.confirm(
-          'Die bisherige Dosierung wird fÃ¼r das neue Produkt Ã¼bernommen. Produktform oder StÃ¤rke kÃ¶nnen abweichen. Bitte prÃ¼fe die Dosierung nach dem Ersetzen. Trotzdem ersetzen?'
+          'Die bisherige Dosierung wird für das neue Produkt übernommen. Produktform oder Stärke können abweichen. Bitte prüfe die Dosierung nach dem Ersetzen. Trotzdem ersetzen?'
         );
         if (!confirmed) return;
       }
@@ -1822,6 +1968,8 @@ export function StackWorkspace({
     addModalOpen ||
     createStackModalOpen ||
     editModalOpen ||
+    stackShareModalOpen ||
+    stackImportModalOpen ||
     editingProductKey !== null ||
     replaceProductKey !== null ||
     pendingDeleteProductKey !== null;
@@ -1882,14 +2030,93 @@ export function StackWorkspace({
     window.print();
   };
 
+  const openStackShareModal = () => {
+    setShareStatus('');
+    setShareEmail('');
+    setShareCaptcha(newCaptchaChallenge());
+    setShareCaptchaInput('');
+    setStackShareModalOpen(true);
+  };
+
+  const handleDownloadStackJson = () => {
+    if (!activeStack || !activeStackExportJson) return;
+    const blob = new Blob([activeStackExportJson], { type: 'application/json;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = stackExportFileName(activeStack);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setShareStatus('JSON-Datei wurde vorbereitet.');
+  };
+
+  const handleMailStackJson = () => {
+    if (!activeStack || !activeStackExportJson) return;
+    const recipient = shareEmail.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient)) {
+      setShareStatus('Bitte gib eine gültige E-Mail-Adresse ein.');
+      return;
+    }
+    if (Number(shareCaptchaInput.trim()) !== shareCaptcha.a + shareCaptcha.b) {
+      setShareStatus('Captcha stimmt nicht.');
+      return;
+    }
+    const subject = `Supplement Stack: ${activeStack.name}`;
+    const body = `Hier ist der Supplement Stack als JSON:\n\n${activeStackExportJson}`;
+    window.location.href = `mailto:${encodeURIComponent(recipient)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    setShareStatus('E-Mail wurde in deinem Mailprogramm vorbereitet.');
+  };
+
+  const handleImportStackJson = () => {
+    setImportStatus('');
+    try {
+      const importedStack = importedStackFromJson(importText);
+      setState((prev) => ({
+        stacks: [...prev.stacks, importedStack],
+        activeStackId: importedStack.id,
+      }));
+      if (importedStack.description) {
+        setDescriptions((prev) => ({ ...prev, [importedStack.id]: importedStack.description ?? '' }));
+      }
+      setImportText('');
+      setStackImportModalOpen(false);
+    } catch (err) {
+      setImportStatus(err instanceof Error ? err.message : 'JSON konnte nicht importiert werden.');
+    }
+  };
+
+  const handleImportFile = async (file?: File | null) => {
+    if (!file) return;
+    setImportStatus('');
+    try {
+      setImportText(await file.text());
+    } catch {
+      setImportStatus('Datei konnte nicht gelesen werden.');
+    }
+  };
+
+  const handleStackSelectChange = useCallback((value: string) => {
+    if (value === CREATE_STACK_SELECT_VALUE) {
+      setCreateStackModalOpen(true);
+      return;
+    }
+    setState((prev) => ({ ...prev, activeStackId: value }));
+  }, []);
+
   const activeDescription = activeStack ? descriptions[activeStack.id] ?? '' : '';
+  const activeStackExportJson = useMemo(
+    () => (activeStack ? JSON.stringify(buildStackExportPayload(activeStack, activeDescription), null, 2) : ''),
+    [activeDescription, activeStack],
+  );
   const editingProduct = activeStack?.products.find((product) => productStackKey(product) === editingProductKey) ?? null;
   const pendingDeleteProduct = activeStack?.products.find((product) => productStackKey(product) === pendingDeleteProductKey) ?? null;
   const replacingStack = activeStack && replaceProductKey ? activeStack : null;
 
   const rightSlot = isDemo ? (
     <>
-      <span className="header-email">Demo-Modus â€” nicht angemeldet</span>
+      <span className="header-email">Demo-Modus — nicht angemeldet</span>
       <Link
         to="/register"
         className="btn-logout"
@@ -1912,11 +2139,11 @@ export function StackWorkspace({
       {showStandaloneHeader && (
       <StacksHeader
         variant={HEADER_VARIANT}
-        title={isDemo ? 'Demo â€“ Supplement Stack' : 'Meine Supplement Stacks'}
+        title={isDemo ? 'Demo – Supplement Stack' : 'Meine Supplement Stacks'}
         subtitle={
           isDemo
-            ? 'Teste die komplette OberflÃ¤che. Ã„nderungen werden nach dem Neuladen zurÃ¼ckgesetzt.'
-            : 'Verwalte deine Supplements dauerhaft mit derselben OberflÃ¤che wie in der Demo.'
+            ? 'Teste die komplette Oberfläche. Änderungen werden nach dem Neuladen zurückgesetzt.'
+            : 'Verwalte deine Supplements dauerhaft mit derselben Oberfläche wie in der Demo.'
         }
         rightSlot={rightSlot}
       />
@@ -1929,8 +2156,8 @@ export function StackWorkspace({
             <strong>Interaktive Demo:</strong>
             &nbsp;
             <span>
-              Alles nutzbar â€” nach dem Neuladen startet wieder der Demo-Stack. Registriere dich,
-              um Ã„nderungen dauerhaft zu speichern.
+              Demo-Stack wird beim Neuladen der Seite zurückgesetzt. Kostenlos anmelden,
+              um deinen Stack dauerhaft zu speichern.
             </span>
           </div>
         )}
@@ -1957,15 +2184,14 @@ export function StackWorkspace({
             <select
               className="stack-select"
               value={state.activeStackId}
-              onChange={(e) =>
-                setState((prev) => ({ ...prev, activeStackId: e.target.value }))
-              }
+              onChange={(e) => handleStackSelectChange(e.target.value)}
             >
               {state.stacks.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name} ({s.products.length} Produkte)
                 </option>
               ))}
+              <option value={CREATE_STACK_SELECT_VALUE}>Stack erstellen</option>
             </select>
             <span className="stack-select-arrow">
               <IconChevron />
@@ -1973,39 +2199,55 @@ export function StackWorkspace({
           </div>
 
 
-          <button className="ss-btn ss-btn-indigo" onClick={() => setCreateStackModalOpen(true)}>
-            <IconStackPlus />
-            Stack erstellen
-          </button>
-
           <button
-            className="ss-btn ss-btn-outline"
+            className="ss-btn ss-btn-icon ss-btn-icon-yellow"
             onClick={() => setEditModalOpen(true)}
             disabled={!activeStack}
+            aria-label="Stack bearbeiten"
+            title="Stack bearbeiten"
           >
             <IconPencil />
-            Stack bearbeiten
           </button>
 
           <button
-            className="ss-btn ss-btn-outline"
+            className="ss-btn ss-btn-icon ss-btn-icon-mail"
             onClick={() => void handleEmailStack()}
             disabled={!isDemo && (!activeStack || emailSending)}
-            title={isDemo ? DEMO_SHARE_NOTICE : undefined}
+            aria-label="Stack mailen"
+            title={isDemo ? DEMO_SHARE_NOTICE : 'Stack mailen'}
             style={!isDemo && (!activeStack || emailSending) ? { opacity: 0.55, cursor: 'not-allowed' } : undefined}
           >
             <IconMail />
-            {emailSending ? 'Wird gesendet...' : 'Stack mailen'}
           </button>
           <button
-            className="ss-btn ss-btn-outline print-action"
+            className="ss-btn ss-btn-icon ss-btn-icon-pdf print-action"
             onClick={handlePrintStack}
             disabled={!isDemo && (!activeStack || productsCount === 0)}
-            title={isDemo ? DEMO_SHARE_NOTICE : undefined}
+            aria-label="Plan drucken/PDF"
+            title={isDemo ? DEMO_SHARE_NOTICE : 'Plan drucken/PDF'}
             style={!isDemo && (!activeStack || productsCount === 0) ? { opacity: 0.55, cursor: 'not-allowed' } : undefined}
           >
-            <IconPrint />
-            Plan drucken/PDF
+            <IconPdf />
+          </button>
+          <button
+            className="ss-btn ss-btn-icon ss-btn-icon-share"
+            onClick={openStackShareModal}
+            disabled={!activeStack}
+            aria-label="Stack teilen"
+            title="Stack teilen"
+          >
+            <IconShareStack />
+          </button>
+          <button
+            className="ss-btn ss-btn-icon ss-btn-icon-import"
+            onClick={() => {
+              setImportStatus('');
+              setStackImportModalOpen(true);
+            }}
+            aria-label="Stack importieren"
+            title="Stack importieren"
+          >
+            <IconImportStack />
           </button>
           {emailStatus && (
             <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>
@@ -2013,17 +2255,20 @@ export function StackWorkspace({
             </span>
           )}
 
-          <button className="ss-btn ss-btn-green" onClick={() => setAddModalOpen(true)}>
-            <IconPlus />
-            Produkt hinzufuegen
-          </button>
-
           <button
-            className="ss-btn ss-btn-red-soft"
+            className="ss-btn ss-btn-icon ss-btn-icon-red"
             onClick={() => void handleDeleteStack(state.activeStackId)}
+            aria-label="Stack löschen"
+            title="Stack löschen"
           >
             <IconTrash />
-            Stack lÃ¶schen
+          </button>
+
+          <span className="ss-toolbar-divider" aria-hidden="true" />
+
+          <button className="ss-btn ss-btn-green" onClick={() => setAddModalOpen(true)}>
+            <IconPlus />
+            Produkt hinzufügen
           </button>
         </div>
 
@@ -2047,7 +2292,7 @@ export function StackWorkspace({
         <section className="stack-cockpit" aria-label="Stack-Steuerung">
           <div className="print-sheet-heading">
             <strong>Supplement Stack Einnahmeplan</strong>
-            <span>{activeStack?.name ?? 'Stack'} Â· {stackProfileLabel(activeStack)}</span>
+            <span>{activeStack?.name ?? 'Stack'} · {stackProfileLabel(activeStack)}</span>
           </div>
           <div className="stack-cockpit-head">
             <div>
@@ -2065,8 +2310,8 @@ export function StackWorkspace({
         </section>
 
         <div className="ss-section-title ss-products-title">
-          <span>Supplement Ãœbersicht</span>
-          <div className="product-view-toggle" role="group" aria-label="Produktansicht wÃ¤hlen">
+          <span>Übersicht</span>
+          <div className="product-view-toggle" role="group" aria-label="Produktansicht wählen">
             <button
               type="button"
               className={productViewMode === 'grid' ? 'active' : ''}
@@ -2119,7 +2364,7 @@ export function StackWorkspace({
           >
             <Package size={32} style={{ margin: '0 auto 10px', color: '#c7d2fe' }} />
             <p style={{ fontSize: 14, fontWeight: 600 }}>
-              Noch leer â€” klicke auf &bdquo;Produkt hinzufÃ¼gen&ldquo;, um zu starten.
+              Noch leer — klicke auf &bdquo;Produkt hinzufügen&ldquo;, um zu starten.
             </p>
             <button
               type="button"
@@ -2128,7 +2373,7 @@ export function StackWorkspace({
               style={{ margin: '18px auto 0' }}
             >
               <IconPlus />
-              Produkt hinzufÃ¼gen
+              Produkt hinzufügen
             </button>
           </div>
         )}
@@ -2138,7 +2383,27 @@ export function StackWorkspace({
             {activeProducts.map((p) => {
               const key = productStackKey(p);
               return (
-                <div key={key} className={productViewMode === 'grid' ? 'masonry-item' : 'product-list-item'}>
+                <div
+                  key={key}
+                  className={`${productViewMode === 'grid' ? 'masonry-item' : 'product-list-item'} product-sort-item${draggedProductKey === key ? ' is-dragging' : ''}`}
+                  draggable
+                  onDragStart={(event) => {
+                    event.dataTransfer.effectAllowed = 'move';
+                    event.dataTransfer.setData('text/plain', key);
+                    setDraggedProductKey(key);
+                  }}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = 'move';
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    const sourceKey = event.dataTransfer.getData('text/plain') || draggedProductKey;
+                    if (sourceKey) void reorderActiveProducts(sourceKey, key);
+                    setDraggedProductKey(null);
+                  }}
+                  onDragEnd={() => setDraggedProductKey(null)}
+                >
                   <ProductCard
                     product={p}
                     shopDomains={shopDomains}
@@ -2156,10 +2421,10 @@ export function StackWorkspace({
             {productViewMode === 'grid' && (
               <button
                 type="button"
-                className="masonry-item flex min-h-[220px] items-center justify-center rounded-[14px] border-2 border-dashed border-emerald-300 bg-emerald-50 text-emerald-600 shadow-sm transition hover:border-emerald-500 hover:bg-emerald-100"
+                className="masonry-item masonry-add-tile"
                 onClick={() => setAddModalOpen(true)}
-                aria-label="Produkt hinzufuegen"
-                title="Produkt hinzufuegen"
+                aria-label="Produkt hinzufügen"
+                title="Produkt hinzufügen"
               >
                 <Plus size={56} strokeWidth={2.4} />
               </button>
@@ -2169,13 +2434,12 @@ export function StackWorkspace({
                 type="button"
                 className="product-list-add-row"
                 onClick={() => setAddModalOpen(true)}
-                aria-label="Produkt hinzufuegen"
-                title="Produkt hinzufuegen"
+                aria-label="Produkt hinzufügen"
+                title="Produkt hinzufügen"
               >
                 <Plus size={20} strokeWidth={2.5} />
                 <span>
-                  <strong>Produkt hinzufuegen</strong>
-                  <small>Produkt als kompakte Zeile hinzufuegen</small>
+                  <strong>Produkt hinzufügen</strong>
                 </span>
               </button>
             )}
@@ -2195,12 +2459,12 @@ export function StackWorkspace({
         <div className="bb-prices">
           <div className="bb-price-block">
             <div className="bb-price-label">Einmalkosten</div>
-            <div className="bb-price-value">{formatEuro(totalOnce)} â‚¬</div>
+            <div className="bb-price-value">{formatEuro(totalOnce)} €</div>
           </div>
           <div className="bb-divider" />
           <div className="bb-price-block">
             <div className="bb-price-label">Pro Monat</div>
-            <div className="bb-price-value">{formatEuro(totalMonthly)} â‚¬</div>
+            <div className="bb-price-value">{formatEuro(totalMonthly)} €</div>
           </div>
           <button
             className="btn-select-all"
@@ -2208,7 +2472,7 @@ export function StackWorkspace({
             disabled={productsCount === 0}
             style={productsCount === 0 ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
           >
-            {allSelected ? 'Alles abwÃ¤hlen' : 'Alles auswÃ¤hlen'}
+            {allSelected ? 'Alles abwählen' : 'Alles auswählen'}
           </button>
         </div>
       </div>
@@ -2279,9 +2543,9 @@ export function StackWorkspace({
 
       {pendingDeleteProductKey && pendingDeleteProduct && (
         <ConfirmDialog
-          title="Produkt loeschen?"
-          message="Willst du dieses Produkt wirklich loeschen?"
-          confirmLabel="Ja, loeschen"
+          title="Produkt löschen?"
+          message="Willst du dieses Produkt wirklich löschen?"
+          confirmLabel="Ja, löschen"
           onConfirm={async () => {
             const key = pendingDeleteProductKey;
             setPendingDeleteProductKey(null);
@@ -2289,6 +2553,130 @@ export function StackWorkspace({
           }}
           onClose={() => setPendingDeleteProductKey(null)}
         />
+      )}
+
+      {stackShareModalOpen && activeStack && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/55 px-3 py-6 backdrop-blur-sm sm:px-6"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setStackShareModalOpen(false);
+          }}
+        >
+          <div className="w-full max-w-xl rounded-[1.6rem] bg-white p-5 shadow-[0_30px_80px_rgba(15,23,42,0.35)] sm:p-6">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-2xl font-black tracking-tight text-slate-950">Stack teilen</h2>
+                <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-600">
+                  Exportiere den aktuellen Stack als JSON-Datei oder bereite eine E-Mail mit JSON-Inhalt vor.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setStackShareModalOpen(false)}
+                className="rounded-2xl p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                aria-label="Schließen"
+              >
+                <X size={22} />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={handleDownloadStackJson}
+                className="w-full rounded-xl bg-slate-950 px-5 py-3 text-sm font-black text-white hover:bg-slate-800"
+              >
+                JSON herunterladen
+              </button>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <label className="block text-xs font-black uppercase tracking-wide text-slate-500">
+                  Empfänger-E-Mail
+                  <input
+                    type="email"
+                    value={shareEmail}
+                    onChange={(event) => setShareEmail(event.target.value)}
+                    className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold normal-case tracking-normal text-slate-900 outline-none focus:border-indigo-400"
+                    placeholder="name@example.com"
+                  />
+                </label>
+                <label className="mt-3 block text-xs font-black uppercase tracking-wide text-slate-500">
+                  Captcha: {shareCaptcha.a} + {shareCaptcha.b}
+                  <input
+                    type="number"
+                    value={shareCaptchaInput}
+                    onChange={(event) => setShareCaptchaInput(event.target.value)}
+                    className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold normal-case tracking-normal text-slate-900 outline-none focus:border-indigo-400"
+                    inputMode="numeric"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={handleMailStackJson}
+                  className="mt-4 w-full rounded-xl bg-sky-600 px-5 py-3 text-sm font-black text-white hover:bg-sky-700"
+                >
+                  Per Mail versenden
+                </button>
+              </div>
+              {shareStatus && <p className="text-sm font-bold text-slate-600">{shareStatus}</p>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {stackImportModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/55 px-3 py-6 backdrop-blur-sm sm:px-6"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setStackImportModalOpen(false);
+          }}
+        >
+          <div className="w-full max-w-xl rounded-[1.6rem] bg-white p-5 shadow-[0_30px_80px_rgba(15,23,42,0.35)] sm:p-6">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-2xl font-black tracking-tight text-slate-950">Stack importieren</h2>
+                <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-600">
+                  Füge eine Supplement-Stack-JSON ein oder lade eine JSON-Datei hoch.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setStackImportModalOpen(false)}
+                className="rounded-2xl p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                aria-label="Schließen"
+              >
+                <X size={22} />
+              </button>
+            </div>
+            <input
+              type="file"
+              accept=".json,application/json"
+              onChange={(event) => void handleImportFile(event.target.files?.[0])}
+              className="mb-3 block w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-700"
+            />
+            <textarea
+              value={importText}
+              onChange={(event) => setImportText(event.target.value)}
+              className="min-h-48 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 font-mono text-xs text-slate-800 outline-none focus:border-indigo-400"
+              placeholder='{"supplementStackExportVersion":1,"stack":{...}}'
+            />
+            {importStatus && <p className="mt-3 text-sm font-bold text-red-600">{importStatus}</p>}
+            <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setStackImportModalOpen(false)}
+                className="rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-600 hover:bg-slate-50"
+              >
+                Abbrechen
+              </button>
+              <button
+                type="button"
+                onClick={handleImportStackJson}
+                className="rounded-xl bg-emerald-600 px-5 py-3 text-sm font-black text-white hover:bg-emerald-700"
+              >
+                Importieren
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {demoShareNoticeOpen && (
@@ -2301,9 +2689,9 @@ export function StackWorkspace({
           <div className="w-full max-w-md rounded-[1.6rem] bg-white p-5 shadow-[0_30px_80px_rgba(15,23,42,0.35)] sm:p-6">
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-2xl font-black tracking-tight text-slate-950">Kostenlos mit Konto verfuegbar</h2>
+                <h2 className="text-2xl font-black tracking-tight text-slate-950">Kostenlos mit Konto verfügbar</h2>
                 <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-600">
-                  Funktion ist kostenlos verfuegbar, sobald man angemeldet ist. Registriere dich oder melde dich an,
+                  Funktion ist kostenlos verfügbar, sobald man angemeldet ist. Registriere dich oder melde dich an,
                   um Stack-Mail und PDF dauerhaft mit deinem echten Stack zu nutzen.
                 </p>
               </div>
@@ -2311,7 +2699,7 @@ export function StackWorkspace({
                 type="button"
                 onClick={() => setDemoShareNoticeOpen(false)}
                 className="rounded-2xl p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
-                aria-label="Schliessen"
+                aria-label="Schließen"
               >
                 <X size={22} />
               </button>
