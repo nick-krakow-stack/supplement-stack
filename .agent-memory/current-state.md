@@ -1,6 +1,6 @@
 # Current State
 
-Last updated: 2026-05-08
+Last updated: 2026-05-11
 
 ## Active Baseline
 
@@ -12,7 +12,7 @@ Last updated: 2026-05-08
   - Cloudflare config: `wrangler.toml` and `wrangler.maintenance.toml`
 - Live domain: `https://supplementstack.de`.
 - Latest documented deployed preview:
-  `https://89b9f726.supplementstack.pages.dev`.
+  `https://71809f56.supplementstack.pages.dev`.
 - The active admin frontend is `/administrator`.
 - `/api/admin` remains the backend API namespace.
 - The old frontend `/admin` route was removed during cleanup. Use
@@ -38,6 +38,202 @@ Last updated: 2026-05-08
   refactor candidate.
 
 ## Latest Completed Work
+
+### 2026-05-11 User UX Follow-Ups - Local Implementation
+
+- Implemented the post-QA user UX follow-ups locally; not deployed yet.
+- Stack create/edit now owns family/profile assignment:
+  - `Stack erstellen` opens a modal for name, description, and profile instead
+    of immediately creating `Stack 2`.
+  - `Stack bearbeiten` can save name, description, and assigned family member.
+  - The cockpit now shows the assignment and keeps profile management secondary.
+- Product replacement from `Produkt bearbeiten` now preserves the current
+  product's ingredient/dose/form context and opens directly into product
+  selection where possible.
+- Stack deletion now uses an in-app confirmation dialog instead of native
+  `window.confirm`.
+- Product selection now explains DGE vs. study values and the product ordering.
+- Bottom selection bar now explicitly describes the sum of selected products.
+- Stack product list mode was rebuilt as a compact scan-friendly list with
+  German timing labels for raw timing values such as `evening`.
+- `/profile` now uses a responsive desktop layout instead of a narrow
+  mobile-like column.
+- Own-product creation now has clearer guidance that it should be used only
+  when the product is missing from normal product search, with simpler
+  packaging/label-entry hints.
+- `Influencer` remains the stored profile value for compatibility, but the
+  visible label is now `Community-basierte Empfehlung`.
+- Verification:
+  - `frontend`: `npx tsc --noEmit` passed.
+  - `frontend`: `npm run lint` passed.
+  - `frontend`: `npm run build` passed.
+  - `frontend`: `npm test -- --run` is blocked locally by Vite/esbuild
+    `spawn EPERM` while loading `vite.config.ts`.
+  - Browser sanity on local production build via static `dist` server passed
+    for landing, demo load, stack-create modal/profile assignment visibility,
+    and list-view toggle. Text entry in the in-app browser was limited by a
+    missing virtual clipboard, so full create/delete interaction still needs
+    deployment or a working dev server.
+
+### 2026-05-11 Authenticated User Browser QA - Tobias
+
+- Authenticated user QA was run on live `https://supplementstack.de` as
+  `email@nickkrakow.de` with Tobias-style human thoughts.
+- Covered:
+  - logged-in landing page
+  - `/stacks` empty stack and existing-stack workspace
+  - stack creation and cleanup of QA stack `Stack 2`
+  - stack edit modal
+  - product add flow: search -> dosage -> product selection -> add
+  - product edit modal and product replacement entry point
+  - list/grid toggle and Einnahmeplan
+  - `/my-products` empty state and own-product form
+  - `/profile`
+  - footer affiliate/medical/legal trust signals
+- Important findings for next update:
+  - Family/profile assignment belongs in `Stack anlegen` / `Stack bearbeiten`,
+    not as a prominent separate cockpit control.
+  - `Produkt bearbeiten` -> `Produkt wechseln` should open product selection
+    directly with existing Wirkstoff/dose context preserved.
+  - `/profile` needs a flexible desktop width; it currently feels too narrow /
+    mobile-like on desktop.
+  - Product add flow is much better after removing the forced form step.
+  - Existing stack cards show useful costs, reach, and warnings, but raw timing
+    labels like `evening` still appear.
+  - Own-product creation is powerful but too complex for normal users without
+    stronger guidance.
+  - Stack delete still uses native `window.confirm`; functional but not ideal
+    for a polished user flow.
+
+### 2026-05-11 Tobias QA Updates - Deployed
+
+- Landing page hero claim now says `Wissenschaftlich. Einfach. Kostenlos.`
+  instead of `Wissenschaftlich. Einfach. Kosteneffizient.`.
+- Normal and demo `AddProductModal` in `frontend/src/components/StackWorkspace.tsx`
+  no longer has a separate `form` step in the product-add flow.
+- Ingredient forms are still loaded after ingredient selection, but
+  `selectedFormId` stays `null` by default and the flow goes directly to
+  dosage.
+- Product selection now exposes an optional form dropdown when forms exist,
+  defaulting to `Alle Formen`; selecting a form reloads the product list with
+  the form filter.
+- Back navigation from dosage now returns to search.
+- Added `scripts/tobias-qa-regression-check.mjs`.
+- TDD red run passed as expected by failing before implementation with 10
+  Tobias QA issues.
+- Validation passed:
+  - `node scripts/tobias-qa-regression-check.mjs`
+  - `node scripts/admin-qa-regression-check.mjs`
+  - `node --check scripts/tobias-qa-regression-check.mjs`
+  - `frontend`: `npx tsc --noEmit`
+  - `frontend`: `npm run build`
+- GitHub:
+  - Local commit `74cc5bd` pushed to branch
+    `codex/streamline-demo-product-form-selection`.
+  - PR `#4` merged to `main` as `9c67ed7`.
+- Deployment:
+  - Cloudflare Pages preview `https://71809f56.supplementstack.pages.dev`.
+  - Live alias `https://supplementstack.de`.
+- Browser QA:
+  - Preview landing page shows `Wissenschaftlich. Einfach. Kostenlos.`
+    and no longer shows `Kosteneffizient`.
+  - Live landing page shows the same copy and no browser console errors.
+  - Preview `/demo` Vitamin D3 flow goes directly from ingredient selection
+    to dosage, then to product selection with optional `Form` dropdown
+    defaulting to `Alle Formen`.
+  - `Vitamin D3 2000 IU Tropfen` and `Vitamin D3 5000 IU` appeared in the
+    product selection for the `2000 IE` study value with `Alle Formen`.
+
+### 2026-05-11 Tobias Browser-QA Persona And First User QA - Memory
+
+- New standard human browser-QA persona exists in
+  `.agent-memory/browser-qa-persona.md`: Tobias, 30, normal
+  health-interested user; covers user flows plus admin-operator overlay.
+- Persona file was committed as `b694b4c`
+  (`Add Tobias browser QA persona memory`).
+- First Tobias QA covered landing page, demo, and Vitamin D/D3.
+- Findings:
+  - landing page communicates free/no-signup positioning well.
+  - direct demo CTA was not visible in the logged-in admin context, so that
+    observation is test-limited.
+  - `/demo` is directly usable and explains demo mode.
+  - D3 search finds Vitamin D3.
+  - form selection is scientifically strong but cognitively heavy for normal
+    users.
+  - choosing `Cholecalciferol (D3)` + `2000 IE` returned
+    `Keine Produkte fuer diesen Wirkstoff gefunden`, which can disrupt the
+    demo core flow.
+
+### 2026-05-10 Admin Human-Flow QA And Dosing URL Filter Fix - Deployed
+
+- Authenticated admin QA was extended from a human/operator perspective across
+  dashboard, products, product detail shop links, ingredients, dosing, users,
+  user-products, shop domains, and legal routes.
+- Found and fixed a live admin deep-link bug:
+  `/administrator/dosing?ingredient_id=3&q=Magnesium` selected Magnesium in
+  the filters but still rendered the unfiltered 100-row dosing list.
+- `AdministratorDosingPage` now initializes `q` and `ingredient_id` filters
+  from URL search params.
+- `scripts/admin-qa-regression-check.mjs` now guards the URL filter
+  initialization in addition to the previous admin dosing visibility rule.
+- Validation passed:
+  - `node scripts/admin-qa-regression-check.mjs`
+  - `frontend`: `npx tsc --noEmit`
+  - `node --check scripts/admin-qa-regression-check.mjs`
+  - `frontend`: `npm run build`
+  - `git diff --check` passed with existing LF/CRLF warnings only.
+- GitHub commits on `main`:
+  - `d9ef6cc` (`Guard admin dosing URL filters`)
+  - `5733d8f` (`Initialize admin dosing filters from URL`)
+- Cloudflare Pages production deployment succeeded for commit `5733d8f`.
+  - Production deployment short id: `5a0b8826`
+  - Live URL: `https://supplementstack.de`
+- Live authenticated browser verification confirmed the Magnesium dosing
+  deep-link now renders `4 Richtwerte` and no console warnings/errors.
+- Admin usability findings from the pass:
+  - `/administrator/user-products` is useful but not discoverable in the main
+    sidebar.
+  - The user-products `Markieren` button changes trusted status and is too
+    ambiguous beside row selection.
+  - The ingredient forms modal works but is long and cognitively heavy.
+  - Native confirm dialogs are brittle in browser QA and less polished for
+    destructive admin actions than in-app confirmation dialogs.
+  - Shop-domain create/edit fields are understandable, but text-entry testing
+    was blocked by the in-app browser automation clipboard limitation.
+
+### 2026-05-10 Admin Browser QA And Dosing Visibility Fix - Deployed
+
+- Authenticated browser QA was run against `https://supplementstack.de/administrator/`.
+- A stale in-app browser tab was hanging on `/login`; a fresh tab loaded the
+  active authenticated admin session correctly.
+- Read-only admin QA passed without browser console errors on:
+  `/administrator/dashboard`, `/administrator/products`,
+  `/administrator/ingredients`, `/administrator/users`,
+  `/administrator/dosing`, `/administrator/knowledge`,
+  `/administrator/interactions`, `/administrator/shop-domains`,
+  `/administrator/legal`, and `/administrator/profile`.
+- Product shop-link modal, ingredient form modal, user detail drawer, command
+  palette, and mobile dashboard/products/users layouts were smoke-tested
+  without state-changing saves or deletes.
+- Found and fixed an admin-only data visibility bug:
+  `/administrator/dosing` hid all unpublished `dose_recommendations`, while
+  production data currently stores all 136 dosing rows as unpublished.
+  Admin maintenance views must show these rows.
+- Added `scripts/admin-qa-regression-check.mjs` to guard against reintroducing
+  the unpublished-dose hiding rule in the admin dosing list.
+- Validation passed:
+  - `node scripts/admin-qa-regression-check.mjs`
+  - `node scripts/backend-regression-check.mjs`
+  - `frontend`: `npx tsc --noEmit`
+  - `frontend`: `npm run build`
+  - `node --check scripts/admin-qa-regression-check.mjs`
+  - `git diff --check` passed with existing LF/CRLF warnings only.
+- Commit `2ffeec6` was pushed to `origin/main`.
+- Cloudflare Pages production deployment succeeded for commit `2ffeec6`.
+  - Preview URL: `https://575850b1.supplementstack.pages.dev`
+  - Live URL: `https://supplementstack.de`
+- Live authenticated browser verification confirmed `/administrator/dosing`
+  now renders dosing rows again.
 
 ### 2026-05-10 Backend P2 Hardening - Deployed
 
@@ -538,8 +734,43 @@ Last updated: 2026-05-08
 - Authenticated owner browser QA remains the final acceptance gate for the new
   admin/user workflows.
 
+## 2026-05-11 - Website UX Fixes Local
+
+- Local website UX fixes for the stack/demo surface are implemented on branch
+  `codex/website-ux-fixes`; not deployed yet.
+- Demo now renders inside the shared public `Layout` header instead of the
+  standalone StackWorkspace header.
+- Demo mail/PDF actions no longer show a static unavailable text; buttons stay
+  visible and expose a registration tooltip/click notice.
+- Product removal from a stack now uses an in-app confirmation dialog.
+- Product list cards were compacted; warnings now show a short `Achtung`
+  summary with detail available through the info affordance.
+- Product selection now offers an own-product CTA; demo users get a register
+  modal, authenticated users are linked to `/my-products`.
+- Duplicate Wirkstoff selection is intercepted before dosage selection and
+  offers edit amount, change product, leave unchanged, or deliberately add a
+  second product with the same Wirkstoff.
+- Stack create/edit modals now own family/profile assignment; the cockpit no
+  longer renders profile management or the routine clock.
+- New protected routes were added:
+  - `/family` for family member management and local main-stack selection.
+  - `/routine` for a first standalone Einnahmeplan overview with print action.
+- Demo stacks are persisted in localStorage and imported into real stacks after
+  successful registration when possible.
+- Verification passed:
+  - `frontend`: `npx tsc --noEmit`
+  - `frontend`: `npm run lint`
+  - `frontend`: `npm test -- --run`
+  - `frontend`: `npm run build`
+  - Browser smoke on local Vite: `/demo` shared header, demo mail tooltip,
+    protected `/family` login redirect. Local demo products stayed empty
+    because the pure Vite dev server does not serve `/api/demo/products`.
+
 ## Known Remaining Work
 
+- Later simplify the normal product-add flow: do not force a separate form
+  selection step before product selection. Keep forms for DB/product matching,
+  but expose them as an optional product-list filter defaulting to `Alle`.
 - Final authenticated owner browser QA:
   - Admin dashboard range cards, especially `Anmeldungen` and activation
     subtext

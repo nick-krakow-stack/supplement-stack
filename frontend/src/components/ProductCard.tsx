@@ -9,6 +9,8 @@ interface ProductCardProduct {
   id: number;
   product_type?: 'catalog' | 'user_product';
   name: string;
+  ingredient_name?: string;
+  parent_ingredient_name?: string;
   brand?: string;
   price: number;
   shop_link?: string;
@@ -43,6 +45,8 @@ interface ProductCardProduct {
     unit?: string | null;
     basis_quantity?: number | null;
     basis_unit?: string | null;
+    ingredient_name?: string;
+    parent_ingredient_name?: string;
     search_relevant?: number | boolean;
   }>;
   effect_summary?: string;
@@ -130,13 +134,26 @@ function getDose(product: ProductCardProduct): string {
 
 type TimingKey = 'morning' | 'evening' | 'noon' | 'trial' | 'anytime';
 
+type KnownTimingLabel = 'Zum Frühstück' | 'Zum Abendessen' | 'Mittags' | 'Zum Probieren' | 'Jederzeit';
+
 function getTimingKey(timing?: string): TimingKey {
   const t = (timing ?? '').toLowerCase();
   if (t.includes('morgen') || t.includes('morning') || t.includes('fr\u00fch')) return 'morning';
   if (t.includes('abend') || t.includes('evening') || t.includes('nacht')) return 'evening';
   if (t.includes('mittag') || t.includes('noon')) return 'noon';
   if (t.includes('probe') || t.includes('trial') || t.includes('test')) return 'trial';
+  if (t === 'anytime' || t.includes('jederzeit') || t.includes('any day') || t.includes('all day')) return 'anytime';
   return 'anytime';
+}
+
+function getTimingDisplayLabel(rawTiming?: string): { label: KnownTimingLabel | string; cls: string } {
+  const timing = (rawTiming ?? '').trim();
+  const key = getTimingKey(timing);
+  const hasCustomTiming = timing.length > 0 && !/^(morning|evening|mittag|noon|trial|anytime)$/i.test(timing);
+  return {
+    label: key === 'anytime' && hasCustomTiming ? timing : TIMING_STYLES[key].label,
+    cls: TIMING_STYLES[key].cls,
+  };
 }
 
 const TIMING_STYLES: Record<TimingKey, { cls: string; label: string }> = {
@@ -174,9 +191,17 @@ const SAFETY_WARNING_STYLES: Record<ProductSafetyWarning['severity'], string> = 
 
 function getFallbackWarning(product: ProductCardProduct): ProductWarning | null {
   const t = product.name.toLowerCase();
-  if (t.includes('b12')) return { type: 'caution', title: 'Einnahmeabstand pr\u00fcfen', message: 'Kaffee oder Tee werden in Quellen im Zusammenhang mit m\u00f6glicher geringerer Aufnahme einzelner N\u00e4hrstoffe diskutiert. Ein zeitlicher Abstand kann sinnvoll sein.' };
+  if (t.includes('b12')) return { type: 'caution', title: 'Achtung', message: 'Kaffee/Tee kann die Aufnahme hemmen. 30 Min. Abstand einhalten.' };
   if (t.includes('jod')) return { type: 'danger', title: 'Schilddr\u00fcsenkontext beachten', message: 'Bei Schilddr\u00fcsenerkrankungen, Jodmedikation oder unklarer Versorgung sollte Jod nur nach \u00e4rztlicher R\u00fccksprache erg\u00e4nzt werden.' };
   return null;
+}
+
+function shortenWarningMessage(message: string, maxLength = 96): string {
+  const normalized = (message ?? '').replace(/\s+/g, ' ').trim();
+  if (normalized.length <= maxLength) return normalized;
+  const firstSentence = normalized.match(/[^.!?]+[.!?]/)?.[0];
+  if (firstSentence && firstSentence.length <= maxLength) return firstSentence.trim();
+  return `${normalized.slice(0, maxLength).trimEnd()}...`;
 }
 
 function normalizeShopHostname(value?: string): string | null {
@@ -225,8 +250,7 @@ export default function ProductCard({
   const emoji = CATEGORY_EMOJI[category];
 
   const effectiveTiming = product.ingredient_timing?.trim() || product.timing;
-  const timingKey = getTimingKey(effectiveTiming);
-  const timing = TIMING_STYLES[timingKey];
+  const timing = getTimingDisplayLabel(effectiveTiming);
 
   const productHost = normalizeShopHostname(product.shop_link);
   const directShopHref = normalizeShopHref(product.shop_link);
@@ -251,11 +275,77 @@ export default function ProductCard({
   const intervalDays = getIntakeIntervalDays(product);
   const intervalLabel = intervalDays === 1 ? 't\u00e4glich' : `alle ${intervalDays} Tage`;
   const showInterval = product.intake_interval_days != null;
+  const ingredientTitle = product.ingredient_name
+    || product.ingredients?.find((ingredient) => ingredient.ingredient_name?.trim())?.ingredient_name
+    || product.name;
 
   const productWarning = product.warning_message
     ? { title: product.warning_title, message: product.warning_message, type: product.warning_type ?? 'caution' }
     : null;
   const cardWarning = warning ?? productWarning ?? getFallbackWarning(product);
+  const warningHintMessage = cardWarning ? shortenWarningMessage(cardWarning.message) : '';
+  const isList = display === 'list';
+
+  const actions = (
+    <div className={`ss-product-card-actions flex gap-[7px] ${isList ? 'ss-product-card-actions-list' : ''}`}>
+      {shopHref && (
+        <a
+          href={shopHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className={`ss-product-card-buy ss-product-card-action inline-flex items-center justify-center gap-1.5 rounded-[10px] px-3 text-[12.5px] font-bold text-white transition-colors ${isList ? 'ss-product-card-action--compact' : 'min-h-11 flex-1'}`}
+          style={{ background: '#3b82f6' }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = '#2563eb')}
+          onMouseLeave={(e) => (e.currentTarget.style.background = '#3b82f6')}
+        >
+          <ExternalLink size={13} />
+          {buttonText}
+        </a>
+      )}
+      {onEdit && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onEdit(); }}
+          aria-label="Produkt bearbeiten"
+          className={`ss-product-card-action-icon ss-product-card-action ${isList ? 'h-10 w-full' : 'h-11 w-11'} flex shrink-0 items-center justify-center rounded-[10px] transition-colors`}
+          style={{ background: '#fef3c7', border: '1.5px solid #fbbf24', color: '#b45309' }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = '#fde68a'; e.currentTarget.style.borderColor = '#f59e0b'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = '#fef3c7'; e.currentTarget.style.borderColor = '#fbbf24'; }}
+        >
+          <Pencil size={15} />
+        </button>
+      )}
+      {onDelete && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onDelete(); }}
+          aria-label="Produkt entfernen"
+          className={`ss-product-card-action-icon ss-product-card-action ${isList ? 'h-10 w-full' : 'h-11 w-11'} flex shrink-0 items-center justify-center rounded-[10px] transition-colors`}
+          style={{ background: '#fee2e2', border: '1.5px solid #fca5a5', color: '#dc2626' }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = '#fecaca'; e.currentTarget.style.borderColor = '#f87171'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.borderColor = '#fca5a5'; }}
+        >
+          <Trash2 size={15} />
+        </button>
+      )}
+      {!shopHref && onReportMissingLink && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onReportMissingLink(product, reportReason); }}
+          className={`ss-product-card-action-flag ss-product-card-action inline-flex items-center justify-center gap-1.5 rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2 text-[12.5px] font-bold text-amber-700 transition-colors ${isList ? 'ss-product-card-action--compact' : 'min-h-11 flex-1'} hover:bg-amber-100`}
+        >
+          <Flag size={13} />
+          Link melden
+        </button>
+      )}
+      {showSelectButton && onSelect && (
+        <button
+          onClick={(e) => { e.stopPropagation(); onSelect(); }}
+          className={`ss-product-card-action-select ss-product-card-action ${isList ? 'w-full min-h-10' : 'rounded-[10px] border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 min-h-11 hover:bg-slate-50'}`}
+        >
+          Alternative
+        </button>
+      )}
+    </div>
+  );
 
   return (
     <article
@@ -268,7 +358,7 @@ export default function ProductCard({
           ? '0 4px 20px rgba(99,102,241,0.2)'
           : '0 2px 12px rgba(99,102,241,0.08), 0 1px 3px rgba(0,0,0,0.04)',
       }}
-      className={`ss-product-card ${display === 'list' ? 'ss-product-card-list' : ''} relative flex flex-col bg-white cursor-pointer transition-all duration-150 hover:-translate-y-px`}
+      className={`ss-product-card ${isList ? 'ss-product-card-list' : ''} relative ${isList ? '' : 'flex flex-col'} bg-white cursor-pointer transition-all duration-150 hover:-translate-y-px`}
     >
       {/* Checkbox */}
       {(onToggleSelected ?? onSelect) && (
@@ -283,83 +373,161 @@ export default function ProductCard({
         </div>
       )}
 
-      {/* Card top */}
-      <div className="ss-product-card-top flex items-start gap-[11px] mb-3">
-        {/* Image / emoji */}
-        {product.image_url ? (
-          <img
-            src={product.image_url}
-            alt={name}
-            className="w-[52px] h-[52px] shrink-0 rounded-[10px] border border-[#e5e7eb] bg-[#f3f4f6] object-cover"
-            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-          />
-        ) : (
-          <div
-            className="w-[52px] h-[52px] shrink-0 rounded-[10px] border border-[#e5e7eb] bg-[#f3f4f6] flex items-center justify-center select-none"
-            style={{ fontSize: '22px' }}
-          >
-            {emoji}
+      {isList ? (
+        <>
+          <div className="ss-product-card-list-main">
+            {product.image_url ? (
+              <img
+                src={product.image_url}
+                alt={name}
+                className="w-[44px] h-[44px] shrink-0 rounded-lg border border-[#e5e7eb] bg-[#f3f4f6] object-cover"
+                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+              />
+            ) : (
+              <div
+                className="w-[44px] h-[44px] shrink-0 rounded-lg border border-[#e5e7eb] bg-[#f3f4f6] flex items-center justify-center select-none"
+                style={{ fontSize: '20px' }}
+              >
+                {emoji}
+              </div>
+            )}
+            <div className="min-w-0">
+              <div className="ss-product-card-list-ingredient-title text-[10px] font-bold tracking-[0.8px] text-slate-500 uppercase mb-0.5">
+                {ingredientTitle}
+              </div>
+              <div className="ss-product-card-list-name leading-snug text-slate-900" title={name}>
+                {name}
+              </div>
+              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-extrabold ${timing.cls}`}>
+                  {timing.label}
+                </span>
+                {recommendationType && (
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-extrabold ${
+                    recommendationType === 'recommended' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                  }`}>
+                    {recommendationType === 'recommended' ? 'Passend' : 'Alternative'}
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
-        )}
 
-        {/* Name + brand + timing */}
-        <div className="flex-1 min-w-0 pr-6">
-          {brand && (
-            <div className="text-[10px] font-bold tracking-[0.8px] text-slate-400 uppercase mb-0.5">
-              {brand}
+          <div className="ss-product-card-list-col">
+            <div className="ss-product-card-list-label">Dosierung</div>
+            <div className="ss-product-card-list-value">{dose}</div>
+            {showInterval && <div className="ss-product-card-list-meta">{intervalLabel}</div>}
+            {warningHintMessage && (
+              <div className="ss-product-card-list-warning" title={cardWarning?.message}>
+                <span className="ss-product-card-list-warning-text">Achtung: {warningHintMessage}</span>
+                <button
+                  type="button"
+                  className="ss-product-card-list-warning-info inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-orange-500 transition-colors hover:bg-orange-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-300 focus-visible:ring-offset-2"
+                  title={cardWarning?.message}
+                  aria-label={`Warnung vollständig anzeigen: ${cardWarning?.message}`}
+                >
+                  <Info size={12} />
+                </button>
+              </div>
+            )}
+          </div>
+          <div className="ss-product-card-list-col">
+            <div className="ss-product-card-list-label">Reicht für</div>
+            <div className="ss-product-card-list-value">{daysSupply ? `${daysSupply} Tage` : '\u2014'}</div>
+          </div>
+          <div className="ss-product-card-list-col">
+            <div className="ss-product-card-list-label">Kosten</div>
+            <div className="ss-product-card-list-value">
+              <span className="ss-product-card-list-meta-label">Einmalig</span>
+              {formatEur(price)}
+            </div>
+            <div className="ss-product-card-list-value">
+              <span className="ss-product-card-list-meta-label">Monat</span>
+              {monthlyPrice === null ? '\u2014' : `${formatEur(monthlyPrice)} / Monat`}
+            </div>
+          </div>
+        </>
+      ) : (
+        <>
+          {/* Card top */}
+          <div className="ss-product-card-top flex items-start gap-[11px] mb-3">
+            {/* Image / emoji */}
+            {product.image_url ? (
+              <img
+                src={product.image_url}
+                alt={name}
+                className="w-[52px] h-[52px] shrink-0 rounded-[10px] border border-[#e5e7eb] bg-[#f3f4f6] object-cover"
+                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+              />
+            ) : (
+              <div
+                className="w-[52px] h-[52px] shrink-0 rounded-[10px] border border-[#e5e7eb] bg-[#f3f4f6] flex items-center justify-center select-none"
+                style={{ fontSize: '22px' }}
+              >
+                {emoji}
+              </div>
+            )}
+
+            {/* Name + brand + timing */}
+            <div className="flex-1 min-w-0 pr-6">
+              {brand && (
+                <div className="text-[10px] font-bold tracking-[0.8px] text-slate-400 uppercase mb-0.5">
+                  {brand}
+                </div>
+              )}
+              <div className="text-[13.5px] font-extrabold text-slate-900 leading-snug mb-1.5">
+                {name}
+              </div>
+              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-extrabold ${timing.cls}`}>
+                {timing.label}
+              </span>
+              {recommendationType && (
+                <span className={`ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-extrabold ${
+                  recommendationType === 'recommended' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                }`}>
+                  {recommendationType === 'recommended' ? 'Passend' : 'Alternative'}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Meta grid */}
+          <div className="ss-product-card-meta grid grid-cols-2 gap-2 mb-2.5">
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-[0.4px] text-slate-400 mb-0.5">Dosierung</div>
+              <div className="text-[12.5px] font-bold text-slate-700">{dose}</div>
+              {showInterval && <div className="mt-0.5 text-[11px] font-semibold text-slate-500">{intervalLabel}</div>}
+            </div>
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-[0.4px] text-slate-400 mb-0.5">Reicht f&uuml;r</div>
+              <div className="text-[12.5px] font-bold text-slate-700">
+                {daysSupply ? `${daysSupply} Tage` : '\u2014'}
+              </div>
+            </div>
+          </div>
+
+          {/* Effect */}
+          {effectText && (
+            <div className="ss-product-card-effect mb-2.5">
+              <div className="text-[10px] font-bold uppercase tracking-[0.4px] text-slate-400 mb-1">Wirkung</div>
+              {effects.length > 1 ? (
+                <div className="ss-effect-points">
+                  {effects.map((effect) => (
+                    <span key={effect}>{effect}</span>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-[12px] text-slate-500 leading-relaxed font-medium">
+                  {effectText}
+                </div>
+              )}
             </div>
           )}
-          <div className="text-[13.5px] font-extrabold text-slate-900 leading-snug mb-1.5">
-            {name}
-          </div>
-          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-extrabold ${timing.cls}`}>
-            {effectiveTiming ? effectiveTiming : timing.label}
-          </span>
-          {recommendationType && (
-            <span className={`ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-extrabold ${
-              recommendationType === 'recommended' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
-            }`}>
-              {recommendationType === 'recommended' ? 'Passend' : 'Alternative'}
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Meta grid */}
-      <div className="ss-product-card-meta grid grid-cols-2 gap-2 mb-2.5">
-        <div>
-          <div className="text-[10px] font-bold uppercase tracking-[0.4px] text-slate-400 mb-0.5">Dosierung</div>
-          <div className="text-[12.5px] font-bold text-slate-700">{dose}</div>
-          {showInterval && <div className="mt-0.5 text-[11px] font-semibold text-slate-500">{intervalLabel}</div>}
-        </div>
-        <div>
-          <div className="text-[10px] font-bold uppercase tracking-[0.4px] text-slate-400 mb-0.5">Reicht f&uuml;r</div>
-          <div className="text-[12.5px] font-bold text-slate-700">
-            {daysSupply ? `${daysSupply} Tage` : '\u2014'}
-          </div>
-        </div>
-      </div>
-
-      {/* Effect */}
-      {effectText && (
-        <div className="ss-product-card-effect mb-2.5">
-          <div className="text-[10px] font-bold uppercase tracking-[0.4px] text-slate-400 mb-1">Wirkung</div>
-          {effects.length > 1 ? (
-            <div className="ss-effect-points">
-              {effects.map((effect) => (
-                <span key={effect}>{effect}</span>
-              ))}
-            </div>
-          ) : (
-            <div className="text-[12px] text-slate-500 leading-relaxed font-medium">
-              {effectText}
-            </div>
-          )}
-        </div>
+        </>
       )}
 
       {/* Discontinued */}
-      {product.discontinued_at && (
+      {!isList && product.discontinued_at && (
         <div className="ss-product-card-note flex items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs text-slate-500 mb-2.5">
           <RefreshCcw size={12} className="shrink-0" />
           Eingestellt &mdash; Alternative w&auml;hlen
@@ -367,14 +535,14 @@ export default function ProductCard({
       )}
 
       {/* Alternative note */}
-      {product.alternative_note && (
+      {!isList && product.alternative_note && (
         <div className="ss-product-card-note rounded-lg border border-indigo-100 bg-indigo-50 px-2.5 py-1.5 text-xs leading-relaxed text-indigo-700 mb-2.5">
           <span className="font-bold">Alternative:</span> {product.alternative_note}
         </div>
       )}
 
       {/* Ingredient safety warnings */}
-      {product.warnings && product.warnings.length > 0 && (
+      {!isList && product.warnings && product.warnings.length > 0 && (
         <div className="ss-product-card-warnings mb-2.5 flex flex-wrap gap-1.5">
           {product.warnings.map((safetyWarning) => {
             const isOpen = openSafetyWarningId === safetyWarning.id;
@@ -432,7 +600,7 @@ export default function ProductCard({
       )}
 
       {/* Warning box */}
-      {cardWarning && (
+      {!isList && cardWarning && (
         <div className="ss-product-card-warning-box rounded-lg bg-[#fff8f0] border border-[#fed7aa] px-3 py-2.5 mb-2.5">
           <div className="flex items-center gap-1.5 text-[11.5px] font-extrabold text-orange-600 mb-1.5">
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
@@ -440,88 +608,32 @@ export default function ProductCard({
               <path d="M6 5v2.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
               <circle cx="6" cy="9" r="0.6" fill="currentColor"/>
             </svg>
-            {cardWarning.title ?? 'Hinweis'}
+            Achtung
+            <button
+              type="button"
+              className="ss-product-card-warning-info-button inline-flex shrink-0 rounded-full p-0.5 text-orange-500 transition-colors hover:bg-orange-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-300 focus-visible:ring-offset-2"
+              title={cardWarning.message}
+              aria-label={`Warnung vollständig anzeigen: ${cardWarning.message}`}
+            >
+              <Info size={12} />
+            </button>
           </div>
-          <ul className="list-none space-y-0.5">
-            {cardWarning.message.split('.').filter(s => s.trim()).map((item, i) => (
-              <li key={i} className="flex gap-1.5 text-[11px] text-orange-900 font-medium leading-snug">
-                <span aria-hidden="true" className="text-orange-500">&bull;</span>
-                {item.trim()}.
-              </li>
-            ))}
-          </ul>
+          <div className="text-[12px] leading-snug text-orange-900 font-medium">{warningHintMessage}</div>
         </div>
       )}
 
-      {/* Price row */}
-      <div className="ss-product-card-price flex items-center justify-between pt-2.5 border-t border-slate-100 mb-2.5">
-        <span className="text-[18px] font-black text-slate-900">{formatEur(price)}</span>
-        {monthlyPrice !== null && (
-          <span className="bg-emerald-500 text-white px-2.5 py-0.5 rounded-full text-[12px] font-extrabold">
-            {formatEur(monthlyPrice)}/Mo
-          </span>
-        )}
-      </div>
+      {isList ? null : (
+        <div className="ss-product-card-price flex items-center justify-between pt-2.5 border-t border-slate-100 mb-2.5">
+          <span className="text-[18px] font-black text-slate-900">{formatEur(price)}</span>
+          {monthlyPrice !== null && (
+            <span className="bg-emerald-500 text-white px-2.5 py-0.5 rounded-full text-[12px] font-extrabold">
+              {formatEur(monthlyPrice)}/Mo
+            </span>
+          )}
+        </div>
+      )}
 
-      {/* Actions */}
-      <div className="ss-product-card-actions flex gap-[7px]">
-        {shopHref && (
-          <a
-            href={shopHref}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            className="flex-1 inline-flex min-h-11 items-center justify-center gap-1.5 rounded-[10px] py-[9px] text-[12.5px] font-bold text-white transition-colors"
-            style={{ background: '#3b82f6' }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = '#2563eb')}
-            onMouseLeave={(e) => (e.currentTarget.style.background = '#3b82f6')}
-          >
-            <ExternalLink size={13} />
-            {buttonText}
-          </a>
-        )}
-        {!shopHref && onReportMissingLink && (
-          <button
-            onClick={(e) => { e.stopPropagation(); onReportMissingLink(product, reportReason); }}
-            className="flex-1 inline-flex min-h-11 items-center justify-center gap-1.5 rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2 text-[12.5px] font-bold text-amber-700 transition-colors hover:bg-amber-100"
-          >
-            <Flag size={13} />
-            Link melden
-          </button>
-        )}
-        {onEdit && (
-          <button
-            onClick={(e) => { e.stopPropagation(); onEdit(); }}
-            aria-label="Produkt bearbeiten"
-            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] transition-colors"
-            style={{ background: '#fef3c7', border: '1.5px solid #fbbf24', color: '#b45309' }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = '#fde68a'; e.currentTarget.style.borderColor = '#f59e0b'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = '#fef3c7'; e.currentTarget.style.borderColor = '#fbbf24'; }}
-          >
-            <Pencil size={15} />
-          </button>
-        )}
-        {onDelete && (
-          <button
-            onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            aria-label="Produkt entfernen"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] transition-colors"
-            style={{ background: '#fee2e2', border: '1.5px solid #fca5a5', color: '#dc2626' }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = '#fecaca'; e.currentTarget.style.borderColor = '#f87171'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.borderColor = '#fca5a5'; }}
-          >
-            <Trash2 size={15} />
-          </button>
-        )}
-        {showSelectButton && onSelect && (
-          <button
-            onClick={(e) => { e.stopPropagation(); onSelect(); }}
-            className="min-h-11 flex-1 rounded-[10px] border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-50"
-          >
-            Alternative
-          </button>
-        )}
-      </div>
+      {actions}
     </article>
   );
 }

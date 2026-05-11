@@ -6,7 +6,6 @@ import {
   ArrowLeft,
   ArrowRight,
   Calculator,
-  Clock3,
   Flag,
   Info,
   LayoutGrid,
@@ -15,8 +14,6 @@ import {
   Plus,
   Printer,
   Search,
-  UserPlus,
-  Users,
   X,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -25,7 +22,7 @@ import SearchBar from './SearchBar';
 import ProductCard from './ProductCard';
 import StacksHeader, { type StacksHeaderVariant } from './StacksHeader';
 import EditStackModal from './EditStackModal';
-import { createFamilyMember, deleteFamilyMember, getFamilyMembers } from '../api/family';
+import { getFamilyMembers } from '../api/family';
 import { reportProductLink } from '../api/stacks';
 import type { FamilyMember, ProductSafetyWarning } from '../types';
 import type { DosageGuideline, Ingredient, ShopDomain } from '../types/local';
@@ -119,8 +116,11 @@ export interface StackWorkspaceProps {
 // ---------------------------------------------------------------------------
 
 const DEMO_NOTICE =
-  'Diese Funktion ist nur in der kostenlosen Vollversion verfügbar. Registriere dich, damit deine Änderungen dauerhaft gespeichert werden.';
+  'Diese Funktion ist nur in der kostenlosen Vollversion verfÃ¼gbar. Registriere dich, damit deine Ã„nderungen dauerhaft gespeichert werden.';
+const DEMO_SHARE_NOTICE =
+  'Stack mailen und Plan drucken/PDF sind kostenlos verfuegbar, sobald du dich registriert hast.';
 const DESC_STORAGE_KEY = 'ss_stack_descriptions';
+const DEMO_CARRYOVER_KEY = 'ss_demo_stack_carryover';
 
 function newStackId(): string {
   return `stack_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -188,6 +188,12 @@ function productStackKey(product: Pick<DemoProduct, 'id' | 'product_type'>): str
   return `${product.product_type ?? 'catalog'}:${product.id}`;
 }
 
+function productMatchesIngredient(product: DemoProduct, ingredientId: number): boolean {
+  return product.ingredients?.some((row) => (
+    row.ingredient_id === ingredientId || row.parent_ingredient_id === ingredientId
+  )) ?? false;
+}
+
 interface ManualDose {
   value: number;
   unit: string;
@@ -237,7 +243,7 @@ function productContentLabel(product: DemoProduct, previewProduct: DemoProduct):
     : null;
   const unit = product.serving_unit?.trim();
   const usage = calculateProductUsage(previewProduct, previewProduct.price, { fallbackTotalServings: 30 });
-  const daysLabel = usage.daysSupply ? ` (reicht für ${usage.daysSupply} Tage)` : '';
+  const daysLabel = usage.daysSupply ? ` (reicht fÃ¼r ${usage.daysSupply} Tage)` : '';
 
   if (totalServings > 0 && servingSize && unit) {
     const totalUnits = totalServings * servingSize;
@@ -263,7 +269,7 @@ function productIntakeIntervalDays(product: DemoProduct): number {
 }
 
 function formatIntakeInterval(days: number): string {
-  return days === 1 ? 'täglich' : `alle ${days} Tage`;
+  return days === 1 ? 'tÃ¤glich' : `alle ${days} Tage`;
 }
 
 function productMonthlyPrice(product: DemoProduct): number {
@@ -274,30 +280,9 @@ function formatEuro(value: number): string {
   return value.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function formatDaysSupply(days: number | null): string {
-  return days ? `${days} Tage` : 'unbekannt';
-}
-
 function stackProfileLabel(stack: DemoStack | undefined): string {
   if (!stack?.family_member_id) return 'Mein Stack';
-  return stack.family_member_first_name ? `Für ${stack.family_member_first_name}` : 'Familienprofil';
-}
-
-type RoutineKey = 'morning' | 'noon' | 'evening' | 'flexible';
-
-const ROUTINE_META: Record<RoutineKey, { label: string; hint: string }> = {
-  morning: { label: 'Morgens', hint: 'Frühstück / Start in den Tag' },
-  noon: { label: 'Mittags', hint: 'Mittag / nach dem Essen' },
-  evening: { label: 'Abends', hint: 'Abendessen / vor dem Schlafen' },
-  flexible: { label: 'Flexibel', hint: 'Zeitpunkt frei wählbar' },
-};
-
-function routineKeyForTiming(timing?: string): RoutineKey {
-  const normalized = (timing ?? '').toLowerCase();
-  if (normalized.includes('morgen') || normalized.includes('frueh') || normalized.includes('früh') || normalized.includes('morning')) return 'morning';
-  if (normalized.includes('mittag') || normalized.includes('noon')) return 'noon';
-  if (normalized.includes('abend') || normalized.includes('nacht') || normalized.includes('evening')) return 'evening';
-  return 'flexible';
+  return stack.family_member_first_name ? `FÃ¼r ${stack.family_member_first_name}` : 'Familienprofil';
 }
 
 function productDoseSignature(product: DemoProduct): string {
@@ -335,8 +320,10 @@ function AddProductModal({
   onAdd,
   onClose,
   ignoredExistingProductKey,
-  title = 'Produkt hinzufügen',
-  submitLabel = 'Hinzufügen',
+  title = 'Produkt hinzufÃ¼gen',
+  submitLabel = 'HinzufÃ¼gen',
+  onEditExisting,
+  onReplaceExisting,
 }: {
   stacks: DemoStack[];
   activeStackId: string;
@@ -346,8 +333,10 @@ function AddProductModal({
   title?: string;
   submitLabel?: string;
   ignoredExistingProductKey?: string;
+  onEditExisting?: (productKey: string) => void;
+  onReplaceExisting?: (productKey: string) => void;
 }) {
-  const [step, setStep] = useState<'search' | 'dosage' | 'products'>('search');
+  const [step, setStep] = useState<'search' | 'duplicate' | 'dosage' | 'products'>('search');
   const [ingredient, setIngredient] = useState<Ingredient | null>(null);
   const [forms, setForms] = useState<IngredientFormOption[]>([]);
   const [selectedFormId, setSelectedFormId] = useState<number | null>(null);
@@ -360,6 +349,8 @@ function AddProductModal({
   const [productsLoading, setProductsLoading] = useState(false);
   const [savingProductKey, setSavingProductKey] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [duplicateIngredientProduct, setDuplicateIngredientProduct] = useState<DemoProduct | null>(null);
+  const [demoOwnProductNoticeOpen, setDemoOwnProductNoticeOpen] = useState(false);
   const targetStack = stacks.find((stack) => stack.id === targetStackId);
   const existingProductKeys = useMemo(
     () => new Set((targetStack?.products ?? []).map(productStackKey)),
@@ -397,9 +388,10 @@ function AddProductModal({
       .finally(() => setGuidelinesLoading(false));
   }, []);
 
-  const chooseIngredient = (selected: Ingredient) => {
+  const continueWithIngredient = (selected: Ingredient) => {
     setIngredient(selected);
     setError('');
+    setDuplicateIngredientProduct(null);
     setGuidelines([]);
     setForms([]);
     setSelectedFormId(null);
@@ -424,6 +416,21 @@ function AddProductModal({
         loadDosageGuidelines(selected);
       })
       .finally(() => setIngredientLoading(false));
+  };
+
+  const chooseIngredient = (selected: Ingredient) => {
+    const duplicate = (targetStack?.products ?? []).find((product) => {
+      const key = productStackKey(product);
+      return key !== ignoredExistingProductKey && productMatchesIngredient(product, selected.id);
+    });
+    if (duplicate) {
+      setIngredient(selected);
+      setError('');
+      setDuplicateIngredientProduct(duplicate);
+      setStep('duplicate');
+      return;
+    }
+    continueWithIngredient(selected);
   };
 
   const loadProducts = (formId = selectedFormId) => {
@@ -489,12 +496,12 @@ function AddProductModal({
       return;
     }
     const targetDosageText = dose.value > 0 && dose.unit
-      ? `${dose.value} ${dose.unit} täglich`
-      : product.dosage_text || '1 Portion täglich';
+      ? `${dose.value} ${dose.unit} tÃ¤glich`
+      : product.dosage_text || '1 Portion tÃ¤glich';
     const enhanced: DemoProduct = {
       ...product,
       dosage_text: targetDosageText,
-      timing: product.ingredient_timing || product.timing || 'Zum Frühstück',
+      timing: product.ingredient_timing || product.timing || 'Zum FrÃ¼hstÃ¼ck',
       intake_interval_days: product.intake_interval_days ?? 1,
     };
     enhanced.quantity = productServingsPerDay(enhanced);
@@ -534,7 +541,7 @@ function AddProductModal({
           <button
             onClick={onClose}
             className="rounded-2xl p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
-            aria-label="Schließen"
+            aria-label="SchlieÃŸen"
           >
             <X size={24} />
           </button>
@@ -557,13 +564,74 @@ function AddProductModal({
           </div>
         )}
 
+        {step === 'duplicate' && ingredient && duplicateIngredientProduct && (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:p-5">
+            <div className="mb-4 flex items-start gap-3 text-amber-800">
+              <AlertTriangle size={24} className="mt-1 shrink-0" />
+              <div>
+                <h3 className="text-xl font-black sm:text-2xl">
+                  Dieser Wirkstoff ist bereits in deinem Stack vorhanden
+                </h3>
+                <p className="mt-2 text-sm font-semibold text-amber-900">
+                  {ingredient.name} ist schon ueber dieses Produkt abgedeckt:
+                </p>
+              </div>
+            </div>
+            <div className="rounded-2xl border border-amber-100 bg-white p-4">
+              <p className="text-lg font-black text-slate-950">{duplicateIngredientProduct.name}</p>
+              {duplicateIngredientProduct.brand && (
+                <p className="mt-1 text-sm font-semibold text-slate-500">{duplicateIngredientProduct.brand}</p>
+              )}
+              <p className="mt-3 text-sm font-semibold text-slate-700">
+                {duplicateIngredientProduct.dosage_text || 'Dosierung noch nicht gesetzt'}
+              </p>
+            </div>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <button
+                type="button"
+                className="rounded-xl bg-blue-600 px-4 py-3 text-sm font-black text-white hover:bg-blue-700"
+                onClick={() => {
+                  onEditExisting?.(productStackKey(duplicateIngredientProduct));
+                  onClose();
+                }}
+              >
+                Wirkstoffmenge bearbeiten
+              </button>
+              <button
+                type="button"
+                className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50"
+                onClick={() => {
+                  onReplaceExisting?.(productStackKey(duplicateIngredientProduct));
+                  onClose();
+                }}
+              >
+                Produkt aendern
+              </button>
+              <button
+                type="button"
+                className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50"
+                onClick={onClose}
+              >
+                So lassen
+              </button>
+              <button
+                type="button"
+                className="rounded-xl border border-amber-300 bg-amber-100 px-4 py-3 text-sm font-black text-amber-800 hover:bg-amber-200"
+                onClick={() => continueWithIngredient(ingredient)}
+              >
+                Trotzdem weiteres Produkt hinzufuegen
+              </button>
+            </div>
+          </div>
+        )}
+
         {step === 'dosage' && ingredient && (
           <>
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4 sm:p-5">
               <div className="mb-4 flex items-center gap-3 text-emerald-800">
                 <Calculator size={24} />
                 <h3 className="text-xl font-black sm:text-2xl">
-                  Dosierung für {ingredient.name} festlegen
+                  Dosierung fÃ¼r {ingredient.name} festlegen
                 </h3>
               </div>
 
@@ -588,14 +656,14 @@ function AddProductModal({
                         {primaryDose(dgeGuideline)!.unit}
                       </p>
                       <span className="mt-4 flex justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-black text-white">
-                        Referenzwert übernehmen
+                        Referenzwert Ã¼bernehmen
                       </span>
                     </button>
                   ) : (
                     <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left cursor-default">
                       <p className="text-base font-black text-slate-500">DGE-Referenzwert</p>
                       <p className="mt-2 text-sm font-semibold text-slate-400">
-                        Kein offizieller Referenzwert verfügbar
+                        Kein offizieller Referenzwert verfÃ¼gbar
                       </p>
                     </div>
                   )}
@@ -658,7 +726,7 @@ function AddProductModal({
                 </div>
               )}
 
-              <label className="mt-5 block text-base font-black text-slate-700">Stack auswählen</label>
+              <label className="mt-5 block text-base font-black text-slate-700">Stack auswÃ¤hlen</label>
               <select
                 value={targetStackId}
                 onChange={(event) => setTargetStackId(event.target.value)}
@@ -669,7 +737,7 @@ function AddProductModal({
                 ))}
               </select>
               <p className="mt-2 text-sm font-semibold text-slate-500">
-                Produkt wird diesem Stack hinzugefügt.
+                Produkt wird diesem Stack hinzugefÃ¼gt.
               </p>
             </div>
 
@@ -694,12 +762,30 @@ function AddProductModal({
 
         {step === 'products' && ingredient && (
           <>
-            <div className="mb-5">
-              <h3 className="text-2xl font-black tracking-tight text-slate-950">Produkt auswählen</h3>
-              <p className="mt-1 text-base font-semibold text-slate-500">
-                {ingredient.name} · {dose.value || 1} {dose.unit || normalizeUnitToGerman(ingredient.unit)}
-                {selectedForm ? ` · ${selectedForm.name}` : ''}
-              </p>
+            <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h3 className="text-2xl font-black tracking-tight text-slate-950">Produkt auswÃ¤hlen</h3>
+                <p className="mt-1 text-base font-semibold text-slate-500">
+                  {ingredient.name} Â· {dose.value || 1} {dose.unit || normalizeUnitToGerman(ingredient.unit)}
+                  {selectedForm ? ` Â· ${selectedForm.name}` : ''}
+                </p>
+              </div>
+              {isDemo ? (
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-700 hover:bg-emerald-100"
+                  onClick={() => setDemoOwnProductNoticeOpen(true)}
+                >
+                  Eigenes Produkt hinzufuegen
+                </button>
+              ) : (
+                <Link
+                  to="/my-products"
+                  className="inline-flex items-center justify-center rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-700 hover:bg-emerald-100"
+                >
+                  Eigenes Produkt hinzufuegen
+                </Link>
+              )}
             </div>
             {forms.length > 0 && (
               <div className="mb-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -734,7 +820,7 @@ function AddProductModal({
               {error && <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
               {!productsLoading && products.length === 0 && !error && (
                 <p className="py-10 text-center text-sm font-semibold text-slate-500">
-                  Keine Produkte für diesen Wirkstoff gefunden.
+                  Keine Produkte fÃ¼r diesen Wirkstoff gefunden.
                 </p>
               )}
               <div className="grid gap-4">
@@ -744,7 +830,7 @@ function AddProductModal({
                   const previewProduct: DemoProduct = {
                     ...product,
                     dosage_text: dose.value > 0 && dose.unit
-                      ? `${dose.value} ${dose.unit} täglich`
+                      ? `${dose.value} ${dose.unit} tÃ¤glich`
                       : product.dosage_text,
                   };
                   return (
@@ -768,7 +854,7 @@ function AddProductModal({
                       </div>
                       <div className="shrink-0 text-right">
                         <p className="text-xl font-black text-emerald-600">
-                          €{formatEuro(productMonthlyPrice(previewProduct))}
+                          â‚¬{formatEuro(productMonthlyPrice(previewProduct))}
                         </p>
                         <p className="text-xs font-semibold text-slate-500">pro Monat</p>
                       </div>
@@ -790,12 +876,12 @@ function AddProductModal({
                     <div className="mt-3 grid grid-cols-2 gap-3">
                       <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3">
                         <p className="text-xs font-semibold text-slate-500">Einmalpreis</p>
-                        <p className="mt-1 text-lg font-black text-slate-950">€{formatEuro(product.price)}</p>
+                        <p className="mt-1 text-lg font-black text-slate-950">â‚¬{formatEuro(product.price)}</p>
                       </div>
                       <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3">
                         <p className="text-xs font-semibold text-emerald-700">Pro Monat</p>
                         <p className="mt-1 text-lg font-black text-emerald-700">
-                          €{formatEuro(productMonthlyPrice(previewProduct))}
+                          â‚¬{formatEuro(productMonthlyPrice(previewProduct))}
                         </p>
                       </div>
                     </div>
@@ -818,16 +904,48 @@ function AddProductModal({
                 className="inline-flex items-center gap-2 rounded-xl px-2 py-3 text-lg font-semibold text-blue-600 hover:text-blue-800"
               >
                 <ArrowLeft size={20} />
-                Zurück zur Dosierung
+                ZurÃ¼ck zur Dosierung
               </button>
               {isDemo && (
                 <p className="hidden items-center gap-2 text-sm font-semibold text-slate-500 sm:flex">
                   <Info size={18} />
-                  Demo-Modus: Änderungen werden nach Neuladen zurückgesetzt.
+                  Demo-Modus: Ã„nderungen werden nach Neuladen zurÃ¼ckgesetzt.
                 </p>
               )}
             </div>
           </>
+        )}
+
+        {demoOwnProductNoticeOpen && (
+          <div
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/40 px-4"
+            onClick={(event) => {
+              if (event.target === event.currentTarget) setDemoOwnProductNoticeOpen(false);
+            }}
+          >
+            <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-2xl">
+              <h3 className="text-xl font-black text-slate-950">Produkt zur Datenbank hinzufuegen</h3>
+              <p className="mt-3 text-sm font-semibold leading-relaxed text-slate-600">
+                Danke, dass du ein neues Produkt zu unserer Datenbank hinzufuegen moechtest.
+                Diese Funktion steht dir kostenlos zur Verfuegung, sobald du dich als Nutzer angemeldet hast.
+              </p>
+              <div className="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-600 hover:bg-slate-50"
+                  onClick={() => setDemoOwnProductNoticeOpen(false)}
+                >
+                  Abbrechen
+                </button>
+                <Link
+                  to="/register?redirect=/stacks"
+                  className="inline-flex justify-center rounded-xl bg-emerald-600 px-4 py-3 text-sm font-black text-white hover:bg-emerald-700"
+                >
+                  Jetzt anmelden
+                </Link>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>
@@ -862,7 +980,7 @@ function EditProductModal({
     const parsedQuantity = Number(quantity);
     const parsedInterval = Number(interval);
     if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
-      setError('Portionen pro Einnahmetag müssen größer als 0 sein.');
+      setError('Portionen pro Einnahmetag mÃ¼ssen grÃ¶ÃŸer als 0 sein.');
       return;
     }
     if (!Number.isInteger(parsedInterval) || parsedInterval < 1) {
@@ -907,7 +1025,7 @@ function EditProductModal({
             type="button"
             onClick={onClose}
             className="rounded-2xl p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
-            aria-label="Schließen"
+            aria-label="SchlieÃŸen"
           >
             <X size={24} />
           </button>
@@ -921,7 +1039,7 @@ function EditProductModal({
             <input
               value={dosageText}
               onChange={(event) => setDosageText(event.target.value)}
-              placeholder="z.B. 2000 IE täglich"
+              placeholder="z.B. 2000 IE tÃ¤glich"
               className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base font-semibold text-slate-950 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-4 focus:ring-blue-100"
             />
           </label>
@@ -946,7 +1064,7 @@ function EditProductModal({
             <input
               value={timing}
               onChange={(event) => setTiming(event.target.value)}
-              placeholder="z.B. Zum Frühstück"
+              placeholder="z.B. Zum FrÃ¼hstÃ¼ck"
               className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base font-semibold text-slate-950 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-4 focus:ring-blue-100"
             />
           </label>
@@ -990,10 +1108,73 @@ function EditProductModal({
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-blue-600/20 hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <IconPencil />
-            {saving ? 'Speichert...' : 'Änderungen speichern'}
+            {saving ? 'Speichert...' : 'Ã„nderungen speichern'}
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+function ConfirmDialog({
+  title,
+  message,
+  confirmLabel,
+  onConfirm,
+  onClose,
+}: {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  onConfirm: () => void | Promise<void>;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/55 px-3 py-6 backdrop-blur-sm sm:px-6"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div className="w-full max-w-md rounded-[1.6rem] bg-white p-5 shadow-[0_30px_80px_rgba(15,23,42,0.35)] sm:p-6">
+        <div className="mb-5 flex items-start justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <span className="mt-1 text-red-600">
+              <AlertTriangle size={24} />
+            </span>
+            <div>
+              <h2 className="text-2xl font-black tracking-tight text-slate-950">{title}</h2>
+              <p className="mt-2 text-sm font-semibold text-slate-600">{message}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-2xl p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+            aria-label="Schliessen"
+          >
+            <X size={22} />
+          </button>
+        </div>
+        <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-black text-slate-600 hover:bg-slate-50"
+          >
+            Abbrechen
+          </button>
+          <button
+            type="button"
+            onClick={() => void onConfirm()}
+            className="rounded-xl bg-red-600 px-5 py-3 text-sm font-black text-white shadow-lg shadow-red-600/20 hover:bg-red-700"
+          >
+            {confirmLabel}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1083,9 +1264,11 @@ export function StackWorkspace({
     mode === 'authenticated' ? loadDescriptions() : {},
   );
   const [addModalOpen, setAddModalOpen] = useState(false);
+  const [createStackModalOpen, setCreateStackModalOpen] = useState(false);
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingProductKey, setEditingProductKey] = useState<string | null>(null);
   const [replaceProductKey, setReplaceProductKey] = useState<string | null>(null);
+  const [pendingDeleteProductKey, setPendingDeleteProductKey] = useState<string | null>(null);
   const [shopDomains, setShopDomains] = useState<ShopDomain[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(mode === 'authenticated');
@@ -1093,12 +1276,7 @@ export function StackWorkspace({
   const [emailSending, setEmailSending] = useState(false);
   const [emailStatus, setEmailStatus] = useState('');
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
-  const [familyFormOpen, setFamilyFormOpen] = useState(false);
-  const [familyDraft, setFamilyDraft] = useState({ first_name: '', age: '', weight: '' });
-  const [familySaving, setFamilySaving] = useState(false);
-  const [familyStatus, setFamilyStatus] = useState('');
   const [linkReportStatus, setLinkReportStatus] = useState('');
-  const [routineOpen, setRoutineOpen] = useState(false);
   const [productViewMode, setProductViewMode] = useState<ProductViewMode>(loadProductViewMode);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -1109,6 +1287,15 @@ export function StackWorkspace({
   useEffect(() => {
     window.localStorage.setItem(STACK_PRODUCT_VIEW_KEY, productViewMode);
   }, [productViewMode]);
+
+  useEffect(() => {
+    if (!isDemo) return;
+    try {
+      window.localStorage.setItem(DEMO_CARRYOVER_KEY, JSON.stringify(state.stacks));
+    } catch {
+      // Demo carryover is optional; storage failures must not block the demo.
+    }
+  }, [isDemo, state.stacks]);
 
   // Fetch shop domains
   useEffect(() => {
@@ -1124,7 +1311,7 @@ export function StackWorkspace({
       const members = await getFamilyMembers();
       setFamilyMembers(members);
     } catch {
-      setFamilyStatus('Familienprofile konnten nicht geladen werden.');
+      setError('Familienprofile konnten nicht geladen werden.');
     }
   }, [mode]);
 
@@ -1230,10 +1417,11 @@ export function StackWorkspace({
   }, [activeStack]);
 
   const persistStackProducts = useCallback(
-    async (stackId: string, products: DemoProduct[], name?: string) => {
+    async (stackId: string, products: DemoProduct[], name?: string, familyMemberId?: number | null) => {
       if (mode !== 'authenticated') return;
       const payload = {
         ...(name ? { name } : {}),
+        ...(familyMemberId !== undefined ? { family_member_id: familyMemberId } : {}),
         product_ids: products.map((product) => ({
           id: product.id,
           product_type: product.product_type ?? 'catalog',
@@ -1252,116 +1440,6 @@ export function StackWorkspace({
       if (!res.ok) throw new Error(data.error ?? 'Stack konnte nicht gespeichert werden.');
     },
     [mode],
-  );
-
-  const handleAssignFamilyMember = useCallback(
-    async (familyMemberId: number | null) => {
-      if (!activeStack) return;
-      if (mode !== 'authenticated') {
-        setFamilyStatus('Familienprofile sind nur angemeldet verfügbar.');
-        return;
-      }
-      setFamilyStatus('');
-      try {
-        const res = await credentialedFetch(apiPath(`/stacks/${activeStack.id}`), {
-          method: 'PUT',
-          headers: JSON_HEADERS,
-          body: JSON.stringify({ family_member_id: familyMemberId }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error ?? 'Profil konnte nicht zugeordnet werden.');
-        const selectedMember = familyMembers.find((member) => member.id === familyMemberId);
-        setState((prev) => ({
-          ...prev,
-          stacks: prev.stacks.map((stack) => (
-            stack.id === activeStack.id
-              ? {
-                  ...stack,
-                  family_member_id: familyMemberId,
-                  family_member_first_name: selectedMember?.first_name ?? null,
-                }
-              : stack
-          )),
-        }));
-      } catch (err) {
-        setFamilyStatus(err instanceof Error ? err.message : 'Profil konnte nicht zugeordnet werden.');
-      }
-    },
-    [activeStack, familyMembers, mode],
-  );
-
-  const handleCreateFamilyMember = useCallback(
-    async (event: FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
-      if (mode !== 'authenticated') {
-        setFamilyStatus('Familienprofile sind nur angemeldet verfügbar.');
-        return;
-      }
-      const firstName = familyDraft.first_name.trim();
-      const age = familyDraft.age.trim() ? Number(familyDraft.age) : null;
-      const weight = familyDraft.weight.trim() ? Number(familyDraft.weight) : null;
-      if (!firstName) {
-        setFamilyStatus('Bitte gib einen Vornamen ein.');
-        return;
-      }
-      if (age !== null && (!Number.isInteger(age) || age < 0 || age > 120)) {
-        setFamilyStatus('Alter muss zwischen 0 und 120 liegen.');
-        return;
-      }
-      if (weight !== null && (!Number.isFinite(weight) || weight <= 0 || weight > 300)) {
-        setFamilyStatus('Gewicht muss zwischen 1 und 300 kg liegen.');
-        return;
-      }
-
-      setFamilySaving(true);
-      setFamilyStatus('');
-      try {
-        const member = await createFamilyMember({ first_name: firstName, age, weight });
-        setFamilyMembers((prev) => [...prev, member]);
-        setFamilyDraft({ first_name: '', age: '', weight: '' });
-        setFamilyFormOpen(false);
-        if (activeStack) {
-          await handleAssignFamilyMember(member.id);
-          setState((prev) => ({
-            ...prev,
-            stacks: prev.stacks.map((stack) => (
-              stack.id === activeStack.id
-                ? { ...stack, family_member_id: member.id, family_member_first_name: member.first_name }
-                : stack
-            )),
-          }));
-        }
-      } catch (err) {
-        setFamilyStatus(err instanceof Error ? err.message : 'Familienprofil konnte nicht gespeichert werden.');
-      } finally {
-        setFamilySaving(false);
-      }
-    },
-    [activeStack, familyDraft, handleAssignFamilyMember, mode],
-  );
-
-  const handleDeleteFamilyMember = useCallback(
-    async (memberId: number) => {
-      if (mode !== 'authenticated') return;
-      const member = familyMembers.find((item) => item.id === memberId);
-      if (!member || !window.confirm(`Profil "${member.first_name}" entfernen?`)) return;
-      setFamilyStatus('');
-      try {
-        await deleteFamilyMember(memberId);
-        setFamilyMembers((prev) => prev.filter((item) => item.id !== memberId));
-        setState((prev) => ({
-          ...prev,
-          stacks: prev.stacks.map((stack) => (
-            stack.family_member_id === memberId
-              ? { ...stack, family_member_id: null, family_member_first_name: null }
-              : stack
-          )),
-        }));
-      } catch (err) {
-        setFamilyStatus(err instanceof Error ? err.message : 'Familienprofil konnte nicht entfernt werden.');
-      }
-    },
-    [familyMembers, mode],
   );
 
   const handleReportMissingLink = useCallback(
@@ -1388,55 +1466,72 @@ export function StackWorkspace({
 
   // ---- Stack management ----
 
-  const handleCreateStack = useCallback(async () => {
+  const handleCreateStack = useCallback(async (name: string, description: string, familyMemberId: number | null) => {
     const id = newStackId();
-    const name = `Stack ${state.stacks.length + 1}`;
+    const finalName = name.trim() || `Stack ${state.stacks.length + 1}`;
+    const selectedMember = familyMembers.find((member) => member.id === familyMemberId);
     if (mode === 'authenticated') {
       try {
         const res = await credentialedFetch(apiPath('/stacks'), {
           method: 'POST',
           headers: JSON_HEADERS,
-          body: JSON.stringify({ name, product_ids: [] }),
+          body: JSON.stringify({ name: finalName, family_member_id: familyMemberId, product_ids: [] }),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error ?? 'Stack konnte nicht erstellt werden.');
         const created = data.stack ?? data;
-        const createdStack = mapStackDetail(created);
+        const createdStack = {
+          ...mapStackDetail(created),
+          name: finalName,
+          family_member_id: familyMemberId,
+          family_member_first_name: selectedMember?.first_name ?? null,
+        };
         setState((prev) => ({
           stacks: [...prev.stacks, createdStack],
           activeStackId: createdStack.id,
         }));
+        if (description) saveDescription(createdStack.id, description);
+        setDescriptions((prev) => (description ? { ...prev, [createdStack.id]: description } : prev));
+        setCreateStackModalOpen(false);
         return;
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Stack konnte nicht erstellt werden.');
-        return;
+        throw err instanceof Error ? err : new Error('Stack konnte nicht erstellt werden.');
       }
     }
     setState((prev) => ({
-      stacks: [...prev.stacks, { id, name, products: [] }],
+      stacks: [...prev.stacks, {
+        id,
+        name: finalName,
+        products: [],
+        family_member_id: familyMemberId,
+        family_member_first_name: selectedMember?.first_name ?? null,
+      }],
       activeStackId: id,
     }));
-  }, [mode, state.stacks.length]);
+    setDescriptions((prev) => (description ? { ...prev, [id]: description } : prev));
+    setCreateStackModalOpen(false);
+  }, [familyMembers, mode, state.stacks.length]);
 
   const handleDeleteStack = useCallback(
     async (id: string) => {
       if (state.stacks.length <= 1) {
         if (isDemo) demoRestrictedNotice();
-        else setError('Der letzte Stack kann nicht gelöscht werden.');
+        else setError('Der letzte Stack kann nicht gelÃ¶scht werden.');
         return;
       }
       const stack = state.stacks.find((s) => s.id === id);
       if (!stack) return;
-      if (!window.confirm(`Stack "${stack.name}" wirklich löschen?`)) return;
+      if (!window.confirm(`Stack "${stack.name}" wirklich lÃ¶schen?`)) return;
       if (mode === 'authenticated') {
         try {
           const res = await credentialedFetch(apiPath(`/stacks/${id}`), {
             method: 'DELETE',
             headers: JSON_HEADERS,
           });
-          if (!res.ok) throw new Error('Stack konnte nicht gelöscht werden.');
+          if (!res.ok) throw new Error('Stack konnte nicht gelÃ¶scht werden.');
         } catch (err) {
-          setError(err instanceof Error ? err.message : 'Stack konnte nicht gelöscht werden.');
+          setError(err instanceof Error ? err.message : 'Stack konnte nicht gelÃ¶scht werden.');
           return;
         }
       }
@@ -1458,15 +1553,27 @@ export function StackWorkspace({
   );
 
   const handleSaveStackMeta = useCallback(
-    async (newName: string, newDescription: string) => {
+    async (newName: string, newDescription: string, familyMemberId: number | null) => {
       if (!activeStack) return;
       const prevName = activeStack.name;
-      if (mode === 'authenticated' && newName !== prevName) {
-        await persistStackProducts(activeStack.id, activeStack.products, newName);
+      const prevFamilyMemberId = activeStack.family_member_id ?? null;
+      const familyChanged = familyMemberId !== prevFamilyMemberId;
+      if (mode === 'authenticated' && (newName !== prevName || familyChanged)) {
+        await persistStackProducts(activeStack.id, activeStack.products, newName, familyMemberId);
       }
+      const selectedMember = familyMembers.find((member) => member.id === familyMemberId);
       setState((prev) => ({
         ...prev,
-        stacks: prev.stacks.map((s) => (s.id === activeStack.id ? { ...s, name: newName } : s)),
+        stacks: prev.stacks.map((s) => (
+          s.id === activeStack.id
+            ? {
+                ...s,
+                name: newName,
+                family_member_id: familyMemberId,
+                family_member_first_name: selectedMember?.first_name ?? null,
+              }
+            : s
+        )),
       }));
       setDescriptions((prev) => {
         const next = { ...prev };
@@ -1477,7 +1584,7 @@ export function StackWorkspace({
       });
       setEditModalOpen(false);
     },
-    [activeStack, mode, persistStackProducts],
+    [activeStack, familyMembers, mode, persistStackProducts],
   );
 
   // ---- Product management ----
@@ -1586,7 +1693,7 @@ export function StackWorkspace({
         && productDoseSignature(previousProduct) !== productDoseSignature(replacement);
       if (preservesOldDosageOnDifferentProduct) {
         const confirmed = window.confirm(
-          'Die bisherige Dosierung wird für das neue Produkt übernommen. Produktform oder Stärke können abweichen. Bitte prüfe die Dosierung nach dem Ersetzen. Trotzdem ersetzen?'
+          'Die bisherige Dosierung wird fÃ¼r das neue Produkt Ã¼bernommen. Produktform oder StÃ¤rke kÃ¶nnen abweichen. Bitte prÃ¼fe die Dosierung nach dem Ersetzen. Trotzdem ersetzen?'
         );
         if (!confirmed) return;
       }
@@ -1651,7 +1758,13 @@ export function StackWorkspace({
   const totalMonthly = selectedProducts.reduce((sum, p) => sum + productMonthlyPrice(p), 0);
   const productsCount = activeProducts.length;
   const allSelected = productsCount > 0 && selectedIds.size === productsCount;
-  const hasOpenModal = addModalOpen || editModalOpen || editingProductKey !== null || replaceProductKey !== null;
+  const hasOpenModal =
+    addModalOpen ||
+    createStackModalOpen ||
+    editModalOpen ||
+    editingProductKey !== null ||
+    replaceProductKey !== null ||
+    pendingDeleteProductKey !== null;
   const bottomBarVisible = productsCount > 0 && !hasOpenModal;
 
   useEffect(() => {
@@ -1661,18 +1774,6 @@ export function StackWorkspace({
     };
   }, [bottomBarVisible]);
 
-  const routineGroups = useMemo(() => {
-    const groups: Record<RoutineKey, DemoProduct[]> = {
-      morning: [],
-      noon: [],
-      evening: [],
-      flexible: [],
-    };
-    for (const product of activeProducts) {
-      groups[routineKeyForTiming(product.timing)].push(product);
-    }
-    return groups;
-  }, [activeProducts]);
 
   const handleSelectAll = () => {
     if (!activeStack) return;
@@ -1689,7 +1790,11 @@ export function StackWorkspace({
   };
 
   const handleEmailStack = async () => {
-    if (isDemo || !activeStack) return;
+    if (isDemo) {
+      window.alert(DEMO_SHARE_NOTICE);
+      return;
+    }
+    if (!activeStack) return;
     setEmailSending(true);
     setEmailStatus('');
     try {
@@ -1710,16 +1815,21 @@ export function StackWorkspace({
   };
 
   const handlePrintStack = () => {
+    if (isDemo) {
+      window.alert(DEMO_SHARE_NOTICE);
+      return;
+    }
     window.print();
   };
 
   const activeDescription = activeStack ? descriptions[activeStack.id] ?? '' : '';
   const editingProduct = activeStack?.products.find((product) => productStackKey(product) === editingProductKey) ?? null;
+  const pendingDeleteProduct = activeStack?.products.find((product) => productStackKey(product) === pendingDeleteProductKey) ?? null;
   const replacingStack = activeStack && replaceProductKey ? activeStack : null;
 
   const rightSlot = isDemo ? (
     <>
-      <span className="header-email">Demo-Modus — nicht angemeldet</span>
+      <span className="header-email">Demo-Modus â€” nicht angemeldet</span>
       <Link
         to="/register"
         className="btn-logout"
@@ -1742,11 +1852,11 @@ export function StackWorkspace({
       {showStandaloneHeader && (
       <StacksHeader
         variant={HEADER_VARIANT}
-        title={isDemo ? 'Demo – Supplement Stack' : 'Meine Supplement Stacks'}
+        title={isDemo ? 'Demo â€“ Supplement Stack' : 'Meine Supplement Stacks'}
         subtitle={
           isDemo
-            ? 'Teste die komplette Oberfläche. Änderungen werden nach dem Neuladen zurückgesetzt.'
-            : 'Verwalte deine Supplements dauerhaft mit derselben Oberfläche wie in der Demo.'
+            ? 'Teste die komplette OberflÃ¤che. Ã„nderungen werden nach dem Neuladen zurÃ¼ckgesetzt.'
+            : 'Verwalte deine Supplements dauerhaft mit derselben OberflÃ¤che wie in der Demo.'
         }
         rightSlot={rightSlot}
       />
@@ -1759,8 +1869,8 @@ export function StackWorkspace({
             <strong>Interaktive Demo:</strong>
             &nbsp;
             <span>
-              Alles nutzbar — nach dem Neuladen startet wieder der Demo-Stack. Registriere dich,
-              um Änderungen dauerhaft zu speichern.
+              Alles nutzbar â€” nach dem Neuladen startet wieder der Demo-Stack. Registriere dich,
+              um Ã„nderungen dauerhaft zu speichern.
             </span>
           </div>
         )}
@@ -1802,12 +1912,8 @@ export function StackWorkspace({
             </span>
           </div>
 
-          <button className="ss-btn ss-btn-green" onClick={() => setAddModalOpen(true)}>
-            <IconPlus />
-            Produkt hinzufügen
-          </button>
 
-          <button className="ss-btn ss-btn-indigo" onClick={() => void handleCreateStack()}>
+          <button className="ss-btn ss-btn-indigo" onClick={() => setCreateStackModalOpen(true)}>
             <IconStackPlus />
             Stack erstellen
           </button>
@@ -1824,8 +1930,9 @@ export function StackWorkspace({
           <button
             className="ss-btn ss-btn-outline"
             onClick={() => void handleEmailStack()}
-            disabled={isDemo || !activeStack || emailSending}
-            style={isDemo || !activeStack || emailSending ? { opacity: 0.55, cursor: 'not-allowed' } : undefined}
+            disabled={!isDemo && (!activeStack || emailSending)}
+            title={isDemo ? DEMO_SHARE_NOTICE : undefined}
+            style={!isDemo && (!activeStack || emailSending) ? { opacity: 0.55, cursor: 'not-allowed' } : undefined}
           >
             <IconMail />
             {emailSending ? 'Wird gesendet...' : 'Stack mailen'}
@@ -1833,24 +1940,30 @@ export function StackWorkspace({
           <button
             className="ss-btn ss-btn-outline print-action"
             onClick={handlePrintStack}
-            disabled={!activeStack || productsCount === 0}
-            style={!activeStack || productsCount === 0 ? { opacity: 0.55, cursor: 'not-allowed' } : undefined}
+            disabled={!isDemo && (!activeStack || productsCount === 0)}
+            title={isDemo ? DEMO_SHARE_NOTICE : undefined}
+            style={!isDemo && (!activeStack || productsCount === 0) ? { opacity: 0.55, cursor: 'not-allowed' } : undefined}
           >
             <IconPrint />
             Plan drucken/PDF
           </button>
-          {(isDemo || emailStatus) && (
+          {emailStatus && (
             <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>
-              {isDemo ? 'E-Mail-Versand ist nur angemeldet verfügbar.' : emailStatus}
+              {emailStatus}
             </span>
           )}
+
+          <button className="ss-btn ss-btn-green" onClick={() => setAddModalOpen(true)}>
+            <IconPlus />
+            Produkt hinzufuegen
+          </button>
 
           <button
             className="ss-btn ss-btn-red-soft"
             onClick={() => void handleDeleteStack(state.activeStackId)}
           >
             <IconTrash />
-            Stack löschen
+            Stack lÃ¶schen
           </button>
         </div>
 
@@ -1874,139 +1987,13 @@ export function StackWorkspace({
         <section className="stack-cockpit" aria-label="Stack-Steuerung">
           <div className="print-sheet-heading">
             <strong>Supplement Stack Einnahmeplan</strong>
-            <span>{activeStack?.name ?? 'Stack'} · {stackProfileLabel(activeStack)}</span>
+            <span>{activeStack?.name ?? 'Stack'} Â· {stackProfileLabel(activeStack)}</span>
           </div>
           <div className="stack-cockpit-head">
             <div>
-              <div className="stack-cockpit-kicker">Stack</div>
               <h2>{activeStack?.name ?? 'Stack'}</h2>
-              <p>{stackProfileLabel(activeStack)}</p>
             </div>
-            <div className="family-switcher">
-              <label>
-                <Users size={15} />
-                Profil
-              </label>
-              <div className="family-switcher-row">
-                <select
-                  value={activeStack?.family_member_id ?? ''}
-                  disabled={isDemo || !activeStack}
-                  onChange={(event) => {
-                    const nextValue = event.target.value ? Number(event.target.value) : null;
-                    void handleAssignFamilyMember(nextValue);
-                  }}
-                >
-                  <option value="">Ich selbst</option>
-                  {familyMembers.map((member) => (
-                    <option key={member.id} value={member.id}>
-                      {member.first_name}{member.age != null ? `, ${member.age}` : ''}
-                    </option>
-                  ))}
-                </select>
-                {!isDemo && (
-                  <button
-                    type="button"
-                    className="family-add-btn"
-                    onClick={() => setFamilyFormOpen((open) => !open)}
-                  >
-                    <UserPlus size={15} />
-                    Profil
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className={`routine-toggle-btn ${routineOpen ? 'active' : ''}`}
-                  onClick={() => setRoutineOpen((open) => !open)}
-                  aria-label={routineOpen ? 'Einnahmeplan einklappen' : 'Einnahmeplan ausklappen'}
-                  title={routineOpen ? 'Einnahmeplan einklappen' : 'Einnahmeplan ausklappen'}
-                >
-                  <Clock3 size={17} />
-                </button>
-              </div>
-              {familyStatus && <p className="family-status">{familyStatus}</p>}
-            </div>
-          </div>
-
-          {familyFormOpen && !isDemo && (
-            <form className="family-form" onSubmit={(event) => void handleCreateFamilyMember(event)}>
-              <input
-                value={familyDraft.first_name}
-                onChange={(event) => setFamilyDraft((prev) => ({ ...prev, first_name: event.target.value }))}
-                placeholder="Vorname"
-              />
-              <input
-                value={familyDraft.age}
-                onChange={(event) => setFamilyDraft((prev) => ({ ...prev, age: event.target.value }))}
-                inputMode="numeric"
-                placeholder="Alter"
-              />
-              <input
-                value={familyDraft.weight}
-                onChange={(event) => setFamilyDraft((prev) => ({ ...prev, weight: event.target.value }))}
-                inputMode="decimal"
-                placeholder="Gewicht optional"
-              />
-              <button type="submit" disabled={familySaving}>
-                {familySaving ? 'Speichert...' : 'Anlegen'}
-              </button>
-            </form>
-          )}
-
-          {!isDemo && familyMembers.length > 0 && (
-            <div className="family-member-list">
-              {familyMembers.map((member) => (
-                <span key={member.id}>
-                  {member.first_name}
-                  <button type="button" onClick={() => void handleDeleteFamilyMember(member.id)}>
-                    Entfernen
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
-
-          <div className={`routine-panel ${routineOpen ? 'routine-open' : 'routine-closed'}`}>
-            <div className="routine-panel-title">
-              <Clock3 size={17} />
-              Einnahmeplan
-            </div>
-            <div className="routine-grid">
-              {(Object.keys(ROUTINE_META) as RoutineKey[]).map((routineKey) => {
-                const products = routineGroups[routineKey];
-                const meta = ROUTINE_META[routineKey];
-                return (
-                  <div key={routineKey} className="routine-column">
-                    <div className="routine-column-head">
-                      <strong>{meta.label}</strong>
-                      <span>{products.length}</span>
-                    </div>
-                    <p>{meta.hint}</p>
-                    {products.length === 0 ? (
-                      <div className="routine-empty">Keine Produkte</div>
-                    ) : (
-                      <div className="routine-list">
-                        {products.map((product) => {
-                          const usage = calculateProductUsage(product, product.price, { fallbackTotalServings: 30 });
-                          return (
-                            <div key={productStackKey(product)} className="routine-item">
-                              <strong>{product.name}</strong>
-                              <span>{product.dosage_text || `${usage.servingsPerIntake} ${unitLabel(product.serving_unit ?? 'Portion', usage.servingsPerIntake)}`}</span>
-                              <small>
-                                {formatIntakeInterval(productIntakeIntervalDays(product))}
-                                {' - '}
-                                {formatEuro(usage.monthlyCost ?? product.price)} EUR/Monat
-                                {' - '}
-                                {formatDaysSupply(usage.daysSupply)}
-                              </small>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+            <div className="stack-cockpit-profile">{stackProfileLabel(activeStack)}</div>
           </div>
 
           {linkReportStatus && (
@@ -2018,8 +2005,8 @@ export function StackWorkspace({
         </section>
 
         <div className="ss-section-title ss-products-title">
-          <span>Supplement Übersicht</span>
-          <div className="product-view-toggle" role="group" aria-label="Produktansicht wählen">
+          <span>Supplement Ãœbersicht</span>
+          <div className="product-view-toggle" role="group" aria-label="Produktansicht wÃ¤hlen">
             <button
               type="button"
               className={productViewMode === 'grid' ? 'active' : ''}
@@ -2072,7 +2059,7 @@ export function StackWorkspace({
           >
             <Package size={32} style={{ margin: '0 auto 10px', color: '#c7d2fe' }} />
             <p style={{ fontSize: 14, fontWeight: 600 }}>
-              Noch leer — klicke auf &bdquo;Produkt hinzufügen&ldquo;, um zu starten.
+              Noch leer â€” klicke auf &bdquo;Produkt hinzufÃ¼gen&ldquo;, um zu starten.
             </p>
             <button
               type="button"
@@ -2081,7 +2068,7 @@ export function StackWorkspace({
               style={{ margin: '18px auto 0' }}
             >
               <IconPlus />
-              Produkt hinzufügen
+              Produkt hinzufÃ¼gen
             </button>
           </div>
         )}
@@ -2099,13 +2086,24 @@ export function StackWorkspace({
                     display={productViewMode === 'list' ? 'list' : 'card'}
                     onToggleSelected={() => toggleSelected(key)}
                     onEdit={() => setEditingProductKey(key)}
-                    onDelete={() => void handleRemoveProduct(key)}
+                    onDelete={() => setPendingDeleteProductKey(key)}
                     onReportMissingLink={(product, reason) => void handleReportMissingLink(product as DemoProduct, reason)}
                     showSelectButton={false}
                   />
                 </div>
               );
             })}
+            {productViewMode === 'grid' && (
+              <button
+                type="button"
+                className="masonry-item flex min-h-[220px] items-center justify-center rounded-[14px] border-2 border-dashed border-emerald-300 bg-emerald-50 text-emerald-600 shadow-sm transition hover:border-emerald-500 hover:bg-emerald-100"
+                onClick={() => setAddModalOpen(true)}
+                aria-label="Produkt hinzufuegen"
+                title="Produkt hinzufuegen"
+              >
+                <Plus size={56} strokeWidth={2.4} />
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -2122,12 +2120,12 @@ export function StackWorkspace({
         <div className="bb-prices">
           <div className="bb-price-block">
             <div className="bb-price-label">Einmalkosten</div>
-            <div className="bb-price-value">{formatEuro(totalOnce)} €</div>
+            <div className="bb-price-value">{formatEuro(totalOnce)} â‚¬</div>
           </div>
           <div className="bb-divider" />
           <div className="bb-price-block">
             <div className="bb-price-label">Pro Monat</div>
-            <div className="bb-price-value">{formatEuro(totalMonthly)} €</div>
+            <div className="bb-price-value">{formatEuro(totalMonthly)} â‚¬</div>
           </div>
           <button
             className="btn-select-all"
@@ -2135,7 +2133,7 @@ export function StackWorkspace({
             disabled={productsCount === 0}
             style={productsCount === 0 ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
           >
-            {allSelected ? 'Alles abwählen' : 'Alles auswählen'}
+            {allSelected ? 'Alles abwÃ¤hlen' : 'Alles auswÃ¤hlen'}
           </button>
         </div>
       </div>
@@ -2147,6 +2145,8 @@ export function StackWorkspace({
           activeStackId={state.activeStackId}
           isDemo={isDemo}
           onAdd={handleAddProduct}
+          onEditExisting={(key) => setEditingProductKey(key)}
+          onReplaceExisting={(key) => setReplaceProductKey(key)}
           onClose={() => setAddModalOpen(false)}
         />
       )}
@@ -2157,6 +2157,8 @@ export function StackWorkspace({
           activeStackId={replacingStack.id}
           isDemo={isDemo}
           onAdd={handleReplaceProduct}
+          onEditExisting={(key) => setEditingProductKey(key)}
+          onReplaceExisting={(key) => setReplaceProductKey(key)}
           onClose={() => setReplaceProductKey(null)}
           title="Produkt wechseln"
           submitLabel="Produkt ersetzen"
@@ -2176,12 +2178,41 @@ export function StackWorkspace({
         />
       )}
 
+      {createStackModalOpen && (
+        <EditStackModal
+          initialName=""
+          initialDescription=""
+          initialFamilyMemberId={null}
+          familyMembers={familyMembers}
+          title="Stack anlegen"
+          submitLabel="Stack erstellen"
+          onSave={(name, description, familyMemberId) => handleCreateStack(name, description, familyMemberId)}
+          onClose={() => setCreateStackModalOpen(false)}
+        />
+      )}
+
       {editModalOpen && activeStack && (
         <EditStackModal
           initialName={activeStack.name}
           initialDescription={activeDescription}
-          onSave={(n, d) => handleSaveStackMeta(n, d)}
+          initialFamilyMemberId={activeStack.family_member_id ?? null}
+          familyMembers={familyMembers}
+          onSave={(n, d, familyMemberId) => handleSaveStackMeta(n, d, familyMemberId)}
           onClose={() => setEditModalOpen(false)}
+        />
+      )}
+
+      {pendingDeleteProductKey && pendingDeleteProduct && (
+        <ConfirmDialog
+          title="Produkt loeschen?"
+          message="Willst du dieses Produkt wirklich loeschen?"
+          confirmLabel="Ja, loeschen"
+          onConfirm={async () => {
+            const key = pendingDeleteProductKey;
+            setPendingDeleteProductKey(null);
+            await handleRemoveProduct(key);
+          }}
+          onClose={() => setPendingDeleteProductKey(null)}
         />
       )}
     </>

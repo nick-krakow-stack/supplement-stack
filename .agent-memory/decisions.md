@@ -1,6 +1,119 @@
 # Decisions
 
-Last updated: 2026-05-08
+Last updated: 2026-05-11
+
+## 2026-05-11 - Family Member Assignment Belongs To Stack Create/Edit
+
+Decision: family/profile assignment should be part of `Stack anlegen` and
+`Stack bearbeiten`, because that is the logical moment when a user defines who
+the stack belongs to.
+
+Operational rules:
+
+- Do not keep family/profile management as a prominent separate control in the
+  main stack cockpit long term.
+- Family-member assignment is implemented in the local stack create/edit flows
+  as of the 2026-05-11 UX follow-up branch state.
+- Keep profile creation/management available, but treat assignment as stack
+  metadata.
+
+Rationale:
+
+- While watching authenticated user QA, Nick noted that the current profile /
+  family management placement feels poor and less logical than assigning the
+  owner directly when creating or editing a stack.
+
+## 2026-05-11 - Product Replacement Must Preserve Existing Context
+
+Decision: `Produkt bearbeiten` -> `Produkt wechseln` should not restart at
+ingredient search.
+
+Operational rules:
+
+- Product replacement should open directly at product selection.
+- It should preserve the current stack product's ingredient, target amount /
+  dose, and relevant filter context where available.
+- Users should only change product choice, not re-enter the active ingredient
+  and dose they already configured.
+- This is implemented locally as of the 2026-05-11 UX follow-up branch state;
+  final live QA should verify it with catalog products after deployment.
+
+Rationale:
+
+- During authenticated user QA, the current replacement flow required entering
+  the Wirkstoff again. Nick noted this makes no sense because the product in the
+  stack already carries the necessary Wirkstoff and dosage context.
+
+## 2026-05-11 - Profile Page Needs Responsive Desktop Width
+
+Decision: the Profile page should not stay in a narrow/mobile-feeling layout
+on desktop.
+
+Operational rules:
+
+- Next UI update should give `/profile` a flexible responsive desktop width.
+- Keep mobile readability, but use desktop horizontal space better.
+- Avoid implementing this during the current QA pass; record it as a follow-up.
+
+Rationale:
+
+- During authenticated user QA, Nick noted that Profile appears to use the
+  mobile layout even on desktop.
+
+## 2026-05-11 - Product List View Should Be Compact
+
+Decision: the product list view in the stack workspace should be a compact,
+scan-friendly list.
+
+Operational rules:
+
+- Next UI update should reduce vertical height and card-like bulk in list mode.
+- List mode should prioritize quick comparison: product name, dose, timing,
+  reach, monthly cost, and primary actions.
+- Keep card/grid mode for richer visual presentation.
+- Avoid implementing this during the current QA pass; record it as a follow-up.
+
+Rationale:
+
+- During authenticated user QA, Nick noted that the current list view is too
+  inflated and should feel like an actual list.
+
+## 2026-05-11 - Landing Page Hero Free Copy
+
+Decision: the homepage claim/hero copy should use `Kostenlos` instead of
+`Kosteneffizient`.
+
+Operational rule:
+
+- Implemented and deployed in the Tobias QA landing/demo update:
+  commit `74cc5bd`, PR `#4`, merge `9c67ed7`, Pages preview
+  `https://71809f56.supplementstack.pages.dev`, live
+  `https://supplementstack.de`.
+
+Rationale:
+
+- Nick explicitly decided/noted this wording change for the next update; it was
+  bundled with the product-add flow simplification.
+
+## 2026-05-11 - Product Add Flow Form Selection Simplification
+
+Decision: the normal product-add flow should not force users through a
+separate form-selection step before product selection.
+
+Operational rules:
+
+- Forms remain important for database structure, search, and product matching.
+- Product selection should first show all matching products.
+- Form choice should move into product selection as an optional dropdown/filter.
+- The form filter default is `Alle`, so normal users are not blocked by form
+  terminology before seeing available products.
+
+Rationale:
+
+- Tobias QA showed the current form selection is scientifically useful but
+  cognitively heavy for normal users.
+- In the Vitamin D/D3 demo path, choosing `Cholecalciferol (D3)` + `2000 IE`
+  produced no products, which can interrupt the demo core flow.
 
 ## 2026-05-08 - Admin Dashboard Is Post-Launch Operations
 
@@ -1206,3 +1319,41 @@ Rationale:
   pages during transition.
 - Audit-Log was explicitly removed from the admin workflow to reduce surface
   area before launch.
+
+## 2026-05-11 - Stack Cockpit Simplification
+
+Decision: family/profile assignment and the Einnahmeplan are no longer cockpit
+controls inside `/stacks`.
+
+Operational rule:
+- Stack ownership/family member selection belongs to the Stack create/edit
+  modal.
+- Family member management has a dedicated protected `/family` page.
+- The Einnahmeplan has a dedicated protected `/routine` page.
+- The stack cockpit only presents the active stack title and profile label.
+
+Rationale:
+- Assigning ownership is part of defining the stack, not a persistent cockpit
+  control.
+- The Einnahmeplan is a separate user task with enough information density to
+  justify its own page.
+- Removing profile and clock controls reduces cockpit noise and frees space for
+  the primary stack actions.
+
+## 2026-05-11 - Duplicate Wirkstoff Handling
+
+Decision: duplicate prevention should be based on Wirkstoff presence before the
+dosage step, while still allowing deliberate duplicate products.
+
+Operational rule:
+- If the chosen ingredient already exists in the active stack, show an
+  intervention screen before dosage/product selection.
+- Offer amount editing, product replacement, leaving the existing item unchanged,
+  or deliberately adding another product with the same ingredient.
+- Exact product duplicate protection remains in place.
+
+Rationale:
+- Blocking only identical products still allows accidental duplicate ingredient
+  intake.
+- Some users legitimately need split formats for the same Wirkstoff, so the
+  flow should warn and explain rather than hard-block every duplicate.

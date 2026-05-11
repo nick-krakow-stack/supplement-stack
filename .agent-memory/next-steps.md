@@ -1,9 +1,76 @@
 # Next Steps
 
-Last updated: 2026-05-08
+Last updated: 2026-05-11
 
 ## Immediate
 
+- User UX follow-ups from the authenticated Tobias QA are implemented locally
+  and still need final deploy/live owner QA:
+  - family/profile assignment lives in `Stack anlegen` / `Stack bearbeiten`
+  - `Produkt bearbeiten` -> `Produkt wechseln` preserves ingredient, dose, and
+    form context and opens product selection directly where possible
+  - `/profile` uses a responsive desktop layout
+  - stack product list mode is compact and scan-friendly
+  - own-product flow has clearer missing-product and label-entry guidance
+  - stack delete uses an in-app confirmation dialog
+  - DGE vs. study values and product ordering are explained in the add flow
+- Before deployment, do one final local/source review of the changed user
+  screens and confirm the known Vitest `spawn EPERM` issue is not a code
+  regression.
+- After deployment, run live authenticated owner QA for:
+  - stack create/edit with family/profile assignment
+  - product replacement preserving Wirkstoff/dose context
+  - product list compact mode with real products
+  - `/profile` desktop layout
+  - own-product create/edit guidance
+  - stack delete confirmation
+- Tobias QA landing/demo updates are implemented, merged, deployed, and
+  browser-verified:
+  - commit `74cc5bd`, PR `#4`, merge `9c67ed7`
+  - preview `https://71809f56.supplementstack.pages.dev`
+  - live `https://supplementstack.de`
+  - homepage hero now uses `Wissenschaftlich. Einfach. Kostenlos.`
+  - product-add flow no longer forces a separate form-selection step
+  - forms remain available as an optional product-list filter defaulting to
+    `Alle Formen`
+- Use `.agent-memory/browser-qa-persona.md` as the standard Tobias human
+  Browser-QA persona. Commit `b694b4c` added the persona memory.
+- First Tobias QA covered landing page, `/demo`, and Vitamin D/D3:
+  landing page explains free/no-signup well; `/demo` is directly usable; D3
+  search works; the former forced form-selection step was too cognitively
+  heavy for normal users and is now removed.
+- Admin browser QA found two production-visible admin dosing bugs and both are
+  fixed and deployed:
+  - `/administrator/dosing` now shows unpublished production dosing rows in the
+    admin maintenance list again (`2ffeec6`).
+  - `/administrator/dosing?ingredient_id=3&q=Magnesium` now initializes the
+    filter state from URL params and renders the filtered Magnesium list
+    (`5733d8f`, production deployment `5a0b8826`).
+- Read-only authenticated admin QA covered dashboard, products, product detail
+  shop-link edit/recheck, ingredients/forms modal, users drawer, user-products
+  moderation queue, dosing deep-links, shop domains, legal, profile, command
+  palette, and selected mobile layouts.
+- Remaining authenticated QA that changes data should be run deliberately on
+  known test objects:
+  - product shop-link create/edit/delete/recheck
+  - ingredient form/source/synonym/precursor edits
+  - legal document save
+  - user blocked-submitter toggle
+  - image upload/delete
+  - interaction/dosing save flows
+- Admin comfort follow-ups from browser QA:
+  - add `/administrator/user-products` to the main admin navigation or link it
+    prominently from `Heute zu tun` when pending submissions exist.
+  - rename the user-products trusted toggle from ambiguous `Markieren` to
+    explicit labels such as `Als trusted markieren` / `Trusted entfernen`.
+  - make `/administrator/ingredients` more card-like on narrow mobile screens;
+    it is functional but denser than products/users at 390px.
+  - polish command-palette/admin labels that still use ASCII transliterations
+    such as `Uebersetzungen`/`pruefen`.
+  - consider splitting the long ingredient forms modal into clearer existing
+    forms vs. add/edit sections.
+  - replace native destructive `confirm()` dialogs with in-app confirmation
+    dialogs for better admin ergonomics and more reliable browser QA.
 - Backend review P2 hardening is deployed:
   - malformed auth JSON -> HTTP 400
   - mail transport debug fields removed from API JSON responses
@@ -134,3 +201,18 @@ Last updated: 2026-05-08
   the backend API namespace.
 - Consider table-rebuild cleanup migrations only after the current admin panel
   is QA-accepted.
+
+## Website UX Fixes Before Deployment
+
+- Run authenticated browser QA against the local Pages/Workers stack or preview
+  deployment for the new stack flows:
+  - duplicate Wirkstoff modal
+  - own-product CTA from product selection
+  - stack create/edit family assignment
+  - product delete confirmation
+  - `/family` and `/routine` as logged-in user
+  - demo stack import after registration
+- The local Vite smoke cannot verify demo catalog products because `/api` is not
+  available from Vite alone.
+- The `/routine` mail action is a frontend placeholder until a dedicated backend
+  endpoint for emailing the combined Einnahmeplan exists.

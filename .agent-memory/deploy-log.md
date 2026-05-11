@@ -1,6 +1,108 @@
 # Deploy Log
 
-Last updated: 2026-05-10
+Last updated: 2026-05-11
+
+## 2026-05-11 Tobias QA Landing/Demo Product Flow Deployed
+
+- Scope:
+  - Landing hero claim changed from `Wissenschaftlich. Einfach. Kosteneffizient.`
+    to `Wissenschaftlich. Einfach. Kostenlos.`.
+  - `AddProductModal` no longer forces a separate ingredient-form step.
+  - Ingredient forms remain available as an optional product-list filter on
+    the product-selection step, defaulting to `Alle Formen`.
+  - Added `scripts/tobias-qa-regression-check.mjs`.
+- GitHub:
+  - Local commit: `74cc5bd` (`Streamline demo product form selection`).
+  - Remote branch: `codex/streamline-demo-product-form-selection`.
+  - PR `#4` merged to `main` as `9c67ed7`.
+- Validation:
+  - `node scripts/tobias-qa-regression-check.mjs` passed.
+  - `node scripts/admin-qa-regression-check.mjs` passed.
+  - `node --check scripts/tobias-qa-regression-check.mjs` passed.
+  - `frontend`: `npx tsc --noEmit` passed.
+  - `frontend`: `npm run build` passed.
+  - `git diff --cached --check` passed before commit.
+- Deploy command:
+  - `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://71809f56.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`.
+- Browser QA:
+  - Preview landing page showed the new `Kostenlos` hero copy, no old
+    `Kosteneffizient` hero copy, and no browser console errors.
+  - Live landing page showed the new `Kostenlos` hero copy and no browser
+    console errors.
+  - Preview `/demo` Vitamin D3 flow went directly from ingredient selection to
+    dosage, then to product selection.
+  - Product selection showed the optional `Form` dropdown with `Alle Formen`
+    selected by default.
+  - With the `2000 IE` study value and `Alle Formen`, products were listed,
+    including `Vitamin D3 2000 IU Tropfen` and `Vitamin D3 5000 IU`.
+
+## 2026-05-10 Admin Dosing URL Filter Fix Deployed
+
+- Scope:
+  - Fixed `/administrator/dosing?ingredient_id=3&q=Magnesium` so the admin
+    page initializes the visible query and ingredient filters from URL search
+    params instead of showing the unfiltered list.
+  - Extended `scripts/admin-qa-regression-check.mjs` to guard the URL-filter
+    initialization.
+  - Continued authenticated admin human-flow QA across dashboard, products,
+    product detail shop links, ingredients, dosing, users, user-products, shop
+    domains, and legal routes.
+- Remote D1 migrations:
+  - No new migration required.
+- GitHub:
+  - Commit: `d9ef6cc` (`Guard admin dosing URL filters`).
+  - Commit: `5733d8f` (`Initialize admin dosing filters from URL`).
+  - Pushed to `origin/main` through the GitHub connector.
+- Pages deploy:
+  - Project: `supplementstack`.
+  - Production deployment short id: `5a0b8826`.
+  - Live URL: `https://supplementstack.de`.
+  - Cloudflare API reported production deployment success for commit
+    `5733d8f`.
+- Validation:
+  - `node scripts/admin-qa-regression-check.mjs` passed.
+  - `frontend`: `npx tsc --noEmit` passed.
+  - `node --check scripts/admin-qa-regression-check.mjs` passed.
+  - `frontend`: `npm run build` passed.
+  - `git diff --check` passed with existing LF/CRLF warnings only.
+- Smoke checks:
+  - Live authenticated browser check confirmed the Magnesium dosing deep-link
+    renders `4 Richtwerte`, keeps Magnesium selected, and captures no console
+    warnings/errors.
+
+## 2026-05-10 Admin Dosing Visibility Fix Deployed
+
+- Scope:
+  - Fixed `/administrator/dosing` so the admin maintenance view no longer hides
+    unpublished `dose_recommendations`.
+  - Added `scripts/admin-qa-regression-check.mjs` to guard the admin dosing
+    visibility rule.
+  - Ran read-only authenticated browser QA across the core admin routes and
+    selected modals/drawers.
+- Remote D1 migrations:
+  - No new migration required.
+- GitHub:
+  - Commit: `2ffeec6` (`Fix admin dosing visibility`).
+  - Pushed to `origin/main`.
+- Pages deploy:
+  - Project: `supplementstack`.
+  - Preview URL: `https://575850b1.supplementstack.pages.dev`.
+  - Live URL: `https://supplementstack.de`.
+  - Cloudflare API reported production deployment success for commit
+    `2ffeec6`.
+- Validation:
+  - `node scripts/admin-qa-regression-check.mjs` passed.
+  - `node scripts/backend-regression-check.mjs` passed.
+  - `frontend`: `npx tsc --noEmit` passed.
+  - `frontend`: `npm run build` passed.
+  - `node --check scripts/admin-qa-regression-check.mjs` passed.
+  - `git diff --check` passed with existing LF/CRLF warnings only.
+- Smoke checks:
+  - Live authenticated browser check confirmed `/administrator/dosing` renders
+    dosing rows again and no console warnings/errors were captured for the
+    route.
 
 ## 2026-05-10 Backend P2 Hardening Deployed
 

@@ -1,6 +1,57 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { apiPath } from '../api/base';
+
+const DEMO_CARRYOVER_KEY = 'ss_demo_stack_carryover';
+
+type DemoCarryoverProduct = {
+  id: number;
+  product_type?: 'catalog' | 'user_product';
+  quantity?: number;
+  intake_interval_days?: number;
+  dosage_text?: string;
+  timing?: string;
+};
+
+type DemoCarryoverStack = {
+  name?: string;
+  products?: DemoCarryoverProduct[];
+};
+
+async function importDemoStacksAfterRegister(): Promise<boolean> {
+  const raw = window.localStorage.getItem(DEMO_CARRYOVER_KEY);
+  if (!raw) return false;
+  const stacks = JSON.parse(raw) as DemoCarryoverStack[];
+  if (!Array.isArray(stacks) || stacks.length === 0) return false;
+
+  let imported = false;
+  for (const stack of stacks) {
+    const products = Array.isArray(stack.products) ? stack.products : [];
+    if (products.length === 0) continue;
+    const response = await fetch(apiPath('/stacks'), {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: stack.name?.trim() || 'Demo Stack',
+        product_ids: products.map((product) => ({
+          id: product.id,
+          product_type: product.product_type ?? 'catalog',
+          quantity: product.quantity ?? 1,
+          intake_interval_days: product.intake_interval_days ?? 1,
+          dosage_text: product.dosage_text,
+          timing: product.timing,
+        })),
+      }),
+    });
+    if (!response.ok) throw new Error('Demo-Stack konnte nicht uebernommen werden.');
+    imported = true;
+  }
+
+  if (imported) window.localStorage.removeItem(DEMO_CARRYOVER_KEY);
+  return imported;
+}
 
 function getAuthRedirect(location: ReturnType<typeof useLocation>): string {
   const state = location.state as { from?: { pathname?: string }; redirect?: string } | null;
@@ -34,11 +85,22 @@ export default function RegisterPage() {
         age: Number.isFinite(ageNum) ? (ageNum as number) : undefined,
         guideline_source: guidelineSource === '' ? undefined : guidelineSource,
       });
+      let demoImported = false;
+      let demoImportFailed = false;
+      try {
+        demoImported = await importDemoStacksAfterRegister();
+      } catch {
+        demoImportFailed = true;
+      }
       navigate('/verify-email', {
         replace: true,
         state: {
           redirect: getAuthRedirect(location),
-          message: result.message,
+          message: demoImported
+            ? 'Dein Konto wurde erstellt und dein Demo-Stack wurde uebernommen.'
+            : demoImportFailed
+              ? 'Dein Konto wurde erstellt. Der Demo-Stack konnte nicht automatisch uebernommen werden.'
+              : result.message,
           emailVerificationEmailSent: result.emailVerificationEmailSent,
         },
       });
