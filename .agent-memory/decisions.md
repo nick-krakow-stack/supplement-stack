@@ -2,6 +2,28 @@
 
 Last updated: 2026-05-11
 
+## 2026-05-11 - Deploy Directly To Production Domain
+
+Decision: unless the owner explicitly asks for preview-only, completed website
+changes should be deployed directly to Cloudflare Pages production so they are
+available under `https://supplementstack.de`.
+
+Operational rules:
+
+- After verification, apply required remote D1 migrations to
+  `supplementstack-production` and deploy the built Pages snapshot with
+  `wrangler pages deploy ... --project-name supplementstack --branch main`.
+- Branch previews may still be useful for intermediate review, but they are not
+  the final target when the owner asks to finish or deploy.
+- Keep GitHub updated after the production deploy.
+- Record production deployment IDs and postflight checks in
+  `.agent-memory/deploy-log.md`.
+
+Rationale:
+
+- The owner explicitly wants current and future finished changes deployed
+  directly under `supplementstack.de`, not left only on the branch preview.
+
 ## 2026-05-11 - Admin Dashboard Metrics After Owner Review
 
 Decision: the admin dashboard KPI row should use owner-facing operational

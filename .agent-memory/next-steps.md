@@ -16,12 +16,13 @@ Last updated: 2026-05-11
 
 ## Immediate
 
-- Admin dashboard owner comments are implemented and deployed to the
-  `codex-website-ux-fixes` preview. Next useful QA:
-  - open
-    `https://codex-website-ux-fixes.supplementstack.pages.dev/administrator/dashboard`
-    with an authenticated preview admin session, or deploy/merge to production
-    before doing live `https://supplementstack.de` admin review.
+- Default deployment target from now on: after verified changes, deploy directly
+  to Cloudflare Pages production under `https://supplementstack.de`, unless the
+  owner explicitly asks for preview-only.
+- Admin dashboard owner comments are implemented and deployed to production.
+  Next useful QA:
+  - open `https://supplementstack.de/administrator/dashboard` with an
+    authenticated admin session.
   - confirm the new cards `Neuanmeldungen`, `Neue Stacks`, `Backlinks`, and
     `Abmeldungen`.
   - confirm dashboard links for `User-Partnerlink`, `Linkmeldungen`,

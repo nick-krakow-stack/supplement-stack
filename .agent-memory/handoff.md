@@ -1,25 +1,24 @@
 ﻿# Handoff
 
-Last updated: 2026-05-11 23:14:45 +02:00
+Last updated: 2026-05-11 23:44:02 +02:00
 Update mode: SessionEnd
 
 ## Latest Notes
 
-Admin dashboard owner comments implemented, migrated, preview-deployed, and verified. PostToolUse handoff updates disabled to keep the tree clean.
+Admin dashboard owner comments are now deployed directly to production supplementstack.de; future finished deploys should target production unless preview-only is requested.
 
 ## Git Snapshot
 
 - Branch: codex/website-ux-fixes
-- Last commit: e9bf831 Update admin dashboard metrics
+- Last commit: 204b51a Update admin dashboard metrics
 
 ## Working Tree
 
 ~~~text
 M .agent-memory/current-state.md
-M .agent-memory/handoff.md
+M .agent-memory/decisions.md
+M .agent-memory/deploy-log.md
 M .agent-memory/next-steps.md
-M .codex/hooks.json
-M .codex/hooks/update-agent-handoff.ps1
 ~~~
 
 ## Current State Summary
@@ -33,6 +32,7 @@ M .codex/hooks/update-agent-handoff.ps1
 - Important limitation: `Backlinks` is currently an app-measured external
 - Verification passed:
 - Preview deployment:
+- Production deployment:
 - Remote postflight:
 - Hook failures in the Codex App were traced to Bash-only hook commands on
 - Hook entry points are now centralized under `.codex/hooks/` as PowerShell
@@ -48,7 +48,6 @@ M .codex/hooks/update-agent-handoff.ps1
 - The active admin frontend is `/administrator`.
 - `/api/admin` remains the backend API namespace.
 - The old frontend `/admin` route was removed during cleanup. Use
-- The old frontend admin monolith has been removed from active code:
 
 ## Next Planned Work
 
@@ -58,7 +57,8 @@ M .codex/hooks/update-agent-handoff.ps1
 - Hook failure logs are written to `.agent-memory/deploy-errors.log`, which is
 - Do not wire `update-agent-handoff.ps1` back into every `PostToolUse` shell
 ## Immediate
-- Admin dashboard owner comments are implemented and deployed to the
+- Default deployment target from now on: after verified changes, deploy directly
+- Admin dashboard owner comments are implemented and deployed to production.
 - The new dashboard metrics only have history from 2026-05-11 onward:
 - Admin knowledge/users deep-link filter fix is implemented and deployed to
 - User UX follow-ups from the authenticated Tobias QA are implemented locally
@@ -86,7 +86,6 @@ M .codex/hooks/update-agent-handoff.ps1
 - Review L-Carnitin/ALCAR display copy in admin content if the migrated legacy
 - Fix or reset the local D1 migration journal/schema mismatch if local
 - Keep `/administrator` as the frontend admin surface and `/api/admin` as the
-## Wirkstoffe/Formen Rebuild
 
 ## Required Startup For Next Agent
 

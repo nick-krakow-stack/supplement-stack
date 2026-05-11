@@ -5,7 +5,8 @@ Last updated: 2026-05-11
 ## 2026-05-11 Admin Dashboard Owner Comments - Preview Deployed
 
 - Implemented the owner comments from live `/administrator/dashboard` on branch
-  `codex/website-ux-fixes` and deployed them to the Pages branch preview.
+  `codex/website-ux-fixes` and deployed them first to the Pages branch preview,
+  then directly to the production/live domain.
 - Remote D1 migration `0076_admin_dashboard_tracking.sql` was applied to
   `supplementstack-production`.
 - New dashboard tracking/storage:
@@ -42,6 +43,9 @@ Last updated: 2026-05-11
 - Preview deployment:
   - `https://8f774ddf.supplementstack.pages.dev`
   - alias `https://codex-website-ux-fixes.supplementstack.pages.dev`
+- Production deployment:
+  - `https://15debffb.supplementstack.pages.dev`
+  - live alias `https://supplementstack.de`
 - Remote postflight:
   - `wrangler d1 migrations list supplementstack-production --remote` reported
     no pending migrations.
@@ -49,6 +53,10 @@ Last updated: 2026-05-11
   - Preview `/api/products` returned 200.
   - Preview unauthenticated `/api/admin/stats` returned 401.
   - Preview `POST /api/analytics/pageview` returned 200.
+  - Live `/` returned 200.
+  - Live `/api/products` returned 200.
+  - Live unauthenticated `/api/admin/stats` returned 401.
+  - Live `POST /api/analytics/pageview` returned 200.
 
 ## 2026-05-11 Codex/Claude Hook Centralization - Local
 

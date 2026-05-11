@@ -3106,3 +3106,33 @@ When a future agent deploys or applies migrations, append the exact date, commit
   - Preview `/api/products` returned 200.
   - Preview unauthenticated `/api/admin/stats` returned 401.
   - Preview `POST /api/analytics/pageview` returned 200.
+
+## 2026-05-11 Admin Dashboard Owner Comments Production Deployed
+
+- Scope:
+  - Same verified dashboard metrics build from commit
+    `204b51a Update admin dashboard metrics`.
+  - Owner requested direct Cloudflare production deploys under
+    `https://supplementstack.de` now and in future.
+- Remote D1 migrations:
+  - `wrangler d1 migrations list supplementstack-production --remote` reported
+    no migrations to apply; `0076_admin_dashboard_tracking.sql` was already
+    applied before the preview deploy.
+- Validation before production deploy:
+  - `npm run build` from `frontend/` passed.
+- Deploy prep:
+  - Built `frontend/dist`.
+  - Copied `functions/` to `frontend/dist/functions`.
+  - Verified `frontend/dist/functions/api/[[path]].ts` exists.
+  - Copied `frontend/dist` into stable temp snapshot before Wrangler upload.
+- Deploy command:
+  - `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy <snapshot> --project-name supplementstack --branch main --commit-dirty=true`
+- Production deployment URL:
+  - `https://15debffb.supplementstack.pages.dev`
+- Live domain:
+  - `https://supplementstack.de`
+- Live postflight:
+  - Live `/` returned 200.
+  - Live `/api/products` returned 200.
+  - Live unauthenticated `/api/admin/stats` returned 401.
+  - Live `POST /api/analytics/pageview` returned 200.
