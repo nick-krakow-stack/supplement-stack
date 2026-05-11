@@ -3255,6 +3255,127 @@ async function getTableColumns(db: D1Database, tableName: string): Promise<Set<s
   }
 }
 
+type ReferralSourceRow = {
+  referrer_host: string
+  referrer_source: string | null
+  visitors: number
+  pageviews: number
+  registrations: number
+  last_visit_at: string | null
+  last_signup_at: string | null
+}
+
+async function loadReferralSources(
+  db: D1Database,
+  currentRangeCondition: (column: string) => string,
+  options: {
+    hasPageViewEvents: boolean
+    hasPageViewVisitorId: boolean
+    hasSignupAttribution: boolean
+  },
+): Promise<ReferralSourceRow[]> {
+  if (!options.hasPageViewEvents && !options.hasSignupAttribution) return []
+
+  if (options.hasPageViewEvents && options.hasSignupAttribution) {
+    const visitorCountSql = options.hasPageViewVisitorId
+      ? "COUNT(DISTINCT COALESCE(visitor_id, 'pv-' || id))"
+      : 'COUNT(*)'
+    const { results } = await db.prepare(`
+      WITH page_sources AS (
+        SELECT
+          referrer_host,
+          referrer_source,
+          COUNT(*) AS pageviews,
+          ${visitorCountSql} AS visitors,
+          MAX(created_at) AS last_visit_at
+        FROM page_view_events
+        WHERE referrer_host IS NOT NULL
+          AND referrer_source IN ('external', 'google', 'bing', 'duckduckgo')
+          AND ${currentRangeCondition('created_at')}
+        GROUP BY referrer_host, referrer_source
+      ),
+      signup_sources AS (
+        SELECT
+          COALESCE(last_referrer_host, first_referrer_host) AS referrer_host,
+          COALESCE(last_referrer_source, first_referrer_source) AS referrer_source,
+          COUNT(*) AS registrations,
+          MAX(created_at) AS last_signup_at
+        FROM signup_attribution
+        WHERE COALESCE(last_referrer_host, first_referrer_host) IS NOT NULL
+          AND COALESCE(last_referrer_source, first_referrer_source) IN ('external', 'google', 'bing', 'duckduckgo')
+          AND ${currentRangeCondition('created_at')}
+        GROUP BY COALESCE(last_referrer_host, first_referrer_host), COALESCE(last_referrer_source, first_referrer_source)
+      ),
+      source_keys AS (
+        SELECT referrer_host, referrer_source FROM page_sources
+        UNION
+        SELECT referrer_host, referrer_source FROM signup_sources
+      )
+      SELECT
+        source_keys.referrer_host,
+        source_keys.referrer_source,
+        COALESCE(page_sources.visitors, 0) AS visitors,
+        COALESCE(page_sources.pageviews, 0) AS pageviews,
+        COALESCE(signup_sources.registrations, 0) AS registrations,
+        page_sources.last_visit_at,
+        signup_sources.last_signup_at
+      FROM source_keys
+      LEFT JOIN page_sources
+        ON page_sources.referrer_host = source_keys.referrer_host
+       AND COALESCE(page_sources.referrer_source, '') = COALESCE(source_keys.referrer_source, '')
+      LEFT JOIN signup_sources
+        ON signup_sources.referrer_host = source_keys.referrer_host
+       AND COALESCE(signup_sources.referrer_source, '') = COALESCE(source_keys.referrer_source, '')
+      ORDER BY registrations DESC, visitors DESC, pageviews DESC, source_keys.referrer_host ASC
+      LIMIT 8
+    `).all<ReferralSourceRow>()
+    return results ?? []
+  }
+
+  if (options.hasPageViewEvents) {
+    const visitorCountSql = options.hasPageViewVisitorId
+      ? "COUNT(DISTINCT COALESCE(visitor_id, 'pv-' || id))"
+      : 'COUNT(*)'
+    const { results } = await db.prepare(`
+      SELECT
+        referrer_host,
+        referrer_source,
+        ${visitorCountSql} AS visitors,
+        COUNT(*) AS pageviews,
+        0 AS registrations,
+        MAX(created_at) AS last_visit_at,
+        NULL AS last_signup_at
+      FROM page_view_events
+      WHERE referrer_host IS NOT NULL
+        AND referrer_source IN ('external', 'google', 'bing', 'duckduckgo')
+        AND ${currentRangeCondition('created_at')}
+      GROUP BY referrer_host, referrer_source
+      ORDER BY visitors DESC, pageviews DESC, referrer_host ASC
+      LIMIT 8
+    `).all<ReferralSourceRow>()
+    return results ?? []
+  }
+
+  const { results } = await db.prepare(`
+    SELECT
+      COALESCE(last_referrer_host, first_referrer_host) AS referrer_host,
+      COALESCE(last_referrer_source, first_referrer_source) AS referrer_source,
+      0 AS visitors,
+      0 AS pageviews,
+      COUNT(*) AS registrations,
+      NULL AS last_visit_at,
+      MAX(created_at) AS last_signup_at
+    FROM signup_attribution
+    WHERE COALESCE(last_referrer_host, first_referrer_host) IS NOT NULL
+      AND COALESCE(last_referrer_source, first_referrer_source) IN ('external', 'google', 'bing', 'duckduckgo')
+      AND ${currentRangeCondition('created_at')}
+    GROUP BY COALESCE(last_referrer_host, first_referrer_host), COALESCE(last_referrer_source, first_referrer_source)
+    ORDER BY registrations DESC, referrer_host ASC
+    LIMIT 8
+  `).all<ReferralSourceRow>()
+  return results ?? []
+}
+
 function ingredientTaskStatusSelect(hasTaskStatusTable: boolean): string {
   if (!hasTaskStatusTable) {
     return `
@@ -8544,8 +8665,11 @@ admin.get('/stats', async (c) => {
   const hasStackEmailEvents = await hasTable(c.env.DB, 'stack_email_events')
   const hasAccountDeletionEvents = await hasTable(c.env.DB, 'account_deletion_events')
   const hasPageViewEvents = await hasTable(c.env.DB, 'page_view_events')
+  const hasSignupAttribution = await hasTable(c.env.DB, 'signup_attribution')
   const hasUserProducts = await hasTable(c.env.DB, 'user_products')
   const hasKnowledgeArticleIngredients = await hasTable(c.env.DB, 'knowledge_article_ingredients')
+  const pageViewColumns = hasPageViewEvents ? await getTableColumns(c.env.DB, 'page_view_events') : new Set<string>()
+  const hasPageViewVisitorId = pageViewColumns.has('visitor_id')
   const userColumns = await getTableColumns(c.env.DB, 'users')
   const hasLastSeenAt = userColumns.has('last_seen_at')
   const inactiveCondition = (() => {
@@ -8730,6 +8854,7 @@ admin.get('/stats', async (c) => {
     userProductsPendingRow,
     userProductsPendingInRangeRow,
     ingredientsWithoutArticleRow,
+    referralSourcesResult,
   ] = await Promise.all([
     hasStackEmailEvents
       ? c.env.DB.prepare(`
@@ -8837,6 +8962,11 @@ admin.get('/stats', async (c) => {
             )
         `).first<CountRow>()
       : Promise.resolve({ count: 0 }),
+    loadReferralSources(c.env.DB, currentRangeCondition, {
+      hasPageViewEvents,
+      hasPageViewVisitorId,
+      hasSignupAttribution,
+    }),
   ])
 
   const registrations = registrationsRow?.count ?? 0
@@ -8898,6 +9028,7 @@ admin.get('/stats', async (c) => {
     },
     top_clicked_products: topProductsResult.results ?? [],
     top_shops: topShopsResult.results ?? [],
+    referral_sources: referralSourcesResult,
   })
 })
 

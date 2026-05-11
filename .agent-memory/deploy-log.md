@@ -3136,3 +3136,42 @@ When a future agent deploys or applies migrations, append the exact date, commit
   - Live `/api/products` returned 200.
   - Live unauthenticated `/api/admin/stats` returned 401.
   - Live `POST /api/analytics/pageview` returned 200.
+
+## 2026-05-11 Phase 1 Referral Attribution Production Deployed
+
+- Scope:
+  - Implemented free first-party referral attribution for the admin dashboard.
+  - Added local visitor id and first/last source state in frontend analytics.
+  - Added `visitor_id` storage to pageview events.
+  - Added `signup_attribution` writes during registration.
+  - Added `referral_sources` to `/api/admin/stats`.
+  - Added `Quellen & Anmeldungen` module to `/administrator/dashboard`.
+- Remote D1 migrations:
+  - Applied `0077_signup_referral_attribution.sql` to
+    `supplementstack-production`.
+- Validation:
+  - `node scripts/admin-qa-regression-check.mjs` passed.
+  - `npx tsc -p tsconfig.json --noEmit` from `functions/` passed.
+  - `npx tsc --noEmit` from `frontend/` passed.
+  - `npm run lint --if-present` from `frontend/` passed.
+  - `npm test -- --run` from `frontend/` passed, 12 tests.
+  - `npm run build` from `frontend/` passed.
+  - `git diff --check` passed with CRLF warnings only.
+- Deploy prep:
+  - Built `frontend/dist`.
+  - Copied `functions/` to `frontend/dist/functions`.
+  - Verified `frontend/dist/functions/api/[[path]].ts` exists.
+  - Copied `frontend/dist` into stable temp snapshot before Wrangler upload.
+- Deploy command:
+  - `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy <snapshot> --project-name supplementstack --branch main --commit-dirty=true`
+- Production deployment URL:
+  - `https://e345663e.supplementstack.pages.dev`
+- Live domain:
+  - `https://supplementstack.de`
+- Live postflight:
+  - Live `/` returned 200.
+  - Live `/api/products` returned 200.
+  - Live unauthenticated `/api/admin/stats` returned 401.
+  - Live `POST /api/analytics/pageview` returned 200.
+  - Remote D1 confirmed test pageview attribution:
+    `visitor_id = ssv-postflight`, `referrer_host = example-blog.de`.

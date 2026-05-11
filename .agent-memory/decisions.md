@@ -2,6 +2,33 @@
 
 Last updated: 2026-05-11
 
+## 2026-05-11 - Phase 1 Referral Attribution Instead Of Backlink Crawling
+
+Decision: start with free first-party attribution instead of integrating a
+backlink crawler, Google Search Console API, or paid SEO provider.
+
+Operational rules:
+
+- Track observed external referrers and search referrers through
+  `page_view_events`.
+- Store a stable local `visitor_id` only after analytics consent is active.
+- Attach stored first/last attribution data to registration in
+  `signup_attribution`.
+- Show the admin what matters now: source host, visitors, registrations, and
+  conversion rate.
+- Treat "Backlinks" in the current dashboard as observed referrer sources, not
+  a complete web-wide backlink inventory.
+- Defer external crawler/Search Console automation until the affiliate business
+  case justifies more complexity or paid tooling.
+
+Rationale:
+
+- The owner does not need broad backlink discovery yet; the immediate business
+  question is which sources actually send visitors and signups.
+- First-party attribution is free, simple, and enough at the current stage.
+- Full backlink crawling is operationally noisier and less valuable before
+  there is meaningful affiliate revenue to optimize.
+
 ## 2026-05-11 - Deploy Directly To Production Domain
 
 Decision: unless the owner explicitly asks for preview-only, completed website

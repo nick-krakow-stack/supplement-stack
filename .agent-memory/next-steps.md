@@ -19,12 +19,22 @@ Last updated: 2026-05-11
 - Default deployment target from now on: after verified changes, deploy directly
   to Cloudflare Pages production under `https://supplementstack.de`, unless the
   owner explicitly asks for preview-only.
+- Phase 1 referral attribution is implemented and deployed to production:
+  - observed external/search referrers are tracked in `page_view_events`
+  - registrations can be attributed through `signup_attribution`
+  - the admin dashboard shows `Quellen & Anmeldungen`
+  - history starts from remote migration `0077_signup_referral_attribution.sql`
+- Do not add backlink crawler complexity yet. Revisit Google Search Console API
+  or a paid backlink provider only if source attribution starts driving enough
+  affiliate revenue to justify the extra setup/maintenance.
 - Admin dashboard owner comments are implemented and deployed to production.
   Next useful QA:
   - open `https://supplementstack.de/administrator/dashboard` with an
     authenticated admin session.
   - confirm the new cards `Neuanmeldungen`, `Neue Stacks`, `Backlinks`, and
     `Abmeldungen`.
+  - confirm the new `Quellen & Anmeldungen` module after real referrer/signup
+    data accumulates.
   - confirm dashboard links for `User-Partnerlink`, `Linkmeldungen`,
     `offene Freigaben`, and `Wirkstoffe ohne Artikel`.
   - Decide whether the current app-measured `Backlinks` metric is sufficient or

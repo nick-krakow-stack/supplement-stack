@@ -1,16 +1,16 @@
 ﻿# Handoff
 
-Last updated: 2026-05-11 23:44:02 +02:00
+Last updated: 2026-05-12 00:15:11 +02:00
 Update mode: SessionEnd
 
 ## Latest Notes
 
-Admin dashboard owner comments are now deployed directly to production supplementstack.de; future finished deploys should target production unless preview-only is requested.
+Phase 1 referral attribution is implemented, remotely migrated, deployed to supplementstack.de, and live-smoked. Next agent should only review/QA or build later external backlink tooling if explicitly requested.
 
 ## Git Snapshot
 
 - Branch: codex/website-ux-fixes
-- Last commit: 204b51a Update admin dashboard metrics
+- Last commit: 7c6dc80 Record production dashboard deploy
 
 ## Working Tree
 
@@ -19,10 +19,29 @@ M .agent-memory/current-state.md
 M .agent-memory/decisions.md
 M .agent-memory/deploy-log.md
 M .agent-memory/next-steps.md
+M frontend/src/api/auth.ts
+M frontend/src/lib/analytics.ts
+M frontend/src/pages/administrator/AdministratorDashboardPage.tsx
+M frontend/src/types/index.ts
+M functions/api/modules/admin.ts
+M functions/api/modules/analytics.ts
+M functions/api/modules/auth.ts
+M scripts/admin-qa-regression-check.mjs
+?? d1-migrations/0077_signup_referral_attribution.sql
 ~~~
 
 ## Current State Summary
 
+- Implemented the free Phase 1 attribution approach for the admin dashboard:
+- Remote D1 migration `0077_signup_referral_attribution.sql` was applied to
+- New data model:
+- Frontend:
+- Backend:
+- Admin UI:
+- Important limitation:
+- Verification passed:
+- Production deployment:
+- Remote postflight:
 - Implemented the owner comments from live `/administrator/dashboard` on branch
 - Remote D1 migration `0076_admin_dashboard_tracking.sql` was applied to
 - New dashboard tracking/storage:
@@ -38,16 +57,6 @@ M .agent-memory/next-steps.md
 - Hook entry points are now centralized under `.codex/hooks/` as PowerShell
 - `.codex/hooks.json` points to those PowerShell scripts.
 - `update-agent-handoff.ps1` remains available for PreCompact/manual handoff
-- `.claude/settings.json` also points to the same `.codex/hooks/*.ps1` scripts
-- `.gitignore` now keeps Codex local app state ignored while allowing the
-- Old duplicate Bash hook files under `.codex/hooks/*.sh` and
-- Manual verification passed:
-- Production-like line is the Cloudflare Pages/Workers line:
-- Live domain: `https://supplementstack.de`.
-- Latest documented deployed preview:
-- The active admin frontend is `/administrator`.
-- `/api/admin` remains the backend API namespace.
-- The old frontend `/admin` route was removed during cleanup. Use
 
 ## Next Planned Work
 
@@ -58,6 +67,8 @@ M .agent-memory/next-steps.md
 - Do not wire `update-agent-handoff.ps1` back into every `PostToolUse` shell
 ## Immediate
 - Default deployment target from now on: after verified changes, deploy directly
+- Phase 1 referral attribution is implemented and deployed to production:
+- Do not add backlink crawler complexity yet. Revisit Google Search Console API
 - Admin dashboard owner comments are implemented and deployed to production.
 - The new dashboard metrics only have history from 2026-05-11 onward:
 - Admin knowledge/users deep-link filter fix is implemented and deployed to
@@ -84,8 +95,6 @@ M .agent-memory/next-steps.md
 - Run authenticated owner QA for the new user/admin flows, especially stack
 - In the same owner QA pass, upload one Product Detail/Product-QA image and
 - Review L-Carnitin/ALCAR display copy in admin content if the migrated legacy
-- Fix or reset the local D1 migration journal/schema mismatch if local
-- Keep `/administrator` as the frontend admin surface and `/api/admin` as the
 
 ## Required Startup For Next Agent
 

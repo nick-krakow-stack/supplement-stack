@@ -2,6 +2,58 @@
 
 Last updated: 2026-05-11
 
+## 2026-05-11 Phase 1 Referral Attribution - Production Deployed
+
+- Implemented the free Phase 1 attribution approach for the admin dashboard:
+  first-party referrer/pageview tracking plus signup attribution, no external
+  backlink crawler or paid SEO provider.
+- Remote D1 migration `0077_signup_referral_attribution.sql` was applied to
+  `supplementstack-production`.
+- New data model:
+  - `page_view_events.visitor_id` links consented pageviews to a stable local
+    visitor id.
+  - `signup_attribution` stores the visitor id plus first/last external source,
+    landing path, and timestamps for registrations.
+- Frontend:
+  - `frontend/src/lib/analytics.ts` now stores first/last attribution state in
+    localStorage and includes `visitor_id` in pageview events.
+  - Registration sends the stored attribution payload with `/api/auth/register`.
+- Backend:
+  - `/api/analytics/pageview` stores `visitor_id` when the remote schema has
+    the new column, with a backward-compatible fallback.
+  - `/api/auth/register` records signup attribution in a best-effort insert so
+    registration cannot fail if attribution storage is unavailable.
+  - `/api/admin/stats` exposes `referral_sources`: source host, source type,
+    visitors, pageviews, registrations, and last activity timestamps.
+- Admin UI:
+  - `/administrator/dashboard` now has a `Quellen & Anmeldungen` module that
+    shows who sent visitors, how many visitors arrived, how many registrations
+    came from that source, and the conversion percentage.
+- Important limitation:
+  - Phase 1 measures only observed traffic/referrers and registrations from the
+    app itself. It does not crawl the web for all backlinks that exist but have
+    not sent traffic.
+  - Referral/signup history starts from migration `0077`; older traffic and
+    registrations cannot be reconstructed.
+- Verification passed:
+  - `node scripts/admin-qa-regression-check.mjs`
+  - `functions`: `npx tsc -p tsconfig.json --noEmit`
+  - `frontend`: `npx tsc --noEmit`
+  - `frontend`: `npm run lint --if-present`
+  - `frontend`: `npm test -- --run`
+  - `frontend`: `npm run build`
+  - `git diff --check` with CRLF warnings only
+- Production deployment:
+  - `https://e345663e.supplementstack.pages.dev`
+  - live alias `https://supplementstack.de`
+- Remote postflight:
+  - Live `/` returned 200.
+  - Live `/api/products` returned 200.
+  - Live unauthenticated `/api/admin/stats` returned 401.
+  - Live `POST /api/analytics/pageview` returned 200.
+  - Remote D1 confirmed a test `page_view_events` row with
+    `visitor_id = ssv-postflight` and `referrer_host = example-blog.de`.
+
 ## 2026-05-11 Admin Dashboard Owner Comments - Preview Deployed
 
 - Implemented the owner comments from live `/administrator/dashboard` on branch

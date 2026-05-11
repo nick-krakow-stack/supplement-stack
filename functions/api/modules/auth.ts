@@ -105,6 +105,98 @@ async function createEmailVerificationToken(
   return rawToken
 }
 
+type SignupAttributionInput = {
+  visitor_id?: unknown
+  first_referrer_host?: unknown
+  first_referrer_source?: unknown
+  first_landing_path?: unknown
+  first_seen_at?: unknown
+  last_referrer_host?: unknown
+  last_referrer_source?: unknown
+  last_landing_path?: unknown
+  last_seen_at?: unknown
+}
+
+function cleanAttributionText(value: unknown, maxLength = 120): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed ? trimmed.slice(0, maxLength) : null
+}
+
+function cleanAttributionVisitorId(value: unknown): string | null {
+  const trimmed = cleanAttributionText(value, 80)
+  return trimmed && /^[a-zA-Z0-9._:-]+$/.test(trimmed) ? trimmed : null
+}
+
+function cleanAttributionSource(value: unknown): string | null {
+  const source = cleanAttributionText(value, 40)
+  if (!source) return null
+  return ['internal', 'google', 'bing', 'duckduckgo', 'external'].includes(source) ? source : null
+}
+
+function cleanAttributionPath(value: unknown): string | null {
+  const path = cleanAttributionText(value, 240)
+  if (!path || !path.startsWith('/') || path.startsWith('//')) return null
+  return path
+}
+
+function cleanAttributionDate(value: unknown): string | null {
+  const date = cleanAttributionText(value, 40)
+  if (!date || Number.isNaN(Date.parse(date))) return null
+  return date
+}
+
+async function recordSignupAttribution(
+  db: D1Database,
+  userId: number,
+  attribution: SignupAttributionInput | null,
+) {
+  if (!attribution) return
+
+  const visitorId = cleanAttributionVisitorId(attribution.visitor_id)
+  const firstReferrerHost = cleanAttributionText(attribution.first_referrer_host)
+  const firstReferrerSource = cleanAttributionSource(attribution.first_referrer_source)
+  const firstLandingPath = cleanAttributionPath(attribution.first_landing_path)
+  const firstSeenAt = cleanAttributionDate(attribution.first_seen_at)
+  const lastReferrerHost = cleanAttributionText(attribution.last_referrer_host)
+  const lastReferrerSource = cleanAttributionSource(attribution.last_referrer_source)
+  const lastLandingPath = cleanAttributionPath(attribution.last_landing_path)
+  const lastSeenAt = cleanAttributionDate(attribution.last_seen_at)
+
+  if (!visitorId && !firstReferrerHost && !lastReferrerHost) return
+
+  try {
+    await db.prepare(`
+      INSERT INTO signup_attribution (
+        user_id,
+        visitor_id,
+        first_referrer_host,
+        first_referrer_source,
+        first_landing_path,
+        first_seen_at,
+        last_referrer_host,
+        last_referrer_source,
+        last_landing_path,
+        last_seen_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      userId,
+      visitorId,
+      firstReferrerHost,
+      firstReferrerSource,
+      firstLandingPath,
+      firstSeenAt,
+      lastReferrerHost,
+      lastReferrerSource,
+      lastLandingPath,
+      lastSeenAt,
+    ).run()
+  } catch (error) {
+    console.error('[auth] signup attribution failed:', error)
+  }
+}
+
 // POST /api/auth/register
 auth.post('/register', async (c) => {
   const originErr = validateBrowserOrigin(c)
@@ -127,6 +219,9 @@ auth.post('/register', async (c) => {
   if (!body.health_consent)
     return c.json({ error: 'Gesundheits-Einwilligung erforderlich (DSGVO Art. 9)' }, 400)
   const data = body as { email: string; password: string; age?: number; guideline_source?: string }
+  const attribution = typeof body.attribution === 'object' && body.attribution !== null
+    ? body.attribution as SignupAttributionInput
+    : null
 
   // Normalize: empty strings → undefined (treat as not provided)
   const ageRaw = data.age
@@ -163,6 +258,7 @@ auth.post('/register', async (c) => {
 
   const userId = result.meta.last_row_id
   const verificationToken = await createEmailVerificationToken(c.env.DB, userId)
+  await recordSignupAttribution(c.env.DB, userId, attribution)
   await c.env.DB.prepare(
     `INSERT INTO consent_log (user_id, consent_type, granted) VALUES (?, 'health_data', 1)`
   ).bind(userId).run()

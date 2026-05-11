@@ -19,6 +19,16 @@ export interface AdminStatsTopShop {
   affiliate_clicks: number;
 }
 
+export interface AdminStatsReferralSource {
+  referrer_host: string;
+  referrer_source?: string | null;
+  visitors: number;
+  pageviews: number;
+  registrations: number;
+  last_visit_at?: string | null;
+  last_signup_at?: string | null;
+}
+
 export interface User {
   id: number;
   email: string;
@@ -78,6 +88,7 @@ export interface AdminStats {
   };
   top_clicked_products?: AdminStatsTopProduct[];
   top_shops?: AdminStatsTopShop[];
+  referral_sources?: AdminStatsReferralSource[];
 }
 
 export interface IngredientSynonym {

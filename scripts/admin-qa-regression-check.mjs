@@ -10,6 +10,8 @@ const dashboardPage = read('frontend/src/pages/administrator/AdministratorDashbo
 const adminModule = read('functions/api/modules/admin.ts')
 const stacksModule = read('functions/api/modules/stacks.ts')
 const authModule = read('functions/api/modules/auth.ts')
+const analyticsModule = read('functions/api/modules/analytics.ts')
+const frontendAnalytics = read('frontend/src/lib/analytics.ts')
 const typesFile = read('frontend/src/types/index.ts')
 const hiddenDoseMatch = dosingPage.match(/function isHiddenAdminDose[\s\S]*?^}/m)
 assert.ok(hiddenDoseMatch, 'AdministratorDosingPage must define isHiddenAdminDose')
@@ -38,7 +40,6 @@ assert.match(
 for (const oldLabel of [
   'Stacks im Zeitraum',
   'Benutzer',
-  'Anmeldungen',
   'Katalog-Risiko',
   'Deadlinks als Potenzial',
   'Ohne aktiven Link',
@@ -52,6 +53,12 @@ for (const oldLabel of [
     `AdministratorDashboardPage must not show old dashboard label: ${oldLabel}`,
   )
 }
+
+assert.doesNotMatch(
+  dashboardPage,
+  /label:\s*['"]Anmeldungen['"]/,
+  'AdministratorDashboardPage must not show old dashboard KPI label: Anmeldungen',
+)
 
 for (const newLabel of [
   'Neue Stacks',
@@ -76,7 +83,9 @@ for (const newLabel of [
 for (const backendSignal of [
   'stack_email_events',
   'account_deletion_events',
+  'signup_attribution',
   'page_view_events',
+  'visitor_id',
   'last_seen_at',
   'stack_email_sends',
   'account_deletions',
@@ -87,6 +96,7 @@ for (const backendSignal of [
   'user_affiliate_links_active',
   'link_report_users',
   'ingredients_without_article',
+  'referral_sources',
 ]) {
   assert.match(
     adminModule,
@@ -113,6 +123,24 @@ assert.match(
   'auth module must record account deletion events before hard delete',
 )
 
+assert.match(
+  authModule,
+  /INSERT INTO signup_attribution/,
+  'auth module must record signup attribution from first-party referral state',
+)
+
+assert.match(
+  analyticsModule,
+  /visitor_id/,
+  'analytics module must store visitor_id with page view events',
+)
+
+assert.match(
+  frontendAnalytics,
+  /getSignupAttribution/,
+  'frontend analytics must expose signup attribution for registration',
+)
+
 for (const statsField of [
   'stack_email_sends',
   'account_deletions',
@@ -130,3 +158,9 @@ for (const statsField of [
     `AdminStats must type ${statsField}`,
   )
 }
+
+assert.match(
+  typesFile,
+  /referral_sources\?: AdminStatsReferralSource\[\]/,
+  'AdminStats must type referral_sources as source rows',
+)

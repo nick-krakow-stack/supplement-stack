@@ -104,6 +104,14 @@ function inactiveRangeLabel(range: DashboardRange): string {
   return '30 Tage';
 }
 
+function sourceTypeLabel(value: string | null | undefined): string {
+  if (value === 'google') return 'Google';
+  if (value === 'bing') return 'Bing';
+  if (value === 'duckduckgo') return 'DuckDuckGo';
+  if (value === 'external') return 'Backlink';
+  return 'Quelle';
+}
+
 function taskTone(value: number, urgentTone: AdminTone = 'warn'): AdminTone {
   return value > 0 ? urgentTone : 'ok';
 }
@@ -154,6 +162,7 @@ export default function AdministratorDashboardPage() {
   const googlePageviews = numberValue(stats.google_pageviews);
   const userAffiliateLinksActive = numberValue(stats.user_affiliate_links_active);
   const linkReportUsers = numberValue(stats.link_report_users);
+  const referralSources = stats.referral_sources ?? [];
 
   const tasks = useMemo<DashboardTask[]>(
     () => [
@@ -531,6 +540,32 @@ export default function AdministratorDashboardPage() {
                 </span>
                 <span>Öffnen</span>
               </a>
+            )}
+          </div>
+        </AdminCard>
+
+        <AdminCard
+          title="Quellen & Anmeldungen"
+          subtitle="Wer Besucher und Registrierungen bringt."
+          actions={<Link2 size={16} className="admin-muted" />}
+          className="admin-dashboard-module"
+        >
+          <div className="admin-top-list">
+            {referralSources.length > 0 ? (
+              referralSources.map((source) => (
+                <a key={`${source.referrer_source ?? 'source'}-${source.referrer_host}`} href="/administrator/dashboard" className="admin-top-item">
+                  <span>
+                    <strong>{source.referrer_host}</strong>
+                    <small>
+                      {sourceTypeLabel(source.referrer_source)} - {formatCount(source.visitors)} Besucher,
+                      {' '}{formatCount(source.registrations)} Anmeldungen
+                    </small>
+                  </span>
+                  <span>{formatPercent(source.registrations, source.visitors)}</span>
+                </a>
+              ))
+            ) : (
+              <div className="admin-activity-empty">Noch keine externen Quellen im Zeitraum.</div>
             )}
           </div>
         </AdminCard>
