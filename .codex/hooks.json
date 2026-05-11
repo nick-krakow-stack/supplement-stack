@@ -10,26 +10,6 @@
           }
         ]
       }
-    ],
-    "PreCompact": [
-      {
-        "matcher": "auto",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File ./.codex/hooks/agent-protocol.ps1 -Event PreCompactAuto"
-          }
-        ]
-      },
-      {
-        "matcher": "manual",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File ./.codex/hooks/agent-protocol.ps1 -Event PreCompactManual"
-          }
-        ]
-      }
     ]
   }
 }

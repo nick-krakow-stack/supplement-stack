@@ -53,13 +53,17 @@ for (const settings of [codexHooks, claudeHooks]) {
     0,
     'PostToolUse must stay disabled so Codex does not require unreviewable tool-hook approvals',
   )
+  assert.equal(
+    (settings.hooks?.PreCompact ?? []).length,
+    0,
+    'PreCompact must stay disabled so Codex does not require hidden unreviewable hook approvals',
+  )
 }
 
 for (const command of allCommands) {
   assert.match(command, /^powershell\b/i, `hook command must be PowerShell-compatible: ${command}`)
   assert.match(command, /\.\/\.codex\/hooks\//, `hook command must use centralized .codex/hooks scripts: ${command}`)
   assert.match(command, /agent-protocol\.ps1/, `hook command must use the single dispatcher: ${command}`)
-  assert.doesNotMatch(command, /\.\/\.claude\/hooks\//, `hook command must not use .claude/hooks: ${command}`)
   assert.doesNotMatch(command, /\.sh\b/, `hook command must not reintroduce Bash scripts: ${command}`)
 }
 
@@ -74,12 +78,6 @@ for (const settings of [codexHooks, claudeHooks]) {
     'UserPromptSubmit must run centralized agent-protocol.ps1',
   )
 }
-
-assert.equal(
-  eventCommands(claudeHooks, 'PostToolUse').some((command) => command.includes('update-agent-handoff.ps1')),
-  false,
-  'PostToolUse must not run update-agent-handoff.ps1 on every shell command',
-)
 
 for (const path of [
   '.codex/hooks/agent-protocol.ps1',
@@ -97,7 +95,7 @@ assert.match(protocolHook, /browser|diff|website|admin/i, 'protocol hook must id
 assert.match(protocolHook, /agent-protocol\.log/, 'protocol hook must record orchestrator guard reminders')
 assert.match(protocolHook, /pre-deploy-check\.log/, 'protocol hook must retain manual/future pre-deploy check logic')
 assert.match(protocolHook, /deploy-errors\.log/, 'protocol hook must retain manual/future deploy error capture logic')
-assert.match(protocolHook, /Update-Handoff/, 'protocol hook must update handoff on PreCompact')
+assert.match(protocolHook, /Update-Handoff/, 'protocol hook must retain manual/future handoff update logic')
 
 const manualFeedbackScript = read('scripts/append-owner-feedback.ps1')
 assert.match(manualFeedbackScript, /owner-feedback\.md/, 'manual feedback script must append to owner-feedback.md')

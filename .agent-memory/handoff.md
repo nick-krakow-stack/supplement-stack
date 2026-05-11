@@ -1,6 +1,6 @@
 ﻿# Handoff
 
-Last updated: 2026-05-12 01:07:13 +02:00
+Last updated: 2026-05-12 01:30:27 +02:00
 Update mode: PreCompactManual
 
 ## Latest Notes
@@ -10,7 +10,7 @@ Automatic handoff snapshot written by .codex/hooks/agent-protocol.ps1.
 ## Git Snapshot
 
 - Branch: codex/website-ux-fixes
-- Last commit: 1007516 Centralize agent hook protocol
+- Last commit: 5858a26 Disable unreviewable tool hooks
 
 ## Working Tree
 
@@ -21,6 +21,7 @@ Automatic handoff snapshot written by .codex/hooks/agent-protocol.ps1.
  M .claude/settings.json
  M .codex/hooks.json
  M .codex/hooks/README.md
+ M .codex/hooks/agent-protocol.ps1
  M scripts/hook-regression-check.mjs
 ~~~
 

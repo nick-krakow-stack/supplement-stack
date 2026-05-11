@@ -4,6 +4,19 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+# Centralized hook responsibilities:
+# - Preserve the Orchestrator/Sub-Agent protocol reminder without writing
+#   normal hook output that the Codex App may treat as invalid JSON/noise.
+# - Capture owner browser QA, diff comments, and multi-point website/admin
+#   feedback in .agent-memory/owner-feedback.md so context compression does not
+#   lose pending requests.
+# - Retain Cloudflare/Wrangler pre-deploy checks as durable log output in
+#   .agent-memory/pre-deploy-check.log when the corresponding event is used.
+# - Retain Wrangler deploy error capture in .agent-memory/deploy-errors.log
+#   when the corresponding event is used.
+# - Retain handoff/memory updates before context compaction through
+#   Update-Handoff. The event can be wired again later or run manually.
+
 function Get-RepoRoot {
   $current = Split-Path -Parent $PSScriptRoot
   while ($current -and -not (Test-Path (Join-Path $current ".git"))) {

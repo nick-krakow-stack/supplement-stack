@@ -13,9 +13,12 @@ Operational rules:
   `.codex/hooks/agent-protocol.ps1` for routine hooks.
 - `PreToolUse` and `PostToolUse` are not actively wired while the Codex App
   surfaces those tool hooks as unreviewable approvals in this repo.
-- Do not reintroduce separate active hook files such as `pre-deploy-check.ps1`,
-  `orchestrator-guard.ps1`, `error-capture.ps1`, or
-  `update-agent-handoff.ps1`.
+- `PreCompact` is also not actively wired while the Codex App counts its two
+  auto/manual entries as hidden unreviewable hook approvals. Its handoff logic
+  remains in `.codex/hooks/agent-protocol.ps1` and can be run manually with
+  `powershell -NoProfile -ExecutionPolicy Bypass -File ./.codex/hooks/agent-protocol.ps1 -Event PreCompactManual`.
+- Do not reintroduce separate active hook files. All hook behavior belongs in
+  the central dispatcher.
 - UserPromptSubmit hook runs must produce no stdout or stderr.
 - Pending owner browser QA, diff comments, and multi-point website/admin
   requests belong in `.agent-memory/owner-feedback.md`.
@@ -24,7 +27,8 @@ Operational rules:
 
 Rationale:
 
-- The Codex App treats normal PreToolUse output as invalid/noisy hook output.
+- The Codex App treats normal hook output as invalid/noisy output for some
+  lifecycle events.
   A single dispatcher makes the silent-output rule enforceable in one place.
 - Owner feedback must survive context compression.
 - Orchestrator/sub-agent protocol reminders should be centralized and tested,
@@ -933,14 +937,16 @@ Decision: Initial Codex model-routing policy was recorded in commit `2457345`.
 
 ## Automatic Handoff Snapshots
 
-Decision: use `.codex/hooks/update-agent-handoff.ps1` for cheap automatic handoff snapshots.
+Decision: keep handoff snapshot behavior in the central hook dispatcher.
 
 Codex and Claude integration:
 
-- `.codex/hooks.json` runs the script on `PreCompact`.
-- `.codex/hooks.json` runs the script after shell tool use.
-- `.claude/settings.json` points to the same `.codex/hooks/*.ps1` scripts so
-  hook behavior is centralized and reviewable in one directory.
+- Handoff updates are implemented in `.codex/hooks/agent-protocol.ps1` through
+  `Update-Handoff`.
+- Automatic wiring is disabled while Codex App hook review is not usable for
+  the hidden compaction hooks.
+- Run the dispatcher manually before context compaction when needed:
+  `powershell -NoProfile -ExecutionPolicy Bypass -File ./.codex/hooks/agent-protocol.ps1 -Event PreCompactManual`.
 
 Rationale:
 

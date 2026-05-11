@@ -16,11 +16,25 @@ Current hooks:
   owner feedback capture, pre-deploy logging, deploy error capture, and
   pre-compact handoff updates.
 
-`PreToolUse` and `PostToolUse` are intentionally not wired in the active
-Codex/Claude hook settings. The Codex App currently surfaces those tool hooks
-as unreviewable hook approvals in this repo. Keep tool-hook behavior available
-inside `agent-protocol.ps1`, but trigger it manually or re-enable it only after
-the app review flow is usable.
+Centralized responsibilities:
+
+- `Add-ProtocolLog`: preserve the Orchestrator/Sub-Agent protocol reminder.
+- `Add-PreDeployLog`: preserve the Cloudflare/Wrangler pre-deploy checklist.
+- `Add-ErrorCapture`: preserve Wrangler deploy error capture into memory.
+- `Update-Handoff`: preserve the memory handoff update before context
+  compaction.
+
+Only `UserPromptSubmit` is wired in the active Codex/Claude hook settings.
+`PreToolUse`, `PostToolUse`, and `PreCompact` are intentionally not wired
+because the Codex App surfaced those hooks as unreviewable hook approvals in
+this repo. Keep their behavior available inside `agent-protocol.ps1`, but
+trigger it manually or re-enable it only after the app review flow is usable.
+
+Manual handoff/memory update before context compaction:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File ./.codex/hooks/agent-protocol.ps1 -Event PreCompactManual
+```
 
 If a `UserPromptSubmit` payload does not expose prompt text, capture important
 owner feedback manually:

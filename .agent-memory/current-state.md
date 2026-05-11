@@ -19,23 +19,25 @@ Last updated: 2026-05-12
   - `.codex/hooks/agent-protocol.ps1` records the rule that the Orchestrator
     plans/delegates/reviews and implementation must be delegated to the
     responsible Sub-Agent, with Dev-Agent as the code implementation role.
-  - PreToolUse and UserPromptSubmit hook runs intentionally write no stdout or
-    stderr because the Codex App treats normal hook output as invalid
-    pre-tool-use JSON/noise.
+  - Hook runs intentionally write no stdout or stderr because the Codex App
+    treats normal hook output as invalid JSON/noise.
 - Hook wiring remains centralized under `.codex/hooks/` and PowerShell-based:
   - `.codex/hooks.json` and `.claude/settings.json` wire
-    `UserPromptSubmit` and `PreCompact` through
+    only `UserPromptSubmit` through
     `.codex/hooks/agent-protocol.ps1`.
-  - `PreToolUse` and `PostToolUse` are intentionally not wired because the
-    Codex App surfaced those tool hooks as unreviewable approval prompts in
-    this repo.
+  - `PreToolUse`, `PostToolUse`, and `PreCompact` are intentionally not wired
+    because the Codex App surfaced those hooks as unreviewable approval prompts
+    in this repo.
   - The consolidated tool-hook behavior remains inside `agent-protocol.ps1`
     for manual use or future re-enable when review is usable.
+  - Stale global trust-state entries for old `pre_tool_use` and `post_tool_use`
+    hooks were removed from `C:\Users\email\.codex\config.toml`; backup:
+    `C:\Users\email\.codex\config.toml.before-hook-cleanup`.
 - Replaced the previous separate hook entry points with the single
   `.codex/hooks/agent-protocol.ps1` dispatcher.
 - Added `scripts/hook-regression-check.mjs` to prevent silent regressions in
-  hook centralization, feedback capture, orchestrator guard wording, and the
-  disabled `PostToolUse` handoff updater.
+  hook centralization, feedback capture, orchestrator guard wording, and
+  disabled app-review-sensitive events.
 - Pending owner feedback was moved into `.agent-memory/owner-feedback.md`,
   including the production dashboard deploy mismatch and the admin Wirkstoffe
   page comments.
@@ -45,8 +47,6 @@ Last updated: 2026-05-12
     owner feedback hook wiring.
   - `node scripts/hook-regression-check.mjs`
   - `node --check scripts/hook-regression-check.mjs`
-  - `powershell -NoProfile -ExecutionPolicy Bypass -File
-    ./.codex/hooks/agent-protocol.ps1 -Event PreToolUse`
   - `powershell -NoProfile -ExecutionPolicy Bypass -File
     ./.codex/hooks/agent-protocol.ps1 -Event UserPromptSubmit`
   - Simulated `UserPromptSubmit` payload captured a test entry with no
@@ -162,34 +162,22 @@ Last updated: 2026-05-12
 
 ## 2026-05-11 Codex/Claude Hook Centralization - Local
 
-- Hook failures in the Codex App were traced to Bash-only hook commands on
-  Windows: `bash ./.codex/hooks/*.sh` and `bash ./.claude/hooks/*.sh` failed
-  because `bash` is not available in the current Codex App environment.
-- Hook entry points are now centralized under `.codex/hooks/` as PowerShell
-  scripts:
-  - `pre-deploy-check.ps1`
-  - `error-capture.ps1`
-  - `orchestrator-guard.ps1`
-  - `update-agent-handoff.ps1`
-- `.codex/hooks.json` points to those PowerShell scripts.
-- `update-agent-handoff.ps1` remains available for PreCompact/manual handoff
-  updates, but it is no longer wired into every `PostToolUse` shell command.
-  Running it after every shell command dirtied the Git tree continuously in the
-  Codex App.
-- `.claude/settings.json` also points to the same `.codex/hooks/*.ps1` scripts
-  so Codex and Claude no longer maintain duplicate hook implementations.
-- `.gitignore` now keeps Codex local app state ignored while allowing the
-  reviewed hook entry points in `.codex/hooks.json` and `.codex/hooks/*.ps1`
-  to be versioned.
-- Old duplicate Bash hook files under `.codex/hooks/*.sh` and
-  `.claude/hooks/*.sh` were removed.
-- Manual verification passed:
-  - `orchestrator-guard.ps1` runs and exits 0.
-  - `pre-deploy-check.ps1` exits 0 with empty input and prints the checklist for
-    a simulated Wrangler deploy command.
-  - `error-capture.ps1` exits 0 with empty input and records a simulated
-    Wrangler error to `.agent-memory/deploy-errors.log`.
-  - `update-agent-handoff.ps1` updates `.agent-memory/handoff.md`.
+- Hook failures in the Codex App were traced to hook commands that were not
+  compatible with the current Windows Codex App environment.
+- Hook behavior is now consolidated into the single PowerShell dispatcher
+  `.codex/hooks/agent-protocol.ps1`.
+- The dispatcher preserves:
+  - Orchestrator/Sub-Agent protocol reminders.
+  - Owner-feedback capture into `.agent-memory/owner-feedback.md`.
+  - Cloudflare/Wrangler deploy checklist logging.
+  - Wrangler deploy error capture.
+  - Handoff snapshot generation through `Update-Handoff`.
+- `.codex/hooks.json` and `.claude/settings.json` now wire only the reviewable
+  prompt-capture path. Other dispatcher events remain available for manual use
+  or future re-enable when Codex App hook review is usable.
+- `.gitignore` keeps Codex local app state ignored while allowing the reviewed
+  central hook dispatcher and settings to be versioned.
+- Old duplicate hook entry points were removed.
 
 ## Active Baseline
 
@@ -800,8 +788,8 @@ Last updated: 2026-05-12
   - `qa-preview-demo-bottombar-no-cookie.png`
 - Replaced large temporary admin analysis/plan dumps with compact
   `.agent-memory/admin-rebuild-plan.md`.
-- Removed legacy `.claude/SESSION.md` deploy logging and
-  `.claude/hooks/post-deploy-log.sh`.
+- Removed legacy `.claude/SESSION.md` deploy logging and old Claude hook
+  scripts.
 - `.agent-memory/deploy-log.md` is the canonical deploy/migration log.
 - Added ignore rules for local design/browser-QA artifacts and Claude
   deploy-error logs.

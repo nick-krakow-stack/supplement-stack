@@ -25,6 +25,10 @@ Last updated: 2026-05-12
 - `PreToolUse` and `PostToolUse` are currently not wired because the Codex App
   surfaced them as unreviewable hook approvals. Re-enable only when the app
   review flow is usable.
+- `PreCompact` is also currently not wired because the Codex App counted the
+  two auto/manual entries as hidden unreviewable hooks. Before context
+  compression, run the centralized fallback manually:
+  `powershell -NoProfile -ExecutionPolicy Bypass -File ./.codex/hooks/agent-protocol.ps1 -Event PreCompactManual`.
 - `UserPromptSubmit` must stay silent on stdout/stderr.
 - Check `.agent-memory/owner-feedback.md` before continuing after context
   compression. Current pending entries include the production dashboard deploy
