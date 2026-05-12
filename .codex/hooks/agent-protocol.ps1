@@ -16,6 +16,8 @@ $ErrorActionPreference = "Stop"
 #   when the corresponding event is used.
 # - Retain handoff/memory updates before context compaction through
 #   Update-Handoff. The event can be wired again later or run manually.
+# - Write Stop and PreCompact snapshots with completed work, open work, next
+#   steps, and checks/status into durable memory without stdout/stderr output.
 
 function Get-RepoRoot {
   $current = Split-Path -Parent $PSScriptRoot
@@ -80,9 +82,121 @@ function Get-PromptText {
   return ""
 }
 
+function Get-ListProperty {
+  param([object]$Value, [string[]]$Names)
+  if ($null -eq $Value) { return @() }
+  foreach ($name in $Names) {
+    if ($Value.PSObject.Properties.Name -contains $name) {
+      $candidate = $Value.$name
+      if ($candidate -is [string] -and -not [string]::IsNullOrWhiteSpace($candidate)) {
+        return @($candidate)
+      }
+      if ($candidate -is [System.Array]) {
+        return @($candidate | ForEach-Object { "$_" } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+      }
+    }
+  }
+  foreach ($propertyName in @("hook_input", "event", "payload", "request", "summary")) {
+    if ($Value.PSObject.Properties.Name -contains $propertyName) {
+      $nested = Get-ListProperty -Value $Value.$propertyName -Names $Names
+      if ($nested.Count -gt 0) { return $nested }
+    }
+  }
+  return @()
+}
+
+function Format-SnapshotList {
+  param([string[]]$Items, [string]$Fallback)
+  if ($Items.Count -eq 0) { return "- $Fallback" }
+  return (($Items | ForEach-Object { "- $_" }) -join "`n")
+}
+
+function Ensure-ProgressSnapshotFile {
+  param([string]$MemoryDir)
+  $snapshotPath = Join-Path $MemoryDir "progress-snapshots.md"
+  if (-not (Test-Path $snapshotPath)) {
+    @(
+      "# Progress Snapshots",
+      "",
+      "Durable Stop and PreCompact snapshots for turn/task progress that must survive context compression.",
+      "",
+      "Use this file for efficient recent progress snapshots. Move durable completed project state into `.agent-memory/current-state.md`, exact continuation context into `.agent-memory/handoff.md`, and durable next steps into `.agent-memory/next-steps.md`.",
+      "",
+      "Each snapshot should preserve completed work, open work, next steps, and checks/status.",
+      "",
+      "## Snapshots",
+      ""
+    ) | Set-Content -Path $snapshotPath -Encoding UTF8
+  }
+  return $snapshotPath
+}
+
+function New-MemorySnapshot {
+  param([string]$RepoRoot, [object]$Payload, [string]$Mode)
+  Push-Location $RepoRoot
+  try {
+    $branch = git rev-parse --abbrev-ref HEAD 2>$null
+    $commit = git log -1 --oneline 2>$null
+    $statusLines = @(git status --short 2>$null)
+    $statusBlock = if ($statusLines.Count -gt 0) { ($statusLines | Select-Object -First 80) -join "`n" } else { "Clean working tree." }
+  } finally {
+    Pop-Location
+  }
+
+  $completed = Get-ListProperty -Value $Payload -Names @("completed", "completed_work", "done", "progress")
+  $open = Get-ListProperty -Value $Payload -Names @("open", "open_work", "open_items", "pending", "remaining")
+  $nextSteps = Get-ListProperty -Value $Payload -Names @("next_steps", "nextSteps", "next", "todo")
+  $checks = Get-ListProperty -Value $Payload -Names @("checks_status", "checksStatus", "checks", "status", "verification")
+
+  $completedBlock = Format-SnapshotList -Items $completed -Fallback "No structured completed-work notes were provided by the hook payload; review the git snapshot and recent conversation."
+  $openBlock = Format-SnapshotList -Items $open -Fallback "No structured open-work notes were provided by the hook payload; preserve unresolved items in next-steps when known."
+  $nextBlock = Format-SnapshotList -Items $nextSteps -Fallback "No structured next steps were provided by the hook payload; keep `.agent-memory/next-steps.md` as the durable priority source."
+  $checksBlock = Format-SnapshotList -Items $checks -Fallback "No structured checks/status were provided by the hook payload; run verification before claiming completion."
+
+  return @"
+## Snapshot: $Mode
+
+### Completed
+$completedBlock
+
+### Open
+$openBlock
+
+### Next Steps
+$nextBlock
+
+### Checks/Status
+$checksBlock
+
+### Git Snapshot
+
+- Branch: $branch
+- Last commit: $commit
+
+~~~text
+$statusBlock
+~~~
+"@
+}
+
+function Add-ProgressSnapshot {
+  param([string]$MemoryDir, [string]$Snapshot)
+  $snapshotPath = Ensure-ProgressSnapshotFile -MemoryDir $MemoryDir
+  $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss zzz"
+  @(
+    "### $timestamp",
+    "",
+    $Snapshot,
+    ""
+  ) | Add-Content -Path $snapshotPath -Encoding UTF8
+}
+
 function Test-IsOwnerFeedback {
   param([string]$PromptText)
   if ([string]::IsNullOrWhiteSpace($PromptText)) { return $false }
+  $agentRolePattern = "(?i)\bDu bist\s+(?:Dev|QA|Critic|Science|Feature|UX|UI|Mobile|Persona|Legal|Explorer)(?:-Agent)?\b"
+  $internalDelegationPattern = "(?is)(Workspace:\s*\S+.*$agentRolePattern|$agentRolePattern.*(?:Du bist nicht allein im Codebase|Aufgabe:|Workspace:))"
+  if ($PromptText -match $internalDelegationPattern) { return $false }
   $feedbackPattern = "(?i)(browser|screenshot|diff|feedback|owner|review|kommentar|aenderung|admin|administrator|dashboard|website|demo|stack)"
   if ($PromptText -notmatch $feedbackPattern) { return $false }
   $listMarkers = ([regex]::Matches($PromptText, "(?m)^\s*(-|\*|\d+[\.)])\s+")).Count
@@ -210,7 +324,7 @@ function Add-ErrorCapture {
 }
 
 function Update-Handoff {
-  param([string]$RepoRoot, [string]$MemoryDir, [string]$Mode)
+  param([string]$RepoRoot, [string]$MemoryDir, [string]$Mode, [string]$Snapshot)
   Push-Location $RepoRoot
   try {
     $handoffPath = Join-Path $MemoryDir "handoff.md"
@@ -228,6 +342,8 @@ Update mode: $Mode
 ## Latest Notes
 
 Automatic handoff snapshot written by .codex/hooks/agent-protocol.ps1.
+
+$Snapshot
 
 ## Git Snapshot
 
@@ -255,11 +371,19 @@ $statusBlock
 - Keep implementation compatible with Cloudflare Workers / Pages Functions.
 - Review untracked files before deleting or committing them.
 - Check ``.agent-memory/owner-feedback.md`` before continuing after context compression.
+- Put durable completed state in ``.agent-memory/current-state.md`` and durable priorities in ``.agent-memory/next-steps.md``.
 "@
     Set-Content -Path $handoffPath -Value $content -Encoding UTF8
   } finally {
     Pop-Location
   }
+}
+
+function Update-MemorySnapshot {
+  param([string]$RepoRoot, [string]$MemoryDir, [object]$Payload, [string]$Mode)
+  $snapshot = New-MemorySnapshot -RepoRoot $RepoRoot -Payload $Payload -Mode $Mode
+  Update-Handoff -RepoRoot $RepoRoot -MemoryDir $MemoryDir -Mode $Mode -Snapshot $snapshot
+  Add-ProgressSnapshot -MemoryDir $MemoryDir -Snapshot $snapshot
 }
 
 try {
@@ -286,8 +410,12 @@ try {
       }
       break
     }
+    "^Stop$" {
+      Update-MemorySnapshot -RepoRoot $repoRoot -MemoryDir $memoryDir -Payload $payload -Mode $Event
+      break
+    }
     "^PreCompact" {
-      Update-Handoff -RepoRoot $repoRoot -MemoryDir $memoryDir -Mode $Event
+      Update-MemorySnapshot -RepoRoot $repoRoot -MemoryDir $memoryDir -Payload $payload -Mode $Event
       break
     }
     default {

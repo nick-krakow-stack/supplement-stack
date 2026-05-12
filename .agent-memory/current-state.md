@@ -2,6 +2,28 @@
 
 Last updated: 2026-05-12
 
+## 2026-05-12 Central Hook Memory Rules - Local
+
+- Implemented the owner-requested central hook/memory rule update locally.
+- `.codex/hooks.json` and `.claude/settings.json` now actively wire only the
+  single dispatcher `.codex/hooks/agent-protocol.ps1` for:
+  - `UserPromptSubmit` owner-feedback capture.
+  - `Stop` handoff/progress snapshots.
+  - `PreCompact` with explicit `auto` and `manual` matchers for the same
+    handoff/progress snapshots.
+- `PreToolUse` and `PostToolUse` remain inactive.
+- `.codex/hooks/agent-protocol.ps1` now writes Stop/PreCompact snapshots with
+  clear `Completed`, `Open`, `Next Steps`, and `Checks/Status` sections into
+  `.agent-memory/handoff.md` and `.agent-memory/progress-snapshots.md`.
+- Added `.agent-memory/progress-snapshots.md` as the efficient recent
+  turn/task progress log. Durable completed state still belongs in
+  `.agent-memory/current-state.md`; durable follow-ups still belong in
+  `.agent-memory/next-steps.md`.
+- `scripts/hook-regression-check.mjs` now validates the new active hook set,
+  forbids `PreToolUse`/`PostToolUse`, checks the central dispatcher and memory
+  rules, and simulates silent `UserPromptSubmit`, `Stop`, `PreCompactAuto`,
+  and `PreCompactManual` runs.
+
 ## 2026-05-12 Hook Owner Feedback Capture - Local
 
 - Implemented local hook infrastructure changes only; no dashboard,
@@ -22,17 +44,12 @@ Last updated: 2026-05-12
   - Hook runs intentionally write no stdout or stderr because the Codex App
     treats normal hook output as invalid JSON/noise.
 - Hook wiring remains centralized under `.codex/hooks/` and PowerShell-based:
-  - `.codex/hooks.json` and `.claude/settings.json` wire
-    only `UserPromptSubmit` through
-    `.codex/hooks/agent-protocol.ps1`.
-  - `PreToolUse`, `PostToolUse`, and `PreCompact` are intentionally not wired
-    because the Codex App surfaced those hooks as unreviewable approval prompts
-    in this repo.
+  - Superseded 2026-05-12: `.codex/hooks.json` and
+    `.claude/settings.json` now wire `UserPromptSubmit`, `Stop`, and
+    `PreCompact` auto/manual through `.codex/hooks/agent-protocol.ps1`.
+  - `PreToolUse` and `PostToolUse` are intentionally not wired.
   - The consolidated tool-hook behavior remains inside `agent-protocol.ps1`
     for manual use or future re-enable when review is usable.
-  - Stale global trust-state entries for old `pre_tool_use` and `post_tool_use`
-    hooks were removed from `C:\Users\email\.codex\config.toml`; backup:
-    `C:\Users\email\.codex\config.toml.before-hook-cleanup`.
 - Replaced the previous separate hook entry points with the single
   `.codex/hooks/agent-protocol.ps1` dispatcher.
 - Added `scripts/hook-regression-check.mjs` to prevent silent regressions in

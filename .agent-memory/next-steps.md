@@ -22,14 +22,23 @@ Last updated: 2026-05-12
   `.codex/hooks/*.ps1` change.
 - Do not reintroduce multiple hook entry-point scripts for routine behavior.
   Keep `.codex/hooks/agent-protocol.ps1` as the single active dispatcher.
-- `PreToolUse` and `PostToolUse` are currently not wired because the Codex App
-  surfaced them as unreviewable hook approvals. Re-enable only when the app
-  review flow is usable.
-- `PreCompact` is also currently not wired because the Codex App counted the
-  two auto/manual entries as hidden unreviewable hooks. Before context
-  compression, run the centralized fallback manually:
+- Active hook events are:
+  - `UserPromptSubmit` for owner-feedback capture.
+  - `Stop` for handoff/progress snapshots.
+  - `PreCompact` with `auto` and `manual` matchers for the same snapshot before
+    compaction.
+- `PreToolUse` and `PostToolUse` are not wired; do not re-enable them for this
+  hook rule set.
+- Before context compression, the active `PreCompact` hook should write the
+  snapshot automatically. If manual fallback is needed, run:
   `powershell -NoProfile -ExecutionPolicy Bypass -File ./.codex/hooks/agent-protocol.ps1 -Event PreCompactManual`.
-- `UserPromptSubmit` must stay silent on stdout/stderr.
+- Hook events must stay silent on stdout/stderr.
+- Stop/PreCompact snapshots go to `.agent-memory/handoff.md` and
+  `.agent-memory/progress-snapshots.md` with completed work, open work, next
+  steps, and checks/status.
+- Durable completed project state still belongs in
+  `.agent-memory/current-state.md`; durable priorities still belong in
+  `.agent-memory/next-steps.md`.
 - Check `.agent-memory/owner-feedback.md` before continuing after context
   compression. Current pending entries include the production dashboard deploy
   mismatch and the admin Wirkstoffe page owner comments.

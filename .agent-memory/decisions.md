@@ -11,15 +11,19 @@ Operational rules:
 
 - `.codex/hooks.json` and `.claude/settings.json` should wire only
   `.codex/hooks/agent-protocol.ps1` for routine hooks.
+- Active hook events are `UserPromptSubmit`, `Stop`, and `PreCompact` with
+  explicit `auto` and `manual` matchers.
 - `PreToolUse` and `PostToolUse` are not actively wired while the Codex App
   surfaces those tool hooks as unreviewable approvals in this repo.
-- `PreCompact` is also not actively wired while the Codex App counts its two
-  auto/manual entries as hidden unreviewable hook approvals. Its handoff logic
-  remains in `.codex/hooks/agent-protocol.ps1` and can be run manually with
-  `powershell -NoProfile -ExecutionPolicy Bypass -File ./.codex/hooks/agent-protocol.ps1 -Event PreCompactManual`.
+- `Stop`, `PreCompactAuto`, and `PreCompactManual` write the same
+  handoff/progress snapshot through the central dispatcher.
+- Stop/PreCompact snapshots belong in `.agent-memory/handoff.md` and
+  `.agent-memory/progress-snapshots.md`; durable completed state belongs in
+  `.agent-memory/current-state.md`, and durable follow-ups belong in
+  `.agent-memory/next-steps.md`.
 - Do not reintroduce separate active hook files. All hook behavior belongs in
   the central dispatcher.
-- UserPromptSubmit hook runs must produce no stdout or stderr.
+- Hook runs must produce no stdout or stderr.
 - Pending owner browser QA, diff comments, and multi-point website/admin
   requests belong in `.agent-memory/owner-feedback.md`.
 - Manual fallback capture uses `scripts/append-owner-feedback.ps1`.
@@ -942,10 +946,11 @@ Decision: keep handoff snapshot behavior in the central hook dispatcher.
 Codex and Claude integration:
 
 - Handoff updates are implemented in `.codex/hooks/agent-protocol.ps1` through
-  `Update-Handoff`.
-- Automatic wiring is disabled while Codex App hook review is not usable for
-  the hidden compaction hooks.
-- Run the dispatcher manually before context compaction when needed:
+  `Update-MemorySnapshot`.
+- Active `Stop` and `PreCompact` auto/manual hooks write handoff/progress
+  snapshots through the single dispatcher.
+- Run the dispatcher manually before context compaction only if fallback is
+  needed:
   `powershell -NoProfile -ExecutionPolicy Bypass -File ./.codex/hooks/agent-protocol.ps1 -Event PreCompactManual`.
 
 Rationale:

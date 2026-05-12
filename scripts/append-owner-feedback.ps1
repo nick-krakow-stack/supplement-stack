@@ -2,7 +2,9 @@ param(
   [Parameter(Mandatory = $true)]
   [string]$Text,
 
-  [string]$Source = "manual"
+  [string]$Source = "manual",
+
+  [switch]$PassThru
 )
 
 $ErrorActionPreference = "Stop"
@@ -61,4 +63,6 @@ $entry = @(
 )
 
 $entry | Add-Content -Path $feedbackPath -Encoding UTF8
-Write-Output "Appended feedback to .agent-memory/owner-feedback.md"
+if ($PassThru) {
+  Write-Output "Appended feedback to .agent-memory/owner-feedback.md"
+}
