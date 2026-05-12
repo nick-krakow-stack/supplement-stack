@@ -1,20 +1,30 @@
 import { useEffect, useState } from 'react';
+import type { FamilyMember } from '../types';
 
 interface EditStackModalProps {
   initialName: string;
   initialDescription?: string;
-  onSave: (name: string, description: string) => void | Promise<void>;
+  initialFamilyMemberId?: number | null;
+  familyMembers?: FamilyMember[];
+  title?: string;
+  submitLabel?: string;
+  onSave: (name: string, description: string, familyMemberId: number | null) => void | Promise<void>;
   onClose: () => void;
 }
 
 export default function EditStackModal({
   initialName,
   initialDescription = '',
+  initialFamilyMemberId = null,
+  familyMembers = [],
+  title = 'Stack bearbeiten',
+  submitLabel = 'Speichern',
   onSave,
   onClose,
 }: EditStackModalProps) {
   const [name, setName] = useState(initialName);
   const [desc, setDesc] = useState(initialDescription);
+  const [familyMemberId, setFamilyMemberId] = useState<number | null>(initialFamilyMemberId);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -31,7 +41,7 @@ export default function EditStackModal({
     setSaving(true);
     setError('');
     try {
-      await onSave(finalName, desc.trim());
+      await onSave(finalName, desc.trim(), familyMemberId);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Speichern fehlgeschlagen.');
       setSaving(false);
@@ -44,7 +54,7 @@ export default function EditStackModal({
     <div className="ss-modal-overlay" onClick={onClose}>
       <div className="ss-modal" onClick={(e) => e.stopPropagation()}>
         <div className="ss-modal-header">
-          <div className="ss-modal-title">Stack bearbeiten</div>
+          <div className="ss-modal-title">{title}</div>
           <button className="ss-modal-close" onClick={onClose} aria-label="Schließen">
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
               <path d="M2 2l10 10M12 2L2 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
@@ -82,6 +92,21 @@ export default function EditStackModal({
             placeholder="Kurze Beschreibung deines Stacks, z. B. Ziele oder Zeitraum…"
           />
         </div>
+        <div className="ss-modal-field">
+          <div className="ss-modal-label">Familienmitglied / Profil</div>
+          <select
+            className="ss-modal-input"
+            value={familyMemberId ?? ''}
+            onChange={(e) => setFamilyMemberId(e.target.value ? Number(e.target.value) : null)}
+          >
+            <option value="">Ich selbst</option>
+            {familyMembers.map((member) => (
+              <option key={member.id} value={member.id}>
+                {member.first_name}{member.age != null ? `, ${member.age}` : ''}
+              </option>
+            ))}
+          </select>
+        </div>
         {error && (
           <div
             style={{
@@ -102,8 +127,8 @@ export default function EditStackModal({
           <button className="ss-modal-btn-cancel" onClick={onClose} disabled={saving}>
             Abbrechen
           </button>
-          <button className="ss-modal-btn-save" onClick={() => void handleSave()} disabled={saving}>
-            {saving ? 'Speichern…' : 'Speichern'}
+          <button className="ss-modal-btn-save" onClick={() => void handleSave()} disabled={saving} aria-label={submitLabel}>
+            {saving ? 'Speichern…' : submitLabel}
           </button>
         </div>
       </div>

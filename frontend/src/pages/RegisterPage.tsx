@@ -1,6 +1,13 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { apiPath } from '../api/base';
+import { transferDemoStacksToAccount } from '../lib/stackFlow';
+
+async function importDemoStacksAfterRegister(): Promise<boolean> {
+  const result = await transferDemoStacksToAccount(window.localStorage, fetch, apiPath);
+  return result.importedStacks > 0;
+}
 
 function getAuthRedirect(location: ReturnType<typeof useLocation>): string {
   const state = location.state as { from?: { pathname?: string }; redirect?: string } | null;
@@ -34,11 +41,22 @@ export default function RegisterPage() {
         age: Number.isFinite(ageNum) ? (ageNum as number) : undefined,
         guideline_source: guidelineSource === '' ? undefined : guidelineSource,
       });
+      let demoImported = false;
+      let demoImportFailed = false;
+      try {
+        demoImported = await importDemoStacksAfterRegister();
+      } catch {
+        demoImportFailed = true;
+      }
       navigate('/verify-email', {
         replace: true,
         state: {
           redirect: getAuthRedirect(location),
-          message: result.message,
+          message: demoImported
+            ? 'Dein Konto wurde erstellt und dein Demo-Stack wurde uebernommen.'
+            : demoImportFailed
+              ? 'Dein Konto wurde erstellt. Der Demo-Stack konnte nicht automatisch uebernommen werden.'
+              : result.message,
           emailVerificationEmailSent: result.emailVerificationEmailSent,
         },
       });

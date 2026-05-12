@@ -1,6 +1,235 @@
 # Decisions
 
-Last updated: 2026-05-08
+Last updated: 2026-05-12
+
+## 2026-05-12 - Single Hook Dispatcher And Durable Owner Feedback
+
+Decision: keep one active hook entry point, `.codex/hooks/agent-protocol.ps1`,
+for Codex and Claude hook events.
+
+Operational rules:
+
+- `.codex/hooks.json` and `.claude/settings.json` should wire only
+  `.codex/hooks/agent-protocol.ps1` for routine hooks.
+- Active hook events are `UserPromptSubmit`, `Stop`, and `PreCompact` with
+  explicit `auto` and `manual` matchers.
+- `PreToolUse` and `PostToolUse` are not actively wired while the Codex App
+  surfaces those tool hooks as unreviewable approvals in this repo.
+- `Stop`, `PreCompactAuto`, and `PreCompactManual` write the same
+  handoff/progress snapshot through the central dispatcher.
+- Stop/PreCompact snapshots belong in `.agent-memory/handoff.md` and
+  `.agent-memory/progress-snapshots.md`; durable completed state belongs in
+  `.agent-memory/current-state.md`, and durable follow-ups belong in
+  `.agent-memory/next-steps.md`.
+- Do not reintroduce separate active hook files. All hook behavior belongs in
+  the central dispatcher.
+- Hook runs must produce no stdout or stderr.
+- Pending owner browser QA, diff comments, and multi-point website/admin
+  requests belong in `.agent-memory/owner-feedback.md`.
+- Manual fallback capture uses `scripts/append-owner-feedback.ps1`.
+- Keep `scripts/hook-regression-check.mjs` passing after hook changes.
+
+Rationale:
+
+- The Codex App treats normal hook output as invalid/noisy output for some
+  lifecycle events.
+  A single dispatcher makes the silent-output rule enforceable in one place.
+- Owner feedback must survive context compression.
+- Orchestrator/sub-agent protocol reminders should be centralized and tested,
+  not spread across multiple small scripts.
+
+## 2026-05-11 - Phase 1 Referral Attribution Instead Of Backlink Crawling
+
+Decision: start with free first-party attribution instead of integrating a
+backlink crawler, Google Search Console API, or paid SEO provider.
+
+Operational rules:
+
+- Track observed external referrers and search referrers through
+  `page_view_events`.
+- Store a stable local `visitor_id` only after analytics consent is active.
+- Attach stored first/last attribution data to registration in
+  `signup_attribution`.
+- Show the admin what matters now: source host, visitors, registrations, and
+  conversion rate.
+- Treat "Backlinks" in the current dashboard as observed referrer sources, not
+  a complete web-wide backlink inventory.
+- Defer external crawler/Search Console automation until the affiliate business
+  case justifies more complexity or paid tooling.
+
+Rationale:
+
+- The owner does not need broad backlink discovery yet; the immediate business
+  question is which sources actually send visitors and signups.
+- First-party attribution is free, simple, and enough at the current stage.
+- Full backlink crawling is operationally noisier and less valuable before
+  there is meaningful affiliate revenue to optimize.
+
+## 2026-05-11 - Deploy Directly To Production Domain
+
+Decision: unless the owner explicitly asks for preview-only, completed website
+changes should be deployed directly to Cloudflare Pages production so they are
+available under `https://supplementstack.de`.
+
+Operational rules:
+
+- After verification, apply required remote D1 migrations to
+  `supplementstack-production` and deploy the built Pages snapshot with
+  `wrangler pages deploy ... --project-name supplementstack --branch main`.
+- Branch previews may still be useful for intermediate review, but they are not
+  the final target when the owner asks to finish or deploy.
+- Keep GitHub updated after the production deploy.
+- Record production deployment IDs and postflight checks in
+  `.agent-memory/deploy-log.md`.
+
+Rationale:
+
+- The owner explicitly wants current and future finished changes deployed
+  directly under `supplementstack.de`, not left only on the branch preview.
+
+## 2026-05-11 - Admin Dashboard Metrics After Owner Review
+
+Decision: the admin dashboard KPI row should use owner-facing operational
+business language instead of implementation-oriented labels.
+
+Operational rules:
+
+- `Neuanmeldungen` is the selected-range registration count; subtext is
+  `davon XX aktiv`, counted from verified users created in the same selected
+  range.
+- `Neue Stacks` is the selected-range stack creation count; subtext counts
+  successfully emailed stacks from `stack_email_events`.
+- `Abmeldungen` counts recorded self-service account deletions from
+  `account_deletion_events`; subtext counts non-admin users inactive beyond
+  the selected range using `users.last_seen_at`.
+- `Backlinks` currently means observed external referrer hosts captured by
+  first-party pageview tracking. `Aufrufe über Google` counts Google referrer
+  pageviews. Full SEO backlink counting remains out of scope until an external
+  data source is added.
+- Dashboard action links should lead directly to operational review surfaces:
+  user-owned affiliate links in Products, link reports, pending user products,
+  and ingredients without related articles.
+
+Rationale:
+
+- The owner wants the dashboard to answer operational questions quickly:
+  signups, sent stacks, account churn/inactivity, link opportunities, link
+  reports, and missing content coverage.
+- Several requested values were not historically tracked, so additive event
+  tables are required and historical values begin at the migration date.
+
+## 2026-05-11 - Family Member Assignment Belongs To Stack Create/Edit
+
+Decision: family/profile assignment should be part of `Stack anlegen` and
+`Stack bearbeiten`, because that is the logical moment when a user defines who
+the stack belongs to.
+
+Operational rules:
+
+- Do not keep family/profile management as a prominent separate control in the
+  main stack cockpit long term.
+- Family-member assignment is implemented in the local stack create/edit flows
+  as of the 2026-05-11 UX follow-up branch state.
+- Keep profile creation/management available, but treat assignment as stack
+  metadata.
+
+Rationale:
+
+- While watching authenticated user QA, Nick noted that the current profile /
+  family management placement feels poor and less logical than assigning the
+  owner directly when creating or editing a stack.
+
+## 2026-05-11 - Product Replacement Must Preserve Existing Context
+
+Decision: `Produkt bearbeiten` -> `Produkt wechseln` should not restart at
+ingredient search.
+
+Operational rules:
+
+- Product replacement should open directly at product selection.
+- It should preserve the current stack product's ingredient, target amount /
+  dose, and relevant filter context where available.
+- Users should only change product choice, not re-enter the active ingredient
+  and dose they already configured.
+- This is implemented locally as of the 2026-05-11 UX follow-up branch state;
+  final live QA should verify it with catalog products after deployment.
+
+Rationale:
+
+- During authenticated user QA, the current replacement flow required entering
+  the Wirkstoff again. Nick noted this makes no sense because the product in the
+  stack already carries the necessary Wirkstoff and dosage context.
+
+## 2026-05-11 - Profile Page Needs Responsive Desktop Width
+
+Decision: the Profile page should not stay in a narrow/mobile-feeling layout
+on desktop.
+
+Operational rules:
+
+- Next UI update should give `/profile` a flexible responsive desktop width.
+- Keep mobile readability, but use desktop horizontal space better.
+- Avoid implementing this during the current QA pass; record it as a follow-up.
+
+Rationale:
+
+- During authenticated user QA, Nick noted that Profile appears to use the
+  mobile layout even on desktop.
+
+## 2026-05-11 - Product List View Should Be Compact
+
+Decision: the product list view in the stack workspace should be a compact,
+scan-friendly list.
+
+Operational rules:
+
+- Next UI update should reduce vertical height and card-like bulk in list mode.
+- List mode should prioritize quick comparison: product name, dose, timing,
+  reach, monthly cost, and primary actions.
+- Keep card/grid mode for richer visual presentation.
+- Avoid implementing this during the current QA pass; record it as a follow-up.
+
+Rationale:
+
+- During authenticated user QA, Nick noted that the current list view is too
+  inflated and should feel like an actual list.
+
+## 2026-05-11 - Landing Page Hero Free Copy
+
+Decision: the homepage claim/hero copy should use `Kostenlos` instead of
+`Kosteneffizient`.
+
+Operational rule:
+
+- Implemented and deployed in the Tobias QA landing/demo update:
+  commit `74cc5bd`, PR `#4`, merge `9c67ed7`, Pages preview
+  `https://71809f56.supplementstack.pages.dev`, live
+  `https://supplementstack.de`.
+
+Rationale:
+
+- Nick explicitly decided/noted this wording change for the next update; it was
+  bundled with the product-add flow simplification.
+
+## 2026-05-11 - Product Add Flow Form Selection Simplification
+
+Decision: the normal product-add flow should not force users through a
+separate form-selection step before product selection.
+
+Operational rules:
+
+- Forms remain important for database structure, search, and product matching.
+- Product selection should first show all matching products.
+- Form choice should move into product selection as an optional dropdown/filter.
+- The form filter default is `Alle`, so normal users are not blocked by form
+  terminology before seeing available products.
+
+Rationale:
+
+- Tobias QA showed the current form selection is scientifically useful but
+  cognitively heavy for normal users.
+- In the Vitamin D/D3 demo path, choosing `Cholecalciferol (D3)` + `2000 IE`
+  produced no products, which can interrupt the demo core flow.
 
 ## 2026-05-08 - Admin Dashboard Is Post-Launch Operations
 
@@ -712,12 +941,17 @@ Decision: Initial Codex model-routing policy was recorded in commit `2457345`.
 
 ## Automatic Handoff Snapshots
 
-Decision: use `scripts/update-agent-handoff.ps1` for cheap automatic handoff snapshots.
+Decision: keep handoff snapshot behavior in the central hook dispatcher.
 
-Claude Code integration:
+Codex and Claude integration:
 
-- `.claude/settings.json` runs the script on `PreCompact`.
-- `.claude/settings.json` also runs the script after Bash tool use.
+- Handoff updates are implemented in `.codex/hooks/agent-protocol.ps1` through
+  `Update-MemorySnapshot`.
+- Active `Stop` and `PreCompact` auto/manual hooks write handoff/progress
+  snapshots through the single dispatcher.
+- Run the dispatcher manually before context compaction only if fallback is
+  needed:
+  `powershell -NoProfile -ExecutionPolicy Bypass -File ./.codex/hooks/agent-protocol.ps1 -Event PreCompactManual`.
 
 Rationale:
 
@@ -1206,3 +1440,89 @@ Rationale:
   pages during transition.
 - Audit-Log was explicitly removed from the admin workflow to reduce surface
   area before launch.
+
+## 2026-05-11 - Stack Cockpit Simplification
+
+Decision: family/profile assignment and the Einnahmeplan are no longer cockpit
+controls inside `/stacks`.
+
+Operational rule:
+- Stack ownership/family member selection belongs to the Stack create/edit
+  modal.
+- Family member management has a dedicated protected `/family` page.
+- The Einnahmeplan has a dedicated protected `/routine` page.
+- The stack cockpit only presents the active stack title and profile label.
+
+Rationale:
+- Assigning ownership is part of defining the stack, not a persistent cockpit
+  control.
+- The Einnahmeplan is a separate user task with enough information density to
+  justify its own page.
+- Removing profile and clock controls reduces cockpit noise and frees space for
+  the primary stack actions.
+
+## 2026-05-11 - Duplicate Wirkstoff Handling
+
+Decision: duplicate prevention should be based on Wirkstoff presence before the
+dosage step, while still allowing deliberate duplicate products.
+
+Operational rule:
+- If the chosen ingredient already exists in the active stack, show an
+  intervention screen before dosage/product selection.
+- Offer amount editing, product replacement, leaving the existing item unchanged,
+  or deliberately adding another product with the same ingredient.
+- Exact product duplicate protection remains in place.
+
+Rationale:
+- Blocking only identical products still allows accidental duplicate ingredient
+  intake.
+- Some users legitimately need split formats for the same Wirkstoff, so the
+  flow should warn and explain rather than hard-block every duplicate.
+
+## 2026-05-11 - Combined Routine Email
+
+Decision: `/routine` sends one combined Einnahmeplan email through the stacks
+API namespace instead of mailing each stack separately.
+
+Operational rule:
+- Use `POST /api/stacks/routine/email` for the combined plan.
+- Keep the route before dynamic stack routes such as `/:id` and `/:id/email`.
+- Load only the authenticated user's stacks.
+- Reuse the Stack-Mail item, ingredient, warning, and SMTP helpers.
+- Use the dedicated rate-limit key `routine-email:${user.userId}`.
+- The email must include both a timing overview and a total Wirkstoff overview.
+
+Rationale:
+- `/api/stacks` is already the mounted namespace for stack/routine data.
+- Reusing the existing Stack-Mail helpers keeps warning and dose formatting
+  consistent with single-stack mail.
+- A separate rate-limit key prevents routine mail from sharing quota or route
+  ambiguity with single-stack mail.
+
+## 2026-05-11 - Demo Ordering, Knowledge Index, And Oil Volume Data
+
+Decision: demo/stack product ordering is user-adjustable, `/wissen` becomes a
+searchable public evidence index, and volume-based product calculations are
+first-class for liquid products.
+
+Operational rule:
+- Product cards in the stack overview may be reordered by drag/drop; add-product
+  tiles/rows remain fixed at the end.
+- Persist authenticated ordering through the existing stack product persistence
+  path; demo ordering may stay local/demo-scoped.
+- Public knowledge entries should expose search terms and keyword chips that
+  match likely user language, not only internal taxonomy.
+- Source summaries must state that studies and sources are summarized and
+  interpreted, may be incomplete or wrong, and include links so users can check
+  the original material themselves.
+- Liquid products use volume units such as `ml` in product ingredient potency,
+  serving units, and dose parsing instead of forcing mass units.
+
+Rationale:
+- Stack order is part of personal organization and should not be locked to the
+  insertion order.
+- The public knowledge surface needs to answer normal user questions such as
+  "Magnesium", "Risiko", or "DGE" before it becomes a large article archive.
+- Oil products such as Schwarzkümmelöl are materially wrong when modeled as mg
+  doses against ml bottles; volume support prevents distorted days-supply and
+  monthly-cost calculations.

@@ -109,6 +109,23 @@ describe('stackCalculations', () => {
     expect(usage.matchedIngredient?.ingredient_id).toBe(2);
   });
 
+  it('calculates ml-based oil bottles from dosage text and bottle volume', () => {
+    const usage = calculateProductUsage({
+      price: 11.39,
+      dosage_text: '40 ml täglich',
+      serving_size: 1,
+      serving_unit: 'ml',
+      servings_per_container: 500,
+      container_count: 1,
+      ingredients: [{ ingredient_id: 6, quantity: 1, unit: 'ml', search_relevant: 1 }],
+    }, 11.39);
+
+    expect(usage.calculationSource).toBe('target_dose');
+    expect(usage.servingsPerIntake).toBe(40);
+    expect(usage.daysSupply).toBe(12);
+    expect(usage.monthlyCost).toBeCloseTo(28.48, 2);
+  });
+
   it('falls back to default when dosage text is not parseable', () => {
     const usage = calculateProductUsage({
       dosage_text: 'unbekannt',

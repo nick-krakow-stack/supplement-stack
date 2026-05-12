@@ -876,6 +876,8 @@ export default function AdministratorProductsPage() {
             <select value={affiliate} onChange={(event) => { setPage(1); setAffiliate(event.target.value); }} className="admin-select">
               <option value="all">Alle Partnerlinks</option>
               <option value="partner">Partnerlink</option>
+              <option value="nick">Nick-Partnerlink</option>
+              <option value="user">User-Partnerlink</option>
               <option value="no_partner">Kein Partnerlink</option>
             </select>
             <select value={linkStatus} onChange={(event) => { setPage(1); setLinkStatus(event.target.value); }} className="admin-select">

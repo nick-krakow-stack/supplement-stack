@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Archive, FilePlus, ImagePlus, Plus, RefreshCw, Save, Search, Trash2, X } from 'lucide-react';
 import {
   archiveKnowledgeArticle,
@@ -141,12 +142,13 @@ function parseOptionalNumber(value: string): number | null {
 }
 
 export default function AdministratorKnowledgePage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [articles, setArticles] = useState<AdminKnowledgeArticle[]>([]);
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
   const [mode, setMode] = useState<EditorMode>('edit');
   const [draft, setDraft] = useState<ArticleDraft>(() => emptyDraft());
-  const [query, setQuery] = useState('');
-  const [status, setStatus] = useState('');
+  const [query, setQuery] = useState(() => searchParams.get('q') ?? '');
+  const [status, setStatus] = useState(() => searchParams.get('status') ?? '');
   const [loadingList, setLoadingList] = useState(true);
   const [loadingArticle, setLoadingArticle] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -195,6 +197,13 @@ export default function AdministratorKnowledgePage() {
   useEffect(() => {
     void loadList();
   }, [loadList]);
+
+  useEffect(() => {
+    const next = new URLSearchParams();
+    if (query.trim()) next.set('q', query.trim());
+    if (status) next.set('status', status);
+    setSearchParams(next);
+  }, [query, setSearchParams, status]);
 
   useEffect(() => {
     if (!selectedSlug || mode === 'create') {

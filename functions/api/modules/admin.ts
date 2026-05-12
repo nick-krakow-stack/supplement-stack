@@ -3255,6 +3255,127 @@ async function getTableColumns(db: D1Database, tableName: string): Promise<Set<s
   }
 }
 
+type ReferralSourceRow = {
+  referrer_host: string
+  referrer_source: string | null
+  visitors: number
+  pageviews: number
+  registrations: number
+  last_visit_at: string | null
+  last_signup_at: string | null
+}
+
+async function loadReferralSources(
+  db: D1Database,
+  currentRangeCondition: (column: string) => string,
+  options: {
+    hasPageViewEvents: boolean
+    hasPageViewVisitorId: boolean
+    hasSignupAttribution: boolean
+  },
+): Promise<ReferralSourceRow[]> {
+  if (!options.hasPageViewEvents && !options.hasSignupAttribution) return []
+
+  if (options.hasPageViewEvents && options.hasSignupAttribution) {
+    const visitorCountSql = options.hasPageViewVisitorId
+      ? "COUNT(DISTINCT COALESCE(visitor_id, 'pv-' || id))"
+      : 'COUNT(*)'
+    const { results } = await db.prepare(`
+      WITH page_sources AS (
+        SELECT
+          referrer_host,
+          referrer_source,
+          COUNT(*) AS pageviews,
+          ${visitorCountSql} AS visitors,
+          MAX(created_at) AS last_visit_at
+        FROM page_view_events
+        WHERE referrer_host IS NOT NULL
+          AND referrer_source IN ('external', 'google', 'bing', 'duckduckgo')
+          AND ${currentRangeCondition('created_at')}
+        GROUP BY referrer_host, referrer_source
+      ),
+      signup_sources AS (
+        SELECT
+          COALESCE(last_referrer_host, first_referrer_host) AS referrer_host,
+          COALESCE(last_referrer_source, first_referrer_source) AS referrer_source,
+          COUNT(*) AS registrations,
+          MAX(created_at) AS last_signup_at
+        FROM signup_attribution
+        WHERE COALESCE(last_referrer_host, first_referrer_host) IS NOT NULL
+          AND COALESCE(last_referrer_source, first_referrer_source) IN ('external', 'google', 'bing', 'duckduckgo')
+          AND ${currentRangeCondition('created_at')}
+        GROUP BY COALESCE(last_referrer_host, first_referrer_host), COALESCE(last_referrer_source, first_referrer_source)
+      ),
+      source_keys AS (
+        SELECT referrer_host, referrer_source FROM page_sources
+        UNION
+        SELECT referrer_host, referrer_source FROM signup_sources
+      )
+      SELECT
+        source_keys.referrer_host,
+        source_keys.referrer_source,
+        COALESCE(page_sources.visitors, 0) AS visitors,
+        COALESCE(page_sources.pageviews, 0) AS pageviews,
+        COALESCE(signup_sources.registrations, 0) AS registrations,
+        page_sources.last_visit_at,
+        signup_sources.last_signup_at
+      FROM source_keys
+      LEFT JOIN page_sources
+        ON page_sources.referrer_host = source_keys.referrer_host
+       AND COALESCE(page_sources.referrer_source, '') = COALESCE(source_keys.referrer_source, '')
+      LEFT JOIN signup_sources
+        ON signup_sources.referrer_host = source_keys.referrer_host
+       AND COALESCE(signup_sources.referrer_source, '') = COALESCE(source_keys.referrer_source, '')
+      ORDER BY registrations DESC, visitors DESC, pageviews DESC, source_keys.referrer_host ASC
+      LIMIT 8
+    `).all<ReferralSourceRow>()
+    return results ?? []
+  }
+
+  if (options.hasPageViewEvents) {
+    const visitorCountSql = options.hasPageViewVisitorId
+      ? "COUNT(DISTINCT COALESCE(visitor_id, 'pv-' || id))"
+      : 'COUNT(*)'
+    const { results } = await db.prepare(`
+      SELECT
+        referrer_host,
+        referrer_source,
+        ${visitorCountSql} AS visitors,
+        COUNT(*) AS pageviews,
+        0 AS registrations,
+        MAX(created_at) AS last_visit_at,
+        NULL AS last_signup_at
+      FROM page_view_events
+      WHERE referrer_host IS NOT NULL
+        AND referrer_source IN ('external', 'google', 'bing', 'duckduckgo')
+        AND ${currentRangeCondition('created_at')}
+      GROUP BY referrer_host, referrer_source
+      ORDER BY visitors DESC, pageviews DESC, referrer_host ASC
+      LIMIT 8
+    `).all<ReferralSourceRow>()
+    return results ?? []
+  }
+
+  const { results } = await db.prepare(`
+    SELECT
+      COALESCE(last_referrer_host, first_referrer_host) AS referrer_host,
+      COALESCE(last_referrer_source, first_referrer_source) AS referrer_source,
+      0 AS visitors,
+      0 AS pageviews,
+      COUNT(*) AS registrations,
+      NULL AS last_visit_at,
+      MAX(created_at) AS last_signup_at
+    FROM signup_attribution
+    WHERE COALESCE(last_referrer_host, first_referrer_host) IS NOT NULL
+      AND COALESCE(last_referrer_source, first_referrer_source) IN ('external', 'google', 'bing', 'duckduckgo')
+      AND ${currentRangeCondition('created_at')}
+    GROUP BY COALESCE(last_referrer_host, first_referrer_host), COALESCE(last_referrer_source, first_referrer_source)
+    ORDER BY registrations DESC, referrer_host ASC
+    LIMIT 8
+  `).all<ReferralSourceRow>()
+  return results ?? []
+}
+
 function ingredientTaskStatusSelect(hasTaskStatusTable: boolean): string {
   if (!hasTaskStatusTable) {
     return `
@@ -6359,6 +6480,7 @@ admin.get('/products', async (c) => {
 
   const includeLinkHealth = await hasAffiliateLinkHealthTable(c.env.DB)
   const includeShopLinkHealth = await hasTable(c.env.DB, 'product_shop_link_health')
+  const hasShopLinks = await hasTable(c.env.DB, 'product_shop_links')
   const linkHealthSelect = includeLinkHealth ? `,${AFFILIATE_LINK_HEALTH_SELECT}` : ''
   const linkHealthJoin = includeLinkHealth ? 'LEFT JOIN affiliate_link_health lh ON lh.product_id = p.id' : ''
   const hasPagedRequest = (
@@ -6429,12 +6551,39 @@ admin.get('/products', async (c) => {
     bindings.push(moderation)
   }
   if (affiliate === 'partner') {
-    where.push('COALESCE(p.is_affiliate, 0) = 1')
+    where.push(hasShopLinks
+      ? `(COALESCE(p.is_affiliate, 0) = 1 OR EXISTS (
+          SELECT 1
+          FROM product_shop_links psl
+          WHERE psl.product_id = p.id
+            AND psl.active = 1
+            AND COALESCE(psl.is_affiliate, 0) = 1
+        ))`
+      : 'COALESCE(p.is_affiliate, 0) = 1')
   } else if (affiliate === 'no_partner') {
-    where.push('COALESCE(p.is_affiliate, 0) = 0')
+    where.push(hasShopLinks
+      ? `COALESCE(p.is_affiliate, 0) = 0
+        AND NOT EXISTS (
+          SELECT 1
+          FROM product_shop_links psl
+          WHERE psl.product_id = p.id
+            AND psl.active = 1
+            AND COALESCE(psl.is_affiliate, 0) = 1
+        )`
+      : 'COALESCE(p.is_affiliate, 0) = 0')
   } else if (affiliate === 'nick' || affiliate === 'user') {
-    where.push('COALESCE(p.affiliate_owner_type, CASE WHEN COALESCE(p.is_affiliate, 0) = 1 THEN ? ELSE ? END) = ?')
-    bindings.push('nick', 'none', affiliate)
+    where.push(hasShopLinks
+      ? `(COALESCE(p.affiliate_owner_type, CASE WHEN COALESCE(p.is_affiliate, 0) = 1 THEN ? ELSE ? END) = ?
+        OR EXISTS (
+          SELECT 1
+          FROM product_shop_links psl
+          WHERE psl.product_id = p.id
+            AND psl.active = 1
+            AND COALESCE(psl.is_affiliate, 0) = 1
+            AND psl.affiliate_owner_type = ?
+        ))`
+      : 'COALESCE(p.affiliate_owner_type, CASE WHEN COALESCE(p.is_affiliate, 0) = 1 THEN ? ELSE ? END) = ?')
+    bindings.push('nick', 'none', affiliate, ...(hasShopLinks ? [affiliate] : []))
   }
   if (image === 'with') {
     where.push("(COALESCE(p.image_url, '') <> '' OR COALESCE(p.image_r2_key, '') <> '')")
@@ -8513,6 +8662,24 @@ admin.get('/stats', async (c) => {
   const hasLegacyLinkHealth = await hasAffiliateLinkHealthTable(c.env.DB)
   const hasShopLinks = await hasTable(c.env.DB, 'product_shop_links')
   const hasLinkReports = await hasTable(c.env.DB, 'product_link_reports')
+  const hasStackEmailEvents = await hasTable(c.env.DB, 'stack_email_events')
+  const hasAccountDeletionEvents = await hasTable(c.env.DB, 'account_deletion_events')
+  const hasPageViewEvents = await hasTable(c.env.DB, 'page_view_events')
+  const hasSignupAttribution = await hasTable(c.env.DB, 'signup_attribution')
+  const hasUserProducts = await hasTable(c.env.DB, 'user_products')
+  const hasKnowledgeArticleIngredients = await hasTable(c.env.DB, 'knowledge_article_ingredients')
+  const pageViewColumns = hasPageViewEvents ? await getTableColumns(c.env.DB, 'page_view_events') : new Set<string>()
+  const hasPageViewVisitorId = pageViewColumns.has('visitor_id')
+  const userColumns = await getTableColumns(c.env.DB, 'users')
+  const hasLastSeenAt = userColumns.has('last_seen_at')
+  const inactiveCondition = (() => {
+    if (!hasLastSeenAt || range === 'all') return '0 = 1'
+    if (range === '60d') return "(u.last_seen_at IS NULL OR u.last_seen_at < datetime('now', '-60 days'))"
+    if (range === '1y') return "(u.last_seen_at IS NULL OR u.last_seen_at < datetime('now', '-1 year'))"
+    if (range === 'this_month') return "(u.last_seen_at IS NULL OR u.last_seen_at < date('now', 'start of month'))"
+    if (range === 'last_month') return "(u.last_seen_at IS NULL OR u.last_seen_at < date('now', 'start of month', '-1 month'))"
+    return "(u.last_seen_at IS NULL OR u.last_seen_at < datetime('now', '-30 days'))"
+  })()
 
   const [
     usersRow,
@@ -8544,8 +8711,8 @@ admin.get('/stats', async (c) => {
     c.env.DB.prepare('SELECT COUNT(*) as count FROM users WHERE email_verified_at IS NOT NULL').first<CountRow>(),
     c.env.DB.prepare(`SELECT COUNT(*) as count FROM users WHERE ${currentRangeCondition('created_at')}`).first<CountRow>(),
     c.env.DB.prepare(`SELECT COUNT(*) as count FROM users WHERE ${previousRangeCondition('created_at')}`).first<CountRow>(),
-    c.env.DB.prepare(`SELECT COUNT(*) as count FROM users WHERE email_verified_at IS NOT NULL AND ${currentRangeCondition('email_verified_at')}`).first<CountRow>(),
-    c.env.DB.prepare(`SELECT COUNT(*) as count FROM users WHERE email_verified_at IS NOT NULL AND ${previousRangeCondition('email_verified_at')}`).first<CountRow>(),
+    c.env.DB.prepare(`SELECT COUNT(*) as count FROM users WHERE email_verified_at IS NOT NULL AND ${currentRangeCondition('created_at')}`).first<CountRow>(),
+    c.env.DB.prepare(`SELECT COUNT(*) as count FROM users WHERE email_verified_at IS NOT NULL AND ${previousRangeCondition('created_at')}`).first<CountRow>(),
     c.env.DB.prepare('SELECT COUNT(*) as count FROM ingredients').first<CountRow>(),
     c.env.DB.prepare('SELECT COUNT(*) as count FROM products').first<CountRow>(),
     c.env.DB.prepare('SELECT COUNT(*) as count FROM stacks').first<CountRow>(),
@@ -8675,6 +8842,133 @@ admin.get('/stats', async (c) => {
       : Promise.resolve({ results: [] }),
   ])
 
+  const [
+    stackEmailSendsRow,
+    accountDeletionsRow,
+    inactiveUsersRow,
+    backlinksRow,
+    googlePageviewsRow,
+    deadlinkClicksRow,
+    userAffiliateLinksActiveRow,
+    linkReportUsersRow,
+    userProductsPendingRow,
+    userProductsPendingInRangeRow,
+    ingredientsWithoutArticleRow,
+    referralSourcesResult,
+  ] = await Promise.all([
+    hasStackEmailEvents
+      ? c.env.DB.prepare(`
+          SELECT COALESCE(SUM(stack_count), 0) AS count
+          FROM stack_email_events
+          WHERE ${currentRangeCondition('created_at')}
+        `).first<CountRow>()
+      : Promise.resolve({ count: 0 }),
+    hasAccountDeletionEvents
+      ? c.env.DB.prepare(`
+          SELECT COUNT(*) AS count
+          FROM account_deletion_events
+          WHERE ${currentRangeCondition('created_at')}
+        `).first<CountRow>()
+      : Promise.resolve({ count: 0 }),
+    hasLastSeenAt
+      ? c.env.DB.prepare(`
+          SELECT COUNT(*) AS count
+          FROM users u
+          WHERE COALESCE(u.role, 'user') <> 'admin'
+            AND ${inactiveCondition}
+        `).first<CountRow>()
+      : Promise.resolve({ count: 0 }),
+    hasPageViewEvents
+      ? c.env.DB.prepare(`
+          SELECT COUNT(DISTINCT referrer_host) AS count
+          FROM page_view_events
+          WHERE referrer_source = 'external'
+            AND referrer_host IS NOT NULL
+            AND ${currentRangeCondition('created_at')}
+        `).first<CountRow>()
+      : Promise.resolve({ count: 0 }),
+    hasPageViewEvents
+      ? c.env.DB.prepare(`
+          SELECT COUNT(*) AS count
+          FROM page_view_events
+          WHERE referrer_source = 'google'
+            AND ${currentRangeCondition('created_at')}
+        `).first<CountRow>()
+      : Promise.resolve({ count: 0 }),
+    hasLinkClicks && hasShopLinkHealth
+      ? c.env.DB.prepare(`
+          SELECT COUNT(*) AS count
+          FROM product_link_clicks plc
+          JOIN product_shop_link_health pslh ON pslh.shop_link_id = plc.shop_link_id
+          WHERE pslh.status IN ('failed', 'timeout', 'invalid')
+            AND ${currentRangeCondition('plc.clicked_at')}
+        `).first<CountRow>()
+      : hasLinkClicks && hasLegacyLinkHealth
+        ? c.env.DB.prepare(`
+            SELECT COUNT(*) AS count
+            FROM product_link_clicks plc
+            JOIN affiliate_link_health lh ON lh.product_id = plc.product_id
+            WHERE plc.product_type = 'catalog'
+              AND lh.status IN ('failed', 'timeout', 'invalid')
+              AND ${currentRangeCondition('plc.clicked_at')}
+          `).first<CountRow>()
+        : Promise.resolve({ count: 0 }),
+    hasShopLinks
+      ? c.env.DB.prepare(`
+          SELECT COUNT(*) AS count
+          FROM product_shop_links
+          WHERE active = 1
+            AND COALESCE(is_affiliate, 0) = 1
+            AND affiliate_owner_type = 'user'
+        `).first<CountRow>()
+      : Promise.resolve({ count: 0 }),
+    hasLinkReports
+      ? c.env.DB.prepare(`
+          SELECT COUNT(DISTINCT user_id) AS count
+          FROM product_link_reports
+          WHERE user_id IS NOT NULL
+            AND ${currentRangeCondition('created_at')}
+        `).first<CountRow>()
+      : Promise.resolve({ count: 0 }),
+    hasUserProducts
+      ? c.env.DB.prepare("SELECT COUNT(*) AS count FROM user_products WHERE status = 'pending'").first<CountRow>()
+      : Promise.resolve({ count: 0 }),
+    hasUserProducts
+      ? c.env.DB.prepare(`
+          SELECT COUNT(*) AS count
+          FROM user_products
+          WHERE status = 'pending'
+            AND ${currentRangeCondition('created_at')}
+        `).first<CountRow>()
+      : Promise.resolve({ count: 0 }),
+    hasKnowledgeArticleIngredients
+      ? c.env.DB.prepare(`
+          SELECT COUNT(*) AS count
+          FROM ingredients i
+          LEFT JOIN ingredient_research_status rs ON rs.ingredient_id = i.id
+          WHERE COALESCE(rs.blog_url, '') = ''
+            AND NOT EXISTS (
+              SELECT 1
+              FROM knowledge_article_ingredients kai
+              WHERE kai.ingredient_id = i.id
+            )
+            AND NOT EXISTS (
+              SELECT 1
+              FROM ingredient_safety_warnings w
+              JOIN knowledge_articles a ON a.slug = w.article_slug
+              WHERE w.ingredient_id = i.id
+                AND w.active = 1
+                AND w.article_slug IS NOT NULL
+            )
+        `).first<CountRow>()
+      : Promise.resolve({ count: 0 }),
+    loadReferralSources(c.env.DB, currentRangeCondition, {
+      hasPageViewEvents,
+      hasPageViewVisitorId,
+      hasSignupAttribution,
+    }),
+  ])
+
   const registrations = registrationsRow?.count ?? 0
   const previousRegistrations = previousRegistrationsRow?.count ?? 0
   const activatedUsers = activationsRow?.count ?? 0
@@ -8697,13 +8991,24 @@ admin.get('/stats', async (c) => {
     products_total: productsRow?.count ?? 0,
     stacks: stacksRow?.count ?? 0,
     stacks_in_range: stacksInRange,
+    stack_email_sends: stackEmailSendsRow?.count ?? 0,
+    account_deletions: accountDeletionsRow?.count ?? 0,
+    inactive_users: inactiveUsersRow?.count ?? 0,
+    backlinks: backlinksRow?.count ?? 0,
+    google_pageviews: googlePageviewsRow?.count ?? 0,
     pending_products: pendingRow?.count ?? 0,
     products_pending: pendingRow?.count ?? 0,
+    user_products_pending: userProductsPendingRow?.count ?? 0,
+    user_products_pending_in_range: userProductsPendingInRangeRow?.count ?? 0,
     blocked_products: blockedRow?.count ?? 0,
     link_clicks: linkClicks,
     affiliate_link_clicks: affiliateLinkClicks,
     non_affiliate_link_clicks: nonAffiliateLinkClicksRow?.count ?? 0,
     products_clicked_without_active_link: productsClickedWithoutActiveLinkRow?.count ?? 0,
+    deadlink_clicks: deadlinkClicksRow?.count ?? 0,
+    user_affiliate_links_active: userAffiliateLinksActiveRow?.count ?? 0,
+    link_report_users: linkReportUsersRow?.count ?? 0,
+    ingredients_without_article: ingredientsWithoutArticleRow?.count ?? 0,
     open_link_reports: openLinkReportsRow?.count ?? 0,
     deadlinks: deadlinksRow?.count ?? 0,
     deadlinks_over_7_days: staleDeadlinksRow?.count ?? 0,
@@ -8723,6 +9028,7 @@ admin.get('/stats', async (c) => {
     },
     top_clicked_products: topProductsResult.results ?? [],
     top_shops: topShopsResult.results ?? [],
+    referral_sources: referralSourcesResult,
   })
 })
 

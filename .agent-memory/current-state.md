@@ -1,6 +1,200 @@
 # Current State
 
-Last updated: 2026-05-08
+Last updated: 2026-05-12
+
+## 2026-05-12 Central Hook Memory Rules - Local
+
+- Implemented the owner-requested central hook/memory rule update locally.
+- `.codex/hooks.json` and `.claude/settings.json` now actively wire only the
+  single dispatcher `.codex/hooks/agent-protocol.ps1` for:
+  - `UserPromptSubmit` owner-feedback capture.
+  - `Stop` handoff/progress snapshots.
+  - `PreCompact` with explicit `auto` and `manual` matchers for the same
+    handoff/progress snapshots.
+- `PreToolUse` and `PostToolUse` remain inactive.
+- `.codex/hooks/agent-protocol.ps1` now writes Stop/PreCompact snapshots with
+  clear `Completed`, `Open`, `Next Steps`, and `Checks/Status` sections into
+  `.agent-memory/handoff.md` and `.agent-memory/progress-snapshots.md`.
+- Added `.agent-memory/progress-snapshots.md` as the efficient recent
+  turn/task progress log. Durable completed state still belongs in
+  `.agent-memory/current-state.md`; durable follow-ups still belong in
+  `.agent-memory/next-steps.md`.
+- `scripts/hook-regression-check.mjs` now validates the new active hook set,
+  forbids `PreToolUse`/`PostToolUse`, checks the central dispatcher and memory
+  rules, and simulates silent `UserPromptSubmit`, `Stop`, `PreCompactAuto`,
+  and `PreCompactManual` runs.
+
+## 2026-05-12 Hook Owner Feedback Capture - Local
+
+- Implemented local hook infrastructure changes only; no dashboard,
+  ingredient, migration, or deployment work was done.
+- Added durable owner-feedback capture:
+  - `.agent-memory/owner-feedback.md` is the pending Markdown log for owner
+    browser QA, diff feedback, and multi-change website/admin requests that
+    must survive context compression.
+  - `.codex/hooks/agent-protocol.ps1` reads `UserPromptSubmit` JSON payloads,
+    extracts prompt text when available, and appends relevant structured
+    pending entries to `.agent-memory/owner-feedback.md`.
+  - `scripts/append-owner-feedback.ps1` is the manual fallback when a hook
+    payload has no prompt text.
+- Strengthened the orchestrator/sub-agent guard:
+  - `.codex/hooks/agent-protocol.ps1` records the rule that the Orchestrator
+    plans/delegates/reviews and implementation must be delegated to the
+    responsible Sub-Agent, with Dev-Agent as the code implementation role.
+  - Hook runs intentionally write no stdout or stderr because the Codex App
+    treats normal hook output as invalid JSON/noise.
+- Hook wiring remains centralized under `.codex/hooks/` and PowerShell-based:
+  - Superseded 2026-05-12: `.codex/hooks.json` and
+    `.claude/settings.json` now wire `UserPromptSubmit`, `Stop`, and
+    `PreCompact` auto/manual through `.codex/hooks/agent-protocol.ps1`.
+  - `PreToolUse` and `PostToolUse` are intentionally not wired.
+  - The consolidated tool-hook behavior remains inside `agent-protocol.ps1`
+    for manual use or future re-enable when review is usable.
+- Replaced the previous separate hook entry points with the single
+  `.codex/hooks/agent-protocol.ps1` dispatcher.
+- Added `scripts/hook-regression-check.mjs` to prevent silent regressions in
+  hook centralization, feedback capture, orchestrator guard wording, and
+  disabled app-review-sensitive events.
+- Pending owner feedback was moved into `.agent-memory/owner-feedback.md`,
+  including the production dashboard deploy mismatch and the admin Wirkstoffe
+  page comments.
+- Verification passed:
+  - TDD red: `node scripts/hook-regression-check.mjs` failed before
+    implementation with `UserPromptSubmit must run centralized
+    owner feedback hook wiring.
+  - `node scripts/hook-regression-check.mjs`
+  - `node --check scripts/hook-regression-check.mjs`
+  - `powershell -NoProfile -ExecutionPolicy Bypass -File
+    ./.codex/hooks/agent-protocol.ps1 -Event UserPromptSubmit`
+  - Simulated `UserPromptSubmit` payload captured a test entry with no
+    stdout/stderr; verification-only entries were removed afterward.
+
+## 2026-05-11 Phase 1 Referral Attribution - Production Deployed
+
+- Implemented the free Phase 1 attribution approach for the admin dashboard:
+  first-party referrer/pageview tracking plus signup attribution, no external
+  backlink crawler or paid SEO provider.
+- Remote D1 migration `0077_signup_referral_attribution.sql` was applied to
+  `supplementstack-production`.
+- New data model:
+  - `page_view_events.visitor_id` links consented pageviews to a stable local
+    visitor id.
+  - `signup_attribution` stores the visitor id plus first/last external source,
+    landing path, and timestamps for registrations.
+- Frontend:
+  - `frontend/src/lib/analytics.ts` now stores first/last attribution state in
+    localStorage and includes `visitor_id` in pageview events.
+  - Registration sends the stored attribution payload with `/api/auth/register`.
+- Backend:
+  - `/api/analytics/pageview` stores `visitor_id` when the remote schema has
+    the new column, with a backward-compatible fallback.
+  - `/api/auth/register` records signup attribution in a best-effort insert so
+    registration cannot fail if attribution storage is unavailable.
+  - `/api/admin/stats` exposes `referral_sources`: source host, source type,
+    visitors, pageviews, registrations, and last activity timestamps.
+- Admin UI:
+  - `/administrator/dashboard` now has a `Quellen & Anmeldungen` module that
+    shows who sent visitors, how many visitors arrived, how many registrations
+    came from that source, and the conversion percentage.
+- Important limitation:
+  - Phase 1 measures only observed traffic/referrers and registrations from the
+    app itself. It does not crawl the web for all backlinks that exist but have
+    not sent traffic.
+  - Referral/signup history starts from migration `0077`; older traffic and
+    registrations cannot be reconstructed.
+- Verification passed:
+  - `node scripts/admin-qa-regression-check.mjs`
+  - `functions`: `npx tsc -p tsconfig.json --noEmit`
+  - `frontend`: `npx tsc --noEmit`
+  - `frontend`: `npm run lint --if-present`
+  - `frontend`: `npm test -- --run`
+  - `frontend`: `npm run build`
+  - `git diff --check` with CRLF warnings only
+- Production deployment:
+  - `https://e345663e.supplementstack.pages.dev`
+  - live alias `https://supplementstack.de`
+- Remote postflight:
+  - Live `/` returned 200.
+  - Live `/api/products` returned 200.
+  - Live unauthenticated `/api/admin/stats` returned 401.
+  - Live `POST /api/analytics/pageview` returned 200.
+  - Remote D1 confirmed a test `page_view_events` row with
+    `visitor_id = ssv-postflight` and `referrer_host = example-blog.de`.
+
+## 2026-05-11 Admin Dashboard Owner Comments - Preview Deployed
+
+- Implemented the owner comments from live `/administrator/dashboard` on branch
+  `codex/website-ux-fixes` and deployed them first to the Pages branch preview,
+  then directly to the production/live domain.
+- Remote D1 migration `0076_admin_dashboard_tracking.sql` was applied to
+  `supplementstack-production`.
+- New dashboard tracking/storage:
+  - `users.last_seen_at` is updated on login and authenticated `/api/me`.
+  - `stack_email_events` records successful stack/routine email sends.
+  - `account_deletion_events` records self-service account deletions before the
+    user row is hard-deleted.
+  - `page_view_events` records consented page views plus referrer source/host.
+- Dashboard KPI copy and order now follows the owner comments:
+  - `Neuanmeldungen`, subtext `davon XX aktiv`.
+  - `Neue Stacks`, subtext `XX Stacks wurden verschickt`.
+  - `Backlinks`, subtext `XXX Aufrufe über Google`.
+  - `Abmeldungen`, subtext `XX seit mehr als ZEITRAUM inaktiv`, placed last.
+- Katalog/Content module labels and links were adjusted:
+  - `offene Freigaben`, `Ohne Affiliate-Link`, `Wirkstoffe ohne Artikel`.
+  - Empty product-click state now links to user-owned affiliate links.
+  - Empty shop-signal state now links to link reports and counts users who
+    submitted link reports.
+  - `Deadlinks als Potenzial` is now `Deadlinks`, with deadlink-click subtext.
+- Admin Products affiliate filter now includes `Nick-Partnerlink` and
+  `User-Partnerlink`; backend filtering includes active `product_shop_links`.
+- Important limitation: `Backlinks` is currently an app-measured external
+  referrer-host count from `page_view_events`, not a full SEO backlink crawl.
+  True web-wide backlink counts require a later external data source such as
+  Search Console or an SEO provider.
+- Verification passed:
+  - `node scripts/admin-qa-regression-check.mjs`
+  - `functions`: `npx tsc -p tsconfig.json --noEmit`
+  - `frontend`: `npx tsc --noEmit`
+  - `frontend`: `npm run lint --if-present`
+  - `frontend`: `npm test -- --run`
+  - `frontend`: `npm run build`
+  - `git diff --check` with CRLF warnings only
+- Preview deployment:
+  - `https://8f774ddf.supplementstack.pages.dev`
+  - alias `https://codex-website-ux-fixes.supplementstack.pages.dev`
+- Production deployment:
+  - `https://15debffb.supplementstack.pages.dev`
+  - live alias `https://supplementstack.de`
+- Remote postflight:
+  - `wrangler d1 migrations list supplementstack-production --remote` reported
+    no pending migrations.
+  - Preview `/` returned 200.
+  - Preview `/api/products` returned 200.
+  - Preview unauthenticated `/api/admin/stats` returned 401.
+  - Preview `POST /api/analytics/pageview` returned 200.
+  - Live `/` returned 200.
+  - Live `/api/products` returned 200.
+  - Live unauthenticated `/api/admin/stats` returned 401.
+  - Live `POST /api/analytics/pageview` returned 200.
+
+## 2026-05-11 Codex/Claude Hook Centralization - Local
+
+- Hook failures in the Codex App were traced to hook commands that were not
+  compatible with the current Windows Codex App environment.
+- Hook behavior is now consolidated into the single PowerShell dispatcher
+  `.codex/hooks/agent-protocol.ps1`.
+- The dispatcher preserves:
+  - Orchestrator/Sub-Agent protocol reminders.
+  - Owner-feedback capture into `.agent-memory/owner-feedback.md`.
+  - Cloudflare/Wrangler deploy checklist logging.
+  - Wrangler deploy error capture.
+  - Handoff snapshot generation through `Update-Handoff`.
+- `.codex/hooks.json` and `.claude/settings.json` now wire only the reviewable
+  prompt-capture path. Other dispatcher events remain available for manual use
+  or future re-enable when Codex App hook review is usable.
+- `.gitignore` keeps Codex local app state ignored while allowing the reviewed
+  central hook dispatcher and settings to be versioned.
+- Old duplicate hook entry points were removed.
 
 ## Active Baseline
 
@@ -12,7 +206,7 @@ Last updated: 2026-05-08
   - Cloudflare config: `wrangler.toml` and `wrangler.maintenance.toml`
 - Live domain: `https://supplementstack.de`.
 - Latest documented deployed preview:
-  `https://89b9f726.supplementstack.pages.dev`.
+  `https://71809f56.supplementstack.pages.dev`.
 - The active admin frontend is `/administrator`.
 - `/api/admin` remains the backend API namespace.
 - The old frontend `/admin` route was removed during cleanup. Use
@@ -38,6 +232,231 @@ Last updated: 2026-05-08
   refactor candidate.
 
 ## Latest Completed Work
+
+### 2026-05-11 Routine Email Endpoint - Local Implementation
+
+- Implemented real authenticated `/routine` mail sending locally; not deployed
+  yet.
+- Added `POST /api/stacks/routine/email` under the existing stacks module and
+  placed it before dynamic `/:id` routes so Hono does not match `routine` as a
+  stack id.
+- The endpoint loads all stacks for the current user, prepares stack items with
+  the existing Stack-Mail helpers, groups the email by timing
+  (`morning`/`noon`/`evening`/`flexible`), includes warnings, and adds a total
+  Wirkstoff overview.
+- Routine mail uses its own stricter rate-limit key:
+  `routine-email:${user.userId}` with 3 sends/hour.
+- `frontend/src/pages/RoutinePage.tsx` now calls the real endpoint from
+  `Plan mailen`, shows sending/success/error states, and no longer uses the
+  placeholder status text.
+- Added regression coverage to `scripts/backend-regression-check.mjs` for
+  route existence/order, routine rate-limit key, dedicated HTML builder, and
+  frontend endpoint usage.
+- Verification:
+  - TDD red: `node scripts/backend-regression-check.mjs` failed before
+    implementation with `Routine email endpoint must exist`.
+  - `node scripts/backend-regression-check.mjs` passed.
+  - `functions`: `npx tsc -p tsconfig.json --noEmit` passed.
+  - `frontend`: `npx tsc --noEmit` passed.
+  - `frontend`: `npm run build` passed.
+  - `git diff --check` passed with existing LF/CRLF warnings only.
+
+### 2026-05-11 User UX Follow-Ups - Preview Implementation
+
+- Implemented the post-QA user UX follow-ups and deployed them to the
+  `codex-website-ux-fixes` Pages preview.
+- Stack create/edit now owns family/profile assignment:
+  - `Stack erstellen` opens a modal for name, description, and profile instead
+    of immediately creating `Stack 2`.
+  - `Stack bearbeiten` can save name, description, and assigned family member.
+  - The cockpit now shows the assignment and keeps profile management secondary.
+- Product replacement from `Produkt bearbeiten` now preserves the current
+  product's ingredient/dose/form context and opens directly into product
+  selection where possible.
+- Stack deletion now uses an in-app confirmation dialog instead of native
+  `window.confirm`.
+- Product selection now explains DGE vs. study values and the product ordering.
+- Bottom selection bar now explicitly describes the sum of selected products.
+- Stack product list mode was rebuilt as a compact scan-friendly list with
+  German timing labels for raw timing values such as `evening`.
+- `/profile` now uses a responsive desktop layout instead of a narrow
+  mobile-like column.
+- Own-product creation now has clearer guidance that it should be used only
+  when the product is missing from normal product search, with simpler
+  packaging/label-entry hints.
+- `Influencer` remains the stored profile value for compatibility, but the
+  visible label is now `Community-basierte Empfehlung`.
+- Verification:
+  - `frontend`: `npx tsc --noEmit` passed.
+  - `frontend`: `npm run lint` passed.
+  - `frontend`: `npm run build` passed.
+  - `frontend`: `npm test -- --run` is blocked locally by Vite/esbuild
+    `spawn EPERM` while loading `vite.config.ts`.
+  - Browser sanity on local production build via static `dist` server passed
+    for landing, demo load, stack-create modal/profile assignment visibility,
+    and list-view toggle. Text entry in the in-app browser was limited by a
+    missing virtual clipboard, so full create/delete interaction still needs
+    deployment or a working dev server.
+
+### 2026-05-11 Authenticated User Browser QA - Tobias
+
+- Authenticated user QA was run on live `https://supplementstack.de` as
+  `email@nickkrakow.de` with Tobias-style human thoughts.
+- Covered:
+  - logged-in landing page
+  - `/stacks` empty stack and existing-stack workspace
+  - stack creation and cleanup of QA stack `Stack 2`
+  - stack edit modal
+  - product add flow: search -> dosage -> product selection -> add
+  - product edit modal and product replacement entry point
+  - list/grid toggle and Einnahmeplan
+  - `/my-products` empty state and own-product form
+  - `/profile`
+  - footer affiliate/medical/legal trust signals
+- Important findings for next update:
+  - Family/profile assignment belongs in `Stack anlegen` / `Stack bearbeiten`,
+    not as a prominent separate cockpit control.
+  - `Produkt bearbeiten` -> `Produkt wechseln` should open product selection
+    directly with existing Wirkstoff/dose context preserved.
+  - `/profile` needs a flexible desktop width; it currently feels too narrow /
+    mobile-like on desktop.
+  - Product add flow is much better after removing the forced form step.
+  - Existing stack cards show useful costs, reach, and warnings, but raw timing
+    labels like `evening` still appear.
+  - Own-product creation is powerful but too complex for normal users without
+    stronger guidance.
+  - Stack delete still uses native `window.confirm`; functional but not ideal
+    for a polished user flow.
+
+### 2026-05-11 Tobias QA Updates - Deployed
+
+- Landing page hero claim now says `Wissenschaftlich. Einfach. Kostenlos.`
+  instead of `Wissenschaftlich. Einfach. Kosteneffizient.`.
+- Normal and demo `AddProductModal` in `frontend/src/components/StackWorkspace.tsx`
+  no longer has a separate `form` step in the product-add flow.
+- Ingredient forms are still loaded after ingredient selection, but
+  `selectedFormId` stays `null` by default and the flow goes directly to
+  dosage.
+- Product selection now exposes an optional form dropdown when forms exist,
+  defaulting to `Alle Formen`; selecting a form reloads the product list with
+  the form filter.
+- Back navigation from dosage now returns to search.
+- Added `scripts/tobias-qa-regression-check.mjs`.
+- TDD red run passed as expected by failing before implementation with 10
+  Tobias QA issues.
+- Validation passed:
+  - `node scripts/tobias-qa-regression-check.mjs`
+  - `node scripts/admin-qa-regression-check.mjs`
+  - `node --check scripts/tobias-qa-regression-check.mjs`
+  - `frontend`: `npx tsc --noEmit`
+  - `frontend`: `npm run build`
+- GitHub:
+  - Local commit `74cc5bd` pushed to branch
+    `codex/streamline-demo-product-form-selection`.
+  - PR `#4` merged to `main` as `9c67ed7`.
+- Deployment:
+  - Cloudflare Pages preview `https://71809f56.supplementstack.pages.dev`.
+  - Live alias `https://supplementstack.de`.
+- Browser QA:
+  - Preview landing page shows `Wissenschaftlich. Einfach. Kostenlos.`
+    and no longer shows `Kosteneffizient`.
+  - Live landing page shows the same copy and no browser console errors.
+  - Preview `/demo` Vitamin D3 flow goes directly from ingredient selection
+    to dosage, then to product selection with optional `Form` dropdown
+    defaulting to `Alle Formen`.
+  - `Vitamin D3 2000 IU Tropfen` and `Vitamin D3 5000 IU` appeared in the
+    product selection for the `2000 IE` study value with `Alle Formen`.
+
+### 2026-05-11 Tobias Browser-QA Persona And First User QA - Memory
+
+- New standard human browser-QA persona exists in
+  `.agent-memory/browser-qa-persona.md`: Tobias, 30, normal
+  health-interested user; covers user flows plus admin-operator overlay.
+- Persona file was committed as `b694b4c`
+  (`Add Tobias browser QA persona memory`).
+- First Tobias QA covered landing page, demo, and Vitamin D/D3.
+- Findings:
+  - landing page communicates free/no-signup positioning well.
+  - direct demo CTA was not visible in the logged-in admin context, so that
+    observation is test-limited.
+  - `/demo` is directly usable and explains demo mode.
+  - D3 search finds Vitamin D3.
+  - form selection is scientifically strong but cognitively heavy for normal
+    users.
+  - choosing `Cholecalciferol (D3)` + `2000 IE` returned
+    `Keine Produkte fuer diesen Wirkstoff gefunden`, which can disrupt the
+    demo core flow.
+
+### 2026-05-10 Admin Human-Flow QA And Dosing URL Filter Fix - Deployed
+
+- Authenticated admin QA was extended from a human/operator perspective across
+  dashboard, products, product detail shop links, ingredients, dosing, users,
+  user-products, shop domains, and legal routes.
+- Found and fixed a live admin deep-link bug:
+  `/administrator/dosing?ingredient_id=3&q=Magnesium` selected Magnesium in
+  the filters but still rendered the unfiltered 100-row dosing list.
+- `AdministratorDosingPage` now initializes `q` and `ingredient_id` filters
+  from URL search params.
+- `scripts/admin-qa-regression-check.mjs` now guards the URL filter
+  initialization in addition to the previous admin dosing visibility rule.
+- Validation passed:
+  - `node scripts/admin-qa-regression-check.mjs`
+  - `frontend`: `npx tsc --noEmit`
+  - `node --check scripts/admin-qa-regression-check.mjs`
+  - `frontend`: `npm run build`
+  - `git diff --check` passed with existing LF/CRLF warnings only.
+- GitHub commits on `main`:
+  - `d9ef6cc` (`Guard admin dosing URL filters`)
+  - `5733d8f` (`Initialize admin dosing filters from URL`)
+- Cloudflare Pages production deployment succeeded for commit `5733d8f`.
+  - Production deployment short id: `5a0b8826`
+  - Live URL: `https://supplementstack.de`
+- Live authenticated browser verification confirmed the Magnesium dosing
+  deep-link now renders `4 Richtwerte` and no console warnings/errors.
+- Admin usability findings from the pass:
+  - `/administrator/user-products` is useful but not discoverable in the main
+    sidebar.
+  - The user-products `Markieren` button changes trusted status and is too
+    ambiguous beside row selection.
+  - The ingredient forms modal works but is long and cognitively heavy.
+  - Native confirm dialogs are brittle in browser QA and less polished for
+    destructive admin actions than in-app confirmation dialogs.
+  - Shop-domain create/edit fields are understandable, but text-entry testing
+    was blocked by the in-app browser automation clipboard limitation.
+
+### 2026-05-10 Admin Browser QA And Dosing Visibility Fix - Deployed
+
+- Authenticated browser QA was run against `https://supplementstack.de/administrator/`.
+- A stale in-app browser tab was hanging on `/login`; a fresh tab loaded the
+  active authenticated admin session correctly.
+- Read-only admin QA passed without browser console errors on:
+  `/administrator/dashboard`, `/administrator/products`,
+  `/administrator/ingredients`, `/administrator/users`,
+  `/administrator/dosing`, `/administrator/knowledge`,
+  `/administrator/interactions`, `/administrator/shop-domains`,
+  `/administrator/legal`, and `/administrator/profile`.
+- Product shop-link modal, ingredient form modal, user detail drawer, command
+  palette, and mobile dashboard/products/users layouts were smoke-tested
+  without state-changing saves or deletes.
+- Found and fixed an admin-only data visibility bug:
+  `/administrator/dosing` hid all unpublished `dose_recommendations`, while
+  production data currently stores all 136 dosing rows as unpublished.
+  Admin maintenance views must show these rows.
+- Added `scripts/admin-qa-regression-check.mjs` to guard against reintroducing
+  the unpublished-dose hiding rule in the admin dosing list.
+- Validation passed:
+  - `node scripts/admin-qa-regression-check.mjs`
+  - `node scripts/backend-regression-check.mjs`
+  - `frontend`: `npx tsc --noEmit`
+  - `frontend`: `npm run build`
+  - `node --check scripts/admin-qa-regression-check.mjs`
+  - `git diff --check` passed with existing LF/CRLF warnings only.
+- Commit `2ffeec6` was pushed to `origin/main`.
+- Cloudflare Pages production deployment succeeded for commit `2ffeec6`.
+  - Preview URL: `https://575850b1.supplementstack.pages.dev`
+  - Live URL: `https://supplementstack.de`
+- Live authenticated browser verification confirmed `/administrator/dosing`
+  now renders dosing rows again.
 
 ### 2026-05-10 Backend P2 Hardening - Deployed
 
@@ -386,8 +805,8 @@ Last updated: 2026-05-08
   - `qa-preview-demo-bottombar-no-cookie.png`
 - Replaced large temporary admin analysis/plan dumps with compact
   `.agent-memory/admin-rebuild-plan.md`.
-- Removed legacy `.claude/SESSION.md` deploy logging and
-  `.claude/hooks/post-deploy-log.sh`.
+- Removed legacy `.claude/SESSION.md` deploy logging and old Claude hook
+  scripts.
 - `.agent-memory/deploy-log.md` is the canonical deploy/migration log.
 - Added ignore rules for local design/browser-QA artifacts and Claude
   deploy-error logs.
@@ -538,8 +957,77 @@ Last updated: 2026-05-08
 - Authenticated owner browser QA remains the final acceptance gate for the new
   admin/user workflows.
 
+## 2026-05-11 - Website UX Fixes Preview
+
+- Website UX fixes for the stack/demo surface are implemented on branch
+  `codex/website-ux-fixes` and deployed to the Pages preview alias
+  `https://codex-website-ux-fixes.supplementstack.pages.dev`.
+- Demo now renders inside the shared public `Layout` header instead of the
+  standalone StackWorkspace header.
+- Demo mail/PDF actions no longer show a static unavailable text; buttons stay
+  visible and expose a registration tooltip/click notice.
+- Product removal from a stack now uses an in-app confirmation dialog.
+- Product list cards were compacted; warnings now show a short `Achtung`
+  summary with detail available through the info affordance.
+- Product selection now offers an own-product CTA; demo users get a register
+  modal, authenticated users are linked to `/my-products`.
+- Duplicate Wirkstoff selection is intercepted before dosage selection and
+  offers edit amount, change product, leave unchanged, or deliberately add a
+  second product with the same Wirkstoff.
+- Stack create/edit modals now own family/profile assignment; the cockpit no
+  longer renders profile management or the routine clock.
+- New protected routes were added:
+  - `/family` for family member management and local main-stack selection.
+  - `/routine` for a first standalone Einnahmeplan overview with print action.
+- Demo stacks are persisted in localStorage and imported into real stacks after
+  successful registration when possible.
+- Verification passed:
+  - `frontend`: `npx tsc --noEmit`
+  - `frontend`: `npm run lint`
+  - `frontend`: `npm test -- --run`
+  - `frontend`: `npm run build`
+  - Browser smoke on local Vite: `/demo` shared header, demo mail tooltip,
+    protected `/family` login redirect. Local demo products stayed empty
+    because the pure Vite dev server does not serve `/api/demo/products`.
+
+### 2026-05-11 Website UX QA Gaps - Preview Follow-Up
+
+- Fixed the remaining QA UX gaps and deployed them to the
+  `codex-website-ux-fixes` Pages preview.
+- Add-product duplicate Wirkstoff checks now follow the selected target stack:
+  - target stack selection appears before ingredient search
+  - changing the target stack after choosing an ingredient re-runs the duplicate
+    check
+  - continuing from dosage re-checks the current target stack before products
+- Short product warnings in card and list view now open click/touch in-app
+  detail popovers instead of relying on `title`/hover text.
+- Demo `Stack mailen` and `Plan drucken/PDF` now open an in-app account CTA
+  modal instead of native `window.alert`.
+- List view now renders a compact add-product row at the end, matching the
+  grid view plus tile affordance.
+- Demo stack carryover now uses the shared `stackFlow` snapshot/transfer helper
+  and imports empty demo stacks with `product_ids: []` when the API accepts the
+  create call.
+- Added `scripts/user-ux-regression-check.mjs` plus stackFlow coverage for
+  empty demo stack transfer.
+- Verification passed:
+  - `node scripts/user-ux-regression-check.mjs`
+  - `node --check scripts/user-ux-regression-check.mjs`
+  - `frontend`: `npx tsc --noEmit`
+  - `frontend`: `npm test -- --run src/lib/stackFlow.test.ts`
+  - `frontend`: `npm test -- --run`
+  - `frontend`: `npm run lint --if-present`
+  - `frontend`: `npm run build`
+  - `git diff --check` passed with existing LF/CRLF warnings only.
+- Preview browser smoke confirmed the demo shared header, account CTA modal,
+  list-view add row, and product delete confirmation. Authenticated admin
+  preview QA still requires a preview-domain login session.
+
 ## Known Remaining Work
 
+- Later simplify the normal product-add flow: do not force a separate form
+  selection step before product selection. Keep forms for DB/product matching,
+  but expose them as an optional product-list filter defaulting to `Alle`.
 - Final authenticated owner browser QA:
   - Admin dashboard range cards, especially `Anmeldungen` and activation
     subtext
@@ -566,3 +1054,115 @@ Last updated: 2026-05-08
 - No open `.agent-memory/deployment_images` PNG visual TODOs remain; keep the
   folder and `.gitkeep` for future owner reference images.
 - Authenticated owner browser QA remains open for the new admin flows.
+
+## 2026-05-11 Admin Knowledge/Users Deep-Link Filters - Preview
+
+- Admin deep-link filter fix implemented and deployed to the
+  `codex-website-ux-fixes` Pages preview.
+- `/administrator/knowledge` now initializes `q` and `status` from URL search
+  params and keeps the URL in sync when those filters change. This fixes
+  dashboard links such as `/administrator/knowledge?status=draft`.
+- `/administrator/users` now initializes `q`, `trusted`, and `blocked` from URL
+  search params and updates the URL when filters are applied, cleared, or set
+  from the summary cards.
+- Added a static guard to `scripts/user-ux-regression-check.mjs` that ensures
+  `AdministratorKnowledgePage` uses `useSearchParams` and initializes `status`
+  from the URL.
+- Verification passed:
+  - `node scripts/user-ux-regression-check.mjs`
+  - `frontend`: `npx tsc --noEmit`
+
+## 2026-05-11 Demo Stack UI Polish - Local
+
+- Implemented the current demo/stack UI polish locally on
+  `codex/website-ux-fixes`; not deployed yet.
+- Stack/Demo visible copy in `StackWorkspace.tsx` was normalized from
+  mojibake and ASCII transliterations to proper German umlauts, including
+  `Produkt hinzufügen`, `Stack löschen`, `Übersicht`, `verfügbar`,
+  `Änderungen`, Euro signs, and close/delete labels.
+- Grid add-product tile now has its own `masonry-add-tile` styling: same
+  column width as product tiles, lower height than normal product cards.
+- List-view product cards now use a compact scan layout:
+  Wirkstoff + timing in the header, product name and dosage below, ingredient
+  amount parentheses stripped from list dosage, Kosten/Reicht-für in one
+  column, and buy/edit/delete actions arranged as one wide buy row plus two
+  narrow icon buttons.
+- `scripts/user-ux-regression-check.mjs` now guards the new layout/copy
+  requirements and fails on mojibake in the public stack/demo components.
+- Verification passed:
+  - TDD red: `node scripts/user-ux-regression-check.mjs` failed before
+    implementation with `StackWorkspace.tsx must not contain mojibake on
+    public stack/demo screens`.
+  - `node scripts/user-ux-regression-check.mjs`
+  - `node --check scripts/user-ux-regression-check.mjs`
+  - `frontend`: `npx tsc --noEmit`
+  - `frontend`: `npm run lint --if-present`
+  - `frontend`: `npm test -- --run`
+  - `frontend`: `npm run build`
+- Browser visual smoke was not run in this Codex session because the Browser
+  plugin did not expose a usable navigate/screenshot tool through
+  `tool_search`; preview/local browser QA remains useful before deploy.
+
+## 2026-05-11 Demo Stack UI Polish - Preview Deployed
+
+- Demo/stack UI polish is deployed to the Pages branch alias:
+  `https://codex-website-ux-fixes.supplementstack.pages.dev`.
+- Public stack/demo surfaces now have normalized German umlauts and Euro signs
+  in `StackWorkspace.tsx` and `ProductCard.tsx`; browser smoke confirmed no
+  mojibake in `/demo`.
+- Toolbar updates:
+  - `Stack erstellen` moved into the stack dropdown as the last option.
+  - Stack edit/mail/PDF/delete are icon-only accessible buttons.
+  - Delete icon sits before a vertical divider, followed by the green
+    `Produkt hinzufügen` button.
+- Demo banner copy now says the demo stack resets on reload and points to free
+  signup for permanent storage.
+- Header now includes a public `Studien & mehr` nav item backed by `/wissen`
+  and a simple knowledge index page.
+- List view product images/placeholders are larger (`58px`), and list dosage
+  remains compact without ingredient amount parentheses.
+- Verification passed:
+  - `node scripts/user-ux-regression-check.mjs`
+  - `frontend`: `npx tsc --noEmit`
+  - `frontend`: `npm run lint --if-present`
+  - `frontend`: `npm test -- --run`
+  - `frontend`: `npm run build`
+  - `git diff --check` with CRLF warnings only
+  - Playwright browser smoke on `/demo` and `/wissen`
+
+## 2026-05-11 Website UX Review Follow-Ups - Preview Deployed
+
+- Implemented and deployed the owner review follow-ups to the
+  `codex-website-ux-fixes` Pages preview.
+- Stack toolbar now has distinct icon backgrounds for mail/PDF, plus new
+  JSON share and JSON import actions with in-app modals.
+- Product cards place `Link melden` as the leftmost grid action.
+- Demo banner now says `um deinen Stack dauerhaft zu speichern`.
+- Product section title is shortened to `Übersicht`.
+- Demo product cards are draggable for manual ordering; the green add tile/row
+  remains fixed at the end. Authenticated reorder persists through the existing
+  stack update flow.
+- List cards vertically center their columns and the list add row now only says
+  `Produkt hinzufügen`.
+- `/wissen` now has the approved headline/copy, search field, keyword-backed
+  filtering, tag cloud, masonry-style feature cards, a remaining-entry list, and
+  a source-interpretation disclaimer.
+- Schwarzkümmelöl product metadata was corrected through D1 migration
+  `0075_fix_black_seed_oil_volume.sql`: 500 ml bottle, 40 ml daily dose, ml
+  calculation support in frontend and backend.
+- Remote D1 migration `0075_fix_black_seed_oil_volume.sql` was applied to
+  `supplementstack-production`.
+- Latest preview deploy:
+  `https://59a52a7d.supplementstack.pages.dev`, alias
+  `https://codex-website-ux-fixes.supplementstack.pages.dev`.
+- Verification passed:
+  - `node scripts/user-ux-regression-check.mjs`
+  - `frontend`: `npx tsc --noEmit`
+  - `functions`: `npx tsc -p tsconfig.json --noEmit`
+  - `frontend`: `npm run lint --if-present`
+  - `frontend`: `npm test -- --run`
+  - `frontend`: `npm run build`
+  - `git diff --check` with CRLF warnings only
+  - Playwright preview smoke confirmed `/demo` and `/wissen`, including
+    no mojibake, drag affordance count, share/import modals, and
+    Schwarzkümmelöl now showing `40 ml täglich`, `12 Tage`, `28,48 €/Mo`.

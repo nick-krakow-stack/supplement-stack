@@ -1,4 +1,4 @@
-import { type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { type FormEvent, type ReactNode, useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   BookOpen,
@@ -1368,7 +1368,7 @@ function RecommendationModal({
 
   useEffect(() => {
     if (selectedProductId) void loadShopLinks(selectedProductId, selectedShopLinkId);
-  }, [loadShopLinks, selectedProductId]);
+  }, [loadShopLinks, selectedProductId, selectedShopLinkId]);
 
   const handleSearchProducts = async (event?: FormEvent) => {
     event?.preventDefault();

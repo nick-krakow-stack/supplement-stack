@@ -12,12 +12,15 @@ const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const StacksPage = lazy(() => import('./pages/StacksPage'));
 const DemoPage = lazy(() => import('./pages/DemoPage'));
 const MyProductsPage = lazy(() => import('./pages/MyProductsPage'));
+const FamilyPage = lazy(() => import('./pages/FamilyPage'));
+const RoutinePage = lazy(() => import('./pages/RoutinePage'));
 const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
 const VerifyEmailPage = lazy(() => import('./pages/VerifyEmailPage'));
 const PrivacyPage = lazy(() => import('./pages/PrivacyPage'));
 const ImprintPage = lazy(() => import('./pages/ImprintPage'));
 const TermsPage = lazy(() => import('./pages/TermsPage'));
+const KnowledgeIndexPage = lazy(() => import('./pages/KnowledgeIndexPage'));
 const KnowledgeArticlePage = lazy(() => import('./pages/KnowledgeArticlePage'));
 
 const AdministratorShell = lazy(() => import('./pages/administrator/AdministratorShell'));
@@ -116,8 +119,6 @@ export default function App() {
               </Layout>
             }
           />
-          <Route path="/demo" element={<DemoPage />} />
-
           <Route
             path="*"
             element={
@@ -138,15 +139,33 @@ export default function App() {
                   <Route path="/reset-password" element={<ResetPasswordPage />} />
                   <Route path="/verify-email" element={<VerifyEmailPage />} />
                   <Route path="/impressum" element={<ImprintPage />} />
+                  <Route path="/demo" element={<DemoPage />} />
                   <Route path="/datenschutz" element={<PrivacyPage />} />
                   <Route path="/nutzungsbedingungen" element={<TermsPage />} />
                   <Route path="/agb" element={<TermsPage />} />
+                  <Route path="/wissen" element={<KnowledgeIndexPage />} />
                   <Route path="/wissen/:slug" element={<KnowledgeArticlePage />} />
                   <Route
                     path="/my-products"
                     element={
                       <ProtectedRoute>
                         <MyProductsPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/family"
+                    element={
+                      <ProtectedRoute>
+                        <FamilyPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/routine"
+                    element={
+                      <ProtectedRoute>
+                        <RoutinePage />
                       </ProtectedRoute>
                     }
                   />

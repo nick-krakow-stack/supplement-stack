@@ -30,9 +30,22 @@ export default function Layout({ children }: LayoutProps) {
       <Link to="/stacks" className={navLinkClass} onClick={closeMobile}>
         Meine Stacks
       </Link>
+      <Link to="/wissen" className={navLinkClass} onClick={closeMobile}>
+        Studien & mehr
+      </Link>
       {user && (
         <Link to="/my-products" className={navLinkClass} onClick={closeMobile}>
           Eigene Produkte
+        </Link>
+      )}
+      {user && (
+        <Link to="/routine" className={navLinkClass} onClick={closeMobile}>
+          Einnahmeplan
+        </Link>
+      )}
+      {user && (
+        <Link to="/family" className={navLinkClass} onClick={closeMobile}>
+          Familie verwalten
         </Link>
       )}
       {!user && (

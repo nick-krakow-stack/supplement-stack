@@ -26,11 +26,16 @@ functions/.dev.vars
 /qa-*.png
 /logo.png
 .claude/deploy-errors.log
+.agent-memory/deploy-errors.log
 
 # Claude local-only state
 .claude/settings.local.json
 .claude/worktrees/
 .claude/commands/
 
-# Codex local-only app hooks/state
-.codex/
+# Codex local-only app state; hook entry points stay versioned/reviewable.
+.codex/*
+!.codex/hooks.json
+!.codex/hooks/
+!.codex/hooks/*.ps1
+!.codex/hooks/README.md

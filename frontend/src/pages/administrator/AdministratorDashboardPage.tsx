@@ -95,6 +95,23 @@ function formatDate(value: string | null | undefined): string {
   return new Intl.DateTimeFormat('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' }).format(date);
 }
 
+function inactiveRangeLabel(range: DashboardRange): string {
+  if (range === '60d') return '60 Tage';
+  if (range === '1y') return '1 Jahr';
+  if (range === 'this_month') return 'diesen Monat';
+  if (range === 'last_month') return 'letzten Monat';
+  if (range === 'all') return 'den gewählten Zeitraum';
+  return '30 Tage';
+}
+
+function sourceTypeLabel(value: string | null | undefined): string {
+  if (value === 'google') return 'Google';
+  if (value === 'bing') return 'Bing';
+  if (value === 'duckduckgo') return 'DuckDuckGo';
+  if (value === 'external') return 'Backlink';
+  return 'Quelle';
+}
+
 function taskTone(value: number, urgentTone: AdminTone = 'warn'): AdminTone {
   return value > 0 ? urgentTone : 'ok';
 }
@@ -127,14 +144,25 @@ export default function AdministratorDashboardPage() {
   const linkClicks = numberValue(stats.link_clicks);
   const affiliateClicks = numberValue(stats.affiliate_link_clicks);
   const deadlinks = numberValue(stats.deadlinks);
+  const deadlinkClicks = numberValue(stats.deadlink_clicks);
   const openLinkReports = numberValue(stats.open_link_reports ?? ops?.link_reports.open);
   const pendingProducts = numberValue(stats.products_pending ?? stats.pending_products);
+  const pendingApprovals = numberValue(stats.user_products_pending ?? pendingProducts);
+  const pendingApprovalsInRange = numberValue(stats.user_products_pending_in_range ?? pendingApprovals);
   const productQaIssues = numberValue(ops?.product_qa.issues);
   const dueResearch = numberValue(ops?.research.due_reviews);
-  const warningsWithoutArticle = numberValue(ops?.warnings.without_article);
+  const ingredientsWithoutArticle = numberValue(stats.ingredients_without_article ?? ops?.warnings.without_article);
   const knowledgeDrafts = numberValue(ops?.knowledge.drafts);
   const nonAffiliateClicks = numberValue(stats.non_affiliate_link_clicks);
   const clickedWithoutActiveLink = numberValue(stats.products_clicked_without_active_link);
+  const stackEmailSends = numberValue(stats.stack_email_sends);
+  const accountDeletions = numberValue(stats.account_deletions);
+  const inactiveUsers = numberValue(stats.inactive_users);
+  const backlinks = numberValue(stats.backlinks);
+  const googlePageviews = numberValue(stats.google_pageviews);
+  const userAffiliateLinksActive = numberValue(stats.user_affiliate_links_active);
+  const linkReportUsers = numberValue(stats.link_report_users);
+  const referralSources = stats.referral_sources ?? [];
 
   const tasks = useMemo<DashboardTask[]>(
     () => [
@@ -159,11 +187,11 @@ export default function AdministratorDashboardPage() {
       {
         id: 'product-qa',
         label: 'Produktfreigaben / Produkt-QA',
-        value: pendingProducts + productQaIssues,
-        meta: `${formatCount(pendingProducts)} Freigaben, ${formatCount(productQaIssues)} QA-Hinweise`,
-        href: '/administrator/products?moderation=pending',
+        value: pendingApprovals + productQaIssues,
+        meta: `${formatCount(pendingApprovals)} offene Freigaben, ${formatCount(productQaIssues)} QA-Hinweise`,
+        href: '/administrator/user-products?status=pending',
         action: 'Katalog',
-        tone: taskTone(pendingProducts + productQaIssues, 'warn'),
+        tone: taskTone(pendingApprovals + productQaIssues, 'warn'),
       },
       {
         id: 'research-due',
@@ -176,12 +204,12 @@ export default function AdministratorDashboardPage() {
       },
       {
         id: 'warnings',
-        label: 'Warnungen ohne Artikel',
-        value: warningsWithoutArticle,
-        meta: 'Vertrauensluecke',
-        href: '/administrator/knowledge',
-        action: 'Verknüpfen',
-        tone: taskTone(warningsWithoutArticle, 'danger'),
+        label: 'Wirkstoffe ohne Artikel',
+        value: ingredientsWithoutArticle,
+        meta: 'Wissenslücke',
+        href: '/administrator/ingredients?task=knowledge',
+        action: 'Pflegen',
+        tone: taskTone(ingredientsWithoutArticle, 'danger'),
       },
       {
         id: 'knowledge',
@@ -198,10 +226,10 @@ export default function AdministratorDashboardPage() {
       dueResearch,
       knowledgeDrafts,
       openLinkReports,
-      pendingProducts,
+      pendingApprovals,
       productQaIssues,
       stats.deadlinks_over_7_days,
-      warningsWithoutArticle,
+      ingredientsWithoutArticle,
     ],
   );
 
@@ -218,20 +246,20 @@ export default function AdministratorDashboardPage() {
         label: 'Affiliate-Klicks',
         value: formatCount(affiliateClicks),
         meta: formatTrend(normalizeTrend(affiliateClicks, stats.trends?.affiliate_link_clicks), range),
-        href: '/administrator/products?affiliate=true',
+        href: '/administrator/products?affiliate=partner',
         tone: affiliateClicks > 0 ? 'ok' : 'neutral',
       },
       {
         label: 'Affiliate-Quote',
         value: formatPercent(affiliateClicks, linkClicks),
         meta: `${formatCount(nonAffiliateClicks)} Klicks ohne Affiliate`,
-        href: '/administrator/products?affiliate=false',
+        href: '/administrator/products?affiliate=no_partner',
         tone: linkClicks > 0 && affiliateClicks === 0 ? 'warn' : 'info',
       },
       {
-        label: 'Deadlinks als Potenzial',
+        label: 'Deadlinks',
         value: formatCount(deadlinks),
-        meta: `${formatCount(clickedWithoutActiveLink)} geklickte Produkte ohne aktiven Link`,
+        meta: `${formatCount(deadlinkClicks)} Deadlinks wurden geklickt`,
         href: '/administrator/products?link_status=dead',
         tone: deadlinks > 0 ? 'danger' : 'ok',
       },
@@ -245,8 +273,8 @@ export default function AdministratorDashboardPage() {
     ],
     [
       affiliateClicks,
-      clickedWithoutActiveLink,
       deadlinks,
+      deadlinkClicks,
       linkClicks,
       nonAffiliateClicks,
       openLinkReports,
@@ -259,49 +287,44 @@ export default function AdministratorDashboardPage() {
   const metrics = useMemo<DashboardMetric[]>(
     () => [
       {
-        label: 'Anmeldungen',
+        label: 'Neuanmeldungen',
         value: formatCount(stats.registrations),
-        delta: `${formatCount(stats.activated_users)} Aktivierungen - ${formatTrend(
-          normalizeTrend(numberValue(stats.registrations), stats.trends?.registrations),
-          range,
-        )}`,
+        delta: `davon ${formatCount(stats.activated_users)} aktiv`,
         href: '/administrator/users',
         tone: numberValue(stats.registrations) > 0 ? 'info' : 'neutral',
       },
       {
-        label: 'Benutzer',
-        value: formatCount(stats.users),
-        delta: `${formatCount(stats.active_users)} aktivierte Nutzer`,
-        href: '/administrator/users',
-        tone: 'info',
-      },
-      {
-        label: 'Stacks im Zeitraum',
+        label: 'Neue Stacks',
         value: formatCount(stats.stacks_in_range),
-        delta: formatTrend(normalizeTrend(numberValue(stats.stacks_in_range), stats.trends?.stacks_in_range), range),
+        delta: `${formatCount(stackEmailSends)} Stacks wurden verschickt`,
         href: '/administrator/users',
         tone: numberValue(stats.stacks_in_range) > 0 ? 'ok' : 'neutral',
       },
       {
-        label: 'Katalog-Risiko',
-        value: formatCount(deadlinks + pendingProducts + productQaIssues),
-        delta: `${formatCount(deadlinks)} Deadlinks, ${formatCount(pendingProducts)} Freigaben`,
-        href: '/administrator/products',
-        tone: deadlinks + pendingProducts + productQaIssues > 0 ? 'warn' : 'ok',
+        label: 'Backlinks',
+        value: formatCount(backlinks),
+        delta: `${formatCount(googlePageviews)} Aufrufe über Google`,
+        href: '/administrator/dashboard',
+        tone: backlinks > 0 ? 'ok' : 'neutral',
+      },
+      {
+        label: 'Abmeldungen',
+        value: formatCount(accountDeletions),
+        delta: `${formatCount(inactiveUsers)} seit mehr als ${inactiveRangeLabel(range)} inaktiv`,
+        href: '/administrator/users',
+        tone: accountDeletions > 0 ? 'warn' : 'neutral',
       },
     ],
     [
-      deadlinks,
-      pendingProducts,
-      productQaIssues,
+      accountDeletions,
+      backlinks,
+      googlePageviews,
+      inactiveUsers,
       range,
-      stats.active_users,
       stats.activated_users,
       stats.registrations,
       stats.stacks_in_range,
-      stats.trends?.registrations,
-      stats.trends?.stacks_in_range,
-      stats.users,
+      stackEmailSends,
     ],
   );
 
@@ -330,9 +353,9 @@ export default function AdministratorDashboardPage() {
     ...(ops?.queues.warnings_without_article ?? []).slice(0, 1).map((entry) => ({
       id: `warning-${entry.id}`,
       title: entry.short_label ?? entry.ingredient_name ?? 'Warnung',
-      meta: 'Warnung ohne Artikel',
+      meta: 'Artikel fehlt',
       value: entry.severity ?? 'offen',
-      href: '/administrator/knowledge',
+      href: '/administrator/ingredients?task=knowledge',
     })),
   ].slice(0, 6);
 
@@ -441,14 +464,14 @@ export default function AdministratorDashboardPage() {
               <span>Deadlinks</span>
               <strong>{formatCount(deadlinks)}</strong>
             </a>
-            <a href="/administrator/products?moderation=pending" className="admin-module-stat" data-tone={pendingProducts > 0 ? 'warn' : 'ok'}>
+            <a href="/administrator/user-products?status=pending" className="admin-module-stat" data-tone={pendingApprovalsInRange > 0 ? 'warn' : 'ok'}>
               <PackageCheck size={15} />
-              <span>Freigaben</span>
-              <strong>{formatCount(pendingProducts)}</strong>
+              <span>offene Freigaben</span>
+              <strong>{formatCount(pendingApprovalsInRange)}</strong>
             </a>
             <a href="/administrator/products" className="admin-module-stat" data-tone={clickedWithoutActiveLink > 0 ? 'warn' : 'neutral'}>
               <Link2 size={15} />
-              <span>Ohne aktiven Link</span>
+              <span>Ohne Affiliate-Link</span>
               <strong>{formatCount(clickedWithoutActiveLink)}</strong>
             </a>
           </div>
@@ -464,7 +487,13 @@ export default function AdministratorDashboardPage() {
                 </a>
               ))
             ) : (
-              <div className="admin-activity-empty">Keine Produktklicks im Zeitraum.</div>
+              <a href="/administrator/products?affiliate=user" className="admin-top-item">
+                <span>
+                  <strong>{formatCount(userAffiliateLinksActive)} fremde Affiliate-Links aktiv</strong>
+                  <small>Nach User-Link filtern</small>
+                </span>
+                <span>Prüfen</span>
+              </a>
             )}
           </div>
         </AdminCard>
@@ -481,10 +510,10 @@ export default function AdministratorDashboardPage() {
               <span>Reviews fällig</span>
               <strong>{formatCount(dueResearch)}</strong>
             </a>
-            <a href="/administrator/knowledge" className="admin-module-stat" data-tone={warningsWithoutArticle > 0 ? 'danger' : 'ok'}>
+            <a href="/administrator/ingredients?task=knowledge" className="admin-module-stat" data-tone={ingredientsWithoutArticle > 0 ? 'danger' : 'ok'}>
               <ShieldAlert size={15} />
-              <span>Warnungen ohne Artikel</span>
-              <strong>{formatCount(warningsWithoutArticle)}</strong>
+              <span>Wirkstoffe ohne Artikel</span>
+              <strong>{formatCount(ingredientsWithoutArticle)}</strong>
             </a>
             <a href="/administrator/knowledge?status=draft" className="admin-module-stat" data-tone={knowledgeDrafts > 0 ? 'info' : 'neutral'}>
               <BookOpen size={15} />
@@ -504,7 +533,39 @@ export default function AdministratorDashboardPage() {
                 </a>
               ))
             ) : (
-              <div className="admin-activity-empty">Keine Shop-Signale im Zeitraum.</div>
+              <a href="/administrator/link-reports" className="admin-top-item">
+                <span>
+                  <strong>{formatCount(linkReportUsers)} User haben Scam-Links eingereicht</strong>
+                  <small>Linkmeldungen nach Nutzer prüfen</small>
+                </span>
+                <span>Öffnen</span>
+              </a>
+            )}
+          </div>
+        </AdminCard>
+
+        <AdminCard
+          title="Quellen & Anmeldungen"
+          subtitle="Wer Besucher und Registrierungen bringt."
+          actions={<Link2 size={16} className="admin-muted" />}
+          className="admin-dashboard-module"
+        >
+          <div className="admin-top-list">
+            {referralSources.length > 0 ? (
+              referralSources.map((source) => (
+                <a key={`${source.referrer_source ?? 'source'}-${source.referrer_host}`} href="/administrator/dashboard" className="admin-top-item">
+                  <span>
+                    <strong>{source.referrer_host}</strong>
+                    <small>
+                      {sourceTypeLabel(source.referrer_source)} - {formatCount(source.visitors)} Besucher,
+                      {' '}{formatCount(source.registrations)} Anmeldungen
+                    </small>
+                  </span>
+                  <span>{formatPercent(source.registrations, source.visitors)}</span>
+                </a>
+              ))
+            ) : (
+              <div className="admin-activity-empty">Noch keine externen Quellen im Zeitraum.</div>
             )}
           </div>
         </AdminCard>

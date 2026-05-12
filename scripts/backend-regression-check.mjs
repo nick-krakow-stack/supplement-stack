@@ -23,6 +23,21 @@ for (const path of ['functions/api/modules/auth.ts', 'functions/api/modules/stac
   assert.equal(read(path).includes('debug:'), false, `${path} must not expose debug fields in API responses`)
 }
 
+const stacks = read('functions/api/modules/stacks.ts')
+const routineRouteIndex = stacks.indexOf("stacks.post('/routine/email'")
+const dynamicStackRouteIndex = stacks.indexOf("stacks.get('/:id'")
+assert.notEqual(routineRouteIndex, -1, 'Routine email endpoint must exist')
+assert.notEqual(dynamicStackRouteIndex, -1, 'Dynamic stack route must exist')
+assert.ok(routineRouteIndex < dynamicStackRouteIndex, 'Routine email endpoint must be registered before /:id routes')
+assert.match(stacks, /routine-email:\$\{user\.userId\}/, 'Routine email endpoint must use its own user-scoped rate-limit key')
+assert.match(stacks, /buildRoutineEmailHtml/, 'Routine email endpoint must render dedicated routine email HTML')
+assert.match(stacks, /Tagesuebersicht|Tagesübersicht/, 'Routine email HTML must include a daily timing overview')
+assert.match(stacks, /Wirkstoffe/, 'Routine email HTML must include an ingredient overview')
+
+const routinePage = read('frontend/src/pages/RoutinePage.tsx')
+assert.match(routinePage, /fetch\(apiPath\('\/stacks\/routine\/email'\)/, 'Routine page must call the routine email endpoint')
+assert.equal(routinePage.includes('E-Mail-Versand fuer den Einnahmeplan wird vorbereitet.'), false, 'Routine page must not keep the placeholder mail status')
+
 const csvPath = new URL('../functions/api/lib/csv.ts', import.meta.url)
 assert.equal(existsSync(csvPath), true, 'functions/api/lib/csv.ts must exist')
 const csv = read('functions/api/lib/csv.ts')

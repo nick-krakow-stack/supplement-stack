@@ -779,6 +779,14 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
     <>
       <ModalWrapper onClose={onClose} title={isEdit ? 'Produkt bearbeiten' : 'Neues Produkt erstellen'}>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+            <p className="font-medium">Wichtiger Hinweis für eigene Produkte</p>
+            <p className="mt-1 text-emerald-700/90 text-xs leading-5">
+              Diese Eingabe ist für Produkte gedacht, die nicht in der normalen Produktsuche erscheinen.
+              Wenn dein Produkt im Katalog vorhanden ist, verwende bitte den normalen Suchflow.
+            </p>
+          </div>
+
           <div>
             <label className={labelClass}>Produktfoto</label>
             <div className="flex items-start gap-4 max-[430px]:flex-col">
@@ -892,6 +900,9 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
             <label className={labelClass}>
               Dosierung pro Portion <span className="text-red-500">*</span>
             </label>
+            <p className="text-xs text-gray-500 mb-2">
+              Bitte so eintragen, wie es auf dem Etikett steht, z. B. 1 Kapsel oder 5 ml pro Portion.
+            </p>
             <div className="flex gap-3 max-[430px]:flex-col">
               <input
                 type="number"
@@ -922,7 +933,7 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
 
           <div>
             <label className={labelClass}>
-              Packungsinhalt / Portionen <span className="text-red-500">*</span>
+              Portionen pro Behälter + Anzahl Behälter <span className="text-red-500">*</span>
             </label>
             <div className="flex gap-3 max-[430px]:flex-col">
               <input
@@ -930,7 +941,7 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
                 value={servingsPerContainer}
                 onChange={(e) => setServingsPerContainer(e.target.value)}
                 className={inputClass}
-                placeholder="Portionen pro Behälter, z.B. 60"
+                placeholder="z.B. Portionen in der Packung: 60"
                 step="1"
                 min="1"
                 required
@@ -940,12 +951,15 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
                 value={containerCount}
                 onChange={(e) => setContainerCount(e.target.value)}
                 className={inputClass}
-                placeholder="Anzahl Behälter, z.B. 1"
+                placeholder="z.B. 1 Packung"
                 step="1"
                 min="1"
                 required
               />
             </div>
+            <p className="mt-1 text-xs text-gray-500">
+              Beispiel: 60 Portionen pro Packung und 1 Packung ergeben insgesamt 60 Portionen.
+            </p>
           </div>
 
           {renderIngredientSection()}

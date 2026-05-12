@@ -84,6 +84,46 @@ type StackMailPreparedItem = StackMailItem & {
   warningLabels: string[]
 }
 
+type RoutineMailPreparedItem = StackMailPreparedItem & {
+  stackName: string
+}
+
+type RoutineIngredientTotal = {
+  name: string
+  unit: string
+  quantity: number
+  open: number
+}
+
+function emailDomain(email: string): string | null {
+  const domain = email.split('@')[1]?.trim().toLowerCase()
+  return domain || null
+}
+
+async function recordStackEmailEvent(
+  db: D1Database,
+  userId: number,
+  stackId: number | null,
+  eventType: 'single_stack' | 'routine',
+  stackCount: number,
+  recipientEmail: string,
+) {
+  try {
+    await db.prepare(`
+      INSERT INTO stack_email_events (
+        user_id,
+        stack_id,
+        event_type,
+        stack_count,
+        recipient_domain
+      )
+      VALUES (?, ?, ?, ?, ?)
+    `).bind(userId, stackId, eventType, stackCount, emailDomain(recipientEmail)).run()
+  } catch {
+    // Dashboard tracking table may not be migrated yet; mail sending must still work.
+  }
+}
+
 function escapeHtml(value: unknown): string {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -274,6 +314,125 @@ function buildStackEmailHtml(stack: StackRow, items: StackMailPreparedItem[], to
       </table>
       <p style="margin:20px 0 0;color:#64748b;font-size:12px;">
         Diese E-Mail dient deiner persönlichen Übersicht und ersetzt keine medizinische Beratung.
+      </p>
+    </div>
+  `
+}
+
+const ROUTINE_TIMING_ORDER = ['morning', 'noon', 'evening', 'flexible'] as const
+type RoutineTimingKey = typeof ROUTINE_TIMING_ORDER[number]
+
+const ROUTINE_TIMING_LABELS: Record<RoutineTimingKey, string> = {
+  morning: 'Morgens',
+  noon: 'Mittags',
+  evening: 'Abends',
+  flexible: 'Flexibel',
+}
+
+function routineTimingKey(timing?: string | null): RoutineTimingKey {
+  const value = (timing ?? '').toLowerCase()
+  if (value.includes('morgen') || value.includes('frueh') || value.includes('fruh') || value.includes('morning')) return 'morning'
+  if (value.includes('mittag') || value.includes('noon')) return 'noon'
+  if (value.includes('abend') || value.includes('evening') || value.includes('nacht')) return 'evening'
+  return 'flexible'
+}
+
+function buildRoutineIngredientTotals(
+  items: StackMailPreparedItem[],
+  ingredientsByItem: Map<number, StackMailIngredient[]>,
+): RoutineIngredientTotal[] {
+  const totals = new Map<string, RoutineIngredientTotal>()
+
+  for (const item of items) {
+    const ingredients = ingredientsByItem.get(item.stack_item_id) ?? []
+    const usage = calculateProductUsage({ ...item, ingredients }, item.product_price)
+    for (const ingredient of ingredients) {
+      if (ingredient.search_relevant !== 1) continue
+      const unit = displayUnit(ingredient.unit).trim()
+      const key = `${ingredient.ingredient_name}:${unit}`
+      const current = totals.get(key) ?? { name: ingredient.ingredient_name, unit, quantity: 0, open: 0 }
+      const amountPerServing = ingredientAmountPerProductServing(ingredient, item)
+      if (amountPerServing != null && Number.isFinite(amountPerServing)) {
+        current.quantity += amountPerServing * usage.servingsPerIntake
+      } else {
+        current.open += 1
+      }
+      totals.set(key, current)
+    }
+  }
+
+  return [...totals.values()].sort((a, b) => a.name.localeCompare(b.name, 'de'))
+}
+
+function buildRoutineEmailHtml(
+  items: RoutineMailPreparedItem[],
+  ingredientTotals: RoutineIngredientTotal[],
+  totalOnce: number,
+  totalMonthly: number,
+): string {
+  const grouped = new Map<RoutineTimingKey, RoutineMailPreparedItem[]>()
+  for (const key of ROUTINE_TIMING_ORDER) grouped.set(key, [])
+  for (const item of items) grouped.get(routineTimingKey(item.timing))?.push(item)
+
+  const timingSections = ROUTINE_TIMING_ORDER.map((key) => {
+    const rows = grouped.get(key) ?? []
+    const content = rows.length > 0
+      ? rows.map((item) => {
+          const ingredients = item.dailyIngredientLabels.length > 0
+            ? item.dailyIngredientLabels.map(escapeHtml).join('<br>')
+            : '<span style="color:#64748b;">Keine Wirkstoffdetails hinterlegt</span>'
+          const warnings = item.warningLabels.length > 0
+            ? `<div style="margin-top:6px;color:#9a3412;">${item.warningLabels.map(escapeHtml).join('<br>')}</div>`
+            : ''
+          return `
+            <div style="padding:12px 0;border-top:1px solid #e5e7eb;">
+              <strong style="font-size:15px;">${escapeHtml(item.name)}</strong>
+              ${item.brand ? `<span style="color:#64748b;"> · ${escapeHtml(item.brand)}</span>` : ''}
+              <div style="color:#64748b;font-size:13px;">${escapeHtml(item.stackName)} · ${escapeHtml(item.intakeIntervalLabel)}</div>
+              <div style="margin-top:5px;"><strong>${escapeHtml(item.dailyAmountLabel)}</strong>${item.dosage_text ? ` · Ziel: ${escapeHtml(item.dosage_text)}` : ''}</div>
+              <div style="margin-top:5px;color:#334155;">${ingredients}</div>
+              ${warnings}
+            </div>
+          `
+        }).join('')
+      : '<p style="margin:10px 0 0;color:#64748b;">Keine Produkte geplant.</p>'
+
+    return `
+      <td style="vertical-align:top;width:25%;padding:12px;border:1px solid #e2e8f0;border-radius:12px;">
+        <h2 style="margin:0;font-size:17px;">${ROUTINE_TIMING_LABELS[key]}</h2>
+        ${content}
+      </td>
+    `
+  }).join('')
+
+  const ingredientRows = ingredientTotals.length > 0
+    ? ingredientTotals.map((total) => `
+        <tr>
+          <td style="padding:10px 8px;border-bottom:1px solid #e5e7eb;"><strong>${escapeHtml(total.name)}</strong></td>
+          <td style="padding:10px 8px;border-bottom:1px solid #e5e7eb;text-align:right;">
+            ${total.quantity > 0 ? escapeHtml(formatDailyUnit(total.quantity, total.unit)) : `${total.open} Produkt(e)`}
+          </td>
+        </tr>
+      `).join('')
+    : '<tr><td colspan="2" style="padding:12px 8px;color:#64748b;">Keine Wirkstoffe im Plan.</td></tr>'
+
+  return `
+    <div style="font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#0f172a;line-height:1.5;">
+      <h1 style="font-size:24px;margin:0 0 8px;">Dein Supplement Stack Einnahmeplan</h1>
+      <p style="margin:0 0 18px;color:#64748b;">Tagesuebersicht nach Einnahmezeit und Gesamtuebersicht deiner Wirkstoffe.</p>
+      <div style="margin:0 0 18px;padding:14px 16px;border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0;">
+        <strong>Einmaliger Kaufpreis:</strong> ${formatEuro(totalOnce)}
+        <br><strong>Geschaetzte Monatskosten:</strong> ${formatEuro(totalMonthly)}
+      </div>
+      <table role="presentation" style="width:100%;border-spacing:10px;border-collapse:separate;margin:0 0 20px;">
+        <tr>${timingSections}</tr>
+      </table>
+      <h2 style="font-size:18px;margin:20px 0 8px;">Wirkstoffe gesamt</h2>
+      <table style="width:100%;border-collapse:collapse;font-size:14px;">
+        <tbody>${ingredientRows}</tbody>
+      </table>
+      <p style="margin:20px 0 0;color:#64748b;font-size:12px;">
+        Diese E-Mail dient deiner persoenlichen Uebersicht und ersetzt keine medizinische Beratung.
       </p>
     </div>
   `
@@ -798,6 +957,60 @@ stacks.post('/link-report', async (c) => {
   return c.json({ ok: true })
 })
 
+// POST /api/stacks/routine/email
+stacks.post('/routine/email', async (c) => {
+  const authErr = await ensureAuth(c)
+  if (authErr) return authErr
+  const user = c.get('user')
+  const allowed = await checkRateLimit(c.env.RATE_LIMITER, `routine-email:${user.userId}`, 3, 3600)
+  if (!allowed) return c.json({ error: 'Bitte warte kurz, bevor du weitere Einnahmeplan-Mails versendest.' }, 429)
+
+  const { results: userStacks } = await c.env.DB.prepare(`
+    SELECT s.*, fp.first_name AS family_member_first_name
+    FROM stacks s
+    LEFT JOIN family_profiles fp ON fp.id = s.family_member_id AND fp.user_id = s.user_id
+    WHERE s.user_id = ?
+    ORDER BY s.created_at DESC
+  `).bind(user.userId).all<StackRow>()
+
+  const stackItems = new Map<number, StackMailItem[]>()
+  const allIngredients: StackMailIngredient[] = []
+  for (const stack of userStacks) {
+    const [items, ingredients] = await Promise.all([
+      loadStackItems(c.env.DB, stack.id, stack.user_id) as unknown as Promise<StackMailItem[]>,
+      loadStackMailIngredients(c.env.DB, stack.id, stack.user_id),
+    ])
+    stackItems.set(stack.id, items)
+    allIngredients.push(...ingredients)
+  }
+
+  const ingredientsByItem = groupIngredientsByStackItem(allIngredients)
+  const warningsByItem = await loadStackMailWarnings(c.env.DB, ingredientsByItem)
+  const preparedItems = userStacks.flatMap((stack) =>
+    prepareMailItems(stackItems.get(stack.id) ?? [], ingredientsByItem, warningsByItem).map((item) => ({
+      ...item,
+      stackName: stack.family_member_first_name ? `${stack.name} (${stack.family_member_first_name})` : stack.name,
+    }))
+  )
+  const totalOnce = preparedItems.reduce((sum, item) => sum + item.product_price, 0)
+  const totalMonthly = preparedItems.reduce((sum, item) => sum + (item.monthlyCost ?? 0), 0)
+  const ingredientTotals = buildRoutineIngredientTotals(preparedItems, ingredientsByItem)
+
+  const result = await sendMail(c.env, {
+    to: user.email,
+    subject: 'Dein Supplement Stack Einnahmeplan',
+    html: buildRoutineEmailHtml(preparedItems, ingredientTotals, totalOnce, totalMonthly),
+  })
+
+  if (!result.ok) {
+    console.error('[stacks] routine mail failed:', result.error)
+    return c.json({ error: 'Einnahmeplan-Mail konnte nicht gesendet werden.' }, 500)
+  }
+
+  await recordStackEmailEvent(c.env.DB, user.userId, null, 'routine', userStacks.length, user.email)
+  return c.json({ ok: true, stacks: userStacks.length, items: preparedItems.length })
+})
+
 // GET /api/stacks/:id
 stacks.get('/:id', async (c) => {
   const authErr = await ensureAuth(c)
@@ -846,6 +1059,7 @@ stacks.post('/:id/email', async (c) => {
     console.error('[stacks] stack mail failed:', result.error)
     return c.json({ error: 'E-Mail konnte nicht gesendet werden.' }, 500)
   }
+  await recordStackEmailEvent(c.env.DB, user.userId, stack.id, 'single_stack', 1, user.email)
   return c.json({ ok: true })
 })
 

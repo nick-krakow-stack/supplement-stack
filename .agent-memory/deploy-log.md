@@ -1,6 +1,142 @@
 # Deploy Log
 
-Last updated: 2026-05-10
+Last updated: 2026-05-11
+
+## 2026-05-11 Website UX Fixes Preview
+
+- Scope:
+  - Added combined `/routine` email delivery through
+    `POST /api/stacks/routine/email`.
+  - Completed user stack UX follow-ups: target-stack-aware duplicate Wirkstoff
+    handling, touch/click warning details, demo mail/PDF account CTA modal,
+    list-view add row, and empty demo-stack transfer on registration.
+  - Fixed admin Knowledge/User deep-link filters so dashboard/query URLs
+    initialize the matching admin filters.
+- Remote D1 migrations:
+  - No new migration required.
+- Pages preview:
+  - Project: `supplementstack`.
+  - Preview URL: `https://6c3c538e.supplementstack.pages.dev`.
+  - Alias URL: `https://codex-website-ux-fixes.supplementstack.pages.dev`.
+- Validation:
+  - `node scripts/backend-regression-check.mjs` passed.
+  - `node scripts/user-ux-regression-check.mjs` passed.
+  - `functions`: `npx tsc -p tsconfig.json --noEmit` passed.
+  - `frontend`: `npx tsc --noEmit` passed.
+  - `frontend`: `npm test -- --run` passed with 11 tests.
+  - `frontend`: `npm run lint --if-present` passed.
+  - `frontend`: `npm run build` passed.
+  - `git diff --check` passed with existing LF/CRLF warnings only.
+- Smoke checks:
+  - Preview `/`, `/demo`, and `/api/products` returned HTTP 200.
+  - Preview unauthenticated `POST /api/stacks/routine/email` returned HTTP
+    401.
+  - Browser QA on preview confirmed the demo shared header, demo mail CTA
+    modal, list-view add row, and product delete confirmation.
+- Notes:
+  - Authenticated admin preview QA is pending a preview-domain login session.
+
+## 2026-05-11 Tobias QA Landing/Demo Product Flow Deployed
+
+- Scope:
+  - Landing hero claim changed from `Wissenschaftlich. Einfach. Kosteneffizient.`
+    to `Wissenschaftlich. Einfach. Kostenlos.`.
+  - `AddProductModal` no longer forces a separate ingredient-form step.
+  - Ingredient forms remain available as an optional product-list filter on
+    the product-selection step, defaulting to `Alle Formen`.
+  - Added `scripts/tobias-qa-regression-check.mjs`.
+- GitHub:
+  - Local commit: `74cc5bd` (`Streamline demo product form selection`).
+  - Remote branch: `codex/streamline-demo-product-form-selection`.
+  - PR `#4` merged to `main` as `9c67ed7`.
+- Validation:
+  - `node scripts/tobias-qa-regression-check.mjs` passed.
+  - `node scripts/admin-qa-regression-check.mjs` passed.
+  - `node --check scripts/tobias-qa-regression-check.mjs` passed.
+  - `frontend`: `npx tsc --noEmit` passed.
+  - `frontend`: `npm run build` passed.
+  - `git diff --cached --check` passed before commit.
+- Deploy command:
+  - `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy frontend/dist --project-name supplementstack`
+- Preview URL: `https://71809f56.supplementstack.pages.dev`.
+- Live URL: `https://supplementstack.de`.
+- Browser QA:
+  - Preview landing page showed the new `Kostenlos` hero copy, no old
+    `Kosteneffizient` hero copy, and no browser console errors.
+  - Live landing page showed the new `Kostenlos` hero copy and no browser
+    console errors.
+  - Preview `/demo` Vitamin D3 flow went directly from ingredient selection to
+    dosage, then to product selection.
+  - Product selection showed the optional `Form` dropdown with `Alle Formen`
+    selected by default.
+  - With the `2000 IE` study value and `Alle Formen`, products were listed,
+    including `Vitamin D3 2000 IU Tropfen` and `Vitamin D3 5000 IU`.
+
+## 2026-05-10 Admin Dosing URL Filter Fix Deployed
+
+- Scope:
+  - Fixed `/administrator/dosing?ingredient_id=3&q=Magnesium` so the admin
+    page initializes the visible query and ingredient filters from URL search
+    params instead of showing the unfiltered list.
+  - Extended `scripts/admin-qa-regression-check.mjs` to guard the URL-filter
+    initialization.
+  - Continued authenticated admin human-flow QA across dashboard, products,
+    product detail shop links, ingredients, dosing, users, user-products, shop
+    domains, and legal routes.
+- Remote D1 migrations:
+  - No new migration required.
+- GitHub:
+  - Commit: `d9ef6cc` (`Guard admin dosing URL filters`).
+  - Commit: `5733d8f` (`Initialize admin dosing filters from URL`).
+  - Pushed to `origin/main` through the GitHub connector.
+- Pages deploy:
+  - Project: `supplementstack`.
+  - Production deployment short id: `5a0b8826`.
+  - Live URL: `https://supplementstack.de`.
+  - Cloudflare API reported production deployment success for commit
+    `5733d8f`.
+- Validation:
+  - `node scripts/admin-qa-regression-check.mjs` passed.
+  - `frontend`: `npx tsc --noEmit` passed.
+  - `node --check scripts/admin-qa-regression-check.mjs` passed.
+  - `frontend`: `npm run build` passed.
+  - `git diff --check` passed with existing LF/CRLF warnings only.
+- Smoke checks:
+  - Live authenticated browser check confirmed the Magnesium dosing deep-link
+    renders `4 Richtwerte`, keeps Magnesium selected, and captures no console
+    warnings/errors.
+
+## 2026-05-10 Admin Dosing Visibility Fix Deployed
+
+- Scope:
+  - Fixed `/administrator/dosing` so the admin maintenance view no longer hides
+    unpublished `dose_recommendations`.
+  - Added `scripts/admin-qa-regression-check.mjs` to guard the admin dosing
+    visibility rule.
+  - Ran read-only authenticated browser QA across the core admin routes and
+    selected modals/drawers.
+- Remote D1 migrations:
+  - No new migration required.
+- GitHub:
+  - Commit: `2ffeec6` (`Fix admin dosing visibility`).
+  - Pushed to `origin/main`.
+- Pages deploy:
+  - Project: `supplementstack`.
+  - Preview URL: `https://575850b1.supplementstack.pages.dev`.
+  - Live URL: `https://supplementstack.de`.
+  - Cloudflare API reported production deployment success for commit
+    `2ffeec6`.
+- Validation:
+  - `node scripts/admin-qa-regression-check.mjs` passed.
+  - `node scripts/backend-regression-check.mjs` passed.
+  - `frontend`: `npx tsc --noEmit` passed.
+  - `frontend`: `npm run build` passed.
+  - `node --check scripts/admin-qa-regression-check.mjs` passed.
+  - `git diff --check` passed with existing LF/CRLF warnings only.
+- Smoke checks:
+  - Live authenticated browser check confirmed `/administrator/dosing` renders
+    dosing rows again and no console warnings/errors were captured for the
+    route.
 
 ## 2026-05-10 Backend P2 Hardening Deployed
 
@@ -2842,3 +2978,200 @@ When a future agent deploys or applies migrations, append the exact date, commit
 - Notes:
   - Authenticated cookie-only login/logout and admin browser/mobile QA remain
     open because no admin/user credentials are available in the environment.
+
+## 2026-05-11 Demo Stack UI Polish Preview Deployed
+
+- Scope:
+  - Public demo/stack text encoding cleanup for German umlauts and Euro signs.
+  - Demo toolbar polish: `Stack erstellen` in dropdown, stack actions as
+    icon-only buttons, delete icon before divider, green `Produkt hinzufügen`
+    after divider.
+  - Demo banner copy updated to the approved reset/signup wording.
+  - Public `Studien & mehr` header nav plus `/wissen` index page.
+  - Larger list-view product images/placeholders.
+- Remote D1 migrations:
+  - No new migration required.
+- Validation:
+  - `node scripts/user-ux-regression-check.mjs` passed.
+  - `npx tsc --noEmit` from `frontend/` passed.
+  - `npm run lint --if-present` from `frontend/` passed.
+  - `npm test -- --run` from `frontend/` passed, 11 tests.
+  - `npm run build` from `frontend/` passed.
+  - `git diff --check` passed with CRLF warnings only.
+- Deploy prep:
+  - Built `frontend/dist`.
+  - Copied `functions/` to `frontend/dist/functions`.
+  - Verified `frontend/dist/functions/api/[[path]].ts` exists.
+  - Copied `frontend/dist` into stable temp snapshot before Wrangler upload.
+- Deploy command:
+  - `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy <snapshot> --project-name supplementstack --branch codex-website-ux-fixes --commit-dirty=true`
+- Preview URL:
+  - `https://be7266ea.supplementstack.pages.dev`
+- Branch alias:
+  - `https://codex-website-ux-fixes.supplementstack.pages.dev`
+- Browser smoke:
+  - `/demo` rendered with no mojibake.
+  - Approved banner copy was visible.
+  - `Studien & mehr` header nav was visible.
+  - Toolbar order verified: stack select, edit/mail/PDF/delete icon buttons,
+    divider, `Produkt hinzufügen`.
+  - List-view images measured `58x58`.
+  - `/wissen` rendered with no mojibake and the knowledge index content.
+
+## 2026-05-11 Website UX Review Follow-Ups Preview Deployed
+
+- Scope:
+  - Owner review comments for `/demo` and `/wissen` on branch
+    `codex/website-ux-fixes`.
+  - Stack toolbar icon polish, JSON share/import modals, demo banner copy,
+    draggable product ordering, compact list/list-add refinements, and
+    left-aligned `Link melden` card action.
+  - `/wissen` rebuilt with approved headline/copy, search, keyword chips,
+    masonry feature cards, remaining-entry list, and a source-interpretation
+    disclaimer.
+  - Schwarzkümmelöl product metadata corrected from mg-based demo data to a
+    500 ml bottle with 40 ml daily dose.
+- Remote D1 migrations:
+  - Applied `0075_fix_black_seed_oil_volume.sql` to
+    `supplementstack-production`.
+- Validation:
+  - `node scripts/user-ux-regression-check.mjs` passed.
+  - `npx tsc --noEmit` from `frontend/` passed.
+  - `npx tsc -p tsconfig.json --noEmit` from `functions/` passed.
+  - `npm run lint --if-present` from `frontend/` passed.
+  - `npm test -- --run` from `frontend/` passed, 12 tests.
+  - `npm run build` from `frontend/` passed.
+  - `git diff --check` passed with CRLF warnings only.
+- Deploy prep:
+  - Built `frontend/dist`.
+  - Copied `functions/` to `frontend/dist/functions`.
+  - Verified `frontend/dist/functions/api/[[path]].ts` exists.
+  - Copied `frontend/dist` into a stable temp snapshot before Wrangler upload.
+- Deploy command:
+  - `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy <snapshot> --project-name supplementstack --branch codex-website-ux-fixes --commit-dirty=true`
+- Preview URL:
+  - `https://59a52a7d.supplementstack.pages.dev`
+- Branch alias:
+  - `https://codex-website-ux-fixes.supplementstack.pages.dev`
+- Browser smoke:
+  - `/demo` rendered with no mojibake.
+  - Demo banner contains `um deinen Stack dauerhaft zu speichern`.
+  - `Übersicht` title rendered.
+  - Six draggable product cards were detected; add tile/row remains separate.
+  - Toolbar share/import buttons and modals rendered.
+  - Schwarzkümmelöl rendered `40 ml täglich`, `12 Tage`, and `28,48 €/Mo`.
+  - `/wissen` rendered the new headline, search field, tag cloud, and filtered
+   results for `magnesium`.
+
+## 2026-05-11 Admin Dashboard Owner Comments Preview Deployed
+
+- Scope:
+  - Owner comments from live `/administrator/dashboard` implemented on branch
+    `codex/website-ux-fixes`.
+  - Dashboard KPI labels/order changed to `Neuanmeldungen`, `Neue Stacks`,
+    `Backlinks`, and `Abmeldungen`.
+  - Added stack email send tracking, account deletion tracking, last-seen user
+    activity, and consented referrer/pageview tracking for Google/external
+    referrer metrics.
+  - Katalog/Content module labels changed to `offene Freigaben`,
+    `Ohne Affiliate-Link`, `Wirkstoffe ohne Artikel`, and `Deadlinks`.
+  - Product filters now support `Nick-Partnerlink` and `User-Partnerlink`
+    across legacy product fields and active `product_shop_links`.
+- Remote D1 migrations:
+  - Applied `0076_admin_dashboard_tracking.sql` to
+    `supplementstack-production`.
+- Validation:
+  - `node scripts/admin-qa-regression-check.mjs` passed.
+  - `npx tsc -p tsconfig.json --noEmit` from `functions/` passed.
+  - `npx tsc --noEmit` from `frontend/` passed.
+  - `npm run lint --if-present` from `frontend/` passed.
+  - `npm test -- --run` from `frontend/` passed, 12 tests.
+  - `npm run build` from `frontend/` passed.
+  - `git diff --check` passed with CRLF warnings only.
+- Deploy prep:
+  - Built `frontend/dist`.
+  - Copied `functions/` to `frontend/dist/functions`.
+  - Verified `frontend/dist/functions/api/[[path]].ts` exists.
+  - Copied `frontend/dist` into stable temp snapshot before Wrangler upload.
+- Deploy command:
+  - `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy <snapshot> --project-name supplementstack --branch codex-website-ux-fixes --commit-dirty=true`
+- Preview URL:
+  - `https://8f774ddf.supplementstack.pages.dev`
+- Branch alias:
+  - `https://codex-website-ux-fixes.supplementstack.pages.dev`
+- Remote postflight:
+  - `wrangler d1 migrations list supplementstack-production --remote` reported
+    no pending migrations.
+  - Preview `/` returned 200.
+  - Preview `/api/products` returned 200.
+  - Preview unauthenticated `/api/admin/stats` returned 401.
+  - Preview `POST /api/analytics/pageview` returned 200.
+
+## 2026-05-11 Admin Dashboard Owner Comments Production Deployed
+
+- Scope:
+  - Same verified dashboard metrics build from commit
+    `204b51a Update admin dashboard metrics`.
+  - Owner requested direct Cloudflare production deploys under
+    `https://supplementstack.de` now and in future.
+- Remote D1 migrations:
+  - `wrangler d1 migrations list supplementstack-production --remote` reported
+    no migrations to apply; `0076_admin_dashboard_tracking.sql` was already
+    applied before the preview deploy.
+- Validation before production deploy:
+  - `npm run build` from `frontend/` passed.
+- Deploy prep:
+  - Built `frontend/dist`.
+  - Copied `functions/` to `frontend/dist/functions`.
+  - Verified `frontend/dist/functions/api/[[path]].ts` exists.
+  - Copied `frontend/dist` into stable temp snapshot before Wrangler upload.
+- Deploy command:
+  - `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy <snapshot> --project-name supplementstack --branch main --commit-dirty=true`
+- Production deployment URL:
+  - `https://15debffb.supplementstack.pages.dev`
+- Live domain:
+  - `https://supplementstack.de`
+- Live postflight:
+  - Live `/` returned 200.
+  - Live `/api/products` returned 200.
+  - Live unauthenticated `/api/admin/stats` returned 401.
+  - Live `POST /api/analytics/pageview` returned 200.
+
+## 2026-05-11 Phase 1 Referral Attribution Production Deployed
+
+- Scope:
+  - Implemented free first-party referral attribution for the admin dashboard.
+  - Added local visitor id and first/last source state in frontend analytics.
+  - Added `visitor_id` storage to pageview events.
+  - Added `signup_attribution` writes during registration.
+  - Added `referral_sources` to `/api/admin/stats`.
+  - Added `Quellen & Anmeldungen` module to `/administrator/dashboard`.
+- Remote D1 migrations:
+  - Applied `0077_signup_referral_attribution.sql` to
+    `supplementstack-production`.
+- Validation:
+  - `node scripts/admin-qa-regression-check.mjs` passed.
+  - `npx tsc -p tsconfig.json --noEmit` from `functions/` passed.
+  - `npx tsc --noEmit` from `frontend/` passed.
+  - `npm run lint --if-present` from `frontend/` passed.
+  - `npm test -- --run` from `frontend/` passed, 12 tests.
+  - `npm run build` from `frontend/` passed.
+  - `git diff --check` passed with CRLF warnings only.
+- Deploy prep:
+  - Built `frontend/dist`.
+  - Copied `functions/` to `frontend/dist/functions`.
+  - Verified `frontend/dist/functions/api/[[path]].ts` exists.
+  - Copied `frontend/dist` into stable temp snapshot before Wrangler upload.
+- Deploy command:
+  - `. .\scripts\use-supplementstack-cloudflare.local.ps1; npx wrangler pages deploy <snapshot> --project-name supplementstack --branch main --commit-dirty=true`
+- Production deployment URL:
+  - `https://e345663e.supplementstack.pages.dev`
+- Live domain:
+  - `https://supplementstack.de`
+- Live postflight:
+  - Live `/` returned 200.
+  - Live `/api/products` returned 200.
+  - Live unauthenticated `/api/admin/stats` returned 401.
+  - Live `POST /api/analytics/pageview` returned 200.
+  - Remote D1 confirmed test pageview attribution:
+    `visitor_id = ssv-postflight`, `referrer_host = example-blog.de`.

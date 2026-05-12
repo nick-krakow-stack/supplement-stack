@@ -218,6 +218,18 @@ export default function MyProductsPage() {
         </button>
       </div>
 
+        <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          <p className="font-medium">
+            Hinweis: Nutze &ldquo;Eigene Produkte&rdquo; nur, wenn ein Produkt in der normalen Produktsuche
+            fehlt.
+          </p>
+        <p className="mt-1 text-emerald-700/90 text-xs leading-5">
+          Sobald dein Produkt im Katalog vorhanden ist, verwende bitte die normale Produktsuche.
+          Diese Sektion ist fuer Produkte, die im Katalog noch nicht verzeichnet sind oder stark abweichende
+          Etikettangaben haben.
+        </p>
+      </div>
+
       {/* Error */}
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm">
@@ -247,7 +259,7 @@ export default function MyProductsPage() {
               className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-medium text-indigo-600 transition-colors hover:text-indigo-800"
             >
               <Plus size={16} />
-              Produkt erstellen
+              Produkt in eigener Liste erstellen
             </button>
           </div>
         )}
