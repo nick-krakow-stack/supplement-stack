@@ -8,6 +8,7 @@ Last updated: 2026-05-12
 - Legacy Hook-Dateien in `.claude/hooks` entfernt.
 - Zentrale Codex-Hooks aktiv und versioniert: `UserPromptSubmit` + `Stop` auf `.codex/hooks/agent-protocol.ps1`.
 - PreCompact/PreToolUse/PostToolUse werden nur noch manuell im Prozess dokumentiert, nicht automatisch verdrahtet.
+- `AGENTS.md` ist jetzt die einzige zentrale Startup-Datei; `CLAUDE.md` ist aus der Pflichtstartliste entfernt.
 
 ## Immediate
 

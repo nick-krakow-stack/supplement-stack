@@ -27,6 +27,16 @@ Rationale:
 - Der Nutzer hat den Claude-Teilnehmerzugriff beendet; offene Hook-Dateien in
   `.claude` sollen keine versteckten Review-Pflichten mehr auslösen.
 
+## 2026-05-12 - AGENTS as Canonical Protocol
+
+Decision: `AGENTS.md` bleibt die zentrale, dauerhafte Start- und Protokolldatei; `CLAUDE.md` wurde aus dem Pflichtstart und aus den zentralen Arbeitsdokumenten entfernt.
+
+Operational rules:
+
+- `.agent-memory/current-state.md`, `.agent-memory/next-steps.md`, `.agent-memory/handoff.md` and `.agent-memory/decisions.md` reference `AGENTS.md` as the canonical startup anchor.
+- Hook handoff output from `.codex/hooks/agent-protocol.ps1` must use the AGENTS-only startup list.
+- Scripted checks must confirm that no `.claude` hook configuration remains active and that AGENTS startup requirements do not include `CLAUDE.md`.
+
 ## 2026-05-08 - Admin Dashboard Is Post-Launch Operations
 
 Decision: the admin dashboard should represent the post-launch operator view,
@@ -686,8 +696,8 @@ Rationale:
 
 Operational rule:
 
-- `AGENTS.md` and `CLAUDE.md` must point to `.agent-memory/*`.
-- `.claude/memory.md` is now a pointer/compatibility file, not the canonical memory.
+- `AGENTS.md` points to `.agent-memory/*` as the canonical workspace memory.
+- `.claude/memory.md` is not used in active startup; `.agent-memory/*` is canonical.
 
 ## Orchestrator And Sub-Agent Operating Model
 

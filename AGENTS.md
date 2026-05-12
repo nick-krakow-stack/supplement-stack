@@ -7,10 +7,9 @@ This file is the shared entry point for Codex, Claude Code, and any future codin
 Before changing code, every agent must read these files in order:
 
 1. `AGENTS.md`
-2. `CLAUDE.md`
-3. `.agent-memory/current-state.md`
-4. `.agent-memory/handoff.md`
-5. `.agent-memory/next-steps.md`
+2. `.agent-memory/current-state.md`
+3. `.agent-memory/handoff.md`
+4. `.agent-memory/next-steps.md`
 
 Then run:
 
@@ -20,58 +19,113 @@ git status --short
 
 Use code and migrations as the final source of truth when documentation conflicts.
 
-## Orchestrator And Sub-Agents
+`AGENTS.md` is the authoritative protocol file. `CLAUDE.md` is removed and must not be required for startup.
 
-Claude and Codex both operate as Orchestrator when they receive work in this repository.
+## Core Scope
 
-The Orchestrator does not implement code and does not edit files directly. The Orchestrator plans the work, selects the responsible Sub-Agent roles, delegates clear subtasks, reviews results, coordinates follow-up, and summarizes the outcome for the user. Practical implementation and file changes are handled by the responsible Sub-Agents.
+- Product goal: best supplement management workflow with clear scientific basis.
+- Monetization: affiliate links managed in admin; users may add their own links.
+- Trust and quality rules: transparent sourcing, clear disclaimers, science-backed dosage/content.
 
-### Roles
+## Technology and Cloudflare Rules
 
-- **Orchestrator**: Owns planning, delegation, coordination, review, and final summary. May be Claude or Codex.
-- **Dev-Agent**: Implements technical changes and edits files. Follows Cloudflare Worker constraints and existing code patterns.
-- **Science-Agent**: Handles study review, dosage logic, evidence quality, source checks, and active scientific research.
-- **Critic-Agent**: Challenges assumptions, finds risks, reviews tradeoffs, and checks for security, UX, architecture, and product weaknesses.
-- **Feature-Agent**: Develops feature ideas, competitive framing, retention opportunities, and impact/effort prioritization.
-- **UX-Agent**: Designs user flows, information architecture, error states, and persona-appropriate journeys.
-- **UI-Agent**: Owns visual design, component presentation, hierarchy, aesthetics, and brand trust.
-- **Mobile-Agent**: Reviews responsive behavior, touch ergonomics, mobile performance, and small-screen layouts.
-- **Persona-Agent**: Checks Kevin, Sabine, and Marco perspectives and flags mismatches between feature depth and user needs.
-- **QA-Agent**: Tests behavior, edge cases, regressions, demo mode, forms, links, mobile, and desktop.
-- **Legal-Agent**: Later / on request only. Reviews German legal wording, health claims, disclaimers, and affiliate disclosure before Go-Live or when explicitly needed.
+- Frontend: React + TypeScript + Vite + Tailwind CSS
+- Backend: Cloudflare Workers with Hono (`functions/api/[[path]].ts`, `functions/api/modules/*`, `functions/api/lib/*`)
+- Data: Cloudflare D1 (`d1-migrations/*`)
+- Files/Assets: Cloudflare R2
+- Session/cache: Cloudflare KV
+- Deployment/config: Wrangler (`wrangler.toml`, `wrangler.maintenance.toml`)
 
-### Delegation Rules
+### Cloudflare constraints (no exceptions for production line)
 
-- Delegate only relevant, clearly bounded subtasks.
-- Keep Sub-Agent handoffs short: goal, scope, files or areas, constraints, and expected output.
-- Do not spawn unnecessary parallel agents. Use parallel review only when roles are genuinely independent and useful.
-- Match the Sub-Agent to the work: implementation to Dev-Agent, evidence to Science-Agent, visual work to UI-Agent, flow work to UX-Agent, validation to QA-Agent, and so on.
-- The Orchestrator remains accountable for integration, consistency, and final communication.
+- No Node.js-only runtime patterns for Worker logic.
+- No local filesystem in runtime code.
+- Use D1 for persistence and KV for sessions/caching.
+- Keep CPU/binding usage compact and efficient.
+- Keep schema and migration changes explicit and reviewable.
+- Respect Wrangler config as source of truth for bindings and secrets.
+- Prefer additive migration paths.
+
+## i18n Decision
+
+Decision is fixed to a translation-table architecture instead of `*_de/_en` suffix columns.
+
+Canonical approach is to keep base entities and add tables like `ingredient_translations`, `recommendation_translations`, `blog_translations`, and `verified_profile_translations` with a `language` field.
+
+Current platform is DE-first; phase B migration and extension uses translation tables with `language='de'`.
+
+## Existing Codebase
+
+This project is already implemented; changes should extend existing code over rebuilding.
+
+- Frontend pages: `LandingPage`, `DemoPage`, `SearchPage`, `StacksPage`, `WishlistPage`, `AdministratorShell`, `LoginPage`, `RegisterPage`, `ProfilePage`, `MyProductsPage`.
+- Core components: `ProductCard`, `SearchBar`, `Layout`, `Modal` stack, `ImageCropModal`, `UserProductForm`, auth context/guards.
+- API modules: `auth`, `admin`, `stacks`, `ingredients`, `products`, `demo`, `wishlist`, `client`.
+- Data foundation: D1 migrations and study material in `_research_raw/`.
+
+## Personas
+
+- Kevin (28): deep stack users, wants detail and traceable evidence.
+- Sabine (44): low friction and clarity, wants practical clear guidance.
+- Marco (32): performance-oriented, cost-aware, clear routines.
+
+## Agent Team and Role Rules
+
+### Shared roles
+
+- Orchestrator: coordinates, delegates, validates, and reports outcomes.
+- Dev-Agent: writes and edits code. Follows Cloudflare constraints and strict patterns.
+- Science-Agent: validates dosing, evidence hierarchy, and source quality.
+- Critic-Agent: stress-tests assumptions, risk, security, and value.
+- Feature-Agent: roadmap and retention.
+- UX-Agent: flow and interaction architecture.
+- UI-Agent: visual hierarchy and trust tone.
+- Mobile-Agent: responsive and touch-first behavior.
+- Persona-Agent: persona-specific fit check.
+- QA-Agent: edge cases, regressions, platform matrix.
+- Legal-Agent: German legal review for pre-go-live claims and disclosures (on request, DE market).
+
+### Agent Detail Rules
+
+- **Dev-Agent**:
+  - keep strict typing, avoid `any`.
+  - read existing code before rewriting.
+  - follow Cloudflare Worker constraints, and avoid Node-only runtime patterns.
+  - prefer additive schema/data changes and existing modules.
+- **Science-Agent**:
+  - keep doses/recommendations linked to source links and hierarchy checks.
+  - flag conflicting evidence and explain uncertainty.
+- **UI/UX/Mobile-Agent**:
+  - keep designs useful on small screens, with clear hierarchy and no hover-only actions.
+  - keep product and safety information understandable without overloading.
+- **Persona-Agent**:
+  - cross-check each flow against Kevin, Sabine, Marco.
+  - avoid depth-heavy choices that block clarity or speed.
+- **QA-Agent**:
+  - test empty states, invalid input, and failure paths.
+  - validate admin/public flows for both desktop and mobile.
+- **Critic-Agent**:
+  - explicitly surface highest-risk failure mode and alternative solutions.
 
 ### Orchestrator Model Routing
 
-- Codex remains Orchestrator and delegates tasks to Sub-Agents.
-- The Orchestrator chooses which model each Sub-Agent should use.
-- Use `gpt-5.3-codex-spark` with the appropriate reasoning mode:
-  - `medium`: simple, routine, clearly scoped tasks.
-  - `high`: bounded tasks that need more caution (policy text, structured review, low-risk refactors).
-  - `xhigh`: trickier tasks that need stronger reasoning depth but are still suitable for Spark.
-- Use `gpt-5.5` with high-reasoning profile for complex, risky, architectural, security,
-  legal, product-critical, or hard-to-test tasks.
-- Quality cannot drop on lower-cost runs: the Orchestrator reviews outputs, tests and
-  validates assumptions, and escalates Spark-tasks to stronger models when risk, ambiguity, or
-  quality concerns appear.
+- Use `gpt-5.3-codex-spark` with:
+  - `medium` for routine scoped tasks
+  - `high` for cautionary policy/review tasks
+  - `xhigh` for trickier but bounded risk tasks
+- Use `gpt-5.5` with high reasoning for complex, risky, architectural, security, legal, product-critical, or hard-to-test work.
+- Escalate where ambiguity or quality risk rises.
 
 ## Required Handoff
 
-Before ending a meaningful work session, update the shared memory files:
+Before ending a meaningful work session, update:
 
-- `.agent-memory/current-state.md` when the project state changed.
+- `.agent-memory/current-state.md` when project state changed.
 - `.agent-memory/next-steps.md` when priorities or follow-up tasks changed.
 - `.agent-memory/handoff.md` with the exact continuation point.
-- `.agent-memory/decisions.md` when a product, architecture, data, or workflow decision was made.
-- `.agent-memory/deploy-log.md` after deployments, remote migrations, or production verification.
-- `.agent-memory/local-secrets.md` only when secret storage locations change, never with raw values.
+- `.agent-memory/decisions.md` for product/architecture/data/workflow decisions.
+- `.agent-memory/deploy-log.md` after deployments/migrations/production checks.
+- `.agent-memory/local-secrets.md` only when secret storage locations change.
 
 Do not write secrets, tokens, passwords, private API keys, or raw credential values into memory files.
 Secret locations are documented in `.agent-memory/local-secrets.md`.
@@ -85,4 +139,25 @@ Production-like work happens on the Cloudflare line:
 - Database: `d1-migrations/*`
 - Cloudflare config: `wrangler.toml`
 
-Legacy or historical docs may be useful context, but they are not automatically authoritative.
+Legacy or historical docs may help, but this protocol and memory files are canonical for day-to-day operation.
+
+## Definition of Done
+
+Ein Feature is complete only when all of the following are true:
+
+- Dev changes are validated against Cloudflare runtime constraints.
+- Science/claims are source-backed with direct links.
+- UX/Persona checks are considered before delivery.
+- Mobile and desktop behavior is coherent and stable.
+- QA has checked edge/error paths.
+- Critic has reviewed for risks and regressions.
+- Repo state reflects actual changes in the memory files.
+
+## Never-Do Rules
+
+- Orchestrator edits files directly.
+- Add medical claims without citable sources and explicit links.
+- Show affiliate labeling on individual product/CTA elements.
+- Ignore existing code and rebuild from scratch without reason.
+- Break Cloudflare worker constraints.
+- Skip required handoff/progress updates needed by central hooks.

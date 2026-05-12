@@ -1,6 +1,6 @@
 ﻿# Handoff
 
-Last updated: 2026-05-12 15:05:32 +02:00
+Last updated: 2026-05-12 16:59:53 +02:00
 Update mode: Stop
 
 ## Latest Notes
@@ -10,7 +10,7 @@ Automatic handoff snapshot written by .codex/hooks/agent-protocol.ps1.
 ## Git Snapshot
 
 - Branch: main
-- Last commit: 74cc5bd Streamline demo product form selection
+- Last commit: e33429a Centralize Codex hooks
 
 ## Working Tree
 
@@ -19,16 +19,12 @@ Automatic handoff snapshot written by .codex/hooks/agent-protocol.ps1.
  M .agent-memory/decisions.md
  M .agent-memory/handoff.md
  M .agent-memory/next-steps.md
- D .claude/hooks/error-capture.sh
- D .claude/hooks/pre-deploy-check.sh
- D .claude/memory.md
- D .claude/settings.json
- M .gitignore
- M CLAUDE.md
- D scripts/update-agent-handoff.ps1
-?? .agent-memory/progress.md
-?? .codex/
-?? scripts/hook-regression-check.mjs
+ M .agent-memory/progress.md
+ M .codex/hooks/agent-protocol.ps1
+ M AGENTS.md
+ D CLAUDE.md
+ M scripts/hook-regression-check.mjs
+?? .agent-memory/feedback.md
 ~~~
 
 ## Current State Summary
@@ -42,11 +38,10 @@ See .agent-memory/next-steps.md.
 ## Required Startup For Next Agent
 
 1. Read AGENTS.md.
-2. Read CLAUDE.md.
-3. Read .agent-memory/current-state.md.
-4. Read this handoff.
-5. Read .agent-memory/next-steps.md.
-6. Run git status --short.
+2. Read .agent-memory/current-state.md.
+3. Read this handoff.
+4. Read .agent-memory/next-steps.md.
+5. Run git status --short.
 
 ## Constraints
 

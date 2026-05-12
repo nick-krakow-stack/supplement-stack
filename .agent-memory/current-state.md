@@ -8,6 +8,7 @@ Last updated: 2026-05-12
 - Legacy `.claude/hooks/error-capture.sh`, `.claude/hooks/pre-deploy-check.sh`, `.claude/settings.json` und `.claude/memory.md` sind entfernt.
 - Zentrale Codex-Hook-Steuerung ist aktiv und versioniert: `.codex/hooks.json` mit `UserPromptSubmit` und `Stop` auf `.codex/hooks/agent-protocol.ps1`.
 - `PreCompact` ist in beiden Konfigurationen absichtlich nicht aktiv.
+- `AGENTS.md` ist die zentrale Startup-Datei für Agent-Regeln; `CLAUDE.md` ist aus dem Pflichtstart entfernt.
 
 ## Active Baseline
 

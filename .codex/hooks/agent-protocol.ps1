@@ -5,7 +5,7 @@ param(
 $ErrorActionPreference = "SilentlyContinue"
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $memoryDir = Join-Path $repoRoot ".agent-memory"
-$feedbackPath = Join-Path $memoryDir "feedback.txt"
+$feedbackPath = Join-Path $memoryDir "feedback.md"
 $handoffPath = Join-Path $memoryDir "handoff.md"
 $currentStatePath = Join-Path $memoryDir "current-state.md"
 $nextStepsPath = Join-Path $memoryDir "next-steps.md"
@@ -155,11 +155,10 @@ See `.agent-memory/next-steps.md`.
 ## Required Startup For Next Agent
 
 1. Read `AGENTS.md`.
-2. Read `CLAUDE.md`.
-3. Read `.agent-memory/current-state.md`.
-4. Read this handoff.
-5. Read `.agent-memory/next-steps.md`.
-6. Run `git status --short`.
+2. Read `.agent-memory/current-state.md`.
+3. Read this handoff.
+4. Read `.agent-memory/next-steps.md`.
+5. Run `git status --short`.
 
 ## Constraints
 
@@ -186,9 +185,34 @@ function Update-MemoryAfterStop {
   }
 }
 
+function Test-IsOwnerFeedback([string]$content) {
+  if ([string]::IsNullOrWhiteSpace($content)) {
+    return $false
+  }
+
+  $internalPatterns = @(
+    "Rolle:\s*(Dev-Agent|QA-Agent|Critic-Agent|UX-Agent|UI-Agent|Science-Agent|Feature-Agent|Mobile-Agent|Persona-Agent)",
+    "Du bist nicht allein im Codebase",
+    "Repository:\s*C:\\Users\\email\\supplement-stack",
+    "Pflichtstart:",
+    "Nicht committen\.",
+    "Antworte mit ge[aä]nderten Dateien",
+    "subagent_notification",
+    "agent_path"
+  )
+
+  foreach ($pattern in $internalPatterns) {
+    if ($content -match $pattern) {
+      return $false
+    }
+  }
+
+  return $true
+}
+
 function Capture-OwnerFeedback([string]$rawPayload) {
   if ([string]::IsNullOrWhiteSpace($rawPayload)) {
-    return
+    return $false
   }
 
   try {
@@ -201,12 +225,17 @@ function Capture-OwnerFeedback([string]$rawPayload) {
       $content = $payload.input
     }
     if ([string]::IsNullOrWhiteSpace($content)) {
-      return
+      return $false
     }
     $safe = [System.Text.RegularExpressions.Regex]::Replace([string]$content, "\s+", " ")
+    if (-not (Test-IsOwnerFeedback -content $safe)) {
+      return $false
+    }
     Append-Feedback -path $feedbackPath -line (Format-Entry "Owner-Feedback: $safe")
+    return $true
   } catch {
     # no-op if payload is not JSON
+    return $false
   }
 }
 
@@ -224,8 +253,9 @@ if ([string]::IsNullOrWhiteSpace($event)) {
 
 switch ($event) {
   "UserPromptSubmit" {
-    Capture-OwnerFeedback -rawPayload $stdin
-    Update-ProgressBlock "Captured user prompt payload on UserPromptSubmit."
+    if (Capture-OwnerFeedback -rawPayload $stdin) {
+      Update-ProgressBlock "Captured owner feedback on UserPromptSubmit."
+    }
   }
   "Stop" {
     Update-ProgressBlock "Stop hook ran and refreshed central memory snapshot."

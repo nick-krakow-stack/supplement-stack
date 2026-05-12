@@ -6,6 +6,11 @@ function readJson(relativePath) {
   return JSON.parse(content)
 }
 
+function readText(relativePath) {
+  const absolutePath = new URL(`../${relativePath}`, import.meta.url)
+  return readFileSync(absolutePath, 'utf8')
+}
+
 function hasHookCommand(config, eventName) {
   if (!config?.hooks?.[eventName]) return false
   return Array.isArray(config.hooks[eventName]) && config.hooks[eventName].length > 0
@@ -34,6 +39,8 @@ try {
 }
 
 if (claudeSettings) {
+  const activeEvents = Object.entries(claudeSettings?.hooks || {})
+  check(activeEvents.length === 0, '.claude/settings.json must not define active hooks')
   const forbidden = ['PreCompact', 'PreToolUse', 'PostToolUse', 'UserPromptSubmit', 'Stop']
   for (const event of forbidden) {
     const active = hasHookCommand(claudeSettings, event)
@@ -123,6 +130,14 @@ check(
   'agent-protocol.ps1 must resolve the repository root from .codex/hooks',
 )
 check(
+  agentProtocol.includes('feedback.md') && !agentProtocol.includes('feedback.txt'),
+  'agent-protocol.ps1 must write owner feedback to .agent-memory/feedback.md, not feedback.txt',
+)
+check(
+  agentProtocol.includes('Test-IsOwnerFeedback') && agentProtocol.includes('Du bist nicht allein im Codebase'),
+  'agent-protocol.ps1 must filter internal sub-agent prompts from owner feedback',
+)
+check(
   existsSync(new URL('../.codex/hooks/README.md', import.meta.url)),
   '.codex/hooks/README.md must exist',
 )
@@ -133,6 +148,7 @@ const oldHookNames = [
   '.claude/hooks/pre-deploy-check.sh',
   'scripts/orchestrator-guard.ps1',
   'scripts/update-agent-handoff.ps1',
+  '.agent-memory/feedback.txt',
 ]
 for (const hookFile of oldHookNames) {
   check(
@@ -140,6 +156,18 @@ for (const hookFile of oldHookNames) {
     `Legacy hook file ${hookFile} must be removed`,
   )
 }
+
+// 6) AGENTS protocol is canonical; CLAUDE.md must not be listed in startup instructions.
+const agentsDoc = readText('AGENTS.md')
+check(
+  !agentsDoc.match(/Read\\s+`?CLAUDE\\.md`?/i),
+  'AGENTS.md startup list must not require CLAUDE.md',
+)
+const handoffDoc = readText('.agent-memory/handoff.md')
+check(
+  !handoffDoc.match(/Read\\s+CLAUDE\\.md/i),
+  'handoff required startup list must not require CLAUDE.md',
+)
 
 if (failures.length > 0) {
   for (const issue of failures) {
