@@ -19,6 +19,16 @@ export interface AdminStatsTopShop {
   affiliate_clicks: number;
 }
 
+export interface AdminStatsReferralSource {
+  referrer_host: string;
+  referrer_source?: string | null;
+  visitors: number;
+  pageviews: number;
+  registrations: number;
+  last_visit_at?: string | null;
+  last_signup_at?: string | null;
+}
+
 export interface User {
   id: number;
   email: string;
@@ -44,10 +54,21 @@ export interface AdminStats {
   blocked_products?: number;
   stacks?: number;
   stacks_in_range?: number;
+  stack_email_sends?: number;
+  account_deletions?: number;
+  inactive_users?: number;
+  backlinks?: number;
+  google_pageviews?: number;
   link_clicks?: number;
   affiliate_link_clicks?: number;
   non_affiliate_link_clicks?: number;
   products_clicked_without_active_link?: number;
+  deadlink_clicks?: number;
+  user_affiliate_links_active?: number;
+  link_report_users?: number;
+  ingredients_without_article?: number;
+  user_products_pending?: number;
+  user_products_pending_in_range?: number;
   open_link_reports?: number;
   deadlinks?: number;
   deadlinks_over_7_days?: number;
@@ -67,6 +88,7 @@ export interface AdminStats {
   };
   top_clicked_products?: AdminStatsTopProduct[];
   top_shops?: AdminStatsTopShop[];
+  referral_sources?: AdminStatsReferralSource[];
 }
 
 export interface IngredientSynonym {

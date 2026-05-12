@@ -60,12 +60,125 @@ function publicProfile(user: UserRow) {
   }
 }
 
+async function markUserSeen(db: D1Database, userId: number) {
+  try {
+    await db.prepare("UPDATE users SET last_seen_at = datetime('now') WHERE id = ?")
+      .bind(userId)
+      .run()
+  } catch {
+    // Older preview databases may not have the optional dashboard column yet.
+  }
+}
+
+async function countUserRows(db: D1Database, table: string, userId: number): Promise<number> {
+  try {
+    const row = await db.prepare(`SELECT COUNT(*) AS count FROM ${table} WHERE user_id = ?`)
+      .bind(userId)
+      .first<{ count: number }>()
+    return row?.count ?? 0
+  } catch {
+    return 0
+  }
+}
+
 function parseVerificationExpiry(value: number | string): number {
   if (typeof value === 'number') return value
   const numeric = Number(value)
   if (Number.isFinite(numeric)) return numeric
   const parsed = Date.parse(value)
   return Number.isFinite(parsed) ? parsed : Number.NaN
+}
+
+type SignupAttributionInput = {
+  visitor_id?: unknown
+  first_referrer_host?: unknown
+  first_referrer_source?: unknown
+  first_landing_path?: unknown
+  first_seen_at?: unknown
+  last_referrer_host?: unknown
+  last_referrer_source?: unknown
+  last_landing_path?: unknown
+  last_seen_at?: unknown
+}
+
+function cleanAttributionText(value: unknown, maxLength = 120): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  return trimmed ? trimmed.slice(0, maxLength) : null
+}
+
+function cleanAttributionVisitorId(value: unknown): string | null {
+  const trimmed = cleanAttributionText(value, 80)
+  return trimmed && /^[a-zA-Z0-9._:-]+$/.test(trimmed) ? trimmed : null
+}
+
+function cleanAttributionSource(value: unknown): string | null {
+  const source = cleanAttributionText(value, 40)
+  if (!source) return null
+  return ['internal', 'google', 'bing', 'duckduckgo', 'external'].includes(source) ? source : null
+}
+
+function cleanAttributionPath(value: unknown): string | null {
+  const path = cleanAttributionText(value, 240)
+  if (!path || !path.startsWith('/') || path.startsWith('//')) return null
+  return path
+}
+
+function cleanAttributionDate(value: unknown): string | null {
+  const date = cleanAttributionText(value, 40)
+  if (!date || Number.isNaN(Date.parse(date))) return null
+  return date
+}
+
+async function recordSignupAttribution(
+  db: D1Database,
+  userId: number,
+  attribution: SignupAttributionInput | null,
+) {
+  if (!attribution) return
+
+  const visitorId = cleanAttributionVisitorId(attribution.visitor_id)
+  const firstReferrerHost = cleanAttributionText(attribution.first_referrer_host)
+  const firstReferrerSource = cleanAttributionSource(attribution.first_referrer_source)
+  const firstLandingPath = cleanAttributionPath(attribution.first_landing_path)
+  const firstSeenAt = cleanAttributionDate(attribution.first_seen_at)
+  const lastReferrerHost = cleanAttributionText(attribution.last_referrer_host)
+  const lastReferrerSource = cleanAttributionSource(attribution.last_referrer_source)
+  const lastLandingPath = cleanAttributionPath(attribution.last_landing_path)
+  const lastSeenAt = cleanAttributionDate(attribution.last_seen_at)
+
+  if (!visitorId && !firstReferrerHost && !lastReferrerHost) return
+
+  try {
+    await db.prepare(`
+      INSERT INTO signup_attribution (
+        user_id,
+        visitor_id,
+        first_referrer_host,
+        first_referrer_source,
+        first_landing_path,
+        first_seen_at,
+        last_referrer_host,
+        last_referrer_source,
+        last_landing_path,
+        last_seen_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      userId,
+      visitorId,
+      firstReferrerHost,
+      firstReferrerSource,
+      firstLandingPath,
+      firstSeenAt,
+      lastReferrerHost,
+      lastReferrerSource,
+      lastLandingPath,
+      lastSeenAt,
+    ).run()
+  } catch (error) {
+    console.error('[auth] signup attribution failed:', error)
+  }
 }
 
 async function createEmailVerificationToken(
@@ -106,6 +219,9 @@ auth.post('/register', async (c) => {
   if (!body.health_consent)
     return c.json({ error: 'Gesundheits-Einwilligung erforderlich (DSGVO Art. 9)' }, 400)
   const data = body as { email: string; password: string; age?: number; guideline_source?: string }
+  const attribution = typeof body.attribution === 'object' && body.attribution !== null
+    ? body.attribution as SignupAttributionInput
+    : null
 
   // Normalize: empty strings → undefined (treat as not provided)
   const ageRaw = data.age
@@ -142,6 +258,7 @@ auth.post('/register', async (c) => {
 
   const userId = result.meta.last_row_id
   const verificationToken = await createEmailVerificationToken(c.env.DB, userId)
+  await recordSignupAttribution(c.env.DB, userId, attribution)
   await c.env.DB.prepare(
     `INSERT INTO consent_log (user_id, consent_type, granted) VALUES (?, 'health_data', 1)`
   ).bind(userId).run()
@@ -343,6 +460,8 @@ auth.post('/login', async (c) => {
   const valid = await verifyPassword(data.password, user.password_hash)
   if (!valid) return c.json({ error: 'Invalid credentials' }, 401)
 
+  await markUserSeen(c.env.DB, user.id)
+
   const token = await sign(
     { userId: user.id, email: user.email, role: user.role ?? 'user', exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS },
     c.env.JWT_SECRET,
@@ -365,6 +484,7 @@ meApp.get('/', async (c) => {
   const authErr = await ensureAuth(c)
   if (authErr) return authErr
   const user = c.get('user')
+  await markUserSeen(c.env.DB, user.userId)
   const row = await c.env.DB.prepare(
     'SELECT id, email, age, guideline_source, health_consent, health_consent_at, email_verified_at, role FROM users WHERE id = ?'
   ).bind(user.userId).first<UserRow>()
@@ -390,9 +510,9 @@ meApp.patch('/password', async (c) => {
   if (newPassword.length < 8) return c.json({ error: 'Neues Passwort muss mindestens 8 Zeichen lang sein.' }, 400)
   if (newPassword === currentPassword) return c.json({ error: 'Neues Passwort muss sich vom aktuellen unterscheiden.' }, 400)
 
-  const row = await c.env.DB.prepare('SELECT password_hash FROM users WHERE id = ?')
+  const row = await c.env.DB.prepare('SELECT id, email, password_hash, email_verified_at FROM users WHERE id = ?')
     .bind(user.userId)
-    .first<{ password_hash: string }>()
+    .first<{ id: number; email: string; password_hash: string; email_verified_at: string | null }>()
   if (!row) return c.json({ error: 'User not found' }, 404)
 
   const valid = await verifyPassword(currentPassword, row.password_hash)
@@ -419,9 +539,9 @@ meApp.delete('/', async (c) => {
   const password = body && typeof body.password === 'string' ? body.password : ''
   if (!password) return c.json({ error: 'Passwort erforderlich.' }, 400)
 
-  const row = await c.env.DB.prepare('SELECT password_hash FROM users WHERE id = ?')
+  const row = await c.env.DB.prepare('SELECT id, email, password_hash, email_verified_at FROM users WHERE id = ?')
     .bind(user.userId)
-    .first<{ password_hash: string }>()
+    .first<{ id: number; email: string; password_hash: string; email_verified_at: string | null }>()
   if (!row) return c.json({ error: 'User not found' }, 404)
 
   const valid = await verifyPassword(password, row.password_hash)
@@ -432,6 +552,28 @@ meApp.delete('/', async (c) => {
   // Reihenfolge: Kinder vor Eltern. stack_items hängt an stacks(id), nicht an
   // users(id) direkt — daher zuerst stack_items via Sub-Select, dann stacks.
   const userId = user.userId
+  const [stackCount, userProductCount] = await Promise.all([
+    countUserRows(c.env.DB, 'stacks', userId),
+    countUserRows(c.env.DB, 'user_products', userId),
+  ])
+  try {
+    await c.env.DB.prepare(`
+      INSERT INTO account_deletion_events (
+        deleted_user_id,
+        had_verified_email,
+        stack_count,
+        user_product_count
+      )
+      VALUES (?, ?, ?, ?)
+    `).bind(
+      userId,
+      row.email_verified_at ? 1 : 0,
+      stackCount,
+      userProductCount,
+    ).run()
+  } catch {
+    // Dashboard tracking table may not be migrated yet; deletion must still work.
+  }
   const coreStmts = [
     c.env.DB.prepare('DELETE FROM stack_items WHERE stack_id IN (SELECT id FROM stacks WHERE user_id = ?)').bind(userId),
     c.env.DB.prepare('DELETE FROM stacks WHERE user_id = ?').bind(userId),

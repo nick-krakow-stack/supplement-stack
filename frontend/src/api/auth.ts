@@ -1,5 +1,6 @@
 import { apiClient } from './client';
 import type { User } from '../types';
+import { getSignupAttribution } from '../lib/analytics';
 
 interface AuthResponse {
   user: User;
@@ -24,6 +25,7 @@ export async function register(
     email,
     password,
     ...extra,
+    attribution: getSignupAttribution(),
   });
   const user = res.data.profile ?? await getMe();
   return {
