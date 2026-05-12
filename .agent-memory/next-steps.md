@@ -9,6 +9,7 @@ Last updated: 2026-05-12
 - Zentrale Codex-Hooks aktiv und versioniert: `UserPromptSubmit` + `Stop` auf `.codex/hooks/agent-protocol.ps1`.
 - PreCompact/PreToolUse/PostToolUse werden nur noch manuell im Prozess dokumentiert, nicht automatisch verdrahtet.
 - `AGENTS.md` ist jetzt die einzige zentrale Startup-Datei; `CLAUDE.md` ist aus der Pflichtstartliste entfernt.
+- Nächster operativer Fokus: aktive To-do-Datei `.agent-memory/current-task.md` als Fortschritts-Checklist führen, jede Step-/Feedback-Erfassung in `.agent-memory/feedback.md` persistieren, Stop/Handoff nach jeder Aufgabe aktualisieren.
 
 ## Immediate
 

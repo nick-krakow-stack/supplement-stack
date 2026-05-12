@@ -11,6 +11,14 @@ Before changing code, every agent must read these files in order:
 3. `.agent-memory/handoff.md`
 4. `.agent-memory/next-steps.md`
 
+### Hook-and-Memory Operational Rules
+
+- The active orchestration model is Orchestrator-only: Codex coordinates and delegates to Sub-Agents; only Sub-Agents perform implementation.
+- For every task, the active checklist is maintained in `.agent-memory/current-task.md` as the canonical live To-do list and updated when steps are completed or reprioritized.
+- All browser feedback, diff comments, and owner feedback points are persisted in `.agent-memory/feedback.md` for continuity across compact/restart.
+- After each stop/assignment boundary, the handoff state is refreshed via hooks so `.agent-memory/handoff.md` and `.agent-memory/progress.md` remain current.
+- After every Sub-Agent final response, the Orchestrator updates `.agent-memory/current-task.md` immediately and marks completed items before delegating again or sending a final response.
+
 Then run:
 
 ```powershell
@@ -155,7 +163,7 @@ Ein Feature is complete only when all of the following are true:
 
 ## Never-Do Rules
 
-- Orchestrator edits files directly.
+- Orchestrator does not implement code or edit files directly.
 - Add medical claims without citable sources and explicit links.
 - Show affiliate labeling on individual product/CTA elements.
 - Ignore existing code and rebuild from scratch without reason.

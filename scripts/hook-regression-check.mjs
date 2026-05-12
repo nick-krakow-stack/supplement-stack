@@ -119,7 +119,34 @@ if (codexHooks) {
   )
 }
 
-// 4) agent protocol script and protocol docs must exist.
+// 4) AGENTS protocol must encode Orchestrator-only and checklist/feedback rules.
+const agentsDoc = readText('AGENTS.md')
+check(
+  agentsDoc.match(/Orchestrator-only|Codex .*Orchestrator|Codex .*operates as Orchestrator/i),
+  'AGENTS.md must state Orchestrator-only operation with Codex as coordinator.',
+)
+check(
+  agentsDoc.match(/Sub-Agent/i),
+  'AGENTS.md must mention Sub-Agent delegation.',
+)
+check(
+  agentsDoc.match(/current-task\.md|checklist/i),
+  'AGENTS.md must define a checklist rule for current tasks.',
+)
+check(
+  agentsDoc.match(/Sub-Agent.*(Final|final|Ergebnis|ergebnis).*current-task\.md|current-task\.md.*Sub-Agent.*(Final|final|Ergebnis|ergebnis)/i),
+  'AGENTS.md must require updating current-task.md after each Sub-Agent final response.',
+)
+check(
+  agentsDoc.match(/Browser-Feedback|Browser feedback/i),
+  'AGENTS.md must define Browser-Feedback capture policy.',
+)
+check(
+  agentsDoc.match(/Stop|handoff|status update/i),
+  'AGENTS.md must require Stop/handoff status updates.',
+)
+
+// 5) agent protocol script and protocol docs must exist.
 check(
   existsSync(new URL('../.codex/hooks/agent-protocol.ps1', import.meta.url)),
   '.codex/hooks/agent-protocol.ps1 must exist',
@@ -134,15 +161,33 @@ check(
   'agent-protocol.ps1 must write owner feedback to .agent-memory/feedback.md, not feedback.txt',
 )
 check(
-  agentProtocol.includes('Test-IsOwnerFeedback') && agentProtocol.includes('Du bist nicht allein im Codebase'),
-  'agent-protocol.ps1 must filter internal sub-agent prompts from owner feedback',
+  agentProtocol.includes('current-task.md'),
+  'agent-protocol.ps1 must include current-task.md for checklist persistence.',
+)
+check(
+  agentProtocol.includes('Browser-Feedback') && agentProtocol.includes('Diff-Kommentar'),
+  'agent-protocol.ps1 must support Browser-Feedback and Diff-Kommentar capture.',
+)
+check(
+  agentProtocol.includes('current-task.md') && agentProtocol.includes('feedback.md'),
+  'agent-protocol.ps1 must keep handoff tied to task checklist and feedback memory.',
+)
+check(
+  agentProtocol.includes('Test-IsInternalSignal') && agentProtocol.includes('Du bist nicht allein im Codebase'),
+  'agent-protocol.ps1 must filter internal sub-agent prompts from feedback capture.',
 )
 check(
   existsSync(new URL('../.codex/hooks/README.md', import.meta.url)),
   '.codex/hooks/README.md must exist',
 )
 
-// 5) old hook scripts should not exist.
+// 6) current task checklist must exist.
+check(
+  existsSync(new URL('../.agent-memory/current-task.md', import.meta.url)),
+  '.agent-memory/current-task.md must exist.',
+)
+
+// 7) old hook scripts should not exist.
 const oldHookNames = [
   '.claude/hooks/error-capture.sh',
   '.claude/hooks/pre-deploy-check.sh',
@@ -157,8 +202,7 @@ for (const hookFile of oldHookNames) {
   )
 }
 
-// 6) AGENTS protocol is canonical; CLAUDE.md must not be listed in startup instructions.
-const agentsDoc = readText('AGENTS.md')
+// 8) AGENTS protocol is canonical; CLAUDE.md must not be listed in startup instructions.
 check(
   !agentsDoc.match(/Read\\s+`?CLAUDE\\.md`?/i),
   'AGENTS.md startup list must not require CLAUDE.md',

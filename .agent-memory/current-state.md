@@ -4,6 +4,9 @@ Last updated: 2026-05-12
 
 ## 2026-05-12 - Hook-Steuerung
 
+- Codex ist Orchestrator-only und arbeitet über Sub-Agents; `.agent-memory/current-task.md` ist die aktive Aufgabe-/To-do-Liste.
+- Browser-Feedback, Diff-Kommentare und Owner-Feedback landen dauerhaft in `.agent-memory/feedback.md`; Stop führt vollständiges Memory/Handoff-Update aus.
+
 - Claude-Hooks wurden vollständig aus der aktiven Projektkonfiguration entfernt.
 - Legacy `.claude/hooks/error-capture.sh`, `.claude/hooks/pre-deploy-check.sh`, `.claude/settings.json` und `.claude/memory.md` sind entfernt.
 - Zentrale Codex-Hook-Steuerung ist aktiv und versioniert: `.codex/hooks.json` mit `UserPromptSubmit` und `Stop` auf `.codex/hooks/agent-protocol.ps1`.

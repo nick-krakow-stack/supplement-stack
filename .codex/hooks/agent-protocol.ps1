@@ -6,6 +6,7 @@ $ErrorActionPreference = "SilentlyContinue"
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $memoryDir = Join-Path $repoRoot ".agent-memory"
 $feedbackPath = Join-Path $memoryDir "feedback.md"
+$currentTaskPath = Join-Path $memoryDir "current-task.md"
 $handoffPath = Join-Path $memoryDir "handoff.md"
 $currentStatePath = Join-Path $memoryDir "current-state.md"
 $nextStepsPath = Join-Path $memoryDir "next-steps.md"
@@ -60,6 +61,28 @@ function Append-Feedback([string]$path, [string]$line) {
   Add-Content -Path $path -Value $line -Encoding UTF8
 }
 
+function Ensure-TaskFileExists {
+  if (Test-Path $currentTaskPath) {
+    return
+  }
+
+  $stamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss zzz"
+  $content = @"
+# Current Task Checklist
+
+Last updated: $stamp
+
+## Active Task Checklist
+
+- [ ] Define the first checklist item.
+
+## Completed Task Steps
+
+- [x] Baseline checklist file created.
+"@
+  Set-Content -Path $currentTaskPath -Value $content -Encoding UTF8
+}
+
 function Update-ProgressBlock([string]$entry) {
   $stamp = Format-Entry $entry
   $line = "- $stamp"
@@ -105,6 +128,157 @@ function Update-SectionInFile([string]$path, [string]$sectionTitle, [string]$lin
   Set-Content -Path $path -Value $updatedRaw -Encoding UTF8
 }
 
+function Ensure-SectionInFile([string]$raw, [string]$sectionTitle, [string]$defaultContent) {
+  if ($raw -match "(?ms)^##\s+$([regex]::Escape($sectionTitle))") {
+    return $raw
+  }
+
+  $section = @"
+
+## $sectionTitle
+
+$defaultContent
+"@
+  return $raw.TrimEnd() + $section
+}
+
+function Normalize-TaskText([string]$text) {
+  if ([string]::IsNullOrWhiteSpace($text)) {
+    return ""
+  }
+
+  return [regex]::Replace([string]$text, "\s+", " ").Trim().ToLowerInvariant()
+}
+
+function Update-CurrentTaskFromPrompt([string]$content) {
+  if ([string]::IsNullOrWhiteSpace($content)) {
+    return
+  }
+
+  Ensure-TaskFileExists
+
+  $raw = Get-Content -Raw -Path $currentTaskPath -ErrorAction SilentlyContinue
+  if ([string]::IsNullOrWhiteSpace($raw)) {
+    $raw = "# Current Task Checklist`r`nLast updated: " + (Get-Date -Format "yyyy-MM-dd HH:mm:ss zzz") + "`r`n"
+  }
+
+  $raw = Ensure-SectionInFile $raw "Active Task Checklist" "- [ ] Add an item."
+  $raw = Ensure-SectionInFile $raw "Completed Task Steps" "- [x] Baseline step."
+
+  $activeItems = @()
+  $completedItems = @()
+  foreach ($line in ($content -split "`r?`n")) {
+    $match = $line | Select-String -Pattern '^\s*-\s*\[([ xX])\]\s*(.+)\s*$'
+    if (-not $match) {
+      continue
+    }
+
+    $mark = $match.Matches[0].Groups[1].Value
+    $text = [string]$match.Matches[0].Groups[2].Value
+    $clean = [regex]::Replace($text, "\s+", " ").Trim()
+    if ([string]::IsNullOrWhiteSpace($clean)) {
+      continue
+    }
+
+    if ($mark.ToLower() -eq "x") {
+      $completedItems += $clean
+    } else {
+      $activeItems += $clean
+    }
+  }
+
+  if ($activeItems.Count -eq 0 -and $completedItems.Count -eq 0) {
+    return
+  }
+
+  $existing = Get-Content -Path $currentTaskPath -ErrorAction SilentlyContinue
+  foreach ($item in $completedItems) {
+    $target = Normalize-TaskText $item
+    $already = $existing | Where-Object {
+      $_ -match '^\s*-\s*\[[xX]\]\s*(.+)\s*$' -and (Normalize-TaskText $Matches[1]) -eq $target
+    }
+    if ($already.Count -gt 0) {
+      continue
+    }
+
+    $raw = [regex]::Replace(
+      $raw,
+      "(?ms)(^##\s+Completed Task Steps.*?)(?=^\s*##\s+|\z)",
+      "`$1`r`n- [x] $item"
+    )
+  }
+
+  foreach ($item in $activeItems) {
+    $target = Normalize-TaskText $item
+    $already = $existing | Where-Object {
+      $_ -match '^\s*-\s*\[[ xX]\]\s*(.+)\s*$' -and (Normalize-TaskText $Matches[1]) -eq $target
+    }
+    if ($already.Count -gt 0) {
+      continue
+    }
+
+    $raw = [regex]::Replace(
+      $raw,
+      "(?ms)(^##\s+Active Task Checklist.*?)(?=^\s*##\s+|\z)",
+      "`$1`r`n- [ ] $item"
+    )
+  }
+
+  $raw = [regex]::Replace(
+    $raw,
+    "(?m)^Last updated:.*$",
+    "Last updated: " + (Get-Date -Format "yyyy-MM-dd HH:mm:ss zzz")
+  )
+
+  Set-Content -Path $currentTaskPath -Value $raw -Encoding UTF8
+}
+
+function Get-PayloadText([pscustomobject]$payload) {
+  $textCandidates = @(
+    $payload.prompt,
+    $payload.message,
+    $payload.input,
+    $payload.text,
+    $payload.comment,
+    $payload.feedback,
+    $payload.body
+  )
+
+  foreach ($candidate in $textCandidates) {
+    if (-not [string]::IsNullOrWhiteSpace([string]$candidate)) {
+      return [string]$candidate
+    }
+  }
+
+  return ""
+}
+
+function Get-FeedbackCategory([pscustomobject]$payload, [string]$content) {
+  $rawType = ""
+  foreach ($property in @("category", "kind", "feedback_type", "feedbackType", "source", "channel")) {
+    $value = $payload.$property
+    if (-not [string]::IsNullOrWhiteSpace([string]$value)) {
+      $rawType = [string]$value
+      break
+    }
+  }
+
+  if ($rawType -match "(?i)browser") {
+    return "Browser-Feedback"
+  }
+  if ($rawType -match "(?i)diff|review|comment") {
+    return "Diff-Kommentar"
+  }
+  if ($content -match "(?i)Browser-Feedback|Browser feedback|Browserfeedback|Browser QA") {
+    return "Browser-Feedback"
+  }
+  if ($content -match "(?i)Diff[- ]?Kommentar|review comment|Code review|PR comment|Diff Kommentar") {
+    return "Diff-Kommentar"
+  }
+
+  return "Owner-Feedback"
+}
+
 function Update-HandoffFile {
   if (-not (Test-Path $memoryDir)) {
     New-Item -ItemType Directory -Path $memoryDir | Out-Null
@@ -132,6 +306,8 @@ Update mode: Stop
 ## Latest Notes
 
 Automatic handoff snapshot written by `.codex/hooks/agent-protocol.ps1`.
+Current task status is tracked in `.agent-memory/current-task.md`.
+Owner and browser feedback are persisted in `.agent-memory/feedback.md`.
 
 ## Git Snapshot
 
@@ -171,6 +347,7 @@ See `.agent-memory/next-steps.md`.
 }
 
 function Update-MemoryAfterStop {
+  Ensure-TaskFileExists
   Update-HandoffFile
 
   if (-not (Test-Path $memoryDir)) {
@@ -178,20 +355,20 @@ function Update-MemoryAfterStop {
   }
 
   if (Test-Path $currentStatePath) {
-    Update-SectionInFile -path $currentStatePath -sectionTitle "Known Remaining Work" -line "Codex-Hook-Regelwerk: zentrale Hooks aktiv (UserPromptSubmit, Stop). Claude-Hooks deaktiviert; kein aktives Claude-Hooking."
+    Update-SectionInFile -path $currentStatePath -sectionTitle "Known Remaining Work" -line "Stop-Hook refreshed memory snapshot and references current-task/checklist handoff continuity."
   }
   if (Test-Path $nextStepsPath) {
-    Update-SectionInFile -path $nextStepsPath -sectionTitle "Immediate" -line "Stop-Hook: Memory-Handoff-Progress-Snapshot aktualisiert."
+    Update-SectionInFile -path $nextStepsPath -sectionTitle "Immediate" -line "Stop-Hook refreshed memory snapshot and current-task/checklist continuity."
   }
 }
 
-function Test-IsOwnerFeedback([string]$content) {
+function Test-IsInternalSignal([string]$content) {
   if ([string]::IsNullOrWhiteSpace($content)) {
     return $false
   }
 
   $internalPatterns = @(
-    "Rolle:\s*(Dev-Agent|QA-Agent|Critic-Agent|UX-Agent|UI-Agent|Science-Agent|Feature-Agent|Mobile-Agent|Persona-Agent)",
+    "Rolle:\s*(Dev-Agent|QA-Agent|Critic-Agent|UX-Agent|UI-Agent|Science-Agent|Feature-Agent|Mobile-Agent|Persona-Agent|Orchestrator)",
     "Du bist nicht allein im Codebase",
     "Repository:\s*C:\\Users\\email\\supplement-stack",
     "Pflichtstart:",
@@ -203,11 +380,11 @@ function Test-IsOwnerFeedback([string]$content) {
 
   foreach ($pattern in $internalPatterns) {
     if ($content -match $pattern) {
-      return $false
+      return $true
     }
   }
 
-  return $true
+  return $false
 }
 
 function Capture-OwnerFeedback([string]$rawPayload) {
@@ -217,21 +394,18 @@ function Capture-OwnerFeedback([string]$rawPayload) {
 
   try {
     $payload = $rawPayload | ConvertFrom-Json
-    $content = $payload.prompt
-    if ([string]::IsNullOrWhiteSpace($content)) {
-      $content = $payload.message
-    }
-    if ([string]::IsNullOrWhiteSpace($content)) {
-      $content = $payload.input
-    }
+    $content = Get-PayloadText $payload
     if ([string]::IsNullOrWhiteSpace($content)) {
       return $false
     }
     $safe = [System.Text.RegularExpressions.Regex]::Replace([string]$content, "\s+", " ")
-    if (-not (Test-IsOwnerFeedback -content $safe)) {
+    if (Test-IsInternalSignal -content $safe) {
       return $false
     }
-    Append-Feedback -path $feedbackPath -line (Format-Entry "Owner-Feedback: $safe")
+
+    $category = Get-FeedbackCategory $payload $safe
+    Append-Feedback -path $feedbackPath -line (Format-Entry "${category}: $safe")
+    Update-CurrentTaskFromPrompt -content $content
     return $true
   } catch {
     # no-op if payload is not JSON
@@ -254,7 +428,7 @@ if ([string]::IsNullOrWhiteSpace($event)) {
 switch ($event) {
   "UserPromptSubmit" {
     if (Capture-OwnerFeedback -rawPayload $stdin) {
-      Update-ProgressBlock "Captured owner feedback on UserPromptSubmit."
+      Update-ProgressBlock "Captured user feedback on UserPromptSubmit."
     }
   }
   "Stop" {

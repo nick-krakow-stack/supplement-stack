@@ -1,30 +1,33 @@
 ﻿# Handoff
 
-Last updated: 2026-05-12 16:59:53 +02:00
+Last updated: 2026-05-12 17:42:51 +02:00
 Update mode: Stop
 
 ## Latest Notes
 
 Automatic handoff snapshot written by .codex/hooks/agent-protocol.ps1.
+Current task status is tracked in .agent-memory/current-task.md.
+Owner and browser feedback are persisted in .agent-memory/feedback.md.
 
 ## Git Snapshot
 
 - Branch: main
-- Last commit: e33429a Centralize Codex hooks
+- Last commit: 0b55f7f Make AGENTS protocol canonical
 
 ## Working Tree
 
 ~~~text
- M .agent-memory/current-state.md
- M .agent-memory/decisions.md
- M .agent-memory/handoff.md
- M .agent-memory/next-steps.md
- M .agent-memory/progress.md
- M .codex/hooks/agent-protocol.ps1
- M AGENTS.md
- D CLAUDE.md
- M scripts/hook-regression-check.mjs
-?? .agent-memory/feedback.md
+M  .agent-memory/current-state.md
+AM .agent-memory/current-task.md
+M  .agent-memory/decisions.md
+M  .agent-memory/feedback.md
+MM .agent-memory/handoff.md
+M  .agent-memory/next-steps.md
+MM .agent-memory/progress.md
+M  .codex/hooks/README.md
+M  .codex/hooks/agent-protocol.ps1
+M  AGENTS.md
+M  scripts/hook-regression-check.mjs
 ~~~
 
 ## Current State Summary

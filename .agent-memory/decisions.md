@@ -740,6 +740,19 @@ Operational rule:
   - test and verify quality,
   - escalate or rerun any Spark assignment if risk, ambiguity, or quality concerns appear.
 
+## Checklist and Feedback Memory Rule
+
+Decision: Hook-driven work continuity is maintained through three live memory artifacts:
+
+- `.agent-memory/current-task.md` as the canonical task checklist.
+- `.agent-memory/feedback.md` as the canonical destination for Owner-, Browser-, and Diff-feedback.
+- `.agent-memory/handoff.md` as the transition snapshot at each Stop.
+
+Operational rule:
+
+- `UserPromptSubmit` and `Stop` hooks must append to the memory artifacts above without creating loud console output.
+- `Stop` must refresh handoff text so the next agent can continue with current task state and feedback continuity.
+
 Decision: Initial Codex model-routing policy was recorded in commit `2457345`.
 
 - This handoff extends it with Spark `medium/high/xhigh` mode guidance and keeps the
