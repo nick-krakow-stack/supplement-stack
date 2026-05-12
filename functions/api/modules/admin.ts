@@ -915,6 +915,18 @@ const PRODUCT_SHOP_LINK_SOURCE_TYPES = ['admin', 'legacy_product', 'user_product
 const INGREDIENT_ADMIN_TASK_KEYS = ['forms', 'dge', 'precursors', 'synonyms'] as const
 const INGREDIENT_ADMIN_TASK_STATUSES = ['open', 'done', 'none'] as const
 const INGREDIENT_PRODUCT_RECOMMENDATION_SLOTS = ['primary', 'alternative_1', 'alternative_2'] as const
+const ADMIN_HIDDEN_TOP_LEVEL_INGREDIENT_NAMES = ['B-Vitamin-Komplex', 'DPA'] as const
+const ADMIN_INGREDIENT_GROUPS = [
+  { value: 'vitamins', label: 'Vitamine' },
+  { value: 'minerals', label: 'Mineralstoffe' },
+  { value: 'trace_elements', label: 'Spurenelemente' },
+  { value: 'enzymes', label: 'Enzyme' },
+  { value: 'amino_acids', label: 'Aminosäuren' },
+  { value: 'fatty_acids', label: 'Fettsäuren' },
+  { value: 'plant_extracts', label: 'Pflanzenstoffe' },
+  { value: 'adaptogens', label: 'Adaptogene' },
+  { value: 'other', label: 'Sonstige' },
+] as const
 const PRODUCT_SHOP_LINK_RECHECK_TIMEOUT_MS = 6000
 const PRODUCT_SHOP_LINK_RECHECK_MAX_REDIRECTS = 5
 type AffiliateOwnerType = typeof AFFILIATE_OWNER_TYPES[number]
@@ -924,6 +936,7 @@ type ProductShopLinkSourceType = typeof PRODUCT_SHOP_LINK_SOURCE_TYPES[number]
 type IngredientAdminTaskKey = typeof INGREDIENT_ADMIN_TASK_KEYS[number]
 type IngredientAdminTaskStatus = typeof INGREDIENT_ADMIN_TASK_STATUSES[number]
 type IngredientProductRecommendationSlot = typeof INGREDIENT_PRODUCT_RECOMMENDATION_SLOTS[number]
+type AdminIngredientGroupKey = typeof ADMIN_INGREDIENT_GROUPS[number]['value']
 type AffiliateOwnership = {
   affiliate_owner_type: AffiliateOwnerType
   affiliate_owner_user_id: number | null
@@ -3405,6 +3418,39 @@ function ingredientTaskStatusJoin(hasTaskStatusTable: boolean): string {
         GROUP BY ingredient_id
       ) task_status ON task_status.ingredient_id = i.id
     `
+}
+
+function adminHiddenIngredientCondition(alias = 'i'): string {
+  const hiddenNames = ADMIN_HIDDEN_TOP_LEVEL_INGREDIENT_NAMES
+    .map((name) => `'${name.replace(/'/g, "''").toLowerCase()}'`)
+    .join(', ')
+  return `lower(${alias}.name) NOT IN (${hiddenNames})`
+}
+
+function ingredientGroupCaseExpression(alias = 'i'): string {
+  return `CASE
+    WHEN lower(COALESCE(${alias}.category, '')) LIKE 'vitamin%' THEN 'vitamins'
+    WHEN lower(COALESCE(${alias}.category, '')) = 'mineral' THEN 'minerals'
+    WHEN lower(COALESCE(${alias}.category, '')) = 'trace_element' THEN 'trace_elements'
+    WHEN lower(COALESCE(${alias}.category, '')) LIKE '%enzyme%' THEN 'enzymes'
+    WHEN lower(COALESCE(${alias}.category, '')) = 'amino_acid' THEN 'amino_acids'
+    WHEN lower(COALESCE(${alias}.category, '')) = 'fatty_acid' THEN 'fatty_acids'
+    WHEN lower(COALESCE(${alias}.category, '')) = 'plant_extract' THEN 'plant_extracts'
+    WHEN lower(COALESCE(${alias}.category, '')) = 'adaptogen' THEN 'adaptogens'
+    ELSE 'other'
+  END`
+}
+
+function ingredientGroupLabel(value: AdminIngredientGroupKey): string {
+  return ADMIN_INGREDIENT_GROUPS.find((group) => group.value === value)?.label ?? value
+}
+
+function ingredientGroupKey(value: string): AdminIngredientGroupKey | null {
+  return ADMIN_INGREDIENT_GROUPS.find((group) => group.value === value)?.value ?? null
+}
+
+function ingredientGroupCondition(group: AdminIngredientGroupKey): string {
+  return `${ingredientGroupCaseExpression('i')} = '${group}'`
 }
 
 function ingredientTaskDoneCondition(taskKey: IngredientAdminTaskKey, hasTaskStatusTable: boolean): string {
@@ -6487,6 +6533,7 @@ admin.get('/products', async (c) => {
     c.req.query('q') !== undefined ||
     c.req.query('page') !== undefined ||
     c.req.query('limit') !== undefined ||
+    c.req.query('ingredient_id') !== undefined ||
     c.req.query('moderation') !== undefined ||
     c.req.query('affiliate') !== undefined ||
     c.req.query('image') !== undefined ||
@@ -6495,6 +6542,8 @@ admin.get('/products', async (c) => {
   )
   const q = c.req.query('q')?.trim() ?? ''
   const moderation = c.req.query('moderation')?.trim() ?? ''
+  const ingredientIdParam = c.req.query('ingredient_id')
+  const ingredientId = ingredientIdParam === undefined ? null : parsePositiveId(ingredientIdParam)
   const affiliate = c.req.query('affiliate')?.trim() ?? ''
   const image = c.req.query('image')?.trim() ?? ''
   const deadlinks = c.req.query('deadlinks') === '1' || c.req.query('link_status') === 'dead'
@@ -6502,6 +6551,9 @@ admin.get('/products', async (c) => {
 
   if (moderation && moderation !== 'all' && !PRODUCT_MODERATION_STATUSES.includes(moderation as ProductModerationStatus)) {
     return c.json({ error: `moderation must be one of all, ${PRODUCT_MODERATION_STATUSES.join(', ')}` }, 400)
+  }
+  if (ingredientIdParam !== undefined && ingredientId === null) {
+    return c.json({ error: 'ingredient_id must be a positive integer' }, 400)
   }
   if (affiliate && !['all', 'partner', 'no_partner', 'nick', 'user'].includes(affiliate)) {
     return c.json({ error: 'affiliate must be one of all, partner, no_partner, nick, user' }, 400)
@@ -6545,6 +6597,16 @@ admin.get('/products', async (c) => {
       OR CAST(p.id AS TEXT) LIKE ?
     )`)
     bindings.push(like, like, like, like)
+  }
+  if (ingredientId !== null) {
+    where.push(`EXISTS (
+      SELECT 1
+      FROM product_ingredients pi
+      WHERE pi.product_id = p.id
+        AND pi.ingredient_id = ?
+        AND COALESCE(pi.search_relevant, 1) = 1
+    )`)
+    bindings.push(ingredientId)
   }
   if (moderation && moderation !== 'all') {
     where.push('p.moderation_status = ?')
@@ -6669,10 +6731,16 @@ admin.get('/ingredients', async (c) => {
   const hasPagedRequest = (
     c.req.query('q') !== undefined ||
     c.req.query('task') !== undefined ||
+    c.req.query('ingredient_group') !== undefined ||
     c.req.query('page') !== undefined ||
     c.req.query('limit') !== undefined
   )
   const q = c.req.query('q')?.trim() ?? ''
+  const groupFilterRaw = c.req.query('ingredient_group')?.trim() ?? ''
+  const groupFilter = groupFilterRaw && groupFilterRaw !== 'all' ? ingredientGroupKey(groupFilterRaw) : null
+  if (groupFilterRaw && groupFilterRaw !== 'all' && groupFilter === null) {
+    return c.json({ error: `ingredient_group must be one of all, ${ADMIN_INGREDIENT_GROUPS.map((group) => group.value).join(', ')}` }, 400)
+  }
   const taskFilterRaw = c.req.query('task')?.trim() ?? ''
   const taskFilter = taskFilterRaw
     ? (ingredientAdminTaskKey(taskFilterRaw) ?? (taskFilterRaw === 'knowledge' || taskFilterRaw === 'dosing' ? taskFilterRaw : null))
@@ -6683,7 +6751,7 @@ admin.get('/ingredients', async (c) => {
   const page = Math.max(1, parsePagination(c.req.query('page'), 1, 100000))
   const limit = Math.max(1, parsePagination(c.req.query('limit'), hasPagedRequest ? 50 : 250, 250))
   const offset = (page - 1) * limit
-  const where: string[] = []
+  const where: string[] = [adminHiddenIngredientCondition('i')]
   const bindings: Array<string | number> = []
 
   if (q) {
@@ -6705,6 +6773,9 @@ admin.get('/ingredients', async (c) => {
   if (taskFilter !== null) {
     where.push(ingredientTaskMissingCondition(taskFilter, hasTaskStatusTable, hasPrecursorsTable))
   }
+  if (groupFilter !== null) {
+    where.push(ingredientGroupCondition(groupFilter))
+  }
   const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''
   const precursorCountSelect = hasPrecursorsTable
     ? 'COALESCE(precursor_counts.precursor_count, 0) AS precursor_count'
@@ -6718,7 +6789,17 @@ admin.get('/ingredients', async (c) => {
       ) precursor_counts ON precursor_counts.ingredient_id = i.id
     `
     : ''
-  const [totalRow, listResult] = await Promise.all([
+  const groupCountsPromise = c.env.DB.prepare(`
+    SELECT ingredient_group, COUNT(*) AS count
+    FROM (
+      SELECT ${ingredientGroupCaseExpression('i')} AS ingredient_group
+      FROM ingredients i
+      WHERE ${adminHiddenIngredientCondition('i')}
+    )
+    GROUP BY ingredient_group
+  `).all<{ ingredient_group: AdminIngredientGroupKey; count: number }>()
+
+  const [totalRow, listResult, groupCountsResult] = await Promise.all([
     c.env.DB.prepare(`
       SELECT COUNT(*) AS count
       FROM ingredients i
@@ -6849,9 +6930,11 @@ admin.get('/ingredients', async (c) => {
       ORDER BY COALESCE(i.category, '') ASC, i.name ASC, i.id ASC
       LIMIT ? OFFSET ?
     `).bind(...bindings, limit, offset).all<Record<string, string | number | null>>(),
+    groupCountsPromise,
   ])
 
   const total = totalRow?.count ?? 0
+  const groupCounts = new Map((groupCountsResult.results ?? []).map((row) => [row.ingredient_group, row.count]))
   return c.json({
     ingredients: listResult.results ?? [],
     total,
@@ -6860,6 +6943,13 @@ admin.get('/ingredients', async (c) => {
     total_pages: Math.max(1, Math.ceil(total / limit)),
     summary: {
       total,
+      groups: ADMIN_INGREDIENT_GROUPS
+        .map((group) => ({
+          value: group.value,
+          label: ingredientGroupLabel(group.value),
+          count: groupCounts.get(group.value) ?? 0,
+        }))
+        .filter((group) => group.count > 0 || ['vitamins', 'minerals', 'trace_elements', 'enzymes'].includes(group.value)),
     },
   })
 })
@@ -6979,6 +7069,17 @@ admin.put('/ingredients/:id/product-recommendations/:slot', async (c) => {
     return c.json({ error: 'product_id is required' }, 400)
   }
   if (!(await productExists(c.env.DB, productId.value))) return c.json({ error: 'Product not found' }, 404)
+  const linkedProductIngredient = await c.env.DB.prepare(`
+    SELECT 1 AS linked
+    FROM product_ingredients
+    WHERE product_id = ?
+      AND ingredient_id = ?
+      AND COALESCE(search_relevant, 1) = 1
+    LIMIT 1
+  `).bind(productId.value, ingredientId).first<{ linked: number }>()
+  if (!linkedProductIngredient) {
+    return c.json({ error: 'Product is not linked to this ingredient' }, 400)
+  }
 
   const shopLinkId = optionalPositiveIntegerField(body, 'shop_link_id')
   if (!shopLinkId.ok) return c.json({ error: shopLinkId.error }, shopLinkId.status ?? 400)

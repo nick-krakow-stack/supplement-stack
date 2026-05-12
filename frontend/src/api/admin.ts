@@ -146,7 +146,14 @@ export interface AdminIngredientsResponse {
   total_pages: number;
   summary?: {
     total: number;
+    groups?: AdminIngredientGroupOption[];
   };
+}
+
+export interface AdminIngredientGroupOption {
+  value: string;
+  label: string;
+  count: number;
 }
 
 export interface AdminDoseRecommendation {
@@ -2705,6 +2712,7 @@ export async function getAdminProducts(params: {
   q?: string;
   page?: number;
   limit?: number;
+  ingredient_id?: number;
   moderation?: string;
   affiliate?: string;
   image?: string;
@@ -2715,6 +2723,7 @@ export async function getAdminProducts(params: {
     q: params.q,
     page: params.page,
     limit: params.limit,
+    ingredient_id: params.ingredient_id,
     moderation: params.moderation,
     affiliate: params.affiliate,
     image: params.image,
@@ -2941,12 +2950,14 @@ export async function deleteAdminProductWarning(
 export async function getAdminIngredients(params: {
   q?: string;
   task?: string;
+  ingredient_group?: string;
   page?: number;
   limit?: number;
 } = {}): Promise<AdminIngredientsResponse> {
   const query = toQueryParams({
     q: params.q,
     task: params.task,
+    ingredient_group: params.ingredient_group,
     page: params.page,
     limit: params.limit,
   });
@@ -2958,6 +2969,16 @@ export async function getAdminIngredients(params: {
   const summaryRaw = res.data.summary && typeof res.data.summary === 'object'
     ? res.data.summary as Record<string, unknown>
     : {};
+  const groups = Array.isArray(summaryRaw.groups)
+    ? summaryRaw.groups.map((entry) => {
+        const raw = entry && typeof entry === 'object' ? entry as Record<string, unknown> : {};
+        return {
+          value: toTextOrNull(raw.value) ?? '',
+          label: toTextOrNull(raw.label) ?? '',
+          count: toIntOrNull(raw.count) ?? 0,
+        };
+      }).filter((entry): entry is AdminIngredientGroupOption => Boolean(entry.value && entry.label))
+    : undefined;
   return {
     ingredients: ingredients.map((ingredient) => parseAdminIngredientListItem(ingredient as Record<string, unknown>)),
     total,
@@ -2966,6 +2987,7 @@ export async function getAdminIngredients(params: {
     total_pages: toIntOrNull(res.data.total_pages) ?? Math.max(1, Math.ceil(total / limit)),
     summary: {
       total: toIntOrNull(summaryRaw.total) ?? total,
+      groups,
     },
   };
 }

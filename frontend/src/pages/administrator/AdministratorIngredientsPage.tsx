@@ -1,13 +1,11 @@
 import { type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  BookOpen,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Circle,
   ExternalLink,
-  FlaskConical,
   ListChecks,
   PackageCheck,
   Plus,
@@ -34,6 +32,7 @@ import {
   updateAdminIngredientTaskStatus,
   upsertAdminIngredientProductRecommendation,
   type AdminCatalogProduct,
+  type AdminIngredientGroupOption,
   type AdminIngredientListItem,
   type AdminIngredientPrecursor,
   type AdminIngredientProductRecommendation,
@@ -52,6 +51,7 @@ import { AdminBadge, AdminButton, AdminCard, AdminEmpty, AdminError, AdminPageHe
 const PAGE_LIMIT_OPTIONS = [25, 50, 100] as const;
 
 type IngredientTaskFilter = 'all' | AdminIngredientTaskKey | 'knowledge' | 'dosing';
+type IngredientGroupFilter = 'all' | string;
 
 const TASK_FILTERS: Array<{ value: IngredientTaskFilter; label: string }> = [
   { value: 'all', label: 'Alle Bearbeitungsstände' },
@@ -61,6 +61,16 @@ const TASK_FILTERS: Array<{ value: IngredientTaskFilter; label: string }> = [
   { value: 'synonyms', label: 'Fehlend: Synonyme' },
   { value: 'knowledge', label: 'Fehlend: Blog / Wissen' },
   { value: 'dosing', label: 'Fehlend: Richtwerte' },
+];
+
+const RECOMMENDATION_SLOTS = ['primary', 'alternative_1', 'alternative_2'] as const;
+
+const DEFAULT_INGREDIENT_GROUP_OPTIONS: AdminIngredientGroupOption[] = [
+  { value: 'all', label: 'Alle Gruppen', count: 0 },
+  { value: 'vitamins', label: 'Vitamine', count: 0 },
+  { value: 'minerals', label: 'Mineralstoffe', count: 0 },
+  { value: 'trace_elements', label: 'Spurenelemente', count: 0 },
+  { value: 'enzymes', label: 'Enzyme', count: 0 },
 ];
 
 const TASK_META: Record<AdminIngredientTaskKey, {
@@ -113,11 +123,6 @@ function getErrorMessage(error: unknown): string {
   return 'Die Aktion konnte nicht ausgeführt werden.';
 }
 
-function countLabel(count: number, singular: string, plural: string): string {
-  if (count === 1) return `1 ${singular}`;
-  return `${count} ${plural}`;
-}
-
 function hasBlogCoverage(ingredient: AdminIngredientListItem): boolean {
   return ingredient.has_blog_url || ingredient.knowledge_article_count > 0;
 }
@@ -141,10 +146,7 @@ function isTaskResolved(ingredient: AdminIngredientListItem, task: AdminIngredie
 function taskDetail(ingredient: AdminIngredientListItem, task: AdminIngredientTaskKey): string {
   const count = taskCount(ingredient, task);
   const status = taskStatus(ingredient, task);
-  if (task === 'forms' && count > 0) return countLabel(count, 'Form', 'Formen');
-  if (task === 'dge' && count > 0) return countLabel(count, 'Quelle', 'Quellen');
-  if (task === 'precursors' && count > 0) return countLabel(count, 'Teil', 'Teile');
-  if (task === 'synonyms' && count > 0) return countLabel(count, 'Synonym', 'Synonyme');
+  if (count > 0) return String(count);
   if (status === 'none') return 'keine';
   if (status === 'done') return 'geprüft';
   return 'fehlt';
@@ -192,7 +194,7 @@ function parseModalNumber(value: string): number | null {
 }
 
 function recommendationSummary(recommendation: AdminIngredientProductRecommendation | null): string {
-  if (!recommendation) return 'setzen';
+  if (!recommendation) return 'fehlt';
   const shop = recommendation.shop_link_name || recommendation.shop_link_host || shopLinkHost(recommendation.shop_link_url);
   return shop && shop !== 'kein Shoplink' ? `${recommendation.product_name} · ${shop}` : recommendation.product_name;
 }
@@ -282,9 +284,9 @@ function IngredientProgressBadges({
   const knowledgeDetail = ingredient.has_blog_url
     ? 'Blog-Link'
     : ingredient.knowledge_article_count > 0
-      ? countLabel(ingredient.knowledge_article_count, 'Artikel', 'Artikel')
+      ? String(ingredient.knowledge_article_count)
       : 'fehlt';
-  const dosingDetail = dosingOk ? countLabel(ingredient.dose_recommendation_count, 'Regel', 'Regeln') : 'fehlt';
+  const dosingDetail = dosingOk ? String(ingredient.dose_recommendation_count) : 'fehlt';
 
   return (
     <div className="flex max-w-[720px] flex-wrap gap-1.5">
@@ -319,27 +321,28 @@ function RecommendationSlots({
   onOpen,
 }: {
   ingredient: AdminIngredientListItem;
-  onOpen: (ingredient: AdminIngredientListItem, slot: AdminIngredientProductRecommendationSlot) => void;
+  onOpen: (ingredient: AdminIngredientListItem) => void;
 }) {
   return (
-    <div className="grid min-w-[240px] gap-1.5">
-      {(['primary', 'alternative_1', 'alternative_2'] as const).map((slot) => {
+    <button
+      type="button"
+      className="grid min-w-[260px] gap-1 rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg)] p-2 text-left text-xs hover:border-[color:var(--admin-line-strong)]"
+      onClick={() => onOpen(ingredient)}
+      title={`Empfehlungen fuer ${ingredient.name} verwalten`}
+    >
+      <span className="flex items-center gap-1 font-medium">
+        <PackageCheck size={12} />
+        Empfehlungen verwalten
+      </span>
+      {RECOMMENDATION_SLOTS.map((slot) => {
         const recommendation = ingredient.product_recommendations[slot];
         return (
-          <button
-            key={slot}
-            type="button"
-            className={`admin-badge admin-badge-${recommendation ? 'info' : 'warn'} justify-start gap-1 text-left`}
-            onClick={() => onOpen(ingredient, slot)}
-            title={`${RECOMMENDATION_SLOT_LABELS[slot]} bearbeiten`}
-          >
-            <PackageCheck size={12} />
-            <span className="shrink-0">{RECOMMENDATION_SLOT_SHORT_LABELS[slot]}</span>
-            <span className="min-w-0 truncate opacity-75">{recommendationSummary(recommendation)}</span>
-          </button>
+          <span key={slot} className="min-w-0 truncate text-[color:var(--admin-ink-3)]">
+            {RECOMMENDATION_SLOT_SHORT_LABELS[slot]}: {recommendationSummary(recommendation)}
+          </span>
         );
       })}
-    </div>
+    </button>
   );
 }
 
@@ -1305,78 +1308,124 @@ function TaskModal({
   );
 }
 
+type RecommendationSlotDraft = {
+  productQuery: string;
+  products: AdminCatalogProduct[];
+  selectedProductId: number | null;
+  selectedProductLabel: string;
+  shopLinks: AdminProductShopLink[];
+  selectedShopLinkId: number | null;
+};
+
+function recommendationSlotDraft(
+  recommendation: AdminIngredientProductRecommendation | null,
+  fallbackQuery: string,
+): RecommendationSlotDraft {
+  return {
+    productQuery: recommendation?.product_name ?? fallbackQuery,
+    products: [],
+    selectedProductId: recommendation?.product_id ?? null,
+    selectedProductLabel: recommendation?.product_name ?? '',
+    shopLinks: [],
+    selectedShopLinkId: recommendation?.shop_link_id ?? null,
+  };
+}
+
+function recommendationSlotDrafts(
+  slots: AdminIngredientProductRecommendationSlots,
+  fallbackQuery: string,
+): Record<AdminIngredientProductRecommendationSlot, RecommendationSlotDraft> {
+  return Object.fromEntries(
+    RECOMMENDATION_SLOTS.map((slot) => [slot, recommendationSlotDraft(slots[slot], fallbackQuery)]),
+  ) as Record<AdminIngredientProductRecommendationSlot, RecommendationSlotDraft>;
+}
+
 function RecommendationModal({
   ingredient,
-  slot,
   onClose,
   onChanged,
 }: {
   ingredient: AdminIngredientListItem;
-  slot: AdminIngredientProductRecommendationSlot;
   onClose: () => void;
   onChanged: () => Promise<void>;
 }) {
   const [slots, setSlots] = useState<AdminIngredientProductRecommendationSlots>(ingredient.product_recommendations);
-  const [productQuery, setProductQuery] = useState('');
-  const [products, setProducts] = useState<AdminCatalogProduct[]>([]);
-  const [selectedProductId, setSelectedProductId] = useState<number | null>(ingredient.product_recommendations[slot]?.product_id ?? null);
-  const [selectedProductLabel, setSelectedProductLabel] = useState(ingredient.product_recommendations[slot]?.product_name ?? '');
-  const [shopLinks, setShopLinks] = useState<AdminProductShopLink[]>([]);
-  const [selectedShopLinkId, setSelectedShopLinkId] = useState<number | null>(ingredient.product_recommendations[slot]?.shop_link_id ?? null);
+  const [drafts, setDrafts] = useState<Record<AdminIngredientProductRecommendationSlot, RecommendationSlotDraft>>(
+    recommendationSlotDrafts(ingredient.product_recommendations, ingredient.name),
+  );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
-  const currentRecommendation = slots[slot];
+  const fetchShopLinks = useCallback(async (productId: number): Promise<AdminProductShopLink[]> => {
+    try {
+      const response = await getAdminProductShopLinks(productId);
+      return response.links;
+    } catch {
+      return [];
+    }
+  }, []);
+
+  const updateDraft = useCallback((
+    slot: AdminIngredientProductRecommendationSlot,
+    patch: Partial<RecommendationSlotDraft>,
+  ) => {
+    setDrafts((previous) => ({
+      ...previous,
+      [slot]: {
+        ...previous[slot],
+        ...patch,
+      },
+    }));
+  }, []);
 
   const loadRecommendations = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
       const response = await getAdminIngredientProductRecommendations(ingredient.id);
+      const nextDrafts = recommendationSlotDrafts(response.slots, ingredient.name);
+      const draftsWithLinks = await Promise.all(
+        RECOMMENDATION_SLOTS.map(async (slot) => {
+          const draft = nextDrafts[slot];
+          if (!draft.selectedProductId) return [slot, draft] as const;
+          const links = await fetchShopLinks(draft.selectedProductId);
+          const selectedShopLinkId = draft.selectedShopLinkId && links.some((link) => link.id === draft.selectedShopLinkId)
+            ? draft.selectedShopLinkId
+            : selectDefaultShopLink(links)?.id ?? null;
+          return [slot, { ...draft, shopLinks: links, selectedShopLinkId }] as const;
+        }),
+      );
       setSlots(response.slots);
-      const current = response.slots[slot];
-      setSelectedProductId(current?.product_id ?? null);
-      setSelectedProductLabel(current?.product_name ?? '');
-      setSelectedShopLinkId(current?.shop_link_id ?? null);
+      setDrafts(Object.fromEntries(draftsWithLinks) as Record<AdminIngredientProductRecommendationSlot, RecommendationSlotDraft>);
     } catch (modalError) {
       setError(getErrorMessage(modalError));
     } finally {
       setLoading(false);
     }
-  }, [ingredient.id, slot]);
-
-  const loadShopLinks = useCallback(async (productId: number, preferredShopLinkId?: number | null) => {
-    try {
-      const response = await getAdminProductShopLinks(productId);
-      setShopLinks(response.links);
-      if (preferredShopLinkId && response.links.some((link) => link.id === preferredShopLinkId)) {
-        setSelectedShopLinkId(preferredShopLinkId);
-      } else {
-        setSelectedShopLinkId(selectDefaultShopLink(response.links)?.id ?? null);
-      }
-    } catch {
-      setShopLinks([]);
-      setSelectedShopLinkId(null);
-    }
-  }, []);
+  }, [fetchShopLinks, ingredient.id, ingredient.name]);
 
   useEffect(() => {
     void loadRecommendations();
   }, [loadRecommendations]);
 
-  useEffect(() => {
-    if (selectedProductId) void loadShopLinks(selectedProductId, selectedShopLinkId);
-  }, [loadShopLinks, selectedProductId]);
-
-  const handleSearchProducts = async (event?: FormEvent) => {
+  const handleSearchProducts = async (slot: AdminIngredientProductRecommendationSlot, event?: FormEvent) => {
     event?.preventDefault();
+    const draft = drafts[slot];
     setSaving(true);
     setError('');
+    setMessage('');
     try {
-      const response = await getAdminProducts({ q: productQuery.trim(), limit: 8 });
-      setProducts(response.products);
+      const response = await getAdminProducts({
+        q: draft.productQuery.trim() || ingredient.name,
+        ingredient_id: ingredient.id,
+        limit: 8,
+      });
+      updateDraft(slot, { products: response.products });
+      if (response.products.length === 0) {
+        setMessage(`Keine Produkte mit ${ingredient.name} gefunden.`);
+      }
     } catch (modalError) {
       setError(getErrorMessage(modalError));
     } finally {
@@ -1384,17 +1433,29 @@ function RecommendationModal({
     }
   };
 
-  const selectProduct = async (product: AdminCatalogProduct) => {
-    setSelectedProductId(product.id);
-    setSelectedProductLabel(productLabel(product));
-    setProducts([]);
-    setProductQuery(productLabel(product));
-    await loadShopLinks(product.id, null);
+  const selectProduct = async (slot: AdminIngredientProductRecommendationSlot, product: AdminCatalogProduct) => {
+    setSaving(true);
+    setError('');
+    setMessage('');
+    try {
+      const links = await fetchShopLinks(product.id);
+      updateDraft(slot, {
+        productQuery: productLabel(product),
+        products: [],
+        selectedProductId: product.id,
+        selectedProductLabel: productLabel(product),
+        shopLinks: links,
+        selectedShopLinkId: selectDefaultShopLink(links)?.id ?? null,
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleSave = async () => {
-    if (!selectedProductId) {
-      setError('Bitte zuerst ein Produkt auswählen.');
+  const handleSave = async (slot: AdminIngredientProductRecommendationSlot) => {
+    const draft = drafts[slot];
+    if (!draft.selectedProductId) {
+      setError(`Bitte zuerst ein Produkt fuer ${RECOMMENDATION_SLOT_LABELS[slot]} auswählen.`);
       return;
     }
     setSaving(true);
@@ -1402,11 +1463,11 @@ function RecommendationModal({
     setMessage('');
     try {
       const response = await upsertAdminIngredientProductRecommendation(ingredient.id, slot, {
-        product_id: selectedProductId,
-        shop_link_id: selectedShopLinkId,
+        product_id: draft.selectedProductId,
+        shop_link_id: draft.selectedShopLinkId,
       });
       setSlots(response.slots);
-      setMessage('Empfehlung gespeichert.');
+      setMessage(`${RECOMMENDATION_SLOT_LABELS[slot]} gespeichert.`);
       await onChanged();
     } catch (modalError) {
       setError(getErrorMessage(modalError));
@@ -1415,8 +1476,8 @@ function RecommendationModal({
     }
   };
 
-  const handleDelete = async () => {
-    if (!currentRecommendation) return;
+  const handleDelete = async (slot: AdminIngredientProductRecommendationSlot) => {
+    if (!slots[slot]) return;
     if (!window.confirm(`${RECOMMENDATION_SLOT_LABELS[slot]} entfernen?`)) return;
     setSaving(true);
     setError('');
@@ -1424,11 +1485,8 @@ function RecommendationModal({
     try {
       const response = await deleteAdminIngredientProductRecommendation(ingredient.id, slot);
       setSlots(response.slots);
-      setSelectedProductId(null);
-      setSelectedProductLabel('');
-      setSelectedShopLinkId(null);
-      setShopLinks([]);
-      setMessage('Empfehlung entfernt.');
+      updateDraft(slot, recommendationSlotDraft(null, ingredient.name));
+      setMessage(`${RECOMMENDATION_SLOT_LABELS[slot]} entfernt.`);
       await onChanged();
     } catch (modalError) {
       setError(getErrorMessage(modalError));
@@ -1438,99 +1496,114 @@ function RecommendationModal({
   };
 
   return (
-    <AdminDialog title={RECOMMENDATION_SLOT_LABELS[slot]} subtitle={ingredient.name} onClose={onClose} maxWidth="max-w-3xl">
+    <AdminDialog title="Empfehlungen verwalten" subtitle={ingredient.name} onClose={onClose} maxWidth="max-w-5xl">
       {error && <AdminError>{error}</AdminError>}
       {message && <p className="admin-muted text-xs">{message}</p>}
       {loading ? (
-        <AdminEmpty>Lade Empfehlung...</AdminEmpty>
+        <AdminEmpty>Lade Empfehlungen...</AdminEmpty>
       ) : (
         <div className="grid gap-4">
-          {currentRecommendation ? (
-            <div className="rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg)] p-3 text-sm">
-              <div className="font-medium">{currentRecommendation.product_name}</div>
-              <p className="admin-muted mt-1">
-                Shoplink: {currentRecommendation.shop_link_name || currentRecommendation.shop_link_host || shopLinkHost(currentRecommendation.shop_link_url)}
-              </p>
-            </div>
-          ) : (
-            <AdminEmpty>Für diesen Slot ist noch kein Produkt gesetzt.</AdminEmpty>
-          )}
-
-          <form className="grid gap-2 rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] p-3" onSubmit={handleSearchProducts}>
-            <div className="flex flex-wrap gap-2">
-              <input
-                value={productQuery}
-                onChange={(event) => setProductQuery(event.target.value)}
-                className="admin-input min-w-[220px] flex-1"
-                placeholder="Produkt suchen"
-                disabled={saving}
-              />
-              <AdminButton type="submit" disabled={saving}>
-                <Search size={13} />
-                Suchen
-              </AdminButton>
-            </div>
-            {products.length > 0 && (
-              <div className="grid gap-2">
-                {products.map((product) => (
-                  <button
-                    key={product.id}
-                    type="button"
-                    className="rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg)] p-3 text-left text-sm hover:border-[color:var(--admin-line-strong)]"
-                    onClick={() => void selectProduct(product)}
-                    disabled={saving}
-                  >
-                    <span className="font-medium">{productLabel(product)}</span>
-                    <span className="admin-muted ml-2">{product.moderation_status || 'ohne Status'}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </form>
-
-          <div className="grid gap-2">
-            <label className="text-sm font-medium">Ausgewähltes Produkt</label>
-            <div className="rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg)] p-3 text-sm">
-              {selectedProductId ? selectedProductLabel || `Produkt ${selectedProductId}` : 'Noch kein Produkt ausgewählt'}
-            </div>
+          <div className="rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg)] p-3 text-sm">
+            <span className="admin-muted">Wirkstoff</span>
+            <div className="mt-1 font-medium">{ingredient.name}</div>
           </div>
 
-          <div className="grid gap-2">
-            <label className="text-sm font-medium">Shoplink</label>
-            {shopLinks.length > 1 ? (
-              <select
-                value={selectedShopLinkId ?? ''}
-                onChange={(event) => setSelectedShopLinkId(event.target.value ? Number(event.target.value) : null)}
-                className="admin-select"
-                disabled={saving}
-              >
-                <option value="">Kein konkreter Shoplink</option>
-                {shopLinks.map((link) => (
-                  <option key={link.id} value={link.id}>
-                    {link.shop_name || link.normalized_host || shopLinkHost(link.url)}{link.is_primary ? ' · Hauptlink' : ''}
-                  </option>
-                ))}
-              </select>
-            ) : shopLinks.length === 1 ? (
-              <div className="rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg)] p-3 text-sm">
-                {shopLinks[0].shop_name || shopLinks[0].normalized_host || shopLinkHost(shopLinks[0].url)}
-              </div>
-            ) : (
-              <p className="admin-muted text-sm">Für dieses Produkt sind keine Mehrfach-Shoplinks verfügbar. Der Slot wird ohne konkreten Shoplink gespeichert.</p>
-            )}
-          </div>
+          <div className="grid gap-3">
+            {RECOMMENDATION_SLOTS.map((slot) => {
+              const draft = drafts[slot];
+              const currentRecommendation = slots[slot];
+              return (
+                <section key={slot} className="grid gap-3 rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] p-3">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <h3 className="m-0 text-sm font-medium">{RECOMMENDATION_SLOT_LABELS[slot]}</h3>
+                      <p className="admin-muted mt-1 text-xs">
+                        {currentRecommendation
+                          ? recommendationSummary(currentRecommendation)
+                          : 'Noch kein Produkt gesetzt.'}
+                      </p>
+                    </div>
+                    {currentRecommendation && (
+                      <AdminButton variant="danger" size="sm" onClick={() => void handleDelete(slot)} disabled={saving}>
+                        <Trash2 size={13} />
+                        Entfernen
+                      </AdminButton>
+                    )}
+                  </div>
 
-          <div className="flex flex-wrap justify-end gap-2">
-            {currentRecommendation && (
-              <AdminButton variant="danger" onClick={() => void handleDelete()} disabled={saving}>
-                <Trash2 size={13} />
-                Entfernen
-              </AdminButton>
-            )}
-            <AdminButton variant="primary" onClick={() => void handleSave()} disabled={saving || !selectedProductId}>
-              <PackageCheck size={13} />
-              Speichern
-            </AdminButton>
+                  <form className="grid gap-2" onSubmit={(event) => void handleSearchProducts(slot, event)}>
+                    <div className="flex flex-wrap gap-2">
+                      <input
+                        value={draft.productQuery}
+                        onChange={(event) => updateDraft(slot, { productQuery: event.target.value })}
+                        className="admin-input min-w-[220px] flex-1"
+                        placeholder={`${ingredient.name} Produkt suchen`}
+                        disabled={saving}
+                      />
+                      <AdminButton type="submit" disabled={saving}>
+                        <Search size={13} />
+                        Suchen
+                      </AdminButton>
+                    </div>
+                    {draft.products.length > 0 && (
+                      <div className="grid gap-2">
+                        {draft.products.map((product) => (
+                          <button
+                            key={product.id}
+                            type="button"
+                            className="rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg)] p-3 text-left text-sm hover:border-[color:var(--admin-line-strong)]"
+                            onClick={() => void selectProduct(slot, product)}
+                            disabled={saving}
+                          >
+                            <span className="font-medium">{productLabel(product)}</span>
+                            <span className="admin-muted ml-2">{product.moderation_status || 'ohne Status'}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </form>
+
+                  <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(220px,0.7fr)_auto] md:items-end">
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium">Ausgewähltes Produkt</label>
+                      <div className="rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg)] p-3 text-sm">
+                        {draft.selectedProductId ? draft.selectedProductLabel || `Produkt ${draft.selectedProductId}` : 'Noch kein Produkt ausgewählt'}
+                      </div>
+                    </div>
+
+                    <div className="grid gap-2">
+                      <label className="text-sm font-medium">Shoplink</label>
+                      {draft.shopLinks.length > 1 ? (
+                        <select
+                          value={draft.selectedShopLinkId ?? ''}
+                          onChange={(event) => updateDraft(slot, { selectedShopLinkId: event.target.value ? Number(event.target.value) : null })}
+                          className="admin-select"
+                          disabled={saving}
+                        >
+                          <option value="">Kein konkreter Shoplink</option>
+                          {draft.shopLinks.map((link) => (
+                            <option key={link.id} value={link.id}>
+                              {link.shop_name || link.normalized_host || shopLinkHost(link.url)}{link.is_primary ? ' · Hauptlink' : ''}
+                            </option>
+                          ))}
+                        </select>
+                      ) : draft.shopLinks.length === 1 ? (
+                        <div className="rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg)] p-3 text-sm">
+                          {draft.shopLinks[0].shop_name || draft.shopLinks[0].normalized_host || shopLinkHost(draft.shopLinks[0].url)}
+                        </div>
+                      ) : (
+                        <p className="admin-muted text-sm">Kein konkreter Shoplink ausgewählt.</p>
+                      )}
+                    </div>
+
+                    <AdminButton variant="primary" onClick={() => void handleSave(slot)} disabled={saving || !draft.selectedProductId}>
+                      <PackageCheck size={13} />
+                      Speichern
+                    </AdminButton>
+                  </div>
+                </section>
+              );
+            })}
           </div>
         </div>
       )}
@@ -1543,16 +1616,15 @@ export default function AdministratorIngredientsPage() {
   const [queryInput, setQueryInput] = useState('');
   const [query, setQuery] = useState('');
   const [taskFilter, setTaskFilter] = useState<IngredientTaskFilter>('all');
+  const [ingredientGroupFilter, setIngredientGroupFilter] = useState<IngredientGroupFilter>('all');
+  const [ingredientGroupOptions, setIngredientGroupOptions] = useState<AdminIngredientGroupOption[]>(DEFAULT_INGREDIENT_GROUP_OPTIONS);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState<(typeof PAGE_LIMIT_OPTIONS)[number]>(50);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [taskModal, setTaskModal] = useState<{ ingredient: AdminIngredientListItem; task: AdminIngredientTaskKey } | null>(null);
-  const [recommendationModal, setRecommendationModal] = useState<{
-    ingredient: AdminIngredientListItem;
-    slot: AdminIngredientProductRecommendationSlot;
-  } | null>(null);
+  const [recommendationModal, setRecommendationModal] = useState<{ ingredient: AdminIngredientListItem } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1561,11 +1633,25 @@ export default function AdministratorIngredientsPage() {
       const response = await getAdminIngredients({
         q: query,
         task: taskFilter === 'all' ? undefined : taskFilter,
+        ingredient_group: ingredientGroupFilter === 'all' ? undefined : ingredientGroupFilter,
         page,
         limit,
       });
       setIngredients(response.ingredients);
       setTotal(response.total);
+      const responseGroups = response.summary?.groups ?? [];
+      if (responseGroups.length > 0) {
+        const merged = [
+          { value: 'all', label: 'Alle Gruppen', count: response.summary?.total ?? response.total },
+          ...responseGroups,
+        ];
+        const values = new Set(merged.map((group) => group.value));
+        const withDefaults = [
+          ...merged,
+          ...DEFAULT_INGREDIENT_GROUP_OPTIONS.filter((group) => !values.has(group.value)),
+        ];
+        setIngredientGroupOptions(withDefaults);
+      }
     } catch (loadError) {
       setIngredients([]);
       setTotal(0);
@@ -1573,7 +1659,7 @@ export default function AdministratorIngredientsPage() {
     } finally {
       setLoading(false);
     }
-  }, [limit, page, query, taskFilter]);
+  }, [ingredientGroupFilter, limit, page, query, taskFilter]);
 
   useEffect(() => {
     void load();
@@ -1614,7 +1700,7 @@ export default function AdministratorIngredientsPage() {
       <div className="mb-4 grid gap-2">
         <div className="admin-filter-bar">
           <div className="admin-filter-main">
-            <label className="relative flex-1">
+            <label className="admin-filter-search-with-icon relative flex-1">
               <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[color:var(--admin-ink-3)]" />
               <input
                 value={queryInput}
@@ -1623,11 +1709,26 @@ export default function AdministratorIngredientsPage() {
                   if (event.key === 'Enter') applyQuery();
                 }}
                 placeholder="Wirkstoff suchen"
-                className="admin-input admin-filter-search pl-9"
+                className="admin-input admin-filter-search"
               />
             </label>
           </div>
           <div className="admin-filter-controls">
+            <select
+              value={ingredientGroupFilter}
+              onChange={(event) => {
+                setPage(1);
+                setIngredientGroupFilter(event.target.value);
+              }}
+              className="admin-select w-[210px]"
+              aria-label="Wirkstoffgruppe filtern"
+            >
+              {ingredientGroupOptions.map((entry) => (
+                <option key={entry.value} value={entry.value}>
+                  {entry.label}{entry.count > 0 ? ` (${entry.count})` : ''}
+                </option>
+              ))}
+            </select>
             <select
               value={taskFilter}
               onChange={(event) => {
@@ -1706,16 +1807,19 @@ export default function AdministratorIngredientsPage() {
                   <th>Wirkstoff</th>
                   <th>Bearbeitungsstand</th>
                   <th>Empfehlung</th>
-                  <th>Aktionen</th>
                 </tr>
               </thead>
               <tbody>
                 {ingredients.map((ingredient) => (
                   <tr key={ingredient.id}>
                     <td>
-                      <div className="font-medium" style={{ fontFamily: 'var(--admin-serif)' }}>
+                      <Link
+                        to={`/administrator/ingredients/${ingredient.id}`}
+                        className="font-medium text-[color:var(--admin-ink)] underline-offset-4 hover:underline"
+                        style={{ fontFamily: 'var(--admin-serif)' }}
+                      >
                         {ingredient.name}
-                      </div>
+                      </Link>
                     </td>
                     <td>
                       <IngredientProgressBadges
@@ -1726,23 +1830,8 @@ export default function AdministratorIngredientsPage() {
                     <td>
                       <RecommendationSlots
                         ingredient={ingredient}
-                        onOpen={(selectedIngredient, selectedSlot) => setRecommendationModal({ ingredient: selectedIngredient, slot: selectedSlot })}
+                        onOpen={(selectedIngredient) => setRecommendationModal({ ingredient: selectedIngredient })}
                       />
-                    </td>
-                    <td>
-                      <div className="flex flex-wrap gap-2">
-                        <Link to={`/administrator/ingredients/${ingredient.id}`} className="admin-btn admin-btn-sm">
-                          Details
-                        </Link>
-                        <Link to={`/administrator/knowledge?q=${encodeURIComponent(ingredient.name)}`} className="admin-btn admin-btn-sm">
-                          <BookOpen size={13} />
-                          Wissen
-                        </Link>
-                        <Link to={`/administrator/dosing?ingredient_id=${ingredient.id}&q=${encodeURIComponent(ingredient.name)}`} className="admin-btn admin-btn-sm">
-                          <FlaskConical size={13} />
-                          Richtwerte
-                        </Link>
-                      </div>
                     </td>
                   </tr>
                 ))}
@@ -1764,7 +1853,6 @@ export default function AdministratorIngredientsPage() {
       {recommendationModal && (
         <RecommendationModal
           ingredient={recommendationModal.ingredient}
-          slot={recommendationModal.slot}
           onClose={() => setRecommendationModal(null)}
           onChanged={load}
         />

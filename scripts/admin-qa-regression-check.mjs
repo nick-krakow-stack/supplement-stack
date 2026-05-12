@@ -12,6 +12,9 @@ function assertFile(path) {
 
 const dosingPage = read('frontend/src/pages/administrator/AdministratorDosingPage.tsx')
 const dashboardPage = read('frontend/src/pages/administrator/AdministratorDashboardPage.tsx')
+const ingredientsPage = read('frontend/src/pages/administrator/AdministratorIngredientsPage.tsx')
+const adminCss = read('frontend/src/pages/administrator/admin.css')
+const adminApi = read('frontend/src/api/admin.ts')
 const apiEntry = read('functions/api/[[path]].ts')
 const adminModule = read('functions/api/modules/admin.ts')
 const stacksModule = read('functions/api/modules/stacks.ts')
@@ -116,3 +119,97 @@ assert.match(migration76, /CREATE TABLE IF NOT EXISTS account_deletion_events/, 
 assert.match(migration76, /CREATE TABLE IF NOT EXISTS page_view_events/, 'migration 0076 must create page view tracking')
 assert.match(migration77, /ALTER TABLE page_view_events ADD COLUMN visitor_id/, 'migration 0077 must add visitor IDs to page views')
 assert.match(migration77, /CREATE TABLE IF NOT EXISTS signup_attribution/, 'migration 0077 must create signup attribution tracking')
+
+assert.match(
+  ingredientsPage,
+  /if \(count > 0\) return String\(count\)/,
+  'Ingredient progress badges must show numeric counts without repeating object labels',
+)
+assert.doesNotMatch(
+  ingredientsPage,
+  /countLabel\(count,\s*'Synonym'/,
+  'Ingredient synonym badge must not render "1 Synonym" after the Synonyme label',
+)
+assert.match(
+  ingredientsPage,
+  /function RecommendationModal\(\{\s*ingredient,\s*onClose,\s*onChanged,/,
+  'Ingredient recommendations must open one modal for all three slots, not one modal per slot',
+)
+assert.doesNotMatch(
+  ingredientsPage,
+  /slot:\s*AdminIngredientProductRecommendationSlot;/,
+  'Ingredient recommendation modal state must not store a single active slot',
+)
+assert.match(
+  ingredientsPage,
+  /getAdminProducts\(\{\s*q:[\s\S]*ingredient_id:\s*ingredient\.id/,
+  'Recommendation product search must be constrained to the current ingredient context',
+)
+assert.doesNotMatch(
+  ingredientsPage,
+  /<th>Aktionen<\/th>/,
+  'Ingredient table must not show a separate Aktionen column',
+)
+assert.match(
+  ingredientsPage,
+  /to=\{`\/administrator\/ingredients\/\$\{ingredient\.id\}`\}/,
+  'Ingredient name must be a keyboard-accessible link to details',
+)
+assert.match(
+  ingredientsPage,
+  /ingredientGroupFilter/,
+  'Ingredient page must expose an ingredient group dropdown filter',
+)
+assert.match(
+  ingredientsPage,
+  /Alle Gruppen/,
+  'Ingredient group dropdown must include Alle Gruppen',
+)
+for (const label of ['Vitamine', 'Mineralstoffe', 'Spurenelemente', 'Enzyme']) {
+  assert.match(ingredientsPage, new RegExp(label), `Ingredient group dropdown must include ${label}`)
+}
+assert.match(
+  adminCss,
+  /\.admin-filter-search-with-icon[\s\S]*padding-left:\s*34px\s*!important/,
+  'Admin search field must reserve icon space with scoped CSS, not only Tailwind utilities',
+)
+assert.match(
+  adminApi,
+  /ingredient_group/,
+  'Frontend admin API must pass ingredient_group to /api/admin/ingredients',
+)
+assert.match(
+  adminApi,
+  /ingredient_id\?: number/,
+  'Frontend admin product search must support ingredient_id context filtering',
+)
+assert.match(
+  adminModule,
+  /adminHiddenIngredientCondition/,
+  'Admin ingredients API must hide non-top-level ingredient names safely',
+)
+assert.match(
+  adminModule,
+  /B-Vitamin-Komplex/,
+  'Admin ingredients API must hide B-Vitamin-Komplex from the top-level list',
+)
+assert.match(
+  adminModule,
+  /DPA/,
+  'Admin ingredients API must hide DPA from the top-level list while keeping Omega-3 sub-ingredient data',
+)
+assert.match(
+  adminModule,
+  /ingredient_group/,
+  'Admin ingredients API must implement an ingredient_group filter',
+)
+assert.match(
+  adminModule,
+  /product_ingredients pi[\s\S]*pi\.ingredient_id = \?/,
+  'Admin products API must support ingredient_id filtering for recommendation search',
+)
+assert.match(
+  adminModule,
+  /FROM product_ingredients\s+WHERE product_id = \?[\s\S]*ingredient_id = \?[\s\S]*COALESCE\(search_relevant,\s*1\) = 1/,
+  'Ingredient product recommendation upsert must require the selected product to be linked to the current ingredient as search-relevant',
+)
