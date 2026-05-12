@@ -1,6 +1,31 @@
 # Decisions
 
-Last updated: 2026-05-08
+Last updated: 2026-05-12
+
+## 2026-05-12 - Hook Ownership Migration
+
+Decision: Operational Hook-Ereignisse werden aus der Claude-Projektkonfiguration entfernt und auf eine zentrale, minimale Codex-Konfiguration migriert.
+
+Operational rules:
+
+- `.claude/settings.json` und `.claude/memory.md` sind nicht mehr Teil der
+  aktiven Projektkonfiguration.
+- `.codex/hooks.json` enthält nur:
+  - `UserPromptSubmit`
+  - `Stop`
+- Beide Codex-Hook-Events laufen auf `.codex/hooks/agent-protocol.ps1`.
+- `.codex/hooks.json`, `.codex/hooks/agent-protocol.ps1` und
+  `.codex/hooks/README.md` werden trotz lokalem `.codex/*`-Ignore explizit
+  versioniert.
+- `UserPromptSubmit` fängt Owner-Feedback auf.
+- `Stop` schreibt zentrale Memory-/Handoff-Progress-Daten.
+- Kein aktiver automatischer PreCompact-Workflow; manuelle Behandlung bleibt
+  als Doku/Fallback im Prozess dokumentiert.
+
+Rationale:
+
+- Der Nutzer hat den Claude-Teilnehmerzugriff beendet; offene Hook-Dateien in
+  `.claude` sollen keine versteckten Review-Pflichten mehr auslösen.
 
 ## 2026-05-08 - Admin Dashboard Is Post-Launch Operations
 
@@ -712,17 +737,16 @@ Decision: Initial Codex model-routing policy was recorded in commit `2457345`.
 
 ## Automatic Handoff Snapshots
 
-Decision: use `scripts/update-agent-handoff.ps1` for cheap automatic handoff snapshots.
+Superseded on 2026-05-12 by the Codex-only hook protocol above.
 
-Claude Code integration:
-
-- `.claude/settings.json` runs the script on `PreCompact`.
-- `.claude/settings.json` also runs the script after Bash tool use.
+Decision: automatic handoff snapshots are written by `.codex/hooks/agent-protocol.ps1`
+through the active `Stop` hook. The old Claude integration and
+`scripts/update-agent-handoff.ps1` were removed.
 
 Rationale:
 
-- Protects against token/session limits without requiring manual handoff.
-- Avoids model-token usage because the snapshot is generated from git status and existing memory files.
+- Keeps the Hook UI free of hidden Claude review entries.
+- Keeps hook behavior centralized in one Codex dispatcher.
 - Keeps `.agent-memory/handoff.md` current enough for the next agent to resume.
 
 ## Secret Handling

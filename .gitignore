@@ -32,5 +32,9 @@ functions/.dev.vars
 .claude/worktrees/
 .claude/commands/
 
-# Codex local-only app hooks/state
-.codex/
+# Codex local-only app state
+.codex/*
+!.codex/hooks.json
+!.codex/hooks/
+!.codex/hooks/agent-protocol.ps1
+!.codex/hooks/README.md

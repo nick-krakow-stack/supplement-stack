@@ -354,7 +354,8 @@ Das beste Supplement-Management-Tool am Markt. Kostenlos für User.
 
 ## 🧠 Memory & Kontext-Kontinuität
 Kanonisches Memory liegt in `.agent-memory/*` (siehe Pflichtstart oben).
-`.claude/memory.md` ist nur noch ein Legacy-Pointer für ältere Claude-Workflows.
+Claude-spezifische `.claude/*` Projekt-Hooks und Legacy-Memory-Dateien werden
+nicht mehr als kanonische Projektsteuerung genutzt.
 
 ---
 

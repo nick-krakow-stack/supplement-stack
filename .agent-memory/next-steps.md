@@ -1,6 +1,13 @@
 # Next Steps
 
-Last updated: 2026-05-08
+Last updated: 2026-05-12
+
+## 2026-05-12 - Hook-Betrieb
+
+- Claude-Hooks aus der aktiven Projektkonfiguration entfernt.
+- Legacy Hook-Dateien in `.claude/hooks` entfernt.
+- Zentrale Codex-Hooks aktiv und versioniert: `UserPromptSubmit` + `Stop` auf `.codex/hooks/agent-protocol.ps1`.
+- PreCompact/PreToolUse/PostToolUse werden nur noch manuell im Prozess dokumentiert, nicht automatisch verdrahtet.
 
 ## Immediate
 

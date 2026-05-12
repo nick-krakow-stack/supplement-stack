@@ -1,6 +1,13 @@
 # Current State
 
-Last updated: 2026-05-08
+Last updated: 2026-05-12
+
+## 2026-05-12 - Hook-Steuerung
+
+- Claude-Hooks wurden vollständig aus der aktiven Projektkonfiguration entfernt.
+- Legacy `.claude/hooks/error-capture.sh`, `.claude/hooks/pre-deploy-check.sh`, `.claude/settings.json` und `.claude/memory.md` sind entfernt.
+- Zentrale Codex-Hook-Steuerung ist aktiv und versioniert: `.codex/hooks.json` mit `UserPromptSubmit` und `Stop` auf `.codex/hooks/agent-protocol.ps1`.
+- `PreCompact` ist in beiden Konfigurationen absichtlich nicht aktiv.
 
 ## Active Baseline
 
