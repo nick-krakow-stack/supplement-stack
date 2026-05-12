@@ -13,6 +13,9 @@ function assertFile(path) {
 const dosingPage = read('frontend/src/pages/administrator/AdministratorDosingPage.tsx')
 const dashboardPage = read('frontend/src/pages/administrator/AdministratorDashboardPage.tsx')
 const ingredientsPage = read('frontend/src/pages/administrator/AdministratorIngredientsPage.tsx')
+const productsPage = read('frontend/src/pages/administrator/AdministratorProductsPage.tsx')
+const productDetailPage = read('frontend/src/pages/administrator/AdministratorProductDetailPage.tsx')
+const productQaPage = read('frontend/src/pages/administrator/AdministratorProductQAPage.tsx')
 const adminCss = read('frontend/src/pages/administrator/admin.css')
 const adminApi = read('frontend/src/api/admin.ts')
 const apiEntry = read('functions/api/[[path]].ts')
@@ -213,3 +216,94 @@ assert.match(
   /FROM product_ingredients\s+WHERE product_id = \?[\s\S]*ingredient_id = \?[\s\S]*COALESCE\(search_relevant,\s*1\) = 1/,
   'Ingredient product recommendation upsert must require the selected product to be linked to the current ingredient as search-relevant',
 )
+
+assert.match(
+  productsPage,
+  /admin-filter-search-with-icon/,
+  'Admin products search field must reserve icon space via the shared icon-search class',
+)
+assert.doesNotMatch(productsPage, /Zurueck/, 'Admin products pagination must use the German umlaut spelling for Zurueck')
+assert.doesNotMatch(productsPage, /Loeschen/, 'Admin products delete buttons must use the German umlaut spelling for Loeschen')
+assert.doesNotMatch(productsPage, />\s*Recheck\s*</, 'Admin products shop-link action must be renamed from Recheck to Neu pruefen')
+assert.doesNotMatch(productsPage, /Schliessen/, 'Admin products modal close button must use the German sharp-s spelling')
+assert.doesNotMatch(
+  productsPage,
+  /onImageDelete/,
+  'Admin product rows must not expose inline image delete; image actions belong in the image modal',
+)
+for (const label of ['Link: Defekt', 'Link: OK', 'Link: Noch nicht']) {
+  assert.match(productsPage, new RegExp(label), `Admin products must use normalized link-status wording: ${label}`)
+}
+for (const label of ['Freigabe', 'Partner-Status', 'Linkstatus', 'Produktbild']) {
+  assert.match(productsPage, new RegExp(`admin-filter-label[\\s\\S]*${label}`), `Admin products filters must label ${label}`)
+}
+assert.match(
+  productsPage,
+  /<option value="all">Alle<\/option>/,
+  'Admin products filter default options must read Alle after adding visible labels',
+)
+assert.match(productsPage, /Link-Klicks:\s*\{product\.link_click_count\}/, 'Admin products list must show Link-Klicks badge per product')
+assert.match(productsPage, /admin-badge-warn[^>]*>\s*Link-Klicks:/, 'Admin products Link-Klicks badge must use yellow warning styling')
+assert.match(productsPage, /Weiteren Link/, 'Admin products shop-link create form must allow adding another link row')
+assert.match(productsPage, /type ShopLinkRole = 'primary' \| 'alternative' \| 'standard'/, 'Admin products shop-link editor must model Hauptlink/Alternative/Standard roles')
+for (const roleLabel of ['Hauptlink', 'Alternative', 'Standard']) {
+  assert.match(productsPage, new RegExp(`<option value="[^"]+">${roleLabel}<\\/option>`), `Admin products link role dropdown must include ${roleLabel}`)
+}
+assert.match(productsPage, /admin-url-input/, 'Admin products editable URL fields must use explicit white edit styling')
+assert.match(productsPage, /admin-toggle-card/, 'Admin products affiliate/active controls must use the compact toggle-card styling')
+assert.match(productsPage, /admin-btn-success/, 'Admin products shop-link save action must use the green success button styling')
+assert.match(productsPage, /admin-icon-btn-warn/, 'Admin products external-link icon beside URL fields must use yellow styling')
+assert.doesNotMatch(
+  productsPage,
+  /Hauptlinks direkt bearbeiten, weitere Links/,
+  'Admin products list subtitle must not use the old technical copy',
+)
+assert.match(adminCss, /\.admin-filter-label/, 'Admin CSS must define compact filter labels')
+assert.match(adminCss, /\.admin-url-input/, 'Admin CSS must define editable white URL field styling')
+assert.match(adminCss, /\.admin-toggle-card/, 'Admin CSS must define modern toggle-card controls')
+assert.match(adminCss, /\.admin-btn-success/, 'Admin CSS must define green save buttons')
+assert.match(adminCss, /\.admin-icon-btn-warn/, 'Admin CSS must define yellow external-link icon buttons')
+assert.match(adminApi, /link_click_count: number/, 'AdminCatalogProduct must type link_click_count')
+assert.match(adminApi, /link_click_count: toIntOrNull\(raw\.link_click_count\) \?\? 0/, 'Admin catalog parser must normalize link_click_count')
+assert.match(
+  adminModule,
+  /product_link_clicks[\s\S]*WHERE product_type = 'catalog'[\s\S]*GROUP BY product_id[\s\S]*link_click_count/,
+  'Admin products API must aggregate only catalog product_link_clicks by product_id',
+)
+assert.match(
+  adminModule,
+  /product_shop_links psl_effective[\s\S]*product_shop_link_health pslh/,
+  'Admin products API must join active primary/fallback shop-link health for product rows',
+)
+assert.match(
+  adminModule,
+  /formatProductShopLinkHealth\(row\) \?\? formatAffiliateLinkHealth\(row\)/,
+  'Admin products API must prefer active primary/fallback shop-link health before legacy affiliate_link_health',
+)
+assert.match(
+  adminModule,
+  /withProductListLinkHealth\(product\)[\s\S]*link_click_count/,
+  'Admin products API response must include link_click_count with each product',
+)
+const shopLinkPayloadFunction = productsPage.match(/function payloadFromShopLinkForm[\s\S]*?\n}\r?\n\r?\nfunction buildPatch/)?.[0] ?? ''
+assert.doesNotMatch(
+  shopLinkPayloadFunction,
+  /source_type: 'admin'/,
+  'Admin products shop-link edit payload must not overwrite source_type on PATCH',
+)
+assert.match(
+  productsPage,
+  /createAdminProductShopLink\(product\.id,\s*\{ \.\.\.payload,\s*source_type: 'admin' \}\)/,
+  'Admin products shop-link create path may set source_type=admin explicitly',
+)
+for (const page of [
+  ['Product Detail', productDetailPage],
+  ['Product QA', productQaPage],
+]) {
+  const [label, source] = page
+  const linkHealthLabelFunction = source.match(/function linkHealthLabel[\s\S]*?\n}\r?\n/)?.[0] ?? ''
+  for (const statusLabel of ['Link: Defekt', 'Link: OK', 'Link: Noch nicht']) {
+    assert.match(linkHealthLabelFunction, new RegExp(statusLabel), `${label} must use normalized link-status wording: ${statusLabel}`)
+  }
+  assert.doesNotMatch(linkHealthLabelFunction, /Link ok|Link fehlgeschlagen|Timeout|Ung(?:ü|\\u00fc)ltiger Link/, `${label} must not use old verbose link-status labels`)
+}

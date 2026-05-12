@@ -11,6 +11,7 @@ import {
   Save,
   Search,
   Trash2,
+  Upload,
   X,
 } from 'lucide-react';
 import {
@@ -47,10 +48,14 @@ type ShopLinkForm = {
   is_affiliate: boolean;
   affiliate_owner_type: AdminProductShopLinkOwnerType;
   affiliate_owner_user_id: number | null;
-  is_primary: boolean;
+  role: ShopLinkRole;
   active: boolean;
   sort_order: string;
 };
+
+type ShopLinkRole = 'primary' | 'alternative' | 'standard';
+
+const STANDARD_LINK_SORT_ORDER = 1000;
 
 function getErrorMessage(error: unknown): string {
   const response = (error as { response?: { status?: number; data?: unknown } } | null)?.response;
@@ -102,20 +107,40 @@ function formFromProduct(product: AdminCatalogProduct): ProductQuickForm {
   };
 }
 
-function emptyShopLinkForm(): ShopLinkForm {
+function defaultShopLinkRole(existingCount: number, rowIndex = 0): ShopLinkRole {
+  const position = existingCount + rowIndex;
+  if (position === 0) return 'primary';
+  if (position <= 3) return 'alternative';
+  return 'standard';
+}
+
+function sortOrderForRole(role: ShopLinkRole, existingCount: number, rowIndex = 0): string {
+  if (role === 'primary') return '0';
+  if (role === 'standard') return String(STANDARD_LINK_SORT_ORDER + Math.max(0, existingCount + rowIndex - 4) * 10);
+  return String(Math.max(1, existingCount + rowIndex) * 10);
+}
+
+function roleFromShopLink(link: AdminProductShopLink, index: number): ShopLinkRole {
+  if (link.is_primary === 1) return 'primary';
+  if (link.source_type === 'user_product' || link.source_type === 'user_submission') return 'standard';
+  if ((link.sort_order ?? 0) >= STANDARD_LINK_SORT_ORDER) return 'standard';
+  return index <= 3 ? 'alternative' : 'standard';
+}
+
+function emptyShopLinkForm(role: ShopLinkRole = 'standard', sortOrder = '0'): ShopLinkForm {
   return {
     shop_name: '',
     url: '',
     is_affiliate: true,
     affiliate_owner_type: 'nick',
     affiliate_owner_user_id: null,
-    is_primary: false,
+    role,
     active: true,
-    sort_order: '0',
+    sort_order: sortOrder,
   };
 }
 
-function shopLinkFormFromLink(link: AdminProductShopLink): ShopLinkForm {
+function shopLinkFormFromLink(link: AdminProductShopLink, index: number): ShopLinkForm {
   const isAffiliate = link.affiliate_owner_type !== 'none' || link.is_affiliate === 1;
   return {
     shop_name: link.shop_name ?? '',
@@ -123,7 +148,7 @@ function shopLinkFormFromLink(link: AdminProductShopLink): ShopLinkForm {
     is_affiliate: isAffiliate,
     affiliate_owner_type: isAffiliate ? link.affiliate_owner_type : 'none',
     affiliate_owner_user_id: link.affiliate_owner_user_id,
-    is_primary: link.is_primary === 1,
+    role: roleFromShopLink(link, index),
     active: link.active !== 0,
     sort_order: String(link.sort_order ?? 0),
   };
@@ -135,6 +160,11 @@ function payloadFromShopLinkForm(form: ShopLinkForm): AdminProductShopLinkPayloa
 
   const parsedSortOrder = Number(form.sort_order.trim() || '0');
   if (!Number.isInteger(parsedSortOrder)) throw new Error('Sortierung muss eine ganze Zahl sein.');
+  const sortOrder = form.role === 'standard'
+    ? Math.max(parsedSortOrder, STANDARD_LINK_SORT_ORDER)
+    : form.role === 'alternative' && parsedSortOrder >= STANDARD_LINK_SORT_ORDER
+      ? 10
+      : parsedSortOrder;
 
   const ownerType: AdminProductShopLinkOwnerType = form.is_affiliate
     ? form.affiliate_owner_type === 'user'
@@ -148,9 +178,9 @@ function payloadFromShopLinkForm(form: ShopLinkForm): AdminProductShopLinkPayloa
     is_affiliate: form.is_affiliate ? 1 : 0,
     affiliate_owner_type: ownerType,
     affiliate_owner_user_id: ownerType === 'user' ? form.affiliate_owner_user_id : null,
-    is_primary: form.is_primary ? 1 : 0,
+    is_primary: form.role === 'primary' ? 1 : 0,
     active: form.active ? 1 : 0,
-    sort_order: parsedSortOrder,
+    sort_order: sortOrder,
   };
 }
 
@@ -179,16 +209,21 @@ function linkHealthTone(health: AdminAffiliateLinkHealth | null): AdminTone {
 
 function linkHealthLabel(health: AdminAffiliateLinkHealth | null): string {
   if (!health || health.status === null || health.status === 'unchecked') return 'Noch nicht geprüft';
-  if (health.status === 'ok') return 'Link ok';
-  if (health.status === 'timeout') return 'Timeout';
-  if (health.status === 'invalid') return 'Ungueltiger Link';
-  return 'Link fehlgeschlagen';
+  if (health.status === 'ok') return 'OK';
+  return 'Defekt';
+}
+
+function linkHealthBadgeText(health: AdminAffiliateLinkHealth | null): string {
+  const label = linkHealthLabel(health);
+  if (label === 'OK') return 'Link: OK';
+  if (label === 'Defekt') return 'Link: Defekt';
+  return 'Link: Noch nicht geprüft';
 }
 
 function formatLinkHealthTitle(health: AdminAffiliateLinkHealth | null): string {
-  if (!health || health.status === null || health.status === 'unchecked') return 'Linkstatus: Noch nicht geprüft';
+  if (!health || health.status === null || health.status === 'unchecked') return 'Link: Noch nicht geprüft';
   const parts = [
-    `Linkstatus: ${linkHealthLabel(health)}`,
+    linkHealthBadgeText(health),
     health.http_status !== null ? `HTTP ${health.http_status}` : null,
     health.consecutive_failures !== null && health.consecutive_failures > 0
       ? `${health.consecutive_failures} Fehler in Folge`
@@ -229,13 +264,11 @@ function ProductRow({
   product,
   onSaved,
   onImageEdit,
-  onImageDelete,
   onOpenLinks,
 }: {
   product: AdminCatalogProduct;
   onSaved: (product: AdminCatalogProduct) => void;
   onImageEdit: (product: AdminCatalogProduct) => void;
-  onImageDelete: (product: AdminCatalogProduct) => void;
   onOpenLinks: (product: AdminCatalogProduct) => void;
 }) {
   const [form, setForm] = useState<ProductQuickForm>(() => formFromProduct(product));
@@ -303,48 +336,52 @@ function ProductRow({
             </p>
             <div className="mt-2 flex flex-wrap gap-1.5">
               <span title={formatLinkHealthTitle(product.link_health)}>
-                <AdminBadge tone={linkHealthTone(product.link_health)}>Link: {linkHealthLabel(product.link_health)}</AdminBadge>
+                <AdminBadge tone={linkHealthTone(product.link_health)}>{linkHealthBadgeText(product.link_health)}</AdminBadge>
               </span>
               <AdminBadge>{moderationLabel(product.moderation_status)}</AdminBadge>
-              {product.image_url && (
-                <button
-                  type="button"
-                  onClick={() => onImageDelete(product)}
-                  className="admin-badge admin-badge-danger"
-                  title="Bild löschen"
-                >
-                  <Trash2 size={12} />
-                  Bild löschen
-                </button>
-              )}
+              <AdminBadge tone="warn" className="admin-badge-warn">Link-Klicks: {product.link_click_count}</AdminBadge>
             </div>
           </div>
         </div>
 
         <div className="grid gap-2 md:grid-cols-[minmax(260px,1fr)_120px_150px_auto]">
-          <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
-            Hauptlink
-            <input
-              value={form.shop_link}
-              onChange={(event) => updateField('shop_link', event.target.value)}
-              className="admin-input mt-1"
-              placeholder="https://..."
-            />
+          <div className="text-xs font-medium text-[color:var(--admin-ink-2)]">
+            <span>Hauptlink</span>
+            <div className="mt-1 flex gap-1.5">
+              <input
+                value={form.shop_link}
+                onChange={(event) => updateField('shop_link', event.target.value)}
+                className="admin-input admin-url-input"
+                placeholder="https://..."
+              />
+              {product.shop_link && (
+                <a
+                  href={product.shop_link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="admin-icon-btn admin-icon-btn-warn"
+                  title="Hauptlink öffnen"
+                  aria-label="Hauptlink öffnen"
+                >
+                  <ExternalLink size={16} />
+                </a>
+              )}
+            </div>
             <button
               type="button"
               onClick={() => onOpenLinks(product)}
               className="admin-muted mt-1 block text-left text-xs hover:underline"
             >
-              weitere Links
+              Weitere Links
             </button>
-          </label>
-          <label className="flex min-h-[38px] items-center gap-2 pt-5 text-xs font-medium text-[color:var(--admin-ink-2)]">
+          </div>
+          <label className="admin-toggle-card mt-5">
             <input
               type="checkbox"
               checked={form.is_affiliate}
               onChange={(event) => updateField('is_affiliate', event.target.checked)}
             />
-            Affiliate
+            <span>Affiliate</span>
           </label>
           <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
             Freigabe
@@ -360,18 +397,6 @@ function ProductRow({
             </select>
           </label>
           <div className="flex items-start justify-end gap-2 pt-5">
-            {product.shop_link && (
-              <a
-                href={product.shop_link}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="admin-icon-btn"
-                title="Hauptlink öffnen"
-                aria-label="Hauptlink öffnen"
-              >
-                <ExternalLink size={16} />
-              </a>
-            )}
             <AdminButton variant="primary" onClick={() => void handleSave()} disabled={saving} title="Speichern">
               <Save size={16} />
             </AdminButton>
@@ -399,7 +424,8 @@ function ShopLinksModal({
   const [message, setMessage] = useState('');
   const [savingId, setSavingId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [form, setForm] = useState<ShopLinkForm>(() => emptyShopLinkForm());
+  const [form, setForm] = useState<ShopLinkForm>(() => emptyShopLinkForm('standard', String(STANDARD_LINK_SORT_ORDER)));
+  const [createForms, setCreateForms] = useState<ShopLinkForm[]>(() => [emptyShopLinkForm('primary', '0')]);
 
   const loadLinks = useCallback(async () => {
     setLoading(true);
@@ -433,31 +459,54 @@ function ShopLinksModal({
     void loadLinks();
   }, [loadLinks]);
 
+  useEffect(() => {
+    setCreateForms((previous) => {
+      if (previous.length !== 1 || previous[0].url.trim() || previous[0].shop_name.trim()) return previous;
+      const role = defaultShopLinkRole(links.length);
+      return [emptyShopLinkForm(role, sortOrderForRole(role, links.length))];
+    });
+  }, [links]);
+
   const updateField = <K extends keyof ShopLinkForm>(field: K, value: ShopLinkForm[K]) => {
     setForm((previous) => ({ ...previous, [field]: value }));
   };
 
+  const updateCreateField = <K extends keyof ShopLinkForm>(index: number, field: K, value: ShopLinkForm[K]) => {
+    setCreateForms((previous) =>
+      previous.map((entry, entryIndex) => {
+        if (entryIndex !== index) return entry;
+        return { ...entry, [field]: value };
+      }),
+    );
+  };
+
+  const addCreateForm = () => {
+    setCreateForms((previous) => {
+      const role = defaultShopLinkRole(links.length, previous.length);
+      return [...previous, emptyShopLinkForm(role, sortOrderForRole(role, links.length, previous.length))];
+    });
+  };
+
   const startCreate = () => {
     setEditingId(null);
-    setForm({
-      ...emptyShopLinkForm(),
-      is_primary: links.length === 0,
-      sort_order: String(links.length * 10),
-    });
+    const role = defaultShopLinkRole(links.length);
+    setCreateForms([emptyShopLinkForm(role, sortOrderForRole(role, links.length))]);
     setError('');
     setMessage('');
   };
 
-  const startEdit = (link: AdminProductShopLink) => {
+  const startEdit = (link: AdminProductShopLink, index: number) => {
     setEditingId(link.id);
-    setForm(shopLinkFormFromLink(link));
+    setForm(shopLinkFormFromLink(link, index));
     setError('');
     setMessage('');
   };
 
   const cancelEdit = () => {
     setEditingId(null);
-    setForm(emptyShopLinkForm());
+    const role = defaultShopLinkRole(links.length);
+    setForm(emptyShopLinkForm('standard', String(STANDARD_LINK_SORT_ORDER)));
+    setCreateForms([emptyShopLinkForm(role, sortOrderForRole(role, links.length))]);
   };
 
   const refreshAfterMutation = async (successMessage: string) => {
@@ -469,23 +518,41 @@ function ShopLinksModal({
 
   const handleSaveLink = async () => {
     const savingKey = editingId ? `save-${editingId}` : 'create';
+    let createdCount = 0;
+    let attemptedCreateCount = 0;
     setSavingId(savingKey);
     setError('');
     setMessage('');
     try {
-      const payload = payloadFromShopLinkForm(form);
-      if (!editingId && links.length === 0) payload.is_primary = 1;
       if (editingId) {
+        const payload = payloadFromShopLinkForm(form);
         const existing = links.find((link) => link.id === editingId);
         await updateAdminProductShopLink(product.id, editingId, payload, { version: existing?.version ?? null });
       } else {
-        await createAdminProductShopLink(product.id, payload);
+        const filledForms = createForms.filter((entry) => entry.url.trim() || entry.shop_name.trim());
+        if (filledForms.length === 0) throw new Error('Mindestens eine URL ist erforderlich.');
+        attemptedCreateCount = filledForms.length;
+        for (const [index, entry] of filledForms.entries()) {
+          const payload = payloadFromShopLinkForm(entry);
+          if (links.length === 0 && index === 0) payload.is_primary = entry.role === 'standard' ? 0 : payload.is_primary;
+          await createAdminProductShopLink(product.id, { ...payload, source_type: 'admin' });
+          createdCount += 1;
+        }
       }
       setEditingId(null);
-      setForm(emptyShopLinkForm());
-      await refreshAfterMutation(editingId ? 'Shop-Link gespeichert.' : 'Shop-Link angelegt.');
+      const role = defaultShopLinkRole(links.length + (editingId ? 0 : createForms.length));
+      setForm(emptyShopLinkForm('standard', String(STANDARD_LINK_SORT_ORDER)));
+      setCreateForms([emptyShopLinkForm(role, sortOrderForRole(role, links.length + (editingId ? 0 : createForms.length)))]);
+      await refreshAfterMutation(editingId ? 'Shop-Link gespeichert.' : 'Shop-Links angelegt.');
     } catch (errorValue) {
-      setError(getErrorMessage(errorValue));
+      if (!editingId) {
+        await loadLinks().catch(() => undefined);
+        if (createdCount > 0) onProductChanged();
+      }
+      const errorMessage = getErrorMessage(errorValue);
+      setError(createdCount > 0 && attemptedCreateCount > 0
+        ? `${createdCount} von ${attemptedCreateCount} Shop-Links wurden angelegt. Danach ist ein Fehler aufgetreten: ${errorMessage}`
+        : errorMessage);
     } finally {
       setSavingId(null);
     }
@@ -576,7 +643,7 @@ function ShopLinksModal({
             </AdminButton>
             <AdminButton size="sm" variant="ghost" onClick={onClose}>
               <X size={13} />
-              Schliessen
+              Schließen
             </AdminButton>
           </div>
         </div>
@@ -594,8 +661,9 @@ function ShopLinksModal({
             <AdminEmpty>Keine Shoplinks vorhanden. Lege den ersten Hauptlink an.</AdminEmpty>
           ) : (
             <div className="grid gap-2">
-              {links.map((link) => {
+              {links.map((link, index) => {
                 const isMain = mainLink?.id === link.id;
+                const role = roleFromShopLink(link, index);
                 return (
                   <article
                     key={link.id}
@@ -605,10 +673,14 @@ function ShopLinksModal({
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-medium">{link.shop_name || linkHost(link.url)}</span>
-                          {isMain ? <AdminBadge tone="ok">Hauptlink</AdminBadge> : null}
+                          {isMain ? <AdminBadge tone="ok">Hauptlink</AdminBadge> : (
+                            <AdminBadge tone={role === 'alternative' ? 'info' : 'neutral'}>
+                              {role === 'alternative' ? 'Alternative' : 'Standard'}
+                            </AdminBadge>
+                          )}
                           <AdminBadge tone={link.active ? 'info' : 'neutral'}>{link.active ? 'aktiv' : 'inaktiv'}</AdminBadge>
                           <AdminBadge tone={shopLinkOwnerTone(link)}>{shopLinkOwnerLabel(link)}</AdminBadge>
-                          <AdminBadge tone={linkHealthTone(link.health)}>{linkHealthLabel(link.health)}</AdminBadge>
+                          <AdminBadge tone={linkHealthTone(link.health)}>{linkHealthBadgeText(link.health)}</AdminBadge>
                         </div>
                         <a
                           href={link.url}
@@ -633,7 +705,7 @@ function ShopLinksModal({
                         </a>
                         {!isMain ? (
                           <AdminButton size="sm" variant="ghost" onClick={() => void handleSetPrimary(link)} disabled={savingId !== null}>
-                            Hauptlink
+                            Als Hauptlink
                           </AdminButton>
                         ) : null}
                         <AdminButton size="sm" variant="ghost" onClick={() => void handleToggleActive(link)} disabled={savingId !== null}>
@@ -641,15 +713,15 @@ function ShopLinksModal({
                         </AdminButton>
                         <AdminButton size="sm" variant="ghost" onClick={() => void handleRecheck(link)} disabled={savingId !== null || !healthAvailable}>
                           <RefreshCw size={13} />
-                          {savingId === `recheck-${link.id}` ? 'Prüfe...' : 'Recheck'}
+                          {savingId === `recheck-${link.id}` ? 'Prüfe...' : 'Neu prüfen'}
                         </AdminButton>
-                        <AdminButton size="sm" variant="ghost" onClick={() => startEdit(link)} disabled={savingId !== null}>
+                        <AdminButton size="sm" variant="ghost" onClick={() => startEdit(link, index)} disabled={savingId !== null}>
                           <Edit3 size={13} />
                           Bearbeiten
                         </AdminButton>
                         <AdminButton size="sm" variant="danger" onClick={() => void handleDelete(link)} disabled={savingId !== null}>
                           <Trash2 size={13} />
-                          Loeschen
+                          Löschen
                         </AdminButton>
                       </div>
                     </div>
@@ -669,60 +741,89 @@ function ShopLinksModal({
               </AdminButton>
             ) : null}
           >
-            <div className="grid gap-3 p-3 md:grid-cols-[160px_minmax(280px,1fr)_110px_120px_120px_auto]">
-              <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
-                Shop
-                <input
-                  value={form.shop_name}
-                  onChange={(event) => updateField('shop_name', event.target.value)}
-                  className="admin-input mt-1"
-                  placeholder="z. B. Amazon"
-                />
-              </label>
-              <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
-                URL
-                <input
-                  value={form.url}
-                  onChange={(event) => updateField('url', event.target.value)}
-                  className="admin-input mt-1"
-                  placeholder="https://..."
-                />
-              </label>
-              <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
-                Sortierung
-                <input
-                  value={form.sort_order}
-                  onChange={(event) => updateField('sort_order', event.target.value)}
-                  inputMode="numeric"
-                  className="admin-input mt-1"
-                />
-              </label>
-              <label className="flex min-h-[38px] items-center gap-2 pt-5 text-xs font-medium text-[color:var(--admin-ink-2)]">
-                <input
-                  type="checkbox"
-                  checked={form.is_affiliate}
-                  onChange={(event) => updateField('is_affiliate', event.target.checked)}
-                />
-                Affiliate
-              </label>
-              <label className="flex min-h-[38px] items-center gap-2 pt-5 text-xs font-medium text-[color:var(--admin-ink-2)]">
-                <input
-                  type="checkbox"
-                  checked={form.active}
-                  onChange={(event) => updateField('active', event.target.checked)}
-                />
-                Aktiv
-              </label>
-              <label className="flex min-h-[38px] items-center gap-2 pt-5 text-xs font-medium text-[color:var(--admin-ink-2)]">
-                <input
-                  type="checkbox"
-                  checked={form.is_primary}
-                  onChange={(event) => updateField('is_primary', event.target.checked)}
-                />
-                Hauptlink
-              </label>
-              <div className="flex items-end justify-end md:col-span-6">
-                <AdminButton variant="primary" onClick={() => void handleSaveLink()} disabled={savingId !== null}>
+            <div className="grid gap-3 p-3">
+              {(editingId ? [form] : createForms).map((entry, index) => {
+                const update = <K extends keyof ShopLinkForm,>(field: K, value: ShopLinkForm[K]) => {
+                  if (editingId) updateField(field, value);
+                  else updateCreateField(index, field, value);
+                };
+                return (
+                  <div
+                    key={editingId ?? `create-${index}`}
+                    className="grid gap-3 rounded-[var(--admin-r-md)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg)] p-3 md:grid-cols-[160px_minmax(280px,1fr)_112px_132px_150px]"
+                  >
+                    <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
+                      Shop
+                      <input
+                        value={entry.shop_name}
+                        onChange={(event) => update('shop_name', event.target.value)}
+                        className="admin-input mt-1"
+                        placeholder="z. B. Amazon"
+                      />
+                    </label>
+                    <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
+                      URL
+                      <input
+                        value={entry.url}
+                        onChange={(event) => update('url', event.target.value)}
+                        className="admin-input admin-url-input mt-1"
+                        placeholder="https://..."
+                      />
+                    </label>
+                    <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
+                      Sortierung
+                      <input
+                        value={entry.sort_order}
+                        onChange={(event) => update('sort_order', event.target.value)}
+                        inputMode="numeric"
+                        className="admin-input mt-1"
+                      />
+                    </label>
+                    <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
+                      Rolle
+                      <select
+                        value={entry.role}
+                        onChange={(event) => update('role', event.target.value as ShopLinkRole)}
+                        className="admin-select mt-1"
+                      >
+                        <option value="primary">Hauptlink</option>
+                        <option value="alternative">Alternative</option>
+                        <option value="standard">Standard</option>
+                      </select>
+                    </label>
+                    <div className="grid gap-2 pt-5">
+                      <label className="admin-toggle-card">
+                        <input
+                          type="checkbox"
+                          checked={entry.is_affiliate}
+                          onChange={(event) => update('is_affiliate', event.target.checked)}
+                        />
+                        <span>Affiliate</span>
+                      </label>
+                      <label className="admin-toggle-card">
+                        <input
+                          type="checkbox"
+                          checked={entry.active}
+                          onChange={(event) => update('active', event.target.checked)}
+                        />
+                        <span>Aktiv</span>
+                      </label>
+                    </div>
+                  </div>
+                );
+              })}
+              {!editingId && (
+                <button
+                  type="button"
+                  onClick={addCreateForm}
+                  className="admin-muted justify-self-start text-xs font-medium hover:underline"
+                  disabled={savingId !== null}
+                >
+                  Weiteren Link hinzufügen
+                </button>
+              )}
+              <div className="flex items-end justify-end">
+                <AdminButton className="admin-btn-success" onClick={() => void handleSaveLink()} disabled={savingId !== null}>
                   <Save size={15} />
                   {savingId === 'create' || (editingId && savingId === `save-${editingId}`)
                     ? 'Speichere...'
@@ -734,6 +835,94 @@ function ShopLinksModal({
         </div>
       </div>
     </div>
+  );
+}
+
+function ProductImageModal({
+  product,
+  onClose,
+  onDelete,
+  onUploaded,
+  onError,
+}: {
+  product: AdminCatalogProduct;
+  onClose: () => void;
+  onDelete: (product: AdminCatalogProduct) => Promise<void>;
+  onUploaded: (product: AdminCatalogProduct, imageUrl: string, response?: { image_url: string; image_r2_key?: string | null; product_version?: number | null }) => void;
+  onError: (message: string) => void;
+}) {
+  const [showUpload, setShowUpload] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    if (!product.image_url) return;
+    setDeleting(true);
+    try {
+      await onDelete(product);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-3 py-8" role="dialog" aria-modal="true">
+        <div className="admin-card w-full max-w-2xl overflow-hidden bg-[color:var(--admin-panel)] shadow-xl">
+          <div className="admin-card-head">
+            <div className="min-w-0">
+              <h2 className="admin-card-title">Produktbild</h2>
+              <p className="admin-card-sub truncate">{product.name}</p>
+            </div>
+            <AdminButton size="sm" variant="ghost" onClick={onClose}>
+              <X size={13} />
+              Schließen
+            </AdminButton>
+          </div>
+          <div className="grid gap-4 p-4">
+            <div className="grid min-h-[320px] place-items-center rounded-[var(--admin-r-md)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg)] p-4">
+              {product.image_url ? (
+                <img
+                  src={product.image_url}
+                  alt=""
+                  className="max-h-[460px] w-full rounded-[var(--admin-r-md)] object-contain"
+                />
+              ) : (
+                <div className="grid justify-items-center gap-2 text-center">
+                  <PackageSearch size={32} className="admin-muted" />
+                  <p className="admin-muted text-sm">Noch kein Produktbild hinterlegt.</p>
+                </div>
+              )}
+            </div>
+            <div className="flex flex-wrap justify-end gap-2">
+              {product.image_url && (
+                <AdminButton variant="danger" onClick={() => void handleDelete()} disabled={deleting}>
+                  <Trash2 size={14} />
+                  {deleting ? 'Lösche...' : 'Bild löschen'}
+                </AdminButton>
+              )}
+              <AdminButton variant="primary" onClick={() => setShowUpload(true)} disabled={deleting}>
+                <Upload size={14} />
+                {product.image_url ? 'Bild ersetzen' : 'Bild hochladen'}
+              </AdminButton>
+            </div>
+          </div>
+        </div>
+      </div>
+      {showUpload && (
+        <ImageCropModal
+          currentImageUrl={product.image_url ?? undefined}
+          productId={product.id}
+          uploadEndpoint={`/api/admin/products/${product.id}/image`}
+          uploadVersion={product.version}
+          onClose={() => setShowUpload(false)}
+          onSuccess={(imageUrl, response) => {
+            onUploaded(product, imageUrl, response);
+            setShowUpload(false);
+          }}
+          onError={onError}
+        />
+      )}
+    </>
   );
 }
 
@@ -814,6 +1003,12 @@ export default function AdministratorProductsPage() {
     if (!window.confirm(`Bild für "${product.name}" löschen?`)) return;
     try {
       const response = await deleteAdminProductImage(product.id, { version: product.version });
+      const updatedProduct = {
+        ...product,
+        image_url: null,
+        image_r2_key: response.image_r2_key,
+        version: response.product_version,
+      };
       setProducts((previous) =>
         previous.map((entry) =>
           entry.id === product.id
@@ -821,6 +1016,7 @@ export default function AdministratorProductsPage() {
             : entry,
         ),
       );
+      setImageProduct((current) => (current?.id === product.id ? updatedProduct : current));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Bild konnte nicht gelöscht werden.');
     }
@@ -839,6 +1035,16 @@ export default function AdministratorProductsPage() {
           : entry,
       ),
     );
+    setImageProduct((current) =>
+      current?.id === product.id
+        ? {
+            ...current,
+            image_url: imageUrl,
+            image_r2_key: response?.image_r2_key ?? current.image_r2_key,
+            version: response?.product_version ?? current.version,
+          }
+        : current,
+    );
   }, []);
 
   return (
@@ -852,7 +1058,7 @@ export default function AdministratorProductsPage() {
       <div className="mb-4 grid gap-2">
         <div className="admin-filter-bar">
           <div className="admin-filter-main">
-            <label className="relative flex-1">
+            <label className="admin-filter-search-with-icon relative flex-1">
               <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[color:var(--admin-ink-3)]" />
               <input
                 value={queryInput}
@@ -866,28 +1072,40 @@ export default function AdministratorProductsPage() {
             </label>
           </div>
           <div className="admin-filter-controls">
-            <select value={moderation} onChange={(event) => { setPage(1); setModeration(event.target.value); }} className="admin-select">
-              <option value="all">Alle Freigaben</option>
-              <option value="approved">Freigegeben</option>
-              <option value="pending">Nicht freigegeben</option>
-              <option value="blocked">Gesperrt</option>
-              <option value="rejected">Abgelehnt</option>
-            </select>
-            <select value={affiliate} onChange={(event) => { setPage(1); setAffiliate(event.target.value); }} className="admin-select">
-              <option value="all">Alle Partnerlinks</option>
-              <option value="partner">Partnerlink</option>
-              <option value="no_partner">Kein Partnerlink</option>
-            </select>
-            <select value={linkStatus} onChange={(event) => { setPage(1); setLinkStatus(event.target.value); }} className="admin-select">
-              <option value="all">Alle Linkchecks</option>
-              <option value="unchecked">Ungeprüft</option>
-              <option value="dead">Deadlinks</option>
-            </select>
-            <select value={image} onChange={(event) => { setPage(1); setImage(event.target.value); }} className="admin-select">
-              <option value="all">Alle Bilder</option>
-              <option value="with">Mit Bild</option>
-              <option value="without">Ohne Bild</option>
-            </select>
+            <label className="admin-filter-field">
+              <span className="admin-filter-label">Freigabe</span>
+              <select value={moderation} onChange={(event) => { setPage(1); setModeration(event.target.value); }} className="admin-select">
+                <option value="all">Alle</option>
+                <option value="approved">Freigegeben</option>
+                <option value="pending">Nicht freigegeben</option>
+                <option value="blocked">Gesperrt</option>
+                <option value="rejected">Abgelehnt</option>
+              </select>
+            </label>
+            <label className="admin-filter-field">
+              <span className="admin-filter-label">Partner-Status</span>
+              <select value={affiliate} onChange={(event) => { setPage(1); setAffiliate(event.target.value); }} className="admin-select">
+                <option value="all">Alle</option>
+                <option value="partner">Partnerlink</option>
+                <option value="no_partner">Kein Partnerlink</option>
+              </select>
+            </label>
+            <label className="admin-filter-field">
+              <span className="admin-filter-label">Linkstatus</span>
+              <select value={linkStatus} onChange={(event) => { setPage(1); setLinkStatus(event.target.value); }} className="admin-select">
+                <option value="all">Alle</option>
+                <option value="unchecked">Ungeprüft</option>
+                <option value="dead">Deadlinks</option>
+              </select>
+            </label>
+            <label className="admin-filter-field">
+              <span className="admin-filter-label">Produktbild</span>
+              <select value={image} onChange={(event) => { setPage(1); setImage(event.target.value); }} className="admin-select">
+                <option value="all">Alle</option>
+                <option value="with">Mit Bild</option>
+                <option value="without">Ohne Bild</option>
+              </select>
+            </label>
           </div>
           <div className="admin-filter-actions">
             <AdminButton onClick={applyQuery}>
@@ -925,7 +1143,7 @@ export default function AdministratorProductsPage() {
             </select>
             <AdminButton onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={!canLoadPrevious || loading}>
               <ChevronLeft size={13} />
-              Zurueck
+              Zurück
             </AdminButton>
             <AdminButton onClick={() => setPage((current) => current + 1)} disabled={!canLoadNext || loading}>
               Weiter
@@ -940,7 +1158,7 @@ export default function AdministratorProductsPage() {
       {loading ? (
         <AdminEmpty>Lade Produkte...</AdminEmpty>
       ) : (
-        <AdminCard title="Produktliste" subtitle="Hauptlinks direkt bearbeiten, weitere Links öffnen.">
+        <AdminCard title="Produktliste" subtitle="Links, Freigabe und Bilder an einem Ort pflegen.">
           <div className="space-y-2 p-3">
             {products.map((product) => (
               <ProductRow
@@ -948,7 +1166,6 @@ export default function AdministratorProductsPage() {
                 product={product}
                 onSaved={handleSaved}
                 onImageEdit={setImageProduct}
-                onImageDelete={(entry) => void handleImageDeleted(entry)}
                 onOpenLinks={setShopLinksProduct}
               />
             ))}
@@ -966,14 +1183,12 @@ export default function AdministratorProductsPage() {
       )}
 
       {imageProduct && (
-        <ImageCropModal
-          currentImageUrl={imageProduct.image_url ?? undefined}
-          productId={imageProduct.id}
-          uploadEndpoint={`/api/admin/products/${imageProduct.id}/image`}
-          uploadVersion={imageProduct.version}
+        <ProductImageModal
+          product={imageProduct}
           onClose={() => setImageProduct(null)}
-          onSuccess={(imageUrl, response) => handleImageUploaded(imageProduct, imageUrl, response)}
-          onError={(message) => setError(message)}
+          onDelete={handleImageDeleted}
+          onUploaded={handleImageUploaded}
+          onError={setError}
         />
       )}
     </>

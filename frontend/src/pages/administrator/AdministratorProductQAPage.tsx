@@ -133,11 +133,9 @@ function linkHealthTone(health: AdminProductLinkHealth | null): 'neutral' | 'ok'
 }
 
 function linkHealthLabel(health: AdminProductLinkHealth | null): string {
-  if (!health || health.status === null || health.status === 'unchecked') return 'Noch nicht gepr\u00fcft';
-  if (health.status === 'ok') return 'Link ok';
-  if (health.status === 'timeout') return 'Timeout';
-  if (health.status === 'invalid') return 'Ung\u00fcltiger Link';
-  return 'Link fehlgeschlagen';
+  if (!health || health.status === null || health.status === 'unchecked') return 'Link: Noch nicht gepr\u00fcft';
+  if (health.status === 'ok') return 'Link: OK';
+  return 'Link: Defekt';
 }
 
 function formatDate(value: string | null): string {

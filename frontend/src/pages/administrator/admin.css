@@ -540,6 +540,18 @@
   color: var(--admin-ink);
 }
 
+.admin-icon-btn-warn {
+  border-color: #d7a847;
+  background: var(--admin-warn-soft);
+  color: var(--admin-warn-ink);
+}
+
+.admin-icon-btn-warn:hover {
+  border-color: var(--admin-warn);
+  background: #f2dfaa;
+  color: var(--admin-warn-ink);
+}
+
 .admin-page {
   width: min(1320px, 100%);
   padding: 24px 28px 72px;
@@ -1151,6 +1163,20 @@
   gap: 8px;
 }
 
+.admin-filter-field {
+  display: grid;
+  gap: 3px;
+}
+
+.admin-filter-label {
+  color: var(--admin-ink-3);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
 .admin-filter-actions {
   margin-left: auto;
 }
@@ -1219,6 +1245,32 @@
   font-size: 13px;
 }
 
+.admin-url-input {
+  background: #fff;
+}
+
+.admin-toggle-card {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--admin-line);
+  border-radius: var(--admin-r-sm);
+  background: var(--admin-bg-elev);
+  color: var(--admin-ink-2);
+  padding: 6px 9px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.admin-toggle-card input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--admin-success-ink);
+}
+
 .admin-input:focus,
 .admin-select:focus {
   border-color: var(--admin-ink-3);
@@ -1280,6 +1332,17 @@
   border-color: var(--admin-danger-ink);
   background: var(--admin-danger-ink);
   color: #fff;
+}
+
+.admin-btn-success {
+  border-color: var(--admin-success-ink);
+  background: var(--admin-success-ink);
+  color: #fff;
+}
+
+.admin-btn-success:hover {
+  border-color: #1d5231;
+  background: #1d5231;
 }
 
 .admin-btn-ghost {

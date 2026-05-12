@@ -926,6 +926,7 @@ export interface AdminCatalogProduct {
   warning_type?: string | null;
   alternative_note?: string | null;
   link_health: AdminAffiliateLinkHealth | null;
+  link_click_count: number;
   version: number | null;
   raw?: Record<string, unknown>;
 }
@@ -1610,6 +1611,7 @@ function parseCatalogProduct(raw: Record<string, unknown>): AdminCatalogProduct 
     warning_type: toTextOrNull(raw.warning_type),
     alternative_note: toTextOrNull(raw.alternative_note),
     link_health: parseAffiliateLinkHealth(raw.link_health),
+    link_click_count: toIntOrNull(raw.link_click_count) ?? 0,
     version: toIntOrNull(raw.version),
     raw,
   };

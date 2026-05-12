@@ -405,11 +405,9 @@ function linkHealthTone(health: AdminProductLinkHealth | null): AdminTone {
 }
 
 function linkHealthLabel(health: AdminProductLinkHealth | null): string {
-  if (!health || health.status === null || health.status === 'unchecked') return 'Noch nicht geprüft';
-  if (health.status === 'ok') return 'Link ok';
-  if (health.status === 'timeout') return 'Timeout';
-  if (health.status === 'invalid') return 'Ungültiger Link';
-  return 'Link fehlgeschlagen';
+  if (!health || health.status === null || health.status === 'unchecked') return 'Link: Noch nicht geprüft';
+  if (health.status === 'ok') return 'Link: OK';
+  return 'Link: Defekt';
 }
 
 function formatDate(value: string | null): string {

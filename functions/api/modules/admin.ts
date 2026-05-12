@@ -3673,6 +3673,41 @@ function withAffiliateLinkHealth<T extends object>(
   }
 }
 
+function withProductListLinkHealth<T extends object>(
+  row: T & Partial<AffiliateLinkHealthSelectRow> & Partial<ProductShopLinkHealthSelectRow>,
+): T & { link_health: AffiliateLinkHealth | null } {
+  const {
+    lh_product_id: _lhProductId,
+    lh_url: _lhUrl,
+    lh_status: _lhStatus,
+    lh_http_status: _lhHttpStatus,
+    lh_failure_reason: _lhFailureReason,
+    lh_last_checked_at: _lhLastCheckedAt,
+    lh_last_success_at: _lhLastSuccessAt,
+    lh_consecutive_failures: _lhConsecutiveFailures,
+    lh_response_time_ms: _lhResponseTimeMs,
+    lh_final_url: _lhFinalUrl,
+    lh_redirected: _lhRedirected,
+    pslh_shop_link_id: _pslhShopLinkId,
+    pslh_url: _pslhUrl,
+    pslh_status: _pslhStatus,
+    pslh_http_status: _pslhHttpStatus,
+    pslh_failure_reason: _pslhFailureReason,
+    pslh_last_checked_at: _pslhLastCheckedAt,
+    pslh_last_success_at: _pslhLastSuccessAt,
+    pslh_consecutive_failures: _pslhConsecutiveFailures,
+    pslh_response_time_ms: _pslhResponseTimeMs,
+    pslh_final_url: _pslhFinalUrl,
+    pslh_redirected: _pslhRedirected,
+    ...rest
+  } = row
+
+  return {
+    ...(rest as T),
+    link_health: formatProductShopLinkHealth(row) ?? formatAffiliateLinkHealth(row),
+  }
+}
+
 function formatProductShopLinkHealth(row: Partial<ProductShopLinkHealthSelectRow>): ProductShopLinkHealth | null {
   if (row.pslh_shop_link_id === undefined || row.pslh_shop_link_id === null) return null
   const status = row.pslh_status && AFFILIATE_LINK_HEALTH_STATUSES.has(row.pslh_status)
@@ -6527,8 +6562,33 @@ admin.get('/products', async (c) => {
   const includeLinkHealth = await hasAffiliateLinkHealthTable(c.env.DB)
   const includeShopLinkHealth = await hasTable(c.env.DB, 'product_shop_link_health')
   const hasShopLinks = await hasTable(c.env.DB, 'product_shop_links')
+  const hasLinkClicks = await hasTable(c.env.DB, 'product_link_clicks')
+  const includeProductListShopLinkHealth = hasShopLinks && includeShopLinkHealth
   const linkHealthSelect = includeLinkHealth ? `,${AFFILIATE_LINK_HEALTH_SELECT}` : ''
   const linkHealthJoin = includeLinkHealth ? 'LEFT JOIN affiliate_link_health lh ON lh.product_id = p.id' : ''
+  const shopLinkHealthSelect = includeProductListShopLinkHealth ? `,${PRODUCT_SHOP_LINK_HEALTH_SELECT}` : ''
+  const shopLinkHealthJoin = includeProductListShopLinkHealth
+    ? `
+      LEFT JOIN product_shop_links psl_effective ON psl_effective.id = (
+        SELECT psl_inner.id
+        FROM product_shop_links psl_inner
+        WHERE psl_inner.product_id = p.id
+          AND psl_inner.active = 1
+        ORDER BY psl_inner.is_primary DESC, psl_inner.sort_order ASC, psl_inner.id ASC
+        LIMIT 1
+      )
+      LEFT JOIN product_shop_link_health pslh ON pslh.shop_link_id = psl_effective.id`
+    : ''
+  const linkClickSelect = hasLinkClicks ? ', COALESCE(plc.link_click_count, 0) AS link_click_count' : ', 0 AS link_click_count'
+  const linkClickJoin = hasLinkClicks
+    ? `
+      LEFT JOIN (
+        SELECT product_id, COUNT(*) AS link_click_count
+        FROM product_link_clicks
+        WHERE product_type = 'catalog'
+        GROUP BY product_id
+      ) plc ON plc.product_id = p.id`
+    : ''
   const hasPagedRequest = (
     c.req.query('q') !== undefined ||
     c.req.query('page') !== undefined ||
@@ -6567,14 +6627,19 @@ admin.get('/products', async (c) => {
 
   if (!hasPagedRequest) {
     const { results } = await c.env.DB.prepare(`
-      SELECT p.*${linkHealthSelect}
+      SELECT p.*${linkHealthSelect}${shopLinkHealthSelect}${linkClickSelect}
       FROM products p
       ${linkHealthJoin}
+      ${shopLinkHealthJoin}
+      ${linkClickJoin}
       ORDER BY p.created_at DESC, p.id DESC
-    `).all<ProductRow & Partial<AffiliateLinkHealthSelectRow>>()
+    `).all<ProductRow & Partial<AffiliateLinkHealthSelectRow> & Partial<ProductShopLinkHealthSelectRow> & { link_click_count?: number }>()
     const products = results ?? []
     return c.json({
-      products: products.map((product) => withAffiliateLinkHealth(product)),
+      products: products.map((product) => ({
+        ...withProductListLinkHealth(product),
+        link_click_count: product.link_click_count ?? 0,
+      })),
       total: products.length,
       page: 1,
       limit: Math.max(1, products.length),
@@ -6653,7 +6718,7 @@ admin.get('/products', async (c) => {
     where.push("COALESCE(p.image_url, '') = '' AND COALESCE(p.image_r2_key, '') = ''")
   }
   if (deadlinks || linkStatus === 'dead') {
-    if (includeShopLinkHealth) {
+    if (includeProductListShopLinkHealth) {
       where.push(`EXISTS (
         SELECT 1
         FROM product_shop_links psl
@@ -6668,7 +6733,7 @@ admin.get('/products', async (c) => {
       where.push('1 = 0')
     }
   } else if (linkStatus === 'unchecked') {
-    if (includeShopLinkHealth) {
+    if (includeProductListShopLinkHealth) {
       where.push(`EXISTS (
         SELECT 1
         FROM product_shop_links psl
@@ -6681,7 +6746,7 @@ admin.get('/products', async (c) => {
       where.push("COALESCE(lh.status, 'unchecked') = 'unchecked'")
     }
   } else if (linkStatus === 'ok') {
-    if (includeShopLinkHealth) {
+    if (includeProductListShopLinkHealth) {
       where.push(`EXISTS (
         SELECT 1
         FROM product_shop_links psl
@@ -6704,18 +6769,23 @@ admin.get('/products', async (c) => {
       ${whereSql}
     `).bind(...bindings).first<CountRow>(),
     c.env.DB.prepare(`
-      SELECT p.*${linkHealthSelect}
+      SELECT p.*${linkHealthSelect}${shopLinkHealthSelect}${linkClickSelect}
       FROM products p
       ${linkHealthJoin}
+      ${shopLinkHealthJoin}
+      ${linkClickJoin}
       ${whereSql}
       ORDER BY p.created_at DESC, p.id DESC
       LIMIT ? OFFSET ?
-    `).bind(...bindings, limit, offset).all<ProductRow & Partial<AffiliateLinkHealthSelectRow>>(),
+    `).bind(...bindings, limit, offset).all<ProductRow & Partial<AffiliateLinkHealthSelectRow> & Partial<ProductShopLinkHealthSelectRow> & { link_click_count?: number }>(),
   ])
 
   const total = totalRow?.count ?? 0
   return c.json({
-    products: (listResult.results ?? []).map((product) => withAffiliateLinkHealth(product)),
+    products: (listResult.results ?? []).map((product) => ({
+      ...withProductListLinkHealth(product),
+      link_click_count: product.link_click_count ?? 0,
+    })),
     total,
     page,
     limit,
