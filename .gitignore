@@ -27,14 +27,9 @@ functions/.dev.vars
 /logo.png
 .claude/deploy-errors.log
 
-# Claude local-only state
-.claude/settings.local.json
-.claude/worktrees/
-.claude/commands/
-
-# Codex local-only app state
-.codex/*
-!.codex/hooks.json
-!.codex/hooks/
-!.codex/hooks/agent-protocol.ps1
-!.codex/hooks/README.md
+# Agent local-only state
+.agent-memory/
+.codex/
+.claude/
+AGENTS.md
+CLAUDE.md
