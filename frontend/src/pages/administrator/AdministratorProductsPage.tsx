@@ -94,16 +94,15 @@ function productIsAffiliate(product: AdminCatalogProduct): boolean {
   return true;
 }
 
+function productModerationStatus(value: string | null): ProductModerationStatus {
+  return value === 'approved' || value === 'rejected' || value === 'blocked' ? value : 'pending';
+}
+
 function formFromProduct(product: AdminCatalogProduct): ProductQuickForm {
   return {
     shop_link: product.shop_link ?? '',
     is_affiliate: productIsAffiliate(product),
-    moderation_status:
-      product.moderation_status === 'approved' ||
-      product.moderation_status === 'rejected' ||
-      product.moderation_status === 'blocked'
-        ? product.moderation_status
-        : 'pending',
+    moderation_status: productModerationStatus(product.moderation_status),
   };
 }
 
@@ -265,11 +264,13 @@ function ProductRow({
   onSaved,
   onImageEdit,
   onOpenLinks,
+  onAffiliateEdit,
 }: {
   product: AdminCatalogProduct;
   onSaved: (product: AdminCatalogProduct) => void;
   onImageEdit: (product: AdminCatalogProduct) => void;
   onOpenLinks: (product: AdminCatalogProduct) => void;
+  onAffiliateEdit: (product: AdminCatalogProduct) => void;
 }) {
   const [form, setForm] = useState<ProductQuickForm>(() => formFromProduct(product));
   const [saving, setSaving] = useState(false);
@@ -340,11 +341,22 @@ function ProductRow({
               </span>
               <AdminBadge>{moderationLabel(product.moderation_status)}</AdminBadge>
               <AdminBadge tone="warn" className="admin-badge-warn">Link-Klicks: {product.link_click_count}</AdminBadge>
+              <button
+                type="button"
+                onClick={() => onAffiliateEdit(product)}
+                className="admin-badge-action"
+                title="Affiliate-Status bearbeiten"
+                aria-label="Affiliate-Status bearbeiten"
+              >
+                <AdminBadge tone={productIsAffiliate(product) ? 'ok' : 'danger'}>
+                  Affiliate-Link: {productIsAffiliate(product) ? 'Ja' : 'Nein'}
+                </AdminBadge>
+              </button>
             </div>
           </div>
         </div>
 
-        <div className="grid gap-2 md:grid-cols-[minmax(260px,1fr)_120px_150px_auto]">
+        <div className="grid gap-2 md:grid-cols-[minmax(260px,1fr)_150px_auto]">
           <div className="text-xs font-medium text-[color:var(--admin-ink-2)]">
             <span>Hauptlink</span>
             <div className="mt-1 flex gap-1.5">
@@ -375,14 +387,6 @@ function ProductRow({
               Weitere Links
             </button>
           </div>
-          <label className={`admin-toggle-card mt-5 ${form.is_affiliate ? 'admin-toggle-card-ok' : 'admin-toggle-card-danger'}`}>
-            <input
-              type="checkbox"
-              checked={form.is_affiliate}
-              onChange={(event) => updateField('is_affiliate', event.target.checked)}
-            />
-            <span>Affiliate-Link: {form.is_affiliate ? 'Ja' : 'Nein'}</span>
-          </label>
           <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
             Freigabe
             <select
@@ -838,6 +842,119 @@ function ShopLinksModal({
   );
 }
 
+function AffiliateStatusModal({
+  product,
+  onClose,
+  onSaved,
+}: {
+  product: AdminCatalogProduct;
+  onClose: () => void;
+  onSaved: (product: AdminCatalogProduct) => void;
+}) {
+  const [isAffiliate, setIsAffiliate] = useState(() => productIsAffiliate(product));
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
+
+  useEffect(() => {
+    setIsAffiliate(productIsAffiliate(product));
+    setMessage('');
+  }, [product]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setMessage('');
+    try {
+      const updated = await updateProductQA(
+        product.id,
+        buildPatch({
+          shop_link: product.shop_link ?? '',
+          is_affiliate: isAffiliate,
+          moderation_status: productModerationStatus(product.moderation_status),
+        }),
+        { version: product.version },
+      );
+      onSaved({
+        ...product,
+        shop_link: updated.shop_link,
+        is_affiliate: updated.is_affiliate,
+        affiliate_owner_type: updated.affiliate_owner_type,
+        affiliate_owner_user_id: updated.affiliate_owner_user_id,
+        link_health: updated.link_health,
+        moderation_status: updated.moderation_status,
+        version: updated.version,
+      });
+      setMessage('Affiliate-Status gespeichert.');
+    } catch (error) {
+      setMessage(getErrorMessage(error));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/35 px-3 py-8" role="dialog" aria-modal="true">
+      <div className="admin-card w-full max-w-xl overflow-hidden bg-[color:var(--admin-panel)] shadow-xl">
+        <div className="admin-card-head">
+          <div className="min-w-0">
+            <h2 className="admin-card-title">Affiliate-Link</h2>
+            <p className="admin-card-sub truncate">{product.name}</p>
+          </div>
+          <AdminButton size="sm" variant="ghost" onClick={onClose}>
+            <X size={13} />
+            Schließen
+          </AdminButton>
+        </div>
+
+        <div className="grid gap-4 p-4">
+          <div>
+            <span className="admin-muted text-xs font-medium">Hauptlink</span>
+            {product.shop_link ? (
+              <a
+                href={product.shop_link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="admin-mono mt-1 block break-all text-xs text-[color:var(--admin-info-ink)] hover:underline"
+              >
+                {product.shop_link}
+              </a>
+            ) : (
+              <p className="admin-muted mt-1 text-xs">Kein Hauptlink hinterlegt.</p>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="admin-muted text-xs font-medium">Aktueller Status</span>
+            <AdminBadge tone={productIsAffiliate(product) ? 'ok' : 'danger'}>
+              Affiliate-Link: {productIsAffiliate(product) ? 'Ja' : 'Nein'}
+            </AdminBadge>
+          </div>
+
+          <label className={`admin-toggle-card ${isAffiliate ? 'admin-toggle-card-ok' : 'admin-toggle-card-danger'}`}>
+            <input
+              type="checkbox"
+              checked={isAffiliate}
+              onChange={(event) => setIsAffiliate(event.target.checked)}
+            />
+            <span>Affiliate-Link: {isAffiliate ? 'Ja' : 'Nein'}</span>
+          </label>
+
+          {message && <p className="admin-muted text-xs">{message}</p>}
+
+          <div className="flex justify-end gap-2">
+            <AdminButton variant="ghost" onClick={onClose} disabled={saving}>
+              Abbrechen
+            </AdminButton>
+            <AdminButton variant="primary" onClick={() => void handleSave()} disabled={saving}>
+              <Save size={15} />
+              {saving ? 'Speichere...' : 'Speichern'}
+            </AdminButton>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ProductImageModal({
   product,
   onClose,
@@ -942,6 +1059,7 @@ export default function AdministratorProductsPage() {
   const [error, setError] = useState('');
   const [imageProduct, setImageProduct] = useState<AdminCatalogProduct | null>(null);
   const [shopLinksProduct, setShopLinksProduct] = useState<AdminCatalogProduct | null>(null);
+  const [affiliateProduct, setAffiliateProduct] = useState<AdminCatalogProduct | null>(null);
   const loadProductsRequestIdRef = useRef(0);
 
   const loadProducts = useCallback(async () => {
@@ -1014,6 +1132,8 @@ export default function AdministratorProductsPage() {
 
   const handleSaved = useCallback((updated: AdminCatalogProduct) => {
     setProducts((previous) => previous.map((product) => (product.id === updated.id ? updated : product)));
+    setAffiliateProduct((current) => (current?.id === updated.id ? updated : current));
+    setShopLinksProduct((current) => (current?.id === updated.id ? updated : current));
   }, []);
 
   const handleImageDeleted = useCallback(async (product: AdminCatalogProduct) => {
@@ -1184,6 +1304,7 @@ export default function AdministratorProductsPage() {
                 onSaved={handleSaved}
                 onImageEdit={setImageProduct}
                 onOpenLinks={setShopLinksProduct}
+                onAffiliateEdit={setAffiliateProduct}
               />
             ))}
             {products.length === 0 && <AdminEmpty>Keine Produkte gefunden.</AdminEmpty>}
@@ -1196,6 +1317,14 @@ export default function AdministratorProductsPage() {
           product={shopLinksProduct}
           onClose={() => setShopLinksProduct(null)}
           onProductChanged={() => void loadProducts()}
+        />
+      )}
+
+      {affiliateProduct && (
+        <AffiliateStatusModal
+          product={affiliateProduct}
+          onClose={() => setAffiliateProduct(null)}
+          onSaved={handleSaved}
         />
       )}
 

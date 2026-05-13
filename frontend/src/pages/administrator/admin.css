@@ -1423,6 +1423,21 @@
   color: var(--admin-info-ink);
 }
 
+.admin-badge-action {
+  display: inline-flex;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.admin-badge-action:focus-visible {
+  outline: 2px solid rgba(47, 111, 216, 0.72);
+  outline-offset: 2px;
+  border-radius: 999px;
+}
+
 .admin-table-wrap {
   overflow-x: auto;
   max-width: 100%;

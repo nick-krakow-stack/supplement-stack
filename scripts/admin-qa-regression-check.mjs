@@ -349,6 +349,51 @@ assert.match(
 )
 assert.match(productsPage, /Link-Klicks:\s*\{product\.link_click_count\}/, 'Admin products list must show Link-Klicks badge per product')
 assert.match(productsPage, /admin-badge-warn[^>]*>\s*Link-Klicks:/, 'Admin products Link-Klicks badge must use yellow warning styling')
+const productRowBlock = extractRequiredBlock(
+  productsPage,
+  /function ProductRow\([\s\S]*?\r?\n}\r?\n\r?\n(?=function ShopLinksModal)/,
+  'Admin products page must keep a ProductRow component before the shop-link modal',
+)
+assert.doesNotMatch(
+  productRowBlock,
+  /admin-toggle-card/,
+  'Admin product rows must not keep the large affiliate admin-toggle-card in the row edit controls',
+)
+assert.match(
+  productRowBlock,
+  /onAffiliateEdit\(product\)/,
+  'Admin product affiliate status badge must open the affiliate status modal',
+)
+assert.match(
+  productRowBlock,
+  /Affiliate-Link:\s*\{productIsAffiliate\(product\) \? 'Ja' : 'Nein'\}/,
+  'Admin products affiliate badge must show Affiliate-Link: Ja/Nein in the product badge row',
+)
+assert.match(
+  productRowBlock,
+  /tone=\{productIsAffiliate\(product\) \? 'ok' : 'danger'\}/,
+  'Admin products affiliate badge must use green/red status tone',
+)
+const affiliateStatusModalBlock = extractRequiredBlock(
+  productsPage,
+  /function AffiliateStatusModal\([\s\S]*?\r?\n}\r?\n\r?\n(?=function ProductImageModal)/,
+  'Admin products page must include an AffiliateStatusModal component before the image modal',
+)
+assert.match(
+  affiliateStatusModalBlock,
+  /Hauptlink[\s\S]*product\.shop_link/,
+  'Admin products affiliate status modal must show the current main link',
+)
+assert.match(
+  affiliateStatusModalBlock,
+  /Affiliate-Link:\s*\{productIsAffiliate\(product\) \? 'Ja' : 'Nein'\}/,
+  'Admin products affiliate status modal must show Affiliate-Link: Ja/Nein status',
+)
+assert.match(
+  affiliateStatusModalBlock,
+  /updateProductQA\(\s*product\.id,\s*[\s\S]*buildPatch\(/,
+  'Admin products affiliate status modal must save through the existing product QA update path',
+)
 assert.match(productsPage, /Weiteren Link/, 'Admin products shop-link create form must allow adding another link row')
 assert.match(productsPage, /type ShopLinkRole = 'primary' \| 'alternative' \| 'standard'/, 'Admin products shop-link editor must model Hauptlink/Alternative/Standard roles')
 for (const roleLabel of ['Hauptlink', 'Alternative', 'Standard']) {
@@ -356,8 +401,6 @@ for (const roleLabel of ['Hauptlink', 'Alternative', 'Standard']) {
 }
 assert.match(productsPage, /admin-url-input/, 'Admin products editable URL fields must use explicit white edit styling')
 assert.match(productsPage, /admin-toggle-card/, 'Admin products affiliate/active controls must use the compact toggle-card styling')
-assert.match(productsPage, /Affiliate-Link:\s*\{form\.is_affiliate \? 'Ja' : 'Nein'\}/, 'Admin products affiliate toggle must show Affiliate-Link: Ja/Nein')
-assert.match(productsPage, /form\.is_affiliate \? 'admin-toggle-card-ok' : 'admin-toggle-card-danger'/, 'Admin products affiliate toggle must use green/red state styling')
 assert.match(productsPage, /admin-btn-success/, 'Admin products shop-link save action must use the green success button styling')
 assert.match(productsPage, /admin-icon-btn-warn/, 'Admin products external-link icon beside URL fields must use yellow styling')
 assert.doesNotMatch(
