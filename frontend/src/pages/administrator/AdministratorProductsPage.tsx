@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   ChevronLeft,
@@ -375,13 +375,13 @@ function ProductRow({
               Weitere Links
             </button>
           </div>
-          <label className="admin-toggle-card mt-5">
+          <label className={`admin-toggle-card mt-5 ${form.is_affiliate ? 'admin-toggle-card-ok' : 'admin-toggle-card-danger'}`}>
             <input
               type="checkbox"
               checked={form.is_affiliate}
               onChange={(event) => updateField('is_affiliate', event.target.checked)}
             />
-            <span>Affiliate</span>
+            <span>Affiliate-Link: {form.is_affiliate ? 'Ja' : 'Nein'}</span>
           </label>
           <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
             Freigabe
@@ -942,8 +942,13 @@ export default function AdministratorProductsPage() {
   const [error, setError] = useState('');
   const [imageProduct, setImageProduct] = useState<AdminCatalogProduct | null>(null);
   const [shopLinksProduct, setShopLinksProduct] = useState<AdminCatalogProduct | null>(null);
+  const loadProductsRequestIdRef = useRef(0);
 
   const loadProducts = useCallback(async () => {
+    const requestId = loadProductsRequestIdRef.current + 1;
+    loadProductsRequestIdRef.current = requestId;
+    const isLatestRequest = () => loadProductsRequestIdRef.current === requestId;
+
     setLoading(true);
     setError('');
     try {
@@ -956,14 +961,18 @@ export default function AdministratorProductsPage() {
         image,
         link_status: linkStatus,
       });
+      if (!isLatestRequest()) return;
       setProducts(response.products);
       setTotal(response.total);
     } catch (err) {
+      if (!isLatestRequest()) return;
       setProducts([]);
       setTotal(0);
       setError(err instanceof Error ? err.message : 'Produkte konnten nicht geladen werden.');
     } finally {
-      setLoading(false);
+      if (isLatestRequest()) {
+        setLoading(false);
+      }
     }
   }, [affiliate, image, limit, linkStatus, moderation, page, query]);
 
@@ -983,17 +992,25 @@ export default function AdministratorProductsPage() {
     }
   }, [loading, page, totalPages]);
 
-  const applyQuery = useCallback(() => {
-    setPage(1);
-    setQuery(queryInput);
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      const nextQuery = queryInput.trim();
+      setPage(1);
+      setQuery(nextQuery);
+    }, 300);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [queryInput]);
+
+  useEffect(() => {
     const next = new URLSearchParams();
-    if (queryInput.trim()) next.set('q', queryInput.trim());
+    if (query) next.set('q', query);
     if (moderation !== 'all') next.set('moderation', moderation);
     if (affiliate !== 'all') next.set('affiliate', affiliate);
     if (image !== 'all') next.set('image', image);
     if (linkStatus !== 'all') next.set('link_status', linkStatus);
-    setSearchParams(next);
-  }, [affiliate, image, linkStatus, moderation, queryInput, setSearchParams]);
+    setSearchParams(next, { replace: true });
+  }, [affiliate, image, linkStatus, moderation, query, setSearchParams]);
 
   const handleSaved = useCallback((updated: AdminCatalogProduct) => {
     setProducts((previous) => previous.map((product) => (product.id === updated.id ? updated : product)));
@@ -1051,24 +1068,24 @@ export default function AdministratorProductsPage() {
     <>
       <AdminPageHeader
         title="Produkte"
-        subtitle="Produkte prüfen, Links setzen und freigeben."
+        subtitle="Produkte anlegen, verwalten und freigeben"
         meta={<AdminBadge tone="info">{total} Treffer</AdminBadge>}
       />
 
       <div className="mb-4 grid gap-2">
         <div className="admin-filter-bar">
           <div className="admin-filter-main">
-            <label className="admin-filter-search-with-icon relative flex-1">
-              <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[color:var(--admin-ink-3)]" />
-              <input
-                value={queryInput}
-                onChange={(event) => setQueryInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') applyQuery();
-                }}
-                placeholder="Produkt, Marke oder Link suchen"
-                className="admin-input admin-filter-search pl-9"
-              />
+            <label className="admin-filter-field admin-filter-search-field">
+              <span className="admin-filter-label">Suche</span>
+              <span className="admin-filter-search-with-icon relative">
+                <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[color:var(--admin-ink-3)]" />
+                <input
+                  value={queryInput}
+                  onChange={(event) => setQueryInput(event.target.value)}
+                  placeholder="Produkt, Marke oder Link suchen"
+                  className="admin-input admin-filter-search pl-9"
+                />
+              </span>
             </label>
           </div>
           <div className="admin-filter-controls">
@@ -1106,16 +1123,16 @@ export default function AdministratorProductsPage() {
                 <option value="without">Ohne Bild</option>
               </select>
             </label>
-          </div>
-          <div className="admin-filter-actions">
-            <AdminButton onClick={applyQuery}>
-              <Search size={13} />
-              Suchen
-            </AdminButton>
-            <AdminButton onClick={() => void loadProducts()} disabled={loading}>
+            <button
+              type="button"
+              onClick={() => void loadProducts()}
+              disabled={loading}
+              className="admin-icon-btn admin-filter-refresh"
+              title="Aktualisieren"
+              aria-label="Aktualisieren"
+            >
               <RefreshCw size={14} />
-              Aktualisieren
-            </AdminButton>
+            </button>
           </div>
         </div>
 
@@ -1158,7 +1175,7 @@ export default function AdministratorProductsPage() {
       {loading ? (
         <AdminEmpty>Lade Produkte...</AdminEmpty>
       ) : (
-        <AdminCard title="Produktliste" subtitle="Links, Freigabe und Bilder an einem Ort pflegen.">
+        <AdminCard title="Produktliste">
           <div className="space-y-2 p-3">
             {products.map((product) => (
               <ProductRow

@@ -1130,8 +1130,8 @@
 .admin-filter-bar {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
+  align-items: end;
+  gap: 10px;
   border: 1px solid var(--admin-line);
   border-radius: var(--admin-r-md);
   background: var(--admin-bg-elev);
@@ -1149,8 +1149,8 @@
 .admin-filter-main {
   display: flex;
   min-width: min(100%, 360px);
-  flex: 1 1 260px;
-  align-items: center;
+  flex: 1 1 300px;
+  align-items: end;
   gap: 8px;
 }
 
@@ -1159,13 +1159,17 @@
   display: flex;
   flex: 0 1 auto;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: end;
   gap: 8px;
 }
 
 .admin-filter-field {
   display: grid;
   gap: 3px;
+}
+
+.admin-filter-search-field {
+  width: 100%;
 }
 
 .admin-filter-label {
@@ -1179,6 +1183,12 @@
 
 .admin-filter-actions {
   margin-left: auto;
+}
+
+.admin-filter-refresh {
+  width: 34px;
+  height: 34px;
+  align-self: end;
 }
 
 .admin-filter-bar .admin-input,
@@ -1269,6 +1279,22 @@
   height: 15px;
   margin: 0;
   accent-color: var(--admin-success-ink);
+}
+
+.admin-toggle-card-ok {
+  border-color: var(--admin-success-soft);
+  background: var(--admin-success-soft);
+  color: var(--admin-success-ink);
+}
+
+.admin-toggle-card-danger {
+  border-color: var(--admin-danger-soft);
+  background: var(--admin-danger-soft);
+  color: var(--admin-danger-ink);
+}
+
+.admin-toggle-card-danger input {
+  accent-color: var(--admin-danger-ink);
 }
 
 .admin-input:focus,

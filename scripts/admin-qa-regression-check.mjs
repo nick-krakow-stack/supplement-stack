@@ -10,6 +10,16 @@ function assertFile(path) {
   return read(path)
 }
 
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function extractRequiredBlock(source, pattern, description) {
+  const match = source.match(pattern)
+  assert.ok(match, description)
+  return match[0]
+}
+
 const dosingPage = read('frontend/src/pages/administrator/AdministratorDosingPage.tsx')
 const dashboardPage = read('frontend/src/pages/administrator/AdministratorDashboardPage.tsx')
 const ingredientsPage = read('frontend/src/pages/administrator/AdministratorIngredientsPage.tsx')
@@ -222,6 +232,101 @@ assert.match(
   /admin-filter-search-with-icon/,
   'Admin products search field must reserve icon space via the shared icon-search class',
 )
+assert.match(
+  productsPage,
+  /subtitle="Produkte anlegen, verwalten und freigeben"/,
+  'Admin products page subtitle must use the follow-up owner wording',
+)
+assert.match(
+  productsPage,
+  /admin-filter-label">\s*Suche\s*<\/span>/,
+  'Admin products search field must have a visible Suche label',
+)
+assert.doesNotMatch(
+  productsPage,
+  />\s*Suchen\s*</,
+  'Admin products toolbar must not keep a separate Suchen button',
+)
+assert.match(
+  productsPage,
+  /useRef/,
+  'Admin products page must use a React-safe latest-request guard for overlapping product loads',
+)
+assert.match(
+  productsPage,
+  /loadProductsRequestIdRef/,
+  'Admin products loadProducts must track the latest request before updating product state',
+)
+const loadProductsBlock = extractRequiredBlock(
+  productsPage,
+  /const loadProducts = useCallback\(async \(\) => \{[\s\S]*?\}, \[affiliate, image, limit, linkStatus, moderation, page, query\]\);/,
+  'Admin products must keep product loading in a memoized loadProducts callback',
+)
+assert.match(
+  loadProductsBlock,
+  /const requestId = loadProductsRequestIdRef\.current \+ 1;[\s\S]*loadProductsRequestIdRef\.current = requestId;/,
+  'Admin products loadProducts must assign a new latest request id for each request',
+)
+assert.match(
+  loadProductsBlock,
+  /const isLatestRequest = \(\) => loadProductsRequestIdRef\.current === requestId;/,
+  'Admin products loadProducts must compare responses against the latest request id',
+)
+assert.match(
+  loadProductsBlock,
+  /if \(!isLatestRequest\(\)\) return;[\s\S]*setProducts\(response\.products\);[\s\S]*setTotal\(response\.total\);/,
+  'Admin products loadProducts must guard product and total success updates against stale requests',
+)
+assert.match(
+  loadProductsBlock,
+  /catch \(err\) \{[\s\S]*if \(!isLatestRequest\(\)\) return;[\s\S]*setProducts\(\[\]\);[\s\S]*setTotal\(0\);[\s\S]*setError\(/,
+  'Admin products loadProducts must guard error updates against stale requests',
+)
+assert.match(
+  loadProductsBlock,
+  /finally \{[\s\S]*if \(isLatestRequest\(\)\) \{[\s\S]*setLoading\(false\);[\s\S]*\}/,
+  'Admin products loadProducts must guard loading=false against stale requests',
+)
+const queryInputEffect = extractRequiredBlock(
+  productsPage,
+  /useEffect\(\(\) => \{[\s\S]*?window\.setTimeout[\s\S]*?\}, \[queryInput\]\);/,
+  'Admin products search input must update the product query automatically from the queryInput effect',
+)
+for (const effectRequirement of [
+  ['window.setTimeout', /window\.setTimeout/],
+  ['window.clearTimeout', /window\.clearTimeout\(timeoutId\)/],
+  ['setPage(1)', /setPage\(1\)/],
+  ['setQuery(nextQuery)', /setQuery\(nextQuery\)/],
+]) {
+  const [label, pattern] = effectRequirement
+  assert.match(queryInputEffect, pattern, `Admin products queryInput effect must include ${label}`)
+}
+const refreshButtonMatch = productsPage.match(
+  /<button\b[\s\S]*?className="[^"]*\badmin-filter-refresh\b[^"]*"[\s\S]*?aria-label="Aktualisieren"[\s\S]*?>\s*([\s\S]*?)\s*<\/button>/,
+)
+assert.ok(refreshButtonMatch, 'Admin products refresh action must remain a dedicated icon-only button')
+const refreshButtonBlock = refreshButtonMatch[0]
+const refreshButtonInner = refreshButtonMatch[1]
+assert.match(
+  refreshButtonBlock,
+  /aria-label="Aktualisieren"/,
+  'Admin products refresh action must remain available to screen readers',
+)
+assert.match(
+  refreshButtonBlock,
+  /title="Aktualisieren"/,
+  'Admin products refresh action may keep a hover title for the icon-only button',
+)
+assert.match(
+  refreshButtonInner,
+  /<RefreshCw\b/,
+  'Admin products refresh action must render the refresh icon',
+)
+assert.doesNotMatch(
+  refreshButtonInner,
+  new RegExp(`\\b${escapeRegExp('Aktualisieren')}\\b`),
+  'Admin products refresh action must not render visible Aktualisieren text',
+)
 assert.doesNotMatch(productsPage, /Zurueck/, 'Admin products pagination must use the German umlaut spelling for Zurueck')
 assert.doesNotMatch(productsPage, /Loeschen/, 'Admin products delete buttons must use the German umlaut spelling for Loeschen')
 assert.doesNotMatch(productsPage, />\s*Recheck\s*</, 'Admin products shop-link action must be renamed from Recheck to Neu pruefen')
@@ -251,6 +356,8 @@ for (const roleLabel of ['Hauptlink', 'Alternative', 'Standard']) {
 }
 assert.match(productsPage, /admin-url-input/, 'Admin products editable URL fields must use explicit white edit styling')
 assert.match(productsPage, /admin-toggle-card/, 'Admin products affiliate/active controls must use the compact toggle-card styling')
+assert.match(productsPage, /Affiliate-Link:\s*\{form\.is_affiliate \? 'Ja' : 'Nein'\}/, 'Admin products affiliate toggle must show Affiliate-Link: Ja/Nein')
+assert.match(productsPage, /form\.is_affiliate \? 'admin-toggle-card-ok' : 'admin-toggle-card-danger'/, 'Admin products affiliate toggle must use green/red state styling')
 assert.match(productsPage, /admin-btn-success/, 'Admin products shop-link save action must use the green success button styling')
 assert.match(productsPage, /admin-icon-btn-warn/, 'Admin products external-link icon beside URL fields must use yellow styling')
 assert.doesNotMatch(
@@ -258,9 +365,16 @@ assert.doesNotMatch(
   /Hauptlinks direkt bearbeiten, weitere Links/,
   'Admin products list subtitle must not use the old technical copy',
 )
+assert.doesNotMatch(
+  productsPage,
+  /Links, Freigabe und Bilder an einem Ort pflegen\./,
+  'Admin products list card subtitle must be removed',
+)
 assert.match(adminCss, /\.admin-filter-label/, 'Admin CSS must define compact filter labels')
 assert.match(adminCss, /\.admin-url-input/, 'Admin CSS must define editable white URL field styling')
 assert.match(adminCss, /\.admin-toggle-card/, 'Admin CSS must define modern toggle-card controls')
+assert.match(adminCss, /\.admin-toggle-card-ok/, 'Admin CSS must define green affiliate toggle-card state')
+assert.match(adminCss, /\.admin-toggle-card-danger/, 'Admin CSS must define red affiliate toggle-card state')
 assert.match(adminCss, /\.admin-btn-success/, 'Admin CSS must define green save buttons')
 assert.match(adminCss, /\.admin-icon-btn-warn/, 'Admin CSS must define yellow external-link icon buttons')
 assert.match(adminApi, /link_click_count: number/, 'AdminCatalogProduct must type link_click_count')
