@@ -381,8 +381,13 @@ const affiliateStatusModalBlock = extractRequiredBlock(
 )
 assert.match(
   affiliateStatusModalBlock,
-  /Hauptlink[\s\S]*product\.shop_link/,
-  'Admin products affiliate status modal must show the current main link',
+  /Hauptlink[\s\S]*shopLinkDraft[\s\S]*admin-url-input/,
+  'Admin products affiliate status modal must make Hauptlink editable',
+)
+assert.match(
+  affiliateStatusModalBlock,
+  /<AdminButton[\s\S]*admin-icon-btn admin-btn-success[\s\S]*<Save size=\{14\}/,
+  'Admin products affiliate status modal must expose a green save icon button next to Hauptlink',
 )
 assert.match(
   affiliateStatusModalBlock,
@@ -391,8 +396,78 @@ assert.match(
 )
 assert.match(
   affiliateStatusModalBlock,
+  /hasUnsavedShopLinkChange/,
+  'Admin products affiliate status modal must track unsaved Hauptlink edits',
+)
+assert.match(
+  affiliateStatusModalBlock,
+  /attemptClose\(\)/,
+  'Admin products affiliate status modal must use a guarded close handler',
+)
+assert.match(
+  affiliateStatusModalBlock,
+  /if\s*\(\s*saving\s*\)/,
+  'Admin products affiliate status modal close handler must check saving state before closing',
+)
+assert.match(
+  affiliateStatusModalBlock,
+  /setMessage\('Speichervorgang läuft noch\.'\)/,
+  'Admin products affiliate status modal should inform when close is blocked while saving',
+)
+assert.match(
+  affiliateStatusModalBlock,
+  /onMouseDown=\{\(event\) => \{[\s\S]*if \(event\.target === event\.currentTarget\)[\s\S]*attemptClose\(\);[\s\S]*\}/,
+  'Admin products affiliate status modal should only close via attemptClose when clicking backdrop',
+)
+assert.match(
+  affiliateStatusModalBlock,
+  /setMessage\('Ungespeicherte Hauptlink[^']*'\)/,
+  'Admin products affiliate status modal should warn when trying to close with unsaved Hauptlink changes',
+)
+assert.match(
+  affiliateStatusModalBlock,
+  /onChange=\{\(event\) => void handleAffiliateToggle\(event\.target\.checked\)\}/,
+  'Admin products affiliate status modal must auto-save Affiliate toggle changes',
+)
+assert.match(
+  affiliateStatusModalBlock,
+  /buildPatch\([\s\S]*shop_link: product\.shop_link[\s\S]*is_affiliate: nextValue/,
+  'Admin products affiliate status modal must save affiliate state without writing unsaved Hauptlink edits',
+)
+assert.match(
+  affiliateStatusModalBlock,
+  /const productIdRef = useRef\(product\.id\);/,
+  'Admin products affiliate status modal should track current product id for draft synchronization',
+)
+assert.match(
+  affiliateStatusModalBlock,
+  /if \(\s*productIdRef\.current === product\.id\)\s*return;/,
+  'Admin products affiliate status modal should ignore same-product prop refreshes for draft initialization',
+)
+assert.match(
+  affiliateStatusModalBlock,
+  /}, \[product\.id\]\);/,
+  'Admin products affiliate status modal draft-sync effect should be keyed by product id',
+)
+assert.doesNotMatch(
+  affiliateStatusModalBlock,
+  /\}, \[product\]\);/,
+  'Admin products affiliate status modal draft-sync effect should not depend on the whole product object',
+)
+assert.match(
+  affiliateStatusModalBlock,
   /updateProductQA\(\s*product\.id,\s*[\s\S]*buildPatch\(/,
   'Admin products affiliate status modal must save through the existing product QA update path',
+)
+assert.doesNotMatch(
+  affiliateStatusModalBlock,
+  /Abbrechen/,
+  'Admin products affiliate status modal must not include a generic Abbrechen button',
+)
+assert.doesNotMatch(
+  affiliateStatusModalBlock,
+  /<AdminButton variant="primary"/,
+  'Admin products affiliate status modal must not keep a generic bottom primary Speichern button',
 )
 assert.match(productsPage, /Weiteren Link/, 'Admin products shop-link create form must allow adding another link row')
 assert.match(productsPage, /type ShopLinkRole = 'primary' \| 'alternative' \| 'standard'/, 'Admin products shop-link editor must model Hauptlink/Alternative/Standard roles')

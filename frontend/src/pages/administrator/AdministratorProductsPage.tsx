@@ -852,22 +852,86 @@ function AffiliateStatusModal({
   onSaved: (product: AdminCatalogProduct) => void;
 }) {
   const [isAffiliate, setIsAffiliate] = useState(() => productIsAffiliate(product));
+  const [shopLinkDraft, setShopLinkDraft] = useState<string>(product.shop_link ?? '');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
+  const [messageIsError, setMessageIsError] = useState(false);
+  const productIdRef = useRef(product.id);
 
   useEffect(() => {
+    if (productIdRef.current === product.id) return;
+    productIdRef.current = product.id;
     setIsAffiliate(productIsAffiliate(product));
+    setShopLinkDraft(product.shop_link ?? '');
     setMessage('');
-  }, [product]);
+    setMessageIsError(false);
+  }, [product.id]);
 
-  const handleSave = async () => {
+  const hasUnsavedShopLinkChange = shopLinkDraft.trim() !== (product.shop_link ?? '').trim();
+
+  const attemptClose = () => {
+    if (saving) {
+      setMessage('Speichervorgang läuft noch.');
+      setMessageIsError(false);
+      return;
+    }
+    if (hasUnsavedShopLinkChange) {
+      setMessage('Ungespeicherte Hauptlink-Änderung: Bitte zuerst speichern, bevor du den Dialog schliesst.');
+      setMessageIsError(true);
+      return;
+    }
+    onClose();
+  };
+
+  const saveAffiliateStatus = async (nextValue: boolean) => {
     setSaving(true);
     setMessage('');
+    setMessageIsError(false);
     try {
       const updated = await updateProductQA(
         product.id,
         buildPatch({
           shop_link: product.shop_link ?? '',
+          is_affiliate: nextValue,
+          moderation_status: productModerationStatus(product.moderation_status),
+        }),
+        { version: product.version },
+      );
+      onSaved({
+        ...product,
+        shop_link: updated.shop_link,
+        is_affiliate: updated.is_affiliate,
+        affiliate_owner_type: updated.affiliate_owner_type,
+        affiliate_owner_user_id: updated.affiliate_owner_user_id,
+        link_health: updated.link_health,
+        moderation_status: updated.moderation_status,
+        version: updated.version,
+      });
+      setIsAffiliate(nextValue);
+      setMessage('Affiliate-Status gespeichert.');
+    } catch (error) {
+      setMessage(getErrorMessage(error));
+      setMessageIsError(true);
+      setIsAffiliate(productIsAffiliate(product));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAffiliateToggle = async (nextValue: boolean) => {
+    setIsAffiliate(nextValue);
+    await saveAffiliateStatus(nextValue);
+  };
+
+  const handleSaveLink = async () => {
+    setSaving(true);
+    setMessage('');
+    setMessageIsError(false);
+    try {
+      const updated = await updateProductQA(
+        product.id,
+        buildPatch({
+          shop_link: shopLinkDraft,
           is_affiliate: isAffiliate,
           moderation_status: productModerationStatus(product.moderation_status),
         }),
@@ -883,44 +947,64 @@ function AffiliateStatusModal({
         moderation_status: updated.moderation_status,
         version: updated.version,
       });
-      setMessage('Affiliate-Status gespeichert.');
+      setShopLinkDraft(updated.shop_link ?? '');
+      setMessage('Hauptlink gespeichert.');
     } catch (error) {
       setMessage(getErrorMessage(error));
+      setMessageIsError(true);
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/35 px-3 py-8" role="dialog" aria-modal="true">
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/35 px-3 py-8"
+      role="dialog"
+      aria-modal="true"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) {
+          attemptClose();
+        }
+      }}
+    >
       <div className="admin-card w-full max-w-xl overflow-hidden bg-[color:var(--admin-panel)] shadow-xl">
         <div className="admin-card-head">
           <div className="min-w-0">
             <h2 className="admin-card-title">Affiliate-Link</h2>
             <p className="admin-card-sub truncate">{product.name}</p>
           </div>
-          <AdminButton size="sm" variant="ghost" onClick={onClose}>
+          <AdminButton size="sm" variant="ghost" onClick={attemptClose}>
             <X size={13} />
             Schließen
           </AdminButton>
         </div>
 
         <div className="grid gap-4 p-4">
-          <div>
-            <span className="admin-muted text-xs font-medium">Hauptlink</span>
-            {product.shop_link ? (
-              <a
-                href={product.shop_link}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="admin-mono mt-1 block break-all text-xs text-[color:var(--admin-info-ink)] hover:underline"
+          <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
+            <span>Hauptlink</span>
+            <div className="mt-1 flex gap-2">
+              <input
+                value={shopLinkDraft}
+                onChange={(event) => {
+                  setShopLinkDraft(event.target.value);
+                  setMessage('');
+                  setMessageIsError(false);
+                }}
+                className="admin-input admin-url-input flex-1"
+                placeholder="https://..."
+              />
+              <AdminButton
+                className="admin-icon-btn admin-btn-success"
+                onClick={() => void handleSaveLink()}
+                disabled={saving || !hasUnsavedShopLinkChange}
+                title="Hauptlink speichern"
+                aria-label="Hauptlink speichern"
               >
-                {product.shop_link}
-              </a>
-            ) : (
-              <p className="admin-muted mt-1 text-xs">Kein Hauptlink hinterlegt.</p>
-            )}
-          </div>
+                <Save size={14} />
+              </AdminButton>
+            </div>
+          </label>
 
           <div className="flex flex-wrap items-center gap-2">
             <span className="admin-muted text-xs font-medium">Aktueller Status</span>
@@ -933,22 +1017,13 @@ function AffiliateStatusModal({
             <input
               type="checkbox"
               checked={isAffiliate}
-              onChange={(event) => setIsAffiliate(event.target.checked)}
+              disabled={saving}
+              onChange={(event) => void handleAffiliateToggle(event.target.checked)}
             />
             <span>Affiliate-Link: {isAffiliate ? 'Ja' : 'Nein'}</span>
           </label>
 
-          {message && <p className="admin-muted text-xs">{message}</p>}
-
-          <div className="flex justify-end gap-2">
-            <AdminButton variant="ghost" onClick={onClose} disabled={saving}>
-              Abbrechen
-            </AdminButton>
-            <AdminButton variant="primary" onClick={() => void handleSave()} disabled={saving}>
-              <Save size={15} />
-              {saving ? 'Speichere...' : 'Speichern'}
-            </AdminButton>
-          </div>
+          {message && <p className={`${messageIsError ? 'admin-error' : 'admin-muted'} text-xs`}>{message}</p>}
         </div>
       </div>
     </div>
