@@ -335,6 +335,7 @@ export default function ProductCard({
     ? { title: product.warning_title, message: product.warning_message, type: product.warning_type ?? 'caution' }
     : null;
   const cardWarning = warning ?? productWarning ?? getFallbackWarning(product);
+  const cardWarningLabel = cardWarning ? compactWarningLabel(product, cardWarning) : null;
 
   if (display === 'list') {
     const listDose = getListDose(product);
@@ -624,25 +625,11 @@ export default function ProductCard({
         </div>
       )}
 
-      {/* Warning box */}
-      {cardWarning && (
-        <div className="ss-product-card-warning-box rounded-lg bg-[#fff8f0] border border-[#fed7aa] px-3 py-2.5 mb-2.5">
-          <div className="flex items-center gap-1.5 text-[11.5px] font-extrabold text-orange-600 mb-1.5">
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-              <path d="M6 1.5L11.5 10.5H.5L6 1.5Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>
-              <path d="M6 5v2.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-              <circle cx="6" cy="9" r="0.6" fill="currentColor"/>
-            </svg>
-            {cardWarning.title ?? 'Hinweis'}
-          </div>
-          <ul className="list-none space-y-0.5">
-            {cardWarning.message.split('.').filter(s => s.trim()).map((item, i) => (
-              <li key={i} className="flex gap-1.5 text-[11px] text-orange-900 font-medium leading-snug">
-                <span aria-hidden="true" className="text-orange-500">&bull;</span>
-                {item.trim()}.
-              </li>
-            ))}
-          </ul>
+      {/* Compact warning */}
+      {cardWarningLabel && (
+        <div className="ss-product-card-compact-warning mb-2.5">
+          <AlertTriangle size={13} className="shrink-0" />
+          <span>{cardWarningLabel}</span>
         </div>
       )}
 

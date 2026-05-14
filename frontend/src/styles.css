@@ -573,6 +573,25 @@ body {
 .ss-product-list-warning svg {
   flex: 0 0 auto;
 }
+.ss-product-card-compact-warning {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  width: fit-content;
+  border: 1px solid #fed7aa;
+  border-radius: 999px;
+  background: #fff7ed;
+  color: #c2410c;
+  padding: 5px 9px;
+  font-size: 11.5px;
+  font-weight: 900;
+  line-height: 1.25;
+}
+.ss-product-card-compact-warning span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .ss-product-list-price {
   min-width: 0;
   text-align: right;
