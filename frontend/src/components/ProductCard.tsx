@@ -114,6 +114,8 @@ function unitLabel(unit?: string, amount?: number): string {
     case 'softgel':
     case 'softgels':
       return singular ? 'Softgel' : 'Softgels';
+    case 'tropfen':
+      return 'Tropfen';
     case 'portion':
     case 'portionen':
       return singular ? 'Portion' : 'Portionen';
@@ -148,10 +150,16 @@ function isCountUnit(unit?: string | null): boolean {
 
 function reliableServingUnit(product: ProductCardProduct): string | null {
   const servingUnit = product.serving_unit?.trim();
-  if (servingUnit) return servingUnit;
+  if (servingUnit && isCountUnit(servingUnit)) return servingUnit;
   const productUnit = product.unit?.trim();
   if (productUnit && isCountUnit(productUnit)) return productUnit;
   return null;
+}
+
+function hasManualCountQuantity(product: ProductCardProduct): boolean {
+  if (typeof product.quantity !== 'number' || !Number.isFinite(product.quantity) || product.quantity <= 0) return false;
+  const productUnit = product.unit?.trim();
+  return !productUnit || isCountUnit(productUnit);
 }
 
 function primaryContentAmount(product: ProductCardProduct, servingsPerDay: number): { amount: number; unit: string } | null {
@@ -170,18 +178,16 @@ function primaryContentAmount(product: ProductCardProduct, servingsPerDay: numbe
   return null;
 }
 
-function hasDailyWording(value: string): boolean {
-  return /\b(t[aä]glich|taeglich|pro\s+tag|am\s+tag|je\s+tag)\b|\/\s*tag/i.test(value);
-}
-
 function getListDoseFallback(product: ProductCardProduct): string {
-  const fallback = getDose(product);
-  if (fallback === '\u2014' || hasDailyWording(fallback)) return fallback;
-  return `${fallback} pro Tag`;
+  return getDose(product);
 }
 
 function getListDose(product: ProductCardProduct): string {
   const usage = calculateProductUsage(product);
+  const hasReliableDailyAmount = usage.calculationSource === 'target_dose'
+    || (usage.calculationSource === 'manual_quantity' && hasManualCountQuantity(product));
+  if (!hasReliableDailyAmount) return getListDoseFallback(product);
+
   const interval = getIntakeIntervalDays(product);
   const servingsPerDay = interval > 1 ? usage.effectiveDailyUsage : usage.servingsPerIntake;
   const servingUnit = reliableServingUnit(product);
@@ -204,6 +210,12 @@ function getTimingKey(timing?: string): TimingKey {
   if (t.includes('mittag') || t.includes('noon')) return 'noon';
   if (t.includes('probe') || t.includes('trial') || t.includes('test')) return 'trial';
   return 'anytime';
+}
+
+function getListTimingPanelKey(timing?: string): TimingKey | 'meal' {
+  const t = (timing ?? '').toLowerCase();
+  if (t.includes('mahlzeit') || t.includes('meal') || t.includes('essen')) return 'meal';
+  return getTimingKey(timing);
 }
 
 const TIMING_STYLES: Record<TimingKey, { cls: string; label: string }> = {
@@ -340,23 +352,15 @@ export default function ProductCard({
   if (display === 'list') {
     const listDose = getListDose(product);
     const listWarning = compactWarningLabel(product, cardWarning);
+    const timingPanelKey = getListTimingPanelKey(effectiveTiming);
+    const timingLabel = effectiveTiming ? effectiveTiming : timing.label;
 
     return (
       <article
         onClick={onToggleSelected}
         className={`ss-product-card ss-product-list-row ${selected ? 'ss-product-list-row-selected' : ''}`}
       >
-        {(onToggleSelected ?? onSelect) && (
-          <div className={`ss-product-list-check ${selected ? 'selected' : ''}`} aria-hidden="true">
-            {selected && (
-              <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
-                <polyline points="1.5,5.5 4.5,8.5 9.5,2.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            )}
-          </div>
-        )}
-
-        <div className="ss-product-list-media">
+        <div className={`ss-product-list-media ss-product-list-media-${timingPanelKey}`}>
           {product.image_url ? (
             <img
               src={product.image_url}
@@ -366,86 +370,113 @@ export default function ProductCard({
           ) : (
             <span>{emoji}</span>
           )}
+          <span className="ss-product-list-timing-caption">{timingLabel}</span>
         </div>
 
-        <div className="ss-product-list-main">
-          {brand && <div className="ss-product-list-brand">{brand}</div>}
+        <div className="ss-product-list-content">
+          <div className="ss-product-list-top">
+            {(onToggleSelected ?? onSelect) && (
+              <span className={`ss-product-list-check ${selected ? 'selected' : ''}`} aria-hidden="true">
+                {selected && (
+                  <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+                    <polyline points="1.5,5.5 4.5,8.5 9.5,2.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                )}
+              </span>
+            )}
+            {brand && <span className="ss-product-list-brand">{brand}</span>}
+          </div>
           <div className="ss-product-list-title">{name}</div>
           <div className="ss-product-list-meta">
             <span className={`ss-product-list-timing ${timing.cls}`}>
-              {effectiveTiming ? effectiveTiming : timing.label}
+              {timingLabel}
             </span>
-            <span>{listDose}</span>
-            <span>{daysSupply ? `${daysSupply} Tage` : 'Reichweite unbekannt'}</span>
-            {showInterval && <span>{intervalLabel}</span>}
+            <span className="ss-product-list-meta-item">
+              <span>Dosierung</span>
+              {listDose}
+            </span>
+            <span className="ss-product-list-meta-item">
+              <span>Reicht f\u00fcr</span>
+              {daysSupply ? `${daysSupply} Tage` : 'unbekannt'}
+            </span>
+            {showInterval && (
+              <span className="ss-product-list-meta-item">
+                <span>Intervall</span>
+                {intervalLabel}
+              </span>
+            )}
             {listWarning && (
               <span className="ss-product-list-warning">
                 <AlertTriangle size={13} />
-                {listWarning}
+                <span>{listWarning}</span>
               </span>
             )}
           </div>
         </div>
 
-        <div className="ss-product-list-price">
-          <strong>{formatEur(price)}</strong>
-          {monthlyPrice !== null && <span>{formatEur(monthlyPrice)}/Mo</span>}
-        </div>
+        <div className="ss-product-list-actions-panel">
+          <div className="ss-product-list-price">
+            <strong>{formatEur(price)}</strong>
+            {monthlyPrice !== null && <span>{formatEur(monthlyPrice)} pro Monat</span>}
+          </div>
 
-        <div className="ss-product-list-actions">
-          {shopHref && (
-            <a
-              href={shopHref}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              className="ss-product-list-buy"
-            >
-              <ExternalLink size={14} />
-              <span>{buttonText}</span>
-            </a>
-          )}
-          {!shopHref && onReportMissingLink && (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onReportMissingLink(product, reportReason); }}
-              className="ss-product-list-report"
-            >
-              <Flag size={14} />
-              <span>Link melden</span>
-            </button>
-          )}
-          {onEdit && (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onEdit(); }}
-              aria-label="Produkt bearbeiten"
-              title="Produkt bearbeiten"
-              className="ss-product-list-icon-btn ss-product-list-edit"
-            >
-              <Pencil size={15} />
-            </button>
-          )}
-          {onDelete && (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onDelete(); }}
-              aria-label="Produkt entfernen"
-              title="Produkt entfernen"
-              className="ss-product-list-icon-btn ss-product-list-delete"
-            >
-              <Trash2 size={15} />
-            </button>
-          )}
-          {showSelectButton && onSelect && (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onSelect(); }}
-              className="ss-product-list-alt"
-            >
-              Alternative
-            </button>
-          )}
+          <div className="ss-product-list-actions">
+            {shopHref && (
+              <a
+                href={shopHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                aria-label={`${buttonText}: ${name}`}
+                className="ss-product-list-buy"
+              >
+                <ExternalLink size={14} />
+                <span>{buttonText}</span>
+              </a>
+            )}
+            {!shopHref && onReportMissingLink && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onReportMissingLink(product, reportReason); }}
+                aria-label={`Fehlenden oder defekten Link melden: ${name}`}
+                className="ss-product-list-report"
+              >
+                <Flag size={14} />
+                <span>Link melden</span>
+              </button>
+            )}
+            {onEdit && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onEdit(); }}
+                aria-label="Produkt bearbeiten"
+                title="Produkt bearbeiten"
+                className="ss-product-list-icon-btn ss-product-list-edit"
+              >
+                <Pencil size={15} />
+              </button>
+            )}
+            {onDelete && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onDelete(); }}
+                aria-label="Produkt entfernen"
+                title="Produkt entfernen"
+                className="ss-product-list-icon-btn ss-product-list-delete"
+              >
+                <Trash2 size={15} />
+              </button>
+            )}
+            {showSelectButton && onSelect && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onSelect(); }}
+                className="ss-product-list-alt"
+              >
+                Alternative
+              </button>
+            )}
+          </div>
         </div>
       </article>
     );
