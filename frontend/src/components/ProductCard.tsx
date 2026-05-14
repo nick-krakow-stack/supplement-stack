@@ -1,9 +1,13 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BookOpen, ExternalLink, Flag, Info, Pencil, RefreshCcw, Trash2 } from 'lucide-react';
+import { AlertTriangle, BookOpen, ExternalLink, Flag, Info, Pencil, RefreshCcw, Trash2 } from 'lucide-react';
 import type { ShopDomain } from '../types/local';
 import type { ProductSafetyWarning } from '../types';
-import { calculateProductUsage, intakeIntervalDays as getIntakeIntervalDays } from '../lib/stackCalculations';
+import {
+  calculateProductUsage,
+  ingredientAmountPerProductServing,
+  intakeIntervalDays as getIntakeIntervalDays,
+} from '../lib/stackCalculations';
 
 interface ProductCardProduct {
   id: number;
@@ -58,6 +62,7 @@ interface ProductWarning {
   title?: string;
   message: string;
   type?: 'danger' | 'caution' | 'info' | string;
+  shortLabel?: string;
 }
 
 interface ProductCardProps {
@@ -82,6 +87,10 @@ function formatEur(value: number): string {
 
 function formatAmount(value: number): string {
   return new Intl.NumberFormat('de-DE', { maximumFractionDigits: 6 }).format(value);
+}
+
+function formatCompactAmount(value: number): string {
+  return new Intl.NumberFormat('de-DE', { maximumFractionDigits: 2 }).format(value);
 }
 
 function effectPoints(value?: string | null): string[] {
@@ -126,6 +135,64 @@ function getDose(product: ProductCardProduct): string {
   if (product.quantity && product.unit) return `${formatAmount(product.quantity)} ${unitLabel(product.unit, product.quantity)}`;
   if (product.serving_size && product.serving_unit) return `${formatAmount(product.serving_size)} ${unitLabel(product.serving_unit, product.serving_size)}`;
   return '\u2014';
+}
+
+function isSearchRelevant(ingredient: NonNullable<ProductCardProduct['ingredients']>[number]): boolean {
+  return ingredient.search_relevant === undefined || ingredient.search_relevant === true || ingredient.search_relevant === 1;
+}
+
+function isCountUnit(unit?: string | null): boolean {
+  const normalized = (unit ?? '').trim().toLowerCase();
+  return ['kapsel', 'kapseln', 'tablette', 'tabletten', 'softgel', 'softgels', 'tropfen', 'portion', 'portionen'].includes(normalized);
+}
+
+function reliableServingUnit(product: ProductCardProduct): string | null {
+  const servingUnit = product.serving_unit?.trim();
+  if (servingUnit) return servingUnit;
+  const productUnit = product.unit?.trim();
+  if (productUnit && isCountUnit(productUnit)) return productUnit;
+  return null;
+}
+
+function primaryContentAmount(product: ProductCardProduct, servingsPerDay: number): { amount: number; unit: string } | null {
+  const ingredient = product.ingredients?.find(isSearchRelevant) ?? product.ingredients?.[0];
+  if (ingredient?.unit) {
+    const amountPerServing = ingredientAmountPerProductServing(ingredient, product);
+    if (amountPerServing != null && amountPerServing > 0) {
+      return { amount: amountPerServing * servingsPerDay, unit: ingredient.unit };
+    }
+  }
+
+  if (product.quantity && product.unit && !isCountUnit(product.unit)) {
+    return { amount: product.quantity * servingsPerDay, unit: product.unit };
+  }
+
+  return null;
+}
+
+function hasDailyWording(value: string): boolean {
+  return /\b(t[aä]glich|taeglich|pro\s+tag|am\s+tag|je\s+tag)\b|\/\s*tag/i.test(value);
+}
+
+function getListDoseFallback(product: ProductCardProduct): string {
+  const fallback = getDose(product);
+  if (fallback === '\u2014' || hasDailyWording(fallback)) return fallback;
+  return `${fallback} pro Tag`;
+}
+
+function getListDose(product: ProductCardProduct): string {
+  const usage = calculateProductUsage(product);
+  const interval = getIntakeIntervalDays(product);
+  const servingsPerDay = interval > 1 ? usage.effectiveDailyUsage : usage.servingsPerIntake;
+  const servingUnit = reliableServingUnit(product);
+  const content = primaryContentAmount(product, servingsPerDay);
+  const contentLabel = content ? ` (${formatCompactAmount(content.amount)} ${unitLabel(content.unit, content.amount)})` : '';
+
+  if (servingsPerDay > 0 && servingUnit) {
+    return `${formatCompactAmount(servingsPerDay)} ${unitLabel(servingUnit, servingsPerDay)}${contentLabel} pro Tag`;
+  }
+
+  return getListDoseFallback(product);
 }
 
 type TimingKey = 'morning' | 'evening' | 'noon' | 'trial' | 'anytime';
@@ -174,9 +241,21 @@ const SAFETY_WARNING_STYLES: Record<ProductSafetyWarning['severity'], string> = 
 
 function getFallbackWarning(product: ProductCardProduct): ProductWarning | null {
   const t = product.name.toLowerCase();
-  if (t.includes('b12')) return { type: 'caution', title: 'Einnahmeabstand pr\u00fcfen', message: 'Kaffee oder Tee werden in Quellen im Zusammenhang mit m\u00f6glicher geringerer Aufnahme einzelner N\u00e4hrstoffe diskutiert. Ein zeitlicher Abstand kann sinnvoll sein.' };
+  if (t.includes('b12')) return { type: 'caution', title: 'Einnahmeabstand pr\u00fcfen', shortLabel: '20-30min Abstand zu Kaffee/Tee', message: 'Kaffee oder Tee werden in Quellen im Zusammenhang mit m\u00f6glicher geringerer Aufnahme einzelner N\u00e4hrstoffe diskutiert. Ein zeitlicher Abstand kann sinnvoll sein.' };
   if (t.includes('jod')) return { type: 'danger', title: 'Schilddr\u00fcsenkontext beachten', message: 'Bei Schilddr\u00fcsenerkrankungen, Jodmedikation oder unklarer Versorgung sollte Jod nur nach \u00e4rztlicher R\u00fccksprache erg\u00e4nzt werden.' };
   return null;
+}
+
+function compactWarningLabel(product: ProductCardProduct, warning: ProductWarning | null): string | null {
+  const safetyLabel = product.warnings?.find((item) => item.short_label.trim())?.short_label.trim();
+  if (safetyLabel) return safetyLabel;
+  if (!warning) return null;
+  if (warning.shortLabel) return warning.shortLabel;
+  const combined = `${warning.title ?? ''} ${warning.message}`.toLowerCase();
+  if (combined.includes('kaffee') || combined.includes('tee')) return '20-30min Abstand zu Kaffee/Tee';
+  const source = warning.title?.trim() || warning.message.trim();
+  const firstSentence = source.split(/[.!?]/).map((part) => part.trim()).find(Boolean) ?? source;
+  return firstSentence.length > 72 ? `${firstSentence.slice(0, 69).trimEnd()}...` : firstSentence;
 }
 
 function normalizeShopHostname(value?: string): string | null {
@@ -257,6 +336,120 @@ export default function ProductCard({
     : null;
   const cardWarning = warning ?? productWarning ?? getFallbackWarning(product);
 
+  if (display === 'list') {
+    const listDose = getListDose(product);
+    const listWarning = compactWarningLabel(product, cardWarning);
+
+    return (
+      <article
+        onClick={onToggleSelected}
+        className={`ss-product-card ss-product-list-row ${selected ? 'ss-product-list-row-selected' : ''}`}
+      >
+        {(onToggleSelected ?? onSelect) && (
+          <div className={`ss-product-list-check ${selected ? 'selected' : ''}`} aria-hidden="true">
+            {selected && (
+              <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+                <polyline points="1.5,5.5 4.5,8.5 9.5,2.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            )}
+          </div>
+        )}
+
+        <div className="ss-product-list-media">
+          {product.image_url ? (
+            <img
+              src={product.image_url}
+              alt={name}
+              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+            />
+          ) : (
+            <span>{emoji}</span>
+          )}
+        </div>
+
+        <div className="ss-product-list-main">
+          {brand && <div className="ss-product-list-brand">{brand}</div>}
+          <div className="ss-product-list-title">{name}</div>
+          <div className="ss-product-list-meta">
+            <span className={`ss-product-list-timing ${timing.cls}`}>
+              {effectiveTiming ? effectiveTiming : timing.label}
+            </span>
+            <span>{listDose}</span>
+            <span>{daysSupply ? `${daysSupply} Tage` : 'Reichweite unbekannt'}</span>
+            {showInterval && <span>{intervalLabel}</span>}
+            {listWarning && (
+              <span className="ss-product-list-warning">
+                <AlertTriangle size={13} />
+                {listWarning}
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="ss-product-list-price">
+          <strong>{formatEur(price)}</strong>
+          {monthlyPrice !== null && <span>{formatEur(monthlyPrice)}/Mo</span>}
+        </div>
+
+        <div className="ss-product-list-actions">
+          {shopHref && (
+            <a
+              href={shopHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="ss-product-list-buy"
+            >
+              <ExternalLink size={14} />
+              <span>{buttonText}</span>
+            </a>
+          )}
+          {!shopHref && onReportMissingLink && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onReportMissingLink(product, reportReason); }}
+              className="ss-product-list-report"
+            >
+              <Flag size={14} />
+              <span>Link melden</span>
+            </button>
+          )}
+          {onEdit && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onEdit(); }}
+              aria-label="Produkt bearbeiten"
+              title="Produkt bearbeiten"
+              className="ss-product-list-icon-btn ss-product-list-edit"
+            >
+              <Pencil size={15} />
+            </button>
+          )}
+          {onDelete && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onDelete(); }}
+              aria-label="Produkt entfernen"
+              title="Produkt entfernen"
+              className="ss-product-list-icon-btn ss-product-list-delete"
+            >
+              <Trash2 size={15} />
+            </button>
+          )}
+          {showSelectButton && onSelect && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onSelect(); }}
+              className="ss-product-list-alt"
+            >
+              Alternative
+            </button>
+          )}
+        </div>
+      </article>
+    );
+  }
+
   return (
     <article
       onClick={onToggleSelected}
@@ -268,7 +461,7 @@ export default function ProductCard({
           ? '0 4px 20px rgba(99,102,241,0.2)'
           : '0 2px 12px rgba(99,102,241,0.08), 0 1px 3px rgba(0,0,0,0.04)',
       }}
-      className={`ss-product-card ${display === 'list' ? 'ss-product-card-list' : ''} relative flex flex-col bg-white cursor-pointer transition-all duration-150 hover:-translate-y-px`}
+      className="ss-product-card relative flex flex-col bg-white cursor-pointer transition-all duration-150 hover:-translate-y-px"
     >
       {/* Checkbox */}
       {(onToggleSelected ?? onSelect) && (
