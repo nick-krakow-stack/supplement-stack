@@ -370,7 +370,6 @@ export default function ProductCard({
           ) : (
             <span>{emoji}</span>
           )}
-          <span className="ss-product-list-timing-caption">{timingLabel}</span>
         </div>
 
         <div className="ss-product-list-content">

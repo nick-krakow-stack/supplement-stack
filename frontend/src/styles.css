@@ -545,21 +545,6 @@ body {
   object-fit: cover;
   box-shadow: 0 1px 5px rgba(15, 23, 42, 0.12);
 }
-.ss-product-list-timing-caption {
-  position: absolute;
-  right: 7px;
-  bottom: 8px;
-  left: 7px;
-  overflow: hidden;
-  font-size: 9.5px;
-  font-weight: 900;
-  letter-spacing: 0.5px;
-  line-height: 1.15;
-  text-align: center;
-  text-overflow: ellipsis;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
 .ss-product-list-content {
   display: flex;
   flex: 1 1 auto;
@@ -682,15 +667,15 @@ body {
 }
 .ss-product-list-actions-panel {
   display: flex;
-  flex: 0 0 200px;
+  flex: 0 1 260px;
   flex-direction: column;
   align-items: flex-end;
   justify-content: space-between;
-  width: 200px;
-  min-width: 0;
+  width: clamp(220px, 24vw, 280px);
+  min-width: 220px;
   border-left: 1px solid #f1f3f8;
   background: #fafbff;
-  padding: 14px 18px;
+  padding: 14px 16px;
 }
 .ss-product-list-price {
   min-width: 0;
@@ -723,6 +708,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 5px;
   width: 100%;
   min-width: 0;
@@ -746,8 +732,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-width: 0;
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   padding: 6px 12px;
   border: 1px solid transparent;
   white-space: nowrap;
@@ -755,9 +740,7 @@ body {
 .ss-product-list-buy span,
 .ss-product-list-report span,
 .ss-product-list-alt {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  min-width: max-content;
 }
 .ss-product-list-buy {
   background: #2563eb;
@@ -827,6 +810,7 @@ body {
     flex-direction: row;
     align-items: center;
     width: auto;
+    min-width: 0;
     border-top: 1px solid #f1f3f8;
     border-left: 0;
   }
