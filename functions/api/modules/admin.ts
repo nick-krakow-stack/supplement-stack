@@ -11,6 +11,10 @@
 //   GET /shop-domains       — shop domains list (admin)
 //   POST /shop-domains      — create shop domain (admin)
 //   DELETE /shop-domains/:id — delete shop domain (admin)
+//   GET /managed-lists/:listKey — managed admin list items (admin)
+//   POST /managed-lists/:listKey — create managed admin list item (admin)
+//   PATCH /managed-lists/:listKey/:itemId — update managed admin list item (admin)
+//   DELETE /managed-lists/:listKey/:itemId — deactivate managed admin list item (admin)
 //   GET /product-rankings   — product rankings (admin)
 //   PUT /product-rankings/:productId — upsert ranking (admin)
 //   GET /user-products?status= — user-submitted products (admin)
@@ -763,6 +767,27 @@ type ProductShopLinkCheckResult = {
   response_time_ms: number | null
 }
 
+type ManagedListItemRow = {
+  id: number
+  list_key: string
+  value: string
+  label: string
+  description: string | null
+  sort_order: number
+  active: number
+  version: number | null
+  created_at: string | null
+  updated_at: string | null
+}
+
+type ManagedListItemMutation = {
+  value?: string
+  label?: string
+  description?: string | null
+  sort_order?: number
+  active?: number
+}
+
 type ProductQaRow = {
   id: number
   name: string
@@ -800,6 +825,7 @@ type ProductQaIssueSummaryRow = Record<ProductQaIssue, number> & {
 type ProductQaPatch = {
   name?: string
   brand?: string | null
+  form?: string | null
   price?: number | null
   shop_link?: string | null
   image_url?: string | null
@@ -812,6 +838,11 @@ type ProductQaPatch = {
   serving_unit?: string | null
   servings_per_container?: number | null
   container_count?: number | null
+}
+
+type ProductCreatePayload = ProductQaPatch & {
+  name: string
+  price: number
 }
 
 type ProductLinkReportStatus = typeof PRODUCT_LINK_REPORT_STATUSES[number]
@@ -1137,6 +1168,9 @@ const PUBMED_LOOKUP_TIMEOUT_MS = 5000
 const PUBMED_AUTHOR_LIMIT = 25
 const PUBMED_LOOKUP_CACHE_TTL_SECONDS = 24 * 60 * 60
 const AFFILIATE_LINK_HEALTH_STALE_DAYS = 7
+const ADMIN_MANAGED_LIST_KEYS = ['serving_unit'] as const
+
+type AdminManagedListKey = (typeof ADMIN_MANAGED_LIST_KEYS)[number]
 
 const ADMIN_SEARCH_ROUTES: AdminSearchRoute[] = [
   {
@@ -1202,6 +1236,14 @@ const ADMIN_SEARCH_ROUTES: AdminSearchRoute[] = [
     subtitle: 'i18n-Inhalte und Sprachstatus',
     href: '/administrator/translations',
     keywords: 'uebersetzungen translations i18n sprache language',
+  },
+  {
+    id: 'route:management',
+    type: 'route',
+    title: 'Verwaltung',
+    subtitle: 'Zentrale Admin-Listen und Einheiten',
+    href: '/administrator/management',
+    keywords: 'verwaltung einheiten units serving unit config',
   },
 ]
 
@@ -2647,6 +2689,15 @@ function ingredientProductRecommendationSortOrder(slot: IngredientProductRecomme
   return 20
 }
 
+function adminManagedListKey(value: string | undefined): AdminManagedListKey | null {
+  if (!value) return null
+  return enumValue(value, ADMIN_MANAGED_LIST_KEYS)
+}
+
+function normalizePriceCents(value: number): number {
+  return Math.round(value * 100) / 100
+}
+
 function emptyIngredientProductRecommendationSlots(): Record<IngredientProductRecommendationSlot, IngredientProductRecommendationRow | null> {
   return {
     primary: null,
@@ -3826,6 +3877,59 @@ function validateProductShopLinkMutation(
   }
 }
 
+function formatManagedListItem(row: ManagedListItemRow): ManagedListItemRow {
+  return {
+    id: row.id,
+    list_key: row.list_key,
+    value: row.value,
+    label: row.label,
+    description: row.description ?? null,
+    sort_order: row.sort_order,
+    active: row.active,
+    version: row.version ?? null,
+    created_at: row.created_at ?? null,
+    updated_at: row.updated_at ?? null,
+  }
+}
+
+function validateManagedListItemMutation(
+  body: Record<string, unknown>,
+  existing: ManagedListItemRow | null,
+): ValidationResult<ManagedListItemMutation> {
+  const allowedFields = new Set(['value', 'label', 'description', 'sort_order', 'active', 'version'])
+  for (const key of Object.keys(body)) {
+    if (!allowedFields.has(key)) return validationError(`${key} cannot be updated on managed list items`)
+  }
+
+  const value = hasOwnKey(body, 'value')
+    ? requiredTextField(body, 'value', 80)
+    : existing ? { ok: true as const, value: existing.value } : validationError('value is required')
+  if (!value.ok) return value
+  if (!/^[\p{L}\p{N}µ%/(). -]+$/u.test(value.value)) {
+    return validationError('value contains unsupported characters')
+  }
+
+  const label = hasOwnKey(body, 'label')
+    ? requiredTextField(body, 'label', 120)
+    : existing ? { ok: true as const, value: existing.label } : validationError('label is required')
+  if (!label.ok) return label
+
+  const description = optionalTextField(body, 'description', 500)
+  if (!description.ok) return description
+  const sortOrder = optionalNumberField(body, 'sort_order', { integer: true, min: -1000000, max: 1000000 })
+  if (!sortOrder.ok) return sortOrder
+  const active = optionalBooleanField(body, 'active')
+  if (!active.ok) return active
+
+  const data: ManagedListItemMutation = {}
+  if (hasOwnKey(body, 'value') || !existing) data.value = value.value
+  if (hasOwnKey(body, 'label') || !existing) data.label = label.value
+  if (description.value !== undefined) data.description = description.value
+  if (sortOrder.value !== undefined) data.sort_order = sortOrder.value ?? 0
+  if (active.value !== undefined) data.active = active.value
+  return { ok: true, value: data }
+}
+
 async function syncPrimaryProductShopLinkFromProduct(db: D1Database, productId: number): Promise<void> {
   if (!(await hasTable(db, 'product_shop_links'))) return
 
@@ -4562,7 +4666,7 @@ function validateProductQaPatch(body: Record<string, unknown>): ValidationResult
   const price = optionalNumberField(body, 'price', { min: 0, minExclusive: true, max: 300 })
   if (!price.ok) return price
   if (price.value === null) return validationError('price is required')
-  if (price.value !== undefined) data.price = price.value
+  if (price.value !== undefined) data.price = normalizePriceCents(price.value)
 
   const shopLink = normalizeHttpUrlField(body, 'shop_link')
   if (!shopLink.ok) return shopLink
@@ -4624,6 +4728,102 @@ function validateProductQaPatch(body: Record<string, unknown>): ValidationResult
   if (containerCount.value !== undefined) data.container_count = containerCount.value
 
   return { ok: true, value: data }
+}
+
+function validateProductCreatePayload(body: Record<string, unknown>): ValidationResult<ProductCreatePayload> {
+  const allowedFields = new Set([
+    'name',
+    'brand',
+    'form',
+    'price',
+    'shop_link',
+    'is_affiliate',
+    'affiliate_owner_type',
+    'affiliate_owner_user_id',
+    'moderation_status',
+    'visibility',
+    'serving_size',
+    'serving_unit',
+    'servings_per_container',
+    'container_count',
+  ])
+  for (const key of Object.keys(body)) {
+    if (!allowedFields.has(key)) return validationError(`${key} cannot be set when creating products`)
+  }
+
+  const name = requiredTextField(body, 'name', 240)
+  if (!name.ok) return name
+
+  const brand = optionalTextField(body, 'brand', 240)
+  if (!brand.ok) return brand
+
+  const form = optionalTextField(body, 'form', 120)
+  if (!form.ok) return form
+
+  const price = optionalNumberField(body, 'price', { min: 0, minExclusive: true, max: 300 })
+  if (!price.ok) return price
+  if (price.value === undefined || price.value === null) return validationError('price is required')
+
+  const shopLink = normalizeHttpUrlField(body, 'shop_link')
+  if (!shopLink.ok) return shopLink
+
+  const moderationStatus = hasOwnKey(body, 'moderation_status')
+    ? enumValue(body.moderation_status, PRODUCT_MODERATION_STATUSES)
+    : 'pending'
+  if (!moderationStatus) return validationError(`moderation_status must be one of ${PRODUCT_MODERATION_STATUSES.join(', ')}`)
+
+  const visibility = hasOwnKey(body, 'visibility')
+    ? enumValue(body.visibility, PRODUCT_VISIBILITIES)
+    : 'hidden'
+  if (!visibility) return validationError(`visibility must be one of ${PRODUCT_VISIBILITIES.join(', ')}`)
+
+  const servingSize = optionalNumberField(body, 'serving_size', { min: 0, minExclusive: true, max: 100000 })
+  if (!servingSize.ok) return servingSize
+  const servingUnit = optionalTextField(body, 'serving_unit', 40)
+  if (!servingUnit.ok) return servingUnit
+  if (servingUnit.value !== undefined && servingUnit.value !== null && !/^[\p{L}\p{N}Âµ%/(). -]+$/u.test(servingUnit.value)) {
+    return validationError('serving_unit contains unsupported characters')
+  }
+  const servingsPerContainer = optionalNumberField(body, 'servings_per_container', {
+    min: 0,
+    minExclusive: true,
+    max: 10000,
+    integer: true,
+  })
+  if (!servingsPerContainer.ok) return servingsPerContainer
+  const containerCount = optionalNumberField(body, 'container_count', {
+    min: 0,
+    minExclusive: true,
+    max: 1000,
+    integer: true,
+  })
+  if (!containerCount.ok) return containerCount
+
+  const fallbackOwner: Partial<AffiliateOwnership> = shopLink.value
+    ? { affiliate_owner_type: 'nick', affiliate_owner_user_id: null, is_affiliate: 1 }
+    : { affiliate_owner_type: 'none', affiliate_owner_user_id: null, is_affiliate: 0 }
+  const ownership = normalizeAffiliateOwnership(body, fallbackOwner)
+  if (!ownership.ok) return ownership
+
+  return {
+    ok: true,
+    value: {
+      name: name.value,
+      brand: brand.value ?? null,
+      form: form.value ?? null,
+      price: normalizePriceCents(price.value),
+      shop_link: shopLink.value ?? null,
+      is_affiliate: shopLink.value ? ownership.value.is_affiliate : 0,
+      affiliate_owner_type: shopLink.value ? ownership.value.affiliate_owner_type : 'none',
+      affiliate_owner_user_id: shopLink.value ? ownership.value.affiliate_owner_user_id : null,
+      moderation_status: moderationStatus,
+      visibility,
+      serving_size: servingSize.value ?? null,
+      serving_unit: servingUnit.value ?? null,
+      servings_per_container: servingsPerContainer.value ?? null,
+      container_count: containerCount.value ?? null,
+    },
+  }
 }
 
 function parseWarningSlugs(value: string | null): string[] {
@@ -6791,6 +6991,95 @@ admin.get('/products', async (c) => {
     limit,
     total_pages: Math.max(1, Math.ceil(total / limit)),
   })
+})
+
+// POST /api/admin/products (admin only)
+admin.post('/products', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const validation = validateProductCreatePayload(body)
+  if (!validation.ok) return c.json({ error: validation.error }, validation.status)
+
+  const data = validation.value
+  if (data.serving_unit !== undefined && data.serving_unit !== null && await hasTable(c.env.DB, 'managed_list_items')) {
+    const managedUnit = await c.env.DB.prepare(`
+      SELECT id
+      FROM managed_list_items
+      WHERE list_key = 'serving_unit'
+        AND value = ?
+        AND active = 1
+    `).bind(data.serving_unit).first<{ id: number }>()
+    if (!managedUnit) return c.json({ error: 'serving_unit must be an active managed serving unit' }, 400)
+  }
+
+  const affiliateOwner = await validateAffiliateOwnerUser(c.env.DB, {
+    affiliate_owner_type: data.affiliate_owner_type ?? 'none',
+    affiliate_owner_user_id: data.affiliate_owner_user_id ?? null,
+    is_affiliate: data.is_affiliate ?? 0,
+  })
+  if (!affiliateOwner.ok) return c.json({ error: affiliateOwner.error }, affiliateOwner.status)
+  data.affiliate_owner_type = data.shop_link ? affiliateOwner.value.affiliate_owner_type : 'none'
+  data.affiliate_owner_user_id = data.shop_link ? affiliateOwner.value.affiliate_owner_user_id : null
+  data.is_affiliate = data.shop_link ? affiliateOwner.value.is_affiliate : 0
+
+  const productColumns = await getTableColumns(c.env.DB, 'products')
+  const createFields = [
+    'name',
+    'brand',
+    'form',
+    'price',
+    'shop_link',
+    'is_affiliate',
+    'affiliate_owner_type',
+    'affiliate_owner_user_id',
+    'moderation_status',
+    'visibility',
+    'serving_size',
+    'serving_unit',
+    'servings_per_container',
+    'container_count',
+  ] as const
+  const fields: Array<[string, string | number | null]> = []
+  for (const field of createFields) {
+    if (productColumns.has(field)) fields.push([field, data[field] ?? null])
+  }
+  if (productColumns.has('version')) fields.push(['version', 1])
+
+  const insertResult = await c.env.DB.prepare(`
+    INSERT INTO products (
+      ${fields.map(([field]) => field).join(',\n      ')}
+    )
+    VALUES (${fields.map(() => '?').join(', ')})
+  `).bind(...fields.map(([, value]) => value)).run()
+  const productId = Number(insertResult.meta.last_row_id)
+  if (!Number.isInteger(productId) || productId <= 0) {
+    return c.json({ error: 'Product could not be created' }, 500)
+  }
+
+  if (data.shop_link) {
+    await syncPrimaryProductShopLinkFromProduct(c.env.DB, productId)
+  }
+
+  const includeLinkHealth = await hasAffiliateLinkHealthTable(c.env.DB)
+  const product = await getProductQaRow(c.env.DB, productId, includeLinkHealth)
+  if (!product) return c.json({ error: 'Product not found after create' }, 404)
+
+  await logAdminAction(c, {
+    action: 'create_product',
+    entity_type: 'product',
+    entity_id: productId,
+    changes: data,
+  })
+
+  return c.json({ product: formatProductQaRow(product) }, 201)
 })
 
 // GET /api/admin/ingredients?q=&page=1&limit=50 (admin only)
@@ -10547,6 +10836,16 @@ admin.patch('/product-qa/:id', async (c) => {
   const validation = validateProductQaPatch(body)
   if (!validation.ok) return c.json({ error: validation.error }, validation.status)
   const data = validation.value
+  if (data.serving_unit !== undefined && await hasTable(c.env.DB, 'managed_list_items')) {
+    const managedUnit = await c.env.DB.prepare(`
+      SELECT id
+      FROM managed_list_items
+      WHERE list_key = 'serving_unit'
+        AND value = ?
+        AND active = 1
+    `).bind(data.serving_unit).first<{ id: number }>()
+    if (!managedUnit) return c.json({ error: 'serving_unit must be an active managed serving unit' }, 400)
+  }
   const lock = validateOptimisticLock(productColumns.has('version'), existing.version, requestVersion(c))
   if (!lock.ok) return c.json({ error: lock.error, current_version: existing.version }, 409)
 
@@ -12115,6 +12414,226 @@ admin.delete('/shop-domains/:id', async (c) => {
     entity_type: 'shop_domain',
     entity_id: Number(id),
   })
+  return c.json({ ok: true })
+})
+
+// GET /api/admin/managed-lists/:listKey (admin only)
+admin.get('/managed-lists/:listKey', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const listKey = adminManagedListKey(c.req.param('listKey'))
+  if (!listKey) return c.json({ error: `list_key must be one of ${ADMIN_MANAGED_LIST_KEYS.join(', ')}` }, 400)
+  if (!(await hasTable(c.env.DB, 'managed_list_items'))) {
+    return c.json({ error: 'managed_list_items is not available in this environment' }, 409)
+  }
+
+  const includeInactive = c.req.query('include_inactive') === '1'
+  const whereSql = includeInactive ? 'list_key = ?' : 'list_key = ? AND active = 1'
+  const { results } = await c.env.DB.prepare(`
+    SELECT *
+    FROM managed_list_items
+    WHERE ${whereSql}
+    ORDER BY active DESC, sort_order ASC, label ASC, id ASC
+  `).bind(listKey).all<ManagedListItemRow>()
+
+  return c.json({
+    list_key: listKey,
+    items: (results ?? []).map(formatManagedListItem),
+  })
+})
+
+// POST /api/admin/managed-lists/:listKey (admin only)
+admin.post('/managed-lists/:listKey', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const listKey = adminManagedListKey(c.req.param('listKey'))
+  if (!listKey) return c.json({ error: `list_key must be one of ${ADMIN_MANAGED_LIST_KEYS.join(', ')}` }, 400)
+  if (!(await hasTable(c.env.DB, 'managed_list_items'))) {
+    return c.json({ error: 'managed_list_items is not available in this environment' }, 409)
+  }
+
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const validation = validateManagedListItemMutation(body, null)
+  if (!validation.ok) return c.json({ error: validation.error }, validation.status)
+  const data = validation.value
+
+  try {
+    const result = await c.env.DB.prepare(`
+      INSERT INTO managed_list_items (
+        list_key,
+        value,
+        label,
+        description,
+        sort_order,
+        active,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+    `).bind(
+      listKey,
+      data.value ?? '',
+      data.label ?? '',
+      data.description ?? null,
+      data.sort_order ?? 0,
+      data.active ?? 1,
+    ).run()
+
+    const itemId = result.meta.last_row_id as number
+    const item = await c.env.DB.prepare('SELECT * FROM managed_list_items WHERE id = ?')
+      .bind(itemId)
+      .first<ManagedListItemRow>()
+
+    await logAdminAction(c, {
+      action: 'create_managed_list_item',
+      entity_type: 'managed_list_item',
+      entity_id: itemId,
+      changes: { list_key: listKey, after: item },
+    })
+
+    return c.json({ ok: true, item: item ? formatManagedListItem(item) : null }, 201)
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      return c.json({ error: 'value already exists in this managed list' }, 409)
+    }
+    throw error
+  }
+})
+
+// PATCH /api/admin/managed-lists/:listKey/:itemId (admin only)
+admin.patch('/managed-lists/:listKey/:itemId', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const listKey = adminManagedListKey(c.req.param('listKey'))
+  if (!listKey) return c.json({ error: `list_key must be one of ${ADMIN_MANAGED_LIST_KEYS.join(', ')}` }, 400)
+  const itemId = parsePositiveId(c.req.param('itemId'))
+  if (itemId === null) return c.json({ error: 'Invalid managed list item id' }, 400)
+  if (!(await hasTable(c.env.DB, 'managed_list_items'))) {
+    return c.json({ error: 'managed_list_items is not available in this environment' }, 409)
+  }
+
+  const existing = await c.env.DB.prepare('SELECT * FROM managed_list_items WHERE id = ? AND list_key = ?')
+    .bind(itemId, listKey)
+    .first<ManagedListItemRow>()
+  if (!existing) return c.json({ error: 'Managed list item not found' }, 404)
+
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const validation = validateManagedListItemMutation(body, existing)
+  if (!validation.ok) return c.json({ error: validation.error }, validation.status)
+  const data = validation.value
+  if (Object.keys(data).length === 0) return c.json({ error: 'At least one managed list item field is required' }, 400)
+
+  const lock = validateOptimisticLock(true, existing.version, requestVersion(c, body))
+  if (!lock.ok) return c.json({ error: lock.error, current_version: existing.version }, 409)
+
+  const fields = ['value', 'label', 'description', 'sort_order', 'active'] as const
+  const setClauses: string[] = []
+  const bindings: Array<string | number | null> = []
+  const before: Record<string, unknown> = {}
+  const after: Record<string, unknown> = {}
+  for (const field of fields) {
+    if (!hasOwnKey(data, field)) continue
+    setClauses.push(`${field} = ?`)
+    bindings.push(data[field] ?? null)
+    before[field] = existing[field]
+    after[field] = data[field] ?? null
+  }
+  setClauses.push("updated_at = datetime('now')", 'version = COALESCE(version, 0) + 1')
+
+  try {
+    const updateResult = await c.env.DB.prepare(`
+      UPDATE managed_list_items
+      SET ${setClauses.join(', ')}
+      WHERE id = ?
+        AND list_key = ?
+        AND version = ?
+    `).bind(...bindings, itemId, listKey, lock.value.expectedVersion).run()
+    if (d1ChangeCount(updateResult) === 0) {
+      const current = await c.env.DB.prepare('SELECT version FROM managed_list_items WHERE id = ? AND list_key = ?')
+        .bind(itemId, listKey)
+        .first<{ version: number | null }>()
+      return c.json({ error: 'Version conflict', current_version: current?.version ?? existing.version }, 409)
+    }
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      return c.json({ error: 'value already exists in this managed list' }, 409)
+    }
+    throw error
+  }
+
+  const item = await c.env.DB.prepare('SELECT * FROM managed_list_items WHERE id = ? AND list_key = ?')
+    .bind(itemId, listKey)
+    .first<ManagedListItemRow>()
+
+  await logAdminAction(c, {
+    action: 'update_managed_list_item',
+    entity_type: 'managed_list_item',
+    entity_id: itemId,
+    changes: { list_key: listKey, before, after },
+  })
+
+  return c.json({ ok: true, item: item ? formatManagedListItem(item) : null })
+})
+
+// DELETE /api/admin/managed-lists/:listKey/:itemId (admin only)
+admin.delete('/managed-lists/:listKey/:itemId', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const listKey = adminManagedListKey(c.req.param('listKey'))
+  if (!listKey) return c.json({ error: `list_key must be one of ${ADMIN_MANAGED_LIST_KEYS.join(', ')}` }, 400)
+  const itemId = parsePositiveId(c.req.param('itemId'))
+  if (itemId === null) return c.json({ error: 'Invalid managed list item id' }, 400)
+  if (!(await hasTable(c.env.DB, 'managed_list_items'))) {
+    return c.json({ error: 'managed_list_items is not available in this environment' }, 409)
+  }
+
+  const existing = await c.env.DB.prepare('SELECT * FROM managed_list_items WHERE id = ? AND list_key = ?')
+    .bind(itemId, listKey)
+    .first<ManagedListItemRow>()
+  if (!existing) return c.json({ error: 'Managed list item not found' }, 404)
+
+  const lock = validateOptimisticLock(true, existing.version, requestVersion(c))
+  if (!lock.ok) return c.json({ error: lock.error, current_version: existing.version }, 409)
+
+  const updateResult = await c.env.DB.prepare(`
+    UPDATE managed_list_items
+    SET active = 0,
+        updated_at = datetime('now'),
+        version = COALESCE(version, 0) + 1
+    WHERE id = ?
+      AND list_key = ?
+      AND version = ?
+  `).bind(itemId, listKey, lock.value.expectedVersion).run()
+  if (d1ChangeCount(updateResult) === 0) {
+    const current = await c.env.DB.prepare('SELECT version FROM managed_list_items WHERE id = ? AND list_key = ?')
+      .bind(itemId, listKey)
+      .first<{ version: number | null }>()
+    return c.json({ error: 'Version conflict', current_version: current?.version ?? existing.version }, 409)
+  }
+
+  await logAdminAction(c, {
+    action: 'deactivate_managed_list_item',
+    entity_type: 'managed_list_item',
+    entity_id: itemId,
+    changes: { list_key: listKey, before: { active: existing.active }, after: { active: 0 } },
+  })
+
   return c.json({ ok: true })
 })
 

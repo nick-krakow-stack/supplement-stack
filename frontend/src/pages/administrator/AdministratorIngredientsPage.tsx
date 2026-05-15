@@ -1,4 +1,4 @@
-import { type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { type FormEvent, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   CheckCircle2,
@@ -20,6 +20,7 @@ import {
   deleteAdminIngredientProductRecommendation,
   deleteIngredientPrecursor,
   deleteIngredientResearchSource,
+  getAdminProduct,
   getAdminIngredientProductRecommendations,
   getAdminIngredientTaskStatuses,
   getAdminIngredients,
@@ -46,7 +47,7 @@ import {
 } from '../../api/admin';
 import { addForm, addSynonym, deleteForm, deleteSynonym, getIngredient, updateForm, updateSynonym } from '../../api/ingredients';
 import type { IngredientForm, IngredientSynonym } from '../../types';
-import { AdminBadge, AdminButton, AdminCard, AdminEmpty, AdminError, AdminPageHeader } from './AdminUi';
+import { AdminBadge, AdminButton, AdminCard, AdminEmpty, AdminError, AdminPageHeader, type AdminTone } from './AdminUi';
 
 const PAGE_LIMIT_OPTIONS = [25, 50, 100] as const;
 
@@ -191,6 +192,161 @@ function parseModalNumber(value: string): number | null {
   if (!trimmed) return null;
   const parsed = Number(trimmed);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatPackPrice(value: number | null): string {
+  if (value === null) return 'Preis nicht bekannt';
+  return `${new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(value)} / Packung`;
+}
+
+function resolveShopLabel(link: AdminProductShopLink | null): string {
+  if (!link) return 'kein Shoplink';
+  return link.shop_name || link.normalized_host || shopLinkHost(link.url);
+}
+
+function resolveCatalogShopLabel(product: Pick<AdminCatalogProduct, 'shop_link'>): string {
+  return shopLinkHost(product.shop_link);
+}
+
+type RecommendationLinkBadgeTone = Exclude<AdminTone, 'neutral' | 'action'>;
+
+type RecommendationLinkBadge = {
+  label: string;
+  tone: RecommendationLinkBadgeTone;
+};
+
+function isCheckedHealth(health: { status: string | null } | null): boolean {
+  return Boolean(health && health.status && health.status !== 'unchecked');
+}
+
+function shopLinkBadge(link: AdminProductShopLink): RecommendationLinkBadge {
+  if (link.affiliate_owner_type === 'nick' || (link.affiliate_owner_type === 'none' && link.is_affiliate === 1)) {
+    return {
+      label: 'Affiliate-Link',
+      tone: 'ok',
+    };
+  }
+  if (link.affiliate_owner_type === 'user') {
+    return isCheckedHealth(link.health)
+      ? { label: 'Kunden-Link (geprÃ¼ft)', tone: 'info' }
+      : { label: 'Kunden-Link (ungeprÃ¼ft)', tone: 'danger' };
+  }
+  return {
+    label: 'Normaler Link',
+    tone: 'warn',
+  };
+}
+
+function catalogProductBadge(product: Pick<AdminCatalogProduct, 'is_affiliate' | 'affiliate_owner_type' | 'link_health'>): RecommendationLinkBadge {
+  if (product.affiliate_owner_type === 'nick' || (product.affiliate_owner_type === 'none' && product.is_affiliate === 1)) {
+    return {
+      label: 'Affiliate-Link',
+      tone: 'ok',
+    };
+  }
+  if (product.affiliate_owner_type === 'user') {
+    return isCheckedHealth(product.link_health)
+      ? { label: 'Kunden-Link (geprÃ¼ft)', tone: 'info' }
+      : { label: 'Kunden-Link (ungeprÃ¼ft)', tone: 'danger' };
+  }
+  return {
+    label: 'Normaler Link',
+    tone: 'warn',
+  };
+}
+
+type RecommendationSlotDraft = {
+  productQuery: string;
+  products: AdminCatalogProduct[];
+  selectedProductId: number | null;
+  selectedProductLabel: string;
+  selectedProduct: AdminCatalogProduct | null;
+  shopLinks: AdminProductShopLink[];
+  selectedShopLinkId: number | null;
+};
+
+function recommendationSlotDraft(recommendation: AdminIngredientProductRecommendation | null): RecommendationSlotDraft {
+  return {
+    productQuery: '',
+    products: [],
+    selectedProductId: recommendation?.product_id ?? null,
+    selectedProductLabel: recommendation?.product_name ?? '',
+    selectedProduct: null,
+    shopLinks: [],
+    selectedShopLinkId: recommendation?.shop_link_id ?? null,
+  };
+}
+
+function recommendationSlotDrafts(
+  slots: AdminIngredientProductRecommendationSlots,
+): Record<AdminIngredientProductRecommendationSlot, RecommendationSlotDraft> {
+  return Object.fromEntries(
+    RECOMMENDATION_SLOTS.map((slot) => [slot, recommendationSlotDraft(slots[slot])]),
+  ) as Record<AdminIngredientProductRecommendationSlot, RecommendationSlotDraft>;
+}
+
+function sortRecommendationProducts(
+  products: AdminCatalogProduct[],
+  draftState: Record<AdminIngredientProductRecommendationSlot, RecommendationSlotDraft>,
+): AdminCatalogProduct[] {
+  const orderIds = [
+    draftState.primary.selectedProductId,
+    draftState.alternative_1.selectedProductId,
+    draftState.alternative_2.selectedProductId,
+  ];
+  return [...products].sort((a, b) => {
+    const aRank = orderIds.indexOf(a.id);
+    const bRank = orderIds.indexOf(b.id);
+    if (aRank !== bRank) return (aRank === -1 ? 3 : aRank) - (bRank === -1 ? 3 : bRank);
+    const aText = `${a.brand ?? ''} ${a.name}`.trim();
+    const bText = `${b.brand ?? ''} ${b.name}`.trim();
+    return aText.localeCompare(bText, 'de', { sensitivity: 'base' });
+  });
+}
+
+function selectedShopLink(draft: RecommendationSlotDraft): AdminProductShopLink | null {
+  if (!draft.shopLinks.length) return null;
+  if (draft.selectedShopLinkId !== null) {
+    const selected = draft.shopLinks.find((link) => link.id === draft.selectedShopLinkId);
+    if (selected) return selected;
+  }
+  return selectDefaultShopLink(draft.shopLinks);
+}
+
+function recommendationLine(
+  product: AdminCatalogProduct | null,
+  draft: RecommendationSlotDraft,
+): string {
+  if (!product) {
+    const line = draft.selectedProduct
+      ? `${draft.selectedProduct.brand || 'Unbekannter Hersteller'} | ${draft.selectedProduct.name}`
+      : `Unbekannter Hersteller | ${draft.selectedProductLabel || 'Unbekanntes Produkt'}`;
+    const shop = selectedShopLink(draft)
+      ? resolveShopLabel(selectedShopLink(draft))
+      : 'kein Shoplink';
+    return `${line} | ${shop} | Darreichungsform unbekannt | Preis nicht bekannt`;
+  }
+
+  const headline = product
+    ? `${product.brand || 'Unbekannter Hersteller'} | ${product.name}`
+    : 'Unbekannter Hersteller | Unbekanntes Produkt';
+  const shop = selectedShopLink(draft)
+    ? resolveShopLabel(selectedShopLink(draft))
+    : product?.shop_link
+      ? resolveCatalogShopLabel(product)
+      : 'kein Shoplink';
+  const form = product?.form?.trim() || 'Darreichungsform unbekannt';
+  return `${headline} | ${shop} | ${form} | ${formatPackPrice(product?.price ?? null)}`;
+}
+
+function recommendationLinkBadge(draft: RecommendationSlotDraft): RecommendationLinkBadge {
+  const link = selectedShopLink(draft);
+  if (link) return shopLinkBadge(link);
+  if (draft.selectedProduct) return catalogProductBadge(draft.selectedProduct);
+  return {
+    label: 'Normaler Link',
+    tone: 'warn',
+  };
 }
 
 function recommendationSummary(recommendation: AdminIngredientProductRecommendation | null): string {
@@ -1308,38 +1464,6 @@ function TaskModal({
   );
 }
 
-type RecommendationSlotDraft = {
-  productQuery: string;
-  products: AdminCatalogProduct[];
-  selectedProductId: number | null;
-  selectedProductLabel: string;
-  shopLinks: AdminProductShopLink[];
-  selectedShopLinkId: number | null;
-};
-
-function recommendationSlotDraft(
-  recommendation: AdminIngredientProductRecommendation | null,
-  fallbackQuery: string,
-): RecommendationSlotDraft {
-  return {
-    productQuery: recommendation?.product_name ?? fallbackQuery,
-    products: [],
-    selectedProductId: recommendation?.product_id ?? null,
-    selectedProductLabel: recommendation?.product_name ?? '',
-    shopLinks: [],
-    selectedShopLinkId: recommendation?.shop_link_id ?? null,
-  };
-}
-
-function recommendationSlotDrafts(
-  slots: AdminIngredientProductRecommendationSlots,
-  fallbackQuery: string,
-): Record<AdminIngredientProductRecommendationSlot, RecommendationSlotDraft> {
-  return Object.fromEntries(
-    RECOMMENDATION_SLOTS.map((slot) => [slot, recommendationSlotDraft(slots[slot], fallbackQuery)]),
-  ) as Record<AdminIngredientProductRecommendationSlot, RecommendationSlotDraft>;
-}
-
 function RecommendationModal({
   ingredient,
   onClose,
@@ -1351,12 +1475,31 @@ function RecommendationModal({
 }) {
   const [slots, setSlots] = useState<AdminIngredientProductRecommendationSlots>(ingredient.product_recommendations);
   const [drafts, setDrafts] = useState<Record<AdminIngredientProductRecommendationSlot, RecommendationSlotDraft>>(
-    recommendationSlotDrafts(ingredient.product_recommendations, ingredient.name),
+    recommendationSlotDrafts(ingredient.product_recommendations),
   );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [activeSlot, setActiveSlot] = useState<AdminIngredientProductRecommendationSlot | null>(null);
+  const dropdownRefs = useRef<Record<AdminIngredientProductRecommendationSlot, HTMLDivElement | null>>({
+    primary: null,
+    alternative_1: null,
+    alternative_2: null,
+  });
+  const searchTimers = useRef<Record<AdminIngredientProductRecommendationSlot, number | null>>({
+    primary: null,
+    alternative_1: null,
+    alternative_2: null,
+  });
+
+  const clearSearchTimer = useCallback((slot: AdminIngredientProductRecommendationSlot) => {
+    const timer = searchTimers.current[slot];
+    if (timer !== null) {
+      window.clearTimeout(timer);
+      searchTimers.current[slot] = null;
+    }
+  }, []);
 
   const fetchShopLinks = useCallback(async (productId: number): Promise<AdminProductShopLink[]> => {
     try {
@@ -1380,23 +1523,59 @@ function RecommendationModal({
     }));
   }, []);
 
+  const closeActiveDropdown = useCallback(() => {
+    setActiveSlot(null);
+  }, []);
+
+  const persistRecommendation = useCallback(async (
+    slot: AdminIngredientProductRecommendationSlot,
+    productId: number,
+    shopLinkId: number | null,
+  ) => {
+    const response = await upsertAdminIngredientProductRecommendation(ingredient.id, slot, {
+      product_id: productId,
+      shop_link_id: shopLinkId,
+    });
+    setSlots(response.slots);
+    setMessage(`${RECOMMENDATION_SLOT_LABELS[slot]} gespeichert.`);
+    await onChanged();
+  }, [ingredient.id, onChanged]);
+
   const loadRecommendations = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
       const response = await getAdminIngredientProductRecommendations(ingredient.id);
-      const nextDrafts = recommendationSlotDrafts(response.slots, ingredient.name);
+      const nextDrafts = recommendationSlotDrafts(response.slots);
       const draftsWithLinks = await Promise.all(
         RECOMMENDATION_SLOTS.map(async (slot) => {
           const draft = nextDrafts[slot];
-          if (!draft.selectedProductId) return [slot, draft] as const;
+          if (!draft.selectedProductId) {
+            return [slot, draft] as const;
+          }
+
           const links = await fetchShopLinks(draft.selectedProductId);
           const selectedShopLinkId = draft.selectedShopLinkId && links.some((link) => link.id === draft.selectedShopLinkId)
             ? draft.selectedShopLinkId
             : selectDefaultShopLink(links)?.id ?? null;
-          return [slot, { ...draft, shopLinks: links, selectedShopLinkId }] as const;
+
+          let selectedProduct: AdminCatalogProduct | null = null;
+          try {
+            const product = await getAdminProduct(draft.selectedProductId);
+            selectedProduct = product;
+          } catch {
+            selectedProduct = null;
+          }
+
+          return [slot, {
+            ...draft,
+            selectedProduct,
+            shopLinks: links,
+            selectedShopLinkId,
+          }] as const;
         }),
       );
+
       setSlots(response.slots);
       setDrafts(Object.fromEntries(draftsWithLinks) as Record<AdminIngredientProductRecommendationSlot, RecommendationSlotDraft>);
     } catch (modalError) {
@@ -1404,28 +1583,93 @@ function RecommendationModal({
     } finally {
       setLoading(false);
     }
-  }, [fetchShopLinks, ingredient.id, ingredient.name]);
+  }, [fetchShopLinks, ingredient.id]);
 
   useEffect(() => {
     void loadRecommendations();
   }, [loadRecommendations]);
 
-  const handleSearchProducts = async (slot: AdminIngredientProductRecommendationSlot, event?: FormEvent) => {
-    event?.preventDefault();
-    const draft = drafts[slot];
+  useEffect(() => {
+    if (!activeSlot) return;
+    const current = dropdownRefs.current[activeSlot];
+    if (!current) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!(event.target instanceof Node)) return;
+      if (!current.contains(event.target)) {
+        closeActiveDropdown();
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closeActiveDropdown();
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [activeSlot, closeActiveDropdown]);
+
+  useEffect(() => () => {
+    (Object.keys(searchTimers.current) as Array<AdminIngredientProductRecommendationSlot>).forEach((slot) => {
+      clearSearchTimer(slot);
+    });
+  }, [clearSearchTimer]);
+
+  const loadProductSuggestions = useCallback((slot: AdminIngredientProductRecommendationSlot, query: string) => {
+    clearSearchTimer(slot);
+    searchTimers.current[slot] = window.setTimeout(async () => {
+      try {
+        const response = await getAdminProducts({
+          q: query.trim() || undefined,
+          ingredient_id: ingredient.id,
+          limit: 8,
+        });
+        const currentDraft = drafts[slot];
+        const sortedProducts = sortRecommendationProducts(response.products, {
+          ...drafts,
+          [slot]: {
+            ...currentDraft,
+            products: response.products,
+            productQuery: query,
+          },
+        });
+        updateDraft(slot, { products: sortedProducts, productQuery: query });
+      } catch {
+        updateDraft(slot, { products: [] });
+      }
+    }, 180);
+  }, [clearSearchTimer, drafts, ingredient.id, updateDraft]);
+
+  const openSlot = useCallback((slot: AdminIngredientProductRecommendationSlot) => {
+    setActiveSlot(slot);
+    loadProductSuggestions(slot, drafts[slot].productQuery);
+  }, [drafts, loadProductSuggestions]);
+
+  const handleSelectProduct = async (slot: AdminIngredientProductRecommendationSlot, product: AdminCatalogProduct) => {
     setSaving(true);
     setError('');
     setMessage('');
     try {
-      const response = await getAdminProducts({
-        q: draft.productQuery.trim() || ingredient.name,
-        ingredient_id: ingredient.id,
-        limit: 8,
+      const links = await fetchShopLinks(product.id);
+      const nextShopLinkId = selectDefaultShopLink(links)?.id ?? null;
+      updateDraft(slot, {
+        productQuery: '',
+        products: [],
+        selectedProductId: product.id,
+        selectedProductLabel: productLabel(product),
+        selectedProduct: product,
+        shopLinks: links,
+        selectedShopLinkId: nextShopLinkId,
       });
-      updateDraft(slot, { products: response.products });
-      if (response.products.length === 0) {
-        setMessage(`Keine Produkte mit ${ingredient.name} gefunden.`);
-      }
+      await persistRecommendation(slot, product.id, nextShopLinkId);
+      setActiveSlot(null);
     } catch (modalError) {
       setError(getErrorMessage(modalError));
     } finally {
@@ -1433,42 +1677,16 @@ function RecommendationModal({
     }
   };
 
-  const selectProduct = async (slot: AdminIngredientProductRecommendationSlot, product: AdminCatalogProduct) => {
-    setSaving(true);
-    setError('');
-    setMessage('');
-    try {
-      const links = await fetchShopLinks(product.id);
-      updateDraft(slot, {
-        productQuery: productLabel(product),
-        products: [],
-        selectedProductId: product.id,
-        selectedProductLabel: productLabel(product),
-        shopLinks: links,
-        selectedShopLinkId: selectDefaultShopLink(links)?.id ?? null,
-      });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleSave = async (slot: AdminIngredientProductRecommendationSlot) => {
+  const handleShopLinkChange = async (slot: AdminIngredientProductRecommendationSlot, shopLinkId: number | null) => {
     const draft = drafts[slot];
-    if (!draft.selectedProductId) {
-      setError(`Bitte zuerst ein Produkt fuer ${RECOMMENDATION_SLOT_LABELS[slot]} auswählen.`);
-      return;
-    }
+    if (!draft.selectedProductId) return;
+
     setSaving(true);
     setError('');
     setMessage('');
     try {
-      const response = await upsertAdminIngredientProductRecommendation(ingredient.id, slot, {
-        product_id: draft.selectedProductId,
-        shop_link_id: draft.selectedShopLinkId,
-      });
-      setSlots(response.slots);
-      setMessage(`${RECOMMENDATION_SLOT_LABELS[slot]} gespeichert.`);
-      await onChanged();
+      updateDraft(slot, { selectedShopLinkId: shopLinkId });
+      await persistRecommendation(slot, draft.selectedProductId, shopLinkId);
     } catch (modalError) {
       setError(getErrorMessage(modalError));
     } finally {
@@ -1479,13 +1697,20 @@ function RecommendationModal({
   const handleDelete = async (slot: AdminIngredientProductRecommendationSlot) => {
     if (!slots[slot]) return;
     if (!window.confirm(`${RECOMMENDATION_SLOT_LABELS[slot]} entfernen?`)) return;
+
     setSaving(true);
     setError('');
     setMessage('');
     try {
       const response = await deleteAdminIngredientProductRecommendation(ingredient.id, slot);
       setSlots(response.slots);
-      updateDraft(slot, recommendationSlotDraft(null, ingredient.name));
+      updateDraft(slot, {
+        ...recommendationSlotDraft(null),
+        productQuery: '',
+        products: [],
+        shopLinks: [],
+        selectedShopLinkId: null,
+      });
       setMessage(`${RECOMMENDATION_SLOT_LABELS[slot]} entfernt.`);
       await onChanged();
     } catch (modalError) {
@@ -1494,6 +1719,8 @@ function RecommendationModal({
       setSaving(false);
     }
   };
+
+  const currentRecommendationStatus = (slot: AdminIngredientProductRecommendationSlot) => slots[slot];
 
   return (
     <AdminDialog title="Empfehlungen verwalten" subtitle={ingredient.name} onClose={onClose} maxWidth="max-w-5xl">
@@ -1511,7 +1738,7 @@ function RecommendationModal({
           <div className="grid gap-3">
             {RECOMMENDATION_SLOTS.map((slot) => {
               const draft = drafts[slot];
-              const currentRecommendation = slots[slot];
+              const currentRecommendation = currentRecommendationStatus(slot);
               return (
                 <section key={slot} className="grid gap-3 rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] p-3">
                   <div className="flex flex-wrap items-start justify-between gap-2">
@@ -1531,43 +1758,64 @@ function RecommendationModal({
                     )}
                   </div>
 
-                  <form className="grid gap-2" onSubmit={(event) => void handleSearchProducts(slot, event)}>
-                    <div className="flex flex-wrap gap-2">
-                      <input
-                        value={draft.productQuery}
-                        onChange={(event) => updateDraft(slot, { productQuery: event.target.value })}
-                        className="admin-input min-w-[220px] flex-1"
-                        placeholder={`${ingredient.name} Produkt suchen`}
-                        disabled={saving}
-                      />
-                      <AdminButton type="submit" disabled={saving}>
-                        <Search size={13} />
-                        Suchen
-                      </AdminButton>
-                    </div>
-                    {draft.products.length > 0 && (
-                      <div className="grid gap-2">
-                        {draft.products.map((product) => (
-                          <button
-                            key={product.id}
-                            type="button"
-                            className="rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg)] p-3 text-left text-sm hover:border-[color:var(--admin-line-strong)]"
-                            onClick={() => void selectProduct(slot, product)}
-                            disabled={saving}
-                          >
-                            <span className="font-medium">{productLabel(product)}</span>
-                            <span className="admin-muted ml-2">{product.moderation_status || 'ohne Status'}</span>
-                          </button>
-                        ))}
+                  <div className="admin-ingredient-product-autocomplete" ref={(element) => { dropdownRefs.current[slot] = element; }}>
+                    <input
+                      value={draft.productQuery}
+                      onFocus={() => openSlot(slot)}
+                      onClick={() => openSlot(slot)}
+                      onChange={(event) => {
+                        const nextQuery = event.target.value;
+                        setActiveSlot(slot);
+                        updateDraft(slot, { productQuery: nextQuery });
+                        loadProductSuggestions(slot, nextQuery);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Escape') {
+                          closeActiveDropdown();
+                        }
+                      }}
+                      className="admin-input"
+                      placeholder="Produktsuche"
+                      disabled={saving}
+                      autoComplete="off"
+                    />
+                    {activeSlot === slot && (
+                      <div className="admin-ingredient-product-autocomplete__dropdown">
+                        {draft.products.length === 0 ? (
+                          <p className="admin-muted admin-ingredient-product-autocomplete__empty">Keine passenden Produkte.</p>
+                        ) : (
+                          draft.products.map((product) => (
+                            <button
+                              key={product.id}
+                              type="button"
+                              className="admin-ingredient-product-autocomplete__item"
+                              onClick={() => void handleSelectProduct(slot, product)}
+                              disabled={saving}
+                            >
+                              <div className="admin-ingredient-product-autocomplete__topline">
+                                <span className="font-medium">{productLabel(product)}</span>
+                                <AdminBadge tone={catalogProductBadge(product).tone}>
+                                  {catalogProductBadge(product).label}
+                                </AdminBadge>
+                              </div>
+                              <p className="admin-muted admin-ingredient-product-autocomplete__meta">
+                                {product.form || 'Darreichungsform unbekannt'} | {product.shop_link ? resolveCatalogShopLabel(product) : 'kein Shoplink'} | {formatPackPrice(product.price)}
+                              </p>
+                            </button>
+                          ))
+                        )}
                       </div>
                     )}
-                  </form>
+                  </div>
 
-                  <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(220px,0.7fr)_auto] md:items-end">
+                  <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_minmax(220px,0.7fr)] md:items-start">
                     <div className="grid gap-2">
                       <label className="text-sm font-medium">Ausgewähltes Produkt</label>
                       <div className="rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg)] p-3 text-sm">
-                        {draft.selectedProductId ? draft.selectedProductLabel || `Produkt ${draft.selectedProductId}` : 'Noch kein Produkt ausgewählt'}
+                        {draft.selectedProductId ? recommendationLine(draft.selectedProduct, draft) : 'Noch kein Produkt ausgewählt'}
+                        <div className="mt-2">
+                          <AdminBadge tone={recommendationLinkBadge(draft).tone}>{recommendationLinkBadge(draft).label}</AdminBadge>
+                        </div>
                       </div>
                     </div>
 
@@ -1576,7 +1824,10 @@ function RecommendationModal({
                       {draft.shopLinks.length > 1 ? (
                         <select
                           value={draft.selectedShopLinkId ?? ''}
-                          onChange={(event) => updateDraft(slot, { selectedShopLinkId: event.target.value ? Number(event.target.value) : null })}
+                          onChange={(event) => {
+                            const nextShopLinkId = event.target.value ? Number(event.target.value) : null;
+                            void handleShopLinkChange(slot, nextShopLinkId);
+                          }}
                           className="admin-select"
                           disabled={saving}
                         >
@@ -1595,11 +1846,6 @@ function RecommendationModal({
                         <p className="admin-muted text-sm">Kein konkreter Shoplink ausgewählt.</p>
                       )}
                     </div>
-
-                    <AdminButton variant="primary" onClick={() => void handleSave(slot)} disabled={saving || !draft.selectedProductId}>
-                      <PackageCheck size={13} />
-                      Speichern
-                    </AdminButton>
                   </div>
                 </section>
               );
@@ -1610,7 +1856,6 @@ function RecommendationModal({
     </AdminDialog>
   );
 }
-
 export default function AdministratorIngredientsPage() {
   const [ingredients, setIngredients] = useState<AdminIngredientListItem[]>([]);
   const [queryInput, setQueryInput] = useState('');

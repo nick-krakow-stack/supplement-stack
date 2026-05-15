@@ -12,6 +12,7 @@ import {
   LogOut,
   Menu,
   Package,
+  Settings,
   Users,
   X,
 } from 'lucide-react';
@@ -49,6 +50,7 @@ const NAV_GROUPS: NavigationGroup[] = [
     items: [
       { label: 'Benutzerverwaltung', path: '/administrator/users', icon: <Users size={15} /> },
       { label: 'Shop-Domains', path: '/administrator/shop-domains', icon: <ExternalLink size={15} /> },
+      { label: 'Verwaltung', path: '/administrator/management', icon: <Settings size={15} /> },
       { label: 'Rechtliches', path: '/administrator/legal', icon: <FileText size={15} /> },
     ],
   },
@@ -61,9 +63,9 @@ const ROUTE_TITLES: Record<string, { group: string; title: string }> = {
   '/administrator/dosing': { group: 'Katalog', title: 'Richtwerte' },
   '/administrator/knowledge': { group: 'Katalog', title: 'Wissensdatenbank' },
   '/administrator/translations': { group: 'Katalog', title: 'Übersetzungen' },
-  '/administrator/interactions': { group: 'Katalog', title: 'Wechselwirkungs-Matrix' },
   '/administrator/users': { group: 'Konfiguration', title: 'Benutzerverwaltung' },
   '/administrator/shop-domains': { group: 'Konfiguration', title: 'Shop-Domains' },
+  '/administrator/management': { group: 'Konfiguration', title: 'Verwaltung' },
   '/administrator/legal': { group: 'Konfiguration', title: 'Rechtliches' },
   '/administrator/profile': { group: 'Konto', title: 'Admin-Profil' },
 };

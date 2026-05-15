@@ -5,6 +5,7 @@ import {
   ChevronRight,
   Edit3,
   ExternalLink,
+  Info,
   PackageSearch,
   Plus,
   RefreshCw,
@@ -14,6 +15,7 @@ import {
   Upload,
   X,
 } from 'lucide-react';
+import { apiClient } from '../../api/client';
 import {
   createAdminProductShopLink,
   deleteAdminProductImage,
@@ -35,6 +37,7 @@ import { AdminBadge, AdminButton, AdminCard, AdminEmpty, AdminError, AdminPageHe
 
 type ProductModerationStatus = 'pending' | 'approved' | 'rejected' | 'blocked';
 const PAGE_LIMIT_OPTIONS = [25, 50, 100] as const;
+const SHOP_DOMAINS_PATH = '/admin/shop-domains';
 
 type ProductQuickForm = {
   shop_link: string;
@@ -42,9 +45,16 @@ type ProductQuickForm = {
   moderation_status: ProductModerationStatus;
 };
 
+type AdminShopDomain = {
+  id: number;
+  domain: string;
+  display_name: string;
+};
+
 type ShopLinkForm = {
   shop_name: string;
   url: string;
+  shop_domain_id: number | null;
   is_affiliate: boolean;
   affiliate_owner_type: AdminProductShopLinkOwnerType;
   affiliate_owner_user_id: number | null;
@@ -130,6 +140,7 @@ function emptyShopLinkForm(role: ShopLinkRole = 'standard', sortOrder = '0'): Sh
   return {
     shop_name: '',
     url: '',
+    shop_domain_id: null,
     is_affiliate: true,
     affiliate_owner_type: 'nick',
     affiliate_owner_user_id: null,
@@ -144,6 +155,7 @@ function shopLinkFormFromLink(link: AdminProductShopLink, index: number): ShopLi
   return {
     shop_name: link.shop_name ?? '',
     url: link.url,
+    shop_domain_id: link.shop_domain_id,
     is_affiliate: isAffiliate,
     affiliate_owner_type: isAffiliate ? link.affiliate_owner_type : 'none',
     affiliate_owner_user_id: link.affiliate_owner_user_id,
@@ -173,6 +185,7 @@ function payloadFromShopLinkForm(form: ShopLinkForm): AdminProductShopLinkPayloa
 
   return {
     shop_name: textValue(form.shop_name),
+    shop_domain_id: form.shop_domain_id,
     url,
     is_affiliate: form.is_affiliate ? 1 : 0,
     affiliate_owner_type: ownerType,
@@ -212,24 +225,81 @@ function linkHealthLabel(health: AdminAffiliateLinkHealth | null): string {
   return 'Defekt';
 }
 
+function linkHealthFailureDescription(health: AdminAffiliateLinkHealth | null): string | null {
+  if (!health || health.status === null || health.status === 'unchecked') return null;
+
+  if (health.http_status === 503 || health.failure_reason === 'http_503') {
+    return 'Server war beim automatischen Check vorübergehend nicht verfügbar oder blockiert diese Prüfung.';
+  }
+
+  if (health.failure_reason) {
+    if (health.failure_reason === 'timeout') return 'Der Linkcheck hat kein rechtzeitiges Ergebnis erhalten.';
+    if (health.failure_reason === 'invalid_url') return 'Die gespeicherte URL ist ungültig.';
+    if (health.failure_reason === 'dns_lookup_failed') return 'DNS-Auflösung für die Domain ist fehlgeschlagen.';
+    if (health.failure_reason === 'connection_failed') return 'Der Server ist aktuell nicht erreichbar.';
+    return `Fehler: ${health.failure_reason}`;
+  }
+
+  if (health.http_status) {
+    return `HTTP ${health.http_status}`;
+  }
+
+  return null;
+}
+
+function linkHealthDetailsTooltip(health: AdminAffiliateLinkHealth | null): string {
+  if (!health || health.status === null || health.status === 'unchecked') {
+    return 'Link wurde noch nicht geprÃ¼ft.';
+  }
+
+  if (health.status === 'ok') {
+    return 'Link ist aktuell erreichbar.';
+  }
+
+  const reason = linkHealthFailureDescription(health);
+  const detailParts = [
+    reason ?? null,
+    health.consecutive_failures ? `${health.consecutive_failures} Fehler in Folge` : null,
+    health.last_checked_at ? `Zuletzt geprÃ¼ft: ${health.last_checked_at}` : null,
+  ].filter((entry): entry is string => typeof entry === 'string');
+
+  return detailParts.length > 0 ? `${linkHealthLabel(health)}: ${detailParts.join(' | ')}` : linkHealthLabel(health);
+}
+
+function linkHealthStatusSummary(health: AdminAffiliateLinkHealth | null): string | null {
+  if (!health || health.status === null || health.status === 'unchecked' || health.status === 'ok') return null;
+  return linkHealthFailureDescription(health) ?? `Link ist ${linkHealthLabel(health).toLowerCase()}.`;
+}
+
+function normalizeShopDomains(raw: unknown): AdminShopDomain[] {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return [];
+  const candidates = (raw as { shops?: unknown }).shops;
+  const rows = Array.isArray(candidates) ? candidates : [];
+  return rows
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return null;
+      const record = entry as { id?: unknown; domain?: unknown; display_name?: unknown };
+      const rawId = record.id;
+      const id = typeof rawId === 'number'
+        ? rawId
+        : typeof rawId === 'string'
+          ? Number(rawId)
+          : NaN;
+      if (!Number.isInteger(id) || id <= 0) return null;
+      const domain = typeof record.domain === 'string' ? record.domain : '';
+      const displayName = typeof record.display_name === 'string' && record.display_name.trim().length > 0
+        ? record.display_name
+        : domain;
+      return { id, domain, display_name: displayName };
+    })
+    .filter((entry): entry is AdminShopDomain => entry !== null);
+}
+
 function linkHealthBadgeText(health: AdminAffiliateLinkHealth | null): string {
   const label = linkHealthLabel(health);
   if (label === 'OK') return 'Link: OK';
   if (label === 'Defekt') return 'Link: Defekt';
   return 'Link: Noch nicht geprüft';
-}
-
-function formatLinkHealthTitle(health: AdminAffiliateLinkHealth | null): string {
-  if (!health || health.status === null || health.status === 'unchecked') return 'Link: Noch nicht geprüft';
-  const parts = [
-    linkHealthBadgeText(health),
-    health.http_status !== null ? `HTTP ${health.http_status}` : null,
-    health.consecutive_failures !== null && health.consecutive_failures > 0
-      ? `${health.consecutive_failures} Fehler in Folge`
-      : null,
-    health.last_checked_at ? `Zuletzt: ${health.last_checked_at}` : null,
-  ].filter(Boolean);
-  return parts.join(' | ');
 }
 
 function moderationLabel(value?: string | null): string {
@@ -275,10 +345,14 @@ function ProductRow({
   const [form, setForm] = useState<ProductQuickForm>(() => formFromProduct(product));
   const [saving, setSaving] = useState(false);
   const [status, setStatus] = useState('');
+  const [showHttp503Info, setShowHttp503Info] = useState(false);
+  const linkHealthStatus = linkHealthStatusSummary(product.link_health);
+  const isHttp503 = product.link_health?.http_status === 503 || product.link_health?.failure_reason === 'http_503';
 
   useEffect(() => {
     setForm(formFromProduct(product));
     setStatus('');
+    setShowHttp503Info(false);
   }, [product]);
 
   const updateField = <K extends keyof ProductQuickForm>(field: K, value: ProductQuickForm[K]) => {
@@ -336,9 +410,28 @@ function ProductRow({
               {product.brand || 'Ohne Marke'} - {formatPrice(product.price)}
             </p>
             <div className="mt-2 flex flex-wrap gap-1.5">
-              <span title={formatLinkHealthTitle(product.link_health)}>
+              <span title={linkHealthDetailsTooltip(product.link_health)}>
                 <AdminBadge tone={linkHealthTone(product.link_health)}>{linkHealthBadgeText(product.link_health)}</AdminBadge>
               </span>
+              {isHttp503 ? (
+                <button
+                  type="button"
+                  className="admin-badge-action inline-flex items-center gap-1 text-xs"
+                  title={linkHealthDetailsTooltip(product.link_health)}
+                  aria-expanded={showHttp503Info}
+                  onClick={() => setShowHttp503Info((current) => !current)}
+                >
+                  <Info size={12} />
+                  HTTP 503
+                </button>
+              ) : linkHealthStatus ? (
+                <span
+                  className="admin-muted text-xs"
+                  title={linkHealthDetailsTooltip(product.link_health)}
+                >
+                  {linkHealthStatus}
+                </span>
+              ) : null}
               <AdminBadge>{moderationLabel(product.moderation_status)}</AdminBadge>
               <AdminBadge tone="warn" className="admin-badge-warn">Link-Klicks: {product.link_click_count}</AdminBadge>
               <button
@@ -353,6 +446,11 @@ function ProductRow({
                 </AdminBadge>
               </button>
             </div>
+            {showHttp503Info ? (
+              <p className="mt-2 rounded-[var(--admin-r-sm)] border border-[color:var(--admin-warn-soft)] bg-[color:var(--admin-warn-soft)] p-2 text-xs text-[color:var(--admin-warn-ink)]">
+                HTTP 503 bedeutet: Der Shop-Server war beim automatischen Check voruebergehend nicht verfuegbar oder blockiert solche Checks. Der Link kann im Browser trotzdem funktionieren. Manuell oeffnen und spaeter erneut pruefen.
+              </p>
+            ) : null}
           </div>
         </div>
 
@@ -426,10 +524,25 @@ function ShopLinksModal({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [shopDomains, setShopDomains] = useState<AdminShopDomain[]>([]);
+  const [shopDomainsState, setShopDomainsState] = useState<'idle' | 'loading' | 'ready' | 'failed'>('idle');
   const [savingId, setSavingId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<ShopLinkForm>(() => emptyShopLinkForm('standard', String(STANDARD_LINK_SORT_ORDER)));
   const [createForms, setCreateForms] = useState<ShopLinkForm[]>(() => [emptyShopLinkForm('primary', '0')]);
+
+  const loadShopDomains = useCallback(async () => {
+    setShopDomainsState('loading');
+    try {
+      const response = await apiClient.get<unknown>(SHOP_DOMAINS_PATH);
+      const normalized = normalizeShopDomains(response.data);
+      setShopDomains(normalized);
+      setShopDomainsState('ready');
+    } catch {
+      setShopDomains([]);
+      setShopDomainsState('failed');
+    }
+  }, []);
 
   const loadLinks = useCallback(async () => {
     setLoading(true);
@@ -464,6 +577,10 @@ function ShopLinksModal({
   }, [loadLinks]);
 
   useEffect(() => {
+    void loadShopDomains();
+  }, [loadShopDomains]);
+
+  useEffect(() => {
     setCreateForms((previous) => {
       if (previous.length !== 1 || previous[0].url.trim() || previous[0].shop_name.trim()) return previous;
       const role = defaultShopLinkRole(links.length);
@@ -489,14 +606,6 @@ function ShopLinksModal({
       const role = defaultShopLinkRole(links.length, previous.length);
       return [...previous, emptyShopLinkForm(role, sortOrderForRole(role, links.length, previous.length))];
     });
-  };
-
-  const startCreate = () => {
-    setEditingId(null);
-    const role = defaultShopLinkRole(links.length);
-    setCreateForms([emptyShopLinkForm(role, sortOrderForRole(role, links.length))]);
-    setError('');
-    setMessage('');
   };
 
   const startEdit = (link: AdminProductShopLink, index: number) => {
@@ -627,9 +736,29 @@ function ShopLinksModal({
   };
 
   const mainLink = primaryOrFirstLink(links);
+  const shopDomainOptions = shopDomainsState === 'ready' && shopDomains.length > 0;
+  const shopDomainFallback = shopDomainsState === 'failed' || (shopDomainsState === 'ready' && shopDomains.length === 0);
+  const shopDomainById = new Map(shopDomains.map((domain) => [domain.id, domain]));
+
+  const attemptClose = () => {
+    if (savingId !== null) {
+      setMessage('Es läuft noch ein Speichervorgang.');
+      return;
+    }
+    onClose();
+  };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/35 px-3 py-8" role="dialog" aria-modal="true">
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/35 px-3 py-8"
+      role="dialog"
+      aria-modal="true"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) {
+          attemptClose();
+        }
+      }}
+    >
       <div className="admin-card w-full max-w-5xl overflow-hidden bg-[color:var(--admin-panel)] shadow-xl">
         <div className="admin-card-head">
           <div className="min-w-0">
@@ -637,34 +766,53 @@ function ShopLinksModal({
             <p className="admin-card-sub truncate">{product.name}</p>
           </div>
           <div className="flex flex-wrap justify-end gap-2">
-            <AdminButton size="sm" onClick={() => void loadLinks()} disabled={loading || savingId !== null}>
+            <button
+              type="button"
+              className="admin-icon-btn"
+              style={{
+                backgroundColor: 'var(--admin-warn-soft)',
+                borderColor: 'var(--admin-warn)',
+                color: 'var(--admin-warn-ink)',
+              }}
+              onClick={() => void loadLinks()}
+              disabled={loading || savingId !== null}
+              title="Aktualisieren"
+              aria-label="Aktualisieren"
+            >
               <RefreshCw size={13} />
-              Aktualisieren
-            </AdminButton>
-            <AdminButton size="sm" variant="primary" onClick={startCreate} disabled={savingId !== null}>
-              <Plus size={13} />
-              Neuer Link
-            </AdminButton>
-            <AdminButton size="sm" variant="ghost" onClick={onClose}>
+            </button>
+            <button
+              type="button"
+              className="admin-icon-btn"
+              onClick={() => attemptClose()}
+              title="Schließen"
+              aria-label="Schließen"
+              disabled={savingId !== null}
+            >
               <X size={13} />
-              Schließen
-            </AdminButton>
+            </button>
           </div>
         </div>
 
-        <div className="grid gap-4 p-4">
-          {error && <AdminError>{error}</AdminError>}
-          {message && <p className="admin-muted text-xs">{message}</p>}
-          {!healthAvailable && (
-            <p className="admin-muted text-xs">Linkcheck-Daten sind in dieser Umgebung nicht verfuegbar.</p>
-          )}
+          <div className="grid gap-4 p-4">
+            {error && <AdminError>{error}</AdminError>}
+            {message && <p className="admin-muted text-xs">{message}</p>}
+            {shopDomainFallback ? (
+              <p className="admin-muted text-xs">
+                Freitext-Fallback:
+                Shop-Liste nicht verfÃ¼gbar. Du kannst den Shop im Freitextfeld erfassen.
+              </p>
+            ) : null}
+            {!healthAvailable && (
+              <p className="admin-muted text-xs">Linkcheck-Daten sind in dieser Umgebung nicht verfuegbar.</p>
+            )}
 
           {loading ? (
             <AdminEmpty>Lade Shoplinks...</AdminEmpty>
           ) : links.length === 0 ? (
             <AdminEmpty>Keine Shoplinks vorhanden. Lege den ersten Hauptlink an.</AdminEmpty>
-          ) : (
-            <div className="grid gap-2">
+            ) : (
+              <div className="grid gap-2">
               {links.map((link, index) => {
                 const isMain = mainLink?.id === link.id;
                 const role = roleFromShopLink(link, index);
@@ -697,12 +845,13 @@ function ShopLinksModal({
                         <div className="admin-muted mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
                           <span>Sortierung: {link.sort_order}</span>
                           <span>Check: {formatDate(link.health?.last_checked_at ?? null)}</span>
-                          {link.health?.http_status ? <span>HTTP {link.health.http_status}</span> : null}
+                          {linkHealthStatusSummary(link.health) ? (
+                            <p className="admin-muted mt-1 text-xs" title={linkHealthDetailsTooltip(link.health)}>
+                              {link.health?.http_status ? `HTTP ${link.health.http_status}: ` : ''}
+                              {linkHealthStatusSummary(link.health)}
+                            </p>
+                          ) : null}
                         </div>
-                        {link.health?.failure_reason ? (
-                          <p className="admin-muted mt-1 text-xs">Fehler: {link.health.failure_reason}</p>
-                        ) : null}
-                      </div>
                       <div className="flex shrink-0 flex-wrap gap-2">
                         <a href={link.url} target="_blank" rel="noopener noreferrer" className="admin-icon-btn" title="Shoplink öffnen" aria-label="Shoplink öffnen">
                           <ExternalLink size={15} />
@@ -729,6 +878,7 @@ function ShopLinksModal({
                         </AdminButton>
                       </div>
                     </div>
+                  </div>
                   </article>
                 );
               })}
@@ -751,20 +901,54 @@ function ShopLinksModal({
                   if (editingId) updateField(field, value);
                   else updateCreateField(index, field, value);
                 };
-                return (
-                  <div
-                    key={editingId ?? `create-${index}`}
-                    className="grid gap-3 rounded-[var(--admin-r-md)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg)] p-3 md:grid-cols-[160px_minmax(280px,1fr)_112px_132px_150px]"
-                  >
-                    <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
-                      Shop
-                      <input
-                        value={entry.shop_name}
-                        onChange={(event) => update('shop_name', event.target.value)}
-                        className="admin-input mt-1"
-                        placeholder="z. B. Amazon"
-                      />
-                    </label>
+	                    return (
+	                  <div
+	                    key={editingId ?? `create-${index}`}
+	                    className="grid gap-3 rounded-[var(--admin-r-md)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg)] p-3 md:grid-cols-[160px_minmax(280px,1fr)_112px_132px_150px]"
+	                  >
+	                    <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
+	                      Shop
+	                      {shopDomainOptions ? (
+	                        <>
+	                          <select
+	                            value={entry.shop_domain_id ?? ''}
+	                            onChange={(event) => {
+	                              const selectedValue = event.target.value;
+	                              if (selectedValue === '') {
+	                                update('shop_domain_id', null);
+	                                return;
+	                              }
+	                              const domainId = Number(selectedValue);
+	                              const domain = shopDomainById.get(domainId);
+	                              update('shop_domain_id', Number.isInteger(domainId) ? domainId : null);
+	                              if (domain) update('shop_name', domain.display_name);
+	                            }}
+	                            className="admin-select mt-1"
+	                          >
+	                            <option value="" disabled>Shop auswÃ¤hlen</option>
+	                            {shopDomains.map((domain) => (
+	                              <option key={domain.id} value={domain.id}>
+	                                {domain.display_name}
+	                              </option>
+	                            ))}
+	                          </select>
+	                        </>
+	                      ) : shopDomainFallback ? (
+	                        <>
+	                          <span className="admin-muted mt-1 block text-xs">Freitext-Fallback</span>
+	                          <input
+	                            value={entry.shop_name}
+	                            onChange={(event) => update('shop_name', event.target.value)}
+	                            className="admin-input mt-1"
+	                            placeholder="z. B. Amazon"
+	                          />
+	                        </>
+	                      ) : (
+	                        <select className="admin-select mt-1" disabled value="">
+	                          <option value="">Shops werden geladen...</option>
+	                        </select>
+	                      )}
+	                    </label>
                     <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
                       URL
                       <input
@@ -1367,10 +1551,23 @@ export default function AdministratorProductsPage() {
 
       {error && <AdminError>{error}</AdminError>}
 
-      {loading ? (
-        <AdminEmpty>Lade Produkte...</AdminEmpty>
-      ) : (
-        <AdminCard title="Produktliste">
+	      {loading ? (
+	        <AdminEmpty>Lade Produkte...</AdminEmpty>
+	      ) : (
+	        <AdminCard
+              title="Produktliste"
+              actions={
+	            <Link
+	              to="/administrator/products/new"
+	              className="admin-btn admin-btn-sm"
+	              title="Neues Produkt anlegen"
+	              aria-label="Neues Produkt anlegen"
+	            >
+	              <Plus size={13} />
+	              Neu
+	            </Link>
+	          }
+	        >
           <div className="space-y-2 p-3">
             {products.map((product) => (
               <ProductRow

@@ -22,8 +22,9 @@ const KnowledgeArticlePage = lazy(() => import('./pages/KnowledgeArticlePage'));
 
 const AdministratorShell = lazy(() => import('./pages/administrator/AdministratorShell'));
 const AdministratorDashboardPage = lazy(() => import('./pages/administrator/AdministratorDashboardPage'));
-const AdministratorInteractionsPage = lazy(() => import('./pages/administrator/AdministratorInteractionsPage'));
 const AdministratorProductsPage = lazy(() => import('./pages/administrator/AdministratorProductsPage'));
+const AdministratorProductCreatePage = lazy(() => import('./pages/administrator/AdministratorProductCreatePage'));
+const AdministratorInteractionsPage = lazy(() => import('./pages/administrator/AdministratorInteractionsPage'));
 const AdministratorDosingPage = lazy(() => import('./pages/administrator/AdministratorDosingPage'));
 const AdministratorHealthPage = lazy(() => import('./pages/administrator/AdministratorHealthPage'));
 const AdministratorIngredientsPage = lazy(() => import('./pages/administrator/AdministratorIngredientsPage'));
@@ -42,6 +43,7 @@ const AdministratorUsersPage = lazy(() => import('./pages/administrator/Administ
 const AdministratorSettingsPage = lazy(() => import('./pages/administrator/AdministratorSettingsPage'));
 const AdministratorLegalPage = lazy(() => import('./pages/administrator/AdministratorLegalPage'));
 const AdministratorProfilePage = lazy(() => import('./pages/administrator/AdministratorProfilePage'));
+const AdministratorManagementPage = lazy(() => import('./pages/administrator/AdministratorManagementPage'));
 
 function NotFoundPage() {
   return (
@@ -86,9 +88,10 @@ export default function App() {
             <Route path="ingredients" element={<AdministratorIngredientsPage />} />
             <Route path="ingredients/:id" element={<AdministratorIngredientDetailPage />} />
             <Route path="products" element={<AdministratorProductsPage />} />
+            <Route path="products/new" element={<AdministratorProductCreatePage />} />
             <Route path="products/:id" element={<AdministratorProductDetailPage />} />
-            <Route path="dosing" element={<AdministratorDosingPage />} />
             <Route path="interactions" element={<AdministratorInteractionsPage />} />
+            <Route path="dosing" element={<AdministratorDosingPage />} />
             <Route path="health" element={<AdministratorHealthPage />} />
             <Route path="knowledge" element={<AdministratorKnowledgePage />} />
             <Route path="translations" element={<AdministratorTranslationsPage />} />
@@ -98,6 +101,7 @@ export default function App() {
             <Route path="launch-checks" element={<AdministratorLaunchChecksPage />} />
             <Route path="users" element={<AdministratorUsersPage />} />
             <Route path="shop-domains" element={<AdministratorShopDomainsPage />} />
+            <Route path="management" element={<AdministratorManagementPage />} />
             <Route path="legal" element={<AdministratorLegalPage />} />
             <Route path="profile" element={<AdministratorProfilePage />} />
             <Route path="rankings" element={<AdministratorRankingsPage />} />

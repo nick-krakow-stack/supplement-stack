@@ -1146,6 +1146,62 @@
   box-shadow: none;
 }
 
+.admin-ingredient-product-autocomplete {
+  position: relative;
+}
+
+.admin-ingredient-product-autocomplete__dropdown {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 5px);
+  z-index: 30;
+  max-height: 280px;
+  overflow-y: auto;
+  border: 1px solid var(--admin-line);
+  border-radius: var(--admin-r-sm);
+  background: var(--admin-bg);
+  box-shadow: var(--admin-shadow-md);
+}
+
+.admin-ingredient-product-autocomplete__item {
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid var(--admin-line);
+  background: transparent;
+  padding: 10px 12px;
+  text-align: left;
+  font-size: 12px;
+}
+
+.admin-ingredient-product-autocomplete__item:last-child {
+  border-bottom: 0;
+}
+
+.admin-ingredient-product-autocomplete__item:hover {
+  background: var(--admin-bg-elev);
+}
+
+.admin-ingredient-product-autocomplete__topline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.admin-ingredient-product-autocomplete__meta {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--admin-ink-3);
+}
+
+.admin-ingredient-product-autocomplete__empty {
+  margin: 0;
+  padding: 10px 12px;
+  font-size: 11px;
+}
+
 .admin-filter-main {
   display: flex;
   min-width: min(100%, 360px);
@@ -1499,6 +1555,44 @@
 
 .admin-table tr:hover td {
   background: var(--admin-bg-sunk);
+}
+
+.admin-managed-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.admin-managed-row-form {
+  display: grid;
+  grid-template-columns: minmax(140px, 0.9fr) minmax(160px, 1fr) minmax(220px, 1.4fr) minmax(90px, 0.55fr) auto;
+  align-items: end;
+  gap: 12px;
+}
+
+.admin-product-overview-card .admin-card-pad,
+.admin-product-shop-card .admin-card-pad {
+  display: grid;
+  gap: 16px;
+}
+
+.admin-product-shop-card-body {
+  display: grid;
+  gap: 16px;
+}
+
+.admin-product-shop-section {
+  border-top: 1px solid var(--admin-line);
+  padding-top: 16px;
+}
+
+.admin-section-title {
+  margin: 0;
+  color: var(--admin-ink);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
 }
 
 .admin-mono {
@@ -2290,6 +2384,11 @@
   .admin-error,
   .admin-card-sub {
     overflow-wrap: anywhere;
+  }
+
+  .admin-managed-row-form {
+    grid-template-columns: 1fr;
+    align-items: stretch;
   }
 
   .admin-empty,

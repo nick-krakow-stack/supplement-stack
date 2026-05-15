@@ -8,6 +8,7 @@ import {
   deleteAdminProductIngredient,
   deleteAdminProductShopLink,
   deleteAdminProductWarning,
+  getAdminManagedListItems,
   getAdminProduct,
   getAdminProductShopLinks,
   getAllIngredients,
@@ -18,6 +19,7 @@ import {
   updateAdminProductWarning,
   updateProductQA,
   type AdminCatalogProduct,
+  type AdminManagedListItem,
   type AdminProductDetail,
   type AdminProductIngredient,
   type AdminProductIngredientPayload,
@@ -30,10 +32,11 @@ import {
   type AdminProductSafetyWarning,
   type IngredientLookup,
 } from '../../api/admin';
+import { apiClient } from '../../api/client';
 import ImageCropModal from '../../components/ImageCropModal';
 import { AdminBadge, AdminButton, AdminCard, AdminEmpty, AdminError, AdminPageHeader, type AdminTone } from './AdminUi';
 
-type TabName = 'overview' | 'wirkstoffe' | 'moderation' | 'affiliate' | 'warnungen';
+type TabName = 'overview' | 'wirkstoffe' | 'moderation' | 'warnungen';
 
 type AffiliateOwnerType = 'none' | 'nick' | 'user';
 type ProductModerationStatus = 'pending' | 'approved' | 'rejected' | 'blocked';
@@ -57,6 +60,7 @@ type ProductEditForm = {
 
 type ShopLinkForm = {
   shop_name: string;
+  shop_domain_id: number | null;
   url: string;
   affiliate_owner_type: AffiliateOwnerType;
   affiliate_owner_user_id: string;
@@ -104,12 +108,35 @@ type AdminProductLinkHealth = {
   redirected: number | null;
 };
 
+type AdminShopDomain = {
+  id: number;
+  domain: string;
+  display_name: string;
+};
+
+const SHOP_DOMAINS_PATH = '/admin/shop-domains';
+
 const TAB_OPTIONS: { key: TabName; label: string }[] = [
   { key: 'overview', label: 'Übersicht' },
   { key: 'wirkstoffe', label: 'Wirkstoffe' },
   { key: 'moderation', label: 'Freigabe' },
-  { key: 'affiliate', label: 'Shop-Link' },
   { key: 'warnungen', label: 'Warnungen' },
+];
+
+const FALLBACK_SERVING_UNITS: AdminManagedListItem[] = [
+  { id: -1, list_key: 'serving_unit', value: 'Kapsel', label: 'Kapsel', description: null, sort_order: 10, active: 1, version: null, created_at: null, updated_at: null },
+  { id: -2, list_key: 'serving_unit', value: 'Kapseln', label: 'Kapseln', description: null, sort_order: 20, active: 1, version: null, created_at: null, updated_at: null },
+  { id: -3, list_key: 'serving_unit', value: 'Tablette', label: 'Tablette', description: null, sort_order: 30, active: 1, version: null, created_at: null, updated_at: null },
+  { id: -4, list_key: 'serving_unit', value: 'Tabletten', label: 'Tabletten', description: null, sort_order: 40, active: 1, version: null, created_at: null, updated_at: null },
+  { id: -5, list_key: 'serving_unit', value: 'Softgel', label: 'Softgel', description: null, sort_order: 50, active: 1, version: null, created_at: null, updated_at: null },
+  { id: -6, list_key: 'serving_unit', value: 'Softgels', label: 'Softgels', description: null, sort_order: 60, active: 1, version: null, created_at: null, updated_at: null },
+  { id: -7, list_key: 'serving_unit', value: 'Tropfen', label: 'Tropfen', description: null, sort_order: 70, active: 1, version: null, created_at: null, updated_at: null },
+  { id: -8, list_key: 'serving_unit', value: 'Portion', label: 'Portion', description: null, sort_order: 80, active: 1, version: null, created_at: null, updated_at: null },
+  { id: -9, list_key: 'serving_unit', value: 'Portionen', label: 'Portionen', description: null, sort_order: 90, active: 1, version: null, created_at: null, updated_at: null },
+  { id: -10, list_key: 'serving_unit', value: 'Messloeffel', label: 'Messloeffel', description: null, sort_order: 100, active: 1, version: null, created_at: null, updated_at: null },
+  { id: -11, list_key: 'serving_unit', value: 'ml', label: 'ml', description: null, sort_order: 110, active: 1, version: null, created_at: null, updated_at: null },
+  { id: -12, list_key: 'serving_unit', value: 'g', label: 'g', description: null, sort_order: 120, active: 1, version: null, created_at: null, updated_at: null },
+  { id: -13, list_key: 'serving_unit', value: 'mg', label: 'mg', description: null, sort_order: 130, active: 1, version: null, created_at: null, updated_at: null },
 ];
 
 function getTabFromSection(section: string | null): TabName {
@@ -158,6 +185,7 @@ function emptyProductEditForm(): ProductEditForm {
 function emptyShopLinkForm(): ShopLinkForm {
   return {
     shop_name: '',
+    shop_domain_id: null,
     url: '',
     affiliate_owner_type: 'none',
     affiliate_owner_user_id: '',
@@ -170,6 +198,7 @@ function emptyShopLinkForm(): ShopLinkForm {
 function shopLinkFormFromLink(link: AdminProductShopLink): ShopLinkForm {
   return {
     shop_name: link.shop_name ?? '',
+    shop_domain_id: link.shop_domain_id,
     url: link.url,
     affiliate_owner_type: link.affiliate_owner_type,
     affiliate_owner_user_id: link.affiliate_owner_type === 'user' && link.affiliate_owner_user_id !== null
@@ -198,6 +227,7 @@ function payloadFromShopLinkForm(form: ShopLinkForm): AdminProductShopLinkPayloa
 
   return {
     shop_name: textValue(form.shop_name),
+    shop_domain_id: form.shop_domain_id,
     url,
     affiliate_owner_type: form.affiliate_owner_type,
     affiliate_owner_user_id: ownerUserId,
@@ -206,6 +236,30 @@ function payloadFromShopLinkForm(form: ShopLinkForm): AdminProductShopLinkPayloa
     active: form.active ? 1 : 0,
     sort_order: parsedSortOrder,
   };
+}
+
+function normalizeShopDomains(raw: unknown): AdminShopDomain[] {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return [];
+  const candidates = (raw as { shops?: unknown }).shops;
+  const rows = Array.isArray(candidates) ? candidates : [];
+  return rows
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return null;
+      const record = entry as { id?: unknown; domain?: unknown; display_name?: unknown };
+      const rawId = record.id;
+      const id = typeof rawId === 'number'
+        ? rawId
+        : typeof rawId === 'string'
+          ? Number(rawId)
+          : NaN;
+      if (!Number.isInteger(id) || id <= 0) return null;
+      const domain = typeof record.domain === 'string' ? record.domain : '';
+      const displayName = typeof record.display_name === 'string' && record.display_name.trim().length > 0
+        ? record.display_name
+        : domain;
+      return { id, domain, display_name: displayName };
+    })
+    .filter((entry): entry is AdminShopDomain => entry !== null);
 }
 
 function shopLinkOwnerLabel(link: AdminProductShopLink): string {
@@ -228,7 +282,7 @@ function formFromProduct(product: AdminCatalogProduct): ProductEditForm {
     name: product.name,
     brand: product.brand ?? '',
     image_url: product.image_url ?? '',
-    price: numberText(product.price),
+    price: priceText(product.price),
     serving_size: numberText(product.serving_size),
     serving_unit: product.serving_unit ?? '',
     servings_per_container:
@@ -336,6 +390,23 @@ function numberText(value: number | null | undefined): string {
   return value === null || value === undefined ? '' : String(value).replace('.', ',');
 }
 
+function priceText(value: number | null | undefined): string {
+  if (value === null || value === undefined) return '';
+  return value.toFixed(2).replace('.', ',');
+}
+
+function parseRequiredPrice(value: string): number {
+  const parsed = parseRequiredNumber(value, 'Preis');
+  return Math.round(parsed * 100) / 100;
+}
+
+function normalizePriceDraft(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+  const parsed = Number(trimmed.replace(',', '.'));
+  return Number.isFinite(parsed) && parsed > 0 ? priceText(Math.round(parsed * 100) / 100) : value;
+}
+
 function textValue(value: string): string | null {
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
@@ -423,6 +494,20 @@ function formatDate(value: string | null): string {
 function formatResponseTime(value: number | null): string {
   if (value === null) return '-';
   return `${Math.round(value)} ms`;
+}
+
+function linkHealthExplanation(health: AdminProductLinkHealth | null): string | null {
+  if (!health) return null;
+  if (health.http_status === 503 || health.failure_reason === 'http_503') {
+    return 'HTTP 503 bedeutet: Der Shop-Server war beim automatischen Check voruebergehend nicht verfuegbar oder blockiert solche Checks. Der Link kann im Browser trotzdem funktionieren. Manuell oeffnen, spaeter erneut pruefen und bei wiederholtem Fehler einen Ersatzlink setzen.';
+  }
+  if (health.status === 'timeout') {
+    return 'Der Linkcheck hat kein rechtzeitiges Ergebnis erhalten. Bitte den Link manuell oeffnen und spaeter erneut pruefen.';
+  }
+  if (health.status === 'invalid') {
+    return 'Die gespeicherte URL ist fuer den Check nicht nutzbar. Bitte Protokoll, Domain und Zielpfad pruefen.';
+  }
+  return null;
 }
 
 function formatAmount(row: AdminProductIngredient): string {
@@ -590,7 +675,7 @@ function buildOverviewPatch(form: ProductEditForm, product: AdminCatalogProduct)
   if (name !== product.name) patch.name = name;
   if (changedText(form.brand, product.brand)) patch.brand = textValue(form.brand);
   if (changedText(form.image_url, product.image_url)) patch.image_url = textValue(form.image_url);
-  if (changedNumber(form.price, product.price)) patch.price = parseRequiredNumber(form.price, 'Preis');
+  if (changedNumber(form.price, product.price)) patch.price = parseRequiredPrice(form.price);
   if (changedNumber(form.serving_size, product.serving_size)) {
     patch.serving_size = parseRequiredNumber(form.serving_size, 'Portionsgröße');
   }
@@ -753,6 +838,10 @@ export default function AdministratorProductDetailPage() {
   const [shopLinkSavingId, setShopLinkSavingId] = useState<string | null>(null);
   const [editingShopLinkId, setEditingShopLinkId] = useState<number | null>(null);
   const [shopLinkForm, setShopLinkForm] = useState<ShopLinkForm>(() => emptyShopLinkForm());
+  const [shopDomains, setShopDomains] = useState<AdminShopDomain[]>([]);
+  const [shopDomainsState, setShopDomainsState] = useState<'idle' | 'loading' | 'ready' | 'failed'>('idle');
+  const [servingUnitOptions, setServingUnitOptions] = useState<AdminManagedListItem[]>(FALLBACK_SERVING_UNITS);
+  const [servingUnitsLoading, setServingUnitsLoading] = useState(false);
   const [ingredientOptions, setIngredientOptions] = useState<IngredientLookup[]>([]);
   const [ingredientLookupQuery, setIngredientLookupQuery] = useState('');
   const [ingredientLookupLoading, setIngredientLookupLoading] = useState(false);
@@ -803,6 +892,30 @@ export default function AdministratorProductDetailPage() {
     }
   }, [productId]);
 
+  const loadServingUnits = useCallback(async () => {
+    setServingUnitsLoading(true);
+    try {
+      const response = await getAdminManagedListItems('serving_unit');
+      setServingUnitOptions(response.items.length > 0 ? response.items : FALLBACK_SERVING_UNITS);
+    } catch {
+      setServingUnitOptions(FALLBACK_SERVING_UNITS);
+    } finally {
+      setServingUnitsLoading(false);
+    }
+  }, []);
+
+  const loadShopDomains = useCallback(async () => {
+    setShopDomainsState('loading');
+    try {
+      const response = await apiClient.get<unknown>(SHOP_DOMAINS_PATH);
+      setShopDomains(normalizeShopDomains(response.data));
+      setShopDomainsState('ready');
+    } catch {
+      setShopDomains([]);
+      setShopDomainsState('failed');
+    }
+  }, []);
+
   const loadIngredientOptions = useCallback(async (query = '') => {
     setIngredientLookupLoading(true);
     try {
@@ -824,6 +937,14 @@ export default function AdministratorProductDetailPage() {
   useEffect(() => {
     void loadShopLinks();
   }, [loadShopLinks]);
+
+  useEffect(() => {
+    void loadServingUnits();
+  }, [loadServingUnits]);
+
+  useEffect(() => {
+    void loadShopDomains();
+  }, [loadShopDomains]);
 
   useEffect(() => {
     void loadIngredientOptions();
@@ -1180,6 +1301,30 @@ export default function AdministratorProductDetailPage() {
 
   const warnings = useMemo(() => (product ? getWarnings(product) : []), [product]);
   const linkHealth = useMemo(() => (product ? readLinkHealth(product.raw) : null), [product]);
+  const shopDomainOptionsAvailable = shopDomainsState === 'ready' && shopDomains.length > 0;
+  const shopDomainFallback = shopDomainsState === 'failed' || (shopDomainsState === 'ready' && shopDomains.length === 0);
+  const shopDomainById = useMemo(() => new Map(shopDomains.map((domain) => [domain.id, domain])), [shopDomains]);
+  const visibleServingUnitOptions = useMemo(() => {
+    const byValue = new Map<string, AdminManagedListItem>();
+    servingUnitOptions
+      .filter((option) => option.active !== 0)
+      .forEach((option) => byValue.set(option.value, option));
+    if (form.serving_unit && !byValue.has(form.serving_unit)) {
+      byValue.set(form.serving_unit, {
+        id: 0,
+        list_key: 'serving_unit',
+        value: form.serving_unit,
+        label: `${form.serving_unit} (bestehend)`,
+        description: null,
+        sort_order: 9999,
+        active: 1,
+        version: null,
+        created_at: null,
+        updated_at: null,
+      });
+    }
+    return [...byValue.values()].sort((a, b) => a.sort_order - b.sort_order || a.label.localeCompare(b.label, 'de'));
+  }, [form.serving_unit, servingUnitOptions]);
 
   const renderLinkHealthSummary = (health: AdminProductLinkHealth | null) => (
     <div className="rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg)] p-3 text-xs">
@@ -1211,6 +1356,11 @@ export default function AdministratorProductDetailPage() {
       {health?.failure_reason ? (
         <p className="admin-muted mt-2 break-words">Grund: {health.failure_reason}</p>
       ) : null}
+      {linkHealthExplanation(health) ? (
+        <p className="mt-3 rounded-[var(--admin-r-sm)] border border-[color:var(--admin-warn-soft)] bg-[color:var(--admin-warn-soft)] p-3 text-[color:var(--admin-warn-ink)]">
+          {linkHealthExplanation(health)}
+        </p>
+      ) : null}
       {health?.final_url ? (
         <p className="admin-muted mt-2 break-all">
           Ziel: <span className="admin-mono">{linkHost(health.final_url)}</span>
@@ -1219,9 +1369,235 @@ export default function AdministratorProductDetailPage() {
     </div>
   );
 
-  const renderOverviewTab = (selected: AdminCatalogProduct) => (
-    <div className="grid gap-4 xl:grid-cols-2">
-      <AdminCard title="Produktübersicht" subtitle="Basisdaten, Produktbild und Packungsdaten direkt bearbeiten.">
+  const renderShopLinksContent = (selected: AdminProductDetail) => (
+    <div className="admin-product-shop-card-body">
+      <section className="admin-product-shop-section">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="admin-section-title">Shop-Links</h3>
+            <p className="admin-muted text-xs">Der Hauptlink wird im Katalog angezeigt.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <AdminButton size="sm" onClick={() => void loadShopLinks(selected.id)} disabled={shopLinksLoading}>
+              <RefreshCw size={13} />
+              Aktualisieren
+            </AdminButton>
+            <AdminButton size="sm" variant="primary" onClick={handleStartCreateShopLink}>
+              <Plus size={13} />
+              Neuer Link
+            </AdminButton>
+          </div>
+        </div>
+        {!shopLinkHealthAvailable ? (
+          <p className="admin-muted mb-3 text-xs">Linkcheck-Daten sind in dieser Umgebung nicht verfuegbar.</p>
+        ) : null}
+        {shopDomainFallback ? (
+          <p className="admin-muted mb-3 text-xs">
+            Freitext-Fallback: Shop-Liste nicht verfuegbar. Du kannst den Shop im Freitextfeld erfassen.
+          </p>
+        ) : null}
+        {shopLinksLoading ? (
+          <AdminEmpty>Lade Shop-Links...</AdminEmpty>
+        ) : shopLinks.length === 0 ? (
+          <AdminEmpty>Keine Shop-Links vorhanden. Lege unten den ersten Link an.</AdminEmpty>
+        ) : (
+          <div className="grid gap-3">
+            {shopLinks.map((link) => (
+              <article key={link.id} className="rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg)] p-3 text-sm">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium">{link.shop_name || linkHost(link.url)}</span>
+                      {link.is_primary ? <AdminBadge tone="ok">Hauptlink</AdminBadge> : null}
+                      <AdminBadge tone={link.active ? 'info' : 'neutral'}>{link.active ? 'aktiv' : 'inaktiv'}</AdminBadge>
+                      <AdminBadge tone={shopLinkOwnerTone(link)}>{shopLinkOwnerLabel(link)}</AdminBadge>
+                      <AdminBadge tone={linkHealthTone(link.health)}>{linkHealthLabel(link.health)}</AdminBadge>
+                    </div>
+                    <a href={link.url} target="_blank" rel="noopener noreferrer" className="admin-mono mt-2 block break-all text-xs text-[color:var(--admin-info-ink)] hover:underline">
+                      {link.url}
+                    </a>
+                    <div className="admin-muted mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                      <span>Sortierung: {link.sort_order}</span>
+                      <span>Quelle: {link.source_type}</span>
+                      <span>Check: {formatDate(link.health?.last_checked_at ?? null)}</span>
+                      {link.health?.http_status ? <span>HTTP {link.health.http_status}</span> : null}
+                    </div>
+                    {link.health?.failure_reason ? (
+                      <p className="admin-muted mt-1 text-xs">Grund: {link.health.failure_reason}</p>
+                    ) : null}
+                    {linkHealthExplanation(link.health) ? (
+                      <p className="mt-2 rounded-[var(--admin-r-sm)] border border-[color:var(--admin-warn-soft)] bg-[color:var(--admin-warn-soft)] p-2 text-xs text-[color:var(--admin-warn-ink)]">
+                        {linkHealthExplanation(link.health)}
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="flex shrink-0 flex-wrap gap-2">
+                    <a href={link.url} target="_blank" rel="noopener noreferrer" className="admin-icon-btn" title="Shop-Link oeffnen" aria-label="Shop-Link oeffnen">
+                      <ExternalLink size={15} />
+                    </a>
+                    {!link.is_primary ? (
+                      <AdminButton size="sm" variant="ghost" onClick={() => void handleSetPrimaryShopLink(link)} disabled={shopLinkSavingId !== null}>
+                        Hauptlink
+                      </AdminButton>
+                    ) : null}
+                    <AdminButton size="sm" variant="ghost" onClick={() => void handleRecheckShopLink(link)} disabled={shopLinkSavingId !== null || !shopLinkHealthAvailable}>
+                      <RefreshCw size={13} />
+                      {shopLinkSavingId === `recheck-${link.id}` ? 'Pruefe...' : 'Erneut pruefen'}
+                    </AdminButton>
+                    <AdminButton size="sm" variant="ghost" onClick={() => handleStartEditShopLink(link)} disabled={shopLinkSavingId !== null}>
+                      <Edit3 size={13} />
+                      Bearbeiten
+                    </AdminButton>
+                    <AdminButton size="sm" variant="danger" onClick={() => void handleDeleteShopLink(link)} disabled={shopLinkSavingId !== null}>
+                      <Trash2 size={13} />
+                      Loeschen
+                    </AdminButton>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="admin-product-shop-section">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="admin-section-title">{editingShopLinkId ? 'Shop-Link bearbeiten' : 'Neuen Shop-Link anlegen'}</h3>
+            <p className="admin-muted text-xs">Der aktive Hauptlink bleibt als Legacy-Shop-Link am Produkt gespiegelt.</p>
+          </div>
+          {editingShopLinkId ? (
+            <AdminButton size="sm" variant="ghost" onClick={handleCancelShopLinkEdit} disabled={shopLinkSavingId !== null}>
+              <X size={13} />
+              Abbrechen
+            </AdminButton>
+          ) : null}
+        </div>
+        <div className="grid gap-3 md:grid-cols-[180px_minmax(260px,1fr)_150px_140px]">
+          <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
+            Shop
+            {shopDomainOptionsAvailable ? (
+              <>
+                <select
+                  value={shopLinkForm.shop_domain_id ?? ''}
+                  onChange={(event) => {
+                    const selectedValue = event.target.value;
+                    if (selectedValue === '') {
+                      updateShopLinkField('shop_domain_id', null);
+                      return;
+                    }
+                    const domainId = Number(selectedValue);
+                    const domain = shopDomainById.get(domainId);
+                    updateShopLinkField('shop_domain_id', Number.isInteger(domainId) ? domainId : null);
+                    if (domain) updateShopLinkField('shop_name', domain.display_name);
+                  }}
+                  className="admin-select mt-1"
+                >
+                  <option value="" disabled>Shop auswaehlen</option>
+                  {shopDomains.map((domain) => (
+                    <option key={domain.id} value={domain.id}>
+                      {domain.display_name}
+                    </option>
+                  ))}
+                </select>
+                {shopLinkForm.shop_name && !shopLinkForm.shop_domain_id ? (
+                  <span className="admin-muted mt-1 block text-xs">Bisher: {shopLinkForm.shop_name}</span>
+                ) : null}
+              </>
+            ) : shopDomainFallback ? (
+              <>
+                <span className="admin-muted mt-1 block text-xs">Freitext-Fallback</span>
+                <input value={shopLinkForm.shop_name} onChange={(event) => updateShopLinkField('shop_name', event.target.value)} className="admin-input mt-1" placeholder="z. B. Amazon" />
+              </>
+            ) : (
+              <select className="admin-select mt-1" disabled value="">
+                <option value="">Shops werden geladen...</option>
+              </select>
+            )}
+          </label>
+          <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
+            URL
+            <input value={shopLinkForm.url} onChange={(event) => updateShopLinkField('url', event.target.value)} className="admin-input mt-1" placeholder="https://..." />
+          </label>
+          <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
+            Link gehoert zu
+            <select value={shopLinkForm.affiliate_owner_type} onChange={(event) => updateShopLinkField('affiliate_owner_type', event.target.value as AffiliateOwnerType)} className="admin-select mt-1">
+              <option value="none">Keiner</option>
+              <option value="nick">Nick</option>
+              <option value="user">Nutzer</option>
+            </select>
+          </label>
+          <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
+            Nutzer-ID
+            <input value={shopLinkForm.affiliate_owner_user_id} onChange={(event) => updateShopLinkField('affiliate_owner_user_id', event.target.value)} inputMode="numeric" disabled={shopLinkForm.affiliate_owner_type !== 'user'} className="admin-input mt-1" />
+          </label>
+          <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
+            Sortierung
+            <input value={shopLinkForm.sort_order} onChange={(event) => updateShopLinkField('sort_order', event.target.value)} inputMode="numeric" className="admin-input mt-1" />
+          </label>
+          <div className="flex flex-wrap items-end gap-4 md:col-span-2">
+            <label className="inline-flex min-h-[38px] items-center gap-2 text-xs font-medium text-[color:var(--admin-ink-2)]">
+              <input type="checkbox" checked={shopLinkForm.is_primary} onChange={(event) => updateShopLinkField('is_primary', event.target.checked)} />
+              Hauptlink
+            </label>
+            <label className="inline-flex min-h-[38px] items-center gap-2 text-xs font-medium text-[color:var(--admin-ink-2)]">
+              <input type="checkbox" checked={shopLinkForm.active} onChange={(event) => updateShopLinkField('active', event.target.checked)} />
+              Aktiv
+            </label>
+          </div>
+          <div className="flex items-end justify-end">
+            <AdminButton variant="primary" onClick={() => void handleSaveShopLink()} disabled={shopLinkSavingId !== null}>
+              <Save size={15} />
+              {shopLinkSavingId === 'create' || (editingShopLinkId && shopLinkSavingId === `save-${editingShopLinkId}`)
+                ? 'Speichere...'
+                : editingShopLinkId ? 'Speichern' : 'Anlegen'}
+            </AdminButton>
+          </div>
+        </div>
+      </section>
+
+      <section className="admin-product-shop-section">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          <h3 className="admin-section-title mr-2">Linkmeldungen</h3>
+          <AdminBadge tone={selected.qa_counts.open_link_report_count > 0 ? 'warn' : 'ok'}>
+            {selected.qa_counts.open_link_report_count} offen
+          </AdminBadge>
+          <AdminBadge tone="neutral">{selected.qa_counts.link_report_count} gesamt</AdminBadge>
+        </div>
+        {selected.link_reports.length === 0 ? (
+          <AdminEmpty>Keine Linkmeldungen fuer dieses Katalogprodukt.</AdminEmpty>
+        ) : (
+          <div className="grid gap-2">
+            {selected.link_reports.map((report) => (
+              <div key={report.id} className="rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg)] p-3 text-xs">
+                <div className="flex flex-wrap items-center gap-2">
+                  <AdminBadge tone={report.status === 'open' ? 'warn' : report.status === 'closed' ? 'neutral' : 'info'}>
+                    {report.status === 'open' ? 'offen' : report.status === 'closed' ? 'erledigt' : report.status === 'reviewed' ? 'geprueft' : report.status}
+                  </AdminBadge>
+                  <span className="admin-muted">#{report.id} - {formatDate(report.created_at)}</span>
+                  <span className="admin-muted">{report.user_email ?? `Nutzer #${report.user_id}`}</span>
+                </div>
+                <div className="mt-2 grid gap-2 md:grid-cols-2">
+                  <div>
+                    <div className="admin-muted">Gemeldet</div>
+                    <div className="admin-mono break-all">{report.shop_link_snapshot || '-'}</div>
+                  </div>
+                  <div>
+                    <div className="admin-muted">Aktuell</div>
+                    <div className="admin-mono break-all">{report.current_shop_link || '-'}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+
+  const renderOverviewTab = (selected: AdminProductDetail) => (
+    <div className="grid gap-4 xl:grid-cols-[minmax(360px,0.9fr)_minmax(460px,1.1fr)]">
+      <AdminCard title="Produktübersicht" subtitle="Basisdaten, Produktbild und Packungsdaten direkt bearbeiten." padded className="admin-product-overview-card">
         <div className="grid gap-3">
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <span className="admin-muted">ID</span>
@@ -1257,6 +1633,7 @@ export default function AdministratorProductDetailPage() {
               <input
                 value={form.price}
                 onChange={(event) => updateField('price', event.target.value)}
+                onBlur={() => updateField('price', normalizePriceDraft(form.price))}
                 inputMode="decimal"
                 className="admin-input mt-1"
               />
@@ -1315,12 +1692,19 @@ export default function AdministratorProductDetailPage() {
             </label>
             <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
               Einheit
-              <input
+              <select
                 value={form.serving_unit}
                 onChange={(event) => updateField('serving_unit', event.target.value)}
-                className="admin-input mt-1"
-                maxLength={40}
-              />
+                className="admin-select mt-1"
+                disabled={servingUnitsLoading}
+              >
+                <option value="">Einheit waehlen</option>
+                {visibleServingUnitOptions.map((option) => (
+                  <option key={`${option.id}-${option.value}`} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
               Portionen
@@ -1349,7 +1733,7 @@ export default function AdministratorProductDetailPage() {
           </div>
         </div>
       </AdminCard>
-      <AdminCard title="Shop-Link" subtitle="Sichtbarer Linkstatus im Katalog.">
+      <AdminCard title="Shop-Link" subtitle="Sichtbarer Linkstatus im Katalog." padded className="admin-product-shop-card">
         <dl className="grid gap-2 text-[13px]">
           <div>
             <dt className="admin-muted">Shop-Link</dt>
@@ -1375,6 +1759,7 @@ export default function AdministratorProductDetailPage() {
           </div>
         </dl>
         <div className="mt-3">{renderLinkHealthSummary(linkHealth)}</div>
+        <div className="mt-4">{renderShopLinksContent(selected)}</div>
       </AdminCard>
     </div>
   );
@@ -2136,7 +2521,6 @@ export default function AdministratorProductDetailPage() {
           {activeTab === 'overview' && renderOverviewTab(product)}
           {activeTab === 'wirkstoffe' && renderWirkstoffeTab(product)}
           {activeTab === 'moderation' && renderModerationTab(product)}
-          {activeTab === 'affiliate' && renderShopLinksTab(product)}
           {activeTab === 'warnungen' && renderWarnungenTab(product, warnings)}
         </div>
       ) : null}

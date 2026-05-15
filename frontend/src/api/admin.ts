@@ -816,6 +816,36 @@ export interface AdminProductShopLinksResponse {
   health_available: boolean;
 }
 
+export type AdminManagedListKey = 'serving_unit';
+
+export interface AdminManagedListItem {
+  id: number;
+  list_key: AdminManagedListKey | string;
+  value: string;
+  label: string;
+  description: string | null;
+  sort_order: number;
+  active: number;
+  version: number | null;
+  created_at: string | null;
+  updated_at: string | null;
+  raw?: Record<string, unknown>;
+}
+
+export interface AdminManagedListItemPayload {
+  value?: string;
+  label?: string;
+  description?: string | null;
+  sort_order?: number;
+  active?: number | boolean;
+  version?: number | null;
+}
+
+export interface AdminManagedListResponse {
+  list_key: AdminManagedListKey | string;
+  items: AdminManagedListItem[];
+}
+
 export interface AdminProductShopLinkPayload {
   shop_domain_id?: number | null;
   shop_name?: string | null;
@@ -884,6 +914,23 @@ export interface AdminProductQAPatch {
   price?: number | null;
   shop_link?: string | null;
   image_url?: string | null;
+  is_affiliate?: number | boolean | null;
+  affiliate_owner_type?: 'none' | 'nick' | 'user' | null;
+  affiliate_owner_user_id?: number | null;
+  moderation_status?: 'pending' | 'approved' | 'rejected' | 'blocked';
+  visibility?: 'hidden' | 'public';
+  serving_size?: number | null;
+  serving_unit?: string | null;
+  servings_per_container?: number | null;
+  container_count?: number | null;
+}
+
+export interface AdminProductCreatePayload {
+  name: string;
+  brand?: string | null;
+  form?: string | null;
+  price: number;
+  shop_link?: string | null;
   is_affiliate?: number | boolean | null;
   affiliate_owner_type?: 'none' | 'nick' | 'user' | null;
   affiliate_owner_user_id?: number | null;
@@ -1434,6 +1481,28 @@ function parseProductShopLink(raw: Record<string, unknown>): AdminProductShopLin
     health: parseAffiliateLinkHealth(raw.health),
     raw,
   };
+}
+
+function parseManagedListItem(raw: Record<string, unknown>): AdminManagedListItem {
+  return {
+    id: toIntOrNull(raw.id) ?? 0,
+    list_key: toTextOrNull(raw.list_key) ?? 'serving_unit',
+    value: toTextOrNull(raw.value) ?? '',
+    label: toTextOrNull(raw.label) ?? toTextOrNull(raw.value) ?? '',
+    description: toTextOrNull(raw.description),
+    sort_order: toIntOrNull(raw.sort_order) ?? 0,
+    active: toIntOrNull(raw.active) ?? (toBooleanOrNull(raw.active) === false ? 0 : 1),
+    version: toIntOrNull(raw.version),
+    created_at: toDateOrNull(raw.created_at),
+    updated_at: toDateOrNull(raw.updated_at),
+    raw,
+  };
+}
+
+function normalizeManagedListItemPayload(payload: AdminManagedListItemPayload): AdminManagedListItemPayload {
+  const normalized: AdminManagedListItemPayload = { ...payload };
+  if (typeof normalized.active === 'boolean') normalized.active = normalized.active ? 1 : 0;
+  return normalized;
 }
 
 function normalizeProductShopLinkPayload(payload: AdminProductShopLinkPayload): AdminProductShopLinkPayload {
@@ -2751,6 +2820,12 @@ export async function getAdminProduct(productId: number): Promise<AdminProductDe
   return parseProductDetail(res.data as Record<string, unknown>);
 }
 
+export async function createAdminProduct(payload: AdminProductCreatePayload): Promise<AdminCatalogProduct> {
+  const res = await apiClient.post<Record<string, unknown>>('/admin/products', payload);
+  const product = (res.data.product ?? res.data) as Record<string, unknown>;
+  return parseCatalogProduct(product);
+}
+
 export async function getAdminProductShopLinks(productId: number): Promise<AdminProductShopLinksResponse> {
   const res = await apiClient.get<Record<string, unknown>>(`/admin/products/${productId}/shop-links`);
   const links = Array.isArray(res.data.links) ? res.data.links : [];
@@ -2758,6 +2833,53 @@ export async function getAdminProductShopLinks(productId: number): Promise<Admin
     links: links.map((entry) => parseProductShopLink(entry as Record<string, unknown>)),
     health_available: toBooleanOrNull(res.data.health_available) ?? false,
   };
+}
+
+export async function getAdminManagedListItems(
+  listKey: AdminManagedListKey,
+  options: { includeInactive?: boolean } = {},
+): Promise<AdminManagedListResponse> {
+  const params = options.includeInactive ? { include_inactive: '1' } : undefined;
+  const res = await apiClient.get<Record<string, unknown>>(`/admin/managed-lists/${listKey}`, { params });
+  const items = Array.isArray(res.data.items) ? res.data.items : [];
+  return {
+    list_key: toTextOrNull(res.data.list_key) ?? listKey,
+    items: items.map((entry) => parseManagedListItem(entry as Record<string, unknown>)),
+  };
+}
+
+export async function createAdminManagedListItem(
+  listKey: AdminManagedListKey,
+  payload: AdminManagedListItemPayload,
+): Promise<AdminManagedListItem> {
+  const normalized = normalizeManagedListItemPayload(payload);
+  const res = await apiClient.post<Record<string, unknown>>(`/admin/managed-lists/${listKey}`, normalized);
+  const item = (res.data.item ?? res.data) as Record<string, unknown>;
+  return parseManagedListItem(item);
+}
+
+export async function updateAdminManagedListItem(
+  listKey: AdminManagedListKey,
+  itemId: number,
+  payload: AdminManagedListItemPayload,
+  options: AdminMutationOptions = {},
+): Promise<AdminManagedListItem> {
+  const normalized = normalizeManagedListItemPayload(payload);
+  const res = await apiClient.patch<Record<string, unknown>>(
+    `/admin/managed-lists/${listKey}/${itemId}`,
+    normalized,
+    withIfMatch(normalized, options),
+  );
+  const item = (res.data.item ?? res.data) as Record<string, unknown>;
+  return parseManagedListItem(item);
+}
+
+export async function deactivateAdminManagedListItem(
+  listKey: AdminManagedListKey,
+  itemId: number,
+  options: AdminMutationOptions = {},
+): Promise<void> {
+  await apiClient.delete(`/admin/managed-lists/${listKey}/${itemId}`, withIfMatch(undefined, options));
 }
 
 export async function createAdminProductShopLink(

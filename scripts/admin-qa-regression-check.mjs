@@ -25,9 +25,11 @@ const adminShell = read('frontend/src/pages/administrator/AdministratorShell.tsx
 const dashboardPage = read('frontend/src/pages/administrator/AdministratorDashboardPage.tsx')
 const ingredientsPage = read('frontend/src/pages/administrator/AdministratorIngredientsPage.tsx')
 const productsPage = read('frontend/src/pages/administrator/AdministratorProductsPage.tsx')
+const productCreatePage = assertFile('frontend/src/pages/administrator/AdministratorProductCreatePage.tsx')
 const productDetailPage = read('frontend/src/pages/administrator/AdministratorProductDetailPage.tsx')
 const productQaPage = read('frontend/src/pages/administrator/AdministratorProductQAPage.tsx')
 const adminCss = read('frontend/src/pages/administrator/admin.css')
+const appSource = read('frontend/src/App.tsx')
 const adminApi = read('frontend/src/api/admin.ts')
 const apiEntry = read('functions/api/[[path]].ts')
 const adminModule = read('functions/api/modules/admin.ts')
@@ -415,6 +417,16 @@ assert.match(
 )
 assert.match(productsPage, /Link-Klicks:\s*\{product\.link_click_count\}/, 'Admin products list must show Link-Klicks badge per product')
 assert.match(productsPage, /admin-badge-warn[^>]*>\s*Link-Klicks:/, 'Admin products Link-Klicks badge must use yellow warning styling')
+assert.match(
+  productsPage,
+  /const SHOP_DOMAINS_PATH = '\/admin\/shop-domains';/,
+  'Admin products shop-domain dropdown should call /admin/shop-domains',
+)
+assert.doesNotMatch(
+  productsPage,
+  /apiClient\.get<[^>]*>\(\s*'\/api\/admin\/shop-domains'\)/,
+  'Admin products shop-domain dropdown should not call /api/admin/shop-domains via apiClient',
+)
 const productRowBlock = extractRequiredBlock(
   productsPage,
   /function ProductRow\([\s\S]*?\r?\n}\r?\n\r?\n(?=function ShopLinksModal)/,
@@ -544,6 +556,8 @@ assert.match(productsPage, /admin-url-input/, 'Admin products editable URL field
 assert.match(productsPage, /admin-toggle-card/, 'Admin products affiliate/active controls must use the compact toggle-card styling')
 assert.match(productsPage, /admin-btn-success/, 'Admin products shop-link save action must use the green success button styling')
 assert.match(productsPage, /admin-icon-btn-warn/, 'Admin products external-link icon beside URL fields must use yellow styling')
+assert.match(productsPage, /to="\/administrator\/products\/new"/, 'Admin products Neu action must link to the product create route')
+assert.doesNotMatch(productsPage, /window\.location\.assign\('\/administrator\/products\/new'\)/, 'Admin products Neu action must not use a hard browser navigation')
 assert.doesNotMatch(
   productsPage,
   /Hauptlinks direkt bearbeiten, weitere Links/,
@@ -563,6 +577,100 @@ assert.match(adminCss, /\.admin-btn-success/, 'Admin CSS must define green save 
 assert.match(adminCss, /\.admin-icon-btn-warn/, 'Admin CSS must define yellow external-link icon buttons')
 assert.match(adminApi, /link_click_count: number/, 'AdminCatalogProduct must type link_click_count')
 assert.match(adminApi, /link_click_count: toIntOrNull\(raw\.link_click_count\) \?\? 0/, 'Admin catalog parser must normalize link_click_count')
+assert.match(adminApi, /export interface AdminProductCreatePayload/, 'Frontend admin API must type product-create payloads')
+assert.match(adminApi, /export async function createAdminProduct/, 'Frontend admin API must expose product creation')
+assert.match(adminApi, /apiClient\.post[\s\S]*?\('\/admin\/products'/, 'Frontend admin API must post new products to /api/admin/products')
+assert.match(appSource, /AdministratorProductCreatePage/, 'App routes must lazy-load the admin product create page')
+assert.match(appSource, /AdministratorInteractionsPage/, 'App routes must lazy-load the admin interactions page')
+assert.match(appSource, /<Route path="products\/new" element=\{<AdministratorProductCreatePage \/>\} \/>/, 'App routes must include /administrator/products/new')
+assert.match(appSource, /<Route path="interactions" element=\{<AdministratorInteractionsPage \/>\} \/>/, 'App routes must include /administrator/interactions')
+assert.match(productCreatePage, /createAdminProduct/, 'Admin product create page must call the create API')
+assert.match(productCreatePage, /navigate\(`\/administrator\/products\/\$\{product\.id\}`\)/, 'Admin product create page must navigate to the created product detail')
+assert.match(
+  productCreatePage,
+  /getAdminManagedListItems\('serving_unit'\)/,
+  'Admin product create page must load centrally managed serving_unit values',
+)
+const productCreateServingUnitBlock = extractRequiredBlock(
+  productCreatePage,
+  /Einheit[\s\S]*?<\/label>/,
+  'Admin product create page must render an Einheit form control',
+)
+assert.match(
+  productCreateServingUnitBlock,
+  /<select[\s\S]*value=\{form\.serving_unit\}/,
+  'Admin product create Einheit must be a dropdown bound to form.serving_unit',
+)
+assert.doesNotMatch(
+  productCreateServingUnitBlock,
+  /<input\b/,
+  'Admin product create Einheit must not regress to a normal text input',
+)
+assert.doesNotMatch(
+  productsPage,
+  /<option value="">Freitext-Shop<\/option>/,
+  'Admin products shop-domain dropdown must not show Freitext-Shop as a normal loaded-domain option',
+)
+assert.match(
+  productsPage,
+  /Freitext-Fallback/,
+  'Admin products shop-link form must clearly label the manual shop entry as Freitext-Fallback when fallback is needed',
+)
+assert.match(
+  productDetailPage,
+  /const SHOP_DOMAINS_PATH = '\/admin\/shop-domains';/,
+  'Admin product detail shop-domain dropdown should call /admin/shop-domains',
+)
+assert.match(
+  productDetailPage,
+  /apiClient\.get<unknown>\(SHOP_DOMAINS_PATH\)/,
+  'Admin product detail must load managed shop domains for the overview shop-link editor',
+)
+assert.match(
+  productDetailPage,
+  /shopDomainOptionsAvailable[\s\S]*<select[\s\S]*value=\{shopLinkForm\.shop_domain_id \?\? ''\}/,
+  'Admin product detail shop-link editor must render a shop-domain dropdown when managed domains are available',
+)
+assert.doesNotMatch(
+  productDetailPage,
+  /<option value="">Freitext-Shop<\/option>/,
+  'Admin product detail shop-domain dropdown must not show Freitext-Shop as a normal loaded-domain option',
+)
+assert.match(
+  productDetailPage,
+  /Freitext-Fallback:[\s\S]*Shop-Liste nicht verfuegbar/,
+  'Admin product detail shop-link editor must expose manual shop text only as a clear fallback',
+)
+assert.match(
+  productDetailPage,
+  /shop_domain_id:\s*form\.shop_domain_id/,
+  'Admin product detail shop-link payload must preserve the selected shop_domain_id',
+)
+assert.match(
+  productsPage,
+  /aria-expanded=\{showHttp503Info\}[\s\S]*onClick=\{\(\) => setShowHttp503Info/,
+  'Admin products HTTP 503 explanation must be click/tap-visible, not only a hover title',
+)
+assert.match(
+  productsPage,
+  /showHttp503Info \? \([\s\S]*HTTP 503 bedeutet:/,
+  'Admin products must render visible explanatory copy for HTTP 503 after toggling the info control',
+)
+assert.match(
+  productCreatePage,
+  /function normalizePriceDraft\(value: string\): string/,
+  'Admin product create page must define price draft normalization',
+)
+assert.match(
+  productCreatePage,
+  /onBlur=\{\(\) => updateField\('price', normalizePriceDraft\(form\.price\)\)\}/,
+  'Admin product create price field must normalize 19,9 to 19,90 on blur',
+)
+assert.match(
+  adminModule,
+  /admin\.post\('\/products'[\s\S]*INSERT INTO products[\s\S]*logAdminAction/,
+  'Admin backend must implement POST /api/admin/products with audit logging',
+)
 assert.match(
   adminModule,
   /product_link_clicks[\s\S]*WHERE product_type = 'catalog'[\s\S]*GROUP BY product_id[\s\S]*link_click_count/,
