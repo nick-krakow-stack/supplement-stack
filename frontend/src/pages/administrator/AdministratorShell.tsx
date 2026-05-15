@@ -7,7 +7,6 @@ import {
   ExternalLink,
   FileText,
   FlaskConical,
-  Grid3X3,
   Languages,
   LayoutDashboard,
   LogOut,
@@ -43,12 +42,6 @@ const NAV_GROUPS: NavigationGroup[] = [
       { label: 'Richtwerte', path: '/administrator/dosing', icon: <FlaskConical size={15} /> },
       { label: 'Wissensdatenbank', path: '/administrator/knowledge', icon: <BookOpen size={15} /> },
       { label: 'Übersetzungen', path: '/administrator/translations', icon: <Languages size={15} /> },
-      {
-        label: 'Wechselwirkungs-Matrix',
-        path: '/administrator/interactions',
-        icon: <Grid3X3 size={15} />,
-        match: ['/administrator/interactions'],
-      },
     ],
   },
   {

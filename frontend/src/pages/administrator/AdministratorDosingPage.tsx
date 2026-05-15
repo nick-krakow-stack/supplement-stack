@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Loader2, Plus, RefreshCw, Search } from 'lucide-react';
 import {
@@ -27,7 +27,7 @@ import {
   sourceLinksFromRecommendation,
   validateDosePayload,
 } from './AdministratorDosingTypes';
-import { AdminBadge, AdminButton, AdminEmpty, AdminError, AdminPageHeader } from './AdminUi';
+import { AdminBadge, AdminEmpty, AdminError, AdminPageHeader } from './AdminUi';
 
 function statusChip(label: string, active: boolean, tone: 'green' | 'blue' | 'amber' = 'blue') {
   if (!active) return <AdminBadge>{label}</AdminBadge>;
@@ -110,6 +110,7 @@ export default function AdministratorDosingPage() {
   const [error, setError] = useState('');
   const [status, setStatus] = useState('');
   const [backendWarnings, setBackendWarnings] = useState<AdminDosePlausibilityWarning[]>([]);
+  const editPanelRef = useRef<HTMLDivElement | null>(null);
 
   const selectedRecommendation = useMemo(() => {
     if (typeof selectedId !== 'number') return null;
@@ -168,6 +169,23 @@ export default function AdministratorDosingPage() {
       setLoading(false);
     }
   }, [ingredientFilter, ingredientNameById, linkTypeFilter, query, sourceStatusFilter]);
+
+  const focusEditPanel = useCallback(() => {
+    window.requestAnimationFrame(() => {
+      const element = editPanelRef.current;
+      if (!element) return;
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      element.focus({ preventScroll: true });
+    });
+  }, []);
+
+  const handleSelectRecommendation = useCallback(
+    (id: number) => {
+      setSelectedId(id);
+      focusEditPanel();
+    },
+    [focusEditPanel],
+  );
 
   useEffect(() => {
     void loadIngredients();
@@ -249,6 +267,7 @@ export default function AdministratorDosingPage() {
     setDraft({ ...blankDoseDraft(), ingredient_id: ingredientFilter });
     setSourceLinks([]);
     setBackendWarnings([]);
+    focusEditPanel();
   };
 
   const handleSave = async () => {
@@ -317,14 +336,16 @@ export default function AdministratorDosingPage() {
 
       <div className="admin-filter-bar mb-4">
         <div className="admin-filter-main">
-          <label className="admin-filter-search flex min-h-[34px] items-center gap-2 rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg)] px-3">
-            <Search size={15} className="admin-muted" />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Wirkstoff, Quelle, Kontext suchen"
-              className="min-w-0 flex-1 bg-transparent text-[12.5px] outline-none"
-            />
+          <label className="admin-filter-field admin-filter-search-field">
+            <span className="admin-filter-search-with-icon relative">
+              <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[color:var(--admin-ink-3)]" />
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Wirkstoff, Quelle, Kontext suchen"
+                className="admin-input admin-filter-search pl-9"
+              />
+            </span>
           </label>
         </div>
         <div className="admin-filter-controls">
@@ -359,16 +380,25 @@ export default function AdministratorDosingPage() {
             <option value="external">Externer Link</option>
             <option value="none">Kein Link</option>
           </select>
-        </div>
-        <div className="admin-filter-actions">
-          <AdminButton onClick={handleNew}>
+          <button
+            type="button"
+            onClick={handleNew}
+            className="admin-icon-btn admin-btn-success admin-filter-add"
+            title="Neu"
+            aria-label="Neu"
+          >
             <Plus size={15} />
-            Neu
-          </AdminButton>
-          <AdminButton onClick={() => void loadRecommendations()}>
+          </button>
+          <button
+            type="button"
+            onClick={() => void loadRecommendations()}
+            disabled={loading}
+            className="admin-icon-btn admin-icon-btn-warn admin-filter-refresh"
+            title="Aktualisieren"
+            aria-label="Aktualisieren"
+          >
             <RefreshCw size={15} />
-            Aktualisieren
-          </AdminButton>
+          </button>
         </div>
       </div>
 
@@ -391,8 +421,10 @@ export default function AdministratorDosingPage() {
                 <button
                   key={row.id}
                   type="button"
-                  onClick={() => setSelectedId(row.id)}
-                  className={`admin-compact-card admin-card block w-full p-3 text-left transition-colors ${
+                  onClick={() => handleSelectRecommendation(row.id)}
+                  title={`Richtwert bearbeiten: ${ingredientName}`}
+                  aria-label={`Richtwert bearbeiten: ${ingredientName}`}
+                  className={`admin-dosing-row admin-compact-card admin-card block w-full p-3 text-left transition-colors ${
                     active ? 'border-[color:var(--admin-green)] ring-2 ring-[rgba(74,176,107,0.18)]' : 'hover:bg-[color:var(--admin-bg-sunk)]'
                   }`}
                 >
@@ -427,24 +459,32 @@ export default function AdministratorDosingPage() {
           )}
         </section>
 
-        <AdministratorDosingEditPanel
-          selectedId={selectedId}
-          selectedRecommendation={selectedRecommendation}
-          draft={draft}
-          sourceLinks={sourceLinks}
-          researchSources={researchSources}
-          ingredientOptions={ingredientOptions}
-          ingredientNameById={ingredientNameById}
-          saving={saving}
-          status={status}
-          backendWarnings={backendWarnings}
-          onDraftChange={updateDraft}
-          onSourceLinkChange={updateSourceLink}
-          onAddSourceLink={addSourceLink}
-          onRemoveSourceLink={removeSourceLink}
-          onSave={() => void handleSave()}
-          onDeactivate={() => void handleDeactivate()}
-        />
+        <div
+          ref={editPanelRef}
+          tabIndex={-1}
+          role="region"
+          className="admin-dosing-edit-anchor"
+          aria-label="Richtwert-Editor"
+        >
+          <AdministratorDosingEditPanel
+            selectedId={selectedId}
+            selectedRecommendation={selectedRecommendation}
+            draft={draft}
+            sourceLinks={sourceLinks}
+            researchSources={researchSources}
+            ingredientOptions={ingredientOptions}
+            ingredientNameById={ingredientNameById}
+            saving={saving}
+            status={status}
+            backendWarnings={backendWarnings}
+            onDraftChange={updateDraft}
+            onSourceLinkChange={updateSourceLink}
+            onAddSourceLink={addSourceLink}
+            onRemoveSourceLink={removeSourceLink}
+            onSave={() => void handleSave()}
+            onDeactivate={() => void handleDeactivate()}
+          />
+        </div>
       </div>
     </>
   );

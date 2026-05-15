@@ -47,7 +47,6 @@ const DEFAULT_TARGETS = [
   { route: '/administrator/ingredients/1?section=dosing', name: 'ingredient-dosing', tabLabel: 'Dosiswerte' },
   { route: '/administrator/ingredients/1?section=display', name: 'ingredient-display', tabLabel: 'Anzeige' },
   { route: '/administrator/dosing' },
-  { route: '/administrator/interactions' },
   { route: '/administrator/knowledge' },
   { route: '/administrator/translations' },
   { route: '/administrator/sub-ingredients' },

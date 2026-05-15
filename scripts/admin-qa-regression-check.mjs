@@ -21,6 +21,7 @@ function extractRequiredBlock(source, pattern, description) {
 }
 
 const dosingPage = read('frontend/src/pages/administrator/AdministratorDosingPage.tsx')
+const adminShell = read('frontend/src/pages/administrator/AdministratorShell.tsx')
 const dashboardPage = read('frontend/src/pages/administrator/AdministratorDashboardPage.tsx')
 const ingredientsPage = read('frontend/src/pages/administrator/AdministratorIngredientsPage.tsx')
 const productsPage = read('frontend/src/pages/administrator/AdministratorProductsPage.tsx')
@@ -38,6 +39,16 @@ const frontendAuthApi = read('frontend/src/api/auth.ts')
 const typesFile = read('frontend/src/types/index.ts')
 const migration76 = assertFile('d1-migrations/0076_admin_dashboard_tracking.sql')
 const migration77 = assertFile('d1-migrations/0077_signup_referral_attribution.sql')
+const adminNavGroupsBlock = extractRequiredBlock(
+  adminShell,
+  /const NAV_GROUPS:[\s\S]*?\n\];/,
+  'AdministratorShell must define visible admin navigation groups',
+)
+assert.doesNotMatch(
+  adminNavGroupsBlock,
+  /Wechselwirkungs-Matrix|\/administrator\/interactions/,
+  'Visible admin sidebar navigation must not include Wechselwirkungs-Matrix',
+)
 const hiddenDoseMatch = dosingPage.match(/function isHiddenAdminDose[\s\S]*?^}/m)
 assert.ok(hiddenDoseMatch, 'AdministratorDosingPage must define isHiddenAdminDose')
 assert.equal(
@@ -60,6 +71,61 @@ assert.match(
   dosingPage,
   /searchParams\.get\('q'\)/,
   'AdministratorDosingPage must read q from URL search params',
+)
+assert.match(
+  dosingPage,
+  /admin-filter-search-with-icon[\s\S]*className="admin-input admin-filter-search pl-9"/,
+  'Admin dosing search field must use the shared single-frame icon-search input pattern',
+)
+assert.doesNotMatch(
+  dosingPage,
+  /admin-filter-search flex min-h-\[34px\][^"]*border/,
+  'Admin dosing search must not keep the old outer framed label wrapper',
+)
+assert.match(
+  dosingPage,
+  /title=\{`Richtwert bearbeiten: \$\{ingredientName\}`\}[\s\S]*aria-label=\{`Richtwert bearbeiten: \$\{ingredientName\}`\}/,
+  'Admin dosing rows must expose an accessible edit label per ingredient',
+)
+assert.match(
+  dosingPage,
+  /handleSelectRecommendation[\s\S]*focusEditPanel/,
+  'Admin dosing row clicks must bring the edit panel into focus',
+)
+const dosingControlsBlock = extractRequiredBlock(
+  dosingPage,
+  /<div className="admin-filter-controls">[\s\S]*?<\/div>\s*<\/div>\s*\{error/,
+  'Admin dosing toolbar controls must include filters and icon actions together',
+)
+assert.match(
+  dosingControlsBlock,
+  /title="Neu"[\s\S]*aria-label="Neu"[\s\S]*<Plus\b/,
+  'Admin dosing Neu action must be an accessible icon-only plus button',
+)
+assert.doesNotMatch(
+  dosingControlsBlock,
+  />\s*Neu\s*</,
+  'Admin dosing Neu action must not render visible Neu text',
+)
+assert.match(
+  dosingControlsBlock,
+  /className="admin-icon-btn admin-btn-success admin-filter-add"/,
+  'Admin dosing Neu action must use icon-only green plus styling',
+)
+assert.match(
+  dosingControlsBlock,
+  /className="admin-icon-btn admin-icon-btn-warn admin-filter-refresh"/,
+  'Admin dosing Aktualisieren action must use icon-only yellow refresh styling',
+)
+assert.match(
+  dosingControlsBlock,
+  /title="Aktualisieren"[\s\S]*aria-label="Aktualisieren"[\s\S]*<RefreshCw\b/,
+  'Admin dosing Aktualisieren action must remain accessible with the refresh icon',
+)
+assert.doesNotMatch(
+  dosingControlsBlock,
+  />\s*Aktualisieren\s*</,
+  'Admin dosing Aktualisieren action must not render visible text',
 )
 
 assert.match(apiEntry, /app\.route\('\/api\/analytics', analytics\)/, 'API entry must mount /api/analytics')

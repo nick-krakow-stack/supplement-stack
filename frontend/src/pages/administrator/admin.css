@@ -1191,6 +1191,12 @@
   align-self: end;
 }
 
+.admin-filter-add {
+  width: 34px;
+  height: 34px;
+  align-self: end;
+}
+
 .admin-filter-bar .admin-input,
 .admin-filter-bar .admin-select,
 .admin-filter-control {
@@ -1219,6 +1225,19 @@
 
 .admin-compact-card {
   border-radius: var(--admin-r-md);
+}
+
+.admin-dosing-row {
+  cursor: pointer;
+}
+
+.admin-dosing-row:hover {
+  border-color: var(--admin-line-strong);
+  box-shadow: var(--admin-shadow-md);
+}
+
+.admin-dosing-edit-anchor:focus {
+  outline: none;
 }
 
 .admin-compact-card .admin-card-head {
