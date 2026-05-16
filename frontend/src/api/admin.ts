@@ -823,6 +823,7 @@ export interface AdminManagedListItem {
   list_key: AdminManagedListKey | string;
   value: string;
   label: string;
+  plural_label: string | null;
   description: string | null;
   sort_order: number;
   active: number;
@@ -835,6 +836,7 @@ export interface AdminManagedListItem {
 export interface AdminManagedListItemPayload {
   value?: string;
   label?: string;
+  plural_label?: string | null;
   description?: string | null;
   sort_order?: number;
   active?: number | boolean;
@@ -844,6 +846,12 @@ export interface AdminManagedListItemPayload {
 export interface AdminManagedListResponse {
   list_key: AdminManagedListKey | string;
   items: AdminManagedListItem[];
+}
+
+export interface AdminManagedListReorderItem {
+  id: number;
+  sort_order: number;
+  version?: number | null;
 }
 
 export interface AdminProductShopLinkPayload {
@@ -1489,6 +1497,7 @@ function parseManagedListItem(raw: Record<string, unknown>): AdminManagedListIte
     list_key: toTextOrNull(raw.list_key) ?? 'serving_unit',
     value: toTextOrNull(raw.value) ?? '',
     label: toTextOrNull(raw.label) ?? toTextOrNull(raw.value) ?? '',
+    plural_label: toTextOrNull(raw.plural_label),
     description: toTextOrNull(raw.description),
     sort_order: toIntOrNull(raw.sort_order) ?? 0,
     active: toIntOrNull(raw.active) ?? (toBooleanOrNull(raw.active) === false ? 0 : 1),
@@ -2880,6 +2889,18 @@ export async function deactivateAdminManagedListItem(
   options: AdminMutationOptions = {},
 ): Promise<void> {
   await apiClient.delete(`/admin/managed-lists/${listKey}/${itemId}`, withIfMatch(undefined, options));
+}
+
+export async function reorderAdminManagedListItems(
+  listKey: AdminManagedListKey,
+  items: AdminManagedListReorderItem[],
+): Promise<AdminManagedListResponse> {
+  const res = await apiClient.patch<Record<string, unknown>>(`/admin/managed-lists/${listKey}/reorder`, items);
+  const rows = Array.isArray(res.data.items) ? res.data.items : [];
+  return {
+    list_key: toTextOrNull(res.data.list_key) ?? listKey,
+    items: rows.map((entry) => parseManagedListItem(entry as Record<string, unknown>)),
+  };
 }
 
 export async function createAdminProductShopLink(

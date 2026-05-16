@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Archive, Plus, RefreshCw, Save, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState, type DragEvent } from 'react';
+import { Archive, ArrowDown, ArrowUp, GripVertical, Plus, Save, X } from 'lucide-react';
 import {
   createAdminManagedListItem,
   deactivateAdminManagedListItem,
   getAdminManagedListItems,
+  reorderAdminManagedListItems,
   updateAdminManagedListItem,
   type AdminManagedListItem,
   type AdminManagedListKey,
@@ -13,56 +14,35 @@ import { AdminBadge, AdminButton, AdminCard, AdminEmpty, AdminError, AdminPageHe
 type ManagedListConfig = {
   key: AdminManagedListKey;
   label: string;
-  description: string;
 };
 
 type UnitDraft = {
-  value: string;
-  label: string;
+  unit: string;
+  plural_label: string;
   description: string;
-  sort_order: string;
-  active: boolean;
 };
 
 const MANAGED_LISTS: ManagedListConfig[] = [
   {
     key: 'serving_unit',
     label: 'Einheiten',
-    description: 'Zentral gepflegte Auswahl fuer Produkt-Portionseinheiten.',
   },
 ];
 
-function emptyDraft(nextSortOrder: number): UnitDraft {
+function emptyDraft(): UnitDraft {
   return {
-    value: '',
-    label: '',
+    unit: '',
+    plural_label: '',
     description: '',
-    sort_order: String(nextSortOrder),
-    active: true,
   };
 }
 
 function draftFromItem(item: AdminManagedListItem): UnitDraft {
   return {
-    value: item.value,
-    label: item.label,
+    unit: item.label || item.value,
+    plural_label: item.plural_label ?? '',
     description: item.description ?? '',
-    sort_order: String(item.sort_order),
-    active: item.active !== 0,
   };
-}
-
-function parseSortOrder(value: string): number {
-  const parsed = Number(value.trim());
-  if (!Number.isInteger(parsed)) throw new Error('Sortierung muss eine ganze Zahl sein.');
-  return parsed;
-}
-
-function formatDate(value: string | null): string {
-  if (!value) return '-';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return '-';
-  return parsed.toLocaleDateString('de-DE');
 }
 
 function getErrorMessage(error: unknown): string {
@@ -74,33 +54,56 @@ function getErrorMessage(error: unknown): string {
   return 'Die Anfrage ist fehlgeschlagen.';
 }
 
+function reorderItems(items: AdminManagedListItem[], fromId: number, toId: number): AdminManagedListItem[] {
+  const fromIndex = items.findIndex((item) => item.id === fromId);
+  const toIndex = items.findIndex((item) => item.id === toId);
+  if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return items;
+
+  const nextItems = [...items];
+  const [movedItem] = nextItems.splice(fromIndex, 1);
+  nextItems.splice(toIndex, 0, movedItem);
+  return nextItems;
+}
+
+function moveItem(items: AdminManagedListItem[], itemId: number, direction: -1 | 1): AdminManagedListItem[] {
+  const index = items.findIndex((item) => item.id === itemId);
+  const nextIndex = index + direction;
+  if (index < 0 || nextIndex < 0 || nextIndex >= items.length) return items;
+
+  const nextItems = [...items];
+  const [movedItem] = nextItems.splice(index, 1);
+  nextItems.splice(nextIndex, 0, movedItem);
+  return nextItems;
+}
+
+function withDisplayOrder(items: AdminManagedListItem[]): AdminManagedListItem[] {
+  return items.map((item, index) => ({ ...item, sort_order: (index + 1) * 10 }));
+}
+
 export default function AdministratorManagementPage() {
   const [activeListKey, setActiveListKey] = useState<AdminManagedListKey>('serving_unit');
   const [items, setItems] = useState<AdminManagedListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
-  const [savingId, setSavingId] = useState<number | 'create' | 'deactivate' | null>(null);
+  const [savingId, setSavingId] = useState<number | 'create' | 'deactivate' | 'reorder' | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [draft, setDraft] = useState<UnitDraft>(() => emptyDraft(10));
-  const [newDraft, setNewDraft] = useState<UnitDraft>(() => emptyDraft(10));
+  const [draggedItemId, setDraggedItemId] = useState<number | null>(null);
+  const [draft, setDraft] = useState<UnitDraft>(() => emptyDraft());
+  const [newDraft, setNewDraft] = useState<UnitDraft>(() => emptyDraft());
 
   const activeConfig = useMemo(
     () => MANAGED_LISTS.find((entry) => entry.key === activeListKey) ?? MANAGED_LISTS[0],
     [activeListKey],
-  );
-  const nextSortOrder = useMemo(
-    () => (items.length === 0 ? 10 : Math.max(...items.map((item) => item.sort_order)) + 10),
-    [items],
   );
 
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const response = await getAdminManagedListItems(activeListKey, { includeInactive: true });
+      const response = await getAdminManagedListItems(activeListKey);
       setItems(response.items);
-      setNewDraft(emptyDraft(response.items.length === 0 ? 10 : Math.max(...response.items.map((item) => item.sort_order)) + 10));
+      setNewDraft(emptyDraft());
     } catch (errorValue) {
       setItems([]);
       setError(getErrorMessage(errorValue));
@@ -130,14 +133,13 @@ export default function AdministratorManagementPage() {
 
   const handleCancelEdit = () => {
     setEditingId(null);
-    setDraft(emptyDraft(nextSortOrder));
+    setDraft(emptyDraft());
   };
 
   const handleCreate = async () => {
-    const value = newDraft.value.trim();
-    const label = newDraft.label.trim();
-    if (!value || !label) {
-      setError('Wert und Anzeige sind erforderlich.');
+    const unit = newDraft.unit.trim();
+    if (!unit) {
+      setError('Einheit ist erforderlich.');
       return;
     }
 
@@ -146,11 +148,10 @@ export default function AdministratorManagementPage() {
     setMessage('');
     try {
       await createAdminManagedListItem(activeListKey, {
-        value,
-        label,
+        value: unit,
+        label: unit,
+        plural_label: newDraft.plural_label.trim() || null,
         description: newDraft.description.trim() || null,
-        sort_order: parseSortOrder(newDraft.sort_order),
-        active: newDraft.active ? 1 : 0,
       });
       await load();
       setMessage('Einheit gespeichert.');
@@ -162,10 +163,9 @@ export default function AdministratorManagementPage() {
   };
 
   const handleSave = async (item: AdminManagedListItem) => {
-    const value = draft.value.trim();
-    const label = draft.label.trim();
-    if (!value || !label) {
-      setError('Wert und Anzeige sind erforderlich.');
+    const unit = draft.unit.trim();
+    if (!unit) {
+      setError('Einheit ist erforderlich.');
       return;
     }
 
@@ -177,11 +177,10 @@ export default function AdministratorManagementPage() {
         activeListKey,
         item.id,
         {
-          value,
-          label,
+          value: unit,
+          label: unit,
+          plural_label: draft.plural_label.trim() || null,
           description: draft.description.trim() || null,
-          sort_order: parseSortOrder(draft.sort_order),
-          active: draft.active ? 1 : 0,
         },
         { version: item.version },
       );
@@ -212,25 +211,68 @@ export default function AdministratorManagementPage() {
     }
   };
 
+  const persistOrder = async (nextOrder: AdminManagedListItem[]) => {
+    const previousItems = items;
+    const orderedItems = withDisplayOrder(nextOrder);
+    setItems(orderedItems);
+    setSavingId('reorder');
+    setError('');
+    setMessage('');
+    try {
+      const response = await reorderAdminManagedListItems(
+        activeListKey,
+        orderedItems.map((item) => ({
+          id: item.id,
+          sort_order: item.sort_order,
+          version: item.version,
+        })),
+      );
+      setItems(response.items);
+      setMessage('Reihenfolge gespeichert.');
+    } catch (errorValue) {
+      setItems(previousItems);
+      setError(getErrorMessage(errorValue));
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const handleDropOnItem = (targetId: number) => {
+    if (draggedItemId === null || draggedItemId === targetId) return;
+    void persistOrder(reorderItems(items, draggedItemId, targetId));
+    setDraggedItemId(null);
+  };
+
+  const handleDragStart = (event: DragEvent<HTMLButtonElement>, itemId: number) => {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', String(itemId));
+    setDraggedItemId(itemId);
+  };
+
+  const handleMove = (itemId: number, direction: -1 | 1) => {
+    void persistOrder(moveItem(items, itemId, direction));
+  };
+
   const renderDraftFields = (
     currentDraft: UnitDraft,
     onChange: <K extends keyof UnitDraft>(field: K, value: UnitDraft[K]) => void,
+    action?: JSX.Element,
   ) => (
     <div className="admin-managed-row-form">
       <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
-        Wert
+        Einheit
         <input
-          value={currentDraft.value}
-          onChange={(event) => onChange('value', event.target.value)}
+          value={currentDraft.unit}
+          onChange={(event) => onChange('unit', event.target.value)}
           className="admin-input mt-1"
           maxLength={80}
         />
       </label>
       <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
-        Anzeige
+        Mehrzahl
         <input
-          value={currentDraft.label}
-          onChange={(event) => onChange('label', event.target.value)}
+          value={currentDraft.plural_label}
+          onChange={(event) => onChange('plural_label', event.target.value)}
           className="admin-input mt-1"
           maxLength={120}
         />
@@ -244,31 +286,17 @@ export default function AdministratorManagementPage() {
           maxLength={500}
         />
       </label>
-      <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
-        Sortierung
-        <input
-          value={currentDraft.sort_order}
-          onChange={(event) => onChange('sort_order', event.target.value)}
-          className="admin-input mt-1"
-          inputMode="numeric"
-        />
-      </label>
-      <label className="inline-flex min-h-[38px] items-center gap-2 text-xs font-medium text-[color:var(--admin-ink-2)]">
-        <input
-          type="checkbox"
-          checked={currentDraft.active}
-          onChange={(event) => onChange('active', event.target.checked)}
-        />
-        Aktiv
-      </label>
+      {action ? <div className="admin-managed-form-action">{action}</div> : null}
     </div>
   );
+
+  const reorderDisabled = savingId !== null || editingId !== null;
 
   return (
     <>
       <AdminPageHeader
         title="Verwaltung"
-        subtitle="Zentrale Listen fuer Admin-Auswahlen pflegen."
+        subtitle="für wichtige Maßeinheiten und Einstellungen"
         meta={<AdminBadge tone="info">{items.filter((item) => item.active !== 0).length} aktiv</AdminBadge>}
       />
 
@@ -292,12 +320,8 @@ export default function AdministratorManagementPage() {
         ))}
       </div>
 
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <p className="admin-muted text-sm">{activeConfig.description}</p>
-        <AdminButton onClick={() => void load()} disabled={loading}>
-          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-          Aktualisieren
-        </AdminButton>
+      <div className="mb-4">
+        <h2 className="admin-section-title">Einheiten / Verabreichungsformen</h2>
       </div>
 
       {error ? <AdminError>{error}</AdminError> : null}
@@ -307,39 +331,39 @@ export default function AdministratorManagementPage() {
         </div>
       ) : null}
 
-      <AdminCard title="Neue Einheit" subtitle="Neue Werte erscheinen direkt in den passenden Admin-Dropdowns." padded>
-        {renderDraftFields(newDraft, updateNewDraft)}
-        <div className="mt-3 flex justify-end">
+      <AdminCard title="Neue Einheit" subtitle="Neue Verabreichungsform anlegen" padded>
+        {renderDraftFields(
+          newDraft,
+          updateNewDraft,
           <AdminButton variant="primary" onClick={() => void handleCreate()} disabled={savingId === 'create'}>
             <Plus size={14} />
             {savingId === 'create' ? 'Speichere...' : 'Einheit anlegen'}
-          </AdminButton>
-        </div>
+          </AdminButton>,
+        )}
       </AdminCard>
 
-      <AdminCard title="Einheiten" subtitle="Werte koennen bearbeitet oder deaktiviert werden." className="mt-4">
+      <AdminCard title={activeConfig.label} subtitle="Welche Verabreichungsform hat das Produkt?" className="mt-4">
         {loading ? <AdminEmpty>Lade Einheiten...</AdminEmpty> : null}
         {!loading && items.length === 0 ? <AdminEmpty>Keine Einheiten vorhanden.</AdminEmpty> : null}
         {!loading && items.length > 0 ? (
           <>
             <div className="admin-table-wrap hidden md:block">
-              <table className="admin-table">
+              <table className="admin-table admin-managed-table">
                 <thead>
                   <tr>
-                    <th>Wert</th>
-                    <th>Anzeige</th>
+                    <th>Einheit</th>
+                    <th>Mehrzahl</th>
                     <th>Beschreibung</th>
                     <th>Status</th>
-                    <th>Sortierung</th>
-                    <th>Aktualisiert</th>
                     <th>Aktionen</th>
+                    <th aria-label="Reihenfolge" />
                   </tr>
                 </thead>
                 <tbody>
                   {items.map((item) => (
                     editingId === item.id ? (
                       <tr key={item.id}>
-                        <td colSpan={7}>
+                        <td colSpan={6}>
                           {renderDraftFields(draft, updateDraft)}
                           <div className="mt-3 flex flex-wrap justify-end gap-2">
                             <AdminButton variant="ghost" size="sm" onClick={handleCancelEdit} disabled={savingId !== null}>
@@ -354,17 +378,22 @@ export default function AdministratorManagementPage() {
                         </td>
                       </tr>
                     ) : (
-                      <tr key={item.id}>
-                        <td className="admin-mono">{item.value}</td>
-                        <td>{item.label}</td>
+                      <tr
+                        key={item.id}
+                        className={draggedItemId === item.id ? 'admin-managed-row-dragging' : undefined}
+                        onDragOver={(event) => {
+                          if (!reorderDisabled) event.preventDefault();
+                        }}
+                        onDrop={() => handleDropOnItem(item.id)}
+                      >
+                        <td className="font-medium">{item.label}</td>
+                        <td>{item.plural_label || '-'}</td>
                         <td className="admin-muted">{item.description || '-'}</td>
                         <td>
                           <AdminBadge tone={item.active !== 0 ? 'ok' : 'neutral'}>
                             {item.active !== 0 ? 'aktiv' : 'inaktiv'}
                           </AdminBadge>
                         </td>
-                        <td className="admin-mono">{item.sort_order}</td>
-                        <td className="admin-muted">{formatDate(item.updated_at)}</td>
                         <td>
                           <div className="flex flex-wrap gap-2">
                             <AdminButton size="sm" variant="ghost" onClick={() => handleStartEdit(item)} disabled={savingId !== null}>
@@ -378,6 +407,20 @@ export default function AdministratorManagementPage() {
                             ) : null}
                           </div>
                         </td>
+                        <td className="admin-managed-order-cell">
+                          <button
+                            type="button"
+                            className="admin-managed-drag-handle"
+                            draggable={!reorderDisabled}
+                            onDragStart={(event) => handleDragStart(event, item.id)}
+                            onDragEnd={() => setDraggedItemId(null)}
+                            disabled={reorderDisabled}
+                            aria-label={`Einheit ${item.label} verschieben`}
+                            title="Reihenfolge ändern"
+                          >
+                            <GripVertical size={16} />
+                          </button>
+                        </td>
                       </tr>
                     )
                   ))}
@@ -386,8 +429,15 @@ export default function AdministratorManagementPage() {
             </div>
 
             <div className="grid gap-3 md:hidden">
-              {items.map((item) => (
-                <article key={item.id} className="rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg)] p-3">
+              {items.map((item, index) => (
+                <article
+                  key={item.id}
+                  className="rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg)] p-3"
+                  onDragOver={(event) => {
+                    if (!reorderDisabled) event.preventDefault();
+                  }}
+                  onDrop={() => handleDropOnItem(item.id)}
+                >
                   {editingId === item.id ? (
                     <>
                       {renderDraftFields(draft, updateDraft)}
@@ -407,24 +457,59 @@ export default function AdministratorManagementPage() {
                       <div className="flex items-start justify-between gap-2">
                         <div>
                           <div className="font-medium">{item.label}</div>
-                          <div className="admin-mono admin-muted text-xs">{item.value}</div>
+                          <div className="admin-muted text-xs">Mehrzahl: {item.plural_label || '-'}</div>
                         </div>
                         <AdminBadge tone={item.active !== 0 ? 'ok' : 'neutral'}>
                           {item.active !== 0 ? 'aktiv' : 'inaktiv'}
                         </AdminBadge>
                       </div>
                       {item.description ? <p className="admin-muted mt-2 text-xs">{item.description}</p> : null}
-                      <div className="admin-muted mt-2 text-xs">Sortierung {item.sort_order} · {formatDate(item.updated_at)}</div>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <AdminButton size="sm" variant="ghost" onClick={() => handleStartEdit(item)} disabled={savingId !== null}>
-                          Bearbeiten
-                        </AdminButton>
-                        {item.active !== 0 ? (
-                          <AdminButton size="sm" variant="danger" onClick={() => void handleDeactivate(item)} disabled={savingId !== null}>
-                            <Archive size={13} />
-                            Deaktivieren
+                      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex flex-wrap gap-2">
+                          <AdminButton size="sm" variant="ghost" onClick={() => handleStartEdit(item)} disabled={savingId !== null}>
+                            Bearbeiten
                           </AdminButton>
-                        ) : null}
+                          {item.active !== 0 ? (
+                            <AdminButton size="sm" variant="danger" onClick={() => void handleDeactivate(item)} disabled={savingId !== null}>
+                              <Archive size={13} />
+                              Deaktivieren
+                            </AdminButton>
+                          ) : null}
+                        </div>
+                        <div className="flex gap-1">
+                          <button
+                            type="button"
+                            className="admin-icon-btn"
+                            onClick={() => handleMove(item.id, -1)}
+                            disabled={reorderDisabled || index === 0}
+                            aria-label={`${item.label} nach oben verschieben`}
+                            title="Nach oben"
+                          >
+                            <ArrowUp size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            className="admin-icon-btn"
+                            onClick={() => handleMove(item.id, 1)}
+                            disabled={reorderDisabled || index === items.length - 1}
+                            aria-label={`${item.label} nach unten verschieben`}
+                            title="Nach unten"
+                          >
+                            <ArrowDown size={14} />
+                          </button>
+                          <button
+                            type="button"
+                            className="admin-managed-drag-handle"
+                            draggable={!reorderDisabled}
+                            onDragStart={(event) => handleDragStart(event, item.id)}
+                            onDragEnd={() => setDraggedItemId(null)}
+                            disabled={reorderDisabled}
+                            aria-label={`Einheit ${item.label} verschieben`}
+                            title="Reihenfolge ändern"
+                          >
+                            <GripVertical size={16} />
+                          </button>
+                        </div>
                       </div>
                     </>
                   )}

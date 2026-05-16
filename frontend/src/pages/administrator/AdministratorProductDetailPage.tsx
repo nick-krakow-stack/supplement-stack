@@ -123,19 +123,16 @@ const TAB_OPTIONS: { key: TabName; label: string }[] = [
 ];
 
 const FALLBACK_SERVING_UNITS: AdminManagedListItem[] = [
-  { id: -1, list_key: 'serving_unit', value: 'Kapsel', label: 'Kapsel', description: null, sort_order: 10, active: 1, version: null, created_at: null, updated_at: null },
-  { id: -2, list_key: 'serving_unit', value: 'Kapseln', label: 'Kapseln', description: null, sort_order: 20, active: 1, version: null, created_at: null, updated_at: null },
-  { id: -3, list_key: 'serving_unit', value: 'Tablette', label: 'Tablette', description: null, sort_order: 30, active: 1, version: null, created_at: null, updated_at: null },
-  { id: -4, list_key: 'serving_unit', value: 'Tabletten', label: 'Tabletten', description: null, sort_order: 40, active: 1, version: null, created_at: null, updated_at: null },
-  { id: -5, list_key: 'serving_unit', value: 'Softgel', label: 'Softgel', description: null, sort_order: 50, active: 1, version: null, created_at: null, updated_at: null },
-  { id: -6, list_key: 'serving_unit', value: 'Softgels', label: 'Softgels', description: null, sort_order: 60, active: 1, version: null, created_at: null, updated_at: null },
-  { id: -7, list_key: 'serving_unit', value: 'Tropfen', label: 'Tropfen', description: null, sort_order: 70, active: 1, version: null, created_at: null, updated_at: null },
-  { id: -8, list_key: 'serving_unit', value: 'Portion', label: 'Portion', description: null, sort_order: 80, active: 1, version: null, created_at: null, updated_at: null },
-  { id: -9, list_key: 'serving_unit', value: 'Portionen', label: 'Portionen', description: null, sort_order: 90, active: 1, version: null, created_at: null, updated_at: null },
-  { id: -10, list_key: 'serving_unit', value: 'Messloeffel', label: 'Messloeffel', description: null, sort_order: 100, active: 1, version: null, created_at: null, updated_at: null },
-  { id: -11, list_key: 'serving_unit', value: 'ml', label: 'ml', description: null, sort_order: 110, active: 1, version: null, created_at: null, updated_at: null },
-  { id: -12, list_key: 'serving_unit', value: 'g', label: 'g', description: null, sort_order: 120, active: 1, version: null, created_at: null, updated_at: null },
-  { id: -13, list_key: 'serving_unit', value: 'mg', label: 'mg', description: null, sort_order: 130, active: 1, version: null, created_at: null, updated_at: null },
+  { id: -1, list_key: 'serving_unit', value: 'Kapsel', label: 'Kapsel', plural_label: 'Kapseln', description: null, sort_order: 10, active: 1, version: null, created_at: null, updated_at: null },
+  { id: -2, list_key: 'serving_unit', value: 'Tablette', label: 'Tablette', plural_label: 'Tabletten', description: null, sort_order: 20, active: 1, version: null, created_at: null, updated_at: null },
+  { id: -3, list_key: 'serving_unit', value: 'Lutschtablette', label: 'Lutschtablette', plural_label: 'Lutschtabletten', description: null, sort_order: 30, active: 1, version: null, created_at: null, updated_at: null },
+  { id: -4, list_key: 'serving_unit', value: 'Tropfen', label: 'Tropfen', plural_label: 'Tropfen', description: null, sort_order: 40, active: 1, version: null, created_at: null, updated_at: null },
+  { id: -5, list_key: 'serving_unit', value: 'Portion', label: 'Portion', plural_label: 'Portionen', description: null, sort_order: 50, active: 1, version: null, created_at: null, updated_at: null },
+  { id: -6, list_key: 'serving_unit', value: 'Messlöffel', label: 'Messlöffel', plural_label: 'Messlöffel', description: null, sort_order: 60, active: 1, version: null, created_at: null, updated_at: null },
+  { id: -7, list_key: 'serving_unit', value: 'Beutel', label: 'Beutel', plural_label: 'Beutel', description: null, sort_order: 70, active: 1, version: null, created_at: null, updated_at: null },
+  { id: -8, list_key: 'serving_unit', value: 'Stick', label: 'Stick', plural_label: 'Sticks', description: null, sort_order: 80, active: 1, version: null, created_at: null, updated_at: null },
+  { id: -9, list_key: 'serving_unit', value: 'Softgel', label: 'Softgel', plural_label: 'Softgels', description: null, sort_order: 90, active: 1, version: null, created_at: null, updated_at: null },
+  { id: -10, list_key: 'serving_unit', value: 'Scoop', label: 'Scoop', plural_label: 'Scoops', description: null, sort_order: 100, active: 1, version: null, created_at: null, updated_at: null },
 ];
 
 function getTabFromSection(section: string | null): TabName {
@@ -1358,6 +1355,7 @@ export default function AdministratorProductDetailPage() {
         list_key: 'serving_unit',
         value: form.serving_unit,
         label: `${form.serving_unit} (bestehend)`,
+        plural_label: null,
         description: null,
         sort_order: 9999,
         active: 1,
@@ -1719,7 +1717,9 @@ export default function AdministratorProductDetailPage() {
                 <option value="">Einheit waehlen</option>
                 {visibleServingUnitOptions.map((option) => (
                   <option key={`${option.id}-${option.value}`} value={option.value}>
-                    {option.label}
+                    {option.plural_label && option.plural_label !== option.label
+                      ? `${option.label} / ${option.plural_label}`
+                      : option.label}
                   </option>
                 ))}
               </select>

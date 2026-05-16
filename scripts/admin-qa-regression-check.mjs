@@ -24,6 +24,7 @@ const dosingPage = read('frontend/src/pages/administrator/AdministratorDosingPag
 const adminShell = read('frontend/src/pages/administrator/AdministratorShell.tsx')
 const dashboardPage = read('frontend/src/pages/administrator/AdministratorDashboardPage.tsx')
 const ingredientsPage = read('frontend/src/pages/administrator/AdministratorIngredientsPage.tsx')
+const managementPage = read('frontend/src/pages/administrator/AdministratorManagementPage.tsx')
 const productsPage = read('frontend/src/pages/administrator/AdministratorProductsPage.tsx')
 const productCreatePage = assertFile('frontend/src/pages/administrator/AdministratorProductCreatePage.tsx')
 const productDetailPage = read('frontend/src/pages/administrator/AdministratorProductDetailPage.tsx')
@@ -42,6 +43,8 @@ const frontendAuthApi = read('frontend/src/api/auth.ts')
 const typesFile = read('frontend/src/types/index.ts')
 const migration76 = assertFile('d1-migrations/0076_admin_dashboard_tracking.sql')
 const migration77 = assertFile('d1-migrations/0077_signup_referral_attribution.sql')
+const migration79 = assertFile('d1-migrations/0079_managed_list_serving_units_cleanup.sql')
+const migration80 = assertFile('d1-migrations/0080_managed_list_serving_units_cleanup_hardening.sql')
 const adminNavGroupsBlock = extractRequiredBlock(
   adminShell,
   /const NAV_GROUPS:[\s\S]*?\n\];/,
@@ -61,9 +64,170 @@ assert.equal(
 )
 
 assert.match(
-  dosingPage,
-  /useSearchParams/,
-  'AdministratorDosingPage must initialize filters from URL search params',
+  managementPage,
+  /subtitle="f(?:ü|\\u00fc)r wichtige Ma(?:ß|\\u00df)einheiten und Einstellungen"/,
+  'Admin management page subtitle must use the owner wording with German umlauts',
+)
+
+
+assert.match(
+  managementPage,
+  /Einheiten \/ Verabreichungsformen/,
+  'Admin management page must show the Einheiten / Verabreichungsformen heading',
+)
+assert.match(
+  managementPage,
+  /Neue Verabreichungsform anlegen/,
+  'Admin management create card must use the new serving-form subtitle',
+)
+assert.match(
+  managementPage,
+  /Welche Verabreichungsform hat das Produkt\?/,
+  'Admin management list card must use the new serving-form helper subtitle',
+)
+assert.match(
+  managementPage,
+  /plural_label/,
+  'Admin management UI must expose singular/plural managed-list data',
+)
+assert.match(
+  managementPage,
+  /reorderAdminManagedListItems/,
+  'Admin management UI must persist drag-and-drop reorder changes',
+)
+assert.match(
+  managementPage,
+  /admin-managed-drag-handle/,
+  'Admin management table must render a far-right drag handle',
+)
+assert.match(
+  managementPage,
+  /aria-label=\{`Einheit \$\{item\.label\} verschieben`\}/,
+  'Admin management drag handle must have an accessible label',
+)
+assert.match(
+  managementPage,
+  /Einheit anlegen/,
+  'Admin management create action must remain visible',
+)
+assert.doesNotMatch(
+  managementPage,
+  /<th>Wert<\/th>|<th>Anzeige<\/th>|Aktualisiert|Sortierung|Zentral gepflegte Auswahl|Admin - \/administrator|RefreshCw/,
+  'Admin management page must remove Wert/Anzeige columns, updated/sort UI, old description, old footer text, and page refresh action',
+)
+const managementCreateCard = extractRequiredBlock(
+  managementPage,
+  /<AdminCard title="Neue Einheit"[\s\S]*?<\/AdminCard>/,
+  'Admin management page must keep a Neue Einheit create card',
+)
+assert.doesNotMatch(
+  managementCreateCard,
+  /Aktiv|sort_order|Sortierung|Anzeige|label:/,
+  'Admin management create form must not expose active, numeric sort, or Wert/Anzeige duplication',
+)
+assert.match(
+  adminShell,
+  />Administrator<\/div>/,
+  'Admin sidebar footer must show Administrator as the user role',
+)
+assert.doesNotMatch(adminShell, /Admin - \/administrator/, 'Admin sidebar footer must not show Admin - /administrator')
+assert.match(adminApi, /plural_label/, 'Frontend admin API must type and parse managed-list plural_label')
+assert.match(
+  adminApi,
+  /reorderAdminManagedListItems/,
+  'Frontend admin API must expose managed-list reorder persistence',
+)
+assert.match(
+  adminModule,
+  /plural_label/,
+  'Admin backend managed-list API must support plural_label',
+)
+assert.match(
+  adminModule,
+  /admin\.patch\('\/managed-lists\/:listKey\/reorder'/,
+  'Admin backend must expose PATCH /api/admin/managed-lists/:listKey/reorder',
+)
+assert.match(
+  migration79,
+  /ALTER TABLE managed_list_items ADD COLUMN plural_label TEXT/,
+  'Migration 0079 must add managed_list_items.plural_label additively',
+)
+assert.match(
+  migration79,
+  /LOWER\(TRIM\(value\)\)\s+IN\s*\(\s*'mg'\s*,\s*'g'\s*,\s*'ml'\s*\)[\s\S]*active\s*=\s*0/,
+  'Migration 0079 must deactivate serving units mg/g/ml case- and trim-safely',
+)
+assert.match(
+  migration79,
+  /UPDATE products[\s\S]*LOWER\(TRIM\(serving_unit\)\)\s+IN\s*\(\s*'mg'\s*,\s*'g'\s*,\s*'ml'\s*\)\s+THEN\s+'Portion'/,
+  'Migration 0079 must normalize mg/g/ml to Portion in products',
+)
+assert.match(
+  migration79,
+  /UPDATE user_products[\s\S]*LOWER\(TRIM\(serving_unit\)\)\s+IN\s*\(\s*'mg'\s*,\s*'g'\s*,\s*'ml'\s*\)\s+THEN\s+'Portion'/,
+  'Migration 0079 must normalize mg/g/ml to Portion in user_products',
+)
+for (const unit of ['Kapseln', 'Tabletten']) {
+  assert.match(
+    migration79,
+    new RegExp(escapeRegExp(unit)),
+    `Migration 0079 must normalize serving unit plural/umlaut data for ${unit}`,
+  )
+}
+assert.match(
+  migration79,
+  /Messl.*ffel/,
+  'Migration 0079 should contain canonical Messlöffel',
+)
+assert.match(
+  migration79,
+  /Messl\u00f6ffel/,
+  'Migration 0079 must contain canonical Messlöffel',
+)
+assert.match(
+  migration79,
+  /messloeffel/,
+  'Migration 0079 should still match ASCII legacy Messloeffel',
+)
+assert.doesNotMatch(
+  migration79,
+  new RegExp('Messl\\u00c3\\u0192|messl\\u00c3\\u0192|\\u00c3\\u201a|\\u00c3\\u0192'),
+  'Migration 0079 should not contain mojibake text for Messl... or related encoding artifacts',
+)
+assert.match(
+  migration80,
+  /UPDATE products[\s\S]*hex\(LOWER\(TRIM\(serving_unit\)\)\)[\s\S]*THEN 'Messlöffel'/,
+  'Migration 0080 must normalize hex-detected mojibake serving units to canonical Messlöffel in products',
+)
+assert.match(
+  migration80,
+  /REPLACE\(TRIM\(serving_unit\), 'Ö', 'ö'\)/,
+  'Migration 0080 must match uppercase umlaut serving-unit variants without relying on SQLite unicode case folding',
+)
+assert.match(
+  migration80,
+  /UPDATE user_products[\s\S]*hex\(LOWER\(TRIM\(serving_unit\)\)\)[\s\S]*THEN 'Messlöffel'/,
+  'Migration 0080 must normalize hex-detected mojibake serving units to canonical Messlöffel in user_products',
+)
+assert.match(
+  migration80,
+  /LOWER\(TRIM\(value\)\)\s+IN\s*\([\s\S]*'kapseln'[\s\S]*'tabletten'[\s\S]*'messloeffel'[\s\S]*\)/,
+  'Migration 0080 must deactivate plural and ASCII legacy managed-list units trim- and case-safely',
+)
+assert.match(
+  migration80,
+  /hex\(LOWER\(TRIM\(value\)\)\)\s+IN\s*\(/,
+  'Migration 0080 must deactivate mojibake managed-list unit rows by hex signature',
+)
+assert.match(
+  migration80,
+  /REPLACE\(TRIM\(value\), 'Ö', 'ö'\)/,
+  'Migration 0080 must identify managed-list Messlöffel case variants without relying on SQLite unicode case folding',
+)
+assert.doesNotMatch(
+  migration80,
+  new RegExp('Messl\\u00c3|messl\\u00c3|\\u00c3\\u201a|\\u00c3\\u0192'),
+  'Migration 0080 must not contain visible mojibake text',
 )
 assert.match(
   dosingPage,
@@ -138,15 +302,24 @@ for (const newLabel of [
   'Neuanmeldungen',
   'Abmeldungen',
   'Backlinks',
-  'Aufrufe über Google',
+  'Aufrufe \\u00fcber Google',
   'Wirkstoffe ohne Artikel',
   'Deadlinks wurden geklickt',
   'Stacks wurden verschickt',
 ]) {
+  if (newLabel.startsWith('Aufrufe ')) {
+    assert.match(
+      dashboardPage,
+      /Aufrufe (?:\u00fcber|\\u00fcber) Google/,
+      'AdministratorDashboardPage must show dashboard label/copy: Aufrufe \\u00fcber Google',
+    )
+    continue
+  }
+  const normalizedDashboardLabel = newLabel
   assert.match(
     dashboardPage,
-    new RegExp(newLabel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
-    `AdministratorDashboardPage must show dashboard label/copy: ${newLabel}`,
+    new RegExp(normalizedDashboardLabel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')),
+    `AdministratorDashboardPage must show dashboard label/copy: ${normalizedDashboardLabel}`,
   )
 }
 
@@ -490,7 +663,7 @@ assert.match(
 )
 assert.match(
   affiliateStatusModalBlock,
-  /setMessage\('Speichervorgang läuft noch\.'\)/,
+  /setMessage\('Speichervorgang [^']+noch\.'\)/,
   'Admin products affiliate status modal should inform when close is blocked while saving',
 )
 assert.match(
@@ -607,6 +780,46 @@ assert.doesNotMatch(
   /<input\b/,
   'Admin product create Einheit must not regress to a normal text input',
 )
+const productCreateServingFallbackBlock = extractRequiredBlock(
+  productCreatePage,
+  /const FALLBACK_SERVING_UNIT_OPTIONS:[\s\S]*?\n\];/,
+  'Admin product create page must define fallback serving-unit options',
+)
+assert.match(
+  productCreateServingFallbackBlock,
+  /pluralLabel/,
+  'Admin product create fallback serving-unit options must carry plural labels',
+)
+assert.match(
+  productCreateServingFallbackBlock,
+  /Messlöffel/,
+  'Admin product create fallback serving-unit options must use canonical Messlöffel',
+)
+assert.doesNotMatch(
+  productCreateServingFallbackBlock,
+  /value: '(?:mg|g|ml|Kapseln|Tabletten|Portionen|Messloeffel)'/,
+  'Admin product create fallback serving-unit options must not include legacy mass/liquid, plural duplicate, or ASCII Messloeffel values',
+)
+const productDetailServingFallbackBlock = extractRequiredBlock(
+  productDetailPage,
+  /const FALLBACK_SERVING_UNITS:[\s\S]*?\n\];/,
+  'Admin product detail page must define fallback serving-unit options',
+)
+assert.match(
+  productDetailServingFallbackBlock,
+  /plural_label/,
+  'Admin product detail fallback serving-unit options must satisfy AdminManagedListItem.plural_label',
+)
+assert.match(
+  productDetailServingFallbackBlock,
+  /Messlöffel/,
+  'Admin product detail fallback serving-unit options must use canonical Messlöffel',
+)
+assert.doesNotMatch(
+  productDetailServingFallbackBlock,
+  /value: '(?:mg|g|ml|Kapseln|Tabletten|Portionen|Messloeffel)'/,
+  'Admin product detail fallback serving-unit options must not include legacy mass/liquid, plural duplicate, or ASCII Messloeffel values',
+)
 assert.doesNotMatch(
   productsPage,
   /<option value="">Freitext-Shop<\/option>/,
@@ -639,7 +852,7 @@ assert.doesNotMatch(
 )
 assert.match(
   productDetailPage,
-  /Freitext-Fallback:[\s\S]*Shop-Liste nicht verf(?:ü|Ã¼)gbar/,
+  /Freitext-Fallback:[\s\S]*Shop-Liste nicht verf(?:\u00fc|ü)gbar/,
   'Admin product detail shop-link editor must expose manual shop text only as a clear fallback',
 )
 assert.match(
@@ -724,7 +937,7 @@ assert.match(
 )
 assert.match(
   productDetailShopLinksContent,
-  /admin-icon-btn admin-icon-btn-warn[\s\S]*aria-label=\{`Shop-Link (?:ö|Ã¶)ffnen:/,
+  /admin-icon-btn admin-icon-btn-warn[\s\S]*aria-label=\{`Shop-Link (?:ö|\u00f6)ffnen:/,
   'Admin product detail shop-link rows must expose an icon-only yellow external open action',
 )
 assert.match(
@@ -750,7 +963,7 @@ assert.doesNotMatch(
 assert.doesNotMatch(
   productDetailPage,
   /Loeschen|oeffnen|pruefen|verfuegbar/,
-  'Admin product detail visible shop-link copy must use German umlauts for Löschen/öffnen/prüfen/verfügbar',
+  'Admin product detail visible shop-link copy must use German umlauts for Löschen/\u00f6ffnen/pr\u00fcfen/verf\u00fcgbar',
 )
 assert.match(
   productDetailPage,
@@ -827,5 +1040,5 @@ for (const page of [
   for (const statusLabel of ['Link: Defekt', 'Link: OK', 'Link: Noch nicht']) {
     assert.match(linkHealthLabelFunction, new RegExp(statusLabel), `${label} must use normalized link-status wording: ${statusLabel}`)
   }
-  assert.doesNotMatch(linkHealthLabelFunction, /Link ok|Link fehlgeschlagen|Timeout|Ung(?:ü|\\u00fc)ltiger Link/, `${label} must not use old verbose link-status labels`)
+  assert.doesNotMatch(linkHealthLabelFunction, /Link ok|Link fehlgeschlagen|Timeout|Ung(?:ü|\u00fc)ltiger Link/, `${label} must not use old verbose link-status labels`)
 }

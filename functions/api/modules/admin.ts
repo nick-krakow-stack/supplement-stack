@@ -13,6 +13,7 @@
 //   DELETE /shop-domains/:id — delete shop domain (admin)
 //   GET /managed-lists/:listKey — managed admin list items (admin)
 //   POST /managed-lists/:listKey — create managed admin list item (admin)
+//   PATCH /managed-lists/:listKey/reorder — reorder managed admin list items (admin)
 //   PATCH /managed-lists/:listKey/:itemId — update managed admin list item (admin)
 //   DELETE /managed-lists/:listKey/:itemId — deactivate managed admin list item (admin)
 //   GET /product-rankings   — product rankings (admin)
@@ -772,6 +773,7 @@ type ManagedListItemRow = {
   list_key: string
   value: string
   label: string
+  plural_label: string | null
   description: string | null
   sort_order: number
   active: number
@@ -783,9 +785,16 @@ type ManagedListItemRow = {
 type ManagedListItemMutation = {
   value?: string
   label?: string
+  plural_label?: string | null
   description?: string | null
   sort_order?: number
   active?: number
+}
+
+type ManagedListReorderItem = {
+  id: number
+  sort_order: number
+  version?: number | null
 }
 
 type ProductQaRow = {
@@ -3883,6 +3892,7 @@ function formatManagedListItem(row: ManagedListItemRow): ManagedListItemRow {
     list_key: row.list_key,
     value: row.value,
     label: row.label,
+    plural_label: row.plural_label ?? null,
     description: row.description ?? null,
     sort_order: row.sort_order,
     active: row.active,
@@ -3896,7 +3906,7 @@ function validateManagedListItemMutation(
   body: Record<string, unknown>,
   existing: ManagedListItemRow | null,
 ): ValidationResult<ManagedListItemMutation> {
-  const allowedFields = new Set(['value', 'label', 'description', 'sort_order', 'active', 'version'])
+  const allowedFields = new Set(['value', 'label', 'plural_label', 'description', 'sort_order', 'active', 'version'])
   for (const key of Object.keys(body)) {
     if (!allowedFields.has(key)) return validationError(`${key} cannot be updated on managed list items`)
   }
@@ -3914,6 +3924,8 @@ function validateManagedListItemMutation(
     : existing ? { ok: true as const, value: existing.label } : validationError('label is required')
   if (!label.ok) return label
 
+  const pluralLabel = optionalTextField(body, 'plural_label', 120)
+  if (!pluralLabel.ok) return pluralLabel
   const description = optionalTextField(body, 'description', 500)
   if (!description.ok) return description
   const sortOrder = optionalNumberField(body, 'sort_order', { integer: true, min: -1000000, max: 1000000 })
@@ -3924,10 +3936,80 @@ function validateManagedListItemMutation(
   const data: ManagedListItemMutation = {}
   if (hasOwnKey(body, 'value') || !existing) data.value = value.value
   if (hasOwnKey(body, 'label') || !existing) data.label = label.value
+  if (pluralLabel.value !== undefined) data.plural_label = pluralLabel.value
   if (description.value !== undefined) data.description = description.value
   if (sortOrder.value !== undefined) data.sort_order = sortOrder.value ?? 0
   if (active.value !== undefined) data.active = active.value
   return { ok: true, value: data }
+}
+
+function managedListSelect(columns: Set<string>): string {
+  return [
+    'id',
+    'list_key',
+    'value',
+    'label',
+    columns.has('plural_label') ? 'plural_label' : 'NULL AS plural_label',
+    'description',
+    'sort_order',
+    'active',
+    'version',
+    'created_at',
+    'updated_at',
+  ].join(', ')
+}
+
+async function loadManagedListItems(
+  db: D1Database,
+  listKey: AdminManagedListKey,
+  includeInactive: boolean,
+): Promise<ManagedListItemRow[]> {
+  const columns = await getTableColumns(db, 'managed_list_items')
+  const whereSql = includeInactive ? 'list_key = ?' : 'list_key = ? AND active = 1'
+  const { results } = await db.prepare(`
+    SELECT ${managedListSelect(columns)}
+    FROM managed_list_items
+    WHERE ${whereSql}
+    ORDER BY sort_order ASC, active DESC, label ASC, id ASC
+  `).bind(listKey).all<ManagedListItemRow>()
+  return results ?? []
+}
+
+function validateManagedListReorderItems(body: unknown): ValidationResult<ManagedListReorderItem[]> {
+  if (!Array.isArray(body)) return validationError('Reorder payload must be an array')
+  if (body.length === 0) return validationError('Reorder payload must not be empty')
+  if (body.length > 250) return validationError('Reorder payload is too large')
+
+  const seenIds = new Set<number>()
+  const items: ManagedListReorderItem[] = []
+  for (const entry of body) {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+      return validationError('Each reorder item must be an object')
+    }
+    const record = entry as Record<string, unknown>
+    const id = typeof record.id === 'number' && Number.isInteger(record.id) && record.id > 0 ? record.id : null
+    if (id === null) return validationError('Each reorder item needs a positive id')
+    if (seenIds.has(id)) return validationError('Duplicate managed list item id in reorder payload')
+    seenIds.add(id)
+
+    const sortOrder = typeof record.sort_order === 'number' && Number.isInteger(record.sort_order)
+      ? record.sort_order
+      : null
+    if (sortOrder === null || sortOrder < -1000000 || sortOrder > 1000000) {
+      return validationError('Each reorder item needs an integer sort_order')
+    }
+
+    const version = record.version === undefined || record.version === null
+      ? null
+      : typeof record.version === 'number' && Number.isInteger(record.version) && record.version >= 0
+        ? record.version
+        : undefined
+    if (version === undefined) return validationError('version must be an integer when provided')
+
+    items.push({ id, sort_order: sortOrder, version })
+  }
+
+  return { ok: true, value: items }
 }
 
 async function syncPrimaryProductShopLinkFromProduct(db: D1Database, productId: number): Promise<void> {
@@ -12429,17 +12511,11 @@ admin.get('/managed-lists/:listKey', async (c) => {
   }
 
   const includeInactive = c.req.query('include_inactive') === '1'
-  const whereSql = includeInactive ? 'list_key = ?' : 'list_key = ? AND active = 1'
-  const { results } = await c.env.DB.prepare(`
-    SELECT *
-    FROM managed_list_items
-    WHERE ${whereSql}
-    ORDER BY active DESC, sort_order ASC, label ASC, id ASC
-  `).bind(listKey).all<ManagedListItemRow>()
+  const results = await loadManagedListItems(c.env.DB, listKey, includeInactive)
 
   return c.json({
     list_key: listKey,
-    items: (results ?? []).map(formatManagedListItem),
+    items: results.map(formatManagedListItem),
   })
 })
 
@@ -12464,31 +12540,46 @@ admin.post('/managed-lists/:listKey', async (c) => {
   const validation = validateManagedListItemMutation(body, null)
   if (!validation.ok) return c.json({ error: validation.error }, validation.status)
   const data = validation.value
+  const columns = await getTableColumns(c.env.DB, 'managed_list_items')
+  const supportsPluralLabel = columns.has('plural_label')
+  const nextSortOrder = data.sort_order ?? (
+    await c.env.DB.prepare(`
+      SELECT COALESCE(MAX(sort_order), 0) + 10 AS sort_order
+      FROM managed_list_items
+      WHERE list_key = ?
+    `).bind(listKey).first<{ sort_order: number | null }>()
+  )?.sort_order ?? 10
+
+  const insertColumns = [
+    'list_key',
+    'value',
+    'label',
+    ...(supportsPluralLabel ? ['plural_label'] : []),
+    'description',
+    'sort_order',
+    'active',
+    'created_at',
+    'updated_at',
+  ]
+  const valuePlaceholders = insertColumns.slice(0, -2).map(() => '?').join(', ')
+  const insertBindings: Array<string | number | null> = [
+    listKey,
+    data.value ?? '',
+    data.label ?? '',
+    ...(supportsPluralLabel ? [data.plural_label ?? null] : []),
+    data.description ?? null,
+    nextSortOrder,
+    data.active ?? 1,
+  ]
 
   try {
     const result = await c.env.DB.prepare(`
-      INSERT INTO managed_list_items (
-        list_key,
-        value,
-        label,
-        description,
-        sort_order,
-        active,
-        created_at,
-        updated_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
-    `).bind(
-      listKey,
-      data.value ?? '',
-      data.label ?? '',
-      data.description ?? null,
-      data.sort_order ?? 0,
-      data.active ?? 1,
-    ).run()
+      INSERT INTO managed_list_items (${insertColumns.join(', ')})
+      VALUES (${valuePlaceholders}, datetime('now'), datetime('now'))
+    `).bind(...insertBindings).run()
 
     const itemId = result.meta.last_row_id as number
-    const item = await c.env.DB.prepare('SELECT * FROM managed_list_items WHERE id = ?')
+    const item = await c.env.DB.prepare(`SELECT ${managedListSelect(columns)} FROM managed_list_items WHERE id = ?`)
       .bind(itemId)
       .first<ManagedListItemRow>()
 
@@ -12508,6 +12599,72 @@ admin.post('/managed-lists/:listKey', async (c) => {
   }
 })
 
+// PATCH /api/admin/managed-lists/:listKey/reorder (admin only)
+admin.patch('/managed-lists/:listKey/reorder', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const listKey = adminManagedListKey(c.req.param('listKey'))
+  if (!listKey) return c.json({ error: `list_key must be one of ${ADMIN_MANAGED_LIST_KEYS.join(', ')}` }, 400)
+  if (!(await hasTable(c.env.DB, 'managed_list_items'))) {
+    return c.json({ error: 'managed_list_items is not available in this environment' }, 409)
+  }
+
+  let body: unknown
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const validation = validateManagedListReorderItems(body)
+  if (!validation.ok) return c.json({ error: validation.error }, validation.status)
+  const reorderItems = validation.value
+  const columns = await getTableColumns(c.env.DB, 'managed_list_items')
+  const placeholders = reorderItems.map(() => '?').join(', ')
+  const { results: existingRows } = await c.env.DB.prepare(`
+    SELECT ${managedListSelect(columns)}
+    FROM managed_list_items
+    WHERE list_key = ?
+      AND id IN (${placeholders})
+  `).bind(listKey, ...reorderItems.map((item) => item.id)).all<ManagedListItemRow>()
+
+  const existingById = new Map((existingRows ?? []).map((row) => [row.id, row]))
+  for (const item of reorderItems) {
+    const existing = existingById.get(item.id)
+    if (!existing) return c.json({ error: `Managed list item ${item.id} not found` }, 404)
+    if (item.version !== null && item.version !== undefined && existing.version !== item.version) {
+      return c.json({ error: 'Version conflict', current_version: existing.version, item_id: item.id }, 409)
+    }
+  }
+
+  await c.env.DB.batch(reorderItems.map((item) => c.env.DB.prepare(`
+    UPDATE managed_list_items
+    SET sort_order = ?,
+        updated_at = datetime('now'),
+        version = COALESCE(version, 0) + 1
+    WHERE id = ?
+      AND list_key = ?
+  `).bind(item.sort_order, item.id, listKey)))
+
+  const items = await loadManagedListItems(c.env.DB, listKey, false)
+
+  await logAdminAction(c, {
+    action: 'reorder_managed_list_items',
+    entity_type: 'managed_list_item',
+    changes: {
+      list_key: listKey,
+      items: reorderItems,
+    },
+  })
+
+  return c.json({
+    ok: true,
+    list_key: listKey,
+    items: items.map(formatManagedListItem),
+  })
+})
+
 // PATCH /api/admin/managed-lists/:listKey/:itemId (admin only)
 admin.patch('/managed-lists/:listKey/:itemId', async (c) => {
   const authErr = await ensureAdmin(c)
@@ -12521,7 +12678,8 @@ admin.patch('/managed-lists/:listKey/:itemId', async (c) => {
     return c.json({ error: 'managed_list_items is not available in this environment' }, 409)
   }
 
-  const existing = await c.env.DB.prepare('SELECT * FROM managed_list_items WHERE id = ? AND list_key = ?')
+  const columns = await getTableColumns(c.env.DB, 'managed_list_items')
+  const existing = await c.env.DB.prepare(`SELECT ${managedListSelect(columns)} FROM managed_list_items WHERE id = ? AND list_key = ?`)
     .bind(itemId, listKey)
     .first<ManagedListItemRow>()
   if (!existing) return c.json({ error: 'Managed list item not found' }, 404)
@@ -12541,12 +12699,13 @@ admin.patch('/managed-lists/:listKey/:itemId', async (c) => {
   const lock = validateOptimisticLock(true, existing.version, requestVersion(c, body))
   if (!lock.ok) return c.json({ error: lock.error, current_version: existing.version }, 409)
 
-  const fields = ['value', 'label', 'description', 'sort_order', 'active'] as const
+  const fields = ['value', 'label', 'plural_label', 'description', 'sort_order', 'active'] as const
   const setClauses: string[] = []
   const bindings: Array<string | number | null> = []
   const before: Record<string, unknown> = {}
   const after: Record<string, unknown> = {}
   for (const field of fields) {
+    if (field === 'plural_label' && !columns.has('plural_label')) continue
     if (!hasOwnKey(data, field)) continue
     setClauses.push(`${field} = ?`)
     bindings.push(data[field] ?? null)
@@ -12576,7 +12735,7 @@ admin.patch('/managed-lists/:listKey/:itemId', async (c) => {
     throw error
   }
 
-  const item = await c.env.DB.prepare('SELECT * FROM managed_list_items WHERE id = ? AND list_key = ?')
+  const item = await c.env.DB.prepare(`SELECT ${managedListSelect(columns)} FROM managed_list_items WHERE id = ? AND list_key = ?`)
     .bind(itemId, listKey)
     .first<ManagedListItemRow>()
 
@@ -12603,7 +12762,8 @@ admin.delete('/managed-lists/:listKey/:itemId', async (c) => {
     return c.json({ error: 'managed_list_items is not available in this environment' }, 409)
   }
 
-  const existing = await c.env.DB.prepare('SELECT * FROM managed_list_items WHERE id = ? AND list_key = ?')
+  const columns = await getTableColumns(c.env.DB, 'managed_list_items')
+  const existing = await c.env.DB.prepare(`SELECT ${managedListSelect(columns)} FROM managed_list_items WHERE id = ? AND list_key = ?`)
     .bind(itemId, listKey)
     .first<ManagedListItemRow>()
   if (!existing) return c.json({ error: 'Managed list item not found' }, 404)

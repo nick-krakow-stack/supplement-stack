@@ -30,15 +30,20 @@ type ProductCreateForm = {
 type ServingUnitOption = {
   value: string;
   label: string;
+  pluralLabel: string | null;
 };
 
 const FALLBACK_SERVING_UNIT_OPTIONS: ServingUnitOption[] = [
-  { value: 'Kapsel', label: 'Kapsel' },
-  { value: 'Tablette', label: 'Tablette' },
-  { value: 'Portion', label: 'Portion' },
-  { value: 'g', label: 'g' },
-  { value: 'ml', label: 'ml' },
-  { value: 'Tropfen', label: 'Tropfen' },
+  { value: 'Kapsel', label: 'Kapsel', pluralLabel: 'Kapseln' },
+  { value: 'Tablette', label: 'Tablette', pluralLabel: 'Tabletten' },
+  { value: 'Lutschtablette', label: 'Lutschtablette', pluralLabel: 'Lutschtabletten' },
+  { value: 'Tropfen', label: 'Tropfen', pluralLabel: 'Tropfen' },
+  { value: 'Portion', label: 'Portion', pluralLabel: 'Portionen' },
+  { value: 'Messlöffel', label: 'Messlöffel', pluralLabel: 'Messlöffel' },
+  { value: 'Beutel', label: 'Beutel', pluralLabel: 'Beutel' },
+  { value: 'Stick', label: 'Stick', pluralLabel: 'Sticks' },
+  { value: 'Softgel', label: 'Softgel', pluralLabel: 'Softgels' },
+  { value: 'Scoop', label: 'Scoop', pluralLabel: 'Scoops' },
 ];
 
 const INITIAL_FORM: ProductCreateForm = {
@@ -62,7 +67,14 @@ function servingUnitOptionsFromItems(items: AdminManagedListItem[]): ServingUnit
     .map((item) => ({
       value: item.value,
       label: item.label.trim().length > 0 ? item.label : item.value,
+      pluralLabel: item.plural_label,
     }));
+}
+
+function servingUnitOptionLabel(option: ServingUnitOption): string {
+  return option.pluralLabel && option.pluralLabel !== option.label
+    ? `${option.label} / ${option.pluralLabel}`
+    : option.label;
 }
 
 function trimmedOrNull(value: string): string | null {
@@ -321,7 +333,7 @@ export default function AdministratorProductCreatePage() {
                 <option value="">{servingUnitSource === 'loading' ? 'Einheiten werden geladen...' : 'Keine Einheit'}</option>
                 {servingUnitOptions.map((option) => (
                   <option key={option.value} value={option.value}>
-                    {option.label}
+                    {servingUnitOptionLabel(option)}
                   </option>
                 ))}
               </select>

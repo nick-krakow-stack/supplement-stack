@@ -265,7 +265,7 @@ export default function AdministratorShell() {
             <div className="admin-avatar">{userInitials}</div>
             <div className="min-w-0 text-xs leading-tight">
               <div className="truncate font-medium text-[color:var(--admin-ink)]">{user.email}</div>
-              <div className="admin-muted">Admin - /administrator</div>
+              <div className="admin-muted">Administrator</div>
             </div>
           </Link>
         </aside>

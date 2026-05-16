@@ -1566,9 +1566,59 @@
 
 .admin-managed-row-form {
   display: grid;
-  grid-template-columns: minmax(140px, 0.9fr) minmax(160px, 1fr) minmax(220px, 1.4fr) minmax(90px, 0.55fr) auto;
+  grid-template-columns: minmax(160px, 0.9fr) minmax(160px, 0.9fr) minmax(220px, 1.4fr) auto;
   align-items: end;
   gap: 12px;
+}
+
+.admin-managed-form-action {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.admin-managed-table {
+  min-width: 820px;
+}
+
+.admin-managed-order-cell {
+  width: 48px;
+  text-align: right;
+}
+
+.admin-managed-drag-handle {
+  display: inline-flex;
+  min-width: 34px;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--admin-line);
+  border-radius: var(--admin-r-sm);
+  background: var(--admin-bg);
+  color: var(--admin-ink-3);
+  cursor: grab;
+  transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease, transform 0.16s ease;
+}
+
+.admin-managed-drag-handle:hover:not(:disabled),
+.admin-managed-drag-handle:focus-visible {
+  border-color: rgba(47, 111, 216, 0.42);
+  background: var(--admin-bg-sunk);
+  color: var(--admin-ink);
+  outline: none;
+}
+
+.admin-managed-drag-handle:active:not(:disabled) {
+  cursor: grabbing;
+  transform: translateY(1px);
+}
+
+.admin-managed-drag-handle:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.admin-managed-row-dragging td {
+  background: rgba(47, 111, 216, 0.08) !important;
 }
 
 .admin-product-overview-card .admin-card-pad,
