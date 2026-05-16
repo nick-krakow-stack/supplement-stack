@@ -12,7 +12,6 @@ import {
   getAdminProduct,
   getAdminProductShopLinks,
   getAllIngredients,
-  recheckAdminProductShopLink,
   searchIngredients,
   updateAdminProductIngredient,
   updateAdminProductShopLink,
@@ -263,17 +262,55 @@ function normalizeShopDomains(raw: unknown): AdminShopDomain[] {
 }
 
 function shopLinkOwnerLabel(link: AdminProductShopLink): string {
-  if (link.affiliate_owner_type === 'nick') return 'Nick';
-  if (link.affiliate_owner_type === 'user') {
-    return link.affiliate_owner_user_id ? `Nutzer #${link.affiliate_owner_user_id}` : 'Nutzer-ID fehlt';
-  }
+  if (link.is_affiliate === 1 || link.affiliate_owner_type !== 'none') return 'Partnerlink';
   return 'Kein Partnerlink';
 }
 
 function shopLinkOwnerTone(link: AdminProductShopLink): AdminTone {
-  if (link.affiliate_owner_type === 'nick') return 'ok';
-  if (link.affiliate_owner_type === 'user') return link.affiliate_owner_user_id ? 'info' : 'warn';
+  if (link.is_affiliate === 1 || link.affiliate_owner_type !== 'none') return 'ok';
   return 'neutral';
+}
+
+function shopLinkRoleLabel(link: AdminProductShopLink): string {
+  if (link.is_primary) return 'Hauptlink';
+  if (link.active && link.sort_order > 0) return 'Alternative';
+  return 'Standard';
+}
+
+function shopLinkRoleTone(link: AdminProductShopLink): AdminTone {
+  const label = shopLinkRoleLabel(link);
+  if (label === 'Hauptlink') return 'ok';
+  if (label === 'Alternative') return 'info';
+  return 'neutral';
+}
+
+function normalizeShopIdentity(value: string | null | undefined): string {
+  return (value ?? '').trim().toLowerCase().replace(/^www\./, '');
+}
+
+function shopKeyFromForm(form: ShopLinkForm): string {
+  if (form.shop_domain_id) return `domain:${form.shop_domain_id}`;
+  const shopName = normalizeShopIdentity(form.shop_name);
+  if (shopName) return `name:${shopName}`;
+  return `host:${normalizeShopIdentity(linkHost(form.url))}`;
+}
+
+function shopKeyFromLink(link: AdminProductShopLink): string {
+  if (link.shop_domain_id) return `domain:${link.shop_domain_id}`;
+  const shopName = normalizeShopIdentity(link.shop_name);
+  if (shopName) return `name:${shopName}`;
+  return `host:${normalizeShopIdentity(link.normalized_host ?? linkHost(link.url))}`;
+}
+
+function linkHealthStatusTitle(health: AdminProductLinkHealth | null): string {
+  if (!health) return 'Link: Noch nicht geprüft';
+  if (health.http_status === 503 || health.failure_reason === 'http_503') {
+    return 'HTTP 503 - Server nicht verfügbar';
+  }
+  if (health.http_status !== null && health.http_status !== undefined) {
+    return `HTTP ${health.http_status}`;
+  }
+  return linkHealthExplanation(health) ?? linkHealthLabel(health);
 }
 
 function formFromProduct(product: AdminCatalogProduct): ProductEditForm {
@@ -350,15 +387,6 @@ function visibilityLabel(value?: string | null): string {
   if (value === 'hidden') return 'ausgeblendet';
   if (value === 'private') return 'privat';
   return 'unbekannt';
-}
-
-function toInt(value: unknown): number | null {
-  if (typeof value === 'number' && Number.isFinite(value)) return Math.trunc(value);
-  if (typeof value === 'string') {
-    const parsed = Number(value.trim());
-    return Number.isFinite(parsed) ? Math.trunc(parsed) : null;
-  }
-  return null;
 }
 
 function toBooleanFromRaw(value: unknown): boolean | null {
@@ -491,21 +519,16 @@ function formatDate(value: string | null): string {
   }).format(date);
 }
 
-function formatResponseTime(value: number | null): string {
-  if (value === null) return '-';
-  return `${Math.round(value)} ms`;
-}
-
 function linkHealthExplanation(health: AdminProductLinkHealth | null): string | null {
   if (!health) return null;
   if (health.http_status === 503 || health.failure_reason === 'http_503') {
-    return 'HTTP 503 bedeutet: Der Shop-Server war beim automatischen Check voruebergehend nicht verfuegbar oder blockiert solche Checks. Der Link kann im Browser trotzdem funktionieren. Manuell oeffnen, spaeter erneut pruefen und bei wiederholtem Fehler einen Ersatzlink setzen.';
+    return 'HTTP 503 bedeutet: Der Shop-Server war beim automatischen Check vorübergehend nicht verfügbar oder blockiert solche Checks. Der Link kann im Browser trotzdem funktionieren. Manuell öffnen, später erneut prüfen und bei wiederholtem Fehler einen Ersatzlink setzen.';
   }
   if (health.status === 'timeout') {
-    return 'Der Linkcheck hat kein rechtzeitiges Ergebnis erhalten. Bitte den Link manuell oeffnen und spaeter erneut pruefen.';
+    return 'Der Linkcheck hat kein rechtzeitiges Ergebnis erhalten. Bitte den Link manuell öffnen und später erneut prüfen.';
   }
   if (health.status === 'invalid') {
-    return 'Die gespeicherte URL ist fuer den Check nicht nutzbar. Bitte Protokoll, Domain und Zielpfad pruefen.';
+    return 'Die gespeicherte URL ist für den Check nicht nutzbar. Bitte Protokoll, Domain und Zielpfad prüfen.';
   }
   return null;
 }
@@ -798,22 +821,6 @@ function getWarnings(product: AdminProductDetail): WarningItem[] {
   return warnings;
 }
 
-function deriveIngredientSummary(product: AdminCatalogProduct): string {
-  if ('qa_counts' in product) {
-    const detail = product as AdminProductDetail;
-    return `Wirkstoffe: ${detail.qa_counts.ingredient_count} / Hauptwirkstoffe: ${detail.qa_counts.main_ingredient_count}`;
-  }
-  const raw = product.raw ?? {};
-  const mainCount = toInt(raw.main_ingredient_count);
-  const ingredientCount = toInt(raw.ingredient_count);
-  const counts = [
-    ingredientCount !== null ? `Wirkstoffe: ${ingredientCount}` : null,
-    mainCount !== null ? `Hauptwirkstoffe: ${mainCount}` : null,
-  ].filter(Boolean);
-  if (counts.length > 0) return counts.join(' / ');
-  return 'Keine Wirkstoff-Zusammenfassung vorhanden.';
-}
-
 export default function AdministratorProductDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -837,6 +844,7 @@ export default function AdministratorProductDetailPage() {
   const [shopLinkHealthAvailable, setShopLinkHealthAvailable] = useState(false);
   const [shopLinkSavingId, setShopLinkSavingId] = useState<string | null>(null);
   const [editingShopLinkId, setEditingShopLinkId] = useState<number | null>(null);
+  const [shopLinkEditorOpen, setShopLinkEditorOpen] = useState(false);
   const [shopLinkForm, setShopLinkForm] = useState<ShopLinkForm>(() => emptyShopLinkForm());
   const [shopDomains, setShopDomains] = useState<AdminShopDomain[]>([]);
   const [shopDomainsState, setShopDomainsState] = useState<'idle' | 'loading' | 'ready' | 'failed'>('idle');
@@ -1027,8 +1035,29 @@ export default function AdministratorProductDetailPage() {
     setProduct(freshProduct);
   };
 
+  const findDuplicateShopLink = (formToCheck: ShopLinkForm, excludeId: number | null) => {
+    const formKeys = new Set<string>([shopKeyFromForm(formToCheck)]);
+    const selectedDomain = formToCheck.shop_domain_id ? shopDomainById.get(formToCheck.shop_domain_id) : null;
+    if (selectedDomain) {
+      formKeys.add(`host:${normalizeShopIdentity(selectedDomain.domain)}`);
+      formKeys.add(`name:${normalizeShopIdentity(selectedDomain.display_name)}`);
+    }
+    if (formToCheck.url.trim()) formKeys.add(`host:${normalizeShopIdentity(linkHost(formToCheck.url))}`);
+    if (formToCheck.shop_name.trim()) formKeys.add(`name:${normalizeShopIdentity(formToCheck.shop_name)}`);
+
+    return shopLinks.find((link) => {
+      if (link.id === excludeId) return false;
+      const linkKeys = new Set<string>([shopKeyFromLink(link)]);
+      if (link.normalized_host) linkKeys.add(`host:${normalizeShopIdentity(link.normalized_host)}`);
+      if (link.shop_name) linkKeys.add(`name:${normalizeShopIdentity(link.shop_name)}`);
+      if (link.url) linkKeys.add(`host:${normalizeShopIdentity(linkHost(link.url))}`);
+      return [...linkKeys].some((key) => key.length > 5 && formKeys.has(key));
+    }) ?? null;
+  };
+
   const handleStartCreateShopLink = () => {
     setEditingShopLinkId(null);
+    setShopLinkEditorOpen(true);
     setShopLinkForm({
       ...emptyShopLinkForm(),
       is_primary: shopLinks.length === 0,
@@ -1040,6 +1069,7 @@ export default function AdministratorProductDetailPage() {
 
   const handleStartEditShopLink = (link: AdminProductShopLink) => {
     setEditingShopLinkId(link.id);
+    setShopLinkEditorOpen(true);
     setShopLinkForm(shopLinkFormFromLink(link));
     setError('');
     setMessage('');
@@ -1047,20 +1077,44 @@ export default function AdministratorProductDetailPage() {
 
   const handleCancelShopLinkEdit = () => {
     setEditingShopLinkId(null);
+    setShopLinkEditorOpen(false);
     setShopLinkForm(emptyShopLinkForm());
   };
 
-  const handleSaveShopLink = async () => {
+  const stageShopLinkUrlEdit = (link: AdminProductShopLink, nextUrl: string) => {
+    setEditingShopLinkId(link.id);
+    setShopLinkEditorOpen(false);
+    setShopLinkForm({ ...shopLinkFormFromLink(link), url: nextUrl });
+    setError('');
+    setMessage('');
+  };
+
+  const ensureShopLinkUrlEdit = (link: AdminProductShopLink) => {
+    if (editingShopLinkId === link.id) return;
+    setEditingShopLinkId(link.id);
+    setShopLinkEditorOpen(false);
+    setShopLinkForm(shopLinkFormFromLink(link));
+    setError('');
+    setMessage('');
+  };
+
+  const saveShopLinkForm = async (formToSave: ShopLinkForm, linkId: number | null) => {
     if (!product) return;
-    const savingId = editingShopLinkId ? `save-${editingShopLinkId}` : 'create';
+    const savingId = linkId ? `save-${linkId}` : 'create';
     setShopLinkSavingId(savingId);
     setError('');
     setMessage('');
     try {
-      const payload = payloadFromShopLinkForm(shopLinkForm);
-      if (editingShopLinkId) {
-        const existing = shopLinks.find((link) => link.id === editingShopLinkId);
-        await updateAdminProductShopLink(product.id, editingShopLinkId, payload, { version: existing?.version ?? null });
+      const payload = payloadFromShopLinkForm(formToSave);
+      const duplicate = findDuplicateShopLink(formToSave, linkId);
+      if (duplicate) {
+        handleStartEditShopLink(duplicate);
+        setError('Für diesen Shop existiert bereits ein Shop-Link. Der bestehende Eintrag wurde geöffnet.');
+        return;
+      }
+      if (linkId) {
+        const existing = shopLinks.find((link) => link.id === linkId);
+        await updateAdminProductShopLink(product.id, linkId, payload, { version: existing?.version ?? null });
         setMessage('Shop-Link gespeichert.');
       } else {
         if (shopLinks.length === 0) payload.is_primary = 1;
@@ -1068,6 +1122,7 @@ export default function AdministratorProductDetailPage() {
         setMessage('Shop-Link erstellt.');
       }
       setEditingShopLinkId(null);
+      setShopLinkEditorOpen(false);
       setShopLinkForm(emptyShopLinkForm());
       await refreshProductAndShopLinks(product.id);
     } catch (errorValue) {
@@ -1076,6 +1131,15 @@ export default function AdministratorProductDetailPage() {
       setShopLinkSavingId(null);
       setTimeout(() => setMessage(''), 2200);
     }
+  };
+
+  const handleSaveShopLink = async () => {
+    await saveShopLinkForm(shopLinkForm, editingShopLinkId);
+  };
+
+  const handleSaveExistingShopLink = async (link: AdminProductShopLink) => {
+    const formToSave = editingShopLinkId === link.id ? shopLinkForm : shopLinkFormFromLink(link);
+    await saveShopLinkForm(formToSave, link.id);
   };
 
   const handleSetPrimaryShopLink = async (link: AdminProductShopLink) => {
@@ -1092,27 +1156,6 @@ export default function AdministratorProductDetailPage() {
       );
       await refreshProductAndShopLinks(product.id);
       setMessage('Hauptlink gesetzt.');
-    } catch (errorValue) {
-      setError(getErrorMessage(errorValue));
-    } finally {
-      setShopLinkSavingId(null);
-      setTimeout(() => setMessage(''), 2200);
-    }
-  };
-
-  const handleRecheckShopLink = async (link: AdminProductShopLink) => {
-    if (!product) return;
-    setShopLinkSavingId(`recheck-${link.id}`);
-    setError('');
-    setMessage('');
-    try {
-      const response = await recheckAdminProductShopLink(product.id, link.id);
-      if (response.link) {
-        setShopLinks((previous) => previous.map((entry) => (entry.id === response.link?.id ? response.link : entry)));
-      } else {
-        await loadShopLinks(product.id);
-      }
-      setMessage('Link erneut geprüft.');
     } catch (errorValue) {
       setError(getErrorMessage(errorValue));
     } finally {
@@ -1326,237 +1369,212 @@ export default function AdministratorProductDetailPage() {
     return [...byValue.values()].sort((a, b) => a.sort_order - b.sort_order || a.label.localeCompare(b.label, 'de'));
   }, [form.serving_unit, servingUnitOptions]);
 
-  const renderLinkHealthSummary = (health: AdminProductLinkHealth | null) => (
-    <div className="rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg)] p-3 text-xs">
-      <div className="mb-2 flex flex-wrap items-center gap-2">
-        <AdminBadge tone={linkHealthTone(health)}>{linkHealthLabel(health)}</AdminBadge>
-        {health?.http_status !== null && health?.http_status !== undefined ? (
-          <span className="admin-mono">HTTP {health.http_status}</span>
-        ) : null}
-        {health?.redirected ? <AdminBadge tone="info">Weiterleitung</AdminBadge> : null}
+  const renderShopLinkEditorForm = () => (
+    <section className="admin-product-shop-editor" aria-label={editingShopLinkId ? 'Shop-Link bearbeiten' : 'Neuen Shop-Link anlegen'}>
+      <div className="admin-product-shop-editor-head">
+        <div>
+          <h3 className="admin-section-title">{editingShopLinkId ? 'Shop-Link bearbeiten' : 'Neuen Shop-Link anlegen'}</h3>
+          <p className="admin-muted text-xs">Shop, Zuordnung und Katalogsichtbarkeit kompakt pflegen.</p>
+        </div>
+        <AdminButton size="sm" variant="ghost" onClick={handleCancelShopLinkEdit} disabled={shopLinkSavingId !== null}>
+          <X size={13} />
+          Schließen
+        </AdminButton>
       </div>
-      <dl className="grid gap-2 sm:grid-cols-2">
-        <div>
-          <dt className="admin-muted">Letzter Check</dt>
-          <dd>{formatDate(health?.last_checked_at ?? null)}</dd>
+      <div className="admin-product-shop-editor-grid">
+        <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
+          Shop
+          {shopDomainOptionsAvailable ? (
+            <>
+              <select
+                value={shopLinkForm.shop_domain_id ?? ''}
+                onChange={(event) => {
+                  const selectedValue = event.target.value;
+                  if (selectedValue === '') {
+                    updateShopLinkField('shop_domain_id', null);
+                    return;
+                  }
+                  const domainId = Number(selectedValue);
+                  const domain = shopDomainById.get(domainId);
+                  updateShopLinkField('shop_domain_id', Number.isInteger(domainId) ? domainId : null);
+                  if (domain) updateShopLinkField('shop_name', domain.display_name);
+                }}
+                className="admin-select mt-1"
+              >
+                <option value="" disabled>Shop auswählen</option>
+                {shopDomains.map((domain) => (
+                  <option key={domain.id} value={domain.id}>
+                    {domain.display_name}
+                  </option>
+                ))}
+              </select>
+              {shopLinkForm.shop_name && !shopLinkForm.shop_domain_id ? (
+                <span className="admin-muted mt-1 block text-xs">Bisher: {shopLinkForm.shop_name}</span>
+              ) : null}
+            </>
+          ) : shopDomainFallback ? (
+            <>
+              <span className="admin-muted mt-1 block text-xs">Freitext-Fallback: Shop-Liste nicht verfügbar</span>
+              <input value={shopLinkForm.shop_name} onChange={(event) => updateShopLinkField('shop_name', event.target.value)} className="admin-input mt-1" placeholder="z. B. Amazon" />
+            </>
+          ) : (
+            <select className="admin-select mt-1" disabled value="">
+              <option value="">Shops werden geladen...</option>
+            </select>
+          )}
+        </label>
+        <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
+          URL
+          <input value={shopLinkForm.url} onChange={(event) => updateShopLinkField('url', event.target.value)} className="admin-input admin-url-input mt-1" placeholder="https://..." />
+        </label>
+        <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
+          Link gehört zu
+          <select value={shopLinkForm.affiliate_owner_type} onChange={(event) => updateShopLinkField('affiliate_owner_type', event.target.value as AffiliateOwnerType)} className="admin-select mt-1">
+            <option value="none">Keiner</option>
+            <option value="nick">Nick</option>
+            <option value="user">Nutzer</option>
+          </select>
+        </label>
+        <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
+          Nutzer-ID
+          <input value={shopLinkForm.affiliate_owner_user_id} onChange={(event) => updateShopLinkField('affiliate_owner_user_id', event.target.value)} inputMode="numeric" disabled={shopLinkForm.affiliate_owner_type !== 'user'} className="admin-input mt-1" />
+        </label>
+        <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
+          Sortierung
+          <input value={shopLinkForm.sort_order} onChange={(event) => updateShopLinkField('sort_order', event.target.value)} inputMode="numeric" className="admin-input mt-1" />
+        </label>
+        <div className="admin-product-shop-editor-toggles">
+          <label className={shopLinkForm.is_primary ? 'admin-toggle-card admin-toggle-card-ok' : 'admin-toggle-card'}>
+            <input type="checkbox" checked={shopLinkForm.is_primary} onChange={(event) => updateShopLinkField('is_primary', event.target.checked)} />
+            Hauptlink
+          </label>
+          <label className={shopLinkForm.active ? 'admin-toggle-card admin-toggle-card-ok' : 'admin-toggle-card admin-toggle-card-danger'}>
+            <input type="checkbox" checked={shopLinkForm.active} onChange={(event) => updateShopLinkField('active', event.target.checked)} />
+            Aktiv
+          </label>
         </div>
-        <div>
-          <dt className="admin-muted">Letzter Erfolg</dt>
-          <dd>{formatDate(health?.last_success_at ?? null)}</dd>
+        <div className="admin-product-shop-editor-save">
+          <AdminButton className="admin-btn-success" onClick={() => void handleSaveShopLink()} disabled={shopLinkSavingId !== null}>
+            <Save size={15} />
+            {shopLinkSavingId === 'create' || (editingShopLinkId && shopLinkSavingId === `save-${editingShopLinkId}`)
+              ? 'Speichere...'
+              : editingShopLinkId ? 'Speichern' : 'Anlegen'}
+          </AdminButton>
         </div>
-        <div>
-          <dt className="admin-muted">Antwortzeit</dt>
-          <dd className="admin-mono">{formatResponseTime(health?.response_time_ms ?? null)}</dd>
-        </div>
-        <div>
-          <dt className="admin-muted">Fehler in Folge</dt>
-          <dd className="admin-mono">{health?.consecutive_failures ?? '-'}</dd>
-        </div>
-      </dl>
-      {health?.failure_reason ? (
-        <p className="admin-muted mt-2 break-words">Grund: {health.failure_reason}</p>
-      ) : null}
-      {linkHealthExplanation(health) ? (
-        <p className="mt-3 rounded-[var(--admin-r-sm)] border border-[color:var(--admin-warn-soft)] bg-[color:var(--admin-warn-soft)] p-3 text-[color:var(--admin-warn-ink)]">
-          {linkHealthExplanation(health)}
-        </p>
-      ) : null}
-      {health?.final_url ? (
-        <p className="admin-muted mt-2 break-all">
-          Ziel: <span className="admin-mono">{linkHost(health.final_url)}</span>
-        </p>
-      ) : null}
-    </div>
+      </div>
+    </section>
   );
 
   const renderShopLinksContent = (selected: AdminProductDetail) => (
     <div className="admin-product-shop-card-body">
-      <section className="admin-product-shop-section">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+      <section className="admin-product-shop-management">
+        <div className="admin-product-shop-toolbar">
           <div>
-            <h3 className="admin-section-title">Shop-Links</h3>
-            <p className="admin-muted text-xs">Der Hauptlink wird im Katalog angezeigt.</p>
+            <p className="admin-muted text-xs">Der aktive Hauptlink wird im Katalog angezeigt.</p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <AdminButton size="sm" onClick={() => void loadShopLinks(selected.id)} disabled={shopLinksLoading}>
-              <RefreshCw size={13} />
-              Aktualisieren
-            </AdminButton>
-            <AdminButton size="sm" variant="primary" onClick={handleStartCreateShopLink}>
-              <Plus size={13} />
-              Neuer Link
-            </AdminButton>
-          </div>
+          <AdminButton size="sm" variant="primary" onClick={handleStartCreateShopLink}>
+            <Plus size={13} />
+            Neuer Shop-Link
+          </AdminButton>
         </div>
         {!shopLinkHealthAvailable ? (
-          <p className="admin-muted mb-3 text-xs">Linkcheck-Daten sind in dieser Umgebung nicht verfuegbar.</p>
+          <p className="admin-muted text-xs">Linkcheck-Daten sind in dieser Umgebung nicht verfügbar.</p>
         ) : null}
         {shopDomainFallback ? (
-          <p className="admin-muted mb-3 text-xs">
-            Freitext-Fallback: Shop-Liste nicht verfuegbar. Du kannst den Shop im Freitextfeld erfassen.
+          <p className="admin-muted text-xs">
+            Freitext-Fallback: Shop-Liste nicht verfügbar. Du kannst den Shop im Freitextfeld erfassen.
           </p>
         ) : null}
         {shopLinksLoading ? (
           <AdminEmpty>Lade Shop-Links...</AdminEmpty>
         ) : shopLinks.length === 0 ? (
-          <AdminEmpty>Keine Shop-Links vorhanden. Lege unten den ersten Link an.</AdminEmpty>
+          <AdminEmpty>Keine Shop-Links vorhanden. Lege den ersten Link an.</AdminEmpty>
         ) : (
-          <div className="grid gap-3">
-            {shopLinks.map((link) => (
-              <article key={link.id} className="rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg)] p-3 text-sm">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-medium">{link.shop_name || linkHost(link.url)}</span>
-                      {link.is_primary ? <AdminBadge tone="ok">Hauptlink</AdminBadge> : null}
-                      <AdminBadge tone={link.active ? 'info' : 'neutral'}>{link.active ? 'aktiv' : 'inaktiv'}</AdminBadge>
-                      <AdminBadge tone={shopLinkOwnerTone(link)}>{shopLinkOwnerLabel(link)}</AdminBadge>
-                      <AdminBadge tone={linkHealthTone(link.health)}>{linkHealthLabel(link.health)}</AdminBadge>
-                    </div>
-                    <a href={link.url} target="_blank" rel="noopener noreferrer" className="admin-mono mt-2 block break-all text-xs text-[color:var(--admin-info-ink)] hover:underline">
-                      {link.url}
-                    </a>
-                    <div className="admin-muted mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
-                      <span>Sortierung: {link.sort_order}</span>
-                      <span>Quelle: {link.source_type}</span>
-                      <span>Check: {formatDate(link.health?.last_checked_at ?? null)}</span>
-                      {link.health?.http_status ? <span>HTTP {link.health.http_status}</span> : null}
-                    </div>
-                    {link.health?.failure_reason ? (
-                      <p className="admin-muted mt-1 text-xs">Grund: {link.health.failure_reason}</p>
-                    ) : null}
-                    {linkHealthExplanation(link.health) ? (
-                      <p className="mt-2 rounded-[var(--admin-r-sm)] border border-[color:var(--admin-warn-soft)] bg-[color:var(--admin-warn-soft)] p-2 text-xs text-[color:var(--admin-warn-ink)]">
-                        {linkHealthExplanation(link.health)}
-                      </p>
-                    ) : null}
+          <div className="admin-product-shop-link-list">
+            {shopLinks.map((link) => {
+              const shopLabel = shopDomainById.get(link.shop_domain_id ?? -1)?.domain
+                ?? link.normalized_host
+                ?? link.shop_name
+                ?? linkHost(link.url);
+              const urlValue = editingShopLinkId === link.id ? shopLinkForm.url : link.url;
+              const savingThisLink = shopLinkSavingId === `save-${link.id}`;
+
+              return (
+                <article key={link.id} className="admin-product-shop-link-row">
+                  <div className="admin-product-shop-link-meta">
+                    <AdminBadge tone="neutral">{shopLabel}</AdminBadge>
+                    <AdminBadge tone={shopLinkRoleTone(link)}>{shopLinkRoleLabel(link)}</AdminBadge>
+                    <AdminBadge tone={link.active ? 'info' : 'neutral'}>{link.active ? 'aktiv' : 'inaktiv'}</AdminBadge>
+                    <AdminBadge tone={shopLinkOwnerTone(link)}>{shopLinkOwnerLabel(link)}</AdminBadge>
+                    <AdminBadge tone={linkHealthTone(link.health)} className="admin-product-shop-health" title={linkHealthStatusTitle(link.health)}>
+                      {linkHealthLabel(link.health)}
+                    </AdminBadge>
                   </div>
-                  <div className="flex shrink-0 flex-wrap gap-2">
-                    <a href={link.url} target="_blank" rel="noopener noreferrer" className="admin-icon-btn" title="Shop-Link oeffnen" aria-label="Shop-Link oeffnen">
+                  <div className="admin-product-shop-url-row">
+                    <input
+                      value={urlValue}
+                      onFocus={() => ensureShopLinkUrlEdit(link)}
+                      onChange={(event) => {
+                        if (editingShopLinkId === link.id) {
+                          updateShopLinkField('url', event.target.value);
+                        } else {
+                          stageShopLinkUrlEdit(link, event.target.value);
+                        }
+                      }}
+                      className="admin-input admin-url-input"
+                      aria-label={`Shop-Link URL ${shopLabel}`}
+                      placeholder="https://..."
+                    />
+                    <a
+                      href={urlValue || link.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="admin-icon-btn admin-icon-btn-warn"
+                      title={`Shop-Link öffnen: ${shopLabel}`}
+                      aria-label={`Shop-Link öffnen: ${shopLabel}`}
+                    >
                       <ExternalLink size={15} />
                     </a>
+                    <button
+                      type="button"
+                      className="admin-icon-btn admin-btn-success"
+                      onClick={() => void handleSaveExistingShopLink(link)}
+                      disabled={shopLinkSavingId !== null}
+                      title={`Shop-Link speichern: ${shopLabel}`}
+                      aria-label={`Shop-Link speichern: ${shopLabel}`}
+                    >
+                      {savingThisLink ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+                    </button>
+                  </div>
+                  <div className="admin-product-shop-link-actions">
                     {!link.is_primary ? (
                       <AdminButton size="sm" variant="ghost" onClick={() => void handleSetPrimaryShopLink(link)} disabled={shopLinkSavingId !== null}>
                         Hauptlink
                       </AdminButton>
                     ) : null}
-                    <AdminButton size="sm" variant="ghost" onClick={() => void handleRecheckShopLink(link)} disabled={shopLinkSavingId !== null || !shopLinkHealthAvailable}>
-                      <RefreshCw size={13} />
-                      {shopLinkSavingId === `recheck-${link.id}` ? 'Pruefe...' : 'Erneut pruefen'}
-                    </AdminButton>
                     <AdminButton size="sm" variant="ghost" onClick={() => handleStartEditShopLink(link)} disabled={shopLinkSavingId !== null}>
                       <Edit3 size={13} />
                       Bearbeiten
                     </AdminButton>
                     <AdminButton size="sm" variant="danger" onClick={() => void handleDeleteShopLink(link)} disabled={shopLinkSavingId !== null}>
                       <Trash2 size={13} />
-                      Loeschen
+                      Löschen
                     </AdminButton>
                   </div>
-                </div>
-              </article>
-            ))}
+                </article>
+              );
+            })}
           </div>
         )}
+        <button type="button" className="admin-product-shop-add-alternative" onClick={handleStartCreateShopLink}>
+          <Plus size={14} />
+          Alternativen Shop hinzufügen
+        </button>
       </section>
 
-      <section className="admin-product-shop-section">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h3 className="admin-section-title">{editingShopLinkId ? 'Shop-Link bearbeiten' : 'Neuen Shop-Link anlegen'}</h3>
-            <p className="admin-muted text-xs">Der aktive Hauptlink bleibt als Legacy-Shop-Link am Produkt gespiegelt.</p>
-          </div>
-          {editingShopLinkId ? (
-            <AdminButton size="sm" variant="ghost" onClick={handleCancelShopLinkEdit} disabled={shopLinkSavingId !== null}>
-              <X size={13} />
-              Abbrechen
-            </AdminButton>
-          ) : null}
-        </div>
-        <div className="grid gap-3 md:grid-cols-[180px_minmax(260px,1fr)_150px_140px]">
-          <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
-            Shop
-            {shopDomainOptionsAvailable ? (
-              <>
-                <select
-                  value={shopLinkForm.shop_domain_id ?? ''}
-                  onChange={(event) => {
-                    const selectedValue = event.target.value;
-                    if (selectedValue === '') {
-                      updateShopLinkField('shop_domain_id', null);
-                      return;
-                    }
-                    const domainId = Number(selectedValue);
-                    const domain = shopDomainById.get(domainId);
-                    updateShopLinkField('shop_domain_id', Number.isInteger(domainId) ? domainId : null);
-                    if (domain) updateShopLinkField('shop_name', domain.display_name);
-                  }}
-                  className="admin-select mt-1"
-                >
-                  <option value="" disabled>Shop auswaehlen</option>
-                  {shopDomains.map((domain) => (
-                    <option key={domain.id} value={domain.id}>
-                      {domain.display_name}
-                    </option>
-                  ))}
-                </select>
-                {shopLinkForm.shop_name && !shopLinkForm.shop_domain_id ? (
-                  <span className="admin-muted mt-1 block text-xs">Bisher: {shopLinkForm.shop_name}</span>
-                ) : null}
-              </>
-            ) : shopDomainFallback ? (
-              <>
-                <span className="admin-muted mt-1 block text-xs">Freitext-Fallback</span>
-                <input value={shopLinkForm.shop_name} onChange={(event) => updateShopLinkField('shop_name', event.target.value)} className="admin-input mt-1" placeholder="z. B. Amazon" />
-              </>
-            ) : (
-              <select className="admin-select mt-1" disabled value="">
-                <option value="">Shops werden geladen...</option>
-              </select>
-            )}
-          </label>
-          <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
-            URL
-            <input value={shopLinkForm.url} onChange={(event) => updateShopLinkField('url', event.target.value)} className="admin-input mt-1" placeholder="https://..." />
-          </label>
-          <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
-            Link gehoert zu
-            <select value={shopLinkForm.affiliate_owner_type} onChange={(event) => updateShopLinkField('affiliate_owner_type', event.target.value as AffiliateOwnerType)} className="admin-select mt-1">
-              <option value="none">Keiner</option>
-              <option value="nick">Nick</option>
-              <option value="user">Nutzer</option>
-            </select>
-          </label>
-          <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
-            Nutzer-ID
-            <input value={shopLinkForm.affiliate_owner_user_id} onChange={(event) => updateShopLinkField('affiliate_owner_user_id', event.target.value)} inputMode="numeric" disabled={shopLinkForm.affiliate_owner_type !== 'user'} className="admin-input mt-1" />
-          </label>
-          <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
-            Sortierung
-            <input value={shopLinkForm.sort_order} onChange={(event) => updateShopLinkField('sort_order', event.target.value)} inputMode="numeric" className="admin-input mt-1" />
-          </label>
-          <div className="flex flex-wrap items-end gap-4 md:col-span-2">
-            <label className="inline-flex min-h-[38px] items-center gap-2 text-xs font-medium text-[color:var(--admin-ink-2)]">
-              <input type="checkbox" checked={shopLinkForm.is_primary} onChange={(event) => updateShopLinkField('is_primary', event.target.checked)} />
-              Hauptlink
-            </label>
-            <label className="inline-flex min-h-[38px] items-center gap-2 text-xs font-medium text-[color:var(--admin-ink-2)]">
-              <input type="checkbox" checked={shopLinkForm.active} onChange={(event) => updateShopLinkField('active', event.target.checked)} />
-              Aktiv
-            </label>
-          </div>
-          <div className="flex items-end justify-end">
-            <AdminButton variant="primary" onClick={() => void handleSaveShopLink()} disabled={shopLinkSavingId !== null}>
-              <Save size={15} />
-              {shopLinkSavingId === 'create' || (editingShopLinkId && shopLinkSavingId === `save-${editingShopLinkId}`)
-                ? 'Speichere...'
-                : editingShopLinkId ? 'Speichern' : 'Anlegen'}
-            </AdminButton>
-          </div>
-        </div>
-      </section>
+      {shopLinkEditorOpen ? renderShopLinkEditorForm() : null}
 
-      <section className="admin-product-shop-section">
+      <section className="admin-product-shop-reports">
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <h3 className="admin-section-title mr-2">Linkmeldungen</h3>
           <AdminBadge tone={selected.qa_counts.open_link_report_count > 0 ? 'warn' : 'ok'}>
@@ -1565,14 +1583,14 @@ export default function AdministratorProductDetailPage() {
           <AdminBadge tone="neutral">{selected.qa_counts.link_report_count} gesamt</AdminBadge>
         </div>
         {selected.link_reports.length === 0 ? (
-          <AdminEmpty>Keine Linkmeldungen fuer dieses Katalogprodukt.</AdminEmpty>
+          <AdminEmpty>Keine Linkmeldungen für dieses Katalogprodukt.</AdminEmpty>
         ) : (
           <div className="grid gap-2">
             {selected.link_reports.map((report) => (
               <div key={report.id} className="rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg)] p-3 text-xs">
                 <div className="flex flex-wrap items-center gap-2">
                   <AdminBadge tone={report.status === 'open' ? 'warn' : report.status === 'closed' ? 'neutral' : 'info'}>
-                    {report.status === 'open' ? 'offen' : report.status === 'closed' ? 'erledigt' : report.status === 'reviewed' ? 'geprueft' : report.status}
+                    {report.status === 'open' ? 'offen' : report.status === 'closed' ? 'erledigt' : report.status === 'reviewed' ? 'geprüft' : report.status}
                   </AdminBadge>
                   <span className="admin-muted">#{report.id} - {formatDate(report.created_at)}</span>
                   <span className="admin-muted">{report.user_email ?? `Nutzer #${report.user_id}`}</span>
@@ -1734,32 +1752,7 @@ export default function AdministratorProductDetailPage() {
         </div>
       </AdminCard>
       <AdminCard title="Shop-Link" subtitle="Sichtbarer Linkstatus im Katalog." padded className="admin-product-shop-card">
-        <dl className="grid gap-2 text-[13px]">
-          <div>
-            <dt className="admin-muted">Shop-Link</dt>
-            <dd className="break-all">
-              {selected.shop_link ? (
-                <a
-                  href={selected.shop_link}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-[color:var(--admin-info-ink)]"
-                >
-                  {selected.shop_link}
-                  <ExternalLink size={12} />
-                </a>
-              ) : (
-                <span className="admin-muted">nicht gesetzt</span>
-              )}
-            </dd>
-          </div>
-          <div>
-            <dt className="admin-muted">Wirkstoffe</dt>
-            <dd>{deriveIngredientSummary(selected)}</dd>
-          </div>
-        </dl>
-        <div className="mt-3">{renderLinkHealthSummary(linkHealth)}</div>
-        <div className="mt-4">{renderShopLinksContent(selected)}</div>
+        {renderShopLinksContent(selected)}
       </AdminCard>
     </div>
   );
@@ -2101,184 +2094,7 @@ export default function AdministratorProductDetailPage() {
     </AdminCard>
   );
 
-  const renderShopLinksTab = (selected: AdminProductDetail) => (
-    <div className="grid gap-4">
-      <AdminCard
-        title="Shop-Links"
-        subtitle="Der Hauptlink wird im Katalog angezeigt."
-        actions={
-          <div className="flex flex-wrap gap-2">
-            <AdminButton size="sm" onClick={() => void loadShopLinks(selected.id)} disabled={shopLinksLoading}>
-              <RefreshCw size={13} />
-              Aktualisieren
-            </AdminButton>
-            <AdminButton size="sm" variant="primary" onClick={handleStartCreateShopLink}>
-              <Plus size={13} />
-              Neuer Link
-            </AdminButton>
-          </div>
-        }
-      >
-        {!shopLinkHealthAvailable ? (
-          <p className="admin-muted mb-3 text-xs">Linkcheck-Daten sind in dieser Umgebung nicht verfuegbar.</p>
-        ) : null}
-        {shopLinksLoading ? (
-          <AdminEmpty>Lade Shop-Links...</AdminEmpty>
-        ) : shopLinks.length === 0 ? (
-          <AdminEmpty>Keine Shop-Links vorhanden. Lege unten den ersten Link an.</AdminEmpty>
-        ) : (
-          <div className="grid gap-3">
-            {shopLinks.map((link) => (
-              <article key={link.id} className="rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg)] p-3 text-sm">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-medium">{link.shop_name || linkHost(link.url)}</span>
-                      {link.is_primary ? <AdminBadge tone="ok">Hauptlink</AdminBadge> : null}
-                      <AdminBadge tone={link.active ? 'info' : 'neutral'}>{link.active ? 'aktiv' : 'inaktiv'}</AdminBadge>
-                      <AdminBadge tone={shopLinkOwnerTone(link)}>{shopLinkOwnerLabel(link)}</AdminBadge>
-                      <AdminBadge tone={linkHealthTone(link.health)}>{linkHealthLabel(link.health)}</AdminBadge>
-                    </div>
-                    <a
-                      href={link.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="admin-mono mt-2 block break-all text-xs text-[color:var(--admin-info-ink)] hover:underline"
-                    >
-                      {link.url}
-                    </a>
-                    <div className="admin-muted mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
-                      <span>Sortierung: {link.sort_order}</span>
-                      <span>Quelle: {link.source_type}</span>
-                      <span>Check: {formatDate(link.health?.last_checked_at ?? null)}</span>
-                      {link.health?.http_status ? <span>HTTP {link.health.http_status}</span> : null}
-                    </div>
-                    {link.health?.failure_reason ? (
-                      <p className="admin-muted mt-1 text-xs">Fehler: {link.health.failure_reason}</p>
-                    ) : null}
-                  </div>
-                  <div className="flex shrink-0 flex-wrap gap-2">
-                    <a href={link.url} target="_blank" rel="noopener noreferrer" className="admin-icon-btn" title="Shop-Link öffnen" aria-label="Shop-Link öffnen">
-                      <ExternalLink size={15} />
-                    </a>
-                    {!link.is_primary ? (
-                      <AdminButton size="sm" variant="ghost" onClick={() => void handleSetPrimaryShopLink(link)} disabled={shopLinkSavingId !== null}>
-                        Hauptlink
-                      </AdminButton>
-                    ) : null}
-                    <AdminButton size="sm" variant="ghost" onClick={() => void handleRecheckShopLink(link)} disabled={shopLinkSavingId !== null || !shopLinkHealthAvailable}>
-                      <RefreshCw size={13} />
-                      {shopLinkSavingId === `recheck-${link.id}` ? 'Prüfe...' : 'Erneut prüfen'}
-                    </AdminButton>
-                    <AdminButton size="sm" variant="ghost" onClick={() => handleStartEditShopLink(link)} disabled={shopLinkSavingId !== null}>
-                      <Edit3 size={13} />
-                      Bearbeiten
-                    </AdminButton>
-                    <AdminButton size="sm" variant="danger" onClick={() => void handleDeleteShopLink(link)} disabled={shopLinkSavingId !== null}>
-                      <Trash2 size={13} />
-                      Loeschen
-                    </AdminButton>
-                  </div>
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
-      </AdminCard>
-
-      <AdminCard
-        title={editingShopLinkId ? 'Shop-Link bearbeiten' : 'Neuen Shop-Link anlegen'}
-        subtitle="Der aktive Hauptlink bleibt als Legacy-Shop-Link am Produkt gespiegelt."
-        actions={editingShopLinkId ? (
-          <AdminButton size="sm" variant="ghost" onClick={handleCancelShopLinkEdit} disabled={shopLinkSavingId !== null}>
-            <X size={13} />
-            Abbrechen
-          </AdminButton>
-        ) : null}
-      >
-        <div className="grid gap-3 md:grid-cols-[180px_minmax(260px,1fr)_150px_140px]">
-          <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
-            Shop
-            <input value={shopLinkForm.shop_name} onChange={(event) => updateShopLinkField('shop_name', event.target.value)} className="admin-input mt-1" placeholder="z. B. Amazon" />
-          </label>
-          <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
-            URL
-            <input value={shopLinkForm.url} onChange={(event) => updateShopLinkField('url', event.target.value)} className="admin-input mt-1" placeholder="https://..." />
-          </label>
-          <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
-            Link gehoert zu
-            <select value={shopLinkForm.affiliate_owner_type} onChange={(event) => updateShopLinkField('affiliate_owner_type', event.target.value as AffiliateOwnerType)} className="admin-select mt-1">
-              <option value="none">Keiner</option>
-              <option value="nick">Nick</option>
-              <option value="user">Nutzer</option>
-            </select>
-          </label>
-          <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
-            Nutzer-ID
-            <input value={shopLinkForm.affiliate_owner_user_id} onChange={(event) => updateShopLinkField('affiliate_owner_user_id', event.target.value)} inputMode="numeric" disabled={shopLinkForm.affiliate_owner_type !== 'user'} className="admin-input mt-1" />
-          </label>
-          <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
-            Sortierung
-            <input value={shopLinkForm.sort_order} onChange={(event) => updateShopLinkField('sort_order', event.target.value)} inputMode="numeric" className="admin-input mt-1" />
-          </label>
-          <div className="flex flex-wrap items-end gap-4 md:col-span-2">
-            <label className="inline-flex min-h-[38px] items-center gap-2 text-xs font-medium text-[color:var(--admin-ink-2)]">
-              <input type="checkbox" checked={shopLinkForm.is_primary} onChange={(event) => updateShopLinkField('is_primary', event.target.checked)} />
-              Hauptlink
-            </label>
-            <label className="inline-flex min-h-[38px] items-center gap-2 text-xs font-medium text-[color:var(--admin-ink-2)]">
-              <input type="checkbox" checked={shopLinkForm.active} onChange={(event) => updateShopLinkField('active', event.target.checked)} />
-              Aktiv
-            </label>
-          </div>
-          <div className="flex items-end justify-end">
-            <AdminButton variant="primary" onClick={() => void handleSaveShopLink()} disabled={shopLinkSavingId !== null}>
-              <Save size={15} />
-              {shopLinkSavingId === 'create' || (editingShopLinkId && shopLinkSavingId === `save-${editingShopLinkId}`)
-                ? 'Speichere...'
-                : editingShopLinkId ? 'Speichern' : 'Anlegen'}
-            </AdminButton>
-          </div>
-        </div>
-      </AdminCard>
-
-      <AdminCard title="Linkmeldungen" subtitle="Gemeldete fehlende oder defekte Shop-Links.">
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          <AdminBadge tone={selected.qa_counts.open_link_report_count > 0 ? 'warn' : 'ok'}>
-            {selected.qa_counts.open_link_report_count} offen
-          </AdminBadge>
-          <AdminBadge tone="neutral">{selected.qa_counts.link_report_count} gesamt</AdminBadge>
-        </div>
-        {selected.link_reports.length === 0 ? (
-          <AdminEmpty>Keine Linkmeldungen für dieses Katalogprodukt.</AdminEmpty>
-        ) : (
-          <div className="grid gap-2">
-            {selected.link_reports.map((report) => (
-              <div key={report.id} className="rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg)] p-3 text-xs">
-                <div className="flex flex-wrap items-center gap-2">
-                  <AdminBadge tone={report.status === 'open' ? 'warn' : report.status === 'closed' ? 'neutral' : 'info'}>
-                    {report.status === 'open' ? 'offen' : report.status === 'closed' ? 'erledigt' : report.status === 'reviewed' ? 'geprüft' : report.status}
-                  </AdminBadge>
-                  <span className="admin-muted">#{report.id} - {formatDate(report.created_at)}</span>
-                  <span className="admin-muted">{report.user_email ?? `Nutzer #${report.user_id}`}</span>
-                </div>
-                <div className="mt-2 grid gap-2 md:grid-cols-2">
-                  <div>
-                    <div className="admin-muted">Gemeldet</div>
-                    <div className="admin-mono break-all">{report.shop_link_snapshot || '-'}</div>
-                  </div>
-                  <div>
-                    <div className="admin-muted">Aktuell</div>
-                    <div className="admin-mono break-all">{report.current_shop_link || '-'}</div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </AdminCard>
-    </div>
-  );
+  const renderShopLinksTab = (selected: AdminProductDetail) => renderShopLinksContent(selected);
 
   const renderWarnungenTab = (selected: AdminProductDetail, warningList: WarningItem[]) => {
     const hasLegacyWarning = Boolean(selected.warning_title || selected.warning_message || selected.alternative_note);

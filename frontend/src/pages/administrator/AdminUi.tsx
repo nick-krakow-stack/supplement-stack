@@ -1,18 +1,20 @@
-import { type ButtonHTMLAttributes, type ReactNode } from 'react';
+import { type ButtonHTMLAttributes, type HTMLAttributes, type ReactNode } from 'react';
 import clsx from 'clsx';
 
 export type AdminTone = 'neutral' | 'ok' | 'warn' | 'danger' | 'info';
+
+type AdminBadgeProps = Omit<HTMLAttributes<HTMLSpanElement>, 'children'> & {
+  tone?: AdminTone;
+  children: ReactNode;
+};
 
 export function AdminBadge({
   tone = 'neutral',
   children,
   className,
-}: {
-  tone?: AdminTone;
-  children: ReactNode;
-  className?: string;
-}) {
-  return <span className={clsx('admin-badge', `admin-badge-${tone}`, className)}>{children}</span>;
+  ...props
+}: AdminBadgeProps) {
+  return <span className={clsx('admin-badge', `admin-badge-${tone}`, className)} {...props}>{children}</span>;
 }
 
 export function AdminButton({

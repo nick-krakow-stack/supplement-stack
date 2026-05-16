@@ -29,6 +29,7 @@ const productCreatePage = assertFile('frontend/src/pages/administrator/Administr
 const productDetailPage = read('frontend/src/pages/administrator/AdministratorProductDetailPage.tsx')
 const productQaPage = read('frontend/src/pages/administrator/AdministratorProductQAPage.tsx')
 const adminCss = read('frontend/src/pages/administrator/admin.css')
+const adminUi = read('frontend/src/pages/administrator/AdminUi.tsx')
 const appSource = read('frontend/src/App.tsx')
 const adminApi = read('frontend/src/api/admin.ts')
 const apiEntry = read('functions/api/[[path]].ts')
@@ -638,13 +639,128 @@ assert.doesNotMatch(
 )
 assert.match(
   productDetailPage,
-  /Freitext-Fallback:[\s\S]*Shop-Liste nicht verfuegbar/,
+  /Freitext-Fallback:[\s\S]*Shop-Liste nicht verf(?:ü|Ã¼)gbar/,
   'Admin product detail shop-link editor must expose manual shop text only as a clear fallback',
 )
 assert.match(
   productDetailPage,
   /shop_domain_id:\s*form\.shop_domain_id/,
   'Admin product detail shop-link payload must preserve the selected shop_domain_id',
+)
+const productDetailOverviewShopLinkCard = extractRequiredBlock(
+  productDetailPage,
+  /<AdminCard title="Shop-Link" subtitle="Sichtbarer Linkstatus im Katalog\."[\s\S]*?<\/AdminCard>/,
+  'Admin product detail overview must keep the canonical Shop-Link card header',
+)
+assert.doesNotMatch(
+  productDetailOverviewShopLinkCard,
+  /renderLinkHealthSummary|deriveIngredientSummary|<dt className="admin-muted">Wirkstoffe<\/dt>|<dt className="admin-muted">Shop-Link<\/dt>/,
+  'Admin product detail overview Shop-Link card must not render the old duplicate link, Wirkstoffe, or large health summary blocks',
+)
+const productDetailShopLinksContent = extractRequiredBlock(
+  productDetailPage,
+  /const renderShopLinksContent = \(selected: AdminProductDetail\) => \([\s\S]*?\n  \);/,
+  'Admin product detail must render shop links through one shared content function',
+)
+assert.match(
+  adminUi,
+  /type AdminBadgeProps = Omit<HTMLAttributes<HTMLSpanElement>, 'children'>/,
+  'AdminBadge must accept native span attributes such as title for compact tooltips',
+)
+assert.match(
+  adminUi,
+  /<span className=\{clsx\('admin-badge'[\s\S]*\{...\props\}/,
+  'AdminBadge must forward native span attributes to the rendered badge',
+)
+assert.match(
+  productDetailPage,
+  /function shopLinkRoleLabel\(link: AdminProductShopLink\): string \{[\s\S]*if \(link\.is_primary\) return 'Hauptlink';[\s\S]*if \(link\.active && link\.sort_order > 0\) return 'Alternative';[\s\S]*return 'Standard';/,
+  'Admin product detail compact shop-link badges must deterministically map primary/alternative/standard roles',
+)
+assert.match(
+  productDetailPage,
+  /function shopLinkRoleTone\(link: AdminProductShopLink\): AdminTone \{[\s\S]*shopLinkRoleLabel\(link\)[\s\S]*'Hauptlink'[\s\S]*'Alternative'/,
+  'Admin product detail compact shop-link role badge must tone Hauptlink and Alternative distinctly',
+)
+assert.match(
+  productDetailPage,
+  /function shopLinkOwnerLabel\(link: AdminProductShopLink\): string \{[\s\S]*return 'Partnerlink';[\s\S]*return 'Kein Partnerlink';/,
+  'Admin product detail compact shop-link owner badge must use Partnerlink/Kein Partnerlink wording',
+)
+assert.match(
+  productDetailPage,
+  /function shopLinkOwnerTone\(link: AdminProductShopLink\): AdminTone \{[\s\S]*affiliate_owner_type !== 'none'[\s\S]*return 'ok';[\s\S]*return 'neutral';/,
+  'Admin product detail compact shop-link owner badge must tone partner links without exposing owner names',
+)
+assert.match(
+  productDetailShopLinksContent,
+  /<AdminBadge tone=\{shopLinkRoleTone\(link\)\}>\{shopLinkRoleLabel\(link\)\}<\/AdminBadge>/,
+  'Admin product detail shop-link rows must always show a role badge, including non-primary links',
+)
+assert.match(
+  productDetailShopLinksContent,
+  /<AdminBadge tone=\{shopLinkOwnerTone\(link\)\}>\{shopLinkOwnerLabel\(link\)\}<\/AdminBadge>/,
+  'Admin product detail shop-link rows must show the compact partner-link badge',
+)
+assert.doesNotMatch(
+  productDetailShopLinksContent,
+  /Nick|Nutzer-ID fehlt|\{link\.is_primary \? <AdminBadge/,
+  'Admin product detail compact shop-link badges must not expose Nick/user owner labels or omit non-primary role badges',
+)
+assert.match(
+  productDetailShopLinksContent,
+  /Neuer Shop-Link/,
+  'Admin product detail shop-link body must expose Neuer Shop-Link',
+)
+assert.match(
+  productDetailShopLinksContent,
+  /Alternativen Shop hinzuf/,
+  'Admin product detail shop-link list must expose Alternativen Shop hinzufügen',
+)
+assert.match(
+  productDetailShopLinksContent,
+  /const urlValue = editingShopLinkId === link\.id \? shopLinkForm\.url : link\.url;[\s\S]*admin-product-shop-url-row[\s\S]*value=\{urlValue\}[\s\S]*admin-url-input/,
+  'Admin product detail shop-link rows must keep the URL as an editable input',
+)
+assert.match(
+  productDetailShopLinksContent,
+  /admin-icon-btn admin-icon-btn-warn[\s\S]*aria-label=\{`Shop-Link (?:ö|Ã¶)ffnen:/,
+  'Admin product detail shop-link rows must expose an icon-only yellow external open action',
+)
+assert.match(
+  productDetailShopLinksContent,
+  /admin-icon-btn admin-btn-success[\s\S]*aria-label=\{`Shop-Link speichern:/,
+  'Admin product detail shop-link rows must expose an icon-only green save action',
+)
+assert.match(
+  productDetailShopLinksContent,
+  /linkHealthLabel\(link\.health\)/,
+  'Admin product detail shop-link rows must use compact normalized link-status labels',
+)
+assert.doesNotMatch(
+  productDetailShopLinksContent,
+  />\s*Aktualisieren\s*</,
+  'Admin product detail shop-link body must not render a visible Aktualisieren button',
+)
+assert.doesNotMatch(
+  productDetailShopLinksContent,
+  /Grund:|Letzter Erfolg|Fehler in Folge|Antwortzeit|renderLinkHealthSummary|<h3 className="admin-section-title">Shop-Links<\/h3>/,
+  'Admin product detail shop-link body must not render the old large raw link-health diagnosis',
+)
+assert.doesNotMatch(
+  productDetailPage,
+  /Loeschen|oeffnen|pruefen|verfuegbar/,
+  'Admin product detail visible shop-link copy must use German umlauts for Löschen/öffnen/prüfen/verfügbar',
+)
+assert.match(
+  productDetailPage,
+  /findDuplicateShopLink[\s\S]*handleStartEditShopLink\(duplicate\)/,
+  'Admin product detail shop-link create flow must open the existing entry instead of creating a duplicate shop link',
+)
+assert.match(
+  productDetailPage,
+  /const renderShopLinksTab = \(selected: AdminProductDetail\) => renderShopLinksContent\(selected\);/,
+  'Admin product detail shop-link tab variant must reuse the shared compact shop-link content',
 )
 assert.match(
   productsPage,
