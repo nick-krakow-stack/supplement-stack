@@ -223,7 +223,8 @@ function assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSo
   assertSourceIncludes(stackWorkspaceSource, 'clearDemoStackHandoff', 'demo handoff cleanup helper');
   assertSourceIncludes(stackWorkspaceSource, 'window.localStorage.removeItem(SS_DEMO_STACK_HANDOFF_KEY)', 'demo handoff localStorage clear after import');
   assertSourceIncludes(stackWorkspaceSource, 'window.sessionStorage.removeItem(SS_DEMO_STACK_HANDOFF_KEY)', 'demo handoff sessionStorage clear after import');
-  assertSourceIncludes(stackWorkspaceSource, 'persistStackProducts(importedStack.id', 'demo handoff import through stack product persistence');
+  assertSourceIncludes(stackWorkspaceSource, 'persistStackProducts(', 'demo handoff import through stack product persistence');
+  assertSourceIncludes(stackWorkspaceSource, 'importedStack.id,', 'demo handoff import stack-id usage');
   assertSourceIncludes(registerSource, 'SS_DEMO_STACK_HANDOFF_KEY', 'registration demo handoff consumption');
   assertSourceIncludes(registerSource, "demoStackHandoffAvailable ? '/stacks'", 'registration redirect to stacks when demo handoff exists');
 
@@ -255,12 +256,19 @@ function assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSo
   assertSourceIncludes(stackWorkspaceSource, 'ss-routine-page', 'routine overview page classes');
 
   assertSourceIncludes(stackWorkspaceSource, 'ss-add-product-tile', 'green add-product grid tile');
-  assertSourceIncludes(stackWorkspaceSource, "type ProductSortMode = 'az' | 'timing'", 'product sort mode type');
+  assertSourceIncludes(stackWorkspaceSource, "type ProductSortMode = 'az' | 'timing' | 'custom'", 'product sort mode type');
+  assertSourceIncludes(stackWorkspaceSource, "type ProductCategoryMode = 'none' | 'timing' | 'custom'", 'product category mode type');
   assertSourceIncludes(stackWorkspaceSource, 'STACK_PRODUCT_SORT_KEY', 'product sort localStorage key');
+  assertSourceIncludes(stackWorkspaceSource, 'STACK_PRODUCT_CATEGORY_MODE_KEY', 'product category localStorage key');
   assertSourceIncludes(stackWorkspaceSource, 'loadProductSortMode', 'product sort localStorage loader');
+  assertSourceIncludes(stackWorkspaceSource, 'loadProductCategoryMode', 'product category localStorage loader');
   assertSourceIncludes(stackWorkspaceSource, 'compareProductsByName', 'A-Z product sort helper');
+  assertSourceIncludes(stackWorkspaceSource, 'compareProductsByCustomOrder', 'custom product sort helper');
   assertSourceIncludes(stackWorkspaceSource, 'sortProductsForDisplay', 'display-only product sort helper');
-  assertSourceIncludes(stackWorkspaceSource, 'sortedActiveProducts', 'sorted product display list');
+  assertSourceIncludes(stackWorkspaceSource, 'buildProductSections', 'section-based product rendering helper');
+  assertSourceIncludes(stackWorkspaceSource, 'productSections.map((section)', 'section rendering for product overview');
+  assertSourceIncludes(stackWorkspaceSource, 'ss-product-sections', 'section wrapper class');
+  assertSourceIncludes(stackWorkspaceSource, 'ss-product-layout-tools', 'custom layout fallback controls wrapper');
   assertSourceIncludes(stackWorkspaceSource, "['morning', 'noon', 'evening', 'flexible']", 'fixed timing sort order');
   assertSourceIncludes(stackWorkspaceSource, 'morning_evening', 'expanded morning/evening timing sort support');
   assertSourceIncludes(stackWorkspaceSource, 'before_breakfast', 'expanded breakfast timing sort support');
@@ -268,11 +276,28 @@ function assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSo
   const sortProductsForDisplaySource = assertFunctionSource(stackWorkspaceSource, 'sortProductsForDisplay');
   assertSourceIncludes(sortProductsForDisplaySource, "if (sortMode === 'az')", 'A-Z branch inside sortProductsForDisplay');
   assertSourceIncludes(sortProductsForDisplaySource, "if (sortMode === 'az') return sorted.sort(compareProductsByName);", 'A-Z sort branch inside sortProductsForDisplay');
+  assertSourceIncludes(sortProductsForDisplaySource, "if (sortMode === 'custom') return sorted.sort(compareProductsByCustomOrder);", 'custom sort branch inside sortProductsForDisplay');
   assertSourceIncludes(sortProductsForDisplaySource, 'routineKeyForTiming(a.timing)', 'timing sort a routine key inside sortProductsForDisplay');
   assertSourceIncludes(sortProductsForDisplaySource, 'routineKeyForTiming(b.timing)', 'timing sort b routine key inside sortProductsForDisplay');
   assertSourceIncludes(sortProductsForDisplaySource, 'PRODUCT_TIMING_ORDER.indexOf', 'timing order lookup inside sortProductsForDisplay');
   assertSourceIncludes(sortProductsForDisplaySource, 'return byTiming || compareProductsByName(a, b);', 'secondary name sort inside timing sort');
   assertSourceIncludes(stackWorkspaceSource, 'Tageszeiten', 'timing sort toggle label');
+  assertSourceIncludes(stackWorkspaceSource, 'Eigene', 'custom mode labels');
+  assertSourceIncludes(stackWorkspaceSource, 'Keine', 'category mode none label');
+  assertSourceIncludes(stackWorkspaceSource, 'Unkategorisiert', 'default custom category label');
+  assertSourceIncludes(
+    stackWorkspaceSource,
+    "activeProducts.length > 0 || productCategoryMode === 'custom'",
+    'custom category sections visible on empty stack',
+  );
+  assertSourceIncludes(stackWorkspaceSource, 'createStackCategory', 'authenticated custom category create endpoint usage');
+  assertSourceIncludes(stackWorkspaceSource, 'updateStackCategory', 'authenticated custom category rename endpoint usage');
+  assertSourceIncludes(stackWorkspaceSource, 'deleteStackCategory', 'authenticated custom category delete endpoint usage');
+  assertSourceIncludes(stackWorkspaceSource, 'updateStackItemsLayout', 'authenticated custom layout endpoint usage');
+  assertSourceIncludes(stackWorkspaceSource, 'missingStackItemId', 'layout persistence guard for missing stack_item_id');
+  assertSourceIncludes(stackWorkspaceSource, 'prepareProductsForAuthenticatedImport', 'demo handoff import category remap helper');
+  assertSourceIncludes(stackWorkspaceSource, 'categoryIdMap', 'demo handoff local category id map');
+  assertSourceIncludes(stackWorkspaceSource, 'const persistedStack = await persistStackProducts(', 'stack persistence response hydration usage');
   assertSourceIncludes(stackWorkspaceSource, 'getPublicIntakeTimings', 'StackWorkspace must load public managed intake timing options');
   assertSourceIncludes(stackWorkspaceSource, 'managedTimingOptions', 'StackWorkspace must store managed intake timing options');
   assertSourceIncludes(stackWorkspaceSource, 'buildIntakeTimingOptions(managedTimingOptions)', 'StackWorkspace edit modal must use managed timing options with fallback');
@@ -283,6 +308,14 @@ function assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSo
   assertSourceIncludes(stackWorkspaceSource, 'humanizeTimingFallback', 'StackWorkspace must humanize unknown timing fallback values');
   assertSourceIncludes(stackWorkspaceSource, 'A-Z', 'alphabetical sort toggle label');
   assertSourceIncludes(stackWorkspaceSource, 'ss-product-title-controls', 'product title controls wrapper');
+  assertSourceIncludes(stylesSource, '.ss-product-sections', 'section layout styles');
+  const productSectionsStyles = stylesSource.match(/\.ss-product-sections\s*\{[\s\S]*?\}/)?.[0] ?? '';
+  if (/padding-bottom:\s*150px/.test(productSectionsStyles)) {
+    throw new Error('Expected .ss-product-sections desktop padding-bottom to avoid duplicate 150px bottom spacing.');
+  }
+  assertSourceIncludes(stylesSource, '.ss-category-toolbar', 'custom category toolbar styles');
+  assertSourceIncludes(stylesSource, '.ss-product-layout-tools', 'custom layout controls styles');
+  assertSourceIncludes(stylesSource, '.ss-product-category-select', 'custom category select fallback styles');
   assertSourceIncludes(stackWorkspaceSource, 'stack-cockpit-user', 'stack hero user identity slot');
   assertSourceIncludes(stackWorkspaceSource, 'getUserDisplayName(user)', 'stack user display-name fallback helper');
   assertSourceIncludes(stackWorkspaceSource, "['name', 'display_name', 'full_name']", 'stack user label fallback fields');

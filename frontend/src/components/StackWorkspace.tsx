@@ -3,8 +3,10 @@ import type { ChangeEvent, FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
+  ArrowDown,
   ArrowLeft,
   ArrowRight,
+  ArrowUp,
   Calculator,
   Flag,
   FileText,
@@ -12,6 +14,7 @@ import {
   LayoutGrid,
   List,
   Mail,
+  GripVertical,
   Package,
   Pencil,
   Plus,
@@ -26,7 +29,16 @@ import ProductCard from './ProductCard';
 import StacksHeader, { type StacksHeaderVariant } from './StacksHeader';
 import EditStackModal from './EditStackModal';
 import { createFamilyMember, deleteFamilyMember, getFamilyMembers } from '../api/family';
-import { getPublicIntakeTimings, reportProductLink, type PublicIntakeTimingOption } from '../api/stacks';
+import {
+  createStackCategory,
+  deleteStackCategory,
+  getPublicIntakeTimings,
+  reportProductLink,
+  updateStackCategory,
+  updateStackItemsLayout,
+  type PublicIntakeTimingOption,
+  type StackCategoryRecord,
+} from '../api/stacks';
 import type { FamilyMember, ProductSafetyWarning, User } from '../types';
 import type { DosageGuideline, Ingredient, ShopDomain } from '../types/local';
 import {
@@ -42,6 +54,7 @@ import {
 export interface DemoProduct {
   id: number;
   product_type?: 'catalog' | 'user_product';
+  stack_item_id?: number;
   name: string;
   product_name?: string | null;
   price: number;
@@ -68,6 +81,10 @@ export interface DemoProduct {
   ingredient_timing_note?: string | null;
   ingredient_intake_hint?: string | null;
   dosage_text?: string;
+  sort_order?: number;
+  category_id?: number | string | null;
+  category_name?: string | null;
+  category_is_default?: boolean | null;
   ingredient_effect_summary?: string | null;
   effect_summary?: string;
   warning_title?: string;
@@ -91,10 +108,19 @@ export interface DemoProduct {
   }>;
 }
 
+interface StackCategory {
+  id: number | string;
+  stack_id: number | string;
+  name: string;
+  sort_order: number;
+  is_default: boolean;
+}
+
 export interface DemoStack {
   id: string;
   name: string;
   products: DemoProduct[];
+  categories: StackCategory[];
   description?: string;
   family_member_id?: number | null;
   family_member_first_name?: string | null;
@@ -140,10 +166,65 @@ interface DemoStackHandoff {
     name: string;
     description?: string;
     products: DemoProduct[];
+    categories?: StackCategory[];
   }>;
 }
 
 const DEMO_STACK_HANDOFF_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const DEFAULT_CUSTOM_CATEGORY_LOCAL_ID = 'default-local-category';
+
+function normalizedCategoryId(value: number | string | null | undefined): string {
+  if (value === null || value === undefined) return '';
+  return String(value).trim();
+}
+
+function categoryNameKey(value: string): string {
+  return value.trim().toLocaleLowerCase('de');
+}
+
+function createDefaultCategory(stackId: string | number): StackCategory {
+  return {
+    id: DEFAULT_CUSTOM_CATEGORY_LOCAL_ID,
+    stack_id: stackId,
+    name: 'Unkategorisiert',
+    sort_order: 0,
+    is_default: true,
+  };
+}
+
+function normalizeStackCategories(stackId: string | number, rawCategories: unknown): StackCategory[] {
+  const categories = Array.isArray(rawCategories) ? rawCategories : [];
+  const parsed: StackCategory[] = categories
+    .map((entry, index) => {
+      if (!entry || typeof entry !== 'object') return null;
+      const source = entry as Partial<StackCategoryRecord>;
+      if (source.id === undefined || source.id === null) return null;
+      const name = typeof source.name === 'string' && source.name.trim()
+        ? source.name.trim()
+        : `Kategorie ${index + 1}`;
+      return {
+        id: source.id,
+        stack_id: source.stack_id ?? stackId,
+        name,
+        sort_order: Number.isFinite(source.sort_order) ? Number(source.sort_order) : index,
+        is_default: Boolean(source.is_default),
+      } satisfies StackCategory;
+    })
+    .filter((entry): entry is StackCategory => entry !== null)
+    .sort((left, right) => left.sort_order - right.sort_order || left.name.localeCompare(right.name, 'de'));
+
+  const fallbackDefault = createDefaultCategory(stackId);
+  const defaultFromApi = parsed.find((category) => category.is_default);
+  const defaultCategory = defaultFromApi ?? fallbackDefault;
+  const withoutDefaultDuplicate = parsed.filter((category) => normalizedCategoryId(category.id) !== normalizedCategoryId(defaultCategory.id));
+  return [defaultCategory, ...withoutDefaultDuplicate]
+    .map((category, index) => ({ ...category, sort_order: index }))
+    .sort((left, right) => left.sort_order - right.sort_order || left.name.localeCompare(right.name, 'de'));
+}
+
+function applySequentialSortOrder(products: DemoProduct[]): DemoProduct[] {
+  return products.map((product, index) => ({ ...product, sort_order: index }));
+}
 
 function newStackId(): string {
   return `stack_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -151,7 +232,10 @@ function newStackId(): string {
 
 function createDefaultState(): DemoState {
   const id = newStackId();
-  return { stacks: [{ id, name: 'Basis Gesundheit', products: [] }], activeStackId: id };
+  return {
+    stacks: [{ id, name: 'Basis Gesundheit', products: [], categories: [createDefaultCategory(id)] }],
+    activeStackId: id,
+  };
 }
 
 const JSON_HEADERS: Record<string, string> = {
@@ -166,16 +250,37 @@ function mapStackDetail(
   stack: { id: number | string; name: string; family_member_id?: number | null; family_member_first_name?: string | null },
   detail?: Record<string, unknown>,
 ): DemoStack {
-  const products = (detail?.products ?? detail?.items ?? []) as DemoProduct[];
+  const stackId = String(stack.id);
+  const rawProducts = (detail?.products ?? detail?.items ?? []) as DemoProduct[];
+  const products = applySequentialSortOrder(
+    [...rawProducts].sort((left, right) => {
+      const leftOrder = Number.isFinite(left.sort_order) ? Number(left.sort_order) : Number.MAX_SAFE_INTEGER;
+      const rightOrder = Number.isFinite(right.sort_order) ? Number(right.sort_order) : Number.MAX_SAFE_INTEGER;
+      if (leftOrder !== rightOrder) return leftOrder - rightOrder;
+      return compareProductsByName(left, right);
+    }),
+  );
   const stackDetail = detail?.stack as {
     name?: string;
     family_member_id?: number | null;
     family_member_first_name?: string | null;
   } | undefined;
+  const categories = normalizeStackCategories(stack.id, detail?.categories);
+  const defaultCategory = categories.find((category) => category.is_default) ?? createDefaultCategory(stackId);
+  const normalizedProducts = products.map((product) => {
+    const productCategory = categories.find((category) => normalizedCategoryId(category.id) === normalizedCategoryId(product.category_id));
+    return {
+      ...product,
+      category_id: productCategory?.id ?? product.category_id ?? defaultCategory.id,
+      category_name: productCategory?.name ?? product.category_name ?? defaultCategory.name,
+      category_is_default: productCategory?.is_default ?? product.category_is_default ?? false,
+    };
+  });
   return {
-    id: String(stack.id),
+    id: stackId,
     name: stackDetail?.name ?? stack.name,
-    products,
+    products: normalizedProducts,
+    categories,
     family_member_id: stackDetail?.family_member_id ?? stack.family_member_id ?? null,
     family_member_first_name: stackDetail?.family_member_first_name ?? stack.family_member_first_name ?? null,
   };
@@ -215,6 +320,7 @@ function persistDemoStackHandoff(state: DemoState, descriptions: Record<string, 
         name: stack.name,
         description: descriptions[stack.id],
         products: stack.products,
+        categories: stack.categories,
       })),
     };
     window.localStorage.setItem(SS_DEMO_STACK_HANDOFF_KEY, JSON.stringify(snapshot));
@@ -258,8 +364,9 @@ function isDemoStackHandoff(value: unknown): value is DemoStackHandoff {
   if (!Array.isArray(candidate.stacks)) return false;
   return candidate.stacks.every((stack) => {
     if (!stack || typeof stack !== 'object') return false;
-    const item = stack as { id?: unknown; name?: unknown; products?: unknown };
-    return typeof item.id === 'string' && typeof item.name === 'string' && Array.isArray(item.products);
+    const item = stack as { id?: unknown; name?: unknown; products?: unknown; categories?: unknown };
+    const hasCategories = item.categories === undefined || Array.isArray(item.categories);
+    return typeof item.id === 'string' && typeof item.name === 'string' && Array.isArray(item.products) && hasCategories;
   });
 }
 
@@ -401,7 +508,8 @@ function stackProfileLabel(stack: DemoStack | undefined): string {
 }
 
 type RoutineKey = 'morning' | 'noon' | 'evening' | 'flexible';
-type ProductSortMode = 'az' | 'timing';
+type ProductSortMode = 'az' | 'timing' | 'custom';
+type ProductCategoryMode = 'none' | 'timing' | 'custom';
 
 const ROUTINE_META: Record<RoutineKey, { label: string; hint: string }> = {
   morning: { label: 'Morgens', hint: 'Frühstück / Start in den Tag' },
@@ -487,9 +595,17 @@ function compareProductsByName(a: DemoProduct, b: DemoProduct): number {
   return PRODUCT_NAME_COLLATOR.compare(String(a.id), String(b.id));
 }
 
+function compareProductsByCustomOrder(a: DemoProduct, b: DemoProduct): number {
+  const aOrder = Number.isFinite(a.sort_order) ? Number(a.sort_order) : Number.MAX_SAFE_INTEGER;
+  const bOrder = Number.isFinite(b.sort_order) ? Number(b.sort_order) : Number.MAX_SAFE_INTEGER;
+  if (aOrder !== bOrder) return aOrder - bOrder;
+  return compareProductsByName(a, b);
+}
+
 function sortProductsForDisplay(products: DemoProduct[], sortMode: ProductSortMode): DemoProduct[] {
   const sorted = [...products];
   if (sortMode === 'az') return sorted.sort(compareProductsByName);
+  if (sortMode === 'custom') return sorted.sort(compareProductsByCustomOrder);
 
   return sorted.sort((a, b) => {
     const aRoutine = routineKeyForTiming(a.timing);
@@ -497,6 +613,97 @@ function sortProductsForDisplay(products: DemoProduct[], sortMode: ProductSortMo
     const byTiming = PRODUCT_TIMING_ORDER.indexOf(aRoutine) - PRODUCT_TIMING_ORDER.indexOf(bRoutine);
     return byTiming || compareProductsByName(a, b);
   });
+}
+
+interface ProductSection {
+  id: string;
+  heading: string | null;
+  categoryId: number | string | null;
+  products: DemoProduct[];
+}
+
+function sectionSortMode(sortMode: ProductSortMode, categoryMode: ProductCategoryMode): ProductSortMode {
+  if (categoryMode === 'timing' && sortMode === 'timing') return 'az';
+  return sortMode;
+}
+
+function buildProductSections(
+  products: DemoProduct[],
+  categories: StackCategory[],
+  sortMode: ProductSortMode,
+  categoryMode: ProductCategoryMode,
+): ProductSection[] {
+  const effectiveSort = sectionSortMode(sortMode, categoryMode);
+  if (categoryMode === 'none') {
+    return [{ id: 'none', heading: null, categoryId: null, products: sortProductsForDisplay(products, effectiveSort) }];
+  }
+
+  if (categoryMode === 'timing') {
+    const byRoutine: Record<RoutineKey, DemoProduct[]> = {
+      morning: [],
+      noon: [],
+      evening: [],
+      flexible: [],
+    };
+    for (const product of products) {
+      byRoutine[routineKeyForTiming(product.timing)].push(product);
+    }
+    return (Object.keys(ROUTINE_META) as RoutineKey[])
+      .map((routine) => ({
+        id: `timing-${routine}`,
+        heading: ROUTINE_META[routine].label,
+        categoryId: routine,
+        products: sortProductsForDisplay(byRoutine[routine], effectiveSort),
+      }))
+      .filter((section) => section.products.length > 0);
+  }
+
+  const orderedCategories = [...categories]
+    .sort((left, right) => left.sort_order - right.sort_order || left.name.localeCompare(right.name, 'de'));
+  const defaultCategory = orderedCategories.find((category) => category.is_default) ?? createDefaultCategory('local-stack');
+  const sections = orderedCategories.map((category) => ({
+    id: `custom-${normalizedCategoryId(category.id)}`,
+    heading: category.name,
+    categoryId: category.id,
+    products: [] as DemoProduct[],
+  }));
+
+  const sectionByCategory = new Map<string, ProductSection>();
+  for (const section of sections) {
+    sectionByCategory.set(normalizedCategoryId(section.categoryId), section);
+  }
+  for (const product of products) {
+    const section = sectionByCategory.get(normalizedCategoryId(product.category_id))
+      ?? sectionByCategory.get(normalizedCategoryId(defaultCategory.id))
+      ?? sections[0];
+    section.products.push(product);
+  }
+  for (const section of sections) {
+    section.products = sortProductsForDisplay(section.products, effectiveSort);
+  }
+  return sections;
+}
+
+function normalizeStackWithLayout(stack: DemoStack): DemoStack {
+  const categories = normalizeStackCategories(stack.id, stack.categories);
+  const defaultCategory = categories.find((category) => category.is_default) ?? createDefaultCategory(stack.id);
+  const products = applySequentialSortOrder(stack.products).map((product) => {
+    const category = categories.find((entry) => normalizedCategoryId(entry.id) === normalizedCategoryId(product.category_id));
+    return {
+      ...product,
+      category_id: category?.id ?? defaultCategory.id,
+      category_name: category?.name ?? defaultCategory.name,
+      category_is_default: category?.is_default ?? false,
+    };
+  });
+  return { ...stack, categories, products };
+}
+
+function toApiCategoryId(value: number | string | null | undefined): number | null | undefined {
+  if (value === null || value === undefined || value === '') return undefined;
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 function productDoseSignature(product: DemoProduct): string {
@@ -1445,6 +1652,7 @@ function IconChevron() {
 const HEADER_VARIANT: StacksHeaderVariant = 'warm';
 const STACK_PRODUCT_VIEW_KEY = 'supplement-stack-product-view';
 const STACK_PRODUCT_SORT_KEY = 'supplement-stack-product-sort';
+const STACK_PRODUCT_CATEGORY_MODE_KEY = 'supplement-stack-product-category-mode';
 const CREATE_STACK_SELECT_VALUE = '__create_stack__';
 
 function loadProductViewMode(): ProductViewMode {
@@ -1454,7 +1662,14 @@ function loadProductViewMode(): ProductViewMode {
 
 function loadProductSortMode(): ProductSortMode {
   if (typeof window === 'undefined') return 'az';
-  return window.localStorage.getItem(STACK_PRODUCT_SORT_KEY) === 'timing' ? 'timing' : 'az';
+  const raw = window.localStorage.getItem(STACK_PRODUCT_SORT_KEY);
+  return raw === 'timing' || raw === 'custom' ? raw : 'az';
+}
+
+function loadProductCategoryMode(): ProductCategoryMode {
+  if (typeof window === 'undefined') return 'none';
+  const raw = window.localStorage.getItem(STACK_PRODUCT_CATEGORY_MODE_KEY);
+  return raw === 'timing' || raw === 'custom' ? raw : 'none';
 }
 
 export function StackWorkspace({
@@ -1484,9 +1699,13 @@ export function StackWorkspace({
   const [linkReportStatus, setLinkReportStatus] = useState('');
   const [productViewMode, setProductViewMode] = useState<ProductViewMode>(loadProductViewMode);
   const [productSortMode, setProductSortMode] = useState<ProductSortMode>(loadProductSortMode);
+  const [productCategoryMode, setProductCategoryMode] = useState<ProductCategoryMode>(loadProductCategoryMode);
   const [managedTimingOptions, setManagedTimingOptions] = useState<IntakeTimingOption[]>([]);
   const [notice, setNotice] = useState<WorkspaceNotice | null>(null);
   const [deleteProductKey, setDeleteProductKey] = useState<string | null>(null);
+  const [categoryDraft, setCategoryDraft] = useState('');
+  const [categoryStatus, setCategoryStatus] = useState('');
+  const [draggingProductKey, setDraggingProductKey] = useState<string | null>(null);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const cockpitUserLabel = getUserDisplayName(user);
@@ -1502,6 +1721,10 @@ export function StackWorkspace({
   useEffect(() => {
     window.localStorage.setItem(STACK_PRODUCT_SORT_KEY, productSortMode);
   }, [productSortMode]);
+
+  useEffect(() => {
+    window.localStorage.setItem(STACK_PRODUCT_CATEGORY_MODE_KEY, productCategoryMode);
+  }, [productCategoryMode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1537,17 +1760,20 @@ export function StackWorkspace({
   }, [mode]);
 
   const persistStackProducts = useCallback(
-    async (stackId: string, products: DemoProduct[], name?: string) => {
-      if (mode !== 'authenticated') return;
+    async (stackId: string, products: DemoProduct[], categories: StackCategory[], name?: string): Promise<DemoStack | null> => {
+      if (mode !== 'authenticated') return null;
+      const normalizedProducts = applySequentialSortOrder(products);
       const payload = {
         ...(name ? { name } : {}),
-        product_ids: products.map((product) => ({
+        product_ids: normalizedProducts.map((product) => ({
           id: product.id,
           product_type: product.product_type ?? 'catalog',
           quantity: productServingsPerDay(product),
           intake_interval_days: productIntakeIntervalDays(product),
           dosage_text: product.dosage_text,
           timing: product.timing,
+          sort_order: product.sort_order,
+          category_id: toApiCategoryId(product.category_id),
         })),
       };
       const res = await credentialedFetch(apiPath(`/stacks/${stackId}`), {
@@ -1555,10 +1781,141 @@ export function StackWorkspace({
         headers: JSON_HEADERS,
         body: JSON.stringify(payload),
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error ?? 'Stack konnte nicht gespeichert werden.');
+      const data = await res.json().catch(() => ({})) as unknown;
+      const dataRecord = data && typeof data === 'object' ? data as Record<string, unknown> : {};
+      if (!res.ok) {
+        const errorMessage = typeof dataRecord.error === 'string' ? dataRecord.error : 'Stack konnte nicht gespeichert werden.';
+        throw new Error(errorMessage);
+      }
+      const responseStack = dataRecord.stack && typeof dataRecord.stack === 'object'
+        ? dataRecord.stack as Record<string, unknown>
+        : dataRecord;
+      const items = Array.isArray(dataRecord.items)
+        ? dataRecord.items
+        : Array.isArray(responseStack.items)
+          ? responseStack.items
+          : Array.isArray(dataRecord.products)
+            ? dataRecord.products
+            : Array.isArray(responseStack.products)
+              ? responseStack.products
+              : normalizedProducts;
+      const persistedCategories = Array.isArray(dataRecord.categories)
+        ? dataRecord.categories
+        : Array.isArray(responseStack.categories)
+          ? responseStack.categories
+          : categories;
+      const fallbackName = typeof name === 'string' && name.trim()
+        ? name.trim()
+        : (typeof responseStack.name === 'string' && responseStack.name.trim() ? responseStack.name : `Stack ${stackId}`);
+      return normalizeStackWithLayout(
+        mapStackDetail(
+          {
+            id: (responseStack.id as number | string | undefined) ?? stackId,
+            name: fallbackName,
+            family_member_id: (responseStack.family_member_id as number | null | undefined) ?? null,
+            family_member_first_name: (responseStack.family_member_first_name as string | null | undefined) ?? null,
+          },
+          {
+            ...dataRecord,
+            items,
+            categories: persistedCategories,
+          },
+        ),
+      );
     },
     [mode],
+  );
+
+  const persistStackLayout = useCallback(
+    async (stackId: string, products: DemoProduct[]) => {
+      if (mode !== 'authenticated') return;
+      const normalizedProducts = applySequentialSortOrder(products);
+      const missingStackItemId = normalizedProducts.some((product) => !Number.isFinite(product.stack_item_id));
+      if (missingStackItemId) {
+        throw new Error('Layout konnte nicht gespeichert werden, da die Stack-Elemente noch nicht synchronisiert sind. Bitte neu laden.');
+      }
+      const items = normalizedProducts
+        .map((product) => ({
+          stack_item_id: product.stack_item_id as number,
+          sort_order: product.sort_order ?? 0,
+          category_id: toApiCategoryId(product.category_id),
+        }));
+      await updateStackItemsLayout(stackId, { items });
+    },
+    [mode],
+  );
+
+  const prepareProductsForAuthenticatedImport = useCallback(
+    async (
+      stackId: string,
+      products: DemoProduct[],
+      categories: StackCategory[],
+      existingCategories: StackCategory[],
+    ): Promise<{ products: DemoProduct[]; categories: StackCategory[] }> => {
+      const knownCategories = normalizeStackCategories(stackId, existingCategories);
+      const categoryByName = new Map<string, StackCategory>();
+      for (const category of knownCategories) {
+        if (category.is_default) continue;
+        categoryByName.set(categoryNameKey(category.name), category);
+      }
+
+      const categoryIdMap = new Map<string, number | string>();
+      for (const category of normalizeStackCategories(stackId, categories)) {
+        if (category.is_default) continue;
+        const normalizedId = normalizedCategoryId(category.id);
+        const apiCategoryId = toApiCategoryId(category.id);
+        if (apiCategoryId !== undefined) {
+          const existingById = knownCategories.find((entry) => (
+            normalizedCategoryId(entry.id) === normalizedCategoryId(apiCategoryId)
+          ));
+          if (existingById) {
+            categoryIdMap.set(normalizedId, existingById.id);
+            continue;
+          }
+        }
+
+        const existingMatch = categoryByName.get(categoryNameKey(category.name));
+        if (existingMatch) {
+          categoryIdMap.set(normalizedId, existingMatch.id);
+          continue;
+        }
+
+        const created = await createStackCategory(stackId, {
+          name: category.name,
+          sort_order: knownCategories.length,
+        });
+        const mappedCategory: StackCategory = {
+          id: created.id,
+          stack_id: created.stack_id,
+          name: created.name,
+          sort_order: created.sort_order,
+          is_default: created.is_default,
+        };
+        knownCategories.push(mappedCategory);
+        categoryByName.set(categoryNameKey(mappedCategory.name), mappedCategory);
+        categoryIdMap.set(normalizedId, mappedCategory.id);
+      }
+
+      const mappedProducts = applySequentialSortOrder(products).map((product) => {
+        const mappedCategoryId = categoryIdMap.get(normalizedCategoryId(product.category_id));
+        if (mappedCategoryId === undefined) return product;
+        const mappedCategory = knownCategories.find((category) => (
+          normalizedCategoryId(category.id) === normalizedCategoryId(mappedCategoryId)
+        ));
+        return {
+          ...product,
+          category_id: mappedCategoryId,
+          category_name: mappedCategory?.name ?? product.category_name,
+          category_is_default: mappedCategory?.is_default ?? false,
+        };
+      });
+
+      return {
+        products: mappedProducts,
+        categories: knownCategories,
+      };
+    },
+    [],
   );
 
   const consumePendingDemoStackHandoff = useCallback(
@@ -1585,13 +1942,28 @@ export function StackWorkspace({
         let importedStack: DemoStack;
 
         if (existing) {
+          const candidateCategories = normalizeStackCategories(existing.id, candidate.categories ?? existing.categories);
+          const preparedImport = await prepareProductsForAuthenticatedImport(
+            existing.id,
+            candidate.products,
+            candidateCategories,
+            existing.categories,
+          );
           importedStack = {
             ...existing,
             name: candidate.name,
-            products: candidate.products,
+            products: preparedImport.products,
+            categories: preparedImport.categories,
           };
-          if (!productKeysMatch(existing.products, candidate.products)) {
-            await persistStackProducts(importedStack.id, importedStack.products, importedStack.name);
+          importedStack = normalizeStackWithLayout(importedStack);
+          const persistedStack = await persistStackProducts(
+            importedStack.id,
+            importedStack.products,
+            importedStack.categories,
+            importedStack.name,
+          );
+          if (persistedStack) {
+            importedStack = persistedStack;
           }
           const existingIndex = nextStacks.findIndex((stack) => stack.id === existing.id);
           if (existingIndex >= 0) nextStacks[existingIndex] = importedStack;
@@ -1611,12 +1983,30 @@ export function StackWorkspace({
             family_member_id?: number | null;
             family_member_first_name?: string | null;
           };
+          const mappedCreatedStack = mapStackDetail(createdStack);
+          const candidateCategories = normalizeStackCategories(mappedCreatedStack.id, candidate.categories ?? mappedCreatedStack.categories);
+          const preparedImport = await prepareProductsForAuthenticatedImport(
+            mappedCreatedStack.id,
+            candidate.products,
+            candidateCategories,
+            mappedCreatedStack.categories,
+          );
           importedStack = {
-            ...mapStackDetail(createdStack),
+            ...mappedCreatedStack,
             name: candidate.name,
-            products: candidate.products,
+            products: preparedImport.products,
+            categories: preparedImport.categories,
           };
-          await persistStackProducts(importedStack.id, importedStack.products, importedStack.name);
+          importedStack = normalizeStackWithLayout(importedStack);
+          const persistedStack = await persistStackProducts(
+            importedStack.id,
+            importedStack.products,
+            importedStack.categories,
+            importedStack.name,
+          );
+          if (persistedStack) {
+            importedStack = persistedStack;
+          }
           nextStacks.push(importedStack);
         }
 
@@ -1634,7 +2024,7 @@ export function StackWorkspace({
         activeStackId: activeStackId || nextStacks[nextStacks.length - 1]?.id || '',
       };
     },
-    [persistStackProducts],
+    [persistStackProducts, prepareProductsForAuthenticatedImport],
   );
 
   const loadAuthenticatedStacks = useCallback(async () => {
@@ -1652,7 +2042,7 @@ export function StackWorkspace({
         family_member_first_name?: string | null;
       }> = data.stacks ?? data ?? [];
 
-      const detailed = await Promise.all(
+      const detailedRaw = await Promise.all(
         stackList.map(async (stack) => {
           const detailRes = await credentialedFetch(apiPath(`/stacks/${stack.id}`), {
             headers: JSON_HEADERS,
@@ -1662,11 +2052,12 @@ export function StackWorkspace({
           return mapStackDetail(stack, detail);
         }),
       );
+      const detailed = detailedRaw.map(normalizeStackWithLayout);
 
       const imported = await consumePendingDemoStackHandoff(detailed);
       if (imported) {
         setState({
-          stacks: imported.stacks,
+          stacks: imported.stacks.map(normalizeStackWithLayout),
           activeStackId: imported.activeStackId,
         });
         const selectedStack = imported.stacks.find((stack) => stack.id === imported.activeStackId) ?? imported.stacks[0];
@@ -1724,11 +2115,18 @@ export function StackWorkspace({
           const next = { ...product, intake_interval_days: product.intake_interval_days ?? 1 };
           return { ...next, quantity: productServingsPerDay(next) };
         });
+        const defaultCategory = fresh.stacks[0].categories[0];
+        const normalizedProducts = applySequentialSortOrder(products).map((product) => ({
+          ...product,
+          category_id: defaultCategory.id,
+          category_name: defaultCategory.name,
+          category_is_default: true,
+        }));
         setState({
-          stacks: [{ ...fresh.stacks[0], products }],
+          stacks: [{ ...fresh.stacks[0], products: normalizedProducts }],
           activeStackId: fresh.activeStackId,
         });
-        setSelectedIds(new Set(products.map(productStackKey)));
+        setSelectedIds(new Set(normalizedProducts.map(productStackKey)));
       })
       .catch(() => setState(fresh));
   }, [loadAuthenticatedStacks, loadFamilyProfiles, mode]);
@@ -1967,7 +2365,7 @@ export function StackWorkspace({
       }
     }
     setState((prev) => ({
-      stacks: [...prev.stacks, { id, name, products: [] }],
+      stacks: [...prev.stacks, { id, name, products: [], categories: [createDefaultCategory(id)] }],
       activeStackId: id,
     }));
   }, [mode, state.stacks.length]);
@@ -2027,12 +2425,17 @@ export function StackWorkspace({
     async (newName: string, newDescription: string) => {
       if (!activeStack) return;
       const prevName = activeStack.name;
+      let persistedStack: DemoStack | null = null;
       if (mode === 'authenticated' && newName !== prevName) {
-        await persistStackProducts(activeStack.id, activeStack.products, newName);
+        persistedStack = await persistStackProducts(activeStack.id, activeStack.products, activeStack.categories, newName);
       }
       setState((prev) => ({
         ...prev,
-        stacks: prev.stacks.map((s) => (s.id === activeStack.id ? { ...s, name: newName } : s)),
+        stacks: prev.stacks.map((stack) => {
+          if (stack.id !== activeStack.id) return stack;
+          if (persistedStack) return persistedStack;
+          return { ...stack, name: newName };
+        }),
       }));
       setDescriptions((prev) => {
         const next = { ...prev };
@@ -2056,10 +2459,18 @@ export function StackWorkspace({
       if (targetStack.products.some((p) => productStackKey(p) === productStackKey(product))) {
         throw new Error('Produkt ist bereits in diesem Stack.');
       }
-      const nextProducts = [...targetStack.products, product];
+      const defaultCategory = targetStack.categories.find((category) => category.is_default) ?? targetStack.categories[0] ?? createDefaultCategory(targetStackId);
+      const nextProduct = {
+        ...product,
+        category_id: product.category_id ?? defaultCategory.id,
+        category_name: product.category_name ?? defaultCategory.name,
+        category_is_default: product.category_is_default ?? defaultCategory.is_default,
+      };
+      const nextProducts = applySequentialSortOrder([...targetStack.products, nextProduct]);
+      let persistedStack: DemoStack | null = null;
       if (mode === 'authenticated') {
         try {
-          await persistStackProducts(targetStackId, nextProducts);
+          persistedStack = await persistStackProducts(targetStackId, nextProducts, targetStack.categories);
         } catch (err) {
           setError(err instanceof Error ? err.message : 'Produkt konnte nicht gespeichert werden.');
           void loadAuthenticatedStacks();
@@ -2069,12 +2480,12 @@ export function StackWorkspace({
       setState((prev) => ({
         ...prev,
         stacks: prev.stacks.map((s) =>
-          s.id === targetStackId ? { ...s, products: nextProducts } : s,
+          s.id === targetStackId ? (persistedStack ?? { ...s, products: nextProducts }) : s,
         ),
       }));
       setSelectedIds((prev) => {
         const next = new Set(prev);
-        next.add(productStackKey(product));
+        next.add(productStackKey(nextProduct));
         return next;
       });
     },
@@ -2084,10 +2495,11 @@ export function StackWorkspace({
   const handleRemoveProduct = useCallback(
     async (productKey: string) => {
       if (!activeStack) return;
-      const nextProducts = activeStack.products.filter((p) => productStackKey(p) !== productKey);
+      const nextProducts = applySequentialSortOrder(activeStack.products.filter((p) => productStackKey(p) !== productKey));
+      let persistedStack: DemoStack | null = null;
       if (mode === 'authenticated') {
         try {
-          await persistStackProducts(activeStack.id, nextProducts);
+          persistedStack = await persistStackProducts(activeStack.id, nextProducts, activeStack.categories);
         } catch (err) {
           setError(err instanceof Error ? err.message : 'Produkt konnte nicht entfernt werden.');
           void loadAuthenticatedStacks();
@@ -2097,7 +2509,7 @@ export function StackWorkspace({
       setState((prev) => ({
         ...prev,
         stacks: prev.stacks.map((s) =>
-          s.id === prev.activeStackId ? { ...s, products: nextProducts } : s,
+          s.id === prev.activeStackId ? (persistedStack ?? { ...s, products: nextProducts }) : s,
         ),
       }));
     },
@@ -2107,12 +2519,13 @@ export function StackWorkspace({
   const handleSaveProduct = useCallback(
     async (productKey: string, productPatch: Pick<DemoProduct, 'quantity' | 'dosage_text' | 'timing' | 'intake_interval_days'>) => {
       if (!activeStack) return;
-      const nextProducts = activeStack.products.map((product) =>
+      const nextProducts = applySequentialSortOrder(activeStack.products.map((product) =>
         productStackKey(product) === productKey ? { ...product, ...productPatch } : product,
-      );
+      ));
+      let persistedStack: DemoStack | null = null;
       if (mode === 'authenticated') {
         try {
-          await persistStackProducts(activeStack.id, nextProducts);
+          persistedStack = await persistStackProducts(activeStack.id, nextProducts, activeStack.categories);
         } catch (err) {
           setError(err instanceof Error ? err.message : 'Produkt konnte nicht gespeichert werden.');
           void loadAuthenticatedStacks();
@@ -2122,7 +2535,7 @@ export function StackWorkspace({
       setState((prev) => ({
         ...prev,
         stacks: prev.stacks.map((stack) =>
-          stack.id === prev.activeStackId ? { ...stack, products: nextProducts } : stack,
+          stack.id === prev.activeStackId ? (persistedStack ?? { ...stack, products: nextProducts }) : stack,
         ),
       }));
       setEditingProductKey(null);
@@ -2161,16 +2574,20 @@ export function StackWorkspace({
         dosage_text: preservedDosage,
         timing: preservedTiming,
         intake_interval_days: preservedInterval,
+        category_id: previousProduct.category_id ?? replacement.category_id,
+        category_name: previousProduct.category_name ?? replacement.category_name,
+        category_is_default: previousProduct.category_is_default ?? replacement.category_is_default,
       };
       const quantityFromDose = productServingsFromDose(candidate);
       candidate.quantity = quantityFromDose ?? previousProduct.quantity ?? productServingsPerDay(candidate);
 
-      const nextProducts = targetStack.products.map((product) =>
+      const nextProducts = applySequentialSortOrder(targetStack.products.map((product) =>
         productStackKey(product) === replaceProductKey ? candidate : product,
-      );
+      ));
+      let persistedStack: DemoStack | null = null;
       if (mode === 'authenticated') {
         try {
-          await persistStackProducts(targetStackId, nextProducts);
+          persistedStack = await persistStackProducts(targetStackId, nextProducts, targetStack.categories);
         } catch (err) {
           setError(err instanceof Error ? err.message : 'Produkt konnte nicht ersetzt werden.');
           void loadAuthenticatedStacks();
@@ -2181,7 +2598,7 @@ export function StackWorkspace({
       setState((prev) => ({
         ...prev,
         stacks: prev.stacks.map((stack) =>
-          stack.id === targetStackId ? { ...stack, products: nextProducts } : stack,
+          stack.id === targetStackId ? (persistedStack ?? { ...stack, products: nextProducts }) : stack,
         ),
       }));
       setSelectedIds((prev) => {
@@ -2212,10 +2629,17 @@ export function StackWorkspace({
     () => (activeStack?.products.filter((p) => selectedIds.has(productStackKey(p))) ?? []),
     [activeStack, selectedIds],
   );
-  const activeProducts = useMemo(() => activeStack?.products ?? [], [activeStack]);
-  const sortedActiveProducts = useMemo(
-    () => sortProductsForDisplay(activeProducts, productSortMode),
-    [activeProducts, productSortMode],
+  const activeCategories = useMemo(
+    () => activeStack?.categories ?? [createDefaultCategory(activeStack?.id ?? 'stack')],
+    [activeStack],
+  );
+  const activeProducts = useMemo(
+    () => applySequentialSortOrder(activeStack?.products ?? []),
+    [activeStack],
+  );
+  const productSections = useMemo(
+    () => buildProductSections(activeProducts, activeCategories, productSortMode, productCategoryMode),
+    [activeCategories, activeProducts, productCategoryMode, productSortMode],
   );
   const totalOnce = selectedProducts.reduce((sum, p) => sum + (p.price ?? 0), 0);
   const totalMonthly = selectedProducts.reduce((sum, p) => sum + productMonthlyPrice(p), 0);
@@ -2244,6 +2668,232 @@ export function StackWorkspace({
     }
     return groups;
   }, [activeProducts]);
+
+  const setActiveStackProducts = useCallback(
+    (nextProducts: DemoProduct[]) => {
+      if (!activeStack) return;
+      const normalizedProducts = applySequentialSortOrder(nextProducts);
+      setState((prev) => ({
+        ...prev,
+        stacks: prev.stacks.map((stack) =>
+          stack.id === activeStack.id ? { ...stack, products: normalizedProducts } : stack,
+        ),
+      }));
+    },
+    [activeStack],
+  );
+
+  const setActiveStackCategories = useCallback(
+    (nextCategories: StackCategory[]) => {
+      if (!activeStack) return;
+      const normalizedCategories = normalizeStackCategories(activeStack.id, nextCategories);
+      setState((prev) => ({
+        ...prev,
+        stacks: prev.stacks.map((stack) =>
+          stack.id === activeStack.id ? normalizeStackWithLayout({ ...stack, categories: normalizedCategories }) : stack,
+        ),
+      }));
+    },
+    [activeStack],
+  );
+
+  const persistCustomLayout = useCallback(
+    async (nextProducts: DemoProduct[]) => {
+      if (!activeStack) return;
+      const normalizedProducts = applySequentialSortOrder(nextProducts);
+      setActiveStackProducts(normalizedProducts);
+      if (mode !== 'authenticated') return;
+      try {
+        await persistStackLayout(activeStack.id, normalizedProducts);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Layout konnte nicht gespeichert werden.');
+        void loadAuthenticatedStacks();
+      }
+    },
+    [activeStack, loadAuthenticatedStacks, mode, persistStackLayout, setActiveStackProducts],
+  );
+
+  const handleCreateCategory = useCallback(async () => {
+    if (!activeStack || productCategoryMode !== 'custom') return;
+    const name = categoryDraft.trim();
+    if (!name) {
+      setCategoryStatus('Bitte einen Kategorienamen eingeben.');
+      return;
+    }
+    const nextSortOrder = activeCategories.length;
+    const localCategory: StackCategory = {
+      id: `local-category-${Date.now()}`,
+      stack_id: activeStack.id,
+      name,
+      sort_order: nextSortOrder,
+      is_default: false,
+    };
+
+    if (mode === 'authenticated') {
+      try {
+        const created = await createStackCategory(activeStack.id, { name, sort_order: nextSortOrder });
+        setActiveStackCategories([...activeCategories, {
+          id: created.id,
+          stack_id: created.stack_id,
+          name: created.name,
+          sort_order: created.sort_order,
+          is_default: created.is_default,
+        }]);
+        setCategoryDraft('');
+        setCategoryStatus('');
+        return;
+      } catch (err) {
+        setCategoryStatus(err instanceof Error ? err.message : 'Kategorie konnte nicht erstellt werden.');
+        return;
+      }
+    }
+
+    setActiveStackCategories([...activeCategories, localCategory]);
+    setCategoryDraft('');
+    setCategoryStatus('');
+  }, [activeCategories, activeStack, categoryDraft, mode, productCategoryMode, setActiveStackCategories]);
+
+  const handleRenameCategory = useCallback(async (category: StackCategory) => {
+    if (!activeStack || productCategoryMode !== 'custom') return;
+    const currentName = category.name.trim();
+    const nextNameRaw = window.prompt('Kategorie umbenennen', currentName);
+    if (nextNameRaw == null) return;
+    const nextName = nextNameRaw.trim();
+    if (!nextName || nextName === currentName) return;
+
+    if (mode === 'authenticated' && toApiCategoryId(category.id) !== undefined) {
+      try {
+        const updated = await updateStackCategory(activeStack.id, category.id, { name: nextName });
+        setActiveStackCategories(
+          activeCategories.map((entry) => (
+            normalizedCategoryId(entry.id) === normalizedCategoryId(category.id)
+              ? { ...entry, name: updated.name }
+              : entry
+          )),
+        );
+        setCategoryStatus('');
+        return;
+      } catch (err) {
+        setCategoryStatus(err instanceof Error ? err.message : 'Kategorie konnte nicht umbenannt werden.');
+        return;
+      }
+    }
+
+    setActiveStackCategories(
+      activeCategories.map((entry) => (
+        normalizedCategoryId(entry.id) === normalizedCategoryId(category.id)
+          ? { ...entry, name: nextName }
+          : entry
+      )),
+    );
+    setCategoryStatus('');
+  }, [activeCategories, activeStack, mode, productCategoryMode, setActiveStackCategories]);
+
+  const handleDeleteCategory = useCallback(async (category: StackCategory) => {
+    if (!activeStack || category.is_default || productCategoryMode !== 'custom') return;
+    const confirmed = window.confirm(`Kategorie "${category.name}" wirklich löschen?`);
+    if (!confirmed) return;
+    const defaultCategory = activeCategories.find((entry) => entry.is_default) ?? activeCategories[0];
+    if (!defaultCategory) return;
+
+    if (mode === 'authenticated' && toApiCategoryId(category.id) !== undefined) {
+      try {
+        await deleteStackCategory(activeStack.id, category.id);
+      } catch (err) {
+        setCategoryStatus(err instanceof Error ? err.message : 'Kategorie konnte nicht gelöscht werden.');
+        return;
+      }
+    }
+
+    const recategorizedProducts = activeProducts.map((product) => (
+      normalizedCategoryId(product.category_id) === normalizedCategoryId(category.id)
+        ? {
+            ...product,
+            category_id: defaultCategory.id,
+            category_name: defaultCategory.name,
+            category_is_default: true,
+          }
+        : product
+    ));
+    setActiveStackCategories(activeCategories.filter((entry) => normalizedCategoryId(entry.id) !== normalizedCategoryId(category.id)));
+    await persistCustomLayout(recategorizedProducts);
+    setCategoryStatus('');
+  }, [activeCategories, activeProducts, activeStack, mode, persistCustomLayout, productCategoryMode, setActiveStackCategories]);
+
+  const moveProductTo = useCallback(
+    async (productKey: string, targetIndex: number, targetCategoryId: number | string | null = null) => {
+      if (!activeStack) return;
+      const sourceIndex = activeProducts.findIndex((product) => productStackKey(product) === productKey);
+      if (sourceIndex < 0) return;
+      const next = [...activeProducts];
+      const [moved] = next.splice(sourceIndex, 1);
+      const adjustedTargetIndex = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
+      const boundedIndex = Math.max(0, Math.min(adjustedTargetIndex, next.length));
+      const defaultCategory = activeCategories.find((category) => category.is_default) ?? activeCategories[0] ?? createDefaultCategory(activeStack.id);
+      const resolvedCategory = productCategoryMode === 'custom'
+        ? (activeCategories.find((category) => normalizedCategoryId(category.id) === normalizedCategoryId(targetCategoryId)) ?? defaultCategory)
+        : null;
+      const nextMoved = resolvedCategory
+        ? {
+            ...moved,
+            category_id: resolvedCategory.id,
+            category_name: resolvedCategory.name,
+            category_is_default: resolvedCategory.is_default,
+          }
+        : moved;
+      next.splice(boundedIndex, 0, nextMoved);
+      await persistCustomLayout(next);
+    },
+    [activeCategories, activeProducts, activeStack, persistCustomLayout, productCategoryMode],
+  );
+
+  const assignProductCategory = useCallback(
+    async (productKey: string, categoryId: string) => {
+      if (!activeStack || productCategoryMode !== 'custom') return;
+      const category = activeCategories.find((entry) => normalizedCategoryId(entry.id) === normalizedCategoryId(categoryId));
+      if (!category) return;
+      const nextProducts = activeProducts.map((product) => (
+        productStackKey(product) === productKey
+          ? {
+              ...product,
+              category_id: category.id,
+              category_name: category.name,
+              category_is_default: category.is_default,
+            }
+          : product
+      ));
+      await persistCustomLayout(nextProducts);
+    },
+    [activeCategories, activeProducts, activeStack, persistCustomLayout, productCategoryMode],
+  );
+
+  const moveProductBefore = useCallback(
+    async (productKey: string, targetProductKey: string, targetCategoryId: number | string | null) => {
+      const targetIndex = activeProducts.findIndex((product) => productStackKey(product) === targetProductKey);
+      if (targetIndex < 0) return;
+      await moveProductTo(productKey, targetIndex, targetCategoryId);
+    },
+    [activeProducts, moveProductTo],
+  );
+
+  const moveProductToSectionEnd = useCallback(
+    async (productKey: string, sectionProducts: DemoProduct[], targetCategoryId: number | string | null) => {
+      if (sectionProducts.length === 0) {
+        await moveProductTo(productKey, activeProducts.length, targetCategoryId);
+        return;
+      }
+      const lastProduct = sectionProducts[sectionProducts.length - 1];
+      const lastIndex = activeProducts.findIndex((product) => productStackKey(product) === productStackKey(lastProduct));
+      if (lastIndex < 0) {
+        await moveProductTo(productKey, activeProducts.length, targetCategoryId);
+        return;
+      }
+      await moveProductTo(productKey, lastIndex + 1, targetCategoryId);
+    },
+    [activeProducts, moveProductTo],
+  );
+
+  const customLayoutEnabled = productSortMode === 'custom' || productCategoryMode === 'custom';
 
   const handleSelectAll = () => {
     if (!activeStack) return;
@@ -2610,6 +3260,44 @@ export function StackWorkspace({
               >
                 <span>Tageszeiten</span>
               </button>
+              <button
+                type="button"
+                className={productSortMode === 'custom' ? 'active' : ''}
+                onClick={() => setProductSortMode('custom')}
+                aria-pressed={productSortMode === 'custom'}
+                title="Eigene Sortierung"
+              >
+                <span>Eigene</span>
+              </button>
+            </div>
+            <div className="product-view-toggle" role="group" aria-label="Produktkategorien wählen">
+              <button
+                type="button"
+                className={productCategoryMode === 'none' ? 'active' : ''}
+                onClick={() => setProductCategoryMode('none')}
+                aria-pressed={productCategoryMode === 'none'}
+                title="Keine Kategorien"
+              >
+                <span>Keine</span>
+              </button>
+              <button
+                type="button"
+                className={productCategoryMode === 'timing' ? 'active' : ''}
+                onClick={() => setProductCategoryMode('timing')}
+                aria-pressed={productCategoryMode === 'timing'}
+                title="Nach Tageszeiten gruppieren"
+              >
+                <span>Tageszeiten</span>
+              </button>
+              <button
+                type="button"
+                className={productCategoryMode === 'custom' ? 'active' : ''}
+                onClick={() => setProductCategoryMode('custom')}
+                aria-pressed={productCategoryMode === 'custom'}
+                title="Eigene Kategorien"
+              >
+                <span>Eigene</span>
+              </button>
             </div>
             <div className="product-view-toggle" role="group" aria-label="Produktansicht wählen">
               <button
@@ -2679,40 +3367,193 @@ export function StackWorkspace({
           </div>
         )}
 
-        {!loading && activeProducts.length > 0 && (
-          <div className={productViewMode === 'grid' ? 'masonry-grid' : 'product-list-view'}>
-            {sortedActiveProducts.map((p) => {
-              const key = productStackKey(p);
-              return (
-                <div key={key} className={productViewMode === 'grid' ? 'masonry-item' : 'product-list-item'}>
-                  <ProductCard
-                    product={p}
-                    shopDomains={shopDomains}
-                    selected={selectedIds.has(key)}
-                    display={productViewMode === 'list' ? 'list' : 'card'}
-                    onToggleSelected={() => toggleSelected(key)}
-                    onEdit={() => setEditingProductKey(key)}
-                    onDelete={() => setDeleteProductKey(key)}
-                    onReportMissingLink={(product, reason) => void handleReportMissingLink(product as DemoProduct, reason)}
-                    showSelectButton={false}
-                  />
-                </div>
-              );
-            })}
-            {productViewMode === 'grid' && (
-              <div className="masonry-item">
-                <button
-                  type="button"
-                  className="ss-add-product-tile"
-                  onClick={() => setAddModalOpen(true)}
-                >
-                  <Plus size={28} />
-                  <span>Produkt hinzufügen</span>
+        {!loading && (activeProducts.length > 0 || productCategoryMode === 'custom') && (
+          <>
+            {productCategoryMode === 'custom' && (
+              <div className="ss-category-toolbar" role="group" aria-label="Eigene Kategorien verwalten">
+                <input
+                  type="text"
+                  value={categoryDraft}
+                  onChange={(event) => setCategoryDraft(event.target.value)}
+                  placeholder="Neue Kategorie"
+                  className="ss-category-input"
+                  aria-label="Neue Kategorie"
+                />
+                <button type="button" className="ss-btn ss-btn-outline ss-category-add" onClick={() => void handleCreateCategory()}>
+                  <Plus size={15} />
+                  Kategorie
                 </button>
+                {categoryStatus && <span className="ss-category-status">{categoryStatus}</span>}
               </div>
             )}
-          </div>
+
+            <div className="ss-product-sections">
+              {productSections.map((section) => {
+                const sectionCategory = productCategoryMode === 'custom'
+                  ? activeCategories.find((category) => normalizedCategoryId(category.id) === normalizedCategoryId(section.categoryId))
+                  : null;
+                return (
+                  <section
+                    key={section.id}
+                    className="ss-product-section"
+                    onDragOver={(event) => {
+                      if (!customLayoutEnabled || !draggingProductKey) return;
+                      event.preventDefault();
+                    }}
+                    onDrop={(event) => {
+                      if (!customLayoutEnabled || !draggingProductKey) return;
+                      event.preventDefault();
+                      event.stopPropagation();
+                      void moveProductToSectionEnd(draggingProductKey, section.products, sectionCategory?.id ?? null);
+                      setDraggingProductKey(null);
+                    }}
+                  >
+                    {section.heading && (
+                      <div className="ss-product-section-head">
+                        <div className="ss-product-section-title-row">
+                          <h3>{section.heading}</h3>
+                          <span>{section.products.length}</span>
+                        </div>
+                        {sectionCategory && (
+                          <div className="ss-product-section-actions">
+                            <button
+                              type="button"
+                              className="ss-section-action-btn"
+                              onClick={() => void handleRenameCategory(sectionCategory)}
+                              aria-label={`Kategorie umbenennen: ${sectionCategory.name}`}
+                            >
+                              <Pencil size={14} />
+                            </button>
+                            {!sectionCategory.is_default && (
+                              <button
+                                type="button"
+                                className="ss-section-action-btn ss-section-action-btn-danger"
+                                onClick={() => void handleDeleteCategory(sectionCategory)}
+                                aria-label={`Kategorie löschen: ${sectionCategory.name}`}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <div className={productViewMode === 'grid' ? 'masonry-grid ss-section-grid' : 'product-list-view'}>
+                      {section.products.map((product, index) => {
+                        const key = productStackKey(product);
+                        const previous = section.products[index - 1] ?? null;
+                        const next = section.products[index + 1] ?? null;
+                        const afterNext = section.products[index + 2] ?? null;
+                        return (
+                          <div
+                            key={key}
+                            className={productViewMode === 'grid' ? 'masonry-item' : 'product-list-item'}
+                            onDragOver={(event) => {
+                              if (!customLayoutEnabled || !draggingProductKey) return;
+                              event.preventDefault();
+                            }}
+                            onDrop={(event) => {
+                              if (!customLayoutEnabled || !draggingProductKey) return;
+                              event.preventDefault();
+                              event.stopPropagation();
+                              void moveProductBefore(draggingProductKey, key, sectionCategory?.id ?? null);
+                              setDraggingProductKey(null);
+                            }}
+                          >
+                            {customLayoutEnabled && (
+                              <div className="ss-product-layout-tools" onClick={(event) => event.stopPropagation()}>
+                                <button
+                                  type="button"
+                                  className="ss-product-layout-btn ss-product-layout-drag"
+                                  draggable
+                                  onMouseDown={(event) => event.stopPropagation()}
+                                  onDragStart={(event) => {
+                                    event.stopPropagation();
+                                    setDraggingProductKey(key);
+                                    event.dataTransfer.effectAllowed = 'move';
+                                    event.dataTransfer.setData('text/plain', key);
+                                  }}
+                                  onDragEnd={() => setDraggingProductKey(null)}
+                                  aria-label={`Produkt verschieben: ${product.name}`}
+                                >
+                                  <GripVertical size={14} />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="ss-product-layout-btn"
+                                  onClick={() => previous && void moveProductBefore(key, productStackKey(previous), sectionCategory?.id ?? null)}
+                                  disabled={!previous}
+                                  aria-label={`Nach oben: ${product.name}`}
+                                >
+                                  <ArrowUp size={14} />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="ss-product-layout-btn"
+                                  onClick={() => {
+                                    if (afterNext) {
+                                      void moveProductBefore(key, productStackKey(afterNext), sectionCategory?.id ?? null);
+                                      return;
+                                    }
+                                    if (next) {
+                                      void moveProductToSectionEnd(key, section.products, sectionCategory?.id ?? null);
+                                    }
+                                  }}
+                                  disabled={!next}
+                                  aria-label={`Nach unten: ${product.name}`}
+                                >
+                                  <ArrowDown size={14} />
+                                </button>
+                                {productCategoryMode === 'custom' && (
+                                  <select
+                                    className="ss-product-category-select"
+                                    value={normalizedCategoryId(product.category_id)}
+                                    onChange={(event) => void assignProductCategory(key, event.target.value)}
+                                    aria-label={`Kategorie für ${product.name}`}
+                                  >
+                                    {activeCategories.map((category) => (
+                                      <option key={String(category.id)} value={normalizedCategoryId(category.id)}>
+                                        {category.name}
+                                      </option>
+                                    ))}
+                                  </select>
+                                )}
+                              </div>
+                            )}
+                            <ProductCard
+                              product={product}
+                              shopDomains={shopDomains}
+                              selected={selectedIds.has(key)}
+                              display={productViewMode === 'list' ? 'list' : 'card'}
+                              onToggleSelected={() => toggleSelected(key)}
+                              onEdit={() => setEditingProductKey(key)}
+                              onDelete={() => setDeleteProductKey(key)}
+                              onReportMissingLink={(item, reason) => void handleReportMissingLink(item as DemoProduct, reason)}
+                              showSelectButton={false}
+                            />
+                          </div>
+                        );
+                      })}
+                      {productViewMode === 'grid' && section.id === productSections[productSections.length - 1]?.id && (
+                        <div className="masonry-item">
+                          <button
+                            type="button"
+                            className="ss-add-product-tile"
+                            onClick={() => setAddModalOpen(true)}
+                          >
+                            <Plus size={28} />
+                            <span>Produkt hinzufÃ¼gen</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
+          </>
         )}
+
       </div>
 
       {/* Bottom bar */}

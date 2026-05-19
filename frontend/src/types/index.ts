@@ -198,6 +198,7 @@ export interface StackItem {
   id: number;
   stack_id: number;
   product_id: number;
+  stack_item_id?: number;
   product_type?: 'catalog' | 'user_product';
   quantity: number;
   intake_interval_days?: number;
@@ -205,8 +206,20 @@ export interface StackItem {
   timing?: string;
   timing_label?: string | null;
   ingredient_timing_label?: string | null;
+  sort_order?: number;
+  category_id?: number | null;
+  category_name?: string | null;
+  category_is_default?: boolean | null;
   ingredients?: Array<Pick<ProductIngredient, 'ingredient_id' | 'form_id' | 'quantity' | 'unit' | 'basis_quantity' | 'basis_unit' | 'search_relevant'>>;
   product?: Product;
+}
+
+export interface StackCategory {
+  id: number | string;
+  stack_id: number | string;
+  name: string;
+  sort_order: number;
+  is_default: boolean;
 }
 
 export interface Stack {
@@ -217,6 +230,7 @@ export interface Stack {
   family_member_first_name?: string | null;
   created_at: string;
   items?: StackItem[];
+  categories?: StackCategory[];
 }
 
 export interface Recommendation {

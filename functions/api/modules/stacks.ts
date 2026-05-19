@@ -28,6 +28,8 @@ type StackProductInput = {
   intake_interval_days: number
   dosage_text: string | null
   timing: string | null
+  sort_order?: number
+  category_id?: number | null
 }
 
 type StackProductValidation = {
@@ -40,6 +42,28 @@ type StackLinkReportProduct = {
   name: string
   shop_link: string | null
 }
+
+type StackCategoryRow = {
+  id: number
+  stack_id: number
+  name: string
+  name_normalized?: string
+  sort_order: number
+  is_default: number
+}
+
+type StackCategoryValidation = {
+  name: string
+  name_normalized: string
+}
+
+type StackLayoutInput = {
+  stack_item_id: number
+  sort_order: number
+  category_id?: number | null
+}
+
+const DEFAULT_STACK_CATEGORY_NAME = 'Unkategorisiert'
 
 type StackMailItem = {
   stack_item_id: number
@@ -205,6 +229,36 @@ function normalizeFamilyMemberId(value: unknown): number | null | undefined {
   if (value === null || value === '') return null
   const parsed = Number(value)
   return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined
+}
+
+function normalizeStackCategoryName(value: unknown): StackCategoryValidation | null {
+  if (typeof value !== 'string') return null
+  const normalizedSpacing = value.trim().replace(/\s+/g, ' ')
+  if (normalizedSpacing.length < 1 || normalizedSpacing.length > 80) return null
+  return {
+    name: normalizedSpacing,
+    name_normalized: normalizedSpacing.toLowerCase(),
+  }
+}
+
+function normalizeOptionalSortOrder(value: unknown): number | undefined {
+  if (value === undefined) return undefined
+  if (value === null || value === '') return undefined
+  const parsed = Number(value)
+  if (!Number.isInteger(parsed) || parsed < 0) return undefined
+  return parsed
+}
+
+function normalizeOptionalCategoryId(value: unknown): number | null | undefined {
+  if (value === undefined) return undefined
+  if (value === null || value === '') return null
+  const parsed = Number(value)
+  if (!Number.isInteger(parsed) || parsed <= 0) return undefined
+  return parsed
+}
+
+function isUniqueConstraintError(error: unknown): boolean {
+  return error instanceof Error && /unique|constraint/i.test(error.message)
 }
 
 function formatIntakeInterval(days: number): string {
@@ -395,6 +449,8 @@ function normalizeStackProductItems(value: unknown): StackProductValidation {
     const timing = typeof item.timing === 'string' && item.timing.trim() !== ''
       ? item.timing.trim()
       : null
+    const sortOrder = normalizeOptionalSortOrder(item.sort_order ?? item.sortOrder)
+    const categoryId = normalizeOptionalCategoryId(item.category_id ?? item.categoryId)
 
     if (!Number.isInteger(id) || id <= 0) {
       return { error: 'product_ids must reference valid products' }
@@ -408,13 +464,28 @@ function normalizeStackProductItems(value: unknown): StackProductValidation {
     if (intakeIntervalDays === null) {
       return { error: 'intake_interval_days must be an integer greater than or equal to 1' }
     }
+    if ((item.sort_order !== undefined || item.sortOrder !== undefined) && sortOrder === undefined) {
+      return { error: 'sort_order must be an integer greater than or equal to 0' }
+    }
+    if ((item.category_id !== undefined || item.categoryId !== undefined) && categoryId === undefined) {
+      return { error: 'category_id must be null or a valid category id' }
+    }
     const productKey = `${productType}:${id}`
     if (seenProducts.has(productKey)) {
       return { error: 'product_ids must not contain duplicate products' }
     }
     seenProducts.add(productKey)
 
-    items.push({ id, product_type: productType, quantity, intake_interval_days: intakeIntervalDays, dosage_text: dosageText, timing })
+    items.push({
+      id,
+      product_type: productType,
+      quantity,
+      intake_interval_days: intakeIntervalDays,
+      dosage_text: dosageText,
+      timing,
+      sort_order: sortOrder,
+      category_id: categoryId,
+    })
   }
 
   return { items }
@@ -462,6 +533,84 @@ async function familyMemberBelongsToUser(db: D1Database, userId: number, familyM
   return Boolean(row)
 }
 
+async function loadStackCategories(
+  db: D1Database,
+  stackId: number | string,
+): Promise<StackCategoryRow[]> {
+  const { results } = await db.prepare(`
+    SELECT id, stack_id, name, sort_order, is_default
+    FROM stack_categories
+    WHERE stack_id = ?
+    ORDER BY sort_order ASC, id ASC
+  `).bind(stackId).all<StackCategoryRow>()
+  return results
+}
+
+async function ensureDefaultStackCategory(
+  db: D1Database,
+  stackId: number | string,
+): Promise<StackCategoryRow> {
+  const existing = await db.prepare(`
+    SELECT id, stack_id, name, sort_order, is_default
+    FROM stack_categories
+    WHERE stack_id = ?
+      AND is_default = 1
+    LIMIT 1
+  `).bind(stackId).first<StackCategoryRow>()
+  if (existing) return existing
+
+  const normalizedDefault = normalizeStackCategoryName(DEFAULT_STACK_CATEGORY_NAME)
+  if (!normalizedDefault) {
+    throw new Error('Default stack category name is invalid')
+  }
+
+  try {
+    await db.prepare(`
+      INSERT INTO stack_categories (
+        stack_id,
+        name,
+        name_normalized,
+        sort_order,
+        is_default,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, 0, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    `).bind(stackId, normalizedDefault.name, normalizedDefault.name_normalized).run()
+  } catch (error) {
+    if (!isUniqueConstraintError(error)) throw error
+  }
+
+  const inserted = await db.prepare(`
+    SELECT id, stack_id, name, sort_order, is_default
+    FROM stack_categories
+    WHERE stack_id = ?
+      AND is_default = 1
+    LIMIT 1
+  `).bind(stackId).first<StackCategoryRow>()
+  if (!inserted) {
+    throw new Error('Failed to ensure default stack category')
+  }
+  return inserted
+}
+
+async function validateStackCategoryIds(
+  db: D1Database,
+  stackId: number | string,
+  categoryIds: number[],
+): Promise<boolean> {
+  const uniqueIds = [...new Set(categoryIds)]
+  if (uniqueIds.length === 0) return true
+  const placeholders = uniqueIds.map(() => '?').join(',')
+  const row = await db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM stack_categories
+    WHERE stack_id = ?
+      AND id IN (${placeholders})
+  `).bind(stackId, ...uniqueIds).first<{ count: number }>()
+  return (row?.count ?? 0) === uniqueIds.length
+}
+
 async function loadStackItems(
   db: D1Database,
   stackId: number | string,
@@ -470,6 +619,8 @@ async function loadStackItems(
   const { results } = await db.prepare(`
     SELECT
       base.*,
+      category.name AS category_name,
+      category.is_default AS category_is_default,
       timing_item.label AS timing_label,
       ingredient_timing_item.label AS ingredient_timing_label
     FROM (
@@ -500,6 +651,8 @@ async function loadStackItems(
         p.warning_message,
         p.warning_type,
         p.alternative_note,
+        si.sort_order,
+        si.category_id,
         si.quantity,
         si.intake_interval_days
       FROM stack_items si
@@ -551,6 +704,8 @@ async function loadStackItems(
         up.warning_message,
         up.warning_type,
         up.alternative_note,
+        si.sort_order,
+        si.category_id,
         si.quantity,
         si.intake_interval_days
       FROM stack_items si
@@ -573,6 +728,8 @@ async function loadStackItems(
       WHERE si.stack_id = ?
         AND si.user_product_id IS NOT NULL
     ) base
+    LEFT JOIN stack_categories category
+      ON category.id = base.category_id
     LEFT JOIN managed_list_items timing_item
       ON timing_item.list_key = 'intake_timing'
      AND timing_item.active = 1
@@ -581,7 +738,7 @@ async function loadStackItems(
       ON ingredient_timing_item.list_key = 'intake_timing'
      AND ingredient_timing_item.active = 1
      AND ingredient_timing_item.value = ${canonicalIntakeTimingSqlExpression('base.ingredient_timing')}
-    ORDER BY base.stack_item_id ASC
+    ORDER BY base.sort_order ASC, base.stack_item_id ASC
   `).bind(stackId, ownerUserId, stackId).all<StackItemRow>()
   return results
 }
@@ -810,10 +967,11 @@ stacks.post('/', async (c) => {
     'INSERT INTO stacks (user_id, name, family_member_id) VALUES (?, ?, ?)'
   ).bind(user.userId, data.name, familyMemberId).run()
   const stackId = stackResult.meta.last_row_id
+  const defaultCategory = await ensureDefaultStackCategory(c.env.DB, stackId)
 
-  for (const item of normalized.items) {
+  for (const [index, item] of normalized.items.entries()) {
     await c.env.DB.prepare(
-      'INSERT INTO stack_items (stack_id, catalog_product_id, user_product_id, quantity, intake_interval_days, dosage_text, timing) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      'INSERT INTO stack_items (stack_id, catalog_product_id, user_product_id, quantity, intake_interval_days, dosage_text, timing, sort_order, category_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
     ).bind(
       stackId,
       item.product_type === 'catalog' ? item.id : null,
@@ -822,6 +980,8 @@ stacks.post('/', async (c) => {
       item.intake_interval_days,
       item.dosage_text,
       item.timing,
+      index,
+      defaultCategory.id,
     ).run()
   }
   return c.json({ id: stackId, name: data.name, family_member_id: familyMemberId })
@@ -897,6 +1057,315 @@ stacks.post('/link-report', async (c) => {
   return c.json({ ok: true })
 })
 
+// POST /api/stacks/:id/categories
+stacks.post('/:id/categories', async (c) => {
+  const authErr = await ensureAuth(c)
+  if (authErr) return authErr
+  const user = c.get('user')
+  const stackId = c.req.param('id')
+  const stack = await c.env.DB.prepare('SELECT * FROM stacks WHERE id = ?').bind(stackId).first<StackRow>()
+  if (!stack) return c.json({ error: 'Not found' }, 404)
+  if (stack.user_id !== user.userId && user.role !== 'admin') return c.json({ error: 'Forbidden' }, 403)
+
+  let data: Record<string, unknown>
+  try {
+    data = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const normalizedName = normalizeStackCategoryName(data.name)
+  if (!normalizedName) {
+    return c.json({ error: 'name must be a string between 1 and 80 characters' }, 400)
+  }
+  const requestedSortOrder = normalizeOptionalSortOrder(data.sort_order ?? data.sortOrder)
+  if ((data.sort_order !== undefined || data.sortOrder !== undefined) && requestedSortOrder === undefined) {
+    return c.json({ error: 'sort_order must be an integer greater than or equal to 0' }, 400)
+  }
+
+  const existing = await c.env.DB.prepare(`
+    SELECT id
+    FROM stack_categories
+    WHERE stack_id = ?
+      AND name_normalized = ?
+    LIMIT 1
+  `).bind(stack.id, normalizedName.name_normalized).first<{ id: number }>()
+  if (existing) return c.json({ error: 'Category name already exists in this stack' }, 409)
+
+  let sortOrder = requestedSortOrder
+  if (sortOrder === undefined) {
+    const maxSortOrder = await c.env.DB.prepare(`
+      SELECT COALESCE(MAX(sort_order), -1) AS value
+      FROM stack_categories
+      WHERE stack_id = ?
+    `).bind(stack.id).first<{ value: number }>()
+    sortOrder = (maxSortOrder?.value ?? -1) + 1
+  }
+
+  try {
+    await c.env.DB.prepare(`
+      INSERT INTO stack_categories (
+        stack_id,
+        name,
+        name_normalized,
+        sort_order,
+        is_default,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    `).bind(stack.id, normalizedName.name, normalizedName.name_normalized, sortOrder).run()
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      return c.json({ error: 'Category name already exists in this stack' }, 409)
+    }
+    throw error
+  }
+
+  const created = await c.env.DB.prepare(`
+    SELECT id, stack_id, name, sort_order, is_default
+    FROM stack_categories
+    WHERE stack_id = ?
+      AND name_normalized = ?
+    LIMIT 1
+  `).bind(stack.id, normalizedName.name_normalized).first<StackCategoryRow>()
+  return c.json({ category: created }, 201)
+})
+
+// PATCH /api/stacks/:id/categories/:categoryId
+stacks.patch('/:id/categories/:categoryId', async (c) => {
+  const authErr = await ensureAuth(c)
+  if (authErr) return authErr
+  const user = c.get('user')
+  const stackId = c.req.param('id')
+  const categoryId = Number(c.req.param('categoryId'))
+  if (!Number.isInteger(categoryId) || categoryId <= 0) {
+    return c.json({ error: 'Invalid category id' }, 400)
+  }
+  const stack = await c.env.DB.prepare('SELECT * FROM stacks WHERE id = ?').bind(stackId).first<StackRow>()
+  if (!stack) return c.json({ error: 'Not found' }, 404)
+  if (stack.user_id !== user.userId && user.role !== 'admin') return c.json({ error: 'Forbidden' }, 403)
+
+  let data: Record<string, unknown>
+  try {
+    data = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const existing = await c.env.DB.prepare(`
+    SELECT id, stack_id, name, name_normalized, sort_order, is_default
+    FROM stack_categories
+    WHERE id = ?
+      AND stack_id = ?
+    LIMIT 1
+  `).bind(categoryId, stack.id).first<StackCategoryRow>()
+  if (!existing) return c.json({ error: 'Category not found' }, 404)
+
+  const hasName = data.name !== undefined
+  const hasSortOrder = data.sort_order !== undefined || data.sortOrder !== undefined
+  if (!hasName && !hasSortOrder) {
+    return c.json({ error: 'No category changes requested' }, 400)
+  }
+
+  let normalizedName: StackCategoryValidation | null = null
+  if (hasName) {
+    normalizedName = normalizeStackCategoryName(data.name)
+    if (!normalizedName) {
+      return c.json({ error: 'name must be a string between 1 and 80 characters' }, 400)
+    }
+  }
+
+  const sortOrder = normalizeOptionalSortOrder(data.sort_order ?? data.sortOrder)
+  if (hasSortOrder && sortOrder === undefined) {
+    return c.json({ error: 'sort_order must be an integer greater than or equal to 0' }, 400)
+  }
+
+  const nextName = normalizedName?.name ?? existing.name
+  const nextNameNormalized = normalizedName?.name_normalized ?? existing.name_normalized ?? existing.name.toLowerCase()
+  if (normalizedName) {
+    const duplicate = await c.env.DB.prepare(`
+      SELECT id
+      FROM stack_categories
+      WHERE stack_id = ?
+        AND name_normalized = ?
+        AND id <> ?
+      LIMIT 1
+    `).bind(stack.id, normalizedName.name_normalized, existing.id).first<{ id: number }>()
+    if (duplicate) return c.json({ error: 'Category name already exists in this stack' }, 409)
+  }
+
+  try {
+    await c.env.DB.prepare(`
+      UPDATE stack_categories
+      SET name = ?,
+          name_normalized = ?,
+          sort_order = ?,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+        AND stack_id = ?
+    `).bind(nextName, nextNameNormalized, sortOrder ?? existing.sort_order, existing.id, stack.id).run()
+  } catch (error) {
+    if (isUniqueConstraintError(error)) {
+      return c.json({ error: 'Category name already exists in this stack' }, 409)
+    }
+    throw error
+  }
+
+  const updated = await c.env.DB.prepare(`
+    SELECT id, stack_id, name, sort_order, is_default
+    FROM stack_categories
+    WHERE id = ?
+      AND stack_id = ?
+    LIMIT 1
+  `).bind(existing.id, stack.id).first<StackCategoryRow>()
+  return c.json({ category: updated })
+})
+
+// DELETE /api/stacks/:id/categories/:categoryId
+stacks.delete('/:id/categories/:categoryId', async (c) => {
+  const authErr = await ensureAuth(c)
+  if (authErr) return authErr
+  const user = c.get('user')
+  const stackId = c.req.param('id')
+  const categoryId = Number(c.req.param('categoryId'))
+  if (!Number.isInteger(categoryId) || categoryId <= 0) {
+    return c.json({ error: 'Invalid category id' }, 400)
+  }
+  const stack = await c.env.DB.prepare('SELECT * FROM stacks WHERE id = ?').bind(stackId).first<StackRow>()
+  if (!stack) return c.json({ error: 'Not found' }, 404)
+  if (stack.user_id !== user.userId && user.role !== 'admin') return c.json({ error: 'Forbidden' }, 403)
+
+  const category = await c.env.DB.prepare(`
+    SELECT id, stack_id, name, sort_order, is_default
+    FROM stack_categories
+    WHERE id = ?
+      AND stack_id = ?
+    LIMIT 1
+  `).bind(categoryId, stack.id).first<StackCategoryRow>()
+  if (!category) return c.json({ error: 'Category not found' }, 404)
+  if (category.is_default === 1) return c.json({ error: 'Default category cannot be deleted' }, 400)
+
+  const defaultCategory = await ensureDefaultStackCategory(c.env.DB, stack.id)
+  await c.env.DB.batch([
+    c.env.DB.prepare(`
+      UPDATE stack_items
+      SET category_id = ?
+      WHERE stack_id = ?
+        AND category_id = ?
+    `).bind(defaultCategory.id, stack.id, category.id),
+    c.env.DB.prepare(`
+      DELETE FROM stack_categories
+      WHERE id = ?
+        AND stack_id = ?
+    `).bind(category.id, stack.id),
+  ])
+
+  return c.json({ ok: true, moved_to_category_id: defaultCategory.id })
+})
+
+// PUT /api/stacks/:id/items/layout
+stacks.put('/:id/items/layout', async (c) => {
+  const authErr = await ensureAuth(c)
+  if (authErr) return authErr
+  const user = c.get('user')
+  const stackId = c.req.param('id')
+  const stack = await c.env.DB.prepare('SELECT * FROM stacks WHERE id = ?').bind(stackId).first<StackRow>()
+  if (!stack) return c.json({ error: 'Not found' }, 404)
+  if (stack.user_id !== user.userId && user.role !== 'admin') return c.json({ error: 'Forbidden' }, 403)
+
+  let data: Record<string, unknown>
+  try {
+    data = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  if (!Array.isArray(data.items)) {
+    return c.json({ error: 'items must be an array' }, 400)
+  }
+
+  const layoutItems: StackLayoutInput[] = []
+  const seenStackItemIds = new Set<number>()
+  for (const rawItem of data.items) {
+    if (!rawItem || typeof rawItem !== 'object') {
+      return c.json({ error: 'items must contain objects' }, 400)
+    }
+    const item = rawItem as Record<string, unknown>
+    const stackItemId = Number(item.stack_item_id ?? item.stackItemId)
+    const sortOrder = normalizeOptionalSortOrder(item.sort_order ?? item.sortOrder)
+    const categoryId = normalizeOptionalCategoryId(item.category_id ?? item.categoryId)
+    const hasCategory = item.category_id !== undefined || item.categoryId !== undefined
+
+    if (!Number.isInteger(stackItemId) || stackItemId <= 0) {
+      return c.json({ error: 'stack_item_id must be a valid stack item id' }, 400)
+    }
+    if (sortOrder === undefined) {
+      return c.json({ error: 'sort_order must be an integer greater than or equal to 0' }, 400)
+    }
+    if (hasCategory && categoryId === undefined) {
+      return c.json({ error: 'category_id must be null or a valid category id' }, 400)
+    }
+    if (seenStackItemIds.has(stackItemId)) {
+      return c.json({ error: 'items must not contain duplicate stack_item_id values' }, 400)
+    }
+    seenStackItemIds.add(stackItemId)
+    layoutItems.push({
+      stack_item_id: stackItemId,
+      sort_order: sortOrder,
+      ...(hasCategory ? { category_id: categoryId } : {}),
+    })
+  }
+
+  const { results: stackItems } = await c.env.DB.prepare(`
+    SELECT id, category_id
+    FROM stack_items
+    WHERE stack_id = ?
+    ORDER BY id ASC
+  `).bind(stack.id).all<{ id: number; category_id: number | null }>()
+
+  if (stackItems.length !== layoutItems.length) {
+    return c.json({ error: 'items must include all stack items exactly once' }, 400)
+  }
+
+  const stackItemIdSet = new Set(stackItems.map((item) => item.id))
+  for (const item of layoutItems) {
+    if (!stackItemIdSet.has(item.stack_item_id)) {
+      return c.json({ error: 'All layout items must belong to the stack' }, 400)
+    }
+  }
+
+  const providedCategoryIds = layoutItems
+    .map((item) => item.category_id)
+    .filter((categoryId): categoryId is number => typeof categoryId === 'number')
+  if (!(await validateStackCategoryIds(c.env.DB, stack.id, providedCategoryIds))) {
+    return c.json({ error: 'category_id must belong to this stack' }, 400)
+  }
+
+  const defaultCategory = await ensureDefaultStackCategory(c.env.DB, stack.id)
+  const existingCategoryByItemId = new Map(stackItems.map((item) => [item.id, item.category_id]))
+  const statements = layoutItems.map((item) => {
+    const currentCategoryId = existingCategoryByItemId.get(item.stack_item_id)
+    const nextCategoryId = item.category_id === undefined
+      ? (currentCategoryId ?? defaultCategory.id)
+      : (item.category_id ?? defaultCategory.id)
+    return c.env.DB.prepare(`
+      UPDATE stack_items
+      SET sort_order = ?,
+          category_id = ?
+      WHERE id = ?
+        AND stack_id = ?
+    `).bind(item.sort_order, nextCategoryId, item.stack_item_id, stack.id)
+  })
+  if (statements.length > 0) {
+    await c.env.DB.batch(statements)
+  }
+
+  const items = await loadStackItemsWithIngredients(c.env.DB, stack.id, stack.user_id)
+  const categories = await loadStackCategories(c.env.DB, stack.id)
+  return c.json({ items, categories })
+})
+
 // GET /api/stacks/:id
 stacks.get('/:id', async (c) => {
   const authErr = await ensureAuth(c)
@@ -910,9 +1379,11 @@ stacks.get('/:id', async (c) => {
   `).bind(c.req.param('id')).first<StackRow>()
   if (!stack) return c.json({ error: 'Not found' }, 404)
   if (stack.user_id !== user.userId && user.role !== 'admin') return c.json({ error: 'Forbidden' }, 403)
+  await ensureDefaultStackCategory(c.env.DB, stack.id)
   const items = await loadStackItemsWithIngredients(c.env.DB, stack.id, stack.user_id)
+  const categories = await loadStackCategories(c.env.DB, stack.id)
   const total = items.reduce((sum, i) => sum + i.product_price, 0)
-  return c.json({ stack, items, total })
+  return c.json({ stack, items, categories, total })
 })
 
 // POST /api/stacks/:id/email
@@ -992,8 +1463,15 @@ stacks.put('/:id', async (c) => {
   if (familyMemberId !== undefined && !(await familyMemberBelongsToUser(c.env.DB, stack.user_id, familyMemberId))) {
     return c.json({ error: 'Family profile not found' }, 404)
   }
+  const defaultCategory = await ensureDefaultStackCategory(c.env.DB, stack.id)
 
   let normalizedItems: StackProductInput[] | null = null
+  let existingLayoutByProductKey = new Map<string, {
+    stack_item_id: number
+    sort_order: number
+    category_id: number | null
+  }>()
+  let nextFallbackSortOrder = 0
   if (data.product_ids !== undefined) {
     const normalized = normalizeStackProductItems(data.product_ids)
     if (normalized.error || !normalized.items) {
@@ -1002,6 +1480,46 @@ stacks.put('/:id', async (c) => {
     if (!(await validateStackProductReferences(c.env.DB, stack.user_id, normalized.items))) {
       return c.json({ error: 'Stacks can only use public catalog products or your own pending/approved/blocked products' }, 400)
     }
+    const categoryIds = normalized.items
+      .map((item) => item.category_id)
+      .filter((categoryId): categoryId is number => typeof categoryId === 'number')
+    if (!(await validateStackCategoryIds(c.env.DB, stack.id, categoryIds))) {
+      return c.json({ error: 'category_id must belong to this stack' }, 400)
+    }
+    const { results: existingLayoutRows } = await c.env.DB.prepare(`
+      SELECT
+        id AS stack_item_id,
+        sort_order,
+        category_id,
+        CASE
+          WHEN catalog_product_id IS NOT NULL THEN 'catalog'
+          ELSE 'user_product'
+        END AS product_type,
+        COALESCE(catalog_product_id, user_product_id) AS product_id
+      FROM stack_items
+      WHERE stack_id = ?
+      ORDER BY sort_order ASC, id ASC
+    `).bind(id).all<{
+      stack_item_id: number
+      sort_order: number
+      category_id: number | null
+      product_type: StackProductType
+      product_id: number
+    }>()
+    for (const existing of existingLayoutRows) {
+      const productKey = `${existing.product_type}:${existing.product_id}`
+      if (!existingLayoutByProductKey.has(productKey)) {
+        existingLayoutByProductKey.set(productKey, {
+          stack_item_id: existing.stack_item_id,
+          sort_order: existing.sort_order,
+          category_id: existing.category_id,
+        })
+      }
+    }
+    nextFallbackSortOrder = existingLayoutRows.reduce(
+      (maxSortOrder, existing) => Math.max(maxSortOrder, existing.sort_order),
+      -1,
+    ) + 1
     normalizedItems = normalized.items
   }
 
@@ -1014,9 +1532,15 @@ stacks.put('/:id', async (c) => {
   }
   if (normalizedItems !== null) {
     statements.push(c.env.DB.prepare('DELETE FROM stack_items WHERE stack_id = ?').bind(id))
-    statements.push(...normalizedItems.map((item) =>
-      c.env.DB.prepare(
-        'INSERT INTO stack_items (stack_id, catalog_product_id, user_product_id, quantity, intake_interval_days, dosage_text, timing) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    statements.push(...normalizedItems.map((item) => {
+      const productKey = `${item.product_type}:${item.id}`
+      const existingLayout = existingLayoutByProductKey.get(productKey)
+      const sortOrder = item.sort_order ?? existingLayout?.sort_order ?? nextFallbackSortOrder++
+      const categoryId = item.category_id === undefined
+        ? (typeof existingLayout?.category_id === 'number' ? existingLayout.category_id : defaultCategory.id)
+        : (item.category_id ?? defaultCategory.id)
+      return c.env.DB.prepare(
+        'INSERT INTO stack_items (stack_id, catalog_product_id, user_product_id, quantity, intake_interval_days, dosage_text, timing, sort_order, category_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
       ).bind(
         id,
         item.product_type === 'catalog' ? item.id : null,
@@ -1025,8 +1549,10 @@ stacks.put('/:id', async (c) => {
         item.intake_interval_days,
         item.dosage_text,
         item.timing,
+        sortOrder,
+        categoryId,
       )
-    ))
+    }))
   }
   if (statements.length > 0) {
     await c.env.DB.batch(statements)
@@ -1038,7 +1564,8 @@ stacks.put('/:id', async (c) => {
     WHERE s.id = ?
   `).bind(id).first()
   const items = await loadStackItemsWithIngredients(c.env.DB, id, stack.user_id)
-  return c.json({ stack: updated, items })
+  const categories = await loadStackCategories(c.env.DB, id)
+  return c.json({ stack: updated, items, categories })
 })
 
 export default stacks

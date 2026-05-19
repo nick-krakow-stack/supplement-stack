@@ -8,6 +8,8 @@ interface StackProductInput {
   intake_interval_days?: number;
   dosage_text?: string;
   timing?: string;
+  sort_order?: number;
+  category_id?: number | null;
 }
 
 interface ProductLinkReportInput {
@@ -22,6 +24,20 @@ export interface PublicIntakeTimingOption {
   label: string;
   description: string | null;
   sort_order: number;
+}
+
+export interface StackCategoryRecord {
+  id: number | string;
+  stack_id: number | string;
+  name: string;
+  sort_order: number;
+  is_default: boolean;
+}
+
+export interface StackLayoutItemInput {
+  stack_item_id: number;
+  sort_order: number;
+  category_id?: number | null;
 }
 
 export async function getStacks(): Promise<{ stacks: Stack[] }> {
@@ -58,6 +74,40 @@ export async function reportProductLink(input: ProductLinkReportInput): Promise<
 export async function getPublicIntakeTimings(): Promise<PublicIntakeTimingOption[]> {
   const res = await apiClient.get<{ items?: PublicIntakeTimingOption[] }>('/client/managed-lists/intake-timing');
   return Array.isArray(res.data.items) ? res.data.items : [];
+}
+
+export async function createStackCategory(
+  stackId: number | string,
+  payload: { name: string; sort_order?: number },
+): Promise<StackCategoryRecord> {
+  const res = await apiClient.post<{ category?: StackCategoryRecord } | StackCategoryRecord>(
+    `/stacks/${stackId}/categories`,
+    payload,
+  );
+  return ('category' in res.data ? res.data.category : res.data) as StackCategoryRecord;
+}
+
+export async function updateStackCategory(
+  stackId: number | string,
+  categoryId: number | string,
+  payload: { name?: string; sort_order?: number },
+): Promise<StackCategoryRecord> {
+  const res = await apiClient.patch<{ category?: StackCategoryRecord } | StackCategoryRecord>(
+    `/stacks/${stackId}/categories/${categoryId}`,
+    payload,
+  );
+  return ('category' in res.data ? res.data.category : res.data) as StackCategoryRecord;
+}
+
+export async function deleteStackCategory(stackId: number | string, categoryId: number | string): Promise<void> {
+  await apiClient.delete(`/stacks/${stackId}/categories/${categoryId}`);
+}
+
+export async function updateStackItemsLayout(
+  stackId: number | string,
+  payload: { items: StackLayoutItemInput[] },
+): Promise<void> {
+  await apiClient.put(`/stacks/${stackId}/items/layout`, payload);
 }
 
 export async function getStackWarnings(id: number): Promise<Interaction[]> {
