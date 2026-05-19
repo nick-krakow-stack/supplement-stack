@@ -360,6 +360,7 @@ function assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSo
   assertSourceIncludes(toolbarSource, 'ss-toolbar-icon-action ss-toolbar-icon-action-edit', 'icon-only edit toolbar action');
   assertSourceIncludes(toolbarSource, 'ss-toolbar-icon-action ss-toolbar-icon-action-blue', 'icon-only blue toolbar actions');
   assertSourceIncludes(toolbarSource, 'ss-toolbar-divider', 'visible toolbar divider before add-product action');
+  assertSourceIncludes(toolbarSource, 'ss-toolbar-section-divider', 'toolbar-to-section visual separator marker');
   assertSourceExcludes(toolbarSource, 'ss-toolbar-spacer', 'toolbar spacer before add-product action');
   assertSourceExcludes(stylesSource, '.ss-toolbar-primary-action { margin-left: auto; }', 'far-right toolbar add-product margin');
   assertSourceExcludes(stylesSource, '.ss-toolbar-spacer { flex: 1 1 auto;', 'flex spacer pushing add-product action right');
@@ -369,6 +370,7 @@ function assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSo
   assertSourceIncludes(toolbarSource, 'aria-label={emailActionLabel}', 'dynamic mail aria label');
   assertSourceIncludes(toolbarSource, 'title={emailActionLabel}', 'dynamic mail title');
   assertSourceIncludes(toolbarSource, 'IconPdf', 'PDF icon for print/PDF action');
+  assertSourceIncludes(stylesSource, '.ss-toolbar-section-divider', 'toolbar section separator style');
   assertSourceExcludes(toolbarSource, '\n            Stack bearbeiten\n', 'visible edit toolbar text');
   assertSourceExcludes(toolbarSource, "{emailSending ? 'Wird gesendet...' : 'Stack mailen'}", 'visible mail toolbar text');
   assertSourceExcludes(toolbarSource, '\n            Plan drucken/PDF\n', 'visible print toolbar text');

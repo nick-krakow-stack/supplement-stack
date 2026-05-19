@@ -3231,6 +3231,8 @@ export function StackWorkspace({
           </button>
         </div>
 
+        <hr className="ss-toolbar-section-divider" aria-hidden="true" />
+
         {activeDescription && (
           <div
             style={{

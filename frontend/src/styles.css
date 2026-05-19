@@ -221,6 +221,13 @@ body {
 .ss-btn[disabled] { opacity: 0.55; cursor: not-allowed; }
 .ss-toolbar .ss-btn[disabled]:hover { transform: none; }
 
+.ss-toolbar-section-divider {
+  width: 100%;
+  margin: 0 0 18px;
+  border: 0;
+  border-top: 1px solid #e0e4f0;
+}
+
 /* Section title */
 .ss-section-title {
   display: flex; align-items: center; gap: 10px;
