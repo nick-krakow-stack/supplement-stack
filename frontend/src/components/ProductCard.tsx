@@ -522,31 +522,31 @@ export default function ProductCard({
             <strong>{formatEur(price)}</strong>
             {monthlyPrice !== null && <span>{formatEur(monthlyPrice)} pro Monat</span>}
           </div>
-          {shopHref && (
-            <a
-              href={shopHref}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              aria-label={`${buttonText}: ${name}`}
-              className="ss-product-list-buy"
-            >
-              <ExternalLink size={14} />
-              <span>{buttonText}</span>
-            </a>
-          )}
-          {!shopHref && onReportMissingLink && (
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); onReportMissingLink(product, reportReason); }}
-              aria-label={`Fehlenden oder defekten Link melden: ${name}`}
-              className="ss-product-list-report"
-            >
-              <Flag size={14} />
-              <span>Link melden</span>
-            </button>
-          )}
           <div className="ss-product-list-actions">
+            {shopHref && (
+              <a
+                href={shopHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                aria-label={`${buttonText}: ${name}`}
+                className="ss-product-list-buy"
+              >
+                <ExternalLink size={14} />
+                <span>{buttonText}</span>
+              </a>
+            )}
+            {!shopHref && onReportMissingLink && (
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onReportMissingLink(product, reportReason); }}
+                aria-label={`Fehlenden oder defekten Link melden: ${name}`}
+                className="ss-product-list-report"
+              >
+                <Flag size={14} />
+                <span>Link melden</span>
+              </button>
+            )}
             {onEdit && (
               <button
                 type="button"

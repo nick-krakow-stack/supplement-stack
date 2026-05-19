@@ -273,6 +273,65 @@ function assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSo
 }
 
 function assertProductCardStaticChecks(productCardSource, stylesSource) {
+  const listActionsStackStyle = stylesSource.match(/\.ss-product-list-actions-stack\s*\{[\s\S]*?\}/)?.[0] ?? '';
+  if (listActionsStackStyle && /display\s*:\s*contents/.test(listActionsStackStyle)) {
+    throw new Error('QA guard: .ss-product-list-actions-stack must not use display: contents.');
+  }
+
+  const listActionsPanelStyle = stylesSource.match(/\.ss-product-list-actions-panel\s*\{[\s\S]*?\}/)?.[0] ?? '';
+  if (!listActionsPanelStyle) {
+    throw new Error('Expected styles.css to contain .ss-product-list-actions-panel block.');
+  }
+  if (/display\s*:\s*contents/.test(listActionsPanelStyle)) {
+    throw new Error('QA guard: .ss-product-list-actions-panel must not use display: contents.');
+  }
+
+  const listActionPanelStart = productCardSource.indexOf('<div className="ss-product-list-actions-panel ss-product-list-actions-stack">');
+  if (listActionPanelStart === -1) {
+    throw new Error('Expected ProductCard.tsx to contain a list actions panel in list view.');
+  }
+  const listActionArticleEnd = productCardSource.indexOf('</article>', listActionPanelStart);
+  if (listActionArticleEnd === -1) {
+    throw new Error('Could not locate ProductCard.tsx list row closing tag for actions-panel validation.');
+  }
+
+  const listActionPanelSource = productCardSource.slice(listActionPanelStart, listActionArticleEnd);
+  const listActionsRowIndex = listActionPanelSource.indexOf('<div className="ss-product-list-actions">');
+  if (listActionsRowIndex === -1) {
+    throw new Error('Expected list actions row class ss-product-list-actions in ProductCard list row.');
+  }
+
+  const beforeActionsRow = listActionPanelSource.slice(0, listActionsRowIndex);
+  if (
+    /className="ss-product-list-buy"/.test(beforeActionsRow) ||
+    /className="ss-product-list-report"/.test(beforeActionsRow)
+  ) {
+    throw new Error('Expected Buy/Report buttons to render inside ss-product-list-actions.');
+  }
+  const actionsRowSource = listActionPanelSource.slice(listActionsRowIndex);
+  if (!/className="ss-product-list-buy"/.test(actionsRowSource) && !/className="ss-product-list-report"/.test(actionsRowSource)) {
+    throw new Error('Expected Buy or Report button inside ss-product-list-actions.');
+  }
+
+  const listActionsRowStyle = stylesSource.match(/\.ss-product-list-actions\s*\{[\s\S]*?\}/)?.[0] ?? '';
+  if (!listActionsRowStyle.includes('gap: 5px') || !listActionsRowStyle.includes('margin-top: 8px')) {
+    throw new Error('Expected compact desktop ss-product-list-actions layout to match actions-row spacing.');
+  }
+  if (!/flex-wrap:\s*nowrap/.test(listActionsRowStyle)) {
+    throw new Error('Expected desktop ss-product-list-actions to keep nowrap spacing.');
+  }
+  if (/width:\s*100%/.test(listActionsRowStyle)) {
+    throw new Error('Expected desktop ss-product-list-actions to avoid forced full-width behavior.');
+  }
+
+  const buyStyle = stylesSource.match(/\.ss-product-list-buy,\s*\.ss-product-list-report,\s*\.ss-product-list-alt\s*\{[\s\S]*?\}/)?.[0] ?? '';
+  if (!/padding:\s*6px 12px/.test(buyStyle) || !/white-space:\s*nowrap/.test(stylesSource.match(/\.ss-product-list-buy[\s\S]*?\{[\s\S]*?\}/)?.[0] ?? '')) {
+    throw new Error('Expected ProductCard buy/report/alternative button sizing to match row-based actions style.');
+  }
+  if (!/flex:\s*0 0 auto/.test(buyStyle) || /max-width:\s*76px/.test(buyStyle) || /text-overflow:\s*ellipsis/.test(buyStyle)) {
+    throw new Error('Expected list row action buttons to be compact and not force desktop ellipsis/overflow constraints.');
+  }
+
   const requiredProductCardMarkers = [
     'ss-product-list-media-panel',
     'ss-product-list-content',
@@ -299,7 +358,6 @@ function assertProductCardStaticChecks(productCardSource, stylesSource) {
     '.ss-product-list-content',
     '.ss-product-list-main',
     '.ss-product-list-price',
-    '.ss-product-list-actions-stack',
     '.ss-product-warning-detail',
     '.ss-product-warning-severity-danger',
     '.ss-product-warning-severity-caution',
