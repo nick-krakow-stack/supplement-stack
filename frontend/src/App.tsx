@@ -120,7 +120,14 @@ export default function App() {
               </Layout>
             }
           />
-          <Route path="/demo" element={<DemoPage />} />
+          <Route
+            path="/demo"
+            element={
+              <Layout>
+                <DemoPage />
+              </Layout>
+            }
+          />
 
           <Route
             path="*"

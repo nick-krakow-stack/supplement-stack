@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -55,6 +55,10 @@ function parseArgs() {
     console.log(usage());
     process.exit(0);
   }
+  if (args.has('--static-route-checks')) {
+    runStaticRouteChecks();
+    process.exit(0);
+  }
 }
 
 function usage() {
@@ -74,6 +78,9 @@ Optional (public + auth):
   USER_QA_HEADFUL=1
   USER_QA_SKIP_API_GUARDS=1
 
+Static regression:
+  node scripts/user-browser-smoke.mjs --static-route-checks
+
 Optional (auth mode):
   USER_QA_TOKEN=<jwt>
   USER_QA_EMAIL=user@example.com
@@ -83,6 +90,73 @@ Examples:
   node scripts/user-browser-smoke.mjs
   $env:USER_QA_EMAIL='user@example.com'; $env:USER_QA_PASSWORD='...'; node scripts/user-browser-smoke.mjs
 `;
+}
+
+function findJsxTags(source, tagName) {
+  const tags = [];
+  const tagPattern = new RegExp(`<${tagName}\\b`, 'g');
+  let match;
+  while ((match = tagPattern.exec(source)) !== null) {
+    const start = match.index;
+    let braceDepth = 0;
+    let quote = '';
+    for (let index = start; index < source.length; index += 1) {
+      const char = source[index];
+      const previous = source[index - 1];
+      if (quote) {
+        if (char === quote && previous !== '\\') quote = '';
+        continue;
+      }
+      if (char === '"' || char === "'" || char === '`') {
+        quote = char;
+        continue;
+      }
+      if (char === '{') {
+        braceDepth += 1;
+        continue;
+      }
+      if (char === '}') {
+        braceDepth = Math.max(0, braceDepth - 1);
+        continue;
+      }
+      if (char === '>' && braceDepth === 0) {
+        tags.push(source.slice(start, index + 1));
+        tagPattern.lastIndex = index + 1;
+        break;
+      }
+    }
+  }
+  return tags;
+}
+
+function hasJsxStringProp(tagSource, propName, expectedValue) {
+  return new RegExp(`\\b${propName}\\s*=\\s*(["'])${escapeRegExp(expectedValue)}\\1`).test(tagSource);
+}
+
+function hasJsxBooleanLiteralProp(tagSource, propName, expectedValue) {
+  return new RegExp(`\\b${propName}\\s*=\\s*\\{\\s*${expectedValue}\\s*\\}`).test(tagSource);
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function runStaticRouteChecks() {
+  const appSource = readFileSync(join(REPO_ROOT, 'frontend', 'src', 'App.tsx'), 'utf8');
+  const demoPageSource = readFileSync(join(REPO_ROOT, 'frontend', 'src', 'pages', 'DemoPage.tsx'), 'utf8');
+  const demoRoute = findJsxTags(appSource, 'Route').find((tagSource) => hasJsxStringProp(tagSource, 'path', '/demo'));
+  const demoWorkspace = findJsxTags(demoPageSource, 'StackWorkspace').find((tagSource) =>
+    hasJsxStringProp(tagSource, 'mode', 'demo')
+  );
+
+  if (!demoRoute || !/\belement\s*=\s*\{[\s\S]*<Layout\b[\s\S]*<DemoPage\b[\s\S]*<\/Layout>\s*\}/.test(demoRoute)) {
+    throw new Error('Expected /demo to be routed through Layout in frontend/src/App.tsx.');
+  }
+  if (!demoWorkspace || !hasJsxBooleanLiteralProp(demoWorkspace, 'standaloneHeader', false)) {
+    throw new Error('Expected DemoPage to disable StackWorkspace standaloneHeader.');
+  }
+
+  console.log('ok static route-check /demo layout header');
 }
 
 function normalizeBaseUrl(raw) {
