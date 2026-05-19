@@ -240,6 +240,7 @@ body {
   gap: 12px;
 }
 .ss-product-title-controls {
+  margin-left: auto;
   display: grid;
   grid-template-columns: repeat(3, minmax(220px, 1fr));
   justify-items: end;

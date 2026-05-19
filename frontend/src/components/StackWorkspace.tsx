@@ -3602,7 +3602,6 @@ export function StackWorkspace({
         )}
 
         <div className="ss-section-title ss-products-title">
-          <span>Supplement Übersicht</span>
           <div className="ss-product-title-controls">
             <div className="ss-control-group">
               <span className="ss-control-group-label">Sortierung</span>

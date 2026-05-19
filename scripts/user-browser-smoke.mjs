@@ -354,6 +354,12 @@ function assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSo
   assertSourceIncludes(stackWorkspaceSource, 'humanizeTimingFallback', 'StackWorkspace must humanize unknown timing fallback values');
   assertSourceIncludes(stackWorkspaceSource, 'A-Z', 'alphabetical sort toggle label');
   assertSourceIncludes(stackWorkspaceSource, 'ss-product-title-controls', 'product title controls wrapper');
+  const supplementOverviewTitle = `Supplement ${String.fromCharCode(0xdc)}bersicht`;
+  assertSourceExcludes(
+    stackWorkspaceSource,
+    supplementOverviewTitle,
+    'StackWorkspace should no longer include the visible product area title',
+  );
   assertSourceIncludes(stackWorkspaceSource, 'ss-control-group-label', 'control group heading markers');
   assertSourceIncludes(stackWorkspaceSource, '>Sortierung<', 'Sortierung control label');
   assertSourceIncludes(stackWorkspaceSource, '>Kategorien<', 'Kategorien control label');
