@@ -11,9 +11,12 @@ import {
   Info,
   LayoutGrid,
   List,
+  Mail,
   Package,
+  Pencil,
   Plus,
   Search,
+  Trash2,
   X,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -1294,32 +1297,16 @@ function IconPlus() {
   );
 }
 function IconPencil() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-      <path d="M9 2L11 4L4.5 10.5L2 11L2.5 8.5L9 2Z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
-      <path d="M8 3L10 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-    </svg>
-  );
+  return <Pencil size={17} strokeWidth={2.2} />;
 }
 function IconMail() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-      <path d="M2 3.5h9M2 6.5h9M2 9.5h5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-    </svg>
-  );
+  return <Mail size={18} strokeWidth={2.1} />;
 }
 function IconPdf() {
-  return <FileText size={14} />;
+  return <FileText size={18} strokeWidth={2.1} />;
 }
 function IconTrash() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
-      <polyline points="1.5,3.5 13.5,3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      <path d="M5 3.5V2.5h5v1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      <path d="M3 3.5l.8 9.5h7.4L12 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M6 6.5v4M9 6.5v4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-    </svg>
-  );
+  return <Trash2 size={18} strokeWidth={2.1} />;
 }
 function IconInfoCircle() {
   return (
@@ -2411,7 +2398,6 @@ export function StackWorkspace({
           </button>
 
           <span className="ss-toolbar-divider" aria-hidden="true">|</span>
-          <span className="ss-toolbar-spacer" />
 
           <button className="ss-btn ss-btn-green ss-toolbar-primary-action" onClick={() => setAddModalOpen(true)}>
             <IconPlus />

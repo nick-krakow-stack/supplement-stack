@@ -161,7 +161,7 @@ function runStaticRouteChecks() {
     throw new Error('Expected DemoPage to disable StackWorkspace standaloneHeader.');
   }
 
-  assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSource, appSource, layoutSource);
+  assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSource, appSource, layoutSource, stylesSource);
   assertProductCardStaticChecks(productCardSource, stylesSource);
   console.log('ok static product-card list/warning layout');
 
@@ -192,7 +192,7 @@ function assertToolbarSource(stackWorkspaceSource) {
   return stackWorkspaceSource.slice(start, end);
 }
 
-function assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSource, appSource, layoutSource) {
+function assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSource, appSource, layoutSource, stylesSource) {
   const toolbarSource = assertToolbarSource(stackWorkspaceSource);
 
   assertSourceIncludes(stackWorkspaceSource, 'ss-restriction-modal', 'shared demo/auth restriction modal');
@@ -246,7 +246,6 @@ function assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSo
   assertSourceIncludes(stackWorkspaceSource, 'ss-routine-page', 'routine overview page classes');
 
   assertSourceIncludes(stackWorkspaceSource, 'ss-add-product-tile', 'green add-product grid tile');
-  assertSourceIncludes(stackWorkspaceSource, 'ss-toolbar-primary-action', 'far-right toolbar add-product action');
   assertSourceIncludes(stackWorkspaceSource, 'stack-cockpit-user', 'stack hero user identity slot');
   assertSourceExcludes(stackWorkspaceSource, 'Mein Stack', 'old stack hero label fallback');
   assertSourceExcludes(stackWorkspaceSource, 'Stack erstellen', 'separate toolbar create-stack button copy');
@@ -258,6 +257,12 @@ function assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSo
   assertSourceIncludes(toolbarSource, 'ss-toolbar-icon-action ss-toolbar-icon-action-edit', 'icon-only edit toolbar action');
   assertSourceIncludes(toolbarSource, 'ss-toolbar-icon-action ss-toolbar-icon-action-blue', 'icon-only blue toolbar actions');
   assertSourceIncludes(toolbarSource, 'ss-toolbar-divider', 'visible toolbar divider before add-product action');
+  assertSourceExcludes(toolbarSource, 'ss-toolbar-spacer', 'toolbar spacer before add-product action');
+  assertSourceExcludes(stylesSource, '.ss-toolbar-primary-action { margin-left: auto; }', 'far-right toolbar add-product margin');
+  assertSourceExcludes(stylesSource, '.ss-toolbar-spacer { flex: 1 1 auto;', 'flex spacer pushing add-product action right');
+  if (!/ss-toolbar-divider[\s\S]*ss-toolbar-primary-action[\s\S]*Produkt hinzuf/.test(toolbarSource)) {
+    throw new Error('Expected toolbar divider to be followed directly by the add-product action.');
+  }
   assertSourceIncludes(toolbarSource, 'aria-label={emailActionLabel}', 'dynamic mail aria label');
   assertSourceIncludes(toolbarSource, 'title={emailActionLabel}', 'dynamic mail title');
   assertSourceIncludes(toolbarSource, 'IconPdf', 'PDF icon for print/PDF action');
