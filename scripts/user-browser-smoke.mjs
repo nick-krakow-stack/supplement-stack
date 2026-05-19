@@ -143,7 +143,12 @@ function escapeRegExp(value) {
 
 function runStaticRouteChecks() {
   const appSource = readFileSync(join(REPO_ROOT, 'frontend', 'src', 'App.tsx'), 'utf8');
+  const layoutSource = readFileSync(join(REPO_ROOT, 'frontend', 'src', 'components', 'Layout.tsx'), 'utf8');
+  const registerSource = readFileSync(join(REPO_ROOT, 'frontend', 'src', 'pages', 'RegisterPage.tsx'), 'utf8');
+  const stackWorkspaceSource = readFileSync(join(REPO_ROOT, 'frontend', 'src', 'components', 'StackWorkspace.tsx'), 'utf8');
   const demoPageSource = readFileSync(join(REPO_ROOT, 'frontend', 'src', 'pages', 'DemoPage.tsx'), 'utf8');
+  const productCardSource = readFileSync(join(REPO_ROOT, 'frontend', 'src', 'components', 'ProductCard.tsx'), 'utf8');
+  const stylesSource = readFileSync(join(REPO_ROOT, 'frontend', 'src', 'styles.css'), 'utf8');
   const demoRoute = findJsxTags(appSource, 'Route').find((tagSource) => hasJsxStringProp(tagSource, 'path', '/demo'));
   const demoWorkspace = findJsxTags(demoPageSource, 'StackWorkspace').find((tagSource) =>
     hasJsxStringProp(tagSource, 'mode', 'demo')
@@ -156,7 +161,124 @@ function runStaticRouteChecks() {
     throw new Error('Expected DemoPage to disable StackWorkspace standaloneHeader.');
   }
 
+  assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSource, appSource, layoutSource);
+  assertProductCardStaticChecks(productCardSource, stylesSource);
+  console.log('ok static product-card list/warning layout');
+
   console.log('ok static route-check /demo layout header');
+  console.log('ok static stack workspace owner requirements');
+}
+
+function assertSourceIncludes(source, expected, description) {
+  if (!source.includes(expected)) {
+    throw new Error(`Expected ${description}: ${expected}`);
+  }
+}
+
+function assertSourceExcludes(source, forbidden, description) {
+  if (source.includes(forbidden)) {
+    throw new Error(`Unexpected ${description}: ${forbidden}`);
+  }
+}
+
+function assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSource, appSource, layoutSource) {
+  assertSourceIncludes(stackWorkspaceSource, 'ss-restriction-modal', 'shared demo/auth restriction modal');
+  assertSourceIncludes(stackWorkspaceSource, 'Stack mailen ist nur angemeldet verfügbar.', 'mail restriction popup copy');
+  assertSourceIncludes(stackWorkspaceSource, 'Plan drucken/PDF ist in der Demo nicht verfügbar.', 'print restriction popup copy');
+  assertSourceExcludes(stackWorkspaceSource, 'disabled={isDemo || !activeStack || emailSending}', 'disabled demo mail button');
+  assertSourceExcludes(stackWorkspaceSource, 'E-Mail-Versand ist nur angemeldet verf', 'inline demo mail restriction text');
+
+  assertSourceIncludes(
+    stackWorkspaceSource,
+    'Danke, dass du ein neues Produkt zu unserer Datenbank hinzufügen möchtest. Diese Funktion steht dir kostenlos zur Verfügung, sobald du dich als Nutzer angemeldet hast.',
+    'own-product demo CTA modal copy',
+  );
+  assertSourceIncludes(stackWorkspaceSource, "navigate('/my-products')", 'authenticated own-product handoff route');
+
+  assertSourceIncludes(stackWorkspaceSource, 'SS_DEMO_STACK_HANDOFF_KEY', 'demo stack handoff storage key');
+  assertSourceIncludes(stackWorkspaceSource, 'persistDemoStackHandoff', 'demo stack handoff persistence before registration');
+  assertSourceIncludes(stackWorkspaceSource, 'consumePendingDemoStackHandoff', 'authenticated demo handoff consumer');
+  assertSourceIncludes(stackWorkspaceSource, 'clearDemoStackHandoff', 'demo handoff cleanup helper');
+  assertSourceIncludes(stackWorkspaceSource, 'window.localStorage.removeItem(SS_DEMO_STACK_HANDOFF_KEY)', 'demo handoff localStorage clear after import');
+  assertSourceIncludes(stackWorkspaceSource, 'window.sessionStorage.removeItem(SS_DEMO_STACK_HANDOFF_KEY)', 'demo handoff sessionStorage clear after import');
+  assertSourceIncludes(stackWorkspaceSource, 'persistStackProducts(importedStack.id', 'demo handoff import through stack product persistence');
+  assertSourceIncludes(registerSource, 'SS_DEMO_STACK_HANDOFF_KEY', 'registration demo handoff consumption');
+  assertSourceIncludes(registerSource, "demoStackHandoffAvailable ? '/stacks'", 'registration redirect to stacks when demo handoff exists');
+
+  assertSourceIncludes(stackWorkspaceSource, 'Willst du dieses Produkt wirklich löschen?', 'product delete confirmation copy');
+  assertSourceIncludes(stackWorkspaceSource, 'Ja, löschen', 'product delete confirmation action');
+  assertSourceIncludes(stackWorkspaceSource, 'Abbrechen', 'product delete cancel action');
+
+  assertSourceIncludes(stackWorkspaceSource, 'Dieser Wirkstoff ist bereits in deinem Stack vorhanden', 'duplicate ingredient modal copy');
+  assertSourceIncludes(stackWorkspaceSource, 'Wirkstoffmengen bearbeiten', 'duplicate ingredient edit action');
+  assertSourceIncludes(stackWorkspaceSource, 'Produkt ändern', 'duplicate ingredient change product action');
+  assertSourceIncludes(stackWorkspaceSource, 'So lassen', 'duplicate ingredient keep action');
+  assertSourceIncludes(
+    stackWorkspaceSource,
+    'Trotzdem weiteres Produkt mit gleichem Wirkstoff hinzufügen',
+    'duplicate ingredient intentional add action',
+  );
+  assertSourceIncludes(stackWorkspaceSource, 'parent_ingredient_id', 'duplicate ingredient parent ingredient handling');
+
+  assertSourceExcludes(stackWorkspaceSource, 'stack-cockpit-kicker', 'old stack cockpit kicker');
+  assertSourceExcludes(stackWorkspaceSource, 'className="family-switcher"', 'profile selector in stack top strip');
+  assertSourceExcludes(stackWorkspaceSource, 'family-add-btn', 'profile add button in stack top strip');
+  assertSourceExcludes(stackWorkspaceSource, 'routine-toggle-btn', 'clock routine toggle in stack top strip');
+  assertSourceIncludes(stackWorkspaceSource, 'familyMembers={familyMembers}', 'family profile selector wired into stack edit modal');
+  assertSourceIncludes(stackWorkspaceSource, 'onFamilyMemberChange={handleSaveStackFamilyMember}', 'family profile save handler wired into stack edit modal');
+
+  assertSourceIncludes(appSource, 'path="/einnahmeplan"', 'einnahmeplan route');
+  assertSourceIncludes(layoutSource, 'to="/einnahmeplan"', 'einnahmeplan nav link');
+  assertSourceIncludes(stackWorkspaceSource, "view === 'routine'", 'separate routine overview mode');
+  assertSourceIncludes(stackWorkspaceSource, 'ss-routine-page', 'routine overview page classes');
+
+  assertSourceIncludes(stackWorkspaceSource, 'ss-add-product-tile', 'green add-product grid tile');
+  assertSourceIncludes(stackWorkspaceSource, 'ss-toolbar-primary-action', 'far-right toolbar add-product action');
+  assertSourceIncludes(stackWorkspaceSource, 'stack-cockpit-user', 'stack hero user identity slot');
+  assertSourceExcludes(stackWorkspaceSource, 'Mein Stack', 'old stack hero label fallback');
+}
+
+function assertProductCardStaticChecks(productCardSource, stylesSource) {
+  const requiredProductCardMarkers = [
+    'ss-product-list-identity',
+    'ss-product-list-dose-warning',
+    'ss-product-list-costs',
+    'ss-product-list-actions-stack',
+    'ss-product-warning-summary',
+    'ss-product-warning-detail',
+    'compactWarnings.map',
+    'data-warning-severity',
+    'ss-product-warning-severity-',
+    'Achtung',
+    'title="Produkt entfernen"',
+  ];
+
+  for (const marker of requiredProductCardMarkers) {
+    if (!productCardSource.includes(marker)) {
+      throw new Error(`Expected ProductCard.tsx to contain ${marker}.`);
+    }
+  }
+
+  const requiredStyleMarkers = [
+    '.ss-product-list-identity',
+    '.ss-product-list-dose-warning',
+    '.ss-product-list-costs',
+    '.ss-product-list-actions-stack',
+    '.ss-product-warning-detail',
+    '.ss-product-warning-severity-danger',
+    '.ss-product-warning-severity-caution',
+    '.ss-product-warning-severity-info',
+  ];
+
+  for (const marker of requiredStyleMarkers) {
+    if (!stylesSource.includes(marker)) {
+      throw new Error(`Expected styles.css to contain ${marker}.`);
+    }
+  }
+
+  if (!/\.ss-product-list-row\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1\.8fr\)\s+minmax\(180px,\s*0\.85fr\)\s+minmax\(128px,\s*0\.55fr\)\s+minmax\(150px,\s*0\.5fr\)/.test(stylesSource)) {
+    throw new Error('Expected list rows to use the compact four-column grid.');
+  }
 }
 
 function normalizeBaseUrl(raw) {

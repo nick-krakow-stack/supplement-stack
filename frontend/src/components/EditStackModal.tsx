@@ -1,8 +1,12 @@
 import { useEffect, useState } from 'react';
+import type { FamilyMember } from '../types';
 
 interface EditStackModalProps {
   initialName: string;
   initialDescription?: string;
+  initialFamilyMemberId?: number | null;
+  familyMembers?: FamilyMember[];
+  onFamilyMemberChange?: (familyMemberId: number | null) => void | Promise<void>;
   onSave: (name: string, description: string) => void | Promise<void>;
   onClose: () => void;
 }
@@ -10,11 +14,15 @@ interface EditStackModalProps {
 export default function EditStackModal({
   initialName,
   initialDescription = '',
+  initialFamilyMemberId = null,
+  familyMembers = [],
+  onFamilyMemberChange,
   onSave,
   onClose,
 }: EditStackModalProps) {
   const [name, setName] = useState(initialName);
   const [desc, setDesc] = useState(initialDescription);
+  const [familyMemberId, setFamilyMemberId] = useState<number | null>(initialFamilyMemberId);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -31,6 +39,9 @@ export default function EditStackModal({
     setSaving(true);
     setError('');
     try {
+      if (onFamilyMemberChange && familyMemberId !== initialFamilyMemberId) {
+        await onFamilyMemberChange(familyMemberId);
+      }
       await onSave(finalName, desc.trim());
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Speichern fehlgeschlagen.');
@@ -61,6 +72,23 @@ export default function EditStackModal({
             autoFocus
           />
         </div>
+        {onFamilyMemberChange && (
+          <div className="ss-modal-field">
+            <div className="ss-modal-label">Familienprofil</div>
+            <select
+              className="ss-modal-input"
+              value={familyMemberId ?? ''}
+              onChange={(e) => setFamilyMemberId(e.target.value ? Number(e.target.value) : null)}
+            >
+              <option value="">Eigener Stack</option>
+              {familyMembers.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.first_name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="ss-modal-field">
           <div className="ss-modal-label">
             Beschreibung{' '}

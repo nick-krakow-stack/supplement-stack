@@ -1,9 +1,10 @@
 import { Navigate, Route, Routes, Link, useLocation } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
-import { AuthProvider } from './contexts/AuthContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import CookieConsentBanner from './components/CookieConsentBanner';
+import StackWorkspace from './components/StackWorkspace';
 
 const LandingPage = lazy(() => import('./pages/LandingPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
@@ -73,6 +74,11 @@ function RouteLoadingFallback() {
   );
 }
 
+function RoutinePageRoute() {
+  const { user } = useAuth();
+  return <StackWorkspace mode={user ? 'authenticated' : 'demo'} standaloneHeader={false} view="routine" />;
+}
+
 export default function App() {
   const location = useLocation();
   const hideCookieBanner = location.pathname.startsWith('/administrator');
@@ -125,6 +131,14 @@ export default function App() {
             element={
               <Layout>
                 <DemoPage />
+              </Layout>
+            }
+          />
+          <Route
+            path="/einnahmeplan"
+            element={
+              <Layout>
+                <RoutinePageRoute />
               </Layout>
             }
           />

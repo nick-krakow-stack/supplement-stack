@@ -6,7 +6,6 @@ import {
   ArrowLeft,
   ArrowRight,
   Calculator,
-  Clock3,
   Flag,
   Info,
   LayoutGrid,
@@ -15,8 +14,6 @@ import {
   Plus,
   Printer,
   Search,
-  UserPlus,
-  Users,
   X,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -112,6 +109,7 @@ interface DemoState {
 export interface StackWorkspaceProps {
   mode?: 'demo' | 'authenticated';
   standaloneHeader?: boolean;
+  view?: 'workspace' | 'routine';
 }
 
 // ---------------------------------------------------------------------------
@@ -121,6 +119,24 @@ export interface StackWorkspaceProps {
 const DEMO_NOTICE =
   'Diese Funktion ist nur in der kostenlosen Vollversion verfügbar. Registriere dich, damit deine Änderungen dauerhaft gespeichert werden.';
 const DESC_STORAGE_KEY = 'ss_stack_descriptions';
+const SS_DEMO_STACK_HANDOFF_KEY = 'ss_demo_stack_handoff_v1';
+const OWN_PRODUCT_DEMO_CTA_TEXT =
+  'Danke, dass du ein neues Produkt zu unserer Datenbank hinzufügen möchtest. Diese Funktion steht dir kostenlos zur Verfügung, sobald du dich als Nutzer angemeldet hast.';
+
+interface DemoStackHandoff {
+  version: 1;
+  source: 'demo';
+  created_at: string;
+  active_stack_id: string;
+  stacks: Array<{
+    id: string;
+    name: string;
+    description?: string;
+    products: DemoProduct[];
+  }>;
+}
+
+const DEMO_STACK_HANDOFF_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
 function newStackId(): string {
   return `stack_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -137,10 +153,6 @@ const JSON_HEADERS: Record<string, string> = {
 
 function credentialedFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
   return fetch(input, { credentials: 'include', ...init });
-}
-
-function demoRestrictedNotice() {
-  window.alert(DEMO_NOTICE);
 }
 
 function mapStackDetail(
@@ -184,9 +196,94 @@ function saveDescription(stackId: string, description: string) {
   }
 }
 
+function persistDemoStackHandoff(state: DemoState, descriptions: Record<string, string>): boolean {
+  try {
+    const snapshot: DemoStackHandoff = {
+      version: 1,
+      source: 'demo',
+      created_at: new Date().toISOString(),
+      active_stack_id: state.activeStackId,
+      stacks: state.stacks.map((stack) => ({
+        id: stack.id,
+        name: stack.name,
+        description: descriptions[stack.id],
+        products: stack.products,
+      })),
+    };
+    window.localStorage.setItem(SS_DEMO_STACK_HANDOFF_KEY, JSON.stringify(snapshot));
+    window.sessionStorage.setItem(SS_DEMO_STACK_HANDOFF_KEY, JSON.stringify({ pending: true }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function clearDemoStackHandoff() {
+  try {
+    window.localStorage.removeItem(SS_DEMO_STACK_HANDOFF_KEY);
+  } catch {
+    // ignore storage errors
+  }
+  try {
+    window.sessionStorage.removeItem(SS_DEMO_STACK_HANDOFF_KEY);
+  } catch {
+    // ignore storage errors
+  }
+}
+
 function productStackKey(product: Pick<DemoProduct, 'id' | 'product_type'>): string {
   return `${product.product_type ?? 'catalog'}:${product.id}`;
 }
+
+function isDemoStackHandoff(value: unknown): value is DemoStackHandoff {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as {
+    version?: unknown;
+    source?: unknown;
+    created_at?: unknown;
+    active_stack_id?: unknown;
+    stacks?: unknown;
+  };
+  if (candidate.version !== 1 || candidate.source !== 'demo') return false;
+  if (typeof candidate.created_at !== 'string' || typeof candidate.active_stack_id !== 'string') return false;
+  const createdAt = Date.parse(candidate.created_at);
+  if (!Number.isFinite(createdAt) || Date.now() - createdAt > DEMO_STACK_HANDOFF_MAX_AGE_MS) return false;
+  if (!Array.isArray(candidate.stacks)) return false;
+  return candidate.stacks.every((stack) => {
+    if (!stack || typeof stack !== 'object') return false;
+    const item = stack as { id?: unknown; name?: unknown; products?: unknown };
+    return typeof item.id === 'string' && typeof item.name === 'string' && Array.isArray(item.products);
+  });
+}
+
+function loadDemoStackHandoff(): DemoStackHandoff | null {
+  try {
+    const raw = window.localStorage.getItem(SS_DEMO_STACK_HANDOFF_KEY);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (!isDemoStackHandoff(parsed)) {
+      clearDemoStackHandoff();
+      return null;
+    }
+    return parsed;
+  } catch {
+    clearDemoStackHandoff();
+    return null;
+  }
+}
+
+function productKeysMatch(left: DemoProduct[], right: DemoProduct[]): boolean {
+  if (left.length !== right.length) return false;
+  const rightKeys = new Set(right.map(productStackKey));
+  return left.every((product) => rightKeys.has(productStackKey(product)));
+}
+
+function findExistingImportedStack(stacks: DemoStack[], candidate: DemoStackHandoff['stacks'][number]): DemoStack | null {
+  const matchingProducts = stacks.find((stack) => stack.name === candidate.name && productKeysMatch(stack.products, candidate.products));
+  if (matchingProducts) return matchingProducts;
+  return stacks.find((stack) => stack.name === candidate.name && stack.products.length === 0) ?? null;
+}
+
 
 interface ManualDose {
   value: number;
@@ -279,7 +376,7 @@ function formatDaysSupply(days: number | null): string {
 }
 
 function stackProfileLabel(stack: DemoStack | undefined): string {
-  if (!stack?.family_member_id) return 'Mein Stack';
+  if (!stack?.family_member_id) return 'Eigener Stack';
   return stack.family_member_first_name ? `Für ${stack.family_member_first_name}` : 'Familienprofil';
 }
 
@@ -337,12 +434,18 @@ function AddProductModal({
   ignoredExistingProductKey,
   title = 'Produkt hinzufügen',
   submitLabel = 'Hinzufügen',
+  onRequestOwnProduct,
+  onEditExistingProduct,
+  onReplaceExistingProduct,
 }: {
   stacks: DemoStack[];
   activeStackId: string;
   isDemo: boolean;
   onAdd: (product: DemoProduct, stackId: string) => Promise<void>;
   onClose: () => void;
+  onRequestOwnProduct: () => void;
+  onEditExistingProduct?: (productKey: string) => void;
+  onReplaceExistingProduct?: (productKey: string) => void;
   title?: string;
   submitLabel?: string;
   ignoredExistingProductKey?: string;
@@ -360,11 +463,16 @@ function AddProductModal({
   const [productsLoading, setProductsLoading] = useState(false);
   const [savingProductKey, setSavingProductKey] = useState<string | null>(null);
   const [error, setError] = useState('');
+  const [duplicateIngredient, setDuplicateIngredient] = useState<{
+    ingredient: Ingredient;
+    product: DemoProduct;
+  } | null>(null);
   const targetStack = stacks.find((stack) => stack.id === targetStackId);
   const existingProductKeys = useMemo(
     () => new Set((targetStack?.products ?? []).map(productStackKey)),
     [targetStack],
   );
+  const duplicateProductKey = duplicateIngredient ? productStackKey(duplicateIngredient.product) : null;
 
   const dgeGuideline = guidelines.find((gl) => gl.source === 'DGE' || gl.is_default) ?? guidelines[0];
   const studyGuideline =
@@ -374,6 +482,19 @@ function AddProductModal({
   const selectedForm = useMemo(
     () => forms.find((form) => form.id === selectedFormId) ?? null,
     [forms, selectedFormId],
+  );
+
+  const findDuplicateIngredientProduct = useCallback(
+    (selected: Ingredient): DemoProduct | null => {
+      const stack = stacks.find((item) => item.id === targetStackId);
+      return stack?.products.find((product) =>
+        productStackKey(product) !== ignoredExistingProductKey &&
+        product.ingredients?.some((row) =>
+          row.ingredient_id === selected.id || row.parent_ingredient_id === selected.id,
+        ),
+      ) ?? null;
+    },
+    [ignoredExistingProductKey, stacks, targetStackId],
   );
 
   const loadDosageGuidelines = useCallback((selected: Ingredient) => {
@@ -397,7 +518,7 @@ function AddProductModal({
       .finally(() => setGuidelinesLoading(false));
   }, []);
 
-  const chooseIngredient = (selected: Ingredient) => {
+  const startIngredientFlow = useCallback((selected: Ingredient) => {
     setIngredient(selected);
     setError('');
     setGuidelines([]);
@@ -424,6 +545,15 @@ function AddProductModal({
         loadDosageGuidelines(selected);
       })
       .finally(() => setIngredientLoading(false));
+  }, [loadDosageGuidelines]);
+
+  const chooseIngredient = (selected: Ingredient) => {
+    const duplicateProduct = findDuplicateIngredientProduct(selected);
+    if (duplicateProduct) {
+      setDuplicateIngredient({ ingredient: selected, product: duplicateProduct });
+      return;
+    }
+    startIngredientFlow(selected);
   };
 
   const loadProducts = (formId = selectedFormId) => {
@@ -701,6 +831,14 @@ function AddProductModal({
                 {selectedForm ? ` · ${selectedForm.name}` : ''}
               </p>
             </div>
+            <button
+              type="button"
+              className="ss-own-product-cta"
+              onClick={onRequestOwnProduct}
+            >
+              <Plus size={18} />
+              Eigenes Produkt hinzufügen
+            </button>
             {forms.length > 0 && (
               <div className="mb-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <label className="block text-sm font-black text-slate-700" htmlFor="product-form-filter">
@@ -828,6 +966,75 @@ function AddProductModal({
               )}
             </div>
           </>
+        )}
+
+        {duplicateIngredient && (
+          <div className="ss-modal-overlay ss-duplicate-modal" role="dialog" aria-modal="true">
+            <div className="ss-modal ss-restriction-modal">
+              <div className="ss-modal-header">
+                <h3 className="ss-modal-title">Dieser Wirkstoff ist bereits in deinem Stack vorhanden</h3>
+                <button
+                  type="button"
+                  className="ss-modal-close"
+                  onClick={() => setDuplicateIngredient(null)}
+                  aria-label="Schließen"
+                >
+                  ×
+                </button>
+              </div>
+              <div className="ss-existing-product-detail">
+                <strong>{duplicateIngredient.product.name}</strong>
+                {duplicateIngredient.product.brand && <span>{duplicateIngredient.product.brand}</span>}
+                <small>
+                  {duplicateIngredient.product.dosage_text ?? 'Dosierung nicht hinterlegt'}
+                  {' · '}
+                  {duplicateIngredient.product.timing ?? 'Timing offen'}
+                </small>
+              </div>
+              <div className="ss-modal-actions ss-modal-actions-stack">
+                <button
+                  type="button"
+                  className="ss-modal-btn-save"
+                  onClick={() => {
+                    if (duplicateProductKey && onEditExistingProduct) {
+                      onEditExistingProduct(duplicateProductKey);
+                    }
+                  }}
+                >
+                  Wirkstoffmengen bearbeiten
+                </button>
+                <button
+                  type="button"
+                  className="ss-modal-btn-cancel"
+                  onClick={() => {
+                    if (duplicateProductKey && onReplaceExistingProduct) {
+                      onReplaceExistingProduct(duplicateProductKey);
+                    }
+                  }}
+                >
+                  Produkt ändern
+                </button>
+                <button
+                  type="button"
+                  className="ss-modal-btn-cancel"
+                  onClick={() => setDuplicateIngredient(null)}
+                >
+                  So lassen
+                </button>
+                <button
+                  type="button"
+                  className="ss-modal-btn-save"
+                  onClick={() => {
+                    const selected = duplicateIngredient.ingredient;
+                    setDuplicateIngredient(null);
+                    startIngredientFlow(selected);
+                  }}
+                >
+                  Trotzdem weiteres Produkt mit gleichem Wirkstoff hinzufügen
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>
@@ -998,6 +1205,83 @@ function EditProductModal({
   );
 }
 
+interface WorkspaceNotice {
+  title: string;
+  message: string;
+  primaryLabel?: string;
+  onPrimary?: () => void;
+}
+
+function WorkspaceNoticeModal({
+  notice,
+  onClose,
+}: {
+  notice: WorkspaceNotice;
+  onClose: () => void;
+}) {
+  return (
+    <div className="ss-modal-overlay ss-restriction-modal" role="dialog" aria-modal="true" onClick={onClose}>
+      <div className="ss-modal" onClick={(event) => event.stopPropagation()}>
+        <div className="ss-modal-header">
+          <h3 className="ss-modal-title">{notice.title}</h3>
+          <button type="button" className="ss-modal-close" onClick={onClose} aria-label="Schließen">
+            ×
+          </button>
+        </div>
+        <p className="ss-modal-copy">{notice.message}</p>
+        <div className="ss-modal-actions">
+          <button type="button" className="ss-modal-btn-cancel" onClick={onClose}>
+            Abbrechen
+          </button>
+          <button
+            type="button"
+            className="ss-modal-btn-save"
+            onClick={() => {
+              const action = notice.onPrimary;
+              onClose();
+              if (action) action();
+            }}
+          >
+            {notice.primaryLabel ?? 'Verstanden'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ConfirmDeleteProductModal({
+  productName,
+  onConfirm,
+  onCancel,
+}: {
+  productName?: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="ss-modal-overlay ss-confirm-modal" role="dialog" aria-modal="true" onClick={onCancel}>
+      <div className="ss-modal" onClick={(event) => event.stopPropagation()}>
+        <div className="ss-modal-header">
+          <h3 className="ss-modal-title">Willst du dieses Produkt wirklich löschen?</h3>
+          <button type="button" className="ss-modal-close" onClick={onCancel} aria-label="Schließen">
+            ×
+          </button>
+        </div>
+        {productName && <p className="ss-modal-copy">{productName}</p>}
+        <div className="ss-modal-actions">
+          <button type="button" className="ss-modal-btn-cancel" onClick={onCancel}>
+            Abbrechen
+          </button>
+          <button type="button" className="ss-modal-btn-save ss-modal-btn-danger" onClick={onConfirm}>
+            Ja, löschen
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Icons used in toolbar
 // ---------------------------------------------------------------------------
@@ -1077,6 +1361,7 @@ function loadProductViewMode(): ProductViewMode {
 export function StackWorkspace({
   mode = 'demo',
   standaloneHeader,
+  view = 'workspace',
 }: StackWorkspaceProps) {
   const [state, setState] = useState<DemoState>(createDefaultState);
   const [descriptions, setDescriptions] = useState<Record<string, string>>(() =>
@@ -1098,8 +1383,9 @@ export function StackWorkspace({
   const [familySaving, setFamilySaving] = useState(false);
   const [familyStatus, setFamilyStatus] = useState('');
   const [linkReportStatus, setLinkReportStatus] = useState('');
-  const [routineOpen, setRoutineOpen] = useState(false);
   const [productViewMode, setProductViewMode] = useState<ProductViewMode>(loadProductViewMode);
+  const [notice, setNotice] = useState<WorkspaceNotice | null>(null);
+  const [deleteProductKey, setDeleteProductKey] = useState<string | null>(null);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -1128,6 +1414,107 @@ export function StackWorkspace({
     }
   }, [mode]);
 
+  const persistStackProducts = useCallback(
+    async (stackId: string, products: DemoProduct[], name?: string) => {
+      if (mode !== 'authenticated') return;
+      const payload = {
+        ...(name ? { name } : {}),
+        product_ids: products.map((product) => ({
+          id: product.id,
+          product_type: product.product_type ?? 'catalog',
+          quantity: productServingsPerDay(product),
+          intake_interval_days: productIntakeIntervalDays(product),
+          dosage_text: product.dosage_text,
+          timing: product.timing,
+        })),
+      };
+      const res = await credentialedFetch(apiPath(`/stacks/${stackId}`), {
+        method: 'PUT',
+        headers: JSON_HEADERS,
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? 'Stack konnte nicht gespeichert werden.');
+    },
+    [mode],
+  );
+
+  const consumePendingDemoStackHandoff = useCallback(
+    async (loadedStacks: DemoStack[]) => {
+      const snapshot = loadDemoStackHandoff();
+      if (!snapshot) return null;
+      const importCandidates = snapshot.stacks
+        .filter((stack) => stack.products.length > 0)
+        .sort((left, right) => {
+          if (left.id === snapshot.active_stack_id) return -1;
+          if (right.id === snapshot.active_stack_id) return 1;
+          return 0;
+        });
+      if (importCandidates.length === 0) {
+        clearDemoStackHandoff();
+        return null;
+      }
+
+      const nextStacks = [...loadedStacks];
+      let activeStackId = '';
+
+      for (const candidate of importCandidates) {
+        const existing = findExistingImportedStack(nextStacks, candidate);
+        let importedStack: DemoStack;
+
+        if (existing) {
+          importedStack = {
+            ...existing,
+            name: candidate.name,
+            products: candidate.products,
+          };
+          if (!productKeysMatch(existing.products, candidate.products)) {
+            await persistStackProducts(importedStack.id, importedStack.products, importedStack.name);
+          }
+          const existingIndex = nextStacks.findIndex((stack) => stack.id === existing.id);
+          if (existingIndex >= 0) nextStacks[existingIndex] = importedStack;
+        } else {
+          const res = await credentialedFetch(apiPath('/stacks'), {
+            method: 'POST',
+            headers: JSON_HEADERS,
+            body: JSON.stringify({ name: candidate.name, product_ids: [] }),
+          });
+          const data = await res.json().catch(() => ({})) as Record<string, unknown>;
+          if (!res.ok) {
+            throw new Error(typeof data.error === 'string' ? data.error : 'Demo-Stack konnte nicht importiert werden.');
+          }
+          const createdStack = (data.stack ?? data) as {
+            id: number | string;
+            name: string;
+            family_member_id?: number | null;
+            family_member_first_name?: string | null;
+          };
+          importedStack = {
+            ...mapStackDetail(createdStack),
+            name: candidate.name,
+            products: candidate.products,
+          };
+          await persistStackProducts(importedStack.id, importedStack.products, importedStack.name);
+          nextStacks.push(importedStack);
+        }
+
+        if (candidate.description) {
+          saveDescription(importedStack.id, candidate.description);
+        }
+        if (candidate.id === snapshot.active_stack_id) {
+          activeStackId = importedStack.id;
+        }
+      }
+
+      clearDemoStackHandoff();
+      return {
+        stacks: nextStacks,
+        activeStackId: activeStackId || nextStacks[nextStacks.length - 1]?.id || '',
+      };
+    },
+    [persistStackProducts],
+  );
+
   const loadAuthenticatedStacks = useCallback(async () => {
     if (mode !== 'authenticated') return;
     setLoading(true);
@@ -1142,11 +1529,34 @@ export function StackWorkspace({
         family_member_id?: number | null;
         family_member_first_name?: string | null;
       }> = data.stacks ?? data ?? [];
-      if (stackList.length === 0) {
+
+      const detailed = await Promise.all(
+        stackList.map(async (stack) => {
+          const detailRes = await credentialedFetch(apiPath(`/stacks/${stack.id}`), {
+            headers: JSON_HEADERS,
+          });
+          if (!detailRes.ok) return mapStackDetail(stack);
+          const detail = await detailRes.json();
+          return mapStackDetail(stack, detail);
+        }),
+      );
+
+      const imported = await consumePendingDemoStackHandoff(detailed);
+      if (imported) {
+        setState({
+          stacks: imported.stacks,
+          activeStackId: imported.activeStackId,
+        });
+        const selectedStack = imported.stacks.find((stack) => stack.id === imported.activeStackId) ?? imported.stacks[0];
+        setSelectedIds(new Set((selectedStack?.products ?? []).map(productStackKey)));
+        return;
+      }
+
+      if (detailed.length === 0) {
         const createRes = await credentialedFetch(apiPath('/stacks'), {
           method: 'POST',
           headers: JSON_HEADERS,
-          body: JSON.stringify({ name: 'Mein Stack', product_ids: [] }),
+          body: JSON.stringify({ name: 'Basis Gesundheit', product_ids: [] }),
         });
         const createData = await createRes.json().catch(() => ({})) as Record<string, unknown>;
         if (!createRes.ok) {
@@ -1162,16 +1572,6 @@ export function StackWorkspace({
         setSelectedIds(new Set());
         return;
       }
-      const detailed = await Promise.all(
-        stackList.map(async (stack) => {
-          const detailRes = await credentialedFetch(apiPath(`/stacks/${stack.id}`), {
-            headers: JSON_HEADERS,
-          });
-          if (!detailRes.ok) return mapStackDetail(stack);
-          const detail = await detailRes.json();
-          return mapStackDetail(stack, detail);
-        }),
-      );
       setState((prev) => ({
         stacks: detailed,
         activeStackId: detailed.some((s) => s.id === prev.activeStackId)
@@ -1185,7 +1585,7 @@ export function StackWorkspace({
     } finally {
       setLoading(false);
     }
-  }, [mode]);
+  }, [consumePendingDemoStackHandoff, mode]);
 
   useEffect(() => {
     if (mode === 'authenticated') {
@@ -1213,6 +1613,30 @@ export function StackWorkspace({
 
   const activeStack = state.stacks.find((s) => s.id === state.activeStackId) ?? state.stacks[0];
 
+  const handleRegisterFromDemo = useCallback(() => {
+    if (isDemo) {
+      persistDemoStackHandoff(state, descriptions);
+    }
+    navigate('/register', {
+      state: {
+        redirect: '/stacks',
+        demoStackHandoffKey: SS_DEMO_STACK_HANDOFF_KEY,
+      },
+    });
+  }, [descriptions, isDemo, navigate, state]);
+
+  const openDemoRestriction = useCallback(
+    (title: string, message = DEMO_NOTICE) => {
+      setNotice({
+        title,
+        message,
+        primaryLabel: 'Jetzt anmelden',
+        onPrimary: handleRegisterFromDemo,
+      });
+    },
+    [handleRegisterFromDemo],
+  );
+
   // Reset selection when active stack changes
   useEffect(() => {
     const stack = state.stacks.find((item) => item.id === state.activeStackId);
@@ -1228,31 +1652,6 @@ export function StackWorkspace({
       return valid;
     });
   }, [activeStack]);
-
-  const persistStackProducts = useCallback(
-    async (stackId: string, products: DemoProduct[], name?: string) => {
-      if (mode !== 'authenticated') return;
-      const payload = {
-        ...(name ? { name } : {}),
-        product_ids: products.map((product) => ({
-          id: product.id,
-          product_type: product.product_type ?? 'catalog',
-          quantity: productServingsPerDay(product),
-          intake_interval_days: productIntakeIntervalDays(product),
-          dosage_text: product.dosage_text,
-          timing: product.timing,
-        })),
-      };
-      const res = await credentialedFetch(apiPath(`/stacks/${stackId}`), {
-        method: 'PUT',
-        headers: JSON_HEADERS,
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error ?? 'Stack konnte nicht gespeichert werden.');
-    },
-    [mode],
-  );
 
   const handleAssignFamilyMember = useCallback(
     async (familyMemberId: number | null) => {
@@ -1286,6 +1685,39 @@ export function StackWorkspace({
       } catch (err) {
         setFamilyStatus(err instanceof Error ? err.message : 'Profil konnte nicht zugeordnet werden.');
       }
+    },
+    [activeStack, familyMembers, mode],
+  );
+
+  const handleSaveStackFamilyMember = useCallback(
+    async (familyMemberId: number | null) => {
+      if (!activeStack) return;
+      if (mode !== 'authenticated') {
+        throw new Error('Familienprofile sind nur angemeldet verfÃ¼gbar.');
+      }
+      setFamilyStatus('');
+      const res = await credentialedFetch(apiPath(`/stacks/${activeStack.id}`), {
+        method: 'PUT',
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ family_member_id: familyMemberId }),
+      });
+      const data = await res.json().catch(() => ({})) as Record<string, unknown>;
+      if (!res.ok) {
+        throw new Error(typeof data.error === 'string' ? data.error : 'Profil konnte nicht zugeordnet werden.');
+      }
+      const selectedMember = familyMembers.find((member) => member.id === familyMemberId);
+      setState((prev) => ({
+        ...prev,
+        stacks: prev.stacks.map((stack) => (
+          stack.id === activeStack.id
+            ? {
+                ...stack,
+                family_member_id: familyMemberId,
+                family_member_first_name: selectedMember?.first_name ?? null,
+              }
+            : stack
+        )),
+      }));
     },
     [activeStack, familyMembers, mode],
   );
@@ -1421,7 +1853,7 @@ export function StackWorkspace({
   const handleDeleteStack = useCallback(
     async (id: string) => {
       if (state.stacks.length <= 1) {
-        if (isDemo) demoRestrictedNotice();
+        if (isDemo) openDemoRestriction('Stack löschen ist in der Demo nicht verfügbar.');
         else setError('Der letzte Stack kann nicht gelöscht werden.');
         return;
       }
@@ -1454,7 +1886,7 @@ export function StackWorkspace({
         return next;
       });
     },
-    [isDemo, mode, state.stacks],
+    [isDemo, mode, openDemoRestriction, state.stacks],
   );
 
   const handleSaveStackMeta = useCallback(
@@ -1651,7 +2083,8 @@ export function StackWorkspace({
   const totalMonthly = selectedProducts.reduce((sum, p) => sum + productMonthlyPrice(p), 0);
   const productsCount = activeProducts.length;
   const allSelected = productsCount > 0 && selectedIds.size === productsCount;
-  const hasOpenModal = addModalOpen || editModalOpen || editingProductKey !== null || replaceProductKey !== null;
+  const hasOpenModal =
+    addModalOpen || editModalOpen || editingProductKey !== null || replaceProductKey !== null || deleteProductKey !== null;
   const bottomBarVisible = productsCount > 0 && !hasOpenModal;
 
   useEffect(() => {
@@ -1689,7 +2122,11 @@ export function StackWorkspace({
   };
 
   const handleEmailStack = async () => {
-    if (isDemo || !activeStack) return;
+    if (isDemo) {
+      openDemoRestriction('Stack mailen ist nur angemeldet verfügbar.');
+      return;
+    }
+    if (!activeStack) return;
     setEmailSending(true);
     setEmailStatus('');
     try {
@@ -1710,11 +2147,23 @@ export function StackWorkspace({
   };
 
   const handlePrintStack = () => {
+    if (isDemo) {
+      openDemoRestriction('Plan drucken/PDF ist in der Demo nicht verfügbar.');
+      return;
+    }
+    if (!activeStack || productsCount === 0) {
+      setNotice({
+        title: 'Plan drucken/PDF ist noch nicht verfügbar.',
+        message: 'Füge zuerst ein Produkt zum Stack hinzu.',
+      });
+      return;
+    }
     window.print();
   };
 
   const activeDescription = activeStack ? descriptions[activeStack.id] ?? '' : '';
   const editingProduct = activeStack?.products.find((product) => productStackKey(product) === editingProductKey) ?? null;
+  const deletingProduct = activeStack?.products.find((product) => productStackKey(product) === deleteProductKey) ?? null;
   const replacingStack = activeStack && replaceProductKey ? activeStack : null;
 
   const rightSlot = isDemo ? (
@@ -1722,6 +2171,8 @@ export function StackWorkspace({
       <span className="header-email">Demo-Modus — nicht angemeldet</span>
       <Link
         to="/register"
+        state={{ redirect: '/stacks', demoStackHandoffKey: SS_DEMO_STACK_HANDOFF_KEY }}
+        onClick={() => persistDemoStackHandoff(state, descriptions)}
         className="btn-logout"
         style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
       >
@@ -1736,6 +2187,106 @@ export function StackWorkspace({
       </button>
     </>
   );
+
+  if (view === 'routine') {
+    return (
+      <>
+        <div className="ss-page ss-page-embedded ss-routine-page">
+          {isDemo && (
+            <div className="info-banner info-banner-demo">
+              <IconInfoCircle />
+              <strong>Demo-Einnahmeplan:</strong>
+              &nbsp;
+              <span>Registriere dich, um den Plan zu speichern oder zu versenden.</span>
+            </div>
+          )}
+
+          <section className="stack-cockpit" aria-label="Einnahmeplan">
+            <div className="print-sheet-heading">
+              <strong>Supplement Stack Einnahmeplan</strong>
+              <span>{activeStack?.name ?? 'Stack'}</span>
+            </div>
+            <div className="stack-cockpit-head">
+              <div>
+                <h2>{activeStack?.name ?? 'Stack'}</h2>
+              </div>
+              {user?.email && <div className="stack-cockpit-user">{user.email}</div>}
+            </div>
+            <div className="ss-routine-actions">
+              <button
+                type="button"
+                className="ss-btn ss-btn-outline"
+                onClick={() => void handleEmailStack()}
+                disabled={!activeStack || emailSending}
+                title={isDemo ? 'Stack mailen ist nur angemeldet verfügbar.' : 'Stack per E-Mail senden'}
+              >
+                <IconMail />
+                {emailSending ? 'Wird gesendet...' : 'Stack mailen'}
+              </button>
+              <button
+                type="button"
+                className="ss-btn ss-btn-outline print-action"
+                onClick={handlePrintStack}
+                disabled={!activeStack || (!isDemo && productsCount === 0)}
+                title={isDemo ? 'Plan drucken/PDF ist in der Demo nicht verfügbar.' : 'Plan drucken oder als PDF speichern'}
+              >
+                <IconPrint />
+                Plan drucken/PDF
+              </button>
+            </div>
+            {emailStatus && <p className="family-status">{emailStatus}</p>}
+          </section>
+
+          {error && <p className="rounded-2xl bg-red-50 px-4 py-3 text-sm font-bold text-red-700">{error}</p>}
+
+          {loading ? (
+            <div style={{ padding: 40, textAlign: 'center' }}>Laden...</div>
+          ) : (
+            <div className="routine-panel routine-open">
+              <div className="routine-grid">
+                {(Object.keys(ROUTINE_META) as RoutineKey[]).map((routineKey) => {
+                  const products = routineGroups[routineKey];
+                  const meta = ROUTINE_META[routineKey];
+                  return (
+                    <div key={routineKey} className="routine-column">
+                      <div className="routine-column-head">
+                        <strong>{meta.label}</strong>
+                        <span>{products.length}</span>
+                      </div>
+                      <p>{meta.hint}</p>
+                      {products.length === 0 ? (
+                        <div className="routine-empty">Keine Produkte</div>
+                      ) : (
+                        <div className="routine-list">
+                          {products.map((product) => {
+                            const usage = calculateProductUsage(product, product.price, { fallbackTotalServings: 30 });
+                            return (
+                              <div key={productStackKey(product)} className="routine-item">
+                                <strong>{product.name}</strong>
+                                <span>{product.dosage_text || `${usage.servingsPerIntake} ${unitLabel(product.serving_unit ?? 'Portion', usage.servingsPerIntake)}`}</span>
+                                <small>
+                                  {formatIntakeInterval(productIntakeIntervalDays(product))}
+                                  {' - '}
+                                  {formatEuro(usage.monthlyCost ?? product.price)} EUR/Monat
+                                  {' - '}
+                                  {formatDaysSupply(usage.daysSupply)}
+                                </small>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+        {notice && <WorkspaceNoticeModal notice={notice} onClose={() => setNotice(null)} />}
+      </>
+    );
+  }
 
   return (
     <>
@@ -1802,11 +2353,6 @@ export function StackWorkspace({
             </span>
           </div>
 
-          <button className="ss-btn ss-btn-green" onClick={() => setAddModalOpen(true)}>
-            <IconPlus />
-            Produkt hinzufügen
-          </button>
-
           <button className="ss-btn ss-btn-indigo" onClick={() => void handleCreateStack()}>
             <IconStackPlus />
             Stack erstellen
@@ -1824,8 +2370,8 @@ export function StackWorkspace({
           <button
             className="ss-btn ss-btn-outline"
             onClick={() => void handleEmailStack()}
-            disabled={isDemo || !activeStack || emailSending}
-            style={isDemo || !activeStack || emailSending ? { opacity: 0.55, cursor: 'not-allowed' } : undefined}
+            disabled={!activeStack || emailSending}
+            title={isDemo ? 'Stack mailen ist nur angemeldet verfügbar.' : 'Stack per E-Mail senden'}
           >
             <IconMail />
             {emailSending ? 'Wird gesendet...' : 'Stack mailen'}
@@ -1833,15 +2379,15 @@ export function StackWorkspace({
           <button
             className="ss-btn ss-btn-outline print-action"
             onClick={handlePrintStack}
-            disabled={!activeStack || productsCount === 0}
-            style={!activeStack || productsCount === 0 ? { opacity: 0.55, cursor: 'not-allowed' } : undefined}
+            disabled={!activeStack || (!isDemo && productsCount === 0)}
+            title={isDemo ? 'Plan drucken/PDF ist in der Demo nicht verfügbar.' : 'Plan drucken oder als PDF speichern'}
           >
             <IconPrint />
             Plan drucken/PDF
           </button>
-          {(isDemo || emailStatus) && (
+          {emailStatus && (
             <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>
-              {isDemo ? 'E-Mail-Versand ist nur angemeldet verfügbar.' : emailStatus}
+              {emailStatus}
             </span>
           )}
 
@@ -1851,6 +2397,13 @@ export function StackWorkspace({
           >
             <IconTrash />
             Stack löschen
+          </button>
+
+          <span className="ss-toolbar-spacer" />
+
+          <button className="ss-btn ss-btn-green ss-toolbar-primary-action" onClick={() => setAddModalOpen(true)}>
+            <IconPlus />
+            Produkt hinzufügen
           </button>
         </div>
 
@@ -1874,139 +2427,13 @@ export function StackWorkspace({
         <section className="stack-cockpit" aria-label="Stack-Steuerung">
           <div className="print-sheet-heading">
             <strong>Supplement Stack Einnahmeplan</strong>
-            <span>{activeStack?.name ?? 'Stack'} · {stackProfileLabel(activeStack)}</span>
+            <span>{activeStack?.name ?? 'Stack'}</span>
           </div>
           <div className="stack-cockpit-head">
             <div>
-              <div className="stack-cockpit-kicker">Stack</div>
               <h2>{activeStack?.name ?? 'Stack'}</h2>
-              <p>{stackProfileLabel(activeStack)}</p>
             </div>
-            <div className="family-switcher">
-              <label>
-                <Users size={15} />
-                Profil
-              </label>
-              <div className="family-switcher-row">
-                <select
-                  value={activeStack?.family_member_id ?? ''}
-                  disabled={isDemo || !activeStack}
-                  onChange={(event) => {
-                    const nextValue = event.target.value ? Number(event.target.value) : null;
-                    void handleAssignFamilyMember(nextValue);
-                  }}
-                >
-                  <option value="">Ich selbst</option>
-                  {familyMembers.map((member) => (
-                    <option key={member.id} value={member.id}>
-                      {member.first_name}{member.age != null ? `, ${member.age}` : ''}
-                    </option>
-                  ))}
-                </select>
-                {!isDemo && (
-                  <button
-                    type="button"
-                    className="family-add-btn"
-                    onClick={() => setFamilyFormOpen((open) => !open)}
-                  >
-                    <UserPlus size={15} />
-                    Profil
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className={`routine-toggle-btn ${routineOpen ? 'active' : ''}`}
-                  onClick={() => setRoutineOpen((open) => !open)}
-                  aria-label={routineOpen ? 'Einnahmeplan einklappen' : 'Einnahmeplan ausklappen'}
-                  title={routineOpen ? 'Einnahmeplan einklappen' : 'Einnahmeplan ausklappen'}
-                >
-                  <Clock3 size={17} />
-                </button>
-              </div>
-              {familyStatus && <p className="family-status">{familyStatus}</p>}
-            </div>
-          </div>
-
-          {familyFormOpen && !isDemo && (
-            <form className="family-form" onSubmit={(event) => void handleCreateFamilyMember(event)}>
-              <input
-                value={familyDraft.first_name}
-                onChange={(event) => setFamilyDraft((prev) => ({ ...prev, first_name: event.target.value }))}
-                placeholder="Vorname"
-              />
-              <input
-                value={familyDraft.age}
-                onChange={(event) => setFamilyDraft((prev) => ({ ...prev, age: event.target.value }))}
-                inputMode="numeric"
-                placeholder="Alter"
-              />
-              <input
-                value={familyDraft.weight}
-                onChange={(event) => setFamilyDraft((prev) => ({ ...prev, weight: event.target.value }))}
-                inputMode="decimal"
-                placeholder="Gewicht optional"
-              />
-              <button type="submit" disabled={familySaving}>
-                {familySaving ? 'Speichert...' : 'Anlegen'}
-              </button>
-            </form>
-          )}
-
-          {!isDemo && familyMembers.length > 0 && (
-            <div className="family-member-list">
-              {familyMembers.map((member) => (
-                <span key={member.id}>
-                  {member.first_name}
-                  <button type="button" onClick={() => void handleDeleteFamilyMember(member.id)}>
-                    Entfernen
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
-
-          <div className={`routine-panel ${routineOpen ? 'routine-open' : 'routine-closed'}`}>
-            <div className="routine-panel-title">
-              <Clock3 size={17} />
-              Einnahmeplan
-            </div>
-            <div className="routine-grid">
-              {(Object.keys(ROUTINE_META) as RoutineKey[]).map((routineKey) => {
-                const products = routineGroups[routineKey];
-                const meta = ROUTINE_META[routineKey];
-                return (
-                  <div key={routineKey} className="routine-column">
-                    <div className="routine-column-head">
-                      <strong>{meta.label}</strong>
-                      <span>{products.length}</span>
-                    </div>
-                    <p>{meta.hint}</p>
-                    {products.length === 0 ? (
-                      <div className="routine-empty">Keine Produkte</div>
-                    ) : (
-                      <div className="routine-list">
-                        {products.map((product) => {
-                          const usage = calculateProductUsage(product, product.price, { fallbackTotalServings: 30 });
-                          return (
-                            <div key={productStackKey(product)} className="routine-item">
-                              <strong>{product.name}</strong>
-                              <span>{product.dosage_text || `${usage.servingsPerIntake} ${unitLabel(product.serving_unit ?? 'Portion', usage.servingsPerIntake)}`}</span>
-                              <small>
-                                {formatIntakeInterval(productIntakeIntervalDays(product))}
-                                {' - '}
-                                {formatEuro(usage.monthlyCost ?? product.price)} EUR/Monat
-                                {' - '}
-                                {formatDaysSupply(usage.daysSupply)}
-                              </small>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+              {user?.email && <div className="stack-cockpit-user">{user.email}</div>}
           </div>
 
           {linkReportStatus && (
@@ -2099,13 +2526,25 @@ export function StackWorkspace({
                     display={productViewMode === 'list' ? 'list' : 'card'}
                     onToggleSelected={() => toggleSelected(key)}
                     onEdit={() => setEditingProductKey(key)}
-                    onDelete={() => void handleRemoveProduct(key)}
+                    onDelete={() => setDeleteProductKey(key)}
                     onReportMissingLink={(product, reason) => void handleReportMissingLink(product as DemoProduct, reason)}
                     showSelectButton={false}
                   />
                 </div>
               );
             })}
+            {productViewMode === 'grid' && (
+              <div className="masonry-item">
+                <button
+                  type="button"
+                  className="ss-add-product-tile"
+                  onClick={() => setAddModalOpen(true)}
+                >
+                  <Plus size={28} />
+                  <span>Produkt hinzufügen</span>
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -2148,6 +2587,26 @@ export function StackWorkspace({
           isDemo={isDemo}
           onAdd={handleAddProduct}
           onClose={() => setAddModalOpen(false)}
+          onRequestOwnProduct={() => {
+            if (isDemo) {
+              setNotice({
+                title: 'Eigenes Produkt hinzufügen',
+                message: OWN_PRODUCT_DEMO_CTA_TEXT,
+                primaryLabel: 'Jetzt anmelden',
+                onPrimary: handleRegisterFromDemo,
+              });
+              return;
+            }
+            navigate('/my-products');
+          }}
+          onEditExistingProduct={(productKey) => {
+            setAddModalOpen(false);
+            setEditingProductKey(productKey);
+          }}
+          onReplaceExistingProduct={(productKey) => {
+            setAddModalOpen(false);
+            setReplaceProductKey(productKey);
+          }}
         />
       )}
 
@@ -2161,6 +2620,25 @@ export function StackWorkspace({
           title="Produkt wechseln"
           submitLabel="Produkt ersetzen"
           ignoredExistingProductKey={replaceProductKey}
+          onRequestOwnProduct={() => {
+            if (isDemo) {
+              setNotice({
+                title: 'Eigenes Produkt hinzufügen',
+                message: OWN_PRODUCT_DEMO_CTA_TEXT,
+                primaryLabel: 'Jetzt anmelden',
+                onPrimary: handleRegisterFromDemo,
+              });
+              return;
+            }
+            navigate('/my-products');
+          }}
+          onEditExistingProduct={(productKey) => {
+            setReplaceProductKey(null);
+            setEditingProductKey(productKey);
+          }}
+          onReplaceExistingProduct={(productKey) => {
+            setReplaceProductKey(productKey);
+          }}
         />
       )}
 
@@ -2180,10 +2658,27 @@ export function StackWorkspace({
         <EditStackModal
           initialName={activeStack.name}
           initialDescription={activeDescription}
+          initialFamilyMemberId={activeStack.family_member_id ?? null}
+          familyMembers={familyMembers}
+          onFamilyMemberChange={handleSaveStackFamilyMember}
           onSave={(n, d) => handleSaveStackMeta(n, d)}
           onClose={() => setEditModalOpen(false)}
         />
       )}
+
+      {deleteProductKey && (
+        <ConfirmDeleteProductModal
+          productName={deletingProduct?.name}
+          onCancel={() => setDeleteProductKey(null)}
+          onConfirm={() => {
+            const productKey = deleteProductKey;
+            setDeleteProductKey(null);
+            void handleRemoveProduct(productKey);
+          }}
+        />
+      )}
+
+      {notice && <WorkspaceNoticeModal notice={notice} onClose={() => setNotice(null)} />}
     </>
   );
 }

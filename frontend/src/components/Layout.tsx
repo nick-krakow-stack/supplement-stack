@@ -30,6 +30,9 @@ export default function Layout({ children }: LayoutProps) {
       <Link to="/stacks" className={navLinkClass} onClick={closeMobile}>
         Meine Stacks
       </Link>
+      <Link to="/einnahmeplan" className={navLinkClass} onClick={closeMobile}>
+        Einnahmeplan
+      </Link>
       {user && (
         <Link to="/my-products" className={navLinkClass} onClick={closeMobile}>
           Eigene Produkte

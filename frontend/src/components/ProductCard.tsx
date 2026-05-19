@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, BookOpen, ExternalLink, Flag, Info, Pencil, RefreshCcw, Trash2 } from 'lucide-react';
+import { AlertTriangle, ExternalLink, Flag, Info, Pencil, RefreshCcw, Trash2 } from 'lucide-react';
 import type { ShopDomain } from '../types/local';
 import type { ProductSafetyWarning } from '../types';
 import {
@@ -63,6 +63,16 @@ interface ProductWarning {
   message: string;
   type?: 'danger' | 'caution' | 'info' | string;
   shortLabel?: string;
+}
+
+type WarningSeverity = 'danger' | 'caution' | 'info';
+
+interface CompactWarning {
+  label: string;
+  severity: WarningSeverity;
+  detail?: string;
+  articleTitle?: string | null;
+  articleUrl?: string | null;
 }
 
 interface ProductCardProps {
@@ -245,12 +255,6 @@ const CATEGORY_EMOJI: Record<CategoryKey, string> = {
   default: '\u2733',
 };
 
-const SAFETY_WARNING_STYLES: Record<ProductSafetyWarning['severity'], string> = {
-  danger: 'border-red-200 bg-red-50 text-red-700',
-  caution: 'border-amber-200 bg-amber-50 text-amber-700',
-  info: 'border-sky-200 bg-sky-50 text-sky-700',
-};
-
 function getFallbackWarning(product: ProductCardProduct): ProductWarning | null {
   const t = product.name.toLowerCase();
   if (t.includes('b12')) return { type: 'caution', title: 'Einnahmeabstand pr\u00fcfen', shortLabel: '20-30min Abstand zu Kaffee/Tee', message: 'Kaffee oder Tee werden in Quellen im Zusammenhang mit m\u00f6glicher geringerer Aufnahme einzelner N\u00e4hrstoffe diskutiert. Ein zeitlicher Abstand kann sinnvoll sein.' };
@@ -258,16 +262,53 @@ function getFallbackWarning(product: ProductCardProduct): ProductWarning | null 
   return null;
 }
 
-function compactWarningLabel(product: ProductCardProduct, warning: ProductWarning | null): string | null {
-  const safetyLabel = product.warnings?.find((item) => item.short_label.trim())?.short_label.trim();
-  if (safetyLabel) return safetyLabel;
+function normalizeWarningSeverity(value?: string | null): WarningSeverity {
+  return value === 'danger' || value === 'info' ? value : 'caution';
+}
+
+function compactTextLabel(value: string): string | null {
+  const source = value.trim();
+  if (!source) return null;
+  const firstSentence = source.split(/[.!?]/).map((part) => part.trim()).find(Boolean) ?? source;
+  return firstSentence.length > 72 ? `${firstSentence.slice(0, 69).trimEnd()}...` : firstSentence;
+}
+
+function compactWarningLabel(warning: ProductWarning | null): string | null {
   if (!warning) return null;
   if (warning.shortLabel) return warning.shortLabel;
   const combined = `${warning.title ?? ''} ${warning.message}`.toLowerCase();
   if (combined.includes('kaffee') || combined.includes('tee')) return '20-30min Abstand zu Kaffee/Tee';
   const source = warning.title?.trim() || warning.message.trim();
-  const firstSentence = source.split(/[.!?]/).map((part) => part.trim()).find(Boolean) ?? source;
-  return firstSentence.length > 72 ? `${firstSentence.slice(0, 69).trimEnd()}...` : firstSentence;
+  return compactTextLabel(source);
+}
+
+function getCompactWarnings(product: ProductCardProduct, warning: ProductWarning | null): CompactWarning[] {
+  const safetyWarnings = product.warnings
+    ?.map((item): CompactWarning | null => {
+      const label = item.short_label.trim() || compactTextLabel(item.popover_text) || '';
+      if (!label) return null;
+      return {
+        label,
+        severity: normalizeWarningSeverity(item.severity),
+        detail: item.popover_text.trim() || undefined,
+        articleTitle: item.article_title,
+        articleUrl: item.article_url,
+      };
+    })
+    .filter((item): item is CompactWarning => item !== null) ?? [];
+  if (safetyWarnings.length > 0) {
+    return safetyWarnings;
+  }
+
+  const label = compactWarningLabel(warning);
+  if (!label || !warning) return [];
+
+  const detail = warning.message.trim();
+  return [{
+    label,
+    severity: normalizeWarningSeverity(warning.type),
+    detail: detail && detail !== label ? detail : undefined,
+  }];
 }
 
 function normalizeShopHostname(value?: string): string | null {
@@ -308,10 +349,13 @@ export default function ProductCard({
   recommendationType, showSelectButton = false,
   shopDomains, selected = false, warning, display = 'card',
 }: ProductCardProps) {
-  const [openSafetyWarningId, setOpenSafetyWarningId] = useState<number | null>(null);
+  const [openWarningKey, setOpenWarningKey] = useState<string | null>(null);
   const price = product.product_price ?? product.price;
   const brand = product.product_brand ?? product.brand;
   const name = product.product_name ?? product.name;
+  const ingredientTitle = product.product_name && product.name.trim() !== product.product_name.trim()
+    ? product.name
+    : name;
   const category = getCategory(product);
   const emoji = CATEGORY_EMOJI[category];
 
@@ -347,32 +391,20 @@ export default function ProductCard({
     ? { title: product.warning_title, message: product.warning_message, type: product.warning_type ?? 'caution' }
     : null;
   const cardWarning = warning ?? productWarning ?? getFallbackWarning(product);
-  const cardWarningLabel = cardWarning ? compactWarningLabel(product, cardWarning) : null;
+  const compactWarnings = getCompactWarnings(product, cardWarning);
 
   if (display === 'list') {
     const listDose = getListDose(product);
-    const listWarning = compactWarningLabel(product, cardWarning);
     const timingPanelKey = getListTimingPanelKey(effectiveTiming);
     const timingLabel = effectiveTiming ? effectiveTiming : timing.label;
+    const warningDetailId = `product-list-warning-${product.id}`;
 
     return (
       <article
         onClick={onToggleSelected}
         className={`ss-product-card ss-product-list-row ${selected ? 'ss-product-list-row-selected' : ''}`}
       >
-        <div className={`ss-product-list-media ss-product-list-media-${timingPanelKey}`}>
-          {product.image_url ? (
-            <img
-              src={product.image_url}
-              alt={name}
-              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-            />
-          ) : (
-            <span>{emoji}</span>
-          )}
-        </div>
-
-        <div className="ss-product-list-content">
+        <div className="ss-product-list-identity">
           <div className="ss-product-list-top">
             {(onToggleSelected ?? onSelect) && (
               <span className={`ss-product-list-check ${selected ? 'selected' : ''}`} aria-hidden="true">
@@ -383,9 +415,29 @@ export default function ProductCard({
                 )}
               </span>
             )}
-            {brand && <span className="ss-product-list-brand">{brand}</span>}
+            <div className="ss-product-list-title">{ingredientTitle}</div>
           </div>
-          <div className="ss-product-list-title">{name}</div>
+
+          <div className="ss-product-list-product">
+            <div className={`ss-product-list-media ss-product-list-media-${timingPanelKey}`}>
+              {product.image_url ? (
+                <img
+                  src={product.image_url}
+                  alt={name}
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                />
+              ) : (
+                <span>{emoji}</span>
+              )}
+            </div>
+            <div className="ss-product-list-product-copy">
+              <div className="ss-product-list-product-name">{name}</div>
+              {brand && <div className="ss-product-list-brand">{brand}</div>}
+            </div>
+          </div>
+        </div>
+
+        <div className="ss-product-list-dose-warning">
           <div className="ss-product-list-meta">
             <span className={`ss-product-list-timing ${timing.cls}`}>
               {timingLabel}
@@ -395,7 +447,7 @@ export default function ProductCard({
               {listDose}
             </span>
             <span className="ss-product-list-meta-item">
-              <span>Reicht f\u00fcr</span>
+              <span>Reicht f&uuml;r</span>
               {daysSupply ? `${daysSupply} Tage` : 'unbekannt'}
             </span>
             {showInterval && (
@@ -404,46 +456,99 @@ export default function ProductCard({
                 {intervalLabel}
               </span>
             )}
-            {listWarning && (
-              <span className="ss-product-list-warning">
-                <AlertTriangle size={13} />
-                <span>{listWarning}</span>
-              </span>
-            )}
           </div>
+          {compactWarnings.length > 0 && (
+            <div className="ss-product-list-warnings">
+              {compactWarnings.map((compactWarning, index) => {
+                const itemKey = `list-${product.id}-${index}`;
+                const isOpen = openWarningKey === itemKey;
+                return (
+                  <div
+                    key={itemKey}
+                    className={`ss-product-list-warning ss-product-warning-summary ss-product-warning-severity-${compactWarning.severity}`}
+                    data-warning-severity={compactWarning.severity}
+                    onClick={(e) => e.stopPropagation()}
+                    onBlur={(e) => {
+                      if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+                        setOpenWarningKey((current) => (current === itemKey ? null : current));
+                      }
+                    }}
+                  >
+                    <AlertTriangle size={13} />
+                    <strong>Achtung</strong>
+                    <span>{compactWarning.label}</span>
+                    {(compactWarning.detail || compactWarning.articleUrl) && (
+                      <button
+                        type="button"
+                        aria-label={`Mehr Informationen: ${compactWarning.label}`}
+                        aria-expanded={isOpen}
+                        aria-describedby={`${warningDetailId}-${index}`}
+                        className="ss-product-warning-info"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenWarningKey((current) => (current === itemKey ? null : itemKey));
+                        }}
+                        onFocus={() => setOpenWarningKey(itemKey)}
+                      >
+                        <Info size={13} />
+                      </button>
+                    )}
+                    {(compactWarning.detail || compactWarning.articleUrl) && (
+                      <span
+                        id={`${warningDetailId}-${index}`}
+                        role="tooltip"
+                        className={`ss-product-warning-detail ${isOpen ? 'open' : ''}`}
+                      >
+                        {compactWarning.detail && <span>{compactWarning.detail}</span>}
+                        {compactWarning.articleUrl && (
+                          <Link
+                            to={compactWarning.articleUrl}
+                            onClick={(e) => e.stopPropagation()}
+                            className="ss-product-warning-link"
+                          >
+                            {compactWarning.articleTitle ?? 'Mehr lesen'}
+                          </Link>
+                        )}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
-        <div className="ss-product-list-actions-panel">
-          <div className="ss-product-list-price">
-            <strong>{formatEur(price)}</strong>
-            {monthlyPrice !== null && <span>{formatEur(monthlyPrice)} pro Monat</span>}
-          </div>
+        <div className="ss-product-list-costs">
+          <strong>{formatEur(price)}</strong>
+          {monthlyPrice !== null && <span>{formatEur(monthlyPrice)} pro Monat</span>}
+        </div>
 
+        <div className="ss-product-list-actions-panel ss-product-list-actions-stack">
+          {shopHref && (
+            <a
+              href={shopHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              aria-label={`${buttonText}: ${name}`}
+              className="ss-product-list-buy"
+            >
+              <ExternalLink size={14} />
+              <span>{buttonText}</span>
+            </a>
+          )}
+          {!shopHref && onReportMissingLink && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onReportMissingLink(product, reportReason); }}
+              aria-label={`Fehlenden oder defekten Link melden: ${name}`}
+              className="ss-product-list-report"
+            >
+              <Flag size={14} />
+              <span>Link melden</span>
+            </button>
+          )}
           <div className="ss-product-list-actions">
-            {shopHref && (
-              <a
-                href={shopHref}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                aria-label={`${buttonText}: ${name}`}
-                className="ss-product-list-buy"
-              >
-                <ExternalLink size={14} />
-                <span>{buttonText}</span>
-              </a>
-            )}
-            {!shopHref && onReportMissingLink && (
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); onReportMissingLink(product, reportReason); }}
-                aria-label={`Fehlenden oder defekten Link melden: ${name}`}
-                className="ss-product-list-report"
-              >
-                <Flag size={14} />
-                <span>Link melden</span>
-              </button>
-            )}
             {onEdit && (
               <button
                 type="button"
@@ -597,69 +702,64 @@ export default function ProductCard({
         </div>
       )}
 
-      {/* Ingredient safety warnings */}
-      {product.warnings && product.warnings.length > 0 && (
-        <div className="ss-product-card-warnings mb-2.5 flex flex-wrap gap-1.5">
-          {product.warnings.map((safetyWarning) => {
-            const isOpen = openSafetyWarningId === safetyWarning.id;
-            const popoverId = `safety-warning-${product.id}-${safetyWarning.id}`;
+      {/* Compact warning */}
+      {compactWarnings.length > 0 && (
+        <div className="ss-product-card-compact-warnings mb-2.5">
+          {compactWarnings.map((compactWarning, index) => {
+            const itemKey = `card-${product.id}-${index}`;
+            const isOpen = openWarningKey === itemKey;
             return (
-              <span
-                key={safetyWarning.id}
-                className={`group relative inline-flex max-w-full items-center gap-1.5 rounded-full border px-2 py-1 text-[11px] font-extrabold ${SAFETY_WARNING_STYLES[safetyWarning.severity]}`}
+              <div
+                key={itemKey}
+                className={`ss-product-card-compact-warning ss-product-warning-summary ss-product-warning-severity-${compactWarning.severity}`}
+                data-warning-severity={compactWarning.severity}
                 onClick={(e) => e.stopPropagation()}
                 onBlur={(e) => {
                   if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
-                    setOpenSafetyWarningId(null);
+                    setOpenWarningKey((current) => (current === itemKey ? null : current));
                   }
                 }}
               >
-                <span className="truncate">{safetyWarning.short_label}</span>
-                <button
-                  type="button"
-                  aria-label={`Mehr Informationen: ${safetyWarning.short_label}`}
-                  aria-expanded={isOpen}
-                  aria-describedby={popoverId}
-                  className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-white/70 focus:outline-none focus:ring-2 focus:ring-current focus:ring-offset-1"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setOpenSafetyWarningId(isOpen ? null : safetyWarning.id);
-                  }}
-                  onFocus={() => setOpenSafetyWarningId(safetyWarning.id)}
-                >
-                  <Info size={13} />
-                </button>
-                {safetyWarning.article_url && (
-                  <Link
-                    to={safetyWarning.article_url}
-                    aria-label={safetyWarning.article_title ?? 'Wissensartikel \u00f6ffnen'}
-                    title={safetyWarning.article_title ?? 'Wissensartikel \u00f6ffnen'}
-                    className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-colors hover:bg-white/70 focus:outline-none focus:ring-2 focus:ring-current focus:ring-offset-1"
-                    onClick={(e) => e.stopPropagation()}
+                <AlertTriangle size={13} className="shrink-0" />
+                <strong>Achtung</strong>
+                <span>{compactWarning.label}</span>
+                {(compactWarning.detail || compactWarning.articleUrl) && (
+                  <button
+                    type="button"
+                    aria-label={`Mehr Informationen: ${compactWarning.label}`}
+                    aria-expanded={isOpen}
+                    aria-describedby={`product-card-warning-${product.id}-${index}`}
+                    className="ss-product-warning-info"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setOpenWarningKey((current) => (current === itemKey ? null : itemKey));
+                    }}
+                    onFocus={() => setOpenWarningKey(itemKey)}
                   >
-                    <BookOpen size={13} />
-                  </Link>
+                    <Info size={13} />
+                  </button>
                 )}
-                <span
-                  id={popoverId}
-                  role="tooltip"
-                  className={`absolute left-0 top-full z-30 mt-2 w-[260px] max-w-[calc(100vw-3rem)] rounded-xl border border-slate-200 bg-white p-3 text-left text-[12px] font-semibold leading-relaxed text-slate-700 shadow-xl transition-all group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100 ${
-                    isOpen ? 'pointer-events-auto translate-y-0 opacity-100' : 'pointer-events-none translate-y-1 opacity-0'
-                  }`}
-                >
-                  {safetyWarning.popover_text}
-                </span>
-              </span>
+                {(compactWarning.detail || compactWarning.articleUrl) && (
+                  <span
+                    id={`product-card-warning-${product.id}-${index}`}
+                    role="tooltip"
+                    className={`ss-product-warning-detail ${isOpen ? 'open' : ''}`}
+                  >
+                    {compactWarning.detail && <span>{compactWarning.detail}</span>}
+                    {compactWarning.articleUrl && (
+                      <Link
+                        to={compactWarning.articleUrl}
+                        onClick={(e) => e.stopPropagation()}
+                        className="ss-product-warning-link"
+                      >
+                        {compactWarning.articleTitle ?? 'Mehr lesen'}
+                      </Link>
+                    )}
+                  </span>
+                )}
+              </div>
             );
           })}
-        </div>
-      )}
-
-      {/* Compact warning */}
-      {cardWarningLabel && (
-        <div className="ss-product-card-compact-warning mb-2.5">
-          <AlertTriangle size={13} className="shrink-0" />
-          <span>{cardWarningLabel}</span>
         </div>
       )}
 
@@ -715,6 +815,7 @@ export default function ProductCard({
           <button
             onClick={(e) => { e.stopPropagation(); onDelete(); }}
             aria-label="Produkt entfernen"
+            title="Produkt entfernen"
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] transition-colors"
             style={{ background: '#fee2e2', border: '1.5px solid #fca5a5', color: '#dc2626' }}
             onMouseEnter={(e) => { e.currentTarget.style.background = '#fecaca'; e.currentTarget.style.borderColor = '#f87171'; }}

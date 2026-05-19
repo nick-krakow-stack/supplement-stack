@@ -1,6 +1,29 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+
+const SS_DEMO_STACK_HANDOFF_KEY = 'ss_demo_stack_handoff_v1';
+const DEMO_STACK_HANDOFF_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+function hasDemoStackHandoff(): boolean {
+  try {
+    const raw = window.localStorage.getItem(SS_DEMO_STACK_HANDOFF_KEY);
+    if (!raw) return false;
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return false;
+    const candidate = parsed as { version?: unknown; source?: unknown; created_at?: unknown; stacks?: unknown };
+    if (candidate.version !== 1 || candidate.source !== 'demo' || !Array.isArray(candidate.stacks)) return false;
+    const createdAt = typeof candidate.created_at === 'string' ? Date.parse(candidate.created_at) : Number.NaN;
+    if (!Number.isFinite(createdAt) || Date.now() - createdAt > DEMO_STACK_HANDOFF_MAX_AGE_MS) {
+      window.localStorage.removeItem(SS_DEMO_STACK_HANDOFF_KEY);
+      window.sessionStorage.removeItem(SS_DEMO_STACK_HANDOFF_KEY);
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function getAuthRedirect(location: ReturnType<typeof useLocation>): string {
   const state = location.state as { from?: { pathname?: string }; redirect?: string } | null;
@@ -21,6 +44,16 @@ export default function RegisterPage() {
   const [healthConsent, setHealthConsent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const demoStackHandoffAvailable = hasDemoStackHandoff();
+
+  useEffect(() => {
+    if (!demoStackHandoffAvailable) return;
+    try {
+      window.sessionStorage.setItem(SS_DEMO_STACK_HANDOFF_KEY, JSON.stringify({ pending: true }));
+    } catch {
+      // Keep registration usable when storage is unavailable.
+    }
+  }, [demoStackHandoffAvailable]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,10 +67,12 @@ export default function RegisterPage() {
         age: Number.isFinite(ageNum) ? (ageNum as number) : undefined,
         guideline_source: guidelineSource === '' ? undefined : guidelineSource,
       });
+      const redirect = demoStackHandoffAvailable ? '/stacks' : getAuthRedirect(location);
       navigate('/verify-email', {
         replace: true,
         state: {
-          redirect: getAuthRedirect(location),
+          redirect,
+          demoStackHandoffKey: demoStackHandoffAvailable ? SS_DEMO_STACK_HANDOFF_KEY : undefined,
           message: result.message,
           emailVerificationEmailSent: result.emailVerificationEmailSent,
         },
