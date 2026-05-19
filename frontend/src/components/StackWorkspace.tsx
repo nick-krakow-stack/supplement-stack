@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import type { FormEvent } from 'react';
+import type { ChangeEvent, FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
@@ -1293,14 +1293,6 @@ function IconPlus() {
     </svg>
   );
 }
-function IconStackPlus() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-      <rect x="1.5" y="1.5" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.5" />
-      <path d="M4.5 6.5h4M6.5 4.5v4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-    </svg>
-  );
-}
 function IconPencil() {
   return (
     <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
@@ -1352,6 +1344,7 @@ function IconChevron() {
 
 const HEADER_VARIANT: StacksHeaderVariant = 'warm';
 const STACK_PRODUCT_VIEW_KEY = 'supplement-stack-product-view';
+const CREATE_STACK_SELECT_VALUE = '__create_stack__';
 
 function loadProductViewMode(): ProductViewMode {
   if (typeof window === 'undefined') return 'grid';
@@ -1850,6 +1843,18 @@ export function StackWorkspace({
     }));
   }, [mode, state.stacks.length]);
 
+  const handleStackSelectChange = useCallback(
+    (event: ChangeEvent<HTMLSelectElement>) => {
+      const nextStackId = event.target.value;
+      if (nextStackId === CREATE_STACK_SELECT_VALUE) {
+        void handleCreateStack();
+        return;
+      }
+      setState((prev) => ({ ...prev, activeStackId: nextStackId }));
+    },
+    [handleCreateStack],
+  );
+
   const handleDeleteStack = useCallback(
     async (id: string) => {
       if (state.stacks.length <= 1) {
@@ -2338,25 +2343,19 @@ export function StackWorkspace({
             <select
               className="stack-select"
               value={state.activeStackId}
-              onChange={(e) =>
-                setState((prev) => ({ ...prev, activeStackId: e.target.value }))
-              }
+              onChange={handleStackSelectChange}
             >
               {state.stacks.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.name} ({s.products.length} Produkte)
                 </option>
               ))}
+              <option value={CREATE_STACK_SELECT_VALUE}>Neuen Stack anlegen</option>
             </select>
             <span className="stack-select-arrow">
               <IconChevron />
             </span>
           </div>
-
-          <button className="ss-btn ss-btn-indigo" onClick={() => void handleCreateStack()}>
-            <IconStackPlus />
-            Stack erstellen
-          </button>
 
           <button
             className="ss-btn ss-btn-outline"

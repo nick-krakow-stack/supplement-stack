@@ -236,6 +236,11 @@ function assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSo
   assertSourceIncludes(stackWorkspaceSource, 'ss-toolbar-primary-action', 'far-right toolbar add-product action');
   assertSourceIncludes(stackWorkspaceSource, 'stack-cockpit-user', 'stack hero user identity slot');
   assertSourceExcludes(stackWorkspaceSource, 'Mein Stack', 'old stack hero label fallback');
+  assertSourceExcludes(stackWorkspaceSource, 'Stack erstellen', 'separate toolbar create-stack button copy');
+  assertSourceExcludes(stackWorkspaceSource, '<IconStackPlus />', 'separate toolbar create-stack icon');
+  assertSourceIncludes(stackWorkspaceSource, 'Neuen Stack anlegen', 'create-stack dropdown option');
+  assertSourceIncludes(stackWorkspaceSource, 'CREATE_STACK_SELECT_VALUE', 'sentinel value for create-stack dropdown option');
+  assertSourceIncludes(stackWorkspaceSource, 'handleStackSelectChange', 'stack dropdown create/select handler');
 }
 
 function assertProductCardStaticChecks(productCardSource, stylesSource) {
