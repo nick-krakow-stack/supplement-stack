@@ -1733,6 +1733,116 @@ function ConfirmDeleteProductModal({
   );
 }
 
+function CategoryCreateModal({
+  draft,
+  status,
+  isBusy,
+  onDraftChange,
+  onSubmit,
+  onClose,
+}: {
+  draft: string;
+  status: string;
+  isBusy: boolean;
+  onDraftChange: (value: string) => void;
+  onSubmit: () => Promise<void>;
+  onClose: () => void;
+}) {
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (isBusy) return;
+    await onSubmit();
+  };
+
+  return (
+    <div className="ss-modal-overlay" role="dialog" aria-modal="true" onClick={onClose}>
+      <form className="ss-modal" onSubmit={submit} onClick={(event) => event.stopPropagation()}>
+        <div className="ss-modal-header">
+          <h3 className="ss-modal-title">Neue Kategorie</h3>
+          <button type="button" className="ss-modal-close" onClick={onClose} aria-label="Schließen">
+            ×
+          </button>
+        </div>
+        <label className="ss-modal-label">
+          Kategorie-Name
+          <input
+            value={draft}
+            onChange={(event) => onDraftChange(event.target.value)}
+            className="ss-modal-input mt-2"
+            placeholder="z. B. Basis-Supplements"
+            maxLength={80}
+            disabled={isBusy}
+          />
+        </label>
+        {status && <p className="ss-modal-copy text-red-700">{status}</p>}
+        <div className="ss-modal-actions">
+          <button type="button" className="ss-modal-btn-cancel" onClick={onClose}>
+            Abbrechen
+          </button>
+          <button type="submit" className="ss-modal-btn-save" disabled={isBusy}>
+            Erstellen
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function CategoryRenameModal({
+  draft,
+  status,
+  isBusy,
+  onDraftChange,
+  onSubmit,
+  onClose,
+}: {
+  draft: string;
+  status: string;
+  isBusy: boolean;
+  onDraftChange: (value: string) => void;
+  onSubmit: () => Promise<void>;
+  onClose: () => void;
+}) {
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (isBusy) return;
+    await onSubmit();
+  };
+
+  return (
+    <div className="ss-modal-overlay" role="dialog" aria-modal="true" onClick={onClose}>
+      <form className="ss-modal" onSubmit={submit} onClick={(event) => event.stopPropagation()}>
+        <div className="ss-modal-header">
+          <h3 className="ss-modal-title">Kategorie umbenennen</h3>
+          <button type="button" className="ss-modal-close" onClick={onClose} aria-label="Schließen">
+            ×
+          </button>
+        </div>
+        <label className="ss-modal-label">
+          Neuer Name
+          <input
+            value={draft}
+            onChange={(event) => onDraftChange(event.target.value)}
+            className="ss-modal-input mt-2"
+            placeholder="Neuer Kategoriename"
+            maxLength={80}
+            disabled={isBusy}
+          />
+        </label>
+        {status && <p className="ss-modal-copy text-red-700">{status}</p>}
+        <div className="ss-modal-actions">
+          <button type="button" className="ss-modal-btn-cancel" onClick={onClose}>
+            Abbrechen
+          </button>
+          <button type="submit" className="ss-modal-btn-save" disabled={isBusy}>
+            Speichern
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Icons used in toolbar
 // ---------------------------------------------------------------------------
@@ -1843,6 +1953,10 @@ export function StackWorkspace({
   const [deleteProductKey, setDeleteProductKey] = useState<string | null>(null);
   const [categoryDraft, setCategoryDraft] = useState('');
   const [categoryStatus, setCategoryStatus] = useState('');
+  const [isCategoryCreateModalOpen, setIsCategoryCreateModalOpen] = useState(false);
+  const [renamingCategory, setRenamingCategory] = useState<StackCategory | null>(null);
+  const [categoryRenameDraft, setCategoryRenameDraft] = useState('');
+  const [isCategoryActionBusy, setIsCategoryActionBusy] = useState(false);
   const [draggingProductKey, setDraggingProductKey] = useState<string | null>(null);
   const [productLayoutPreviewProducts, setProductLayoutPreviewProducts] = useState<DemoProduct[] | null>(null);
   const productItemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -2828,7 +2942,13 @@ export function StackWorkspace({
   const productsCount = activeProducts.length;
   const allSelected = productsCount > 0 && selectedIds.size === productsCount;
   const hasOpenModal =
-    addModalOpen || editModalOpen || editingProductKey !== null || replaceProductKey !== null || deleteProductKey !== null;
+    addModalOpen ||
+    editModalOpen ||
+    isCategoryCreateModalOpen ||
+    renamingCategory !== null ||
+    editingProductKey !== null ||
+    replaceProductKey !== null ||
+    deleteProductKey !== null;
   const bottomBarVisible = productsCount > 0 && !hasOpenModal;
 
   useEffect(() => {
@@ -3149,13 +3269,51 @@ export function StackWorkspace({
     event.stopPropagation();
   }, []);
 
+  const openCreateCategoryModal = useCallback(() => {
+    if (productCategoryMode !== 'custom') return;
+    if (loading) {
+      setCategoryStatus('Bitte warte einen Moment, der Stack wird geladen.');
+      return;
+    }
+    if (!activeStack) {
+      setCategoryStatus('Bitte warte einen Moment, die Stack-Daten sind noch nicht bereit.');
+      return;
+    }
+    setCategoryDraft('');
+    setCategoryStatus('');
+    setIsCategoryCreateModalOpen(true);
+  }, [activeStack, loading, productCategoryMode]);
+
+  const closeCreateCategoryModal = useCallback(() => {
+    setIsCategoryCreateModalOpen(false);
+    setCategoryDraft('');
+    setCategoryStatus('');
+    setIsCategoryActionBusy(false);
+  }, []);
+
+  const openRenameCategoryModal = useCallback((category: StackCategory) => {
+    if (!activeStack || category.is_default || productCategoryMode !== 'custom') return;
+    setRenamingCategory(category);
+    setCategoryRenameDraft(category.name);
+    setCategoryStatus('');
+    setIsCategoryActionBusy(false);
+  }, [activeStack, productCategoryMode]);
+
+  const closeRenameCategoryModal = useCallback(() => {
+    setRenamingCategory(null);
+    setCategoryRenameDraft('');
+    setCategoryStatus('');
+    setIsCategoryActionBusy(false);
+  }, []);
+
   const handleCreateCategory = useCallback(async () => {
-    if (!activeStack || productCategoryMode !== 'custom') return;
+    if (!activeStack || productCategoryMode !== 'custom' || isCategoryActionBusy) return;
     const name = categoryDraft.trim();
     if (!name) {
       setCategoryStatus('Bitte einen Kategorienamen eingeben.');
       return;
     }
+    setIsCategoryActionBusy(true);
     const nextSortOrder = activeCategories.length;
     const localCategory: StackCategory = {
       id: `local-category-${Date.now()}`,
@@ -3165,8 +3323,8 @@ export function StackWorkspace({
       is_default: false,
     };
 
-    if (mode === 'authenticated') {
-      try {
+    try {
+      if (mode === 'authenticated') {
         const created = await createStackCategory(activeStack.id, { name, sort_order: nextSortOrder });
         setActiveStackCategories([...activeCategories, {
           id: created.id,
@@ -3175,55 +3333,60 @@ export function StackWorkspace({
           sort_order: created.sort_order,
           is_default: created.is_default,
         }]);
-        setCategoryDraft('');
-        setCategoryStatus('');
-        return;
-      } catch (err) {
-        setCategoryStatus(err instanceof Error ? err.message : 'Kategorie konnte nicht erstellt werden.');
-        return;
+      } else {
+        setActiveStackCategories([...activeCategories, localCategory]);
       }
+      setIsCategoryCreateModalOpen(false);
+      setCategoryDraft('');
+      setCategoryStatus('');
+    } catch (err) {
+      setCategoryStatus(err instanceof Error ? err.message : 'Kategorie konnte nicht erstellt werden.');
+    } finally {
+      setIsCategoryActionBusy(false);
     }
+  }, [activeCategories, activeStack, categoryDraft, isCategoryActionBusy, mode, productCategoryMode, setActiveStackCategories]);
 
-    setActiveStackCategories([...activeCategories, localCategory]);
-    setCategoryDraft('');
-    setCategoryStatus('');
-  }, [activeCategories, activeStack, categoryDraft, mode, productCategoryMode, setActiveStackCategories]);
+  const handleRenameCategory = useCallback(async () => {
+    if (!activeStack || !renamingCategory || productCategoryMode !== 'custom' || isCategoryActionBusy) return;
+    if (renamingCategory.is_default) return;
+    const nextName = categoryRenameDraft.trim();
+    if (!nextName) {
+      setCategoryStatus('Bitte einen Kategorienamen eingeben.');
+      return;
+    }
+    if (nextName === renamingCategory.name.trim()) {
+      closeRenameCategoryModal();
+      return;
+    }
+    setIsCategoryActionBusy(true);
 
-  const handleRenameCategory = useCallback(async (category: StackCategory) => {
-    if (!activeStack || productCategoryMode !== 'custom') return;
-    const currentName = category.name.trim();
-    const nextNameRaw = window.prompt('Kategorie umbenennen', currentName);
-    if (nextNameRaw == null) return;
-    const nextName = nextNameRaw.trim();
-    if (!nextName || nextName === currentName) return;
-
-    if (mode === 'authenticated' && toApiCategoryId(category.id) !== undefined) {
-      try {
-        const updated = await updateStackCategory(activeStack.id, category.id, { name: nextName });
+    try {
+      if (mode === 'authenticated' && toApiCategoryId(renamingCategory.id) !== undefined) {
+        const updated = await updateStackCategory(activeStack.id, renamingCategory.id, { name: nextName });
         setActiveStackCategories(
           activeCategories.map((entry) => (
-            normalizedCategoryId(entry.id) === normalizedCategoryId(category.id)
+            normalizedCategoryId(entry.id) === normalizedCategoryId(renamingCategory.id)
               ? { ...entry, name: updated.name }
               : entry
           )),
         );
-        setCategoryStatus('');
-        return;
-      } catch (err) {
-        setCategoryStatus(err instanceof Error ? err.message : 'Kategorie konnte nicht umbenannt werden.');
-        return;
+      } else {
+        setActiveStackCategories(
+          activeCategories.map((entry) => (
+            normalizedCategoryId(entry.id) === normalizedCategoryId(renamingCategory.id)
+              ? { ...entry, name: nextName }
+              : entry
+          )),
+        );
       }
+      setCategoryStatus('');
+      closeRenameCategoryModal();
+    } catch (err) {
+      setCategoryStatus(err instanceof Error ? err.message : 'Kategorie konnte nicht umbenannt werden.');
+    } finally {
+      setIsCategoryActionBusy(false);
     }
-
-    setActiveStackCategories(
-      activeCategories.map((entry) => (
-        normalizedCategoryId(entry.id) === normalizedCategoryId(category.id)
-          ? { ...entry, name: nextName }
-          : entry
-      )),
-    );
-    setCategoryStatus('');
-  }, [activeCategories, activeStack, mode, productCategoryMode, setActiveStackCategories]);
+  }, [activeCategories, activeStack, categoryRenameDraft, isCategoryActionBusy, mode, productCategoryMode, renamingCategory, setActiveStackCategories, closeRenameCategoryModal]);
 
   const handleDeleteCategory = useCallback(async (category: StackCategory) => {
     if (!activeStack || category.is_default || productCategoryMode !== 'custom') return;
@@ -3693,6 +3856,18 @@ export function StackWorkspace({
                     <Pencil size={16} />
                   </button>
                 )}
+                {productCategoryMode === 'custom' && (
+                  <button
+                    type="button"
+                    className="ss-layout-edit-toggle-btn ss-category-create-btn"
+                    onClick={openCreateCategoryModal}
+                    disabled={loading || !activeStack || isCategoryActionBusy}
+                    aria-label="Neue Kategorie"
+                    title="Neue Kategorie"
+                  >
+                    <Plus size={16} />
+                  </button>
+                )}
               </div>
             </div>
             <div className="ss-control-group">
@@ -3770,24 +3945,6 @@ export function StackWorkspace({
 
         {!loading && (activeProducts.length > 0 || productCategoryMode === 'custom') && (
           <>
-            {productCategoryMode === 'custom' && (
-              <div className="ss-category-toolbar" role="group" aria-label="Eigene Kategorien verwalten">
-                <input
-                  type="text"
-                  value={categoryDraft}
-                  onChange={(event) => setCategoryDraft(event.target.value)}
-                  placeholder="Neue Kategorie"
-                  className="ss-category-input"
-                  aria-label="Neue Kategorie"
-                />
-                <button type="button" className="ss-btn ss-btn-outline ss-category-add" onClick={() => void handleCreateCategory()}>
-                  <Plus size={15} />
-                  Kategorie
-                </button>
-                {categoryStatus && <span className="ss-category-status">{categoryStatus}</span>}
-              </div>
-            )}
-
             <div className={['ss-product-sections', isProductLayoutEditMode ? 'ss-product-layout-edit-active' : ''].filter(Boolean).join(' ')}>
               {productSections.map((section) => {
                 const sectionCategory = productCategoryMode === 'custom'
@@ -3820,26 +3977,24 @@ export function StackWorkspace({
                           <h3>{section.heading}</h3>
                           <span>{section.products.length}</span>
                         </div>
-                        {sectionCategory && (
+                        {sectionCategory && isProductLayoutEditMode && !sectionCategory.is_default && (
                           <div className="ss-product-section-actions">
                             <button
                               type="button"
                               className="ss-section-action-btn"
-                              onClick={() => void handleRenameCategory(sectionCategory)}
+                              onClick={() => openRenameCategoryModal(sectionCategory)}
                               aria-label={`Kategorie umbenennen: ${sectionCategory.name}`}
                             >
                               <Pencil size={14} />
                             </button>
-                            {!sectionCategory.is_default && (
-                              <button
-                                type="button"
-                                className="ss-section-action-btn ss-section-action-btn-danger"
-                                onClick={() => void handleDeleteCategory(sectionCategory)}
-                                aria-label={`Kategorie löschen: ${sectionCategory.name}`}
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            )}
+                            <button
+                              type="button"
+                              className="ss-section-action-btn ss-section-action-btn-danger"
+                              onClick={() => void handleDeleteCategory(sectionCategory)}
+                              aria-label={`Kategorie löschen: ${sectionCategory.name}`}
+                            >
+                              <Trash2 size={14} />
+                            </button>
                           </div>
                         )}
                       </div>
@@ -4015,6 +4170,28 @@ export function StackWorkspace({
             setAddModalOpen(false);
             setReplaceProductKey(productKey);
           }}
+        />
+      )}
+
+      {isCategoryCreateModalOpen && (
+        <CategoryCreateModal
+          draft={categoryDraft}
+          status={categoryStatus}
+          isBusy={isCategoryActionBusy}
+          onDraftChange={setCategoryDraft}
+          onSubmit={handleCreateCategory}
+          onClose={closeCreateCategoryModal}
+        />
+      )}
+
+      {renamingCategory && (
+        <CategoryRenameModal
+          draft={categoryRenameDraft}
+          status={categoryStatus}
+          isBusy={isCategoryActionBusy}
+          onDraftChange={setCategoryRenameDraft}
+          onSubmit={handleRenameCategory}
+          onClose={closeRenameCategoryModal}
         />
       )}
 

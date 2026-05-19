@@ -181,6 +181,20 @@ function assertSourceExcludes(source, forbidden, description) {
   }
 }
 
+function assertSourceMatches(source, pattern, description) {
+  if (!pattern.test(source)) {
+    throw new Error(`Expected ${description}: ${pattern}`);
+  }
+}
+
+function extractSourceAfter(source, marker, maxChars = 2000) {
+  const start = source.indexOf(marker);
+  if (start === -1) {
+    throw new Error(`Expected source marker not found: ${marker}`);
+  }
+  return source.slice(start, start + maxChars);
+}
+
 function assertToolbarSource(stackWorkspaceSource) {
   const startMarker = '<div className="ss-toolbar">';
   const endMarker = '{activeDescription && (';
@@ -339,6 +353,65 @@ function assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSo
   assertSourceIncludes(stackWorkspaceSource, 'createStackCategory', 'authenticated custom category create endpoint usage');
   assertSourceIncludes(stackWorkspaceSource, 'updateStackCategory', 'authenticated custom category rename endpoint usage');
   assertSourceIncludes(stackWorkspaceSource, 'deleteStackCategory', 'authenticated custom category delete endpoint usage');
+  assertSourceExcludes(stackWorkspaceSource, 'ss-category-toolbar', 'always-visible custom category toolbar row');
+  assertSourceMatches(
+    stackWorkspaceSource,
+    /productCategoryMode\s*===\s*['"]custom['"][\s\S]{0,220}ss-category-create-btn/,
+    'category create control is only shown in custom category mode',
+  );
+  assertSourceMatches(
+    stackWorkspaceSource,
+    /onSubmit=\{handleCreateCategory\}|onSubmit=\{\s*handleCreateCategory\s*\}/,
+    'category create modal submit path exists',
+  );
+  assertSourceMatches(
+    stackWorkspaceSource,
+    /disabled=\{[^}]*loading[^}]*activeStack[^}]*isCategoryActionBusy/,
+    'category create control is disabled while creating/loading',
+  );
+  assertSourceMatches(
+    stackWorkspaceSource,
+    /openCreateCategoryModal\(\)|\{openCreateCategoryModal\}/,
+    'category create modal open path exists',
+  );
+  assertSourceMatches(
+    stackWorkspaceSource,
+    /openRenameCategoryModal\(sectionCategory\)/,
+    'category rename modal is opened from editable section actions',
+  );
+  assertSourceIncludes(stackWorkspaceSource, 'sectionCategory && isProductLayoutEditMode && !sectionCategory.is_default', 'non-default section actions are only shown in edit mode');
+  const openRenameCategoryModalSource = extractSourceAfter(stackWorkspaceSource, 'const openRenameCategoryModal = useCallback');
+  assertSourceMatches(
+    openRenameCategoryModalSource,
+    /category\.is_default/,
+    'rename flow blocks default categories',
+  );
+  assertSourceMatches(
+    openRenameCategoryModalSource,
+    /productCategoryMode\s*!==\s*['"]custom['"]/,
+    'rename flow checks custom category mode',
+  );
+  assertSourceMatches(
+    openRenameCategoryModalSource,
+    /!activeStack/,
+    'rename flow checks active stack readiness',
+  );
+  const handleDeleteCategorySource = extractSourceAfter(stackWorkspaceSource, 'const handleDeleteCategory = useCallback');
+  assertSourceMatches(
+    handleDeleteCategorySource,
+    /category\.is_default/,
+    'delete flow blocks default categories',
+  );
+  assertSourceMatches(
+    handleDeleteCategorySource,
+    /productCategoryMode\s*!==\s*['"]custom['"]/,
+    'delete flow checks custom category mode',
+  );
+  assertSourceMatches(
+    handleDeleteCategorySource,
+    /!activeStack/,
+    'delete flow checks active stack readiness',
+  );
   assertSourceIncludes(stackWorkspaceSource, 'updateStackItemsLayout', 'authenticated custom layout endpoint usage');
   assertSourceIncludes(stackWorkspaceSource, 'missingStackItemId', 'layout persistence guard for missing stack_item_id');
   assertSourceIncludes(stackWorkspaceSource, 'prepareProductsForAuthenticatedImport', 'demo handoff import category remap helper');
@@ -377,6 +450,37 @@ function assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSo
   assertSourceIncludes(stylesSource, '.ss-control-group', 'control block styles');
   assertSourceIncludes(stylesSource, '.ss-control-group-label', 'control group label styles');
   assertSourceIncludes(stylesSource, '.ss-control-group-row', 'compact sort/group row styles');
+  assertSourceIncludes(stylesSource, '.ss-product-list-media-caption', 'list media caption styles');
+  const productListCaptionStyles = stylesSource.match(/\.ss-product-list-media-caption\s*\{[\s\S]*?\}/)?.[0] ?? '';
+  if (/text-overflow\s*:\s*ellipsis/.test(productListCaptionStyles)) {
+    throw new Error('Expected .ss-product-list-media-caption not to use ellipsis truncation.');
+  }
+  if (/white-space\s*:\s*nowrap/.test(productListCaptionStyles)) {
+    throw new Error('Expected .ss-product-list-media-caption to allow timing label wraps.');
+  }
+  if (!/overflow-wrap\s*:\s*break-word/.test(productListCaptionStyles)) {
+    throw new Error('Expected .ss-product-list-media-caption to use non-aggressive word wrapping.');
+  }
+  if (!/word-break\s*:\s*normal/.test(productListCaptionStyles)) {
+    throw new Error('Expected .ss-product-list-media-caption to keep default word-break behavior.');
+  }
+  if (!/hyphens\s*:\s*auto/.test(productListCaptionStyles)) {
+    throw new Error('Expected .ss-product-list-media-caption to enable German-friendly hyphenation.');
+  }
+  assertSourceIncludes(stylesSource, '.ss-product-timing-label', 'timing labels use shared wrapping helper');
+  const timingLabelStyles = stylesSource.match(/\.ss-product-timing-label\s*\{[\s\S]*?\}/)?.[0] ?? '';
+  if (!/white-space\s*:\s*normal/.test(timingLabelStyles)) {
+    throw new Error('Expected .ss-product-timing-label to use normal white-space.');
+  }
+  if (!/overflow-wrap\s*:\s*break-word/.test(timingLabelStyles)) {
+    throw new Error('Expected .ss-product-timing-label to use non-aggressive word wrapping.');
+  }
+  if (!/word-break\s*:\s*normal/.test(timingLabelStyles)) {
+    throw new Error('Expected .ss-product-timing-label to keep default word-break behavior.');
+  }
+  if (!/hyphens\s*:\s*auto/.test(timingLabelStyles)) {
+    throw new Error('Expected .ss-product-timing-label to enable German-friendly hyphenation.');
+  }
   assertSourceIncludes(stylesSource, '.ss-product-layout-editable-item', 'product card edit mode visual styles');
   assertSourceIncludes(stylesSource, '.ss-product-layout-edit-active', 'edit-mode overlay scope styles');
   assertSourceIncludes(stylesSource, '.ss-product-layout-edit-overlay', 'transparent edit-mode overlay styles');
@@ -513,6 +617,7 @@ function assertProductCardStaticChecks(productCardSource, stylesSource) {
     'ModalWrapper onClose',
     'Achtung',
     'title="Produkt entfernen"',
+    'ss-product-timing-label',
   ];
   const requiredCodeMarkers = [
     'function getListDoseFallback',
@@ -555,6 +660,8 @@ function assertProductCardStaticChecks(productCardSource, stylesSource) {
     '.ss-product-list-content',
     '.ss-product-list-main',
     '.ss-product-list-price',
+    '.ss-product-timing-label',
+    '.ss-product-list-media-caption',
     '.ss-product-warning-severity-danger',
     '.ss-product-warning-severity-caution',
     '.ss-product-warning-severity-info',

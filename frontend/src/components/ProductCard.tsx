@@ -563,7 +563,7 @@ export default function ProductCard({
               <span>{emoji}</span>
             )}
           </div>
-          <span className="ss-product-list-media-caption">{timingLabel}</span>
+          <span className="ss-product-list-media-caption ss-product-timing-label">{timingLabel}</span>
         </div>
 
         <div className="ss-product-list-content">
@@ -798,7 +798,9 @@ export default function ProductCard({
           <div className="text-[13.5px] font-extrabold text-slate-900 leading-snug mb-1.5">
             {name}
           </div>
-          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-extrabold ${timing.cls}`}>
+          <span
+            className={`ss-product-timing-label inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-extrabold ${timing.cls}`}
+          >
             {timingLabel}
           </span>
           {recommendationType && (
