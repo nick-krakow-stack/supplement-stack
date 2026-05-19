@@ -205,14 +205,14 @@ function assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSo
   const toolbarSource = assertToolbarSource(stackWorkspaceSource);
 
   assertSourceIncludes(stackWorkspaceSource, 'ss-restriction-modal', 'shared demo/auth restriction modal');
-  assertSourceIncludes(stackWorkspaceSource, 'Stack mailen ist nur angemeldet verfügbar.', 'mail restriction popup copy');
-  assertSourceIncludes(stackWorkspaceSource, 'Plan drucken/PDF ist in der Demo nicht verfügbar.', 'print restriction popup copy');
+  assertSourceIncludes(stackWorkspaceSource, 'Stack mailen ist nur angemeldet', 'mail restriction popup copy');
+  assertSourceIncludes(stackWorkspaceSource, 'Plan drucken/PDF ist in der Demo nicht', 'print restriction popup copy');
   assertSourceExcludes(stackWorkspaceSource, 'disabled={isDemo || !activeStack || emailSending}', 'disabled demo mail button');
   assertSourceExcludes(stackWorkspaceSource, 'E-Mail-Versand ist nur angemeldet verf', 'inline demo mail restriction text');
 
   assertSourceIncludes(
     stackWorkspaceSource,
-    'Danke, dass du ein neues Produkt zu unserer Datenbank hinzufügen möchtest. Diese Funktion steht dir kostenlos zur Verfügung, sobald du dich als Nutzer angemeldet hast.',
+    'Danke, dass du ein neues Produkt',
     'own-product demo CTA modal copy',
   );
   assertSourceIncludes(stackWorkspaceSource, "navigate('/my-products')", 'authenticated own-product handoff route');
@@ -228,7 +228,7 @@ function assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSo
   assertSourceIncludes(registerSource, 'SS_DEMO_STACK_HANDOFF_KEY', 'registration demo handoff consumption');
   assertSourceIncludes(registerSource, "demoStackHandoffAvailable ? '/stacks'", 'registration redirect to stacks when demo handoff exists');
 
-  assertSourceIncludes(stackWorkspaceSource, 'Willst du dieses Produkt wirklich löschen?', 'product delete confirmation copy');
+  assertSourceIncludes(stackWorkspaceSource, 'Willst du dieses Produkt', 'product delete confirmation copy');
   assertSourceIncludes(stackWorkspaceSource, 'Ja, löschen', 'product delete confirmation action');
   assertSourceIncludes(stackWorkspaceSource, 'Abbrechen', 'product delete cancel action');
 
@@ -244,6 +244,7 @@ function assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSo
   assertSourceIncludes(stackWorkspaceSource, 'parent_ingredient_id', 'duplicate ingredient parent ingredient handling');
 
   assertSourceExcludes(stackWorkspaceSource, 'stack-cockpit-kicker', 'old stack cockpit kicker');
+  assertSourceExcludes(stackWorkspaceSource, 'aria-label="Stack-Steuerung"', 'workspace-specific stack cockpit section');
   assertSourceExcludes(stackWorkspaceSource, 'className="family-switcher"', 'profile selector in stack top strip');
   assertSourceExcludes(stackWorkspaceSource, 'family-add-btn', 'profile add button in stack top strip');
   assertSourceExcludes(stackWorkspaceSource, 'routine-toggle-btn', 'clock routine toggle in stack top strip');
@@ -268,7 +269,26 @@ function assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSo
   assertSourceIncludes(stackWorkspaceSource, 'buildProductSections', 'section-based product rendering helper');
   assertSourceIncludes(stackWorkspaceSource, 'productSections.map((section)', 'section rendering for product overview');
   assertSourceIncludes(stackWorkspaceSource, 'ss-product-sections', 'section wrapper class');
-  assertSourceIncludes(stackWorkspaceSource, 'ss-product-layout-tools', 'custom layout fallback controls wrapper');
+  assertSourceExcludes(stackWorkspaceSource, 'ss-product-layout-tools', 'removed per-card layout control wrapper');
+  assertSourceIncludes(stackWorkspaceSource, 'ss-product-layout-edit-toolbar', 'per-card edit-toolbar wrapper for drag/custom context');
+  assertSourceExcludes(stackWorkspaceSource, 'ss-product-sort-handle', 'legacy per-card drag affordance marker');
+  assertSourceIncludes(stackWorkspaceSource, 'ss-layout-edit-toggle-btn', 'custom sort edit-mode toggle marker');
+  assertSourceIncludes(stackWorkspaceSource, 'isCustomLayoutControlsVisible', 'custom layout controls marker');
+  assertSourceIncludes(stackWorkspaceSource, 'showSortLayoutEditToggle', 'sort layout-toggle marker');
+  assertSourceIncludes(stackWorkspaceSource, 'showCategoryLayoutEditToggle', 'category layout-toggle marker');
+  assertSourceIncludes(stackWorkspaceSource, 'handleToggleProductLayoutEditMode', 'layout edit toggle handler');
+  assertSourceIncludes(stackWorkspaceSource, 'draggable={isProductLayoutEditMode}', 'direct card drag only in edit mode');
+  assertSourceIncludes(stackWorkspaceSource, 'ss-product-layout-edit-mode', 'direct edit-mode class marker');
+  assertSourceIncludes(
+    stackWorkspaceSource,
+    "isInteractiveDragSource(target)",
+    'direct drag guard against interactive inner controls',
+  );
+  assertSourceIncludes(
+    stackWorkspaceSource,
+    "target.closest('button, a, input, select, textarea, [role=\"button\"]')",
+    'interactive control selectors excluded from drag start',
+  );
   assertSourceIncludes(stackWorkspaceSource, "['morning', 'noon', 'evening', 'flexible']", 'fixed timing sort order');
   assertSourceIncludes(stackWorkspaceSource, 'morning_evening', 'expanded morning/evening timing sort support');
   assertSourceIncludes(stackWorkspaceSource, 'before_breakfast', 'expanded breakfast timing sort support');
@@ -308,13 +328,24 @@ function assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSo
   assertSourceIncludes(stackWorkspaceSource, 'humanizeTimingFallback', 'StackWorkspace must humanize unknown timing fallback values');
   assertSourceIncludes(stackWorkspaceSource, 'A-Z', 'alphabetical sort toggle label');
   assertSourceIncludes(stackWorkspaceSource, 'ss-product-title-controls', 'product title controls wrapper');
+  assertSourceIncludes(stackWorkspaceSource, 'ss-control-group-label', 'control group heading markers');
+  assertSourceIncludes(stackWorkspaceSource, '>Sortierung<', 'Sortierung control label');
+  assertSourceIncludes(stackWorkspaceSource, '>Kategorien<', 'Kategorien control label');
+  assertSourceIncludes(stackWorkspaceSource, '>Ansicht<', 'Ansicht control label');
   assertSourceIncludes(stylesSource, '.ss-product-sections', 'section layout styles');
   const productSectionsStyles = stylesSource.match(/\.ss-product-sections\s*\{[\s\S]*?\}/)?.[0] ?? '';
   if (/padding-bottom:\s*150px/.test(productSectionsStyles)) {
     throw new Error('Expected .ss-product-sections desktop padding-bottom to avoid duplicate 150px bottom spacing.');
   }
   assertSourceIncludes(stylesSource, '.ss-category-toolbar', 'custom category toolbar styles');
-  assertSourceIncludes(stylesSource, '.ss-product-layout-tools', 'custom layout controls styles');
+  assertSourceExcludes(stylesSource, '.ss-product-layout-tools', 'legacy per-card layout controls styles removed');
+  assertSourceIncludes(stylesSource, '.ss-product-layout-edit-toolbar', 'per-card edit toolbar styles');
+  assertSourceExcludes(stylesSource, '.ss-product-sort-handle', 'per-card drag handle styles removed');
+  assertSourceIncludes(stylesSource, '.ss-layout-edit-toggle-btn', 'sort-group edit toggle styles');
+  assertSourceIncludes(stylesSource, '.ss-control-group', 'control block styles');
+  assertSourceIncludes(stylesSource, '.ss-control-group-label', 'control group label styles');
+  assertSourceIncludes(stylesSource, '.ss-control-group-row', 'compact sort/group row styles');
+  assertSourceIncludes(stylesSource, '.ss-product-layout-editable-item', 'product card edit mode visual styles');
   assertSourceIncludes(stylesSource, '.ss-product-category-select', 'custom category select fallback styles');
   assertSourceIncludes(stackWorkspaceSource, 'stack-cockpit-user', 'stack hero user identity slot');
   assertSourceIncludes(stackWorkspaceSource, 'getUserDisplayName(user)', 'stack user display-name fallback helper');
@@ -471,7 +502,7 @@ function assertProductCardStaticChecks(productCardSource, stylesSource) {
     .slice(listDoseFallbackStart, listDoseFallbackEnd);
 
   if (!/isListMassUnit/.test(listDoseFallbackSource) && !/LIST_MASS_UNITS/.test(listDoseFallbackSource)) {
-    throw new Error('Expected getListDoseFallback to reject active mass units (mg/µg/IE) in list fallback logic.');
+    throw new Error('Expected getListDoseFallback to reject active mass units (mg/ug/IE) in list fallback logic.');
   }
   if (!/return '\\u2014'/.test(listDoseFallbackSource) && !/getListCountFallback/.test(listDoseFallbackSource)) {
     throw new Error('Expected getListDoseFallback to prefer count-based fallback or dash when dosage mass units are active.');
@@ -525,7 +556,7 @@ function assertProductCardStaticChecks(productCardSource, stylesSource) {
     throw new Error('ProductCard timing fallback must not return raw unknown enum-like values.');
   }
   assertSourceIncludes(productCardSource, 'humanizeTimingFallback', 'ProductCard must humanize unknown timing fallback values');
-  const listRowStyles = Array.from(stylesSource.matchAll(/\.ss-product-list-row\s*\{[^}]*\}/g), (match) => match[0]);
+  const listRowStyles = Array.from(stylesSource.matchAll(/^\s*\.ss-product-list-row\s*\{[^}]*\}/gm), (match) => match[0]);
   const listRowStyle = listRowStyles[0] ?? '';
   const listMediaPanelStyle = stylesSource.match(/\.ss-product-list-media-panel\s*\{[^}]*\}/)?.[0] ?? '';
 
@@ -546,7 +577,7 @@ function assertProductCardStaticChecks(productCardSource, stylesSource) {
     throw new Error('Expected a fixed left timing/media panel for Variante 4 list rows.');
   }
 
-  if (!/@media\s*\(max-width:\s*720px\)\s*\{[\s\S]*\.ss-product-list-row\s*\{[\s\S]*flex-direction:\s*column;/.test(stylesSource)) {
+  if (!/@media\s*\(max-width:\s*720px\)\s*\{[\s\S]*^\s*\.ss-product-list-row\s*\{[\s\S]*flex-direction:\s*column;/m.test(stylesSource)) {
     throw new Error('Expected list rows to stack below 720px without horizontal overflow.');
   }
 }

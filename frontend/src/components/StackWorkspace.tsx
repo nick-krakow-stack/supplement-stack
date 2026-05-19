@@ -3,10 +3,8 @@ import type { ChangeEvent, FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
-  ArrowDown,
   ArrowLeft,
   ArrowRight,
-  ArrowUp,
   Calculator,
   Flag,
   FileText,
@@ -14,7 +12,6 @@ import {
   LayoutGrid,
   List,
   Mail,
-  GripVertical,
   Package,
   Pencil,
   Plus,
@@ -1653,6 +1650,7 @@ const HEADER_VARIANT: StacksHeaderVariant = 'warm';
 const STACK_PRODUCT_VIEW_KEY = 'supplement-stack-product-view';
 const STACK_PRODUCT_SORT_KEY = 'supplement-stack-product-sort';
 const STACK_PRODUCT_CATEGORY_MODE_KEY = 'supplement-stack-product-category-mode';
+const STACK_PRODUCT_LAYOUT_EDIT_MODE_KEY = 'supplement-stack-product-layout-edit-mode';
 const CREATE_STACK_SELECT_VALUE = '__create_stack__';
 
 function loadProductViewMode(): ProductViewMode {
@@ -1670,6 +1668,12 @@ function loadProductCategoryMode(): ProductCategoryMode {
   if (typeof window === 'undefined') return 'none';
   const raw = window.localStorage.getItem(STACK_PRODUCT_CATEGORY_MODE_KEY);
   return raw === 'timing' || raw === 'custom' ? raw : 'none';
+}
+
+function loadProductLayoutEditMode(productSortMode: ProductSortMode, productCategoryMode: ProductCategoryMode): boolean {
+  if (typeof window === 'undefined') return false;
+  if (productSortMode !== 'custom' && productCategoryMode !== 'custom') return false;
+  return window.localStorage.getItem(STACK_PRODUCT_LAYOUT_EDIT_MODE_KEY) === '1';
 }
 
 export function StackWorkspace({
@@ -1700,6 +1704,9 @@ export function StackWorkspace({
   const [productViewMode, setProductViewMode] = useState<ProductViewMode>(loadProductViewMode);
   const [productSortMode, setProductSortMode] = useState<ProductSortMode>(loadProductSortMode);
   const [productCategoryMode, setProductCategoryMode] = useState<ProductCategoryMode>(loadProductCategoryMode);
+  const [isLayoutEditMode, setIsLayoutEditMode] = useState(() =>
+    loadProductLayoutEditMode(loadProductSortMode(), loadProductCategoryMode()),
+  );
   const [managedTimingOptions, setManagedTimingOptions] = useState<IntakeTimingOption[]>([]);
   const [notice, setNotice] = useState<WorkspaceNotice | null>(null);
   const [deleteProductKey, setDeleteProductKey] = useState<string | null>(null);
@@ -1725,6 +1732,31 @@ export function StackWorkspace({
   useEffect(() => {
     window.localStorage.setItem(STACK_PRODUCT_CATEGORY_MODE_KEY, productCategoryMode);
   }, [productCategoryMode]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(STACK_PRODUCT_LAYOUT_EDIT_MODE_KEY, isLayoutEditMode ? '1' : '0');
+  }, [isLayoutEditMode]);
+
+  useEffect(() => {
+    if (productSortMode !== 'custom' && productCategoryMode !== 'custom') {
+      setIsLayoutEditMode(false);
+    }
+  }, [productSortMode, productCategoryMode]);
+
+  const isProductLayoutEditMode = isLayoutEditMode && (productSortMode === 'custom' || productCategoryMode === 'custom');
+  const isCustomLayoutControlsVisible = productSortMode === 'custom' || productCategoryMode === 'custom';
+  const showSortLayoutEditToggle = productSortMode === 'custom';
+  const showCategoryLayoutEditToggle = productCategoryMode === 'custom' && productSortMode !== 'custom';
+
+  const isInteractiveDragSource = useCallback((target: EventTarget | null): boolean => {
+    if (!(target instanceof Element)) return false;
+    return target.closest('button, a, input, select, textarea, [role="button"]') !== null;
+  }, []);
+
+  const handleToggleProductLayoutEditMode = useCallback(() => {
+    setIsLayoutEditMode((current) => !current);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -2213,7 +2245,7 @@ export function StackWorkspace({
     async (familyMemberId: number | null) => {
       if (!activeStack) return;
       if (mode !== 'authenticated') {
-        throw new Error('Familienprofile sind nur angemeldet verfÃ¼gbar.');
+        throw new Error('Familienprofile sind nur angemeldet verfügbar.');
       }
       setFamilyStatus('');
       const res = await credentialedFetch(apiPath(`/stacks/${activeStack.id}`), {
@@ -2893,8 +2925,6 @@ export function StackWorkspace({
     [activeProducts, moveProductTo],
   );
 
-  const customLayoutEnabled = productSortMode === 'custom' || productCategoryMode === 'custom';
-
   const handleSelectAll = () => {
     if (!activeStack) return;
     setSelectedIds((prev) =>
@@ -3218,108 +3248,127 @@ export function StackWorkspace({
           </div>
         )}
 
-        <section className="stack-cockpit" aria-label="Stack-Steuerung">
-          <div className="print-sheet-heading">
-            <strong>Supplement Stack Einnahmeplan</strong>
-            <span>{activeStack?.name ?? 'Stack'}</span>
-          </div>
-          <div className="stack-cockpit-head">
-            <div>
-              <h2>{activeStack?.name ?? 'Stack'}</h2>
-            </div>
-              {cockpitUserLabel && <div className="stack-cockpit-user">{cockpitUserLabel}</div>}
-          </div>
-
-          {linkReportStatus && (
-            <div className="link-report-status">
-              <Flag size={14} />
-              {linkReportStatus}
-            </div>
-          )}
-        </section>
-
         <div className="ss-section-title ss-products-title">
           <span>Supplement Übersicht</span>
           <div className="ss-product-title-controls">
-            <div className="product-view-toggle" role="group" aria-label="Produktsortierung wählen">
-              <button
-                type="button"
-                className={productSortMode === 'az' ? 'active' : ''}
-                onClick={() => setProductSortMode('az')}
-                aria-pressed={productSortMode === 'az'}
-                title="Alphabetisch sortieren"
-              >
-                <span>A-Z</span>
-              </button>
-              <button
-                type="button"
-                className={productSortMode === 'timing' ? 'active' : ''}
-                onClick={() => setProductSortMode('timing')}
-                aria-pressed={productSortMode === 'timing'}
-                title="Nach Tageszeiten sortieren"
-              >
-                <span>Tageszeiten</span>
-              </button>
-              <button
-                type="button"
-                className={productSortMode === 'custom' ? 'active' : ''}
-                onClick={() => setProductSortMode('custom')}
-                aria-pressed={productSortMode === 'custom'}
-                title="Eigene Sortierung"
-              >
-                <span>Eigene</span>
-              </button>
+            <div className="ss-control-group">
+              <span className="ss-control-group-label">Sortierung</span>
+              <div className="ss-control-group-row">
+                <div className="product-view-toggle" role="group" aria-label="Produktsortierung waehlen">
+                  <button
+                    type="button"
+                    className={productSortMode === 'az' ? 'active' : ''}
+                    onClick={() => setProductSortMode('az')}
+                    aria-pressed={productSortMode === 'az'}
+                    title="Alphabetisch sortieren"
+                  >
+                    <span>A-Z</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={productSortMode === 'timing' ? 'active' : ''}
+                    onClick={() => setProductSortMode('timing')}
+                    aria-pressed={productSortMode === 'timing'}
+                    title="Nach Tageszeiten sortieren"
+                  >
+                    <span>Tageszeiten</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={productSortMode === 'custom' ? 'active' : ''}
+                    onClick={() => setProductSortMode('custom')}
+                    aria-pressed={productSortMode === 'custom'}
+                    title="Eigene Sortierung"
+                  >
+                    <span>Eigene</span>
+                  </button>
+                </div>
+                {isCustomLayoutControlsVisible && showSortLayoutEditToggle && (
+                  <button
+                    type="button"
+                    className={`ss-layout-edit-toggle-btn ${isProductLayoutEditMode ? 'active' : ''}`}
+                    onClick={handleToggleProductLayoutEditMode}
+                    aria-pressed={isProductLayoutEditMode}
+                    title={isProductLayoutEditMode ? 'Layout-Bearbeitung beenden' : 'Layout bearbeiten'}
+                    aria-label={isProductLayoutEditMode ? 'Layout-Bearbeitung beenden' : 'Layout bearbeiten'}
+                  >
+                    <Pencil size={16} />
+                  </button>
+                )}
+              </div>
             </div>
-            <div className="product-view-toggle" role="group" aria-label="Produktkategorien wählen">
-              <button
-                type="button"
-                className={productCategoryMode === 'none' ? 'active' : ''}
-                onClick={() => setProductCategoryMode('none')}
-                aria-pressed={productCategoryMode === 'none'}
-                title="Keine Kategorien"
-              >
-                <span>Keine</span>
-              </button>
-              <button
-                type="button"
-                className={productCategoryMode === 'timing' ? 'active' : ''}
-                onClick={() => setProductCategoryMode('timing')}
-                aria-pressed={productCategoryMode === 'timing'}
-                title="Nach Tageszeiten gruppieren"
-              >
-                <span>Tageszeiten</span>
-              </button>
-              <button
-                type="button"
-                className={productCategoryMode === 'custom' ? 'active' : ''}
-                onClick={() => setProductCategoryMode('custom')}
-                aria-pressed={productCategoryMode === 'custom'}
-                title="Eigene Kategorien"
-              >
-                <span>Eigene</span>
-              </button>
+            <div className="ss-control-group">
+              <span className="ss-control-group-label">Kategorien</span>
+              <div className="ss-control-group-row">
+                <div className="product-view-toggle" role="group" aria-label="Produktkategorien waehlen">
+                  <button
+                    type="button"
+                    className={productCategoryMode === 'none' ? 'active' : ''}
+                    onClick={() => setProductCategoryMode('none')}
+                    aria-pressed={productCategoryMode === 'none'}
+                    title="Keine Kategorien"
+                  >
+                    <span>Keine</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={productCategoryMode === 'timing' ? 'active' : ''}
+                    onClick={() => setProductCategoryMode('timing')}
+                    aria-pressed={productCategoryMode === 'timing'}
+                    title="Nach Tageszeiten gruppieren"
+                  >
+                    <span>Tageszeiten</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={productCategoryMode === 'custom' ? 'active' : ''}
+                    onClick={() => setProductCategoryMode('custom')}
+                    aria-pressed={productCategoryMode === 'custom'}
+                    title="Eigene Kategorien"
+                  >
+                    <span>Eigene</span>
+                  </button>
+                </div>
+                {isCustomLayoutControlsVisible && showCategoryLayoutEditToggle && (
+                  <button
+                    type="button"
+                    className={`ss-layout-edit-toggle-btn ${isProductLayoutEditMode ? 'active' : ''}`}
+                    onClick={handleToggleProductLayoutEditMode}
+                    aria-pressed={isProductLayoutEditMode}
+                    title={isProductLayoutEditMode ? 'Layout-Bearbeitung beenden' : 'Layout bearbeiten'}
+                    aria-label={isProductLayoutEditMode ? 'Layout-Bearbeitung beenden' : 'Layout bearbeiten'}
+                  >
+                    <Pencil size={16} />
+                  </button>
+                )}
+              </div>
             </div>
-            <div className="product-view-toggle" role="group" aria-label="Produktansicht wählen">
-              <button
-                type="button"
-                className={productViewMode === 'grid' ? 'active' : ''}
-                onClick={() => setProductViewMode('grid')}
-                aria-pressed={productViewMode === 'grid'}
-                title="Kachelansicht"
-              >
-                <LayoutGrid size={16} />
-                <span>Kacheln</span>
-              </button>
-              <button
-                type="button"
-                className={productViewMode === 'list' ? 'active' : ''}
-                onClick={() => setProductViewMode('list')}
-                aria-pressed={productViewMode === 'list'}
-                title="Listenansicht"
-              >
-                <List size={16} />
-                <span>Liste</span>
-              </button>
+            <div className="ss-control-group">
+              <span className="ss-control-group-label">Ansicht</span>
+              <div className="ss-control-group-row">
+                <div className="product-view-toggle" role="group" aria-label="Produktansicht waehlen">
+                  <button
+                    type="button"
+                    className={productViewMode === 'grid' ? 'active' : ''}
+                    onClick={() => setProductViewMode('grid')}
+                    aria-pressed={productViewMode === 'grid'}
+                    title="Kachelansicht"
+                  >
+                    <LayoutGrid size={16} />
+                    <span>Kacheln</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={productViewMode === 'list' ? 'active' : ''}
+                    onClick={() => setProductViewMode('list')}
+                    aria-pressed={productViewMode === 'list'}
+                    title="Listenansicht"
+                  >
+                    <List size={16} />
+                    <span>Liste</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -3397,11 +3446,11 @@ export function StackWorkspace({
                     key={section.id}
                     className="ss-product-section"
                     onDragOver={(event) => {
-                      if (!customLayoutEnabled || !draggingProductKey) return;
+                      if (!isProductLayoutEditMode || !draggingProductKey) return;
                       event.preventDefault();
                     }}
                     onDrop={(event) => {
-                      if (!customLayoutEnabled || !draggingProductKey) return;
+                      if (!isProductLayoutEditMode || !draggingProductKey) return;
                       event.preventDefault();
                       event.stopPropagation();
                       void moveProductToSectionEnd(draggingProductKey, section.products, sectionCategory?.id ?? null);
@@ -3441,74 +3490,53 @@ export function StackWorkspace({
                     <div className={productViewMode === 'grid' ? 'masonry-grid ss-section-grid' : 'product-list-view'}>
                       {section.products.map((product, index) => {
                         const key = productStackKey(product);
-                        const previous = section.products[index - 1] ?? null;
-                        const next = section.products[index + 1] ?? null;
-                        const afterNext = section.products[index + 2] ?? null;
+                        const isDraggingProduct = draggingProductKey === key;
                         return (
                           <div
                             key={key}
-                            className={productViewMode === 'grid' ? 'masonry-item' : 'product-list-item'}
+                            className={[
+                              'ss-product-layout-editable-item',
+                              productViewMode === 'grid' ? 'masonry-item' : 'product-list-item',
+                              isProductLayoutEditMode ? 'ss-product-layout-edit-mode' : '',
+                              isDraggingProduct ? 'ss-product-layout-item-dragging' : '',
+                            ].filter(Boolean).join(' ')}
+                            draggable={isProductLayoutEditMode}
                             onDragOver={(event) => {
-                              if (!customLayoutEnabled || !draggingProductKey) return;
+                              if (!isProductLayoutEditMode || !draggingProductKey) return;
                               event.preventDefault();
                             }}
                             onDrop={(event) => {
-                              if (!customLayoutEnabled || !draggingProductKey) return;
+                              if (!isProductLayoutEditMode || !draggingProductKey) return;
                               event.preventDefault();
                               event.stopPropagation();
                               void moveProductBefore(draggingProductKey, key, sectionCategory?.id ?? null);
                               setDraggingProductKey(null);
                             }}
+                            onDragStart={(event) => {
+                              const target = event.target as HTMLElement | null;
+                              if (!isProductLayoutEditMode || !target || isInteractiveDragSource(target)) {
+                                event.preventDefault();
+                                return;
+                              }
+                              setDraggingProductKey(key);
+                              event.dataTransfer.effectAllowed = 'move';
+                              event.dataTransfer.setData('text/plain', key);
+                            }}
+                            onDragEnd={() => setDraggingProductKey(null)}
                           >
-                            {customLayoutEnabled && (
-                              <div className="ss-product-layout-tools" onClick={(event) => event.stopPropagation()}>
-                                <button
-                                  type="button"
-                                  className="ss-product-layout-btn ss-product-layout-drag"
-                                  draggable
-                                  onMouseDown={(event) => event.stopPropagation()}
-                                  onDragStart={(event) => {
-                                    event.stopPropagation();
-                                    setDraggingProductKey(key);
-                                    event.dataTransfer.effectAllowed = 'move';
-                                    event.dataTransfer.setData('text/plain', key);
-                                  }}
-                                  onDragEnd={() => setDraggingProductKey(null)}
-                                  aria-label={`Produkt verschieben: ${product.name}`}
-                                >
-                                  <GripVertical size={14} />
-                                </button>
-                                <button
-                                  type="button"
-                                  className="ss-product-layout-btn"
-                                  onClick={() => previous && void moveProductBefore(key, productStackKey(previous), sectionCategory?.id ?? null)}
-                                  disabled={!previous}
-                                  aria-label={`Nach oben: ${product.name}`}
-                                >
-                                  <ArrowUp size={14} />
-                                </button>
-                                <button
-                                  type="button"
-                                  className="ss-product-layout-btn"
-                                  onClick={() => {
-                                    if (afterNext) {
-                                      void moveProductBefore(key, productStackKey(afterNext), sectionCategory?.id ?? null);
-                                      return;
-                                    }
-                                    if (next) {
-                                      void moveProductToSectionEnd(key, section.products, sectionCategory?.id ?? null);
-                                    }
-                                  }}
-                                  disabled={!next}
-                                  aria-label={`Nach unten: ${product.name}`}
-                                >
-                                  <ArrowDown size={14} />
-                                </button>
+                            {isProductLayoutEditMode && (
+                              <div className="ss-product-layout-edit-toolbar" onClick={(event) => event.stopPropagation()}>
                                 {productCategoryMode === 'custom' && (
                                   <select
                                     className="ss-product-category-select"
                                     value={normalizedCategoryId(product.category_id)}
-                                    onChange={(event) => void assignProductCategory(key, event.target.value)}
+                                    onMouseDown={(event) => event.stopPropagation()}
+                                    onMouseMove={(event) => event.stopPropagation()}
+                                    onChange={(event) => {
+                                      event.stopPropagation();
+                                      const input = event.target as HTMLSelectElement;
+                                      void assignProductCategory(key, input.value);
+                                    }}
                                     aria-label={`Kategorie für ${product.name}`}
                                   >
                                     {activeCategories.map((category) => (
@@ -3542,7 +3570,7 @@ export function StackWorkspace({
                             onClick={() => setAddModalOpen(true)}
                           >
                             <Plus size={28} />
-                            <span>Produkt hinzufÃ¼gen</span>
+                            <span>Produkt hinzufügen</span>
                           </button>
                         </div>
                       )}
