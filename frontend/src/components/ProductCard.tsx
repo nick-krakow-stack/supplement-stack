@@ -404,44 +404,42 @@ export default function ProductCard({
         onClick={onToggleSelected}
         className={`ss-product-card ss-product-list-row ${selected ? 'ss-product-list-row-selected' : ''}`}
       >
-        <div className="ss-product-list-identity">
-          <div className="ss-product-list-top">
-            {(onToggleSelected ?? onSelect) && (
-              <span className={`ss-product-list-check ${selected ? 'selected' : ''}`} aria-hidden="true">
-                {selected && (
-                  <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
-                    <polyline points="1.5,5.5 4.5,8.5 9.5,2.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                )}
-              </span>
+        <div className={`ss-product-list-media-panel ss-product-list-media-${timingPanelKey}`}>
+          <div className="ss-product-list-media">
+            {product.image_url ? (
+              <img
+                src={product.image_url}
+                alt={name}
+                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+              />
+            ) : (
+              <span>{emoji}</span>
             )}
-            <div className="ss-product-list-title">{ingredientTitle}</div>
           </div>
-
-          <div className="ss-product-list-product">
-            <div className={`ss-product-list-media ss-product-list-media-${timingPanelKey}`}>
-              {product.image_url ? (
-                <img
-                  src={product.image_url}
-                  alt={name}
-                  onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-                />
-              ) : (
-                <span>{emoji}</span>
-              )}
-            </div>
-            <div className="ss-product-list-product-copy">
-              <div className="ss-product-list-product-name">{name}</div>
-              {brand && <div className="ss-product-list-brand">{brand}</div>}
-            </div>
-          </div>
+          <span className="ss-product-list-media-caption">{timingLabel}</span>
         </div>
 
-        <div className="ss-product-list-dose-warning">
+        <div className="ss-product-list-content">
+          <div className="ss-product-list-main">
+            <div className="ss-product-list-top">
+              {(onToggleSelected ?? onSelect) && (
+                <span className={`ss-product-list-check ${selected ? 'selected' : ''}`} aria-hidden="true">
+                  {selected && (
+                    <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+                      <polyline points="1.5,5.5 4.5,8.5 9.5,2.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  )}
+                </span>
+              )}
+              {brand && <div className="ss-product-list-brand">{brand}</div>}
+            </div>
+            <div className="ss-product-list-name">{name}</div>
+            {ingredientTitle !== name && (
+              <div className="ss-product-list-subtitle">{ingredientTitle}</div>
+            )}
+          </div>
+
           <div className="ss-product-list-meta">
-            <span className={`ss-product-list-timing ${timing.cls}`}>
-              {timingLabel}
-            </span>
             <span className="ss-product-list-meta-item">
               <span>Dosierung</span>
               {listDose}
@@ -457,6 +455,7 @@ export default function ProductCard({
               </span>
             )}
           </div>
+
           {compactWarnings.length > 0 && (
             <div className="ss-product-list-warnings">
               {compactWarnings.map((compactWarning, index) => {
@@ -518,12 +517,11 @@ export default function ProductCard({
           )}
         </div>
 
-        <div className="ss-product-list-costs">
-          <strong>{formatEur(price)}</strong>
-          {monthlyPrice !== null && <span>{formatEur(monthlyPrice)} pro Monat</span>}
-        </div>
-
         <div className="ss-product-list-actions-panel ss-product-list-actions-stack">
+          <div className="ss-product-list-price">
+            <strong>{formatEur(price)}</strong>
+            {monthlyPrice !== null && <span>{formatEur(monthlyPrice)} pro Monat</span>}
+          </div>
           {shopHref && (
             <a
               href={shopHref}

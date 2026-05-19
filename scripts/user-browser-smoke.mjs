@@ -274,9 +274,10 @@ function assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSo
 
 function assertProductCardStaticChecks(productCardSource, stylesSource) {
   const requiredProductCardMarkers = [
-    'ss-product-list-identity',
-    'ss-product-list-dose-warning',
-    'ss-product-list-costs',
+    'ss-product-list-media-panel',
+    'ss-product-list-content',
+    'ss-product-list-main',
+    'ss-product-list-price',
     'ss-product-list-actions-stack',
     'ss-product-warning-summary',
     'ss-product-warning-detail',
@@ -294,9 +295,10 @@ function assertProductCardStaticChecks(productCardSource, stylesSource) {
   }
 
   const requiredStyleMarkers = [
-    '.ss-product-list-identity',
-    '.ss-product-list-dose-warning',
-    '.ss-product-list-costs',
+    '.ss-product-list-media-panel',
+    '.ss-product-list-content',
+    '.ss-product-list-main',
+    '.ss-product-list-price',
     '.ss-product-list-actions-stack',
     '.ss-product-warning-detail',
     '.ss-product-warning-severity-danger',
@@ -310,8 +312,28 @@ function assertProductCardStaticChecks(productCardSource, stylesSource) {
     }
   }
 
-  if (!/\.ss-product-list-row\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1\.8fr\)\s+minmax\(180px,\s*0\.85fr\)\s+minmax\(128px,\s*0\.55fr\)\s+minmax\(150px,\s*0\.5fr\)/.test(stylesSource)) {
-    throw new Error('Expected list rows to use the compact four-column grid.');
+  const listRowStyles = Array.from(stylesSource.matchAll(/\.ss-product-list-row\s*\{[^}]*\}/g), (match) => match[0]);
+  const listRowStyle = listRowStyles[0] ?? '';
+  const listMediaPanelStyle = stylesSource.match(/\.ss-product-list-media-panel\s*\{[^}]*\}/)?.[0] ?? '';
+
+  if (!/display:\s*flex;[\s\S]*align-items:\s*stretch;/.test(listRowStyle)) {
+    throw new Error('Expected list rows to use the Variante 4 three-panel flex row.');
+  }
+
+  if (/grid-template-columns:/.test(listRowStyle)) {
+    throw new Error('Product list rows must not use the old four-column grid.');
+  }
+
+  if (listRowStyles.some((styleBlock) => /overflow:\s*hidden;/.test(styleBlock))) {
+    throw new Error('Product list rows must keep overflow visible so warning popovers are not clipped.');
+  }
+
+  if (!/(?:width|flex):\s*(?:92px|0\s+0\s+92px)/.test(listMediaPanelStyle)) {
+    throw new Error('Expected a fixed left timing/media panel for Variante 4 list rows.');
+  }
+
+  if (!/@media\s*\(max-width:\s*720px\)\s*\{[\s\S]*\.ss-product-list-row\s*\{[\s\S]*flex-direction:\s*column;/.test(stylesSource)) {
+    throw new Error('Expected list rows to stack below 720px without horizontal overflow.');
   }
 }
 
