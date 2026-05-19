@@ -17,6 +17,13 @@ interface ProductLinkReportInput {
   reason?: 'missing_link' | 'invalid_link';
 }
 
+export interface PublicIntakeTimingOption {
+  value: string;
+  label: string;
+  description: string | null;
+  sort_order: number;
+}
+
 export async function getStacks(): Promise<{ stacks: Stack[] }> {
   const res = await apiClient.get<{ stacks: Stack[] }>('/stacks');
   return res.data;
@@ -46,6 +53,11 @@ export async function updateStack(id: number, data: { name?: string; product_ids
 
 export async function reportProductLink(input: ProductLinkReportInput): Promise<void> {
   await apiClient.post('/stacks/link-report', input);
+}
+
+export async function getPublicIntakeTimings(): Promise<PublicIntakeTimingOption[]> {
+  const res = await apiClient.get<{ items?: PublicIntakeTimingOption[] }>('/client/managed-lists/intake-timing');
+  return Array.isArray(res.data.items) ? res.data.items : [];
 }
 
 export async function getStackWarnings(id: number): Promise<Interaction[]> {

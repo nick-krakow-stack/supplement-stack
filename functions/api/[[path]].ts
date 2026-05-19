@@ -5,6 +5,7 @@ import { cors } from 'hono/cors'
 import analytics from './modules/analytics'
 import admin, { interactionsApp, shopDomainsPublicApp } from './modules/admin'
 import auth, { meApp } from './modules/auth'
+import client from './modules/client'
 import demo from './modules/demo'
 import family from './modules/family'
 import ingredients, { recommendationsApp } from './modules/ingredients'
@@ -27,6 +28,7 @@ app.use('*', cors({
 
 app.route('/api/auth', auth)
 app.route('/api/analytics', analytics)
+app.route('/api/client', client)
 app.route('/api/me', meApp)
 app.route('/api/ingredients', ingredients)
 app.route('/api/recommendations', recommendationsApp)

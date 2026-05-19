@@ -54,6 +54,8 @@
 //   PUT /translations/verified-profiles/:verifiedProfileId/:language — upsert verified profile translation (admin)
 //   GET /translations/blog-posts — blog translations list (admin)
 //   PUT /translations/blog-posts/:blogPostId/:language — upsert blog translation (admin)
+//   GET /translations/managed-list-items — managed list item translations list (admin)
+//   PUT /translations/managed-list-items/:itemId/:language — upsert managed list item translation (admin)
 //   GET /ops-dashboard    — operational queues and counts (admin)
 //   GET /product-qa       — suspicious product data list (admin)
 //   PATCH /product-qa/:id — update high-impact product QA fields (admin)
@@ -147,6 +149,19 @@ type BlogTranslationRow = {
   slug: string | null
   excerpt: string | null
   meta_description: string | null
+  status: 'missing' | 'translated'
+}
+
+type ManagedListItemTranslationRow = {
+  managed_list_item_id: number
+  list_key: string
+  value: string
+  source_label: string
+  source_description: string | null
+  sort_order: number
+  language: string
+  translated_label: string | null
+  description: string | null
   status: 'missing' | 'translated'
 }
 
@@ -1177,7 +1192,7 @@ const PUBMED_LOOKUP_TIMEOUT_MS = 5000
 const PUBMED_AUTHOR_LIMIT = 25
 const PUBMED_LOOKUP_CACHE_TTL_SECONDS = 24 * 60 * 60
 const AFFILIATE_LINK_HEALTH_STALE_DAYS = 7
-const ADMIN_MANAGED_LIST_KEYS = ['serving_unit'] as const
+const ADMIN_MANAGED_LIST_KEYS = ['serving_unit', 'intake_timing'] as const
 
 type AdminManagedListKey = (typeof ADMIN_MANAGED_LIST_KEYS)[number]
 
@@ -3915,7 +3930,7 @@ function validateManagedListItemMutation(
     ? requiredTextField(body, 'value', 80)
     : existing ? { ok: true as const, value: existing.value } : validationError('value is required')
   if (!value.ok) return value
-  if (!/^[\p{L}\p{N}µ%/(). -]+$/u.test(value.value)) {
+  if (!/^[\p{L}\p{N}µ%/(). _-]+$/u.test(value.value)) {
     return validationError('value contains unsupported characters')
   }
 
@@ -13723,6 +13738,163 @@ admin.delete('/ingredient-sub-ingredients/:parentId/:childId', async (c) => {
   })
 
   return c.json({ ok: true })
+})
+
+// GET /api/admin/translations/managed-list-items?language=en&q=&limit=50&offset=0 (admin)
+admin.get('/translations/managed-list-items', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const language = normalizeTranslationLanguage(c.req.query('language') ?? 'en')
+  if (!language) return c.json({ error: 'Invalid language' }, 400)
+  if (!(await hasTable(c.env.DB, 'managed_list_items'))) {
+    return c.json({ error: 'managed_list_items is not available in this environment' }, 409)
+  }
+  if (!(await hasTable(c.env.DB, 'managed_list_item_translations'))) {
+    return c.json({ error: 'managed_list_item_translations is not available in this environment' }, 409)
+  }
+
+  const q = c.req.query('q')?.trim() ?? ''
+  const limit = parsePagination(c.req.query('limit'), 50, 100)
+  const offset = parsePagination(c.req.query('offset'), 0, 100000)
+  const like = `%${q}%`
+
+  const { results } = await c.env.DB.prepare(`
+    SELECT
+      mli.id as managed_list_item_id,
+      mli.list_key as list_key,
+      mli.value as value,
+      mli.label as source_label,
+      mli.description as source_description,
+      mli.sort_order as sort_order,
+      ? as language,
+      t.label as translated_label,
+      t.description as description,
+      CASE WHEN t.managed_list_item_id IS NULL THEN 'missing' ELSE 'translated' END as status
+    FROM managed_list_items mli
+    LEFT JOIN managed_list_item_translations t
+      ON t.managed_list_item_id = mli.id AND t.language = ?
+    WHERE mli.list_key = 'intake_timing'
+      AND mli.active = 1
+      AND (
+        ? = ''
+        OR mli.label LIKE ?
+        OR mli.value LIKE ?
+        OR COALESCE(mli.description, '') LIKE ?
+        OR COALESCE(t.label, '') LIKE ?
+        OR COALESCE(t.description, '') LIKE ?
+      )
+    ORDER BY
+      CASE WHEN t.managed_list_item_id IS NULL THEN 0 ELSE 1 END ASC,
+      mli.sort_order ASC,
+      mli.label ASC
+    LIMIT ? OFFSET ?
+  `).bind(
+    language,
+    language,
+    q,
+    like,
+    like,
+    like,
+    like,
+    like,
+    limit,
+    offset,
+  ).all<ManagedListItemTranslationRow>()
+
+  const totalRow = await c.env.DB.prepare(`
+    SELECT COUNT(*) AS count
+    FROM managed_list_items mli
+    LEFT JOIN managed_list_item_translations t
+      ON t.managed_list_item_id = mli.id AND t.language = ?
+    WHERE mli.list_key = 'intake_timing'
+      AND mli.active = 1
+      AND (
+        ? = ''
+        OR mli.label LIKE ?
+        OR mli.value LIKE ?
+        OR COALESCE(mli.description, '') LIKE ?
+        OR COALESCE(t.label, '') LIKE ?
+        OR COALESCE(t.description, '') LIKE ?
+      )
+  `).bind(language, q, like, like, like, like, like).first<{ count: number }>()
+
+  return c.json({ language, translations: results, total: totalRow?.count ?? results?.length ?? 0, limit, offset })
+})
+
+// PUT /api/admin/translations/managed-list-items/:itemId/:language (admin)
+admin.put('/translations/managed-list-items/:itemId/:language', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const itemId = parsePositiveId(c.req.param('itemId'))
+  if (itemId === null) return c.json({ error: 'Invalid managed list item id' }, 400)
+
+  const language = normalizeTranslationLanguage(c.req.param('language'))
+  if (!language) return c.json({ error: 'Invalid language' }, 400)
+  if (!(await hasTable(c.env.DB, 'managed_list_item_translations'))) {
+    return c.json({ error: 'managed_list_item_translations is not available in this environment' }, 409)
+  }
+
+  const item = await c.env.DB.prepare(`
+    SELECT id, list_key, value, label
+    FROM managed_list_items
+    WHERE id = ?
+      AND list_key = 'intake_timing'
+      AND active = 1
+  `).bind(itemId).first<{ id: number; list_key: string; value: string; label: string }>()
+  if (!item) return c.json({ error: 'Managed list item not found' }, 404)
+
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const translatedLabel = optionalText(body.translated_label)
+  if (!translatedLabel) return c.json({ error: 'translated_label is required' }, 400)
+  const description = optionalText(body.description)
+
+  await c.env.DB.prepare(`
+    INSERT INTO managed_list_item_translations (
+      managed_list_item_id,
+      language,
+      label,
+      description
+    )
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(managed_list_item_id, language) DO UPDATE SET
+      label = excluded.label,
+      description = excluded.description,
+      updated_at = datetime('now')
+  `).bind(itemId, language, translatedLabel, description).run()
+
+  const translation = await c.env.DB.prepare(`
+    SELECT
+      managed_list_item_id,
+      language,
+      label as translated_label,
+      description
+    FROM managed_list_item_translations
+    WHERE managed_list_item_id = ? AND language = ?
+  `).bind(itemId, language).first()
+
+  await logAdminAction(c, {
+    action: 'upsert_managed_list_item_translation',
+    entity_type: 'managed_list_item_translation',
+    entity_id: itemId,
+    changes: {
+      managed_list_item_id: itemId,
+      list_key: item.list_key,
+      value: item.value,
+      language,
+      translated_label: translatedLabel,
+      description,
+    },
+  })
+
+  return c.json({ translation })
 })
 
 // GET /api/admin/translations/ingredients?language=de&q=&limit=50&offset=0 (admin)

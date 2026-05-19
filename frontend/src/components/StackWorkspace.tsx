@@ -26,7 +26,7 @@ import ProductCard from './ProductCard';
 import StacksHeader, { type StacksHeaderVariant } from './StacksHeader';
 import EditStackModal from './EditStackModal';
 import { createFamilyMember, deleteFamilyMember, getFamilyMembers } from '../api/family';
-import { reportProductLink } from '../api/stacks';
+import { getPublicIntakeTimings, reportProductLink, type PublicIntakeTimingOption } from '../api/stacks';
 import type { FamilyMember, ProductSafetyWarning, User } from '../types';
 import type { DosageGuideline, Ingredient, ShopDomain } from '../types/local';
 import {
@@ -62,7 +62,9 @@ export interface DemoProduct {
   unit?: string;
   form?: string;
   timing?: string;
+  timing_label?: string | null;
   ingredient_timing?: string | null;
+  ingredient_timing_label?: string | null;
   ingredient_timing_note?: string | null;
   ingredient_intake_hint?: string | null;
   dosage_text?: string;
@@ -405,13 +407,69 @@ const ROUTINE_META: Record<RoutineKey, { label: string; hint: string }> = {
   morning: { label: 'Morgens', hint: 'Frühstück / Start in den Tag' },
   noon: { label: 'Mittags', hint: 'Mittag / nach dem Essen' },
   evening: { label: 'Abends', hint: 'Abendessen / vor dem Schlafen' },
-  flexible: { label: 'Flexibel', hint: 'Zeitpunkt frei wählbar' },
+  flexible: { label: 'Jederzeit', hint: 'Zeitpunkt frei wählbar' },
 };
 
+type IntakeTimingOption = Pick<PublicIntakeTimingOption, 'value' | 'label' | 'description' | 'sort_order'>;
+
+const FALLBACK_INTAKE_TIMING_OPTIONS: IntakeTimingOption[] = [
+  { value: 'anytime', label: 'Jederzeit' },
+  { value: 'before_breakfast', label: 'Vor dem Frühstück' },
+  { value: 'after_breakfast', label: 'Nach dem Frühstück' },
+  { value: 'with_meal', label: 'Zum Essen' },
+  { value: 'morning', label: 'Morgens' },
+  { value: 'evening', label: 'Abends' },
+  { value: 'noon', label: 'Mittags' },
+  { value: 'morning_evening', label: 'Morgens & Abends' },
+].map((option, index) => ({ ...option, description: null, sort_order: index + 1 }));
+
+const INTAKE_TIMING_LABELS: Record<string, string> = {
+  anytime: 'Jederzeit',
+  flexible: 'Jederzeit',
+  before_breakfast: 'Vor dem Frühstück',
+  after_breakfast: 'Nach dem Frühstück',
+  with_meal: 'Zum Essen',
+  morning: 'Morgens',
+  evening: 'Abends',
+  noon: 'Mittags',
+  morning_evening: 'Morgens & Abends',
+};
+
+function buildIntakeTimingOptions(managedTimingOptions: IntakeTimingOption[]): IntakeTimingOption[] {
+  const activeManagedOptions = managedTimingOptions
+    .filter((option) => option.value.trim() && option.label.trim())
+    .sort((left, right) => left.sort_order - right.sort_order || left.label.localeCompare(right.label, 'de'));
+  return activeManagedOptions.length > 0 ? activeManagedOptions : FALLBACK_INTAKE_TIMING_OPTIONS;
+}
+
+function humanizeTimingFallback(timing?: string | null): string {
+  const raw = timing?.trim();
+  if (!raw) return INTAKE_TIMING_LABELS.anytime;
+  const enumLike = /^[A-Z0-9_-]+$/.test(raw) || /^[a-z0-9_-]+$/.test(raw);
+  if (enumLike) return INTAKE_TIMING_LABELS.anytime;
+  return raw.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim() || INTAKE_TIMING_LABELS.anytime;
+}
+
+function timingLabelForDisplay(timing?: string | null, managedTimingOptions: IntakeTimingOption[] = []): string {
+  const raw = timing?.trim();
+  if (!raw) return INTAKE_TIMING_LABELS.anytime;
+  const normalized = raw.toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_');
+  const managedLabel = managedTimingOptions.find((option) => option.value === normalized)?.label;
+  return managedLabel ?? INTAKE_TIMING_LABELS[normalized] ?? humanizeTimingFallback(raw);
+}
+
 function routineKeyForTiming(timing?: string): RoutineKey {
-  const normalized = (timing ?? '').toLowerCase();
-  if (normalized.includes('morgen') || normalized.includes('frueh') || normalized.includes('früh') || normalized.includes('morning')) return 'morning';
-  if (normalized.includes('mittag') || normalized.includes('noon')) return 'noon';
+  const normalized = (timing ?? '').toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_');
+  if (
+    normalized.includes('before_breakfast') ||
+    normalized.includes('after_breakfast') ||
+    normalized.includes('morning_evening') ||
+    normalized.includes('morgen') ||
+    normalized.includes('frueh') ||
+    normalized.includes('früh') ||
+    normalized.includes('morning')
+  ) return 'morning';
+  if (normalized.includes('with_meal') || normalized.includes('mittag') || normalized.includes('noon') || normalized.includes('essen') || normalized.includes('meal')) return 'noon';
   if (normalized.includes('abend') || normalized.includes('nacht') || normalized.includes('evening')) return 'evening';
   return 'flexible';
 }
@@ -481,6 +539,7 @@ function AddProductModal({
   onRequestOwnProduct,
   onEditExistingProduct,
   onReplaceExistingProduct,
+  timingOptions,
 }: {
   stacks: DemoStack[];
   activeStackId: string;
@@ -490,6 +549,7 @@ function AddProductModal({
   onRequestOwnProduct: () => void;
   onEditExistingProduct?: (productKey: string) => void;
   onReplaceExistingProduct?: (productKey: string) => void;
+  timingOptions: IntakeTimingOption[];
   title?: string;
   submitLabel?: string;
   ignoredExistingProductKey?: string;
@@ -668,7 +728,7 @@ function AddProductModal({
     const enhanced: DemoProduct = {
       ...product,
       dosage_text: targetDosageText,
-      timing: product.ingredient_timing || product.timing || 'Zum Frühstück',
+      timing: product.ingredient_timing || product.timing || 'anytime',
       intake_interval_days: product.intake_interval_days ?? 1,
     };
     enhanced.quantity = productServingsPerDay(enhanced);
@@ -1032,7 +1092,7 @@ function AddProductModal({
                 <small>
                   {duplicateIngredient.product.dosage_text ?? 'Dosierung nicht hinterlegt'}
                   {' · '}
-                  {duplicateIngredient.product.timing ?? 'Timing offen'}
+                  {timingLabelForDisplay(duplicateIngredient.product.timing, timingOptions)}
                 </small>
               </div>
               <div className="ss-modal-actions ss-modal-actions-stack">
@@ -1090,11 +1150,13 @@ function EditProductModal({
   onSave,
   onReplace,
   onClose,
+  timingOptions,
 }: {
   product: DemoProduct;
   onSave: (patch: Pick<DemoProduct, 'quantity' | 'dosage_text' | 'timing' | 'intake_interval_days'>) => Promise<void>;
   onReplace: () => void;
   onClose: () => void;
+  timingOptions: IntakeTimingOption[];
 }) {
   const [dosageText, setDosageText] = useState(product.dosage_text ?? '');
   const [timing, setTiming] = useState(product.timing ?? '');
@@ -1102,11 +1164,13 @@ function EditProductModal({
   const [interval, setInterval] = useState(String(productIntakeIntervalDays(product)));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const managedTimingOptions = timingOptions;
 
   const intervalNumber = Number(interval);
   const intervalLabel = Number.isInteger(intervalNumber) && intervalNumber >= 1
     ? formatIntakeInterval(intervalNumber)
     : '';
+  const timingHasManagedOption = managedTimingOptions.some((option) => option.value === timing);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -1194,12 +1258,20 @@ function EditProductModal({
 
           <label className="block">
             <span className="text-sm font-black text-slate-700">Timing</span>
-            <input
+            <select
               value={timing}
               onChange={(event) => setTiming(event.target.value)}
-              placeholder="z.B. Zum Frühstück"
               className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-base font-semibold text-slate-950 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-4 focus:ring-blue-100"
-            />
+            >
+              {!timingHasManagedOption && timing.trim() ? (
+                <option value={timing}>{timingLabelForDisplay(timing, managedTimingOptions)}</option>
+              ) : null}
+              {managedTimingOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </label>
 
           <label className="block">
@@ -1412,6 +1484,7 @@ export function StackWorkspace({
   const [linkReportStatus, setLinkReportStatus] = useState('');
   const [productViewMode, setProductViewMode] = useState<ProductViewMode>(loadProductViewMode);
   const [productSortMode, setProductSortMode] = useState<ProductSortMode>(loadProductSortMode);
+  const [managedTimingOptions, setManagedTimingOptions] = useState<IntakeTimingOption[]>([]);
   const [notice, setNotice] = useState<WorkspaceNotice | null>(null);
   const [deleteProductKey, setDeleteProductKey] = useState<string | null>(null);
   const { user, logout } = useAuth();
@@ -1420,6 +1493,7 @@ export function StackWorkspace({
 
   const isDemo = mode === 'demo';
   const showStandaloneHeader = standaloneHeader ?? isDemo;
+  const editTimingOptions = useMemo(() => buildIntakeTimingOptions(managedTimingOptions), [managedTimingOptions]);
 
   useEffect(() => {
     window.localStorage.setItem(STACK_PRODUCT_VIEW_KEY, productViewMode);
@@ -1428,6 +1502,21 @@ export function StackWorkspace({
   useEffect(() => {
     window.localStorage.setItem(STACK_PRODUCT_SORT_KEY, productSortMode);
   }, [productSortMode]);
+
+  useEffect(() => {
+    let cancelled = false;
+    getPublicIntakeTimings()
+      .then((items) => {
+        if (cancelled) return;
+        setManagedTimingOptions(items);
+      })
+      .catch(() => {
+        if (!cancelled) setManagedTimingOptions([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Fetch shop domains
   useEffect(() => {
@@ -2662,6 +2751,7 @@ export function StackWorkspace({
           stacks={state.stacks}
           activeStackId={state.activeStackId}
           isDemo={isDemo}
+          timingOptions={editTimingOptions}
           onAdd={handleAddProduct}
           onClose={() => setAddModalOpen(false)}
           onRequestOwnProduct={() => {
@@ -2692,6 +2782,7 @@ export function StackWorkspace({
           stacks={[replacingStack]}
           activeStackId={replacingStack.id}
           isDemo={isDemo}
+          timingOptions={editTimingOptions}
           onAdd={handleReplaceProduct}
           onClose={() => setReplaceProductKey(null)}
           title="Produkt wechseln"
@@ -2727,6 +2818,7 @@ export function StackWorkspace({
             setReplaceProductKey(editingProductKey);
             setEditingProductKey(null);
           }}
+          timingOptions={editTimingOptions}
           onClose={() => setEditingProductKey(null)}
         />
       )}

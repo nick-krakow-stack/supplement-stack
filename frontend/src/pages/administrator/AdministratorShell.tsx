@@ -46,7 +46,7 @@ const NAV_GROUPS: NavigationGroup[] = [
     ],
   },
   {
-    title: 'Konfiguration',
+    title: 'Verwaltung',
     items: [
       { label: 'Benutzerverwaltung', path: '/administrator/users', icon: <Users size={15} /> },
       { label: 'Shop-Domains', path: '/administrator/shop-domains', icon: <ExternalLink size={15} /> },
@@ -63,10 +63,10 @@ const ROUTE_TITLES: Record<string, { group: string; title: string }> = {
   '/administrator/dosing': { group: 'Katalog', title: 'Richtwerte' },
   '/administrator/knowledge': { group: 'Katalog', title: 'Wissensdatenbank' },
   '/administrator/translations': { group: 'Katalog', title: 'Übersetzungen' },
-  '/administrator/users': { group: 'Konfiguration', title: 'Benutzerverwaltung' },
-  '/administrator/shop-domains': { group: 'Konfiguration', title: 'Shop-Domains' },
-  '/administrator/management': { group: 'Konfiguration', title: 'Verwaltung' },
-  '/administrator/legal': { group: 'Konfiguration', title: 'Rechtliches' },
+  '/administrator/users': { group: 'Verwaltung', title: 'Benutzerverwaltung' },
+  '/administrator/shop-domains': { group: 'Verwaltung', title: 'Shop-Domains' },
+  '/administrator/management': { group: 'Verwaltung', title: 'Verwaltung' },
+  '/administrator/legal': { group: 'Verwaltung', title: 'Rechtliches' },
   '/administrator/profile': { group: 'Konto', title: 'Admin-Profil' },
 };
 

@@ -816,7 +816,7 @@ export interface AdminProductShopLinksResponse {
   health_available: boolean;
 }
 
-export type AdminManagedListKey = 'serving_unit';
+export type AdminManagedListKey = 'serving_unit' | 'intake_timing';
 
 export interface AdminManagedListItem {
   id: number;

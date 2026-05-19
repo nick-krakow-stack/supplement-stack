@@ -178,7 +178,9 @@ export interface Product {
   servings_per_container?: number;
   container_count?: number;
   timing?: string;
+  timing_label?: string | null;
   ingredient_timing?: string | null;
+  ingredient_timing_label?: string | null;
   ingredient_timing_note?: string | null;
   ingredient_intake_hint?: string | null;
   dosage_text?: string;
@@ -201,6 +203,8 @@ export interface StackItem {
   intake_interval_days?: number;
   dosage_text?: string;
   timing?: string;
+  timing_label?: string | null;
+  ingredient_timing_label?: string | null;
   ingredients?: Array<Pick<ProductIngredient, 'ingredient_id' | 'form_id' | 'quantity' | 'unit' | 'basis_quantity' | 'basis_unit' | 'search_relevant'>>;
   product?: Product;
 }

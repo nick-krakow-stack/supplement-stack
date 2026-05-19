@@ -36,6 +36,7 @@ const adminApi = read('frontend/src/api/admin.ts')
 const apiEntry = read('functions/api/[[path]].ts')
 const adminModule = read('functions/api/modules/admin.ts')
 const stacksModule = read('functions/api/modules/stacks.ts')
+const clientModule = assertFile('functions/api/modules/client.ts')
 const authModule = read('functions/api/modules/auth.ts')
 const analyticsModule = assertFile('functions/api/modules/analytics.ts')
 const frontendAnalytics = read('frontend/src/lib/analytics.ts')
@@ -45,6 +46,7 @@ const migration76 = assertFile('d1-migrations/0076_admin_dashboard_tracking.sql'
 const migration77 = assertFile('d1-migrations/0077_signup_referral_attribution.sql')
 const migration79 = assertFile('d1-migrations/0079_managed_list_serving_units_cleanup.sql')
 const migration80 = assertFile('d1-migrations/0080_managed_list_serving_units_cleanup_hardening.sql')
+const migration81 = assertFile('d1-migrations/0081_managed_intake_timings.sql')
 const adminNavGroupsBlock = extractRequiredBlock(
   adminShell,
   /const NAV_GROUPS:[\s\S]*?\n\];/,
@@ -102,13 +104,176 @@ assert.match(
 )
 assert.match(
   managementPage,
-  /aria-label=\{`Einheit \$\{item\.label\} verschieben`\}/,
-  'Admin management drag handle must have an accessible label',
+  /aria-label=\{`\$\{activeConfig\.fieldLabel\} \$\{item\.label\} verschieben`\}/,
+  'Admin management drag handle must have a config-driven accessible label',
 )
 assert.match(
   managementPage,
   /Einheit anlegen/,
   'Admin management create action must remain visible',
+)
+assert.match(
+  adminModule,
+  /ADMIN_MANAGED_LIST_KEYS = \['serving_unit', 'intake_timing'\] as const/,
+  'Admin backend managed-list allowlist must include intake_timing',
+)
+assert.match(
+  adminApi,
+  /export type AdminManagedListKey = 'serving_unit' \| 'intake_timing'/,
+  'Frontend admin API must type intake_timing as a managed-list key',
+)
+assert.match(
+  managementPage,
+  /key: 'intake_timing'[\s\S]*label: 'Tageszeiten'/,
+  'Admin management page must expose the Tageszeiten managed list tab',
+)
+assert.match(
+  managementPage,
+  /fieldLabel: 'Tageszeit'[\s\S]*createTitle: 'Neue Tageszeit'/,
+  'Admin management Tageszeiten config must use Tageszeit wording',
+)
+assert.match(
+  adminShell,
+  /title: 'Verwaltung'[\s\S]*label: 'Verwaltung'[\s\S]*path: '\/administrator\/management'/,
+  'Admin sidebar must keep management under a coherent Verwaltung group',
+)
+assert.match(
+  migration81,
+  /CREATE TABLE IF NOT EXISTS managed_list_item_translations/,
+  'Migration 0081 must add managed_list_item_translations additively',
+)
+assert.match(
+  migration81,
+  /UNIQUE\s*\(\s*managed_list_item_id\s*,\s*language\s*\)/,
+  'Migration 0081 must enforce one managed-list translation per item and language',
+)
+for (const [value, label] of [
+  ['anytime', 'Jederzeit'],
+  ['before_breakfast', 'Vor dem Frühstück'],
+  ['after_breakfast', 'Nach dem Frühstück'],
+  ['with_meal', 'Zum Essen'],
+  ['morning', 'Morgens'],
+  ['evening', 'Abends'],
+  ['noon', 'Mittags'],
+  ['morning_evening', 'Morgens & Abends'],
+]) {
+  assert.match(migration81, new RegExp(escapeRegExp(`'intake_timing', '${value}', '${label}'`)), `Migration 0081 must seed intake_timing ${value}`)
+}
+assert.match(
+  migration81,
+  /ON CONFLICT\(list_key, value\) DO UPDATE SET/,
+  'Migration 0081 must seed intake timings with additive upsert semantics',
+)
+assert.match(
+  adminModule,
+  /admin\.get\('\/translations\/managed-list-items'/,
+  'Admin backend must expose GET /api/admin/translations/managed-list-items',
+)
+assert.match(
+  adminModule,
+  /admin\.put\('\/translations\/managed-list-items\/:itemId\/:language'/,
+  'Admin backend must expose PUT /api/admin/translations/managed-list-items/:itemId/:language',
+)
+assert.match(
+  adminModule,
+  /managed_list_item_translations/,
+  'Admin backend translation routes must read/write managed_list_item_translations',
+)
+assert.match(
+  adminModule,
+  /list_key = 'intake_timing'/,
+  'Admin managed-list translation endpoint must be scoped to intake_timing rows',
+)
+assert.match(
+  apiEntry,
+  /app\.route\('\/api\/client', client\)/,
+  'API entry must mount a public /api/client route for non-admin client data',
+)
+assert.match(
+  clientModule,
+  /client\.get\('\/managed-lists\/intake-timing'/,
+  'Public client module must expose GET /api/client/managed-lists/intake-timing',
+)
+assert.match(
+  clientModule,
+  /SELECT\s+value,\s*label,\s*description,\s*sort_order[\s\S]*FROM managed_list_items[\s\S]*list_key = 'intake_timing'[\s\S]*active = 1[\s\S]*ORDER BY sort_order ASC,\s*label ASC/,
+  'Public intake timing endpoint must return only active value/label/description/sort_order rows in managed order',
+)
+assert.match(
+  stacksModule,
+  /LEFT JOIN managed_list_items\s+timing_item[\s\S]*timing_item\.list_key = 'intake_timing'/,
+  'Stack item load query must join managed intake_timing labels for public stack payloads',
+)
+assert.match(
+  stacksModule,
+  /LEFT JOIN managed_list_items\s+ingredient_timing_item[\s\S]*ingredient_timing_item\.list_key = 'intake_timing'/,
+  'Stack item load query must join managed intake_timing labels for ingredient timing payloads',
+)
+assert.match(
+  stacksModule,
+  /AS timing_label/,
+  'Stack item payloads must include timing_label from managed intake timing rows',
+)
+assert.match(
+  stacksModule,
+  /AS ingredient_timing_label/,
+  'Stack item payloads must include ingredient_timing_label from managed intake timing rows',
+)
+assert.match(
+  stacksModule,
+  /function canonicalIntakeTimingSqlExpression/,
+  'Stack backend must normalize legacy timing values before managed label lookup',
+)
+assert.match(
+  stacksModule,
+  /timing_label: string \| null/,
+  'Stack mail item type must carry timing_label for email rendering',
+)
+assert.doesNotMatch(
+  stacksModule,
+  /item\.timing_label\s*\?\?\s*item\.timing/,
+  'Stack email HTML must not fall back from timing_label to raw enum-like timing values',
+)
+assert.match(
+  stacksModule,
+  /function formatStackTimingForEmail/,
+  'Stack backend must define a safe email timing fallback helper',
+)
+for (const [value, label] of [
+  ['before_breakfast', 'Vor dem Frühstück'],
+  ['with_meal', 'Zum Essen'],
+  ['morning', 'Morgens'],
+  ['evening', 'Abends'],
+  ['morning_evening', 'Morgens & Abends'],
+  ['flexible', 'Jederzeit'],
+]) {
+  assert.match(stacksModule, new RegExp(`${escapeRegExp(value)}: '${escapeRegExp(label)}'`), `Stack email timing fallback must map ${value} to ${label}`)
+}
+assert.match(
+  stacksModule,
+  /isEnumLikeTimingValue\(rawTiming\)\) return 'Jederzeit'/,
+  'Stack email timing fallback must suppress unknown enum-like raw values',
+)
+assert.match(
+  stacksModule,
+  /escapeHtml\(formatStackTimingForEmail\(item\)\)/,
+  'Stack email HTML must use the safe timing fallback helper',
+)
+const translationsPage = read('frontend/src/pages/administrator/AdministratorTranslationsPage.tsx')
+assert.match(
+  translationsPage,
+  /type AdminEntity = 'ingredients' \| 'dose-recommendations' \| 'blog-posts' \| 'managed-list-items'/,
+  'Translations page must include managed-list-items as an entity type',
+)
+assert.match(
+  translationsPage,
+  /label: 'Tageszeiten'[\s\S]*endpoint: '\/admin\/translations\/managed-list-items'/,
+  'Translations page must expose a Tageszeiten tab backed by managed-list translations',
+)
+assert.match(
+  translationsPage,
+  /translated_label/,
+  'Translations page must let admins edit managed-list translated labels',
 )
 assert.doesNotMatch(
   managementPage,
@@ -117,8 +282,8 @@ assert.doesNotMatch(
 )
 const managementCreateCard = extractRequiredBlock(
   managementPage,
-  /<AdminCard title="Neue Einheit"[\s\S]*?<\/AdminCard>/,
-  'Admin management page must keep a Neue Einheit create card',
+  /<AdminCard title=\{activeConfig\.createTitle\}[\s\S]*?<\/AdminCard>/,
+  'Admin management page must keep a config-driven create card',
 )
 assert.doesNotMatch(
   managementCreateCard,

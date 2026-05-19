@@ -5,7 +5,7 @@ import { ArrowLeft, Languages, Loader2, RefreshCw, Save, Search, XCircle } from 
 import { apiClient } from '../../api/client';
 import { AdminBadge, AdminButton, AdminCard, AdminEmpty, AdminError, AdminPageHeader } from './AdminUi';
 
-type AdminEntity = 'ingredients' | 'dose-recommendations' | 'blog-posts';
+type AdminEntity = 'ingredients' | 'dose-recommendations' | 'blog-posts' | 'managed-list-items';
 type TranslationStatus = 'missing' | 'translated';
 type TranslationFilter = 'all' | 'missing' | 'translated';
 
@@ -71,11 +71,25 @@ interface BlogTranslationRow {
   status: TranslationStatus;
 }
 
+interface ManagedListItemTranslationRow {
+  managed_list_item_id: number;
+  list_key: string;
+  value: string;
+  source_label: string;
+  source_description: string | null;
+  sort_order: number;
+  language: string;
+  translated_label: string | null;
+  description: string | null;
+  status: TranslationStatus;
+}
+
 type TranslationRow =
   | IngredientTranslationRow
   | DoseRecommendationTranslationRow
   | VerifiedProfileTranslationRow
-  | BlogTranslationRow;
+  | BlogTranslationRow
+  | ManagedListItemTranslationRow;
 
 interface IngredientDraft {
   name: string;
@@ -102,7 +116,12 @@ interface BlogDraft {
   meta_description: string;
 }
 
-type TranslationDraft = IngredientDraft | DoseRecommendationDraft | VerifiedProfileDraft | BlogDraft;
+interface ManagedListItemDraft {
+  translated_label: string;
+  description: string;
+}
+
+type TranslationDraft = IngredientDraft | DoseRecommendationDraft | VerifiedProfileDraft | BlogDraft | ManagedListItemDraft;
 
 interface SavedIngredientTranslation {
   ingredient_id: number;
@@ -137,6 +156,13 @@ interface SavedBlogTranslation {
   meta_description: string | null;
 }
 
+interface SavedManagedListItemTranslation {
+  managed_list_item_id: number;
+  language: string;
+  translated_label: string;
+  description: string | null;
+}
+
 const DEFAULT_PAGE_LIMIT = 25;
 
 const LANGUAGE_OPTIONS = [
@@ -163,6 +189,12 @@ const ENTITY_CONFIG: Record<AdminEntity, EntityConfig> = {
     endpoint: '/admin/translations/blog-posts',
     searchPlaceholder: 'Titel, Slug oder Kurztext suchen',
     emptyLabel: 'Keine Blogartikel f\u00fcr diese Suche gefunden.',
+  },
+  'managed-list-items': {
+    label: 'Tageszeiten',
+    endpoint: '/admin/translations/managed-list-items',
+    searchPlaceholder: 'Tageszeit oder Wert suchen',
+    emptyLabel: 'Keine Tageszeiten f\u00fcr diese Suche gefunden.',
   },
 };
 
@@ -208,6 +240,7 @@ function rowKey(entity: AdminEntity, row: TranslationRow): string {
   if ('ingredient_id' in row) return `${entity}:${row.ingredient_id}:${language}`;
   if ('dose_recommendation_id' in row) return `${entity}:${row.dose_recommendation_id}:${language}`;
   if ('verified_profile_id' in row) return `${entity}:${row.verified_profile_id}:${language}`;
+  if ('managed_list_item_id' in row) return `${entity}:${row.managed_list_item_id}:${language}`;
   return `${entity}:${row.blog_post_id}:${language}`;
 }
 
@@ -231,6 +264,12 @@ function toDraft(row: TranslationRow): TranslationDraft {
     return {
       credentials: row.credentials ?? '',
       bio: row.bio ?? '',
+    };
+  }
+  if ('managed_list_item_id' in row) {
+    return {
+      translated_label: row.translated_label ?? '',
+      description: row.description ?? '',
     };
   }
   return {
@@ -496,6 +535,32 @@ export default function AdministratorTranslationsPage() {
             bio: translation.bio ?? '',
           },
         }));
+      } else if ('managed_list_item_id' in row) {
+        const local = draft as ManagedListItemDraft;
+        const payload = {
+          translated_label: local.translated_label.trim(),
+          description: local.description.trim() || null,
+        };
+        if (!payload.translated_label) throw new Error('Die übersetzte Tageszeit ist erforderlich.');
+        const response = await apiClient.put<{ translation: SavedManagedListItemTranslation }>(
+          `${config.endpoint}/${row.managed_list_item_id}/${normalizedLanguage}`,
+          payload,
+        );
+        const translation = response.data.translation;
+        setRows((previous) =>
+          previous.map((item) =>
+            'managed_list_item_id' in item && item.managed_list_item_id === row.managed_list_item_id
+              ? { ...item, ...translation, status: 'translated' }
+              : item,
+          ),
+        );
+        setDrafts((previous) => ({
+          ...previous,
+          [key]: {
+            translated_label: translation.translated_label,
+            description: translation.description ?? '',
+          },
+        }));
       } else {
         const local = draft as BlogDraft;
         const payload = {
@@ -563,6 +628,16 @@ export default function AdministratorTranslationsPage() {
           <p className="admin-muted">{row.base_name}</p>
           <p className="admin-muted">Slug: {row.base_slug}</p>
           <p className="admin-muted">Originale Qualifikation: {row.base_credentials || '-'}</p>
+        </div>
+      );
+    }
+    if ('managed_list_item_id' in row) {
+      return (
+        <div className="admin-empty mt-2 space-y-1">
+          <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[color:var(--admin-ink-3)]">Original</p>
+          <p className="admin-muted"><span className="font-medium text-[color:var(--admin-ink-2)]">Tageszeit:</span> {row.source_label}</p>
+          <p className="admin-muted"><span className="font-medium text-[color:var(--admin-ink-2)]">Wert:</span> {row.value}</p>
+          <p className="admin-muted"><span className="font-medium text-[color:var(--admin-ink-2)]">Beschreibung:</span> {row.source_description || 'Keine Beschreibung vorhanden.'}</p>
         </div>
       );
     }
@@ -640,6 +715,24 @@ export default function AdministratorTranslationsPage() {
             <label className="text-xs font-medium">
               Biografie
               <textarea value={local.bio} onChange={(event) => updateDraft(key, 'bio', event.target.value)} className="admin-input mt-1 min-h-[120px]" rows={4} />
+            </label>
+          </div>
+        </div>
+      );
+    }
+
+    if ('managed_list_item_id' in row) {
+      const local = draft as ManagedListItemDraft;
+      return (
+        <div className="admin-card-pad mt-3">
+          <div className="grid gap-2 md:grid-cols-2">
+            <label className="text-xs font-medium">
+              Übersetzte Tageszeit
+              <input value={local.translated_label} onChange={(event) => updateDraft(key, 'translated_label', event.target.value)} className="admin-input mt-1" required />
+            </label>
+            <label className="text-xs font-medium">
+              Übersetzte Beschreibung
+              <textarea value={local.description} onChange={(event) => updateDraft(key, 'description', event.target.value)} className="admin-input mt-1 min-h-[96px]" rows={3} />
             </label>
           </div>
         </div>
@@ -817,6 +910,7 @@ export default function AdministratorTranslationsPage() {
                 ('ingredient_id' in row && row.source_name) ||
                 ('dose_recommendation_id' in row && row.ingredient_name) ||
                 ('verified_profile_id' in row && row.base_name) ||
+                ('managed_list_item_id' in row && row.source_label) ||
                 ('blog_post_id' in row && row.r2_key) ||
                 'Zeile';
 

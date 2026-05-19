@@ -58,6 +58,8 @@ type StackMailItem = {
   servings_per_container: number | null
   container_count: number | null
   timing: string | null
+  timing_label: string | null
+  ingredient_timing_label: string | null
   dosage_text: string | null
 }
 
@@ -209,6 +211,63 @@ function formatIntakeInterval(days: number): string {
   return days <= 1 ? 'täglich' : `alle ${days} Tage`
 }
 
+function normalizedTimingSqlExpression(sourceExpression: string): string {
+  return `LOWER(REPLACE(REPLACE(TRIM(COALESCE(${sourceExpression}, '')), ' ', '_'), '-', '_'))`
+}
+
+function canonicalIntakeTimingSqlExpression(sourceExpression: string): string {
+  const normalized = normalizedTimingSqlExpression(sourceExpression)
+  return `CASE
+    WHEN ${normalized} = '' THEN NULL
+    WHEN ${normalized} IN ('anytime', 'flexible', 'jederzeit') THEN 'anytime'
+    WHEN ${normalized} LIKE '%morning_evening%' OR ${normalized} LIKE '%morgens_%_abends%' THEN 'morning_evening'
+    WHEN ${normalized} LIKE '%before_breakfast%' OR ${normalized} LIKE '%vor_dem_fr%' OR ${normalized} LIKE '%zum_fr%' THEN 'before_breakfast'
+    WHEN ${normalized} LIKE '%after_breakfast%' OR ${normalized} LIKE '%nach_dem_fr%' THEN 'after_breakfast'
+    WHEN ${normalized} LIKE '%with_meal%' OR ${normalized} LIKE '%mahlzeit%' OR ${normalized} LIKE '%essen%' THEN 'with_meal'
+    WHEN ${normalized} LIKE '%morning%' OR ${normalized} LIKE '%morgen%' THEN 'morning'
+    WHEN ${normalized} LIKE '%evening%' OR ${normalized} LIKE '%abend%' OR ${normalized} LIKE '%nacht%' THEN 'evening'
+    WHEN ${normalized} LIKE '%noon%' OR ${normalized} LIKE '%mittag%' THEN 'noon'
+    ELSE ${normalized}
+  END`
+}
+
+const STACK_TIMING_EMAIL_LABELS: Record<string, string> = {
+  anytime: 'Jederzeit',
+  flexible: 'Jederzeit',
+  jederzeit: 'Jederzeit',
+  before_breakfast: 'Vor dem Frühstück',
+  after_breakfast: 'Nach dem Frühstück',
+  with_meal: 'Zum Essen',
+  morning: 'Morgens',
+  evening: 'Abends',
+  noon: 'Mittags',
+  morning_evening: 'Morgens & Abends',
+}
+
+function normalizeTimingDisplayKey(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_')
+}
+
+function isEnumLikeTimingValue(value: string): boolean {
+  const trimmed = value.trim()
+  return /^[A-Z0-9_-]+$/.test(trimmed) || /^[a-z0-9]+(?:[_-][a-z0-9]+)+$/.test(trimmed)
+}
+
+function formatStackTimingForEmail(item: Pick<StackMailItem, 'timing_label' | 'timing'>): string {
+  const managedLabel = item.timing_label?.trim()
+  if (managedLabel) return managedLabel
+
+  const rawTiming = item.timing?.trim()
+  if (!rawTiming) return '-'
+
+  const mappedLabel = STACK_TIMING_EMAIL_LABELS[normalizeTimingDisplayKey(rawTiming)]
+  if (mappedLabel) return mappedLabel
+
+  if (isEnumLikeTimingValue(rawTiming)) return 'Jederzeit'
+
+  return rawTiming
+}
+
 function prepareMailItems(
   items: StackMailItem[],
   ingredientsByItem: Map<number, StackMailIngredient[]>,
@@ -268,7 +327,7 @@ function buildStackEmailHtml(stack: StackRow, items: StackMailPreparedItem[], to
           <br><span style="color:#64748b;">Intervall: ${escapeHtml(item.intakeIntervalLabel)}</span>
           ${item.daysSupply ? `<br><span style="color:#64748b;">reicht ca. ${item.daysSupply} Tage</span>` : ''}
         </td>
-        <td style="padding:14px 8px;border-bottom:1px solid #e5e7eb;">${escapeHtml(item.timing ?? '-')}</td>
+        <td style="padding:14px 8px;border-bottom:1px solid #e5e7eb;">${escapeHtml(formatStackTimingForEmail(item))}</td>
         <td style="padding:14px 8px;border-bottom:1px solid #e5e7eb;">${warnings}</td>
         <td style="padding:14px 8px;border-bottom:1px solid #e5e7eb;text-align:right;">
           <strong>${formatEuro(item.product_price)}</strong>
@@ -409,7 +468,10 @@ async function loadStackItems(
   ownerUserId: number,
 ): Promise<StackItemRow[]> {
   const { results } = await db.prepare(`
-    SELECT *
+    SELECT
+      base.*,
+      timing_item.label AS timing_label,
+      ingredient_timing_item.label AS ingredient_timing_label
     FROM (
       SELECT
         si.id AS stack_item_id,
@@ -510,8 +572,16 @@ async function loadStackItems(
        AND idp_base.sub_ingredient_id IS NULL
       WHERE si.stack_id = ?
         AND si.user_product_id IS NOT NULL
-    )
-    ORDER BY stack_item_id ASC
+    ) base
+    LEFT JOIN managed_list_items timing_item
+      ON timing_item.list_key = 'intake_timing'
+     AND timing_item.active = 1
+     AND timing_item.value = ${canonicalIntakeTimingSqlExpression('base.timing')}
+    LEFT JOIN managed_list_items ingredient_timing_item
+      ON ingredient_timing_item.list_key = 'intake_timing'
+     AND ingredient_timing_item.active = 1
+     AND ingredient_timing_item.value = ${canonicalIntakeTimingSqlExpression('base.ingredient_timing')}
+    ORDER BY base.stack_item_id ASC
   `).bind(stackId, ownerUserId, stackId).all<StackItemRow>()
   return results
 }

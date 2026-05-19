@@ -34,10 +34,12 @@ interface ProductCardProduct {
   product_name?: string | null;
   product_brand?: string | null;
   timing?: string;
+  timing_label?: string | null;
   dosage_text?: string;
   intake_interval_days?: number;
   ingredient_effect_summary?: string | null;
   ingredient_timing?: string | null;
+  ingredient_timing_label?: string | null;
   ingredient_timing_note?: string | null;
   ingredient_intake_hint?: string | null;
   ingredients?: Array<{
@@ -315,7 +317,7 @@ type TimingKey = 'morning' | 'evening' | 'noon' | 'trial' | 'anytime';
 
 function getTimingKey(timing?: string): TimingKey {
   const t = (timing ?? '').toLowerCase();
-  if (t.includes('morgen') || t.includes('morning') || t.includes('fr\u00fch')) return 'morning';
+  if (t.includes('before_breakfast') || t.includes('after_breakfast') || t.includes('morning_evening') || t.includes('morgen') || t.includes('morning') || t.includes('fr\u00fch')) return 'morning';
   if (t.includes('abend') || t.includes('evening') || t.includes('nacht')) return 'evening';
   if (t.includes('mittag') || t.includes('noon')) return 'noon';
   if (t.includes('probe') || t.includes('trial') || t.includes('test')) return 'trial';
@@ -324,17 +326,53 @@ function getTimingKey(timing?: string): TimingKey {
 
 function getListTimingPanelKey(timing?: string): TimingKey | 'meal' {
   const t = (timing ?? '').toLowerCase();
-  if (t.includes('mahlzeit') || t.includes('meal') || t.includes('essen')) return 'meal';
+  if (t.includes('with_meal') || t.includes('mahlzeit') || t.includes('meal') || t.includes('essen')) return 'meal';
   return getTimingKey(timing);
 }
 
 const TIMING_STYLES: Record<TimingKey, { cls: string; label: string }> = {
-  morning: { cls: 'bg-[#fef3c7] text-[#d97706]', label: 'Zum Fr\u00fchst\u00fcck' },
-  evening: { cls: 'bg-[#ede9fe] text-[#7c3aed]', label: 'Zum Abendessen' },
+  morning: { cls: 'bg-[#fef3c7] text-[#d97706]', label: 'Morgens' },
+  evening: { cls: 'bg-[#ede9fe] text-[#7c3aed]', label: 'Abends' },
   noon:    { cls: 'bg-[#dcfce7] text-[#16a34a]', label: 'Mittags' },
   trial:   { cls: 'bg-[#fee2e2] text-[#dc2626] border border-dashed border-[#fca5a5]', label: 'Zum Probieren' },
   anytime: { cls: 'bg-[#e0f2fe] text-[#0284c7]', label: 'Jederzeit' },
 };
+
+const TIMING_LABELS: Record<string, string> = {
+  anytime: 'Jederzeit',
+  flexible: 'Jederzeit',
+  before_breakfast: 'Vor dem Frühstück',
+  after_breakfast: 'Nach dem Frühstück',
+  with_meal: 'Zum Essen',
+  morning: 'Morgens',
+  MORNING: 'Morgens',
+  evening: 'Abends',
+  EVENING: 'Abends',
+  noon: 'Mittags',
+  morning_evening: 'Morgens & Abends',
+  zum_essen: 'Zum Essen',
+  zum_fruehstueck: 'Vor dem Frühstück',
+  zum_frühstück: 'Vor dem Frühstück',
+  zum_abendessen: 'Abends',
+};
+
+function humanizeTimingFallback(timing?: string | null): string {
+  const raw = timing?.trim();
+  if (!raw) return TIMING_STYLES.anytime.label;
+  const enumLike = /^[A-Z0-9_-]+$/.test(raw) || /^[a-z0-9_-]+$/.test(raw);
+  if (enumLike) return TIMING_STYLES.anytime.label;
+  return raw.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim() || TIMING_STYLES.anytime.label;
+}
+
+function getTimingDisplayLabel(timing?: string | null, managedLabel?: string | null): string {
+  const label = managedLabel?.trim();
+  if (label) return label;
+  const raw = timing?.trim();
+  if (!raw) return TIMING_STYLES.anytime.label;
+  const normalized = raw.toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_');
+  const timingKey = getTimingKey(raw);
+  return TIMING_LABELS[raw] ?? TIMING_LABELS[normalized] ?? (timingKey === 'anytime' ? humanizeTimingFallback(raw) : TIMING_STYLES[timingKey].label);
+}
 
 type CategoryKey = 'vitamin' | 'mineral' | 'omega' | 'protein' | 'default';
 
@@ -462,8 +500,10 @@ export default function ProductCard({
   const emoji = CATEGORY_EMOJI[category];
 
   const effectiveTiming = product.ingredient_timing?.trim() || product.timing;
+  const effectiveTimingLabel = product.ingredient_timing_label?.trim() || product.timing_label?.trim();
   const timingKey = getTimingKey(effectiveTiming);
   const timing = TIMING_STYLES[timingKey];
+  const timingLabel = getTimingDisplayLabel(effectiveTiming, effectiveTimingLabel);
 
   const productHost = normalizeShopHostname(product.shop_link);
   const directShopHref = normalizeShopHref(product.shop_link);
@@ -506,7 +546,6 @@ export default function ProductCard({
   if (display === 'list') {
     const listDose = getListDose(product);
     const timingPanelKey = getListTimingPanelKey(effectiveTiming);
-    const timingLabel = effectiveTiming ? effectiveTiming : timing.label;
     return (
       <article
         onClick={onToggleSelected}
@@ -760,7 +799,7 @@ export default function ProductCard({
             {name}
           </div>
           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-extrabold ${timing.cls}`}>
-            {effectiveTiming ? effectiveTiming : timing.label}
+            {timingLabel}
           </span>
           {recommendationType && (
             <span className={`ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-extrabold ${

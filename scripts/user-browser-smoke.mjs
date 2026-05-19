@@ -262,6 +262,9 @@ function assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSo
   assertSourceIncludes(stackWorkspaceSource, 'sortProductsForDisplay', 'display-only product sort helper');
   assertSourceIncludes(stackWorkspaceSource, 'sortedActiveProducts', 'sorted product display list');
   assertSourceIncludes(stackWorkspaceSource, "['morning', 'noon', 'evening', 'flexible']", 'fixed timing sort order');
+  assertSourceIncludes(stackWorkspaceSource, 'morning_evening', 'expanded morning/evening timing sort support');
+  assertSourceIncludes(stackWorkspaceSource, 'before_breakfast', 'expanded breakfast timing sort support');
+  assertSourceIncludes(stackWorkspaceSource, 'with_meal', 'expanded meal timing sort support');
   const sortProductsForDisplaySource = assertFunctionSource(stackWorkspaceSource, 'sortProductsForDisplay');
   assertSourceIncludes(sortProductsForDisplaySource, "if (sortMode === 'az')", 'A-Z branch inside sortProductsForDisplay');
   assertSourceIncludes(sortProductsForDisplaySource, "if (sortMode === 'az') return sorted.sort(compareProductsByName);", 'A-Z sort branch inside sortProductsForDisplay');
@@ -270,6 +273,14 @@ function assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSo
   assertSourceIncludes(sortProductsForDisplaySource, 'PRODUCT_TIMING_ORDER.indexOf', 'timing order lookup inside sortProductsForDisplay');
   assertSourceIncludes(sortProductsForDisplaySource, 'return byTiming || compareProductsByName(a, b);', 'secondary name sort inside timing sort');
   assertSourceIncludes(stackWorkspaceSource, 'Tageszeiten', 'timing sort toggle label');
+  assertSourceIncludes(stackWorkspaceSource, 'getPublicIntakeTimings', 'StackWorkspace must load public managed intake timing options');
+  assertSourceIncludes(stackWorkspaceSource, 'managedTimingOptions', 'StackWorkspace must store managed intake timing options');
+  assertSourceIncludes(stackWorkspaceSource, 'buildIntakeTimingOptions(managedTimingOptions)', 'StackWorkspace edit modal must use managed timing options with fallback');
+  assertSourceIncludes(stackWorkspaceSource, 'timingLabelForDisplay(timing, managedTimingOptions)', 'StackWorkspace timing displays must prefer managed labels');
+  if (/return INTAKE_TIMING_LABELS\[normalized\] \?\? raw;/.test(stackWorkspaceSource)) {
+    throw new Error('StackWorkspace timingLabelForDisplay must not return raw unknown enum-like values.');
+  }
+  assertSourceIncludes(stackWorkspaceSource, 'humanizeTimingFallback', 'StackWorkspace must humanize unknown timing fallback values');
   assertSourceIncludes(stackWorkspaceSource, 'A-Z', 'alphabetical sort toggle label');
   assertSourceIncludes(stackWorkspaceSource, 'ss-product-title-controls', 'product title controls wrapper');
   assertSourceIncludes(stackWorkspaceSource, 'stack-cockpit-user', 'stack hero user identity slot');
@@ -456,6 +467,31 @@ function assertProductCardStaticChecks(productCardSource, stylesSource) {
     throw new Error('Expected ProductCard.tsx to use modal warning details only, without inline tooltip markup.');
   }
 
+  const germanTimingFunctionSource = productCardSource;
+  for (const [rawValue, germanLabel] of [
+    ['evening', 'Abends'],
+    ['EVENING', 'Abends'],
+    ['with_meal', 'Zum Essen'],
+    ['before_breakfast', 'Vor dem Frühstück'],
+    ['after_breakfast', 'Nach dem Frühstück'],
+    ['morning_evening', 'Morgens & Abends'],
+    ['flexible', 'Jederzeit'],
+  ]) {
+    if (!germanTimingFunctionSource.includes(rawValue) || !germanTimingFunctionSource.includes(germanLabel)) {
+      throw new Error(`Expected ProductCard timing label mapping ${rawValue} -> ${germanLabel}.`);
+    }
+  }
+  if (/effectiveTiming \? effectiveTiming : timing\.label/.test(productCardSource)) {
+    throw new Error('ProductCard.tsx must not render raw effectiveTiming values in stack cards or list captions.');
+  }
+  assertSourceIncludes(productCardSource, 'timing_label?: string | null', 'ProductCard product type must accept managed timing labels');
+  assertSourceIncludes(productCardSource, 'ingredient_timing_label?: string | null', 'ProductCard product type must accept managed ingredient timing labels');
+  assertSourceIncludes(productCardSource, 'const effectiveTimingLabel = product.ingredient_timing_label?.trim() || product.timing_label?.trim()', 'ProductCard must prefer managed timing labels before raw timing');
+  assertSourceIncludes(productCardSource, 'const timingLabel = getTimingDisplayLabel(effectiveTiming, effectiveTimingLabel)', 'central German timing display label helper must accept managed labels');
+  if (/timingKey === 'anytime' \? raw : TIMING_STYLES\[timingKey\]\.label/.test(productCardSource)) {
+    throw new Error('ProductCard timing fallback must not return raw unknown enum-like values.');
+  }
+  assertSourceIncludes(productCardSource, 'humanizeTimingFallback', 'ProductCard must humanize unknown timing fallback values');
   const listRowStyles = Array.from(stylesSource.matchAll(/\.ss-product-list-row\s*\{[^}]*\}/g), (match) => match[0]);
   const listRowStyle = listRowStyles[0] ?? '';
   const listMediaPanelStyle = stylesSource.match(/\.ss-product-list-media-panel\s*\{[^}]*\}/)?.[0] ?? '';

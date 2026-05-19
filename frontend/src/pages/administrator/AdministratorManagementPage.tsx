@@ -14,6 +14,20 @@ import { AdminBadge, AdminButton, AdminCard, AdminEmpty, AdminError, AdminPageHe
 type ManagedListConfig = {
   key: AdminManagedListKey;
   label: string;
+  heading: string;
+  fieldLabel: string;
+  createTitle: string;
+  createSubtitle: string;
+  createActionLabel: string;
+  cardSubtitle: string;
+  emptyLabel: string;
+  loadingLabel: string;
+  savedMessage: string;
+  updatedMessage: string;
+  deactivatedMessage: string;
+  confirmDeactivateLabel: string;
+  showPlural: boolean;
+  preserveValueOnEdit: boolean;
 };
 
 type UnitDraft = {
@@ -26,8 +40,56 @@ const MANAGED_LISTS: ManagedListConfig[] = [
   {
     key: 'serving_unit',
     label: 'Einheiten',
+    heading: 'Einheiten / Verabreichungsformen',
+    fieldLabel: 'Einheit',
+    createTitle: 'Neue Einheit',
+    createSubtitle: 'Neue Verabreichungsform anlegen',
+    createActionLabel: 'Einheit anlegen',
+    cardSubtitle: 'Welche Verabreichungsform hat das Produkt?',
+    emptyLabel: 'Keine Einheiten vorhanden.',
+    loadingLabel: 'Lade Einheiten...',
+    savedMessage: 'Einheit gespeichert.',
+    updatedMessage: 'Einheit aktualisiert.',
+    deactivatedMessage: 'Einheit deaktiviert.',
+    confirmDeactivateLabel: 'Einheit',
+    showPlural: true,
+    preserveValueOnEdit: false,
+  },
+  {
+    key: 'intake_timing',
+    label: 'Tageszeiten',
+    heading: 'Tageszeiten',
+    fieldLabel: 'Tageszeit',
+    createTitle: 'Neue Tageszeit',
+    createSubtitle: 'Neue Tageszeit anlegen',
+    createActionLabel: 'Tageszeit anlegen',
+    cardSubtitle: 'Wann wird ein Produkt eingenommen?',
+    emptyLabel: 'Keine Tageszeiten vorhanden.',
+    loadingLabel: 'Lade Tageszeiten...',
+    savedMessage: 'Tageszeit gespeichert.',
+    updatedMessage: 'Tageszeit aktualisiert.',
+    deactivatedMessage: 'Tageszeit deaktiviert.',
+    confirmDeactivateLabel: 'Tageszeit',
+    showPlural: false,
+    preserveValueOnEdit: true,
   },
 ];
+
+function managedListValueFromLabel(label: string): string {
+  return label
+    .trim()
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/ä/g, 'ae')
+    .replace(/ö/g, 'oe')
+    .replace(/ü/g, 'ue')
+    .replace(/ß/g, 'ss')
+    .replace(/&/g, 'und')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    || 'wert';
+}
 
 function emptyDraft(): UnitDraft {
   return {
@@ -139,7 +201,7 @@ export default function AdministratorManagementPage() {
   const handleCreate = async () => {
     const unit = newDraft.unit.trim();
     if (!unit) {
-      setError('Einheit ist erforderlich.');
+      setError(`${activeConfig.fieldLabel} ist erforderlich.`);
       return;
     }
 
@@ -148,13 +210,13 @@ export default function AdministratorManagementPage() {
     setMessage('');
     try {
       await createAdminManagedListItem(activeListKey, {
-        value: unit,
+        value: activeConfig.preserveValueOnEdit ? managedListValueFromLabel(unit) : unit,
         label: unit,
-        plural_label: newDraft.plural_label.trim() || null,
+        plural_label: activeConfig.showPlural ? newDraft.plural_label.trim() || null : null,
         description: newDraft.description.trim() || null,
       });
       await load();
-      setMessage('Einheit gespeichert.');
+      setMessage(activeConfig.savedMessage);
     } catch (errorValue) {
       setError(getErrorMessage(errorValue));
     } finally {
@@ -165,7 +227,7 @@ export default function AdministratorManagementPage() {
   const handleSave = async (item: AdminManagedListItem) => {
     const unit = draft.unit.trim();
     if (!unit) {
-      setError('Einheit ist erforderlich.');
+      setError(`${activeConfig.fieldLabel} ist erforderlich.`);
       return;
     }
 
@@ -177,16 +239,16 @@ export default function AdministratorManagementPage() {
         activeListKey,
         item.id,
         {
-          value: unit,
+          value: activeConfig.preserveValueOnEdit ? item.value : unit,
           label: unit,
-          plural_label: draft.plural_label.trim() || null,
+          plural_label: activeConfig.showPlural ? draft.plural_label.trim() || null : null,
           description: draft.description.trim() || null,
         },
         { version: item.version },
       );
       await load();
       setEditingId(null);
-      setMessage('Einheit aktualisiert.');
+      setMessage(activeConfig.updatedMessage);
     } catch (errorValue) {
       setError(getErrorMessage(errorValue));
     } finally {
@@ -195,7 +257,7 @@ export default function AdministratorManagementPage() {
   };
 
   const handleDeactivate = async (item: AdminManagedListItem) => {
-    if (!window.confirm(`Einheit "${item.label}" deaktivieren?`)) return;
+    if (!window.confirm(`${activeConfig.confirmDeactivateLabel} "${item.label}" deaktivieren?`)) return;
     setSavingId('deactivate');
     setError('');
     setMessage('');
@@ -203,7 +265,7 @@ export default function AdministratorManagementPage() {
       await deactivateAdminManagedListItem(activeListKey, item.id, { version: item.version });
       await load();
       if (editingId === item.id) handleCancelEdit();
-      setMessage('Einheit deaktiviert.');
+      setMessage(activeConfig.deactivatedMessage);
     } catch (errorValue) {
       setError(getErrorMessage(errorValue));
     } finally {
@@ -260,7 +322,7 @@ export default function AdministratorManagementPage() {
   ) => (
     <div className="admin-managed-row-form">
       <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
-        Einheit
+        {activeConfig.fieldLabel}
         <input
           value={currentDraft.unit}
           onChange={(event) => onChange('unit', event.target.value)}
@@ -268,15 +330,17 @@ export default function AdministratorManagementPage() {
           maxLength={80}
         />
       </label>
-      <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
-        Mehrzahl
-        <input
-          value={currentDraft.plural_label}
-          onChange={(event) => onChange('plural_label', event.target.value)}
-          className="admin-input mt-1"
-          maxLength={120}
-        />
-      </label>
+      {activeConfig.showPlural ? (
+        <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
+          Mehrzahl
+          <input
+            value={currentDraft.plural_label}
+            onChange={(event) => onChange('plural_label', event.target.value)}
+            className="admin-input mt-1"
+            maxLength={120}
+          />
+        </label>
+      ) : null}
       <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
         Beschreibung
         <input
@@ -321,7 +385,7 @@ export default function AdministratorManagementPage() {
       </div>
 
       <div className="mb-4">
-        <h2 className="admin-section-title">Einheiten / Verabreichungsformen</h2>
+        <h2 className="admin-section-title">{activeConfig.heading}</h2>
       </div>
 
       {error ? <AdminError>{error}</AdminError> : null}
@@ -331,28 +395,28 @@ export default function AdministratorManagementPage() {
         </div>
       ) : null}
 
-      <AdminCard title="Neue Einheit" subtitle="Neue Verabreichungsform anlegen" padded>
+      <AdminCard title={activeConfig.createTitle} subtitle={activeConfig.createSubtitle} padded>
         {renderDraftFields(
           newDraft,
           updateNewDraft,
           <AdminButton variant="primary" onClick={() => void handleCreate()} disabled={savingId === 'create'}>
             <Plus size={14} />
-            {savingId === 'create' ? 'Speichere...' : 'Einheit anlegen'}
+            {savingId === 'create' ? 'Speichere...' : activeConfig.createActionLabel}
           </AdminButton>,
         )}
       </AdminCard>
 
-      <AdminCard title={activeConfig.label} subtitle="Welche Verabreichungsform hat das Produkt?" className="mt-4">
-        {loading ? <AdminEmpty>Lade Einheiten...</AdminEmpty> : null}
-        {!loading && items.length === 0 ? <AdminEmpty>Keine Einheiten vorhanden.</AdminEmpty> : null}
+      <AdminCard title={activeConfig.label} subtitle={activeConfig.cardSubtitle} className="mt-4">
+        {loading ? <AdminEmpty>{activeConfig.loadingLabel}</AdminEmpty> : null}
+        {!loading && items.length === 0 ? <AdminEmpty>{activeConfig.emptyLabel}</AdminEmpty> : null}
         {!loading && items.length > 0 ? (
           <>
             <div className="admin-table-wrap hidden md:block">
               <table className="admin-table admin-managed-table">
                 <thead>
                   <tr>
-                    <th>Einheit</th>
-                    <th>Mehrzahl</th>
+                    <th>{activeConfig.fieldLabel}</th>
+                    {activeConfig.showPlural ? <th>Mehrzahl</th> : null}
                     <th>Beschreibung</th>
                     <th>Status</th>
                     <th>Aktionen</th>
@@ -363,7 +427,7 @@ export default function AdministratorManagementPage() {
                   {items.map((item) => (
                     editingId === item.id ? (
                       <tr key={item.id}>
-                        <td colSpan={6}>
+                        <td colSpan={activeConfig.showPlural ? 6 : 5}>
                           {renderDraftFields(draft, updateDraft)}
                           <div className="mt-3 flex flex-wrap justify-end gap-2">
                             <AdminButton variant="ghost" size="sm" onClick={handleCancelEdit} disabled={savingId !== null}>
@@ -387,7 +451,7 @@ export default function AdministratorManagementPage() {
                         onDrop={() => handleDropOnItem(item.id)}
                       >
                         <td className="font-medium">{item.label}</td>
-                        <td>{item.plural_label || '-'}</td>
+                        {activeConfig.showPlural ? <td>{item.plural_label || '-'}</td> : null}
                         <td className="admin-muted">{item.description || '-'}</td>
                         <td>
                           <AdminBadge tone={item.active !== 0 ? 'ok' : 'neutral'}>
@@ -415,7 +479,7 @@ export default function AdministratorManagementPage() {
                             onDragStart={(event) => handleDragStart(event, item.id)}
                             onDragEnd={() => setDraggedItemId(null)}
                             disabled={reorderDisabled}
-                            aria-label={`Einheit ${item.label} verschieben`}
+                            aria-label={`${activeConfig.fieldLabel} ${item.label} verschieben`}
                             title="Reihenfolge ändern"
                           >
                             <GripVertical size={16} />
@@ -457,7 +521,7 @@ export default function AdministratorManagementPage() {
                       <div className="flex items-start justify-between gap-2">
                         <div>
                           <div className="font-medium">{item.label}</div>
-                          <div className="admin-muted text-xs">Mehrzahl: {item.plural_label || '-'}</div>
+                          {activeConfig.showPlural ? <div className="admin-muted text-xs">Mehrzahl: {item.plural_label || '-'}</div> : null}
                         </div>
                         <AdminBadge tone={item.active !== 0 ? 'ok' : 'neutral'}>
                           {item.active !== 0 ? 'aktiv' : 'inaktiv'}
@@ -504,7 +568,7 @@ export default function AdministratorManagementPage() {
                             onDragStart={(event) => handleDragStart(event, item.id)}
                             onDragEnd={() => setDraggedItemId(null)}
                             disabled={reorderDisabled}
-                            aria-label={`Einheit ${item.label} verschieben`}
+                            aria-label={`${activeConfig.fieldLabel} ${item.label} verschieben`}
                             title="Reihenfolge ändern"
                           >
                             <GripVertical size={16} />
