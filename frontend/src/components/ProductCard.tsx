@@ -1,11 +1,10 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
 import { AlertTriangle, ExternalLink, Flag, Info, Pencil, RefreshCcw, Trash2 } from 'lucide-react';
 import type { ShopDomain } from '../types/local';
 import type { ProductSafetyWarning } from '../types';
+import ModalWrapper from './modals/ModalWrapper';
 import {
   calculateProductUsage,
-  ingredientAmountPerProductServing,
   intakeIntervalDays as getIntakeIntervalDays,
 } from '../lib/stackCalculations';
 
@@ -70,6 +69,7 @@ type WarningSeverity = 'danger' | 'caution' | 'info';
 interface CompactWarning {
   label: string;
   severity: WarningSeverity;
+  title?: string | null;
   detail?: string;
   articleTitle?: string | null;
   articleUrl?: string | null;
@@ -103,6 +103,29 @@ function formatCompactAmount(value: number): string {
   return new Intl.NumberFormat('de-DE', { maximumFractionDigits: 2 }).format(value);
 }
 
+const LIST_COUNT_UNITS = [
+  'kapsel',
+  'kapseln',
+  'tablette',
+  'tabletten',
+  'lutschtablette',
+  'lutschtabletten',
+  'softgel',
+  'softgels',
+  'tropfen',
+  'portion',
+  'portionen',
+  'messlöffel',
+  'messloeffel',
+  'beutel',
+  'stick',
+  'sticks',
+  'scoop',
+  'scoops',
+] as const;
+
+const LIST_MASS_UNITS = ['mg', 'g', 'kg', 'ml', 'l', 'dl', 'cl', 'µg', 'ug', 'mcg', 'iu', 'ie'] as const;
+
 function effectPoints(value?: string | null): string[] {
   return (value ?? '')
     .split(/[,;]+/)
@@ -112,7 +135,7 @@ function effectPoints(value?: string | null): string[] {
 }
 
 function unitLabel(unit?: string, amount?: number): string {
-  const normalized = (unit ?? '').replace(/\bIU\b/gi, 'IE').replace(/\biu\b/g, 'IE').trim();
+  const normalized = normalizeDoseUnit(unit);
   const singular = amount == null || Math.abs(amount - 1) < 0.001;
   switch (normalized.toLowerCase()) {
     case 'kapsel':
@@ -126,16 +149,48 @@ function unitLabel(unit?: string, amount?: number): string {
       return singular ? 'Softgel' : 'Softgels';
     case 'tropfen':
       return 'Tropfen';
+    case 'lutschtablette':
+      return singular ? 'Lutschtablette' : 'Lutschtabletten';
     case 'portion':
     case 'portionen':
       return singular ? 'Portion' : 'Portionen';
+    case 'messlöffel':
+    case 'messloeffel':
+      return singular ? 'Messlöffel' : 'Messlöffel';
+    case 'beutel':
+      return singular ? 'Beutel' : 'Beutel';
+    case 'stick':
+    case 'sticks':
+      return singular ? 'Stick' : 'Sticks';
+    case 'scoop':
+    case 'scoops':
+      return singular ? 'Scoop' : 'Scoops';
     default:
       return normalized;
   }
 }
 
+function normalizeDoseUnit(unit?: string | null): string {
+  return (unit ?? '')
+    .replace(/\bIU\b/gi, 'IE')
+    .replace(/\biu\b/g, 'IE')
+    .replace(/\u03bc/g, '\u00b5')
+    .trim();
+}
+
 function calcMonthlyPrice(product: ProductCardProduct, price: number): number | null {
   return calculateProductUsage(product, price).monthlyCost;
+}
+
+function parseGermanAmount(value: string): number | null {
+  const trimmed = value.trim();
+  const normalized = trimmed.includes(',')
+    ? trimmed.replace(/\./g, '').replace(',', '.')
+    : /^\d{1,3}(?:\.\d{3})+$/.test(trimmed)
+      ? trimmed.replace(/\./g, '')
+      : trimmed;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
 function getDaysSupply(product: ProductCardProduct): number | null {
@@ -154,8 +209,44 @@ function isSearchRelevant(ingredient: NonNullable<ProductCardProduct['ingredient
 }
 
 function isCountUnit(unit?: string | null): boolean {
-  const normalized = (unit ?? '').trim().toLowerCase();
-  return ['kapsel', 'kapseln', 'tablette', 'tabletten', 'softgel', 'softgels', 'tropfen', 'portion', 'portionen'].includes(normalized);
+  const normalized = normalizeDoseUnit(unit).toLowerCase();
+  return LIST_COUNT_UNITS.includes(normalized as (typeof LIST_COUNT_UNITS)[number]);
+}
+
+function isListMassUnit(unit?: string | null): boolean {
+  const normalized = normalizeDoseUnit(unit).toLowerCase();
+  return LIST_MASS_UNITS.includes(normalized as (typeof LIST_MASS_UNITS)[number]);
+}
+
+function stripTrailingDoseContext(dose: string): string {
+  return dose.replace(/\s*\([^)]*\)\s*$/g, '').trim();
+}
+
+function parseCountDoseFromText(dose: string): { amount: number; unit: string } | null {
+  const normalizedText = dose.trim();
+  const unitPattern = [...LIST_COUNT_UNITS, ...LIST_MASS_UNITS]
+    .map((unit) => unit.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('|');
+  const match = new RegExp(
+    `^(?:ca\\.\\s*)?(\\d+(?:[.,]\\d{1,3})?(?:\\.\\d{3})?)\\s*(?:x\\s*)?(${unitPattern})\\b`,
+    'i',
+  ).exec(normalizedText);
+  if (!match) return null;
+
+  const amount = parseGermanAmount(match[1]);
+  if (amount == null || amount <= 0) return null;
+
+  return { amount, unit: normalizeDoseUnit(match[2]) };
+}
+
+function getListCountFallback(product: ProductCardProduct): string | null {
+  if (product.serving_size != null && isCountUnit(product.serving_unit)) {
+    return `${formatCompactAmount(product.serving_size)} ${unitLabel(product.serving_unit, product.serving_size)}`;
+  }
+  if (product.quantity != null && product.quantity > 0 && isCountUnit(product.unit)) {
+    return `${formatCompactAmount(product.quantity)} ${unitLabel(product.unit, product.quantity)}`;
+  }
+  return null;
 }
 
 function reliableServingUnit(product: ProductCardProduct): string | null {
@@ -172,24 +263,35 @@ function hasManualCountQuantity(product: ProductCardProduct): boolean {
   return !productUnit || isCountUnit(productUnit);
 }
 
-function primaryContentAmount(product: ProductCardProduct, servingsPerDay: number): { amount: number; unit: string } | null {
-  const ingredient = product.ingredients?.find(isSearchRelevant) ?? product.ingredients?.[0];
-  if (ingredient?.unit) {
-    const amountPerServing = ingredientAmountPerProductServing(ingredient, product);
-    if (amountPerServing != null && amountPerServing > 0) {
-      return { amount: amountPerServing * servingsPerDay, unit: ingredient.unit };
+function getListDoseFallback(product: ProductCardProduct): string {
+  const dose = stripTrailingDoseContext(getDose(product));
+  if (!dose) return '\u2014';
+  const parsed = parseCountDoseFromText(dose);
+  if (parsed) {
+    if (isCountUnit(parsed.unit)) {
+      return `${formatCompactAmount(parsed.amount)} ${unitLabel(parsed.unit, parsed.amount)}`;
+    }
+    if (isListMassUnit(parsed.unit)) {
+      return getListCountFallback(product) ?? '\u2014';
     }
   }
 
-  if (product.quantity && product.unit && !isCountUnit(product.unit)) {
-    return { amount: product.quantity * servingsPerDay, unit: product.unit };
+  const normalizedDose = normalizeDoseUnit(dose).toLowerCase();
+  const containsMassUnit = LIST_MASS_UNITS.some((massUnit) => normalizedDose.includes(` ${massUnit}`) || normalizedDose.includes(`${massUnit} `));
+  if (containsMassUnit) {
+    return getListCountFallback(product) ?? '\u2014';
   }
 
-  return null;
+  return dose;
 }
 
-function getListDoseFallback(product: ProductCardProduct): string {
-  return getDose(product);
+function getProductWarningTitle(item: ProductSafetyWarning): string | null {
+  const candidate = (item as { title?: unknown }).title;
+  if (typeof candidate === 'string') {
+    const trimmed = candidate.trim();
+    if (trimmed) return trimmed;
+  }
+  return null;
 }
 
 function getListDose(product: ProductCardProduct): string {
@@ -201,11 +303,9 @@ function getListDose(product: ProductCardProduct): string {
   const interval = getIntakeIntervalDays(product);
   const servingsPerDay = interval > 1 ? usage.effectiveDailyUsage : usage.servingsPerIntake;
   const servingUnit = reliableServingUnit(product);
-  const content = primaryContentAmount(product, servingsPerDay);
-  const contentLabel = content ? ` (${formatCompactAmount(content.amount)} ${unitLabel(content.unit, content.amount)})` : '';
 
   if (servingsPerDay > 0 && servingUnit) {
-    return `${formatCompactAmount(servingsPerDay)} ${unitLabel(servingUnit, servingsPerDay)}${contentLabel} pro Tag`;
+    return `${formatCompactAmount(servingsPerDay)} ${unitLabel(servingUnit, servingsPerDay)} pro Tag`;
   }
 
   return getListDoseFallback(product);
@@ -290,6 +390,7 @@ function getCompactWarnings(product: ProductCardProduct, warning: ProductWarning
       return {
         label,
         severity: normalizeWarningSeverity(item.severity),
+        title: getProductWarningTitle(item),
         detail: item.popover_text.trim() || undefined,
         articleTitle: item.article_title,
         articleUrl: item.article_url,
@@ -307,6 +408,7 @@ function getCompactWarnings(product: ProductCardProduct, warning: ProductWarning
   return [{
     label,
     severity: normalizeWarningSeverity(warning.type),
+    title: warning.title?.trim() || null,
     detail: detail && detail !== label ? detail : undefined,
   }];
 }
@@ -349,7 +451,7 @@ export default function ProductCard({
   recommendationType, showSelectButton = false,
   shopDomains, selected = false, warning, display = 'card',
 }: ProductCardProps) {
-  const [openWarningKey, setOpenWarningKey] = useState<string | null>(null);
+  const [openWarningIndex, setOpenWarningIndex] = useState<number | null>(null);
   const price = product.product_price ?? product.price;
   const brand = product.product_brand ?? product.brand;
   const name = product.product_name ?? product.name;
@@ -392,13 +494,19 @@ export default function ProductCard({
     : null;
   const cardWarning = warning ?? productWarning ?? getFallbackWarning(product);
   const compactWarnings = getCompactWarnings(product, cardWarning);
+  const openWarning = openWarningIndex != null ? compactWarnings[openWarningIndex] ?? null : null;
+  const closeWarningModal = () => setOpenWarningIndex(null);
+  const openWarningModal = (index: number) => {
+    const nextWarning = compactWarnings[index] ?? null;
+    if (nextWarning) {
+      setOpenWarningIndex(index);
+    }
+  };
 
   if (display === 'list') {
     const listDose = getListDose(product);
     const timingPanelKey = getListTimingPanelKey(effectiveTiming);
     const timingLabel = effectiveTiming ? effectiveTiming : timing.label;
-    const warningDetailId = `product-list-warning-${product.id}`;
-
     return (
       <article
         onClick={onToggleSelected}
@@ -459,56 +567,30 @@ export default function ProductCard({
           {compactWarnings.length > 0 && (
             <div className="ss-product-list-warnings">
               {compactWarnings.map((compactWarning, index) => {
-                const itemKey = `list-${product.id}-${index}`;
-                const isOpen = openWarningKey === itemKey;
+                const hasDetails = Boolean(compactWarning.detail || compactWarning.articleUrl);
                 return (
                   <div
-                    key={itemKey}
+                    key={`${product.id}-${index}`}
                     className={`ss-product-list-warning ss-product-warning-summary ss-product-warning-severity-${compactWarning.severity}`}
                     data-warning-severity={compactWarning.severity}
                     onClick={(e) => e.stopPropagation()}
-                    onBlur={(e) => {
-                      if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
-                        setOpenWarningKey((current) => (current === itemKey ? null : current));
-                      }
-                    }}
                   >
                     <AlertTriangle size={13} />
                     <strong>Achtung</strong>
                     <span>{compactWarning.label}</span>
-                    {(compactWarning.detail || compactWarning.articleUrl) && (
+                    {hasDetails && (
                       <button
                         type="button"
                         aria-label={`Mehr Informationen: ${compactWarning.label}`}
-                        aria-expanded={isOpen}
-                        aria-describedby={`${warningDetailId}-${index}`}
+                        aria-expanded={openWarningIndex === index}
                         className="ss-product-warning-info"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setOpenWarningKey((current) => (current === itemKey ? null : itemKey));
+                          openWarningModal(index);
                         }}
-                        onFocus={() => setOpenWarningKey(itemKey)}
                       >
                         <Info size={13} />
                       </button>
-                    )}
-                    {(compactWarning.detail || compactWarning.articleUrl) && (
-                      <span
-                        id={`${warningDetailId}-${index}`}
-                        role="tooltip"
-                        className={`ss-product-warning-detail ${isOpen ? 'open' : ''}`}
-                      >
-                        {compactWarning.detail && <span>{compactWarning.detail}</span>}
-                        {compactWarning.articleUrl && (
-                          <Link
-                            to={compactWarning.articleUrl}
-                            onClick={(e) => e.stopPropagation()}
-                            className="ss-product-warning-link"
-                          >
-                            {compactWarning.articleTitle ?? 'Mehr lesen'}
-                          </Link>
-                        )}
-                      </span>
                     )}
                   </div>
                 );
@@ -569,19 +651,57 @@ export default function ProductCard({
                 <Trash2 size={15} />
               </button>
             )}
-            {showSelectButton && onSelect && (
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); onSelect(); }}
-                className="ss-product-list-alt"
-              >
-                Alternative
-              </button>
-            )}
+              {showSelectButton && onSelect && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onSelect(); }}
+                  className="ss-product-list-alt"
+                >
+                  Alternative
+                </button>
+              )}
+            </div>
           </div>
-        </div>
-      </article>
-    );
+          {openWarning && (
+            <div onClick={(event) => event.stopPropagation()}>
+              <ModalWrapper onClose={closeWarningModal} title={openWarning.title ?? 'Warnung'} size="md">
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-[10px] font-extrabold uppercase tracking-[0.4px] text-slate-400">Warnung</p>
+                    <p className="mt-1 font-bold text-slate-900">
+                      {openWarning.title ?? 'Hinweis'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-extrabold uppercase tracking-[0.4px] text-slate-400">Kurzbeschreibung</p>
+                    <p className="mt-1 text-sm text-slate-700">{openWarning.label}</p>
+                  </div>
+                  {openWarning.detail && (
+                    <div>
+                      <p className="text-[10px] font-extrabold uppercase tracking-[0.4px] text-slate-400">Details</p>
+                      <p className="mt-1 text-sm text-slate-600">{openWarning.detail}</p>
+                    </div>
+                  )}
+                  {openWarning.articleUrl && (
+                    <a
+                      href={openWarning.articleUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-sm font-bold text-indigo-600 hover:underline"
+                      onClick={() => {
+                        closeWarningModal();
+                      }}
+                    >
+                      {openWarning.articleTitle ?? 'Mehr lesen'}
+                      <ExternalLink size={14} />
+                    </a>
+                  )}
+                </div>
+              </ModalWrapper>
+            </div>
+          )}
+        </article>
+      );
   }
 
   return (
@@ -704,60 +824,73 @@ export default function ProductCard({
       {compactWarnings.length > 0 && (
         <div className="ss-product-card-compact-warnings mb-2.5">
           {compactWarnings.map((compactWarning, index) => {
-            const itemKey = `card-${product.id}-${index}`;
-            const isOpen = openWarningKey === itemKey;
+            const hasDetails = Boolean(compactWarning.detail || compactWarning.articleUrl);
             return (
               <div
-                key={itemKey}
+                key={`${product.id}-${index}`}
                 className={`ss-product-card-compact-warning ss-product-warning-summary ss-product-warning-severity-${compactWarning.severity}`}
                 data-warning-severity={compactWarning.severity}
                 onClick={(e) => e.stopPropagation()}
-                onBlur={(e) => {
-                  if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
-                    setOpenWarningKey((current) => (current === itemKey ? null : current));
-                  }
-                }}
               >
                 <AlertTriangle size={13} className="shrink-0" />
                 <strong>Achtung</strong>
                 <span>{compactWarning.label}</span>
-                {(compactWarning.detail || compactWarning.articleUrl) && (
+                {hasDetails && (
                   <button
                     type="button"
                     aria-label={`Mehr Informationen: ${compactWarning.label}`}
-                    aria-expanded={isOpen}
-                    aria-describedby={`product-card-warning-${product.id}-${index}`}
+                    aria-expanded={openWarningIndex === index}
                     className="ss-product-warning-info"
                     onClick={(e) => {
                       e.stopPropagation();
-                      setOpenWarningKey((current) => (current === itemKey ? null : itemKey));
+                      openWarningModal(index);
                     }}
-                    onFocus={() => setOpenWarningKey(itemKey)}
                   >
                     <Info size={13} />
                   </button>
                 )}
-                {(compactWarning.detail || compactWarning.articleUrl) && (
-                  <span
-                    id={`product-card-warning-${product.id}-${index}`}
-                    role="tooltip"
-                    className={`ss-product-warning-detail ${isOpen ? 'open' : ''}`}
-                  >
-                    {compactWarning.detail && <span>{compactWarning.detail}</span>}
-                    {compactWarning.articleUrl && (
-                      <Link
-                        to={compactWarning.articleUrl}
-                        onClick={(e) => e.stopPropagation()}
-                        className="ss-product-warning-link"
-                      >
-                        {compactWarning.articleTitle ?? 'Mehr lesen'}
-                      </Link>
-                    )}
-                  </span>
-                )}
               </div>
             );
           })}
+        </div>
+      )}
+
+      {openWarning && (
+        <div onClick={(event) => event.stopPropagation()}>
+          <ModalWrapper onClose={closeWarningModal} title={openWarning.title ?? 'Warnung'} size="md">
+            <div className="space-y-3">
+              <div>
+                <p className="text-[10px] font-extrabold uppercase tracking-[0.4px] text-slate-400">Warnung</p>
+                <p className="mt-1 font-bold text-slate-900">
+                  {openWarning.title ?? 'Hinweis'}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] font-extrabold uppercase tracking-[0.4px] text-slate-400">Kurzbeschreibung</p>
+                <p className="mt-1 text-sm text-slate-700">{openWarning.label}</p>
+              </div>
+              {openWarning.detail && (
+                <div>
+                  <p className="text-[10px] font-extrabold uppercase tracking-[0.4px] text-slate-400">Details</p>
+                  <p className="mt-1 text-sm text-slate-600">{openWarning.detail}</p>
+                </div>
+              )}
+              {openWarning.articleUrl && (
+                <a
+                  href={openWarning.articleUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-sm font-bold text-indigo-600 hover:underline"
+                  onClick={() => {
+                    closeWarningModal();
+                  }}
+                >
+                  {openWarning.articleTitle ?? 'Mehr lesen'}
+                  <ExternalLink size={14} />
+                </a>
+              )}
+            </div>
+          </ModalWrapper>
         </div>
       )}
 

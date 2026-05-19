@@ -247,6 +247,8 @@ function assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSo
 
   assertSourceIncludes(stackWorkspaceSource, 'ss-add-product-tile', 'green add-product grid tile');
   assertSourceIncludes(stackWorkspaceSource, 'stack-cockpit-user', 'stack hero user identity slot');
+  assertSourceIncludes(stackWorkspaceSource, 'getUserDisplayName(user)', 'stack user display-name fallback helper');
+  assertSourceIncludes(stackWorkspaceSource, "['name', 'display_name', 'full_name']", 'stack user label fallback fields');
   assertSourceExcludes(stackWorkspaceSource, 'Mein Stack', 'old stack hero label fallback');
   assertSourceExcludes(stackWorkspaceSource, 'Stack erstellen', 'separate toolbar create-stack button copy');
   assertSourceExcludes(stackWorkspaceSource, '<IconStackPlus />', 'separate toolbar create-stack icon');
@@ -320,15 +322,15 @@ function assertProductCardStaticChecks(productCardSource, stylesSource) {
   if (!/flex-wrap:\s*nowrap/.test(listActionsRowStyle)) {
     throw new Error('Expected desktop ss-product-list-actions to keep nowrap spacing.');
   }
-  if (/width:\s*100%/.test(listActionsRowStyle)) {
-    throw new Error('Expected desktop ss-product-list-actions to avoid forced full-width behavior.');
+  if (!/width:\s*100%/.test(listActionsRowStyle) || !/max-width:\s*100%/.test(listActionsRowStyle)) {
+    throw new Error('Expected desktop ss-product-list-actions to stay within its panel width.');
   }
 
   const buyStyle = stylesSource.match(/\.ss-product-list-buy,\s*\.ss-product-list-report,\s*\.ss-product-list-alt\s*\{[\s\S]*?\}/)?.[0] ?? '';
   if (!/padding:\s*6px 12px/.test(buyStyle) || !/white-space:\s*nowrap/.test(stylesSource.match(/\.ss-product-list-buy[\s\S]*?\{[\s\S]*?\}/)?.[0] ?? '')) {
     throw new Error('Expected ProductCard buy/report/alternative button sizing to match row-based actions style.');
   }
-  if (!/flex:\s*0 0 auto/.test(buyStyle) || /max-width:\s*76px/.test(buyStyle) || /text-overflow:\s*ellipsis/.test(buyStyle)) {
+  if (!/flex:\s*1 1 auto/.test(buyStyle)) {
     throw new Error('Expected list row action buttons to be compact and not force desktop ellipsis/overflow constraints.');
   }
 
@@ -339,12 +341,18 @@ function assertProductCardStaticChecks(productCardSource, stylesSource) {
     'ss-product-list-price',
     'ss-product-list-actions-stack',
     'ss-product-warning-summary',
-    'ss-product-warning-detail',
     'compactWarnings.map',
     'data-warning-severity',
     'ss-product-warning-severity-',
+    'openWarning &&',
+    'ModalWrapper onClose',
     'Achtung',
     'title="Produkt entfernen"',
+  ];
+  const requiredCodeMarkers = [
+    'function getListDoseFallback',
+    'function parseCountDoseFromText',
+    'function getListCountFallback',
   ];
 
   for (const marker of requiredProductCardMarkers) {
@@ -352,13 +360,36 @@ function assertProductCardStaticChecks(productCardSource, stylesSource) {
       throw new Error(`Expected ProductCard.tsx to contain ${marker}.`);
     }
   }
+  for (const marker of requiredCodeMarkers) {
+    if (!productCardSource.includes(marker)) {
+      throw new Error(`Expected ProductCard.tsx source to include ${marker}.`);
+    }
+  }
+
+  const listDoseFallbackStart = productCardSource.indexOf('function getListDoseFallback');
+  const listDoseFallbackEnd = productCardSource.indexOf('function getProductWarningTitle', listDoseFallbackStart);
+  if (listDoseFallbackStart === -1 || listDoseFallbackEnd === -1) {
+    throw new Error('Expected getListDoseFallback and subsequent warning-title marker in ProductCard.tsx.');
+  }
+
+  const listDoseFallbackSource = productCardSource
+    .slice(listDoseFallbackStart, listDoseFallbackEnd);
+
+  if (!/isListMassUnit/.test(listDoseFallbackSource) && !/LIST_MASS_UNITS/.test(listDoseFallbackSource)) {
+    throw new Error('Expected getListDoseFallback to reject active mass units (mg/µg/IE) in list fallback logic.');
+  }
+  if (!/return '\\u2014'/.test(listDoseFallbackSource) && !/getListCountFallback/.test(listDoseFallbackSource)) {
+    throw new Error('Expected getListDoseFallback to prefer count-based fallback or dash when dosage mass units are active.');
+  }
+  if (!/lutschtablette/.test(productCardSource.toLowerCase())) {
+    throw new Error('Expected ProductCard.tsx to support lutschtablette as count-form dosage unit.');
+  }
 
   const requiredStyleMarkers = [
     '.ss-product-list-media-panel',
     '.ss-product-list-content',
     '.ss-product-list-main',
     '.ss-product-list-price',
-    '.ss-product-warning-detail',
     '.ss-product-warning-severity-danger',
     '.ss-product-warning-severity-caution',
     '.ss-product-warning-severity-info',
@@ -368,6 +399,10 @@ function assertProductCardStaticChecks(productCardSource, stylesSource) {
     if (!stylesSource.includes(marker)) {
       throw new Error(`Expected styles.css to contain ${marker}.`);
     }
+  }
+
+  if (productCardSource.includes('ss-product-warning-detail') || productCardSource.includes('role="tooltip"')) {
+    throw new Error('Expected ProductCard.tsx to use modal warning details only, without inline tooltip markup.');
   }
 
   const listRowStyles = Array.from(stylesSource.matchAll(/\.ss-product-list-row\s*\{[^}]*\}/g), (match) => match[0]);
@@ -382,8 +417,9 @@ function assertProductCardStaticChecks(productCardSource, stylesSource) {
     throw new Error('Product list rows must not use the old four-column grid.');
   }
 
-  if (listRowStyles.some((styleBlock) => /overflow:\s*hidden;/.test(styleBlock))) {
-    throw new Error('Product list rows must keep overflow visible so warning popovers are not clipped.');
+  if (stylesSource.includes('.ss-product-warning-summary:hover .ss-product-warning-detail')
+    || stylesSource.includes('.ss-product-warning-detail.open')) {
+    throw new Error('Product warning popover CSS should be replaced by click modals only.');
   }
 
   if (!/(?:width|flex):\s*(?:92px|0\s+0\s+92px)/.test(listMediaPanelStyle)) {

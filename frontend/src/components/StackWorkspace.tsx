@@ -27,7 +27,7 @@ import StacksHeader, { type StacksHeaderVariant } from './StacksHeader';
 import EditStackModal from './EditStackModal';
 import { createFamilyMember, deleteFamilyMember, getFamilyMembers } from '../api/family';
 import { reportProductLink } from '../api/stacks';
-import type { FamilyMember, ProductSafetyWarning } from '../types';
+import type { FamilyMember, ProductSafetyWarning, User } from '../types';
 import type { DosageGuideline, Ingredient, ShopDomain } from '../types/local';
 import {
   calculateProductUsage,
@@ -376,6 +376,19 @@ function formatEuro(value: number): string {
 
 function formatDaysSupply(days: number | null): string {
   return days ? `${days} Tage` : 'unbekannt';
+}
+
+function getUserDisplayName(user: User | null | undefined): string | null {
+  const userRecord = user as Partial<Record<'name' | 'display_name' | 'full_name' | 'email', unknown>> | null;
+  const candidateKeys: Array<'name' | 'display_name' | 'full_name'> = ['name', 'display_name', 'full_name'];
+  for (const key of candidateKeys) {
+    const value = userRecord?.[key];
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (trimmed) return trimmed;
+    }
+  }
+  return typeof userRecord?.email === 'string' && userRecord.email.trim() ? userRecord.email : null;
 }
 
 function stackProfileLabel(stack: DemoStack | undefined): string {
@@ -1368,6 +1381,7 @@ export function StackWorkspace({
   const [deleteProductKey, setDeleteProductKey] = useState<string | null>(null);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const cockpitUserLabel = getUserDisplayName(user);
 
   const isDemo = mode === 'demo';
   const showStandaloneHeader = standaloneHeader ?? isDemo;
@@ -2183,7 +2197,7 @@ export function StackWorkspace({
     </>
   ) : (
     <>
-      <span className="header-email">{user?.email ?? ''}</span>
+      <span className="header-email">{cockpitUserLabel ?? ''}</span>
       <button className="btn-logout" onClick={handleLogout}>
         Abmelden
       </button>
@@ -2212,7 +2226,7 @@ export function StackWorkspace({
               <div>
                 <h2>{activeStack?.name ?? 'Stack'}</h2>
               </div>
-              {user?.email && <div className="stack-cockpit-user">{user.email}</div>}
+              {cockpitUserLabel && <div className="stack-cockpit-user">{cockpitUserLabel}</div>}
             </div>
             <div className="ss-routine-actions">
               <button
@@ -2431,7 +2445,7 @@ export function StackWorkspace({
             <div>
               <h2>{activeStack?.name ?? 'Stack'}</h2>
             </div>
-              {user?.email && <div className="stack-cockpit-user">{user.email}</div>}
+              {cockpitUserLabel && <div className="stack-cockpit-user">{cockpitUserLabel}</div>}
           </div>
 
           {linkReportStatus && (
