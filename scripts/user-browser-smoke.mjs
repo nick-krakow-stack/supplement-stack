@@ -279,6 +279,32 @@ function assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSo
   assertSourceIncludes(stackWorkspaceSource, 'handleToggleProductLayoutEditMode', 'layout edit toggle handler');
   assertSourceIncludes(stackWorkspaceSource, 'draggable={isProductLayoutEditMode}', 'direct card drag only in edit mode');
   assertSourceIncludes(stackWorkspaceSource, 'ss-product-layout-edit-mode', 'direct edit-mode class marker');
+  assertSourceIncludes(stackWorkspaceSource, 'productLayoutPreviewProducts', 'local live product layout preview state');
+  assertSourceIncludes(stackWorkspaceSource, 'previewProductLayoutPlacement', 'dragover live layout preview helper');
+  assertSourceIncludes(stackWorkspaceSource, 'commitProductLayoutPreview', 'drop-only layout persistence helper');
+  assertSourceIncludes(stackWorkspaceSource, 'ss-product-layout-edit-active', 'edit-mode overlay scope class');
+  assertSourceIncludes(stackWorkspaceSource, 'ss-product-layout-edit-overlay', 'edit-mode transparent overlay marker');
+  assertSourceIncludes(stackWorkspaceSource, 'handleProductPointerDown', 'pointer/touch layout drag start handler');
+  assertSourceIncludes(stackWorkspaceSource, 'handleProductPointerMove', 'pointer/touch live layout preview handler');
+  assertSourceIncludes(stackWorkspaceSource, 'handleProductPointerUp', 'pointer/touch final layout persistence handler');
+  assertSourceIncludes(stackWorkspaceSource, 'targetSectionProductKeys', 'section drop preview must receive target section product keys');
+  assertSourceIncludes(stackWorkspaceSource, 'productLayoutSectionEndIndex', 'section drop must resolve end of target section');
+  assertSourceIncludes(stackWorkspaceSource, 'findProductSectionDropTarget', 'pointer section drop must resolve rendered section target');
+  assertSourceIncludes(stackWorkspaceSource, 'data-product-layout-key', 'stable product layout key attribute for pointer drag targeting');
+  assertSourceIncludes(stackWorkspaceSource, 'data-product-section-id', 'stable product section attribute for pointer drag targeting');
+  assertSourceIncludes(stackWorkspaceSource, 'elementFromPoint', 'pointer drag target detection via coordinates');
+  assertSourceIncludes(stackWorkspaceSource, 'setPointerCapture', 'pointer drag capture for touch/mobile reliability');
+  assertSourceIncludes(stackWorkspaceSource, 'suppressProductClickRef', 'post-drag click suppression guard');
+  assertSourceIncludes(stackWorkspaceSource, 'onClickCapture', 'card click suppression after pointer drag');
+  assertSourceIncludes(stackWorkspaceSource, 'cancelProductLayoutAnimations', 'animation cleanup helper');
+  assertSourceIncludes(stackWorkspaceSource, 'onPointerCancel', 'pointer cancel cleanup handler');
+  assertSourceIncludes(stackWorkspaceSource, 'suppressProductClickRef.current = false;', 'clear/cancel paths must reset click suppression');
+  assertSourceExcludes(stackWorkspaceSource, 'const moveProductTo = useCallback', 'legacy immediate product layout persistence helper removed');
+  assertSourceExcludes(stackWorkspaceSource, 'const moveProductBefore', 'legacy dragover persistence helper removed');
+  assertSourceExcludes(stackWorkspaceSource, 'const moveProductToSectionEnd', 'legacy section-end persistence helper removed');
+  if (/onDragOver=\{\(event\)\s*=>[\s\S]{0,700}moveProduct(?:Before|ToSectionEnd)/.test(stackWorkspaceSource)) {
+    throw new Error('Product layout dragover must update only local preview state, not persist layout moves.');
+  }
   assertSourceIncludes(
     stackWorkspaceSource,
     "isInteractiveDragSource(target)",
@@ -286,7 +312,7 @@ function assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSo
   );
   assertSourceIncludes(
     stackWorkspaceSource,
-    "target.closest('button, a, input, select, textarea, [role=\"button\"]')",
+    "target.closest('button, a, input, select, textarea, [role=\"button\"], [role=\"link\"], label, summary, [contenteditable=\"true\"], [data-no-drag=\"true\"]')",
     'interactive control selectors excluded from drag start',
   );
   assertSourceIncludes(stackWorkspaceSource, "['morning', 'noon', 'evening', 'flexible']", 'fixed timing sort order');
@@ -346,6 +372,11 @@ function assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSo
   assertSourceIncludes(stylesSource, '.ss-control-group-label', 'control group label styles');
   assertSourceIncludes(stylesSource, '.ss-control-group-row', 'compact sort/group row styles');
   assertSourceIncludes(stylesSource, '.ss-product-layout-editable-item', 'product card edit mode visual styles');
+  assertSourceIncludes(stylesSource, '.ss-product-layout-edit-active', 'edit-mode overlay scope styles');
+  assertSourceIncludes(stylesSource, '.ss-product-layout-edit-overlay', 'transparent edit-mode overlay styles');
+  assertSourceIncludes(stylesSource, 'pointer-events: none', 'edit-mode overlay must not block card controls');
+  assertSourceIncludes(stylesSource, 'transform 0.18s ease', 'live reorder animation transition');
+  assertSourceIncludes(stylesSource, 'touch-action: none', 'edit-mode touch drag must not be swallowed by browser scroll gestures');
   assertSourceIncludes(stylesSource, '.ss-product-category-select', 'custom category select fallback styles');
   assertSourceIncludes(stackWorkspaceSource, 'stack-cockpit-user', 'stack hero user identity slot');
   assertSourceIncludes(stackWorkspaceSource, 'getUserDisplayName(user)', 'stack user display-name fallback helper');

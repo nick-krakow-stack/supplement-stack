@@ -347,7 +347,7 @@ body {
   flex-direction: column;
   align-items: flex-end;
   gap: 6px;
-  z-index: 2;
+  z-index: 3;
   pointer-events: auto;
 }
 .ss-product-category-select {
@@ -364,18 +364,51 @@ body {
   box-sizing: border-box;
   border-radius: 14px;
   cursor: default;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease, transform 0.18s ease;
+  will-change: transform;
+}
+.ss-product-layout-edit-active {
+  position: relative;
+}
+.ss-product-layout-edit-active .masonry-grid.ss-section-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(248px, 1fr));
+  gap: 14px;
+  columns: initial;
+  align-items: start;
+}
+.ss-product-layout-edit-active .masonry-item {
+  margin-bottom: 0;
+  break-inside: auto;
 }
 .ss-product-layout-edit-mode {
   opacity: 0.92;
   border: 1.5px solid #818cf8;
   background: #f8fafc;
   cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.ss-product-layout-edit-toolbar,
+.ss-product-layout-edit-toolbar * {
+  touch-action: auto;
+}
+.ss-product-layout-edit-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: 14px;
+  background: rgba(100, 116, 139, 0.18);
+  pointer-events: none;
+  transition: background 0.15s ease, opacity 0.15s ease;
 }
 .ss-product-layout-item-dragging {
   opacity: 0.78;
   border-color: #4338ca;
   box-shadow: 0 12px 26px rgba(15, 23, 42, 0.16);
+}
+.ss-product-layout-item-dragging .ss-product-layout-edit-overlay {
+  background: rgba(67, 56, 202, 0.14);
 }
 .ss-product-layout-edit-mode:hover {
   box-shadow: 0 0 0 1px #a5b4fc;
