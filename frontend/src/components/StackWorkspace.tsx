@@ -7,12 +7,12 @@ import {
   ArrowRight,
   Calculator,
   Flag,
+  FileText,
   Info,
   LayoutGrid,
   List,
   Package,
   Plus,
-  Printer,
   Search,
   X,
 } from 'lucide-react';
@@ -1308,8 +1308,8 @@ function IconMail() {
     </svg>
   );
 }
-function IconPrint() {
-  return <Printer size={14} />;
+function IconPdf() {
+  return <FileText size={14} />;
 }
 function IconTrash() {
   return (
@@ -2170,6 +2170,16 @@ export function StackWorkspace({
   const editingProduct = activeStack?.products.find((product) => productStackKey(product) === editingProductKey) ?? null;
   const deletingProduct = activeStack?.products.find((product) => productStackKey(product) === deleteProductKey) ?? null;
   const replacingStack = activeStack && replaceProductKey ? activeStack : null;
+  const editStackActionLabel = 'Stack bearbeiten';
+  const emailActionLabel = emailSending
+    ? 'Stack-Mail wird gesendet'
+    : isDemo
+      ? 'Stack mailen ist nur angemeldet verfügbar.'
+      : 'Stack per E-Mail senden';
+  const printStackActionLabel = isDemo
+    ? 'Plan drucken/PDF ist in der Demo nicht verfügbar.'
+    : 'Plan drucken oder als PDF speichern';
+  const deleteStackActionLabel = 'Stack löschen';
 
   const rightSlot = isDemo ? (
     <>
@@ -2235,7 +2245,7 @@ export function StackWorkspace({
                 disabled={!activeStack || (!isDemo && productsCount === 0)}
                 title={isDemo ? 'Plan drucken/PDF ist in der Demo nicht verfügbar.' : 'Plan drucken oder als PDF speichern'}
               >
-                <IconPrint />
+                <IconPdf />
                 Plan drucken/PDF
               </button>
             </div>
@@ -2358,31 +2368,32 @@ export function StackWorkspace({
           </div>
 
           <button
-            className="ss-btn ss-btn-outline"
+            className="ss-btn ss-toolbar-icon-action ss-toolbar-icon-action-edit"
             onClick={() => setEditModalOpen(true)}
             disabled={!activeStack}
+            aria-label={editStackActionLabel}
+            title={editStackActionLabel}
           >
             <IconPencil />
-            Stack bearbeiten
           </button>
 
           <button
-            className="ss-btn ss-btn-outline"
+            className="ss-btn ss-toolbar-icon-action ss-toolbar-icon-action-blue"
             onClick={() => void handleEmailStack()}
             disabled={!activeStack || emailSending}
-            title={isDemo ? 'Stack mailen ist nur angemeldet verfügbar.' : 'Stack per E-Mail senden'}
+            aria-label={emailActionLabel}
+            title={emailActionLabel}
           >
             <IconMail />
-            {emailSending ? 'Wird gesendet...' : 'Stack mailen'}
           </button>
           <button
-            className="ss-btn ss-btn-outline print-action"
+            className="ss-btn ss-toolbar-icon-action ss-toolbar-icon-action-blue print-action"
             onClick={handlePrintStack}
             disabled={!activeStack || (!isDemo && productsCount === 0)}
-            title={isDemo ? 'Plan drucken/PDF ist in der Demo nicht verfügbar.' : 'Plan drucken oder als PDF speichern'}
+            aria-label={printStackActionLabel}
+            title={printStackActionLabel}
           >
-            <IconPrint />
-            Plan drucken/PDF
+            <IconPdf />
           </button>
           {emailStatus && (
             <span style={{ fontSize: 11, fontWeight: 700, color: '#64748b' }}>
@@ -2391,13 +2402,15 @@ export function StackWorkspace({
           )}
 
           <button
-            className="ss-btn ss-btn-red-soft"
+            className="ss-btn ss-btn-red-soft ss-toolbar-icon-action"
             onClick={() => void handleDeleteStack(state.activeStackId)}
+            aria-label={deleteStackActionLabel}
+            title={deleteStackActionLabel}
           >
             <IconTrash />
-            Stack löschen
           </button>
 
+          <span className="ss-toolbar-divider" aria-hidden="true">|</span>
           <span className="ss-toolbar-spacer" />
 
           <button className="ss-btn ss-btn-green ss-toolbar-primary-action" onClick={() => setAddModalOpen(true)}>

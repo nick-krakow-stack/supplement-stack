@@ -181,7 +181,20 @@ function assertSourceExcludes(source, forbidden, description) {
   }
 }
 
+function assertToolbarSource(stackWorkspaceSource) {
+  const startMarker = '<div className="ss-toolbar">';
+  const endMarker = '{activeDescription && (';
+  const start = stackWorkspaceSource.indexOf(startMarker);
+  const end = stackWorkspaceSource.indexOf(endMarker, start);
+  if (start === -1 || end === -1) {
+    throw new Error('Expected stack workspace toolbar source block.');
+  }
+  return stackWorkspaceSource.slice(start, end);
+}
+
 function assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSource, appSource, layoutSource) {
+  const toolbarSource = assertToolbarSource(stackWorkspaceSource);
+
   assertSourceIncludes(stackWorkspaceSource, 'ss-restriction-modal', 'shared demo/auth restriction modal');
   assertSourceIncludes(stackWorkspaceSource, 'Stack mailen ist nur angemeldet verfügbar.', 'mail restriction popup copy');
   assertSourceIncludes(stackWorkspaceSource, 'Plan drucken/PDF ist in der Demo nicht verfügbar.', 'print restriction popup copy');
@@ -241,6 +254,17 @@ function assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSo
   assertSourceIncludes(stackWorkspaceSource, 'Neuen Stack anlegen', 'create-stack dropdown option');
   assertSourceIncludes(stackWorkspaceSource, 'CREATE_STACK_SELECT_VALUE', 'sentinel value for create-stack dropdown option');
   assertSourceIncludes(stackWorkspaceSource, 'handleStackSelectChange', 'stack dropdown create/select handler');
+
+  assertSourceIncludes(toolbarSource, 'ss-toolbar-icon-action ss-toolbar-icon-action-edit', 'icon-only edit toolbar action');
+  assertSourceIncludes(toolbarSource, 'ss-toolbar-icon-action ss-toolbar-icon-action-blue', 'icon-only blue toolbar actions');
+  assertSourceIncludes(toolbarSource, 'ss-toolbar-divider', 'visible toolbar divider before add-product action');
+  assertSourceIncludes(toolbarSource, 'aria-label={emailActionLabel}', 'dynamic mail aria label');
+  assertSourceIncludes(toolbarSource, 'title={emailActionLabel}', 'dynamic mail title');
+  assertSourceIncludes(toolbarSource, 'IconPdf', 'PDF icon for print/PDF action');
+  assertSourceExcludes(toolbarSource, '\n            Stack bearbeiten\n', 'visible edit toolbar text');
+  assertSourceExcludes(toolbarSource, "{emailSending ? 'Wird gesendet...' : 'Stack mailen'}", 'visible mail toolbar text');
+  assertSourceExcludes(toolbarSource, '\n            Plan drucken/PDF\n', 'visible print toolbar text');
+  assertSourceExcludes(toolbarSource, '\n            Stack löschen\n', 'visible delete toolbar text');
 }
 
 function assertProductCardStaticChecks(productCardSource, stylesSource) {
