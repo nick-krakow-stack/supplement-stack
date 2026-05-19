@@ -31,8 +31,8 @@ interface ProductCardProduct {
   basis_quantity?: number | null;
   basis_unit?: string | null;
   product_price?: number;
-  product_name?: string;
-  product_brand?: string;
+  product_name?: string | null;
+  product_brand?: string | null;
   timing?: string;
   dosage_text?: string;
   intake_interval_days?: number;

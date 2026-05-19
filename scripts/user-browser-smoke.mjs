@@ -192,6 +192,15 @@ function assertToolbarSource(stackWorkspaceSource) {
   return stackWorkspaceSource.slice(start, end);
 }
 
+function assertFunctionSource(source, functionName) {
+  const start = source.indexOf(`function ${functionName}`);
+  if (start === -1) {
+    throw new Error(`Expected source to contain function ${functionName}.`);
+  }
+  const nextFunction = source.indexOf('\nfunction ', start + 1);
+  return source.slice(start, nextFunction === -1 ? source.length : nextFunction);
+}
+
 function assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSource, appSource, layoutSource, stylesSource) {
   const toolbarSource = assertToolbarSource(stackWorkspaceSource);
 
@@ -246,6 +255,23 @@ function assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSo
   assertSourceIncludes(stackWorkspaceSource, 'ss-routine-page', 'routine overview page classes');
 
   assertSourceIncludes(stackWorkspaceSource, 'ss-add-product-tile', 'green add-product grid tile');
+  assertSourceIncludes(stackWorkspaceSource, "type ProductSortMode = 'az' | 'timing'", 'product sort mode type');
+  assertSourceIncludes(stackWorkspaceSource, 'STACK_PRODUCT_SORT_KEY', 'product sort localStorage key');
+  assertSourceIncludes(stackWorkspaceSource, 'loadProductSortMode', 'product sort localStorage loader');
+  assertSourceIncludes(stackWorkspaceSource, 'compareProductsByName', 'A-Z product sort helper');
+  assertSourceIncludes(stackWorkspaceSource, 'sortProductsForDisplay', 'display-only product sort helper');
+  assertSourceIncludes(stackWorkspaceSource, 'sortedActiveProducts', 'sorted product display list');
+  assertSourceIncludes(stackWorkspaceSource, "['morning', 'noon', 'evening', 'flexible']", 'fixed timing sort order');
+  const sortProductsForDisplaySource = assertFunctionSource(stackWorkspaceSource, 'sortProductsForDisplay');
+  assertSourceIncludes(sortProductsForDisplaySource, "if (sortMode === 'az')", 'A-Z branch inside sortProductsForDisplay');
+  assertSourceIncludes(sortProductsForDisplaySource, "if (sortMode === 'az') return sorted.sort(compareProductsByName);", 'A-Z sort branch inside sortProductsForDisplay');
+  assertSourceIncludes(sortProductsForDisplaySource, 'routineKeyForTiming(a.timing)', 'timing sort a routine key inside sortProductsForDisplay');
+  assertSourceIncludes(sortProductsForDisplaySource, 'routineKeyForTiming(b.timing)', 'timing sort b routine key inside sortProductsForDisplay');
+  assertSourceIncludes(sortProductsForDisplaySource, 'PRODUCT_TIMING_ORDER.indexOf', 'timing order lookup inside sortProductsForDisplay');
+  assertSourceIncludes(sortProductsForDisplaySource, 'return byTiming || compareProductsByName(a, b);', 'secondary name sort inside timing sort');
+  assertSourceIncludes(stackWorkspaceSource, 'Tageszeiten', 'timing sort toggle label');
+  assertSourceIncludes(stackWorkspaceSource, 'A-Z', 'alphabetical sort toggle label');
+  assertSourceIncludes(stackWorkspaceSource, 'ss-product-title-controls', 'product title controls wrapper');
   assertSourceIncludes(stackWorkspaceSource, 'stack-cockpit-user', 'stack hero user identity slot');
   assertSourceIncludes(stackWorkspaceSource, 'getUserDisplayName(user)', 'stack user display-name fallback helper');
   assertSourceIncludes(stackWorkspaceSource, "['name', 'display_name', 'full_name']", 'stack user label fallback fields');
@@ -287,6 +313,9 @@ function assertProductCardStaticChecks(productCardSource, stylesSource) {
   if (/display\s*:\s*contents/.test(listActionsPanelStyle)) {
     throw new Error('QA guard: .ss-product-list-actions-panel must not use display: contents.');
   }
+  if (!/width:\s*272px/.test(listActionsPanelStyle) || !/flex:\s*0 0 272px/.test(listActionsPanelStyle)) {
+    throw new Error('Expected .ss-product-list-actions-panel to keep the widened 272px desktop action panel.');
+  }
 
   const listActionPanelStart = productCardSource.indexOf('<div className="ss-product-list-actions-panel ss-product-list-actions-stack">');
   if (listActionPanelStart === -1) {
@@ -322,16 +351,38 @@ function assertProductCardStaticChecks(productCardSource, stylesSource) {
   if (!/flex-wrap:\s*nowrap/.test(listActionsRowStyle)) {
     throw new Error('Expected desktop ss-product-list-actions to keep nowrap spacing.');
   }
+  if (/overflow\s*:\s*hidden/.test(listActionsRowStyle)) {
+    throw new Error('QA guard: .ss-product-list-actions must not hide overflowing action buttons.');
+  }
   if (!/width:\s*100%/.test(listActionsRowStyle) || !/max-width:\s*100%/.test(listActionsRowStyle)) {
     throw new Error('Expected desktop ss-product-list-actions to stay within its panel width.');
   }
 
   const buyStyle = stylesSource.match(/\.ss-product-list-buy,\s*\.ss-product-list-report,\s*\.ss-product-list-alt\s*\{[\s\S]*?\}/)?.[0] ?? '';
+  if (
+    !buyStyle.includes('.ss-product-list-buy') ||
+    !buyStyle.includes('.ss-product-list-report') ||
+    !buyStyle.includes('.ss-product-list-alt')
+  ) {
+    throw new Error('Expected desktop list row action button rule to cover Buy, Report, and Alternative buttons.');
+  }
   if (!/padding:\s*6px 12px/.test(buyStyle) || !/white-space:\s*nowrap/.test(stylesSource.match(/\.ss-product-list-buy[\s\S]*?\{[\s\S]*?\}/)?.[0] ?? '')) {
     throw new Error('Expected ProductCard buy/report/alternative button sizing to match row-based actions style.');
   }
-  if (!/flex:\s*1 1 auto/.test(buyStyle)) {
-    throw new Error('Expected list row action buttons to be compact and not force desktop ellipsis/overflow constraints.');
+  if (!/flex:\s*0 0 auto/.test(buyStyle)) {
+    throw new Error('Expected list row action buttons to avoid desktop flex squeezing.');
+  }
+
+  const actionTextStyle = stylesSource.match(/\.ss-product-list-buy span,\s*\.ss-product-list-report span,\s*\.ss-product-list-alt span\s*\{[\s\S]*?\}/)?.[0] ?? '';
+  if (
+    !actionTextStyle.includes('.ss-product-list-buy span') ||
+    !actionTextStyle.includes('.ss-product-list-report span') ||
+    !actionTextStyle.includes('.ss-product-list-alt span')
+  ) {
+    throw new Error('Expected list row Buy/Report/Alt text span rule to cover all action labels.');
+  }
+  if (/text-overflow\s*:\s*ellipsis/.test(actionTextStyle) || /max-width\s*:/.test(actionTextStyle) || /overflow\s*:\s*hidden/.test(actionTextStyle)) {
+    throw new Error('Expected list row Buy/Report text spans to remain fully visible without ellipsis/max-width clipping.');
   }
 
   const requiredProductCardMarkers = [

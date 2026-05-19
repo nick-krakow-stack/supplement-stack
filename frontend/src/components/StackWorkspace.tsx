@@ -43,8 +43,10 @@ export interface DemoProduct {
   id: number;
   product_type?: 'catalog' | 'user_product';
   name: string;
+  product_name?: string | null;
   price: number;
   brand?: string;
+  product_brand?: string | null;
   shop_link?: string;
   image_url?: string;
   is_affiliate?: number;
@@ -397,6 +399,7 @@ function stackProfileLabel(stack: DemoStack | undefined): string {
 }
 
 type RoutineKey = 'morning' | 'noon' | 'evening' | 'flexible';
+type ProductSortMode = 'az' | 'timing';
 
 const ROUTINE_META: Record<RoutineKey, { label: string; hint: string }> = {
   morning: { label: 'Morgens', hint: 'Frühstück / Start in den Tag' },
@@ -411,6 +414,31 @@ function routineKeyForTiming(timing?: string): RoutineKey {
   if (normalized.includes('mittag') || normalized.includes('noon')) return 'noon';
   if (normalized.includes('abend') || normalized.includes('nacht') || normalized.includes('evening')) return 'evening';
   return 'flexible';
+}
+
+const PRODUCT_TIMING_ORDER: RoutineKey[] = ['morning', 'noon', 'evening', 'flexible'];
+const PRODUCT_NAME_COLLATOR = new Intl.Collator('de-DE', { sensitivity: 'base', numeric: true });
+
+function productSortName(product: DemoProduct): string {
+  return (product.product_name ?? product.name ?? '').trim();
+}
+
+function compareProductsByName(a: DemoProduct, b: DemoProduct): number {
+  const byName = PRODUCT_NAME_COLLATOR.compare(productSortName(a), productSortName(b));
+  if (byName !== 0) return byName;
+  return PRODUCT_NAME_COLLATOR.compare(String(a.id), String(b.id));
+}
+
+function sortProductsForDisplay(products: DemoProduct[], sortMode: ProductSortMode): DemoProduct[] {
+  const sorted = [...products];
+  if (sortMode === 'az') return sorted.sort(compareProductsByName);
+
+  return sorted.sort((a, b) => {
+    const aRoutine = routineKeyForTiming(a.timing);
+    const bRoutine = routineKeyForTiming(b.timing);
+    const byTiming = PRODUCT_TIMING_ORDER.indexOf(aRoutine) - PRODUCT_TIMING_ORDER.indexOf(bRoutine);
+    return byTiming || compareProductsByName(a, b);
+  });
 }
 
 function productDoseSignature(product: DemoProduct): string {
@@ -1344,11 +1372,17 @@ function IconChevron() {
 
 const HEADER_VARIANT: StacksHeaderVariant = 'warm';
 const STACK_PRODUCT_VIEW_KEY = 'supplement-stack-product-view';
+const STACK_PRODUCT_SORT_KEY = 'supplement-stack-product-sort';
 const CREATE_STACK_SELECT_VALUE = '__create_stack__';
 
 function loadProductViewMode(): ProductViewMode {
   if (typeof window === 'undefined') return 'grid';
   return window.localStorage.getItem(STACK_PRODUCT_VIEW_KEY) === 'list' ? 'list' : 'grid';
+}
+
+function loadProductSortMode(): ProductSortMode {
+  if (typeof window === 'undefined') return 'az';
+  return window.localStorage.getItem(STACK_PRODUCT_SORT_KEY) === 'timing' ? 'timing' : 'az';
 }
 
 export function StackWorkspace({
@@ -1377,6 +1411,7 @@ export function StackWorkspace({
   const [familyStatus, setFamilyStatus] = useState('');
   const [linkReportStatus, setLinkReportStatus] = useState('');
   const [productViewMode, setProductViewMode] = useState<ProductViewMode>(loadProductViewMode);
+  const [productSortMode, setProductSortMode] = useState<ProductSortMode>(loadProductSortMode);
   const [notice, setNotice] = useState<WorkspaceNotice | null>(null);
   const [deleteProductKey, setDeleteProductKey] = useState<string | null>(null);
   const { user, logout } = useAuth();
@@ -1389,6 +1424,10 @@ export function StackWorkspace({
   useEffect(() => {
     window.localStorage.setItem(STACK_PRODUCT_VIEW_KEY, productViewMode);
   }, [productViewMode]);
+
+  useEffect(() => {
+    window.localStorage.setItem(STACK_PRODUCT_SORT_KEY, productSortMode);
+  }, [productSortMode]);
 
   // Fetch shop domains
   useEffect(() => {
@@ -2085,6 +2124,10 @@ export function StackWorkspace({
     [activeStack, selectedIds],
   );
   const activeProducts = useMemo(() => activeStack?.products ?? [], [activeStack]);
+  const sortedActiveProducts = useMemo(
+    () => sortProductsForDisplay(activeProducts, productSortMode),
+    [activeProducts, productSortMode],
+  );
   const totalOnce = selectedProducts.reduce((sum, p) => sum + (p.price ?? 0), 0);
   const totalMonthly = selectedProducts.reduce((sum, p) => sum + productMonthlyPrice(p), 0);
   const productsCount = activeProducts.length;
@@ -2458,27 +2501,49 @@ export function StackWorkspace({
 
         <div className="ss-section-title ss-products-title">
           <span>Supplement Übersicht</span>
-          <div className="product-view-toggle" role="group" aria-label="Produktansicht wählen">
-            <button
-              type="button"
-              className={productViewMode === 'grid' ? 'active' : ''}
-              onClick={() => setProductViewMode('grid')}
-              aria-pressed={productViewMode === 'grid'}
-              title="Kachelansicht"
-            >
-              <LayoutGrid size={16} />
-              <span>Kacheln</span>
-            </button>
-            <button
-              type="button"
-              className={productViewMode === 'list' ? 'active' : ''}
-              onClick={() => setProductViewMode('list')}
-              aria-pressed={productViewMode === 'list'}
-              title="Listenansicht"
-            >
-              <List size={16} />
-              <span>Liste</span>
-            </button>
+          <div className="ss-product-title-controls">
+            <div className="product-view-toggle" role="group" aria-label="Produktsortierung wählen">
+              <button
+                type="button"
+                className={productSortMode === 'az' ? 'active' : ''}
+                onClick={() => setProductSortMode('az')}
+                aria-pressed={productSortMode === 'az'}
+                title="Alphabetisch sortieren"
+              >
+                <span>A-Z</span>
+              </button>
+              <button
+                type="button"
+                className={productSortMode === 'timing' ? 'active' : ''}
+                onClick={() => setProductSortMode('timing')}
+                aria-pressed={productSortMode === 'timing'}
+                title="Nach Tageszeiten sortieren"
+              >
+                <span>Tageszeiten</span>
+              </button>
+            </div>
+            <div className="product-view-toggle" role="group" aria-label="Produktansicht wählen">
+              <button
+                type="button"
+                className={productViewMode === 'grid' ? 'active' : ''}
+                onClick={() => setProductViewMode('grid')}
+                aria-pressed={productViewMode === 'grid'}
+                title="Kachelansicht"
+              >
+                <LayoutGrid size={16} />
+                <span>Kacheln</span>
+              </button>
+              <button
+                type="button"
+                className={productViewMode === 'list' ? 'active' : ''}
+                onClick={() => setProductViewMode('list')}
+                aria-pressed={productViewMode === 'list'}
+                title="Listenansicht"
+              >
+                <List size={16} />
+                <span>Liste</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -2527,7 +2592,7 @@ export function StackWorkspace({
 
         {!loading && activeProducts.length > 0 && (
           <div className={productViewMode === 'grid' ? 'masonry-grid' : 'product-list-view'}>
-            {activeProducts.map((p) => {
+            {sortedActiveProducts.map((p) => {
               const key = productStackKey(p);
               return (
                 <div key={key} className={productViewMode === 'grid' ? 'masonry-item' : 'product-list-item'}>
