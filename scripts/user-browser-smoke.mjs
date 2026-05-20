@@ -215,6 +215,131 @@ function assertFunctionSource(source, functionName) {
   return source.slice(start, nextFunction === -1 ? source.length : nextFunction);
 }
 
+function extractCssBlocks(source) {
+  const cleaned = source.replace(/\/\*[\s\S]*?\*\//g, '');
+  const rules = [];
+  let depth = 0;
+  let selectorStart = 0;
+  let selectorStack = [];
+  let bodyStartStack = [];
+  let quote = '';
+
+  const pushRule = (selectorText, bodyStartIndex) => {
+    selectorStack.push(selectorText.trim());
+    bodyStartStack.push(bodyStartIndex);
+    depth += 1;
+  };
+
+  const popRule = (closeIndex) => {
+    const selector = selectorStack.pop();
+    const bodyStart = bodyStartStack.pop();
+    if (typeof selector === 'string' && selector.length > 0) {
+      rules.push({
+        selector,
+        body: cleaned.slice(bodyStart, closeIndex),
+        ancestors: [...selectorStack],
+      });
+    }
+    depth -= 1;
+  };
+
+  for (let index = 0; index < cleaned.length; index += 1) {
+    const char = cleaned[index];
+    const next = cleaned[index + 1] ?? '';
+    const previous = cleaned[index - 1] ?? '';
+
+    if (quote) {
+      if (char === quote && previous !== '\\') {
+        quote = '';
+      }
+      continue;
+    }
+
+    if (char === '"' || char === "'" || char === '`') {
+      quote = char;
+      continue;
+    }
+
+    if (char === '/' && next === '*') {
+      const endComment = cleaned.indexOf('*/', index + 2);
+      index = endComment === -1 ? cleaned.length : endComment + 1;
+      selectorStart = index + 1;
+      continue;
+    }
+
+    if (char === '{') {
+      const selectorText = cleaned.slice(selectorStart, index).trim();
+      pushRule(selectorText, index + 1);
+      continue;
+    }
+
+    if (char === '}') {
+      if (depth > 0) {
+        popRule(index);
+      }
+      selectorStart = index + 1;
+      continue;
+    }
+  }
+
+  return rules;
+}
+
+function hasDeclaration(rule, property, value) {
+  const escapedProperty = property.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const valuePattern = value instanceof RegExp ? value.source : value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pattern = new RegExp(
+    `(?:^|;|\\n)\\s*${escapedProperty}\\s*:\\s*(?:${valuePattern})\\s*(?:;|$|\\n)`,
+    'i',
+  );
+  return pattern.test(rule.body);
+}
+
+function hasEditModeMasonryGridOverride(stylesSource, forbiddenDeclaration) {
+  const rules = extractCssBlocks(stylesSource).filter((rule) => {
+    const selector = rule.selector;
+    return selector.includes('.ss-product-layout-edit-active') && selector.includes('.masonry-grid');
+  });
+
+  return rules.some((rule) => hasDeclaration(rule, forbiddenDeclaration.property, forbiddenDeclaration.value));
+}
+
+function hasEditModeMasonryItemOverride(stylesSource, forbiddenDeclaration) {
+  const rules = extractCssBlocks(stylesSource).filter((rule) => {
+    const selector = rule.selector;
+    return selector.includes('.ss-product-layout-edit-active') && selector.includes('.masonry-item');
+  });
+
+  return rules.some((rule) => hasDeclaration(rule, forbiddenDeclaration.property, forbiddenDeclaration.value));
+}
+
+function assertMasonryColumnBaseRule(stylesSource, columnsValue) {
+  const rules = extractCssBlocks(stylesSource).filter((rule) => (
+    rule.selector.includes('.masonry-grid')
+    && !rule.selector.includes('.ss-product-layout-edit-active')
+  ));
+
+  const matcher = new RegExp(`\\b${columnsValue}\\b`);
+  const hasBaseColumnsRule = rules.some((rule) => hasDeclaration(rule, 'columns', matcher));
+  if (!hasBaseColumnsRule) {
+    throw new Error(`Expected masonry base rule to include columns: ${columnsValue};`);
+  }
+}
+
+function assertMasonryColumnMediaRule(stylesSource, maxWidth, columnsValue) {
+  const rules = extractCssBlocks(stylesSource).filter((rule) => (
+    rule.selector.includes('.masonry-grid')
+    && !rule.selector.includes('.ss-product-layout-edit-active')
+    && rule.ancestors.some((ancestor) => new RegExp(`max-width\\s*:\\s*${maxWidth}px`).test(ancestor))
+  ));
+
+  const matcher = new RegExp(`\\b${columnsValue}\\b`);
+  const hasMediaColumnsRule = rules.some((rule) => hasDeclaration(rule, 'columns', matcher));
+  if (!hasMediaColumnsRule) {
+    throw new Error(`Expected masonry media rule to include columns: ${columnsValue} at max-width ${maxWidth}px.`);
+  }
+}
+
 function assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSource, appSource, layoutSource, stylesSource) {
   const toolbarSource = assertToolbarSource(stackWorkspaceSource);
 
@@ -299,6 +424,9 @@ function assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSo
   assertSourceIncludes(stackWorkspaceSource, 'findProductLayoutDropSlot', 'stable pointer slot helper for product layout drag');
   assertSourceIncludes(stackWorkspaceSource, 'findGridProductLayoutDropSlot', 'separate grid slot detection helper');
   assertSourceIncludes(stackWorkspaceSource, 'findListProductLayoutDropSlot', 'separate list slot detection helper');
+  assertSourceIncludes(stackWorkspaceSource, 'buildMasonryItemColumns', 'Masonry-aware grid grouping helper');
+  assertSourceIncludes(stackWorkspaceSource, 'pickMasonryColumnForX', 'Masonry-aware pointer-to-column selector helper');
+  assertSourceIncludes(stackWorkspaceSource, 'findGridProductLayoutDropSlotFallbackToNearestCenter', 'Masonry-aware nearest-center fallback helper');
   assertSourceIncludes(stackWorkspaceSource, 'acceptProductLayoutDropSlot', 'layout drag hysteresis helper');
   assertSourceIncludes(stackWorkspaceSource, 'lastAcceptedSlot', 'pointer drag state tracks last accepted slot');
   assertSourceIncludes(stackWorkspaceSource, 'productLayoutDropSlotKey', 'repeated slot preview guard');
@@ -498,30 +626,22 @@ function assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSo
   assertSourceIncludes(stylesSource, '.ss-product-layout-editable-item', 'product card edit mode visual styles');
   assertSourceIncludes(stylesSource, '.ss-product-layout-edit-active', 'edit-mode overlay scope styles');
   assertSourceIncludes(stylesSource, '.ss-product-layout-edit-overlay', 'transparent edit-mode overlay styles');
-  const editModeGridStyles = stylesSource.match(/\.ss-product-layout-edit-active\s+\.masonry-grid\.ss-section-grid\s*\{[\s\S]*?\}/)?.[0] ?? '';
-  if (/auto-fill/.test(editModeGridStyles) || /minmax\(248px,\s*1fr\)/.test(editModeGridStyles)) {
-    throw new Error('Expected edit-mode product grid to preserve normal masonry column counts instead of auto-fill minmax card widths.');
+  if (hasEditModeMasonryGridOverride(stylesSource, { property: 'display', value: 'grid' })) {
+    throw new Error('Expected edit-mode masonry-grid related rules to avoid display:grid.');
   }
-  assertSourceMatches(
-    stylesSource,
-    /\.ss-product-layout-edit-active\s+\.masonry-grid\.ss-section-grid\s*\{[\s\S]*?grid-template-columns\s*:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\)/,
-    'edit-mode grid desktop column parity with normal masonry',
-  );
-  assertSourceMatches(
-    stylesSource,
-    /@media\s*\(max-width:\s*1200px\)\s*\{[\s\S]*?\.ss-product-layout-edit-active\s+\.masonry-grid\.ss-section-grid\s*\{[\s\S]*?repeat\(3,\s*minmax\(0,\s*1fr\)\)/,
-    'edit-mode grid 1200px breakpoint parity with normal masonry',
-  );
-  assertSourceMatches(
-    stylesSource,
-    /@media\s*\(max-width:\s*768px\)\s*\{[\s\S]*?\.ss-product-layout-edit-active\s+\.masonry-grid\.ss-section-grid\s*\{[\s\S]*?repeat\(2,\s*minmax\(0,\s*1fr\)\)/,
-    'edit-mode grid 768px breakpoint parity with normal masonry',
-  );
-  assertSourceMatches(
-    stylesSource,
-    /@media\s*\(max-width:\s*480px\)\s*\{[\s\S]*?\.ss-product-layout-edit-active\s+\.masonry-grid\.ss-section-grid\s*\{[\s\S]*?repeat\(1,\s*minmax\(0,\s*1fr\)\)/,
-    'edit-mode grid 480px breakpoint parity with normal masonry',
-  );
+  if (hasEditModeMasonryGridOverride(stylesSource, { property: 'grid-template-columns', value: /.+/ })) {
+    throw new Error('Expected edit-mode masonry-grid related rules to avoid grid-template-columns overrides.');
+  }
+  if (hasEditModeMasonryGridOverride(stylesSource, { property: 'columns', value: 'initial' })) {
+    throw new Error('Expected edit-mode masonry-grid related rules to avoid columns:initial.');
+  }
+  if (hasEditModeMasonryItemOverride(stylesSource, { property: 'break-inside', value: 'auto' })) {
+    throw new Error('Expected edit-mode masonry item rule not to force break-inside:auto.');
+  }
+  assertMasonryColumnBaseRule(stylesSource, 4);
+  assertMasonryColumnMediaRule(stylesSource, 1200, 3);
+  assertMasonryColumnMediaRule(stylesSource, 768, 2);
+  assertMasonryColumnMediaRule(stylesSource, 480, 1);
   assertSourceIncludes(stylesSource, '.ss-product-layout-drop-target', 'drop target visual styles');
   assertSourceIncludes(stylesSource, '.ss-product-layout-drop-before', 'drop-before visual styles');
   assertSourceIncludes(stylesSource, '.ss-product-layout-drop-after', 'drop-after visual styles');

@@ -632,6 +632,12 @@ interface ProductLayoutMeasuredItem {
   rect: DOMRect;
 }
 
+interface ProductLayoutMasonryColumn {
+  left: number;
+  right: number;
+  items: ProductLayoutMeasuredItem[];
+}
+
 interface ProductLayoutMeasuredSection extends ProductLayoutSectionTarget {
   rect: DOMRect;
   items: ProductLayoutMeasuredItem[];
@@ -664,6 +670,7 @@ const PRODUCT_LAYOUT_SLOT_HYSTERESIS_PX = 16;
 const PRODUCT_LAYOUT_SLOT_DISTANCE_ADVANTAGE_PX = 6;
 const PRODUCT_LAYOUT_SECTION_TARGET_MARGIN_PX = 48;
 const PRODUCT_LAYOUT_SECTION_END_MARGIN_PX = 28;
+const PRODUCT_LAYOUT_MASONRY_COLUMN_TOLERANCE_PX = 24;
 
 function sectionSortMode(sortMode: ProductSortMode, categoryMode: ProductCategoryMode): ProductSortMode {
   if (categoryMode === 'timing' && sortMode === 'timing') return 'az';
@@ -828,6 +835,82 @@ function productLayoutSectionForPoint(
   }, null);
 }
 
+function buildMasonryItemColumns(items: ProductLayoutMeasuredItem[]): ProductLayoutMasonryColumn[] {
+  if (items.length === 0) {
+    return [];
+  }
+
+  const sorted = [...items].sort((left, right) => left.rect.left - right.rect.left || left.rect.top - right.rect.top);
+  const columns: ProductLayoutMasonryColumn[] = [];
+
+  for (const item of sorted) {
+    const itemLeft = item.rect.left;
+    const itemRight = item.rect.left + item.rect.width;
+
+    const column = columns.find((entry) => (
+      Math.abs(entry.left - itemLeft) <= PRODUCT_LAYOUT_MASONRY_COLUMN_TOLERANCE_PX
+    ));
+    if (column) {
+      column.items.push(item);
+      column.left = Math.min(column.left, itemLeft);
+      column.right = Math.max(column.right, itemRight);
+      continue;
+    }
+
+    columns.push({
+      left: itemLeft,
+      right: itemRight,
+      items: [item],
+    });
+  }
+
+  return columns.sort((left, right) => left.left - right.left);
+}
+
+function pickMasonryColumnForX(
+  columns: ProductLayoutMasonryColumn[],
+  clientX: number,
+): ProductLayoutMasonryColumn | null {
+  if (columns.length === 0) return null;
+
+  const tolerance = PRODUCT_LAYOUT_MASONRY_COLUMN_TOLERANCE_PX;
+  const underPointer = columns.filter((column) => {
+    const start = column.left - tolerance;
+    const end = column.right + tolerance;
+    return clientX >= start && clientX <= end;
+  });
+  const candidates = underPointer.length > 0 ? underPointer : columns;
+
+  return candidates.reduce((best, column) => {
+    const columnCenterX = (column.left + column.right) / 2;
+    const bestCenterX = (best.left + best.right) / 2;
+    return Math.abs(columnCenterX - clientX) < Math.abs(bestCenterX - clientX) ? column : best;
+  }, candidates[0]);
+}
+
+function findGridProductLayoutDropSlotFallbackToNearestCenter(
+  section: ProductLayoutMeasuredSection,
+  items: ProductLayoutMeasuredItem[],
+  clientX: number,
+  clientY: number,
+): ProductLayoutDropSlot | null {
+  if (items.length === 0) return null;
+
+  const nearest = items.reduce((best, item) => (
+    productLayoutItemCenterDistance(item, clientX, clientY) < productLayoutItemCenterDistance(best, clientX, clientY) ? item : best
+  ), items[0]);
+  const centerY = nearest.rect.top + nearest.rect.height / 2;
+
+  return {
+    targetProductKey: nearest.productKey,
+    targetCategoryId: section.categoryId,
+    placement: clientY < centerY ? 'before' : 'after',
+    targetSectionId: section.id,
+    targetSectionProductKeys: section.productKeys,
+    distance: Math.abs(clientY - centerY),
+  };
+}
+
 function productLayoutItemCenterDistance(item: ProductLayoutMeasuredItem, clientX: number, clientY: number): number {
   const centerX = item.rect.left + item.rect.width / 2;
   const centerY = item.rect.top + item.rect.height / 2;
@@ -903,18 +986,33 @@ function findGridProductLayoutDropSlot(
     return productLayoutEndSlot(section, clientX, clientY);
   }
 
-  const nearest = items.reduce((best, item) => (
-    productLayoutItemCenterDistance(item, clientX, clientY) < productLayoutItemCenterDistance(best, clientX, clientY) ? item : best
-  ), items[0]);
-  const centerX = nearest.rect.left + nearest.rect.width / 2;
+  const columns = buildMasonryItemColumns(items);
+  const targetColumn = pickMasonryColumnForX(columns, clientX);
+  if (!targetColumn) {
+    return findGridProductLayoutDropSlotFallbackToNearestCenter(section, items, clientX, clientY);
+  }
+
+  const orderedColumnItems = [...targetColumn.items].sort((left, right) => (
+    left.rect.top - right.rect.top || left.rect.left - right.rect.left
+  ));
+  if (orderedColumnItems.length === 0) {
+    return findGridProductLayoutDropSlotFallbackToNearestCenter(section, items, clientX, clientY);
+  }
+
+  const nearestInColumn = orderedColumnItems.reduce((best, item) => {
+    const bestCenterY = best.rect.top + best.rect.height / 2;
+    const itemCenterY = item.rect.top + item.rect.height / 2;
+    return Math.abs(clientY - itemCenterY) < Math.abs(clientY - bestCenterY) ? item : best;
+  }, orderedColumnItems[0]);
+  const centerY = nearestInColumn.rect.top + nearestInColumn.rect.height / 2;
 
   return {
-    targetProductKey: nearest.productKey,
+    targetProductKey: nearestInColumn.productKey,
     targetCategoryId: section.categoryId,
-    placement: clientX < centerX ? 'before' : 'after',
+    placement: clientY < centerY ? 'before' : 'after',
     targetSectionId: section.id,
     targetSectionProductKeys: section.productKeys,
-    distance: productLayoutItemCenterDistance(nearest, clientX, clientY),
+    distance: Math.abs(clientY - centerY),
   };
 }
 
@@ -948,7 +1046,8 @@ function productLayoutDropSlotDistance(
     const centerY = item.rect.top + item.rect.height / 2;
     return Math.abs(clientY - centerY);
   }
-  return productLayoutItemCenterDistance(item, clientX, clientY);
+  const centerY = item.rect.top + item.rect.height / 2;
+  return Math.abs(clientY - centerY);
 }
 
 function acceptProductLayoutDropSlot(

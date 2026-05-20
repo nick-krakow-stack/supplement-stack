@@ -371,32 +371,6 @@ body {
 .ss-product-layout-edit-active {
   position: relative;
 }
-.ss-product-layout-edit-active .masonry-grid.ss-section-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
-  columns: initial;
-  align-items: start;
-}
-.ss-product-layout-edit-active .masonry-item {
-  margin-bottom: 0;
-  break-inside: auto;
-}
-@media (max-width: 1200px) {
-  .ss-product-layout-edit-active .masonry-grid.ss-section-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-@media (max-width: 768px) {
-  .ss-product-layout-edit-active .masonry-grid.ss-section-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-@media (max-width: 480px) {
-  .ss-product-layout-edit-active .masonry-grid.ss-section-grid {
-    grid-template-columns: repeat(1, minmax(0, 1fr));
-  }
-}
 .ss-product-layout-edit-mode {
   opacity: 0.92;
   border: 1.5px solid #f59e0b;
