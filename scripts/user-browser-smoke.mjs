@@ -498,6 +498,30 @@ function assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSo
   assertSourceIncludes(stylesSource, '.ss-product-layout-editable-item', 'product card edit mode visual styles');
   assertSourceIncludes(stylesSource, '.ss-product-layout-edit-active', 'edit-mode overlay scope styles');
   assertSourceIncludes(stylesSource, '.ss-product-layout-edit-overlay', 'transparent edit-mode overlay styles');
+  const editModeGridStyles = stylesSource.match(/\.ss-product-layout-edit-active\s+\.masonry-grid\.ss-section-grid\s*\{[\s\S]*?\}/)?.[0] ?? '';
+  if (/auto-fill/.test(editModeGridStyles) || /minmax\(248px,\s*1fr\)/.test(editModeGridStyles)) {
+    throw new Error('Expected edit-mode product grid to preserve normal masonry column counts instead of auto-fill minmax card widths.');
+  }
+  assertSourceMatches(
+    stylesSource,
+    /\.ss-product-layout-edit-active\s+\.masonry-grid\.ss-section-grid\s*\{[\s\S]*?grid-template-columns\s*:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\)/,
+    'edit-mode grid desktop column parity with normal masonry',
+  );
+  assertSourceMatches(
+    stylesSource,
+    /@media\s*\(max-width:\s*1200px\)\s*\{[\s\S]*?\.ss-product-layout-edit-active\s+\.masonry-grid\.ss-section-grid\s*\{[\s\S]*?repeat\(3,\s*minmax\(0,\s*1fr\)\)/,
+    'edit-mode grid 1200px breakpoint parity with normal masonry',
+  );
+  assertSourceMatches(
+    stylesSource,
+    /@media\s*\(max-width:\s*768px\)\s*\{[\s\S]*?\.ss-product-layout-edit-active\s+\.masonry-grid\.ss-section-grid\s*\{[\s\S]*?repeat\(2,\s*minmax\(0,\s*1fr\)\)/,
+    'edit-mode grid 768px breakpoint parity with normal masonry',
+  );
+  assertSourceMatches(
+    stylesSource,
+    /@media\s*\(max-width:\s*480px\)\s*\{[\s\S]*?\.ss-product-layout-edit-active\s+\.masonry-grid\.ss-section-grid\s*\{[\s\S]*?repeat\(1,\s*minmax\(0,\s*1fr\)\)/,
+    'edit-mode grid 480px breakpoint parity with normal masonry',
+  );
   assertSourceIncludes(stylesSource, '.ss-product-layout-drop-target', 'drop target visual styles');
   assertSourceIncludes(stylesSource, '.ss-product-layout-drop-before', 'drop-before visual styles');
   assertSourceIncludes(stylesSource, '.ss-product-layout-drop-after', 'drop-after visual styles');
