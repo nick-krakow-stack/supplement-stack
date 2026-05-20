@@ -389,6 +389,11 @@ body {
   cursor: grab;
   touch-action: none;
   user-select: none;
+  -webkit-user-drag: none;
+}
+.ss-product-layout-edit-mode img {
+  -webkit-user-drag: none;
+  user-drag: none;
 }
 .ss-product-layout-edit-toolbar,
 .ss-product-layout-edit-toolbar * {
@@ -404,12 +409,66 @@ body {
   transition: background 0.15s ease, opacity 0.15s ease;
 }
 .ss-product-layout-item-dragging {
-  opacity: 0.78;
+  opacity: 0.84;
   border-color: #4338ca;
   box-shadow: 0 12px 26px rgba(15, 23, 42, 0.16);
+  transform: scale(1.015);
+  z-index: 5;
 }
 .ss-product-layout-item-dragging .ss-product-layout-edit-overlay {
   background: rgba(67, 56, 202, 0.14);
+}
+.ss-product-layout-drop-target:not(.ss-product-layout-drop-end) {
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.3), 0 10px 22px rgba(37, 99, 235, 0.14);
+}
+.ss-product-layout-drop-before::before,
+.ss-product-layout-drop-after::after {
+  content: "";
+  position: absolute;
+  z-index: 4;
+  border-radius: 999px;
+  background: #2563eb;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.16);
+  pointer-events: none;
+}
+.ss-product-layout-drop-before.product-list-item::before,
+.ss-product-layout-drop-after.product-list-item::after {
+  left: -6px;
+  right: -6px;
+  height: 4px;
+}
+.ss-product-layout-drop-before.product-list-item::before {
+  top: -7px;
+}
+.ss-product-layout-drop-after.product-list-item::after {
+  bottom: -7px;
+}
+.ss-product-layout-drop-before.masonry-item::before,
+.ss-product-layout-drop-after.masonry-item::after {
+  top: 12px;
+  bottom: 12px;
+  width: 4px;
+}
+.ss-product-layout-drop-before.masonry-item::before {
+  left: -7px;
+}
+.ss-product-layout-drop-after.masonry-item::after {
+  right: -7px;
+}
+.ss-product-section.ss-product-layout-drop-end {
+  border-radius: 14px;
+  outline: 2px dashed rgba(37, 99, 235, 0.48);
+  outline-offset: 6px;
+  background: rgba(37, 99, 235, 0.04);
+}
+.ss-product-section.ss-product-layout-drop-end::after {
+  content: "";
+  display: block;
+  width: 100%;
+  height: 5px;
+  border-radius: 999px;
+  background: #2563eb;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.14);
 }
 .ss-product-layout-edit-mode:hover {
   box-shadow: 0 0 0 1px #a5b4fc;

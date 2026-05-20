@@ -627,14 +627,43 @@ interface ProductLayoutSectionTarget {
   productKeys: string[];
 }
 
+interface ProductLayoutMeasuredItem {
+  productKey: string;
+  rect: DOMRect;
+}
+
+interface ProductLayoutMeasuredSection extends ProductLayoutSectionTarget {
+  rect: DOMRect;
+  items: ProductLayoutMeasuredItem[];
+}
+
+interface ProductLayoutDropSlot {
+  targetProductKey: string | null;
+  targetCategoryId: number | string | null;
+  placement: ProductLayoutDropPlacement;
+  targetSectionId: string | null;
+  targetSectionProductKeys: string[];
+  distance: number;
+}
+
 interface ProductPointerDragState {
   productKey: string;
   pointerId: number;
   startX: number;
   startY: number;
   lastPreviewProducts: DemoProduct[] | null;
+  lastAcceptedSlot: ProductLayoutDropSlot | null;
+  lastAcceptedSlotKey: string | null;
+  lastAcceptedClientX: number;
+  lastAcceptedClientY: number;
   hasMoved: boolean;
 }
+
+const PRODUCT_LAYOUT_POINTER_START_PX = 6;
+const PRODUCT_LAYOUT_SLOT_HYSTERESIS_PX = 16;
+const PRODUCT_LAYOUT_SLOT_DISTANCE_ADVANTAGE_PX = 6;
+const PRODUCT_LAYOUT_SECTION_TARGET_MARGIN_PX = 48;
+const PRODUCT_LAYOUT_SECTION_END_MARGIN_PX = 28;
 
 function sectionSortMode(sortMode: ProductSortMode, categoryMode: ProductCategoryMode): ProductSortMode {
   if (categoryMode === 'timing' && sortMode === 'timing') return 'az';
@@ -757,6 +786,203 @@ function productLayoutSectionEndIndex(
   return products.length;
 }
 
+function productLayoutDropSlotKey(slot: ProductLayoutDropSlot): string {
+  return [
+    slot.targetSectionId ?? '',
+    normalizedCategoryId(slot.targetCategoryId),
+    slot.targetProductKey ?? '',
+    slot.placement,
+  ].join('|');
+}
+
+function productLayoutRectDistance(rect: DOMRect, clientX: number, clientY: number): number {
+  const deltaX = clientX < rect.left ? rect.left - clientX : clientX > rect.right ? clientX - rect.right : 0;
+  const deltaY = clientY < rect.top ? rect.top - clientY : clientY > rect.bottom ? clientY - rect.bottom : 0;
+  return Math.hypot(deltaX, deltaY);
+}
+
+function productLayoutSectionForPoint(
+  sections: ProductLayoutMeasuredSection[],
+  clientX: number,
+  clientY: number,
+): ProductLayoutMeasuredSection | null {
+  if (sections.length === 0) return null;
+
+  const nearbySections = sections.filter((section) => {
+    const rect = section.rect;
+    return (
+      clientX >= rect.left - PRODUCT_LAYOUT_SECTION_TARGET_MARGIN_PX
+      && clientX <= rect.right + PRODUCT_LAYOUT_SECTION_TARGET_MARGIN_PX
+      && clientY >= rect.top - PRODUCT_LAYOUT_SECTION_TARGET_MARGIN_PX
+      && clientY <= rect.bottom + PRODUCT_LAYOUT_SECTION_TARGET_MARGIN_PX
+    );
+  });
+
+  if (nearbySections.length === 0) return null;
+
+  return nearbySections.reduce<ProductLayoutMeasuredSection | null>((best, section) => {
+    if (!best) return section;
+    return productLayoutRectDistance(section.rect, clientX, clientY) < productLayoutRectDistance(best.rect, clientX, clientY)
+      ? section
+      : best;
+  }, null);
+}
+
+function productLayoutItemCenterDistance(item: ProductLayoutMeasuredItem, clientX: number, clientY: number): number {
+  const centerX = item.rect.left + item.rect.width / 2;
+  const centerY = item.rect.top + item.rect.height / 2;
+  return Math.hypot(clientX - centerX, clientY - centerY);
+}
+
+function productLayoutEndSlot(section: ProductLayoutMeasuredSection, clientX: number, clientY: number): ProductLayoutDropSlot {
+  const endX = section.rect.left + section.rect.width / 2;
+  const endY = section.rect.bottom;
+  return {
+    targetProductKey: null,
+    targetCategoryId: section.categoryId,
+    placement: 'end',
+    targetSectionId: section.id,
+    targetSectionProductKeys: section.productKeys,
+    distance: Math.hypot(clientX - endX, clientY - endY),
+  };
+}
+
+function findListProductLayoutDropSlot(
+  sections: ProductLayoutMeasuredSection[],
+  productKey: string,
+  clientX: number,
+  clientY: number,
+): ProductLayoutDropSlot | null {
+  const section = productLayoutSectionForPoint(sections, clientX, clientY);
+  if (!section) return null;
+
+  const items = section.items
+    .filter((item) => item.productKey !== productKey)
+    .sort((left, right) => left.rect.top - right.rect.top || left.rect.left - right.rect.left);
+
+  if (items.length === 0) {
+    return productLayoutEndSlot(section, clientX, clientY);
+  }
+
+  const lastItem = items[items.length - 1];
+  if (clientY > lastItem.rect.bottom + PRODUCT_LAYOUT_SECTION_END_MARGIN_PX) {
+    return productLayoutEndSlot(section, clientX, clientY);
+  }
+
+  const nearest = items.reduce((best, item) => (
+    productLayoutItemCenterDistance(item, clientX, clientY) < productLayoutItemCenterDistance(best, clientX, clientY) ? item : best
+  ), items[0]);
+  const centerY = nearest.rect.top + nearest.rect.height / 2;
+
+  return {
+    targetProductKey: nearest.productKey,
+    targetCategoryId: section.categoryId,
+    placement: clientY < centerY ? 'before' : 'after',
+    targetSectionId: section.id,
+    targetSectionProductKeys: section.productKeys,
+    distance: Math.abs(clientY - centerY),
+  };
+}
+
+function findGridProductLayoutDropSlot(
+  sections: ProductLayoutMeasuredSection[],
+  productKey: string,
+  clientX: number,
+  clientY: number,
+): ProductLayoutDropSlot | null {
+  const section = productLayoutSectionForPoint(sections, clientX, clientY);
+  if (!section) return null;
+
+  const items = section.items.filter((item) => item.productKey !== productKey);
+  if (items.length === 0) {
+    return productLayoutEndSlot(section, clientX, clientY);
+  }
+
+  const maxItemBottom = Math.max(...items.map((item) => item.rect.bottom));
+  if (clientY > maxItemBottom + PRODUCT_LAYOUT_SECTION_END_MARGIN_PX) {
+    return productLayoutEndSlot(section, clientX, clientY);
+  }
+
+  const nearest = items.reduce((best, item) => (
+    productLayoutItemCenterDistance(item, clientX, clientY) < productLayoutItemCenterDistance(best, clientX, clientY) ? item : best
+  ), items[0]);
+  const centerX = nearest.rect.left + nearest.rect.width / 2;
+
+  return {
+    targetProductKey: nearest.productKey,
+    targetCategoryId: section.categoryId,
+    placement: clientX < centerX ? 'before' : 'after',
+    targetSectionId: section.id,
+    targetSectionProductKeys: section.productKeys,
+    distance: productLayoutItemCenterDistance(nearest, clientX, clientY),
+  };
+}
+
+function findProductLayoutDropSlot(
+  sections: ProductLayoutMeasuredSection[],
+  productKey: string,
+  clientX: number,
+  clientY: number,
+  viewMode: ProductViewMode,
+): ProductLayoutDropSlot | null {
+  return viewMode === 'grid'
+    ? findGridProductLayoutDropSlot(sections, productKey, clientX, clientY)
+    : findListProductLayoutDropSlot(sections, productKey, clientX, clientY);
+}
+
+function productLayoutDropSlotDistance(
+  slot: ProductLayoutDropSlot,
+  sections: ProductLayoutMeasuredSection[],
+  clientX: number,
+  clientY: number,
+  viewMode: ProductViewMode,
+): number {
+  const section = sections.find((entry) => entry.id === slot.targetSectionId);
+  if (!section) return Number.POSITIVE_INFINITY;
+  if (!slot.targetProductKey || slot.placement === 'end') {
+    return productLayoutEndSlot(section, clientX, clientY).distance;
+  }
+  const item = section.items.find((entry) => entry.productKey === slot.targetProductKey);
+  if (!item) return Number.POSITIVE_INFINITY;
+  if (viewMode === 'list') {
+    const centerY = item.rect.top + item.rect.height / 2;
+    return Math.abs(clientY - centerY);
+  }
+  return productLayoutItemCenterDistance(item, clientX, clientY);
+}
+
+function acceptProductLayoutDropSlot(
+  pointerDrag: ProductPointerDragState,
+  candidateSlot: ProductLayoutDropSlot,
+  sections: ProductLayoutMeasuredSection[],
+  clientX: number,
+  clientY: number,
+  viewMode: ProductViewMode,
+): boolean {
+  if (!pointerDrag.lastAcceptedSlot || !pointerDrag.lastAcceptedSlotKey) return true;
+  const candidateKey = productLayoutDropSlotKey(candidateSlot);
+  if (candidateKey === pointerDrag.lastAcceptedSlotKey) return false;
+
+  const pointerTravel = Math.hypot(clientX - pointerDrag.lastAcceptedClientX, clientY - pointerDrag.lastAcceptedClientY);
+  const candidateDistance = productLayoutDropSlotDistance(candidateSlot, sections, clientX, clientY, viewMode);
+  const previousDistance = productLayoutDropSlotDistance(pointerDrag.lastAcceptedSlot, sections, clientX, clientY, viewMode);
+
+  return (
+    pointerTravel >= PRODUCT_LAYOUT_SLOT_HYSTERESIS_PX
+    || candidateDistance + PRODUCT_LAYOUT_SLOT_DISTANCE_ADVANTAGE_PX < previousDistance
+  );
+}
+
+function validateProductLayoutDropAtPoint(
+  sections: ProductLayoutMeasuredSection[],
+  productKey: string,
+  clientX: number,
+  clientY: number,
+  viewMode: ProductViewMode,
+): ProductLayoutDropSlot | null {
+  return findProductLayoutDropSlot(sections, productKey, clientX, clientY, viewMode);
+}
+
 function previewProductLayoutProducts(
   products: DemoProduct[],
   categories: StackCategory[],
@@ -797,19 +1023,6 @@ function previewProductLayoutProducts(
   const boundedIndex = Math.max(0, Math.min(targetIndex, next.length));
   next.splice(boundedIndex, 0, movedProduct);
   return applySequentialSortOrder(next);
-}
-
-function productLayoutDropPlacement(
-  element: HTMLElement,
-  clientX: number,
-  clientY: number,
-  viewMode: ProductViewMode,
-): ProductLayoutDropPlacement {
-  const rect = element.getBoundingClientRect();
-  if (viewMode === 'grid') {
-    return clientX < rect.left + rect.width / 2 ? 'before' : 'after';
-  }
-  return clientY < rect.top + rect.height / 2 ? 'before' : 'after';
 }
 
 function normalizeStackWithLayout(stack: DemoStack): DemoStack {
@@ -1958,8 +2171,10 @@ export function StackWorkspace({
   const [categoryRenameDraft, setCategoryRenameDraft] = useState('');
   const [isCategoryActionBusy, setIsCategoryActionBusy] = useState(false);
   const [draggingProductKey, setDraggingProductKey] = useState<string | null>(null);
+  const [productLayoutDropSlot, setProductLayoutDropSlot] = useState<ProductLayoutDropSlot | null>(null);
   const [productLayoutPreviewProducts, setProductLayoutPreviewProducts] = useState<DemoProduct[] | null>(null);
   const productItemRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const productSectionRefs = useRef<Map<string, HTMLElement>>(new Map());
   const productItemRectsRef = useRef<Map<string, DOMRect>>(new Map());
   const productLayoutAnimationsRef = useRef<Map<string, Animation>>(new Map());
   const productPointerDragRef = useRef<ProductPointerDragState | null>(null);
@@ -3023,6 +3238,39 @@ export function StackWorkspace({
     productItemRefs.current.delete(productKey);
   }, []);
 
+  const setProductSectionRef = useCallback((sectionId: string, node: HTMLElement | null) => {
+    if (node) {
+      productSectionRefs.current.set(sectionId, node);
+      return;
+    }
+    productSectionRefs.current.delete(sectionId);
+  }, []);
+
+  const readProductLayoutMeasurements = useCallback((): ProductLayoutMeasuredSection[] => (
+    productSectionTargets
+      .map((section) => {
+        const sectionNode = productSectionRefs.current.get(section.id);
+        if (!sectionNode) return null;
+        const items = section.productKeys
+          .map((productKey) => {
+            const productNode = productItemRefs.current.get(productKey);
+            if (!productNode) return null;
+            return {
+              productKey,
+              rect: productNode.getBoundingClientRect(),
+            };
+          })
+          .filter((item): item is ProductLayoutMeasuredItem => item !== null);
+
+        return {
+          ...section,
+          rect: sectionNode.getBoundingClientRect(),
+          items,
+        };
+      })
+      .filter((section): section is ProductLayoutMeasuredSection => section !== null)
+  ), [productSectionTargets]);
+
   const captureProductLayoutRects = useCallback(() => {
     const rects = new Map<string, DOMRect>();
     productItemRefs.current.forEach((node, productKey) => {
@@ -3042,6 +3290,7 @@ export function StackWorkspace({
     productItemRectsRef.current = new Map();
 
     productItemRefs.current.forEach((node, productKey) => {
+      if (draggingProductKey === productKey) return;
       const previousRect = previousRects.get(productKey);
       if (!previousRect) return;
       const nextRect = node.getBoundingClientRect();
@@ -3065,7 +3314,7 @@ export function StackWorkspace({
       };
       animation.oncancel = animation.onfinish;
     });
-  }, [productSections]);
+  }, [draggingProductKey, productSections]);
 
   useEffect(() => cancelProductLayoutAnimations, [cancelProductLayoutAnimations]);
 
@@ -3073,6 +3322,7 @@ export function StackWorkspace({
     productPointerDragRef.current = null;
     suppressProductClickRef.current = false;
     setDraggingProductKey(null);
+    setProductLayoutDropSlot(null);
     productLayoutPreviewProductsRef.current = null;
     setProductLayoutPreviewProducts(null);
     productItemRectsRef.current = new Map();
@@ -3137,6 +3387,7 @@ export function StackWorkspace({
       const nextProducts = fallbackProducts ?? productLayoutPreviewProductsRef.current ?? productLayoutPreviewProducts;
       productPointerDragRef.current = null;
       setDraggingProductKey(null);
+      setProductLayoutDropSlot(null);
       productLayoutPreviewProductsRef.current = null;
       setProductLayoutPreviewProducts(null);
       productItemRectsRef.current = new Map();
@@ -3148,7 +3399,7 @@ export function StackWorkspace({
 
   const handleProductPointerDown = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>, productKey: string) => {
-      if (!isProductLayoutEditMode || event.pointerType === 'mouse' || event.button !== 0) return;
+      if (!isProductLayoutEditMode || event.button !== 0) return;
       const target = event.target as HTMLElement | null;
       if (!target || isInteractiveDragSource(target)) return;
 
@@ -3159,44 +3410,76 @@ export function StackWorkspace({
         startX: event.clientX,
         startY: event.clientY,
         lastPreviewProducts: null,
+        lastAcceptedSlot: null,
+        lastAcceptedSlotKey: null,
+        lastAcceptedClientX: event.clientX,
+        lastAcceptedClientY: event.clientY,
         hasMoved: false,
       };
+      setProductLayoutDropSlot(null);
       event.currentTarget.setPointerCapture(event.pointerId);
+      event.preventDefault();
+      event.stopPropagation();
       setDraggingProductKey(productKey);
     },
     [captureProductLayoutRects, isInteractiveDragSource, isProductLayoutEditMode],
   );
 
-  const findProductSectionDropTarget = useCallback(
-    (target: Element | null): ProductLayoutSectionTarget | null => {
-      const sectionNode = target?.closest<HTMLElement>('[data-product-section-id]');
-      const sectionId = sectionNode?.dataset.productSectionId ?? null;
-      if (!sectionId) return null;
-      return productSectionTargets.find((section) => section.id === sectionId) ?? null;
+  const previewProductLayoutFromPoint = useCallback(
+    (pointerDrag: ProductPointerDragState, clientX: number, clientY: number): DemoProduct[] | null => {
+      const measurements = readProductLayoutMeasurements();
+      const dropSlot = findProductLayoutDropSlot(measurements, pointerDrag.productKey, clientX, clientY, productViewMode);
+      if (!dropSlot || !acceptProductLayoutDropSlot(pointerDrag, dropSlot, measurements, clientX, clientY, productViewMode)) {
+        return null;
+      }
+
+      const dropSlotKey = productLayoutDropSlotKey(dropSlot);
+      const nextProducts = previewProductLayoutPlacement(
+        pointerDrag.productKey,
+        dropSlot.targetProductKey,
+        dropSlot.targetCategoryId,
+        dropSlot.placement,
+        dropSlot.targetSectionId,
+        dropSlot.targetSectionProductKeys,
+      );
+
+      if (nextProducts) {
+        pointerDrag.lastAcceptedSlot = dropSlot;
+        pointerDrag.lastAcceptedSlotKey = dropSlotKey;
+        pointerDrag.lastAcceptedClientX = clientX;
+        pointerDrag.lastAcceptedClientY = clientY;
+        setProductLayoutDropSlot(dropSlot);
+      }
+
+      return nextProducts;
     },
-    [productSectionTargets],
+    [previewProductLayoutPlacement, productViewMode, readProductLayoutMeasurements],
   );
 
-  const previewProductLayoutFromPoint = useCallback(
-    (productKey: string, clientX: number, clientY: number): DemoProduct[] | null => {
-      const target = document.elementFromPoint(clientX, clientY);
-      const targetItem = target?.closest<HTMLElement>('[data-product-layout-key]');
-      const targetSection = findProductSectionDropTarget(target);
-      const targetCategoryId = targetSection?.categoryId ?? null;
+  const previewValidatedProductLayoutDrop = useCallback(
+    (pointerDrag: ProductPointerDragState, dropSlot: ProductLayoutDropSlot, clientX: number, clientY: number): DemoProduct[] | null => {
+      const dropSlotKey = productLayoutDropSlotKey(dropSlot);
+      const nextProducts = previewProductLayoutPlacement(
+        pointerDrag.productKey,
+        dropSlot.targetProductKey,
+        dropSlot.targetCategoryId,
+        dropSlot.placement,
+        dropSlot.targetSectionId,
+        dropSlot.targetSectionProductKeys,
+      );
 
-      if (targetItem) {
-        const targetProductKey = targetItem.dataset.productLayoutKey ?? null;
-        const placement = productLayoutDropPlacement(targetItem, clientX, clientY, productViewMode);
-        return previewProductLayoutPlacement(productKey, targetProductKey, targetCategoryId, placement, targetSection?.id ?? null, targetSection?.productKeys ?? []);
+      if (nextProducts) {
+        pointerDrag.lastAcceptedSlot = dropSlot;
+        pointerDrag.lastAcceptedSlotKey = dropSlotKey;
+        pointerDrag.lastAcceptedClientX = clientX;
+        pointerDrag.lastAcceptedClientY = clientY;
+        pointerDrag.lastPreviewProducts = nextProducts;
+        setProductLayoutDropSlot(dropSlot);
       }
 
-      if (targetSection) {
-        return previewProductLayoutPlacement(productKey, null, targetCategoryId, 'end', targetSection.id, targetSection.productKeys);
-      }
-
-      return null;
+      return nextProducts;
     },
-    [findProductSectionDropTarget, previewProductLayoutPlacement, productViewMode],
+    [previewProductLayoutPlacement],
   );
 
   const handleProductPointerMove = useCallback(
@@ -3206,14 +3489,14 @@ export function StackWorkspace({
 
       const deltaX = event.clientX - pointerDrag.startX;
       const deltaY = event.clientY - pointerDrag.startY;
-      if (!pointerDrag.hasMoved && Math.hypot(deltaX, deltaY) < 6) return;
+      if (!pointerDrag.hasMoved && Math.hypot(deltaX, deltaY) < PRODUCT_LAYOUT_POINTER_START_PX) return;
 
       pointerDrag.hasMoved = true;
       suppressProductClickRef.current = true;
       event.preventDefault();
       event.stopPropagation();
 
-      const nextProducts = previewProductLayoutFromPoint(pointerDrag.productKey, event.clientX, event.clientY);
+      const nextProducts = previewProductLayoutFromPoint(pointerDrag, event.clientX, event.clientY);
       if (nextProducts) {
         pointerDrag.lastPreviewProducts = nextProducts;
       }
@@ -3245,9 +3528,33 @@ export function StackWorkspace({
       scheduleProductClickSuppressionReset();
       event.preventDefault();
       event.stopPropagation();
-      void commitProductLayoutPreview(pointerDrag.lastPreviewProducts);
+      const endpointSlot = validateProductLayoutDropAtPoint(
+        readProductLayoutMeasurements(),
+        pointerDrag.productKey,
+        event.clientX,
+        event.clientY,
+        productViewMode,
+      );
+      if (!endpointSlot) {
+        clearProductLayoutPreview();
+        suppressProductClickRef.current = true;
+        scheduleProductClickSuppressionReset();
+        return;
+      }
+      const endpointSlotKey = productLayoutDropSlotKey(endpointSlot);
+      const endpointProducts = endpointSlotKey === pointerDrag.lastAcceptedSlotKey
+        ? pointerDrag.lastPreviewProducts
+        : previewValidatedProductLayoutDrop(pointerDrag, endpointSlot, event.clientX, event.clientY);
+      void commitProductLayoutPreview(endpointProducts);
     },
-    [clearProductLayoutPreview, commitProductLayoutPreview, scheduleProductClickSuppressionReset],
+    [
+      clearProductLayoutPreview,
+      commitProductLayoutPreview,
+      previewValidatedProductLayoutDrop,
+      productViewMode,
+      readProductLayoutMeasurements,
+      scheduleProductClickSuppressionReset,
+    ],
   );
 
   const handleProductPointerCancel = useCallback(
@@ -3950,26 +4257,21 @@ export function StackWorkspace({
                 const sectionCategory = productCategoryMode === 'custom'
                   ? activeCategories.find((category) => normalizedCategoryId(category.id) === normalizedCategoryId(section.categoryId))
                   : null;
-                const sectionProductKeys = section.products.map(productStackKey);
+                const isSectionDropEnd = (
+                  productLayoutDropSlot?.targetSectionId === section.id
+                  && productLayoutDropSlot.placement === 'end'
+                  && !productLayoutDropSlot.targetProductKey
+                );
                 return (
                   <section
                     key={section.id}
-                    className="ss-product-section"
+                    ref={(node) => setProductSectionRef(section.id, node)}
+                    className={[
+                      'ss-product-section',
+                      isSectionDropEnd ? 'ss-product-layout-drop-target ss-product-layout-drop-end' : '',
+                    ].filter(Boolean).join(' ')}
                     data-product-section-id={section.id}
                     data-product-section-category-id={section.categoryId === null ? '' : String(section.categoryId)}
-                    onDragOver={(event) => {
-                      if (!isProductLayoutEditMode || !draggingProductKey) return;
-                      event.preventDefault();
-                      event.dataTransfer.dropEffect = 'move';
-                      previewProductLayoutPlacement(draggingProductKey, null, sectionCategory?.id ?? null, 'end', section.id, sectionProductKeys);
-                    }}
-                    onDrop={(event) => {
-                      if (!isProductLayoutEditMode || !draggingProductKey) return;
-                      event.preventDefault();
-                      event.stopPropagation();
-                      const nextProducts = previewProductLayoutPlacement(draggingProductKey, null, sectionCategory?.id ?? null, 'end', section.id, sectionProductKeys);
-                      void commitProductLayoutPreview(nextProducts);
-                    }}
                   >
                     {section.heading && (
                       <div className="ss-product-section-head">
@@ -4000,9 +4302,15 @@ export function StackWorkspace({
                       </div>
                     )}
                     <div className={productViewMode === 'grid' ? 'masonry-grid ss-section-grid' : 'product-list-view'}>
-                      {section.products.map((product, index) => {
+                      {section.products.map((product) => {
                         const key = productStackKey(product);
                         const isDraggingProduct = draggingProductKey === key;
+                        const itemDropPlacement = (
+                          productLayoutDropSlot?.targetSectionId === section.id
+                          && productLayoutDropSlot.targetProductKey === key
+                        )
+                          ? productLayoutDropSlot.placement
+                          : null;
                         return (
                           <div
                             key={key}
@@ -4013,36 +4321,10 @@ export function StackWorkspace({
                               productViewMode === 'grid' ? 'masonry-item' : 'product-list-item',
                               isProductLayoutEditMode ? 'ss-product-layout-edit-mode' : '',
                               isDraggingProduct ? 'ss-product-layout-item-dragging' : '',
+                              itemDropPlacement ? 'ss-product-layout-drop-target' : '',
+                              itemDropPlacement === 'before' ? 'ss-product-layout-drop-before' : '',
+                              itemDropPlacement === 'after' ? 'ss-product-layout-drop-after' : '',
                             ].filter(Boolean).join(' ')}
-                            draggable={isProductLayoutEditMode}
-                            onDragOver={(event) => {
-                              if (!isProductLayoutEditMode || !draggingProductKey) return;
-                              event.preventDefault();
-                              event.stopPropagation();
-                              event.dataTransfer.dropEffect = 'move';
-                              const placement = productLayoutDropPlacement(event.currentTarget, event.clientX, event.clientY, productViewMode);
-                              previewProductLayoutPlacement(draggingProductKey, key, sectionCategory?.id ?? null, placement, section.id, sectionProductKeys);
-                            }}
-                            onDrop={(event) => {
-                              if (!isProductLayoutEditMode || !draggingProductKey) return;
-                              event.preventDefault();
-                              event.stopPropagation();
-                              const placement = productLayoutDropPlacement(event.currentTarget, event.clientX, event.clientY, productViewMode);
-                              const nextProducts = previewProductLayoutPlacement(draggingProductKey, key, sectionCategory?.id ?? null, placement, section.id, sectionProductKeys);
-                              void commitProductLayoutPreview(nextProducts);
-                            }}
-                            onDragStart={(event) => {
-                              const target = event.target as HTMLElement | null;
-                              if (!isProductLayoutEditMode || !target || isInteractiveDragSource(target)) {
-                                event.preventDefault();
-                                return;
-                              }
-                              captureProductLayoutRects();
-                              setDraggingProductKey(key);
-                              event.dataTransfer.effectAllowed = 'move';
-                              event.dataTransfer.setData('text/plain', key);
-                            }}
-                            onDragEnd={clearProductLayoutPreview}
                             onPointerDown={(event) => handleProductPointerDown(event, key)}
                             onPointerMove={handleProductPointerMove}
                             onPointerUp={handleProductPointerUp}

@@ -291,22 +291,32 @@ function assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSo
   assertSourceIncludes(stackWorkspaceSource, 'showSortLayoutEditToggle', 'sort layout-toggle marker');
   assertSourceIncludes(stackWorkspaceSource, 'showCategoryLayoutEditToggle', 'category layout-toggle marker');
   assertSourceIncludes(stackWorkspaceSource, 'handleToggleProductLayoutEditMode', 'layout edit toggle handler');
-  assertSourceIncludes(stackWorkspaceSource, 'draggable={isProductLayoutEditMode}', 'direct card drag only in edit mode');
+  assertSourceExcludes(stackWorkspaceSource, 'draggable={isProductLayoutEditMode}', 'native draggable product layout path removed');
   assertSourceIncludes(stackWorkspaceSource, 'ss-product-layout-edit-mode', 'direct edit-mode class marker');
   assertSourceIncludes(stackWorkspaceSource, 'productLayoutPreviewProducts', 'local live product layout preview state');
   assertSourceIncludes(stackWorkspaceSource, 'previewProductLayoutPlacement', 'dragover live layout preview helper');
   assertSourceIncludes(stackWorkspaceSource, 'commitProductLayoutPreview', 'drop-only layout persistence helper');
+  assertSourceIncludes(stackWorkspaceSource, 'findProductLayoutDropSlot', 'stable pointer slot helper for product layout drag');
+  assertSourceIncludes(stackWorkspaceSource, 'findGridProductLayoutDropSlot', 'separate grid slot detection helper');
+  assertSourceIncludes(stackWorkspaceSource, 'findListProductLayoutDropSlot', 'separate list slot detection helper');
+  assertSourceIncludes(stackWorkspaceSource, 'acceptProductLayoutDropSlot', 'layout drag hysteresis helper');
+  assertSourceIncludes(stackWorkspaceSource, 'lastAcceptedSlot', 'pointer drag state tracks last accepted slot');
+  assertSourceIncludes(stackWorkspaceSource, 'productLayoutDropSlotKey', 'repeated slot preview guard');
+  assertSourceIncludes(stackWorkspaceSource, 'validateProductLayoutDropAtPoint', 'pointerup must validate current drop endpoint before commit');
+  assertSourceIncludes(stackWorkspaceSource, 'clearProductLayoutPreview();', 'invalid pointerup endpoint must cancel stale layout preview');
   assertSourceIncludes(stackWorkspaceSource, 'ss-product-layout-edit-active', 'edit-mode overlay scope class');
   assertSourceIncludes(stackWorkspaceSource, 'ss-product-layout-edit-overlay', 'edit-mode transparent overlay marker');
+  assertSourceIncludes(stackWorkspaceSource, 'ss-product-layout-drop-target', 'current product drop target marker');
+  assertSourceIncludes(stackWorkspaceSource, 'ss-product-layout-drop-before', 'drop-before marker class');
+  assertSourceIncludes(stackWorkspaceSource, 'ss-product-layout-drop-after', 'drop-after marker class');
+  assertSourceIncludes(stackWorkspaceSource, 'ss-product-layout-drop-end', 'section-end drop marker class');
   assertSourceIncludes(stackWorkspaceSource, 'handleProductPointerDown', 'pointer/touch layout drag start handler');
   assertSourceIncludes(stackWorkspaceSource, 'handleProductPointerMove', 'pointer/touch live layout preview handler');
   assertSourceIncludes(stackWorkspaceSource, 'handleProductPointerUp', 'pointer/touch final layout persistence handler');
   assertSourceIncludes(stackWorkspaceSource, 'targetSectionProductKeys', 'section drop preview must receive target section product keys');
   assertSourceIncludes(stackWorkspaceSource, 'productLayoutSectionEndIndex', 'section drop must resolve end of target section');
-  assertSourceIncludes(stackWorkspaceSource, 'findProductSectionDropTarget', 'pointer section drop must resolve rendered section target');
   assertSourceIncludes(stackWorkspaceSource, 'data-product-layout-key', 'stable product layout key attribute for pointer drag targeting');
   assertSourceIncludes(stackWorkspaceSource, 'data-product-section-id', 'stable product section attribute for pointer drag targeting');
-  assertSourceIncludes(stackWorkspaceSource, 'elementFromPoint', 'pointer drag target detection via coordinates');
   assertSourceIncludes(stackWorkspaceSource, 'setPointerCapture', 'pointer drag capture for touch/mobile reliability');
   assertSourceIncludes(stackWorkspaceSource, 'suppressProductClickRef', 'post-drag click suppression guard');
   assertSourceIncludes(stackWorkspaceSource, 'onClickCapture', 'card click suppression after pointer drag');
@@ -316,6 +326,10 @@ function assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSo
   assertSourceExcludes(stackWorkspaceSource, 'const moveProductTo = useCallback', 'legacy immediate product layout persistence helper removed');
   assertSourceExcludes(stackWorkspaceSource, 'const moveProductBefore', 'legacy dragover persistence helper removed');
   assertSourceExcludes(stackWorkspaceSource, 'const moveProductToSectionEnd', 'legacy section-end persistence helper removed');
+  assertSourceExcludes(stackWorkspaceSource, 'onDragStart=', 'native product layout drag start path removed');
+  assertSourceExcludes(stackWorkspaceSource, 'onDragEnd=', 'native product layout drag end path removed');
+  assertSourceExcludes(stackWorkspaceSource, 'onDragOver=', 'native product layout dragover path removed');
+  assertSourceExcludes(stackWorkspaceSource, 'onDrop=', 'native product layout drop path removed');
   if (/onDragOver=\{\(event\)\s*=>[\s\S]{0,700}moveProduct(?:Before|ToSectionEnd)/.test(stackWorkspaceSource)) {
     throw new Error('Product layout dragover must update only local preview state, not persist layout moves.');
   }
@@ -484,8 +498,18 @@ function assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSo
   assertSourceIncludes(stylesSource, '.ss-product-layout-editable-item', 'product card edit mode visual styles');
   assertSourceIncludes(stylesSource, '.ss-product-layout-edit-active', 'edit-mode overlay scope styles');
   assertSourceIncludes(stylesSource, '.ss-product-layout-edit-overlay', 'transparent edit-mode overlay styles');
+  assertSourceIncludes(stylesSource, '.ss-product-layout-drop-target', 'drop target visual styles');
+  assertSourceIncludes(stylesSource, '.ss-product-layout-drop-before', 'drop-before visual styles');
+  assertSourceIncludes(stylesSource, '.ss-product-layout-drop-after', 'drop-after visual styles');
+  assertSourceIncludes(stylesSource, '.ss-product-layout-drop-end', 'section-end drop visual styles');
+  assertSourceMatches(
+    stylesSource,
+    /\.ss-product-section\.ss-product-layout-drop-end::after\s*\{[\s\S]*?display\s*:\s*block[\s\S]*?width\s*:\s*100%/,
+    'section-end drop marker must render as a visible full-width block',
+  );
   assertSourceIncludes(stylesSource, 'pointer-events: none', 'edit-mode overlay must not block card controls');
   assertSourceIncludes(stylesSource, 'transform 0.18s ease', 'live reorder animation transition');
+  assertSourceIncludes(stackWorkspaceSource, 'if (draggingProductKey === productKey) return;', 'FLIP must skip dragged product item');
   assertSourceIncludes(stylesSource, 'touch-action: none', 'edit-mode touch drag must not be swallowed by browser scroll gestures');
   assertSourceIncludes(stylesSource, '.ss-product-category-select', 'custom category select fallback styles');
   assertSourceIncludes(stackWorkspaceSource, 'stack-cockpit-user', 'stack hero user identity slot');
