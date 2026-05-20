@@ -399,8 +399,8 @@ body {
 }
 .ss-product-layout-edit-mode {
   opacity: 0.92;
-  border: 1.5px solid #818cf8;
-  background: #f8fafc;
+  border: 1.5px solid #f59e0b;
+  background: #fffbeb;
   cursor: grab;
   touch-action: none;
   user-select: none;
@@ -486,31 +486,31 @@ body {
   box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.18);
 }
 .ss-product-layout-edit-mode:hover {
-  box-shadow: 0 0 0 1px #a5b4fc;
+  box-shadow: 0 0 0 1px #f59e0b;
 }
 .ss-product-layout-edit-mode .ss-product-card,
 .ss-product-layout-edit-mode .ss-product-list-row {
-  border-color: #818cf8 !important;
-  box-shadow: 0 2px 10px rgba(99, 102, 241, 0.16);
+  border-color: #f59e0b !important;
+  box-shadow: 0 2px 10px rgba(217, 119, 6, 0.16);
 }
 .ss-product-layout-edit-mode:active {
   cursor: grabbing;
 }
 .ss-layout-edit-toggle-btn {
-  border: 1px solid #dbeafe;
+  border: 1px solid #fbbf24;
   border-radius: 10px;
   width: 34px;
   height: 34px;
-  background: #f8fafc;
-  color: #4338ca;
+  background: #fffbeb;
+  color: #d97706;
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
 .ss-layout-edit-toggle-btn.active {
-  border-color: #6366f1;
-  background: #eef2ff;
-  color: #3730a3;
+  border-color: #d97706;
+  background: #fffbeb;
+  color: #d97706;
 }
 .ss-section-grid {
   width: 100%;

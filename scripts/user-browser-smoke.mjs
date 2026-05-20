@@ -542,6 +542,21 @@ function assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSo
       throw new Error('Expected drag/drop movement indicator declarations not to use blue marker colors.');
     }
   }
+  const moveModeAccentBlocks = [
+    stylesSource.match(/\.ss-product-layout-edit-mode\s*\{[\s\S]*?\}/)?.[0] ?? '',
+    stylesSource.match(/\.ss-product-layout-edit-mode:hover\s*\{[\s\S]*?\}/)?.[0] ?? '',
+    stylesSource.match(/\.ss-product-layout-edit-mode\s+\.ss-product-card,\s*\.ss-product-layout-edit-mode\s+\.ss-product-list-row\s*\{[\s\S]*?\}/)?.[0] ?? '',
+    stylesSource.match(/\.ss-layout-edit-toggle-btn\s*\{[\s\S]*?\}/)?.[0] ?? '',
+    stylesSource.match(/\.ss-layout-edit-toggle-btn\.active\s*\{[\s\S]*?\}/)?.[0] ?? '',
+  ];
+  for (const block of moveModeAccentBlocks) {
+    if (!/#(?:d97706|f59e0b|fbbf24|fffbeb)|rgba\((?:245,\s*158,\s*11|217,\s*119,\s*6),/.test(block)) {
+      throw new Error('Expected move/edit-mode accents to use gold/amber styling.');
+    }
+    if (/#(?:818cf8|a5b4fc|4338ca|6366f1|eef2ff|3730a3)|rgba\(99,\s*102,\s*241,/.test(block)) {
+      throw new Error('Expected move/edit-mode accent declarations not to use blue/indigo colors.');
+    }
+  }
   assertSourceMatches(
     stylesSource,
     /\.ss-product-section\.ss-product-layout-drop-end::after\s*\{[\s\S]*?display\s*:\s*block[\s\S]*?width\s*:\s*100%/,
