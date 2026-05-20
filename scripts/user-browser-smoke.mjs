@@ -526,6 +526,22 @@ function assertStaticStackWorkspaceRequirements(stackWorkspaceSource, registerSo
   assertSourceIncludes(stylesSource, '.ss-product-layout-drop-before', 'drop-before visual styles');
   assertSourceIncludes(stylesSource, '.ss-product-layout-drop-after', 'drop-after visual styles');
   assertSourceIncludes(stylesSource, '.ss-product-layout-drop-end', 'section-end drop visual styles');
+  const dragDropMarkerBlocks = [
+    stylesSource.match(/\.ss-product-layout-item-dragging\s*\{[\s\S]*?\}/)?.[0] ?? '',
+    stylesSource.match(/\.ss-product-layout-item-dragging\s+\.ss-product-layout-edit-overlay\s*\{[\s\S]*?\}/)?.[0] ?? '',
+    stylesSource.match(/\.ss-product-layout-drop-target:not\(\.ss-product-layout-drop-end\)\s*\{[\s\S]*?\}/)?.[0] ?? '',
+    stylesSource.match(/\.ss-product-layout-drop-before::before,\s*\.ss-product-layout-drop-after::after\s*\{[\s\S]*?\}/)?.[0] ?? '',
+    stylesSource.match(/\.ss-product-section\.ss-product-layout-drop-end\s*\{[\s\S]*?\}/)?.[0] ?? '',
+    stylesSource.match(/\.ss-product-section\.ss-product-layout-drop-end::after\s*\{[\s\S]*?\}/)?.[0] ?? '',
+  ];
+  for (const block of dragDropMarkerBlocks) {
+    if (!/#(?:d97706|f59e0b)|rgba\((?:245,\s*158,\s*11|217,\s*119,\s*6),/.test(block)) {
+      throw new Error('Expected drag/drop movement indicator declarations to use gold/amber markers.');
+    }
+    if (/#(?:2563eb|4338ca)|rgba\((?:37,\s*99,\s*235|67,\s*56,\s*202),/.test(block)) {
+      throw new Error('Expected drag/drop movement indicator declarations not to use blue marker colors.');
+    }
+  }
   assertSourceMatches(
     stylesSource,
     /\.ss-product-section\.ss-product-layout-drop-end::after\s*\{[\s\S]*?display\s*:\s*block[\s\S]*?width\s*:\s*100%/,
