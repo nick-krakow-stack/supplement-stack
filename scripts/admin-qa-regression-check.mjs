@@ -632,8 +632,23 @@ assert.match(
 )
 assert.match(
   adminCss,
-  /\.admin-forms-grid-inner\s*\{[\s\S]*grid-template-columns:[\s\S]*\.admin-forms-grid-row\s*>\s*\.admin-forms-grid-inner/,
+  /\.admin-forms-grid-inner\s*\{[\s\S]*grid-template-columns:\s*minmax\(150px,\s*1fr\)\s+minmax\(180px,\s*1\.2fr\)\s+minmax\(120px,\s*0\.8fr\)\s+82px\s+84px;[\s\S]*\.admin-forms-grid-row\s*>\s*\.admin-forms-grid-inner/,
   'Admin CSS must align forms table header and rows with the same inner grid',
+)
+assert.match(
+  ingredientsPage,
+  /admin-forms-grid-inner[\s\S]*<span>Aktionen<\/span>[\s\S]*admin-forms-grid-row[\s\S]*admin-forms-grid-row-add/,
+  'Ingredient forms header and rows must render through the same grid class for column consistency',
+)
+assert.match(
+  ingredientsPage,
+  /admin-forms-row-add-link/,
+  'Ingredient forms must align the "Zeile hinzufügen" control with the table start',
+)
+assert.match(
+  ingredientsPage,
+  /className=\"admin-icon-btn admin-btn-success-soft\"[\s\S]*onClick=\{\(\) => void handleAddForm\(row\)\}[\s\S]*aria-label=\"Form hinzufügen\"[\s\S]*title=\"Form hinzufügen\"[\s\S]*<Plus size=\{13\} \/>/,
+  'Ingredient forms add-row action must be icon-only with Form hinzufügen label/title',
 )
 const adminFormFieldLabelBlocks = adminCss.match(/\.admin-form-field-label\s*\{[^}]*\}/g) ?? []
 assert.ok(adminFormFieldLabelBlocks.length > 0, 'Admin CSS must define form field label styling')

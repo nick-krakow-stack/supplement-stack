@@ -1152,19 +1152,25 @@ function TaskModal({
                       <div className="admin-forms-actions">
                         <AdminButton
                           size="sm"
-                          variant="primary"
+                          className="admin-icon-btn admin-btn-success-soft"
                           onClick={() => void handleAddForm(row)}
                           disabled={fieldsDisabled || !row.name.trim()}
+                          aria-label="Form hinzufügen"
+                          title="Form hinzufügen"
                         >
                           <Plus size={13} />
-                          Hinzufügen
                         </AdminButton>
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
-              <button type="button" className="admin-link-button" onClick={appendNewFormRow} disabled={fieldsDisabled}>
+              <button
+                type="button"
+                className="admin-link-button admin-forms-row-add-link"
+                onClick={appendNewFormRow}
+                disabled={fieldsDisabled}
+              >
                 Zeile hinzufügen
               </button>
             </div>
