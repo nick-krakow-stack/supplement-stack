@@ -901,54 +901,54 @@ function ShopLinksModal({
                   if (editingId) updateField(field, value);
                   else updateCreateField(index, field, value);
                 };
-	                    return (
-	                  <div
-	                    key={editingId ?? `create-${index}`}
-	                    className="grid gap-3 rounded-[var(--admin-r-md)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg)] p-3 md:grid-cols-[160px_minmax(280px,1fr)_112px_132px_150px]"
-	                  >
-	                    <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
-	                      Shop
-	                      {shopDomainOptions ? (
-	                        <>
-	                          <select
-	                            value={entry.shop_domain_id ?? ''}
-	                            onChange={(event) => {
-	                              const selectedValue = event.target.value;
-	                              if (selectedValue === '') {
-	                                update('shop_domain_id', null);
-	                                return;
-	                              }
-	                              const domainId = Number(selectedValue);
-	                              const domain = shopDomainById.get(domainId);
-	                              update('shop_domain_id', Number.isInteger(domainId) ? domainId : null);
-	                              if (domain) update('shop_name', domain.display_name);
-	                            }}
-	                            className="admin-select mt-1"
-	                          >
-	                            <option value="" disabled>Shop auswÃ¤hlen</option>
-	                            {shopDomains.map((domain) => (
-	                              <option key={domain.id} value={domain.id}>
-	                                {domain.display_name}
-	                              </option>
-	                            ))}
-	                          </select>
-	                        </>
-	                      ) : shopDomainFallback ? (
-	                        <>
-	                          <span className="admin-muted mt-1 block text-xs">Freitext-Fallback</span>
-	                          <input
-	                            value={entry.shop_name}
-	                            onChange={(event) => update('shop_name', event.target.value)}
-	                            className="admin-input mt-1"
-	                            placeholder="z. B. Amazon"
-	                          />
-	                        </>
-	                      ) : (
-	                        <select className="admin-select mt-1" disabled value="">
-	                          <option value="">Shops werden geladen...</option>
-	                        </select>
-	                      )}
-	                    </label>
+                return (
+                  <div
+                    key={editingId ?? `create-${index}`}
+                    className="grid gap-3 rounded-[var(--admin-r-md)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg)] p-3 md:grid-cols-[160px_minmax(280px,1fr)_112px_132px_150px]"
+                  >
+                    <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
+                      Shop
+                      {shopDomainOptions ? (
+                        <>
+                          <select
+                            value={entry.shop_domain_id ?? ''}
+                            onChange={(event) => {
+                              const selectedValue = event.target.value;
+                              if (selectedValue === '') {
+                                update('shop_domain_id', null);
+                                return;
+                              }
+                              const domainId = Number(selectedValue);
+                              const domain = shopDomainById.get(domainId);
+                              update('shop_domain_id', Number.isInteger(domainId) ? domainId : null);
+                              if (domain) update('shop_name', domain.display_name);
+                            }}
+                            className="admin-select mt-1"
+                          >
+                            <option value="" disabled>Shop auswÃ¤hlen</option>
+                            {shopDomains.map((domain) => (
+                              <option key={domain.id} value={domain.id}>
+                                {domain.display_name}
+                              </option>
+                            ))}
+                          </select>
+                        </>
+                      ) : shopDomainFallback ? (
+                        <>
+                          <span className="admin-muted mt-1 block text-xs">Freitext-Fallback</span>
+                          <input
+                            value={entry.shop_name}
+                            onChange={(event) => update('shop_name', event.target.value)}
+                            className="admin-input mt-1"
+                            placeholder="z. B. Amazon"
+                          />
+                        </>
+                      ) : (
+                        <select className="admin-select mt-1" disabled value="">
+                          <option value="">Shops werden geladen...</option>
+                        </select>
+                      )}
+                    </label>
                     <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
                       URL
                       <input
@@ -1551,23 +1551,23 @@ export default function AdministratorProductsPage() {
 
       {error && <AdminError>{error}</AdminError>}
 
-	      {loading ? (
-	        <AdminEmpty>Lade Produkte...</AdminEmpty>
-	      ) : (
-	        <AdminCard
-              title="Produktliste"
-              actions={
-	            <Link
-	              to="/administrator/products/new"
-	              className="admin-btn admin-btn-sm"
-	              title="Neues Produkt anlegen"
-	              aria-label="Neues Produkt anlegen"
-	            >
-	              <Plus size={13} />
-	              Neu
-	            </Link>
-	          }
-	        >
+      {loading ? (
+        <AdminEmpty>Lade Produkte...</AdminEmpty>
+      ) : (
+        <AdminCard
+          title="Produktliste"
+          actions={
+            <Link
+              to="/administrator/products/new"
+              className="admin-btn admin-btn-sm"
+              title="Neues Produkt anlegen"
+              aria-label="Neues Produkt anlegen"
+            >
+              <Plus size={13} />
+              Neu
+            </Link>
+          }
+        >
           <div className="space-y-2 p-3">
             {products.map((product) => (
               <ProductRow

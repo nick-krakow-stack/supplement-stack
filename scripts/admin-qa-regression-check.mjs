@@ -1335,9 +1335,9 @@ assert.match(
   'Admin product detail shop-link create flow must open the existing entry instead of creating a duplicate shop link',
 )
 assert.match(
-  productDetailPage,
-  /const renderShopLinksTab = \(selected: AdminProductDetail\) => renderShopLinksContent\(selected\);/,
-  'Admin product detail shop-link tab variant must reuse the shared compact shop-link content',
+  productDetailOverviewShopLinkCard,
+  /\{renderShopLinksContent\(selected\)\}/,
+  'Admin product detail overview Shop-Link card must reuse the shared compact shop-link content',
 )
 assert.match(
   productsPage,

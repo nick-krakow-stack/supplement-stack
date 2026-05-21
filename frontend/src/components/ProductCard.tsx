@@ -206,10 +206,6 @@ function getDose(product: ProductCardProduct): string {
   return '\u2014';
 }
 
-function isSearchRelevant(ingredient: NonNullable<ProductCardProduct['ingredients']>[number]): boolean {
-  return ingredient.search_relevant === undefined || ingredient.search_relevant === true || ingredient.search_relevant === 1;
-}
-
 function isCountUnit(unit?: string | null): boolean {
   const normalized = normalizeDoseUnit(unit).toLowerCase();
   return LIST_COUNT_UNITS.includes(normalized as (typeof LIST_COUNT_UNITS)[number]);

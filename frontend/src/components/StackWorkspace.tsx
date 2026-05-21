@@ -6,7 +6,6 @@ import {
   ArrowLeft,
   ArrowRight,
   Calculator,
-  Flag,
   FileText,
   Info,
   LayoutGrid,
@@ -25,7 +24,7 @@ import SearchBar from './SearchBar';
 import ProductCard from './ProductCard';
 import StacksHeader, { type StacksHeaderVariant } from './StacksHeader';
 import EditStackModal from './EditStackModal';
-import { createFamilyMember, deleteFamilyMember, getFamilyMembers } from '../api/family';
+import { getFamilyMembers } from '../api/family';
 import {
   createStackCategory,
   deleteStackCategory,
@@ -497,11 +496,6 @@ function getUserDisplayName(user: User | null | undefined): string | null {
     }
   }
   return typeof userRecord?.email === 'string' && userRecord.email.trim() ? userRecord.email : null;
-}
-
-function stackProfileLabel(stack: DemoStack | undefined): string {
-  if (!stack?.family_member_id) return 'Eigener Stack';
-  return stack.family_member_first_name ? `Für ${stack.family_member_first_name}` : 'Familienprofil';
 }
 
 type RoutineKey = 'morning' | 'noon' | 'evening' | 'flexible';
@@ -2249,11 +2243,8 @@ export function StackWorkspace({
   const [emailSending, setEmailSending] = useState(false);
   const [emailStatus, setEmailStatus] = useState('');
   const [familyMembers, setFamilyMembers] = useState<FamilyMember[]>([]);
-  const [familyFormOpen, setFamilyFormOpen] = useState(false);
-  const [familyDraft, setFamilyDraft] = useState({ first_name: '', age: '', weight: '' });
-  const [familySaving, setFamilySaving] = useState(false);
-  const [familyStatus, setFamilyStatus] = useState('');
-  const [linkReportStatus, setLinkReportStatus] = useState('');
+  const [, setFamilyStatus] = useState('');
+  const [, setLinkReportStatus] = useState('');
   const [productViewMode, setProductViewMode] = useState<ProductViewMode>(loadProductViewMode);
   const [productSortMode, setProductSortMode] = useState<ProductSortMode>(loadProductSortMode);
   const [productCategoryMode, setProductCategoryMode] = useState<ProductCategoryMode>(loadProductCategoryMode);
@@ -2771,42 +2762,6 @@ export function StackWorkspace({
     });
   }, [activeStack]);
 
-  const handleAssignFamilyMember = useCallback(
-    async (familyMemberId: number | null) => {
-      if (!activeStack) return;
-      if (mode !== 'authenticated') {
-        setFamilyStatus('Familienprofile sind nur angemeldet verfügbar.');
-        return;
-      }
-      setFamilyStatus('');
-      try {
-        const res = await credentialedFetch(apiPath(`/stacks/${activeStack.id}`), {
-          method: 'PUT',
-          headers: JSON_HEADERS,
-          body: JSON.stringify({ family_member_id: familyMemberId }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error ?? 'Profil konnte nicht zugeordnet werden.');
-        const selectedMember = familyMembers.find((member) => member.id === familyMemberId);
-        setState((prev) => ({
-          ...prev,
-          stacks: prev.stacks.map((stack) => (
-            stack.id === activeStack.id
-              ? {
-                  ...stack,
-                  family_member_id: familyMemberId,
-                  family_member_first_name: selectedMember?.first_name ?? null,
-                }
-              : stack
-          )),
-        }));
-      } catch (err) {
-        setFamilyStatus(err instanceof Error ? err.message : 'Profil konnte nicht zugeordnet werden.');
-      }
-    },
-    [activeStack, familyMembers, mode],
-  );
-
   const handleSaveStackFamilyMember = useCallback(
     async (familyMemberId: number | null) => {
       if (!activeStack) return;
@@ -2838,80 +2793,6 @@ export function StackWorkspace({
       }));
     },
     [activeStack, familyMembers, mode],
-  );
-
-  const handleCreateFamilyMember = useCallback(
-    async (event: FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
-      if (mode !== 'authenticated') {
-        setFamilyStatus('Familienprofile sind nur angemeldet verfügbar.');
-        return;
-      }
-      const firstName = familyDraft.first_name.trim();
-      const age = familyDraft.age.trim() ? Number(familyDraft.age) : null;
-      const weight = familyDraft.weight.trim() ? Number(familyDraft.weight) : null;
-      if (!firstName) {
-        setFamilyStatus('Bitte gib einen Vornamen ein.');
-        return;
-      }
-      if (age !== null && (!Number.isInteger(age) || age < 0 || age > 120)) {
-        setFamilyStatus('Alter muss zwischen 0 und 120 liegen.');
-        return;
-      }
-      if (weight !== null && (!Number.isFinite(weight) || weight <= 0 || weight > 300)) {
-        setFamilyStatus('Gewicht muss zwischen 1 und 300 kg liegen.');
-        return;
-      }
-
-      setFamilySaving(true);
-      setFamilyStatus('');
-      try {
-        const member = await createFamilyMember({ first_name: firstName, age, weight });
-        setFamilyMembers((prev) => [...prev, member]);
-        setFamilyDraft({ first_name: '', age: '', weight: '' });
-        setFamilyFormOpen(false);
-        if (activeStack) {
-          await handleAssignFamilyMember(member.id);
-          setState((prev) => ({
-            ...prev,
-            stacks: prev.stacks.map((stack) => (
-              stack.id === activeStack.id
-                ? { ...stack, family_member_id: member.id, family_member_first_name: member.first_name }
-                : stack
-            )),
-          }));
-        }
-      } catch (err) {
-        setFamilyStatus(err instanceof Error ? err.message : 'Familienprofil konnte nicht gespeichert werden.');
-      } finally {
-        setFamilySaving(false);
-      }
-    },
-    [activeStack, familyDraft, handleAssignFamilyMember, mode],
-  );
-
-  const handleDeleteFamilyMember = useCallback(
-    async (memberId: number) => {
-      if (mode !== 'authenticated') return;
-      const member = familyMembers.find((item) => item.id === memberId);
-      if (!member || !window.confirm(`Profil "${member.first_name}" entfernen?`)) return;
-      setFamilyStatus('');
-      try {
-        await deleteFamilyMember(memberId);
-        setFamilyMembers((prev) => prev.filter((item) => item.id !== memberId));
-        setState((prev) => ({
-          ...prev,
-          stacks: prev.stacks.map((stack) => (
-            stack.family_member_id === memberId
-              ? { ...stack, family_member_id: null, family_member_first_name: null }
-              : stack
-          )),
-        }));
-      } catch (err) {
-        setFamilyStatus(err instanceof Error ? err.message : 'Familienprofil konnte nicht entfernt werden.');
-      }
-    },
-    [familyMembers, mode],
   );
 
   const handleReportMissingLink = useCallback(

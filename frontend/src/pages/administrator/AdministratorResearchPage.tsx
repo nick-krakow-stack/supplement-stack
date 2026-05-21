@@ -164,13 +164,6 @@ function sourceTitle(source: AdminIngredientResearchSource): string {
   return source.source_title || source.source_url || `Quelle #${source.id}`;
 }
 
-function formatDate(value?: string | null): string {
-  if (!value) return '-';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat('de-DE', { dateStyle: 'short', timeStyle: 'short' }).format(date);
-}
-
 function sourceDraftToPayload(form: SourceDraft): AdminIngredientResearchSourcePayload {
   const sourceKind = form.source_kind.trim().toLowerCase();
   return {

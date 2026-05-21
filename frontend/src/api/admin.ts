@@ -575,8 +575,14 @@ export interface AdminIngredientResearchSourcePayload {
 
 export const research_pipeline_migration_marker = 'research_pipeline_artifacts';
 
-export type AdminResearchPipelineStageKey = 'research' | 'interpretation' | 'interpreter' | 'writer' | (string & {});
-export type AdminResearchPipelineStatus = 'pending' | 'in_progress' | 'needs_changes' | 'approved' | 'archived' | (string & {});
+type AdminOpenStringUnion<TKnown extends string> = TKnown | (string & Record<never, never>);
+
+export type AdminResearchPipelineStageKey = AdminOpenStringUnion<
+  'research' | 'interpretation' | 'interpreter' | 'writer'
+>;
+export type AdminResearchPipelineStatus = AdminOpenStringUnion<
+  'pending' | 'in_progress' | 'needs_changes' | 'approved' | 'archived'
+>;
 
 export interface AdminResearchPipelineStage {
   ingredient_id: number;

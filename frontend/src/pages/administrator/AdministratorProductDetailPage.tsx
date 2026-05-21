@@ -2094,8 +2094,6 @@ export default function AdministratorProductDetailPage() {
     </AdminCard>
   );
 
-  const renderShopLinksTab = (selected: AdminProductDetail) => renderShopLinksContent(selected);
-
   const renderWarnungenTab = (selected: AdminProductDetail, warningList: WarningItem[]) => {
     const hasLegacyWarning = Boolean(selected.warning_title || selected.warning_message || selected.alternative_note);
 
