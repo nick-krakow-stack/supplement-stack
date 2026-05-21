@@ -577,6 +577,42 @@ assert.match(
 )
 assert.match(
   ingredientsPage,
+  /admin-task-status-card[\s\S]*aria-pressed=\{noneChecked\}[\s\S]*admin-task-status-card[\s\S]*aria-pressed=\{doneChecked\}/,
+  'Ingredient task modal status controls must use accessible pressed-state cards, not raw checkbox rows',
+)
+assert.match(
+  ingredientsPage,
+  /<span className="admin-field-label">Interner Kommentar<\/span>/,
+  'Ingredient task modal comment field must have a visible label',
+)
+assert.match(
+  ingredientsPage,
+  /admin-forms-grid-header[\s\S]*Form[\s\S]*Beschreibung\/Kommentar[\s\S]*Tags[\s\S]*Score[\s\S]*Aktionen/,
+  'Ingredient forms modal must expose clear column headings including Score',
+)
+assert.match(
+  ingredientsPage,
+  /H(ö|\u00f6)herer Score erscheint weiter oben/,
+  'Ingredient forms modal must explain that higher scores rank forms higher',
+)
+assert.match(
+  adminCss,
+  /\.admin-task-status-grid[\s\S]*\.admin-task-status-card\[aria-pressed="true"\][\s\S]*\.admin-forms-grid-header/,
+  'Admin CSS must style task status cards and forms grid headings',
+)
+const adminFormFieldLabelBlocks = adminCss.match(/\.admin-form-field-label\s*\{[^}]*\}/g) ?? []
+assert.ok(adminFormFieldLabelBlocks.length > 0, 'Admin CSS must define form field label styling')
+assert.doesNotMatch(
+  adminFormFieldLabelBlocks.join('\n'),
+  /display:\s*none/,
+  'Ingredient forms field labels must remain available to assistive tech on desktop',
+)
+assert.ok(
+  adminFormFieldLabelBlocks.some((block) => /position:\s*absolute[\s\S]*clip:/.test(block)),
+  'Ingredient forms field labels should use a visual hiding pattern on desktop',
+)
+assert.match(
+  ingredientsPage,
   /ingredientGroupFilter/,
   'Ingredient page must expose an ingredient group dropdown filter',
 )

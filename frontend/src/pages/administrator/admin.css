@@ -1372,6 +1372,129 @@
   accent-color: var(--admin-danger-ink);
 }
 
+.admin-task-status-panel {
+  border: 1px solid var(--admin-line);
+  border-radius: var(--admin-r-md);
+  background: var(--admin-bg);
+  padding: 12px;
+}
+
+.admin-task-status-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.admin-task-status-card {
+  display: flex;
+  min-height: 64px;
+  align-items: flex-start;
+  gap: 9px;
+  border: 1px solid var(--admin-line);
+  border-radius: var(--admin-r-sm);
+  background: var(--admin-bg-elev);
+  color: var(--admin-ink-2);
+  padding: 10px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms, border-color 120ms, color 120ms, box-shadow 120ms;
+}
+
+.admin-task-status-card:hover:not(:disabled) {
+  border-color: var(--admin-line-strong);
+  background: var(--admin-bg-sunk);
+}
+
+.admin-task-status-card[aria-pressed="true"] {
+  border-color: var(--admin-success-soft);
+  background: var(--admin-success-soft);
+  color: var(--admin-success-ink);
+  box-shadow: inset 0 0 0 1px rgba(79, 149, 102, 0.16);
+}
+
+.admin-task-status-card:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.admin-task-status-icon {
+  display: inline-flex;
+  margin-top: 1px;
+}
+
+.admin-task-status-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.admin-task-status-copy > span,
+.admin-field-label,
+.admin-form-field-label {
+  color: var(--admin-ink-2);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.admin-task-status-copy small {
+  color: var(--admin-ink-3);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.admin-forms-list {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-forms-grid-header,
+.admin-forms-grid-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) minmax(180px, 1.2fr) minmax(120px, 0.8fr) 82px auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.admin-forms-grid-header {
+  color: var(--admin-ink-3);
+  padding: 0 4px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.admin-forms-grid-row {
+  border: 1px solid var(--admin-line);
+  border-radius: var(--admin-r-sm);
+  background: var(--admin-bg);
+  padding: 10px;
+}
+
+.admin-form-field {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.admin-form-field-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.admin-forms-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .admin-input:focus,
 .admin-select:focus {
   border-color: var(--admin-ink-3);
@@ -2521,6 +2644,39 @@
   .admin-btn-sm {
     min-height: 40px;
     padding: 8px 10px;
+  }
+
+  .admin-task-status-grid,
+  .admin-forms-grid-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-task-status-card {
+    min-height: 58px;
+  }
+
+  .admin-forms-grid-header {
+    display: none;
+  }
+
+  .admin-form-field-label {
+    display: block;
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0;
+    overflow: visible;
+    clip: auto;
+    white-space: normal;
+  }
+
+  .admin-forms-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-forms-actions .admin-btn {
+    width: 100%;
   }
 
   .admin-badge {

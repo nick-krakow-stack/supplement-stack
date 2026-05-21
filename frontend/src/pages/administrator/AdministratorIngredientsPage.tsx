@@ -523,35 +523,50 @@ function TaskStatusControls({
   const doneChecked = status === 'done';
 
   return (
-    <div className="rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg)] p-3">
-      <div className="grid gap-2 text-sm">
-        <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={noneChecked}
-            disabled={disabled}
-            onChange={(event) => void onStatusChange(event.target.checked ? 'none' : 'open')}
-          />
-          <span>{TASK_META[task].noneLabel}</span>
-        </label>
-        <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={doneChecked}
-            disabled={disabled || noneChecked}
-            onChange={(event) => void onStatusChange(event.target.checked ? 'done' : 'open')}
-          />
-          <span>{TASK_META[task].doneLabel}</span>
-        </label>
+    <div className="admin-task-status-panel">
+      <div className="admin-task-status-grid">
+        <button
+          type="button"
+          className="admin-task-status-card"
+          aria-pressed={noneChecked}
+          disabled={disabled}
+          onClick={() => void onStatusChange(noneChecked ? 'open' : 'none')}
+        >
+          <span className="admin-task-status-icon" aria-hidden="true">
+            {noneChecked ? <CheckCircle2 size={16} /> : <Circle size={16} />}
+          </span>
+          <span className="admin-task-status-copy">
+            <span>Keine Felder nötig</span>
+            <small>{TASK_META[task].noneLabel}</small>
+          </span>
+        </button>
+        <button
+          type="button"
+          className="admin-task-status-card"
+          aria-pressed={doneChecked}
+          disabled={disabled || noneChecked}
+          onClick={() => void onStatusChange(doneChecked ? 'open' : 'done')}
+        >
+          <span className="admin-task-status-icon" aria-hidden="true">
+            {doneChecked ? <CheckCircle2 size={16} /> : <Circle size={16} />}
+          </span>
+          <span className="admin-task-status-copy">
+            <span>Geprüft</span>
+            <small>{TASK_META[task].doneLabel}</small>
+          </span>
+        </button>
       </div>
       <div className="mt-3 grid gap-2">
-        <textarea
-          value={note}
-          onChange={(event) => onNoteChange(event.target.value)}
-          className="admin-input min-h-[82px]"
-          placeholder="Interner Kommentar, optional"
-          disabled={disabled}
-        />
+        <label className="grid gap-1">
+          <span className="admin-field-label">Interner Kommentar</span>
+          <textarea
+            value={note}
+            onChange={(event) => onNoteChange(event.target.value)}
+            className="admin-input min-h-[82px]"
+            placeholder="Optionaler Hinweis für die Bearbeitung"
+            disabled={disabled}
+          />
+        </label>
         <div className="flex justify-end">
           <AdminButton size="sm" onClick={() => void onSaveNote()} disabled={disabled}>
             Kommentar speichern
@@ -967,17 +982,21 @@ function TaskModal({
 
           {task === 'forms' && (
             <div className="grid gap-3">
-              <div className="grid gap-2">
+              <div className="admin-forms-list">
+                <p className="admin-muted text-xs">Höherer Score erscheint weiter oben in der Form-Auswahl.</p>
+                <div className="admin-forms-grid-header" aria-hidden="true">
+                  <span>Form</span>
+                  <span>Beschreibung/Kommentar</span>
+                  <span>Tags</span>
+                  <span>Score</span>
+                  <span>Aktionen</span>
+                </div>
                 {forms.length === 0 ? (
                   <AdminEmpty>{TASK_META.forms.emptyLabel}</AdminEmpty>
                 ) : forms.map((form) => (
-                  <div key={form.id} className="flex flex-wrap items-start justify-between gap-3 rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg)] p-3 text-sm">
-                    <div className="min-w-0">
-                      <div className="font-medium">{form.name}</div>
-                      {form.comment ? <p className="admin-muted mt-1">{form.comment}</p> : null}
-                      {form.tags ? <p className="admin-muted mt-1 text-xs">Tags: {form.tags}</p> : null}
-                    </div>
-                    <div className="grid min-w-[260px] flex-1 gap-2 md:grid-cols-[1fr_1fr_0.8fr_72px_auto]">
+                  <div key={form.id} className="admin-forms-grid-row">
+                    <label className="admin-form-field">
+                      <span className="admin-form-field-label">Form</span>
                       <input
                         value={formDrafts[form.id]?.name ?? form.name}
                         onChange={(event) => setFormDrafts((previous) => ({
@@ -988,6 +1007,9 @@ function TaskModal({
                         placeholder="Form"
                         disabled={fieldsDisabled}
                       />
+                    </label>
+                    <label className="admin-form-field">
+                      <span className="admin-form-field-label">Beschreibung/Kommentar</span>
                       <input
                         value={formDrafts[form.id]?.comment ?? form.comment ?? ''}
                         onChange={(event) => setFormDrafts((previous) => ({
@@ -998,6 +1020,9 @@ function TaskModal({
                         placeholder="Kommentar"
                         disabled={fieldsDisabled}
                       />
+                    </label>
+                    <label className="admin-form-field">
+                      <span className="admin-form-field-label">Tags</span>
                       <input
                         value={formDrafts[form.id]?.tags ?? form.tags ?? ''}
                         onChange={(event) => setFormDrafts((previous) => ({
@@ -1008,6 +1033,9 @@ function TaskModal({
                         placeholder="Tags"
                         disabled={fieldsDisabled}
                       />
+                    </label>
+                    <label className="admin-form-field">
+                      <span className="admin-form-field-label">Score</span>
                       <input
                         value={formDrafts[form.id]?.score ?? (form.score == null ? '' : String(form.score))}
                         onChange={(event) => setFormDrafts((previous) => ({
@@ -1019,14 +1047,16 @@ function TaskModal({
                         inputMode="numeric"
                         disabled={fieldsDisabled}
                       />
+                    </label>
+                    <div className="admin-forms-actions">
                       <AdminButton size="sm" onClick={() => void handleUpdateForm(form)} disabled={fieldsDisabled || !formDrafts[form.id]?.name?.trim()}>
                         Speichern
                       </AdminButton>
-                    </div>
-                    <AdminButton size="sm" variant="danger" onClick={() => void handleDeleteForm(form)} disabled={fieldsDisabled}>
-                      <Trash2 size={13} />
+                      <AdminButton size="sm" variant="danger" onClick={() => void handleDeleteForm(form)} disabled={fieldsDisabled}>
+                        <Trash2 size={13} />
                       Löschen
-                    </AdminButton>
+                      </AdminButton>
+                    </div>
                   </div>
                 ))}
               </div>
