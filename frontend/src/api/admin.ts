@@ -1319,6 +1319,16 @@ function toNumberOrNull(value: unknown): number | null {
   return null;
 }
 
+function normalizeOptionalBooleanPayload(value: boolean | number | null | undefined): number | null | undefined {
+  if (value === undefined || value === null) return undefined;
+  const normalized = toBooleanOrNull(value);
+  return normalized === null ? null : normalized ? 1 : 0;
+}
+
+function normalizeOptionalBooleanValue(value: boolean | null | undefined): boolean | null | undefined {
+  return value === undefined || value === null ? undefined : value;
+}
+
 function toDateOrNull(value: unknown): string | null {
   if (value === undefined || value === null) return null;
   if (typeof value === 'number' && Number.isFinite(value)) {
@@ -2448,12 +2458,12 @@ function normalizeSourcePayload(payload: AdminIngredientResearchSourcePayload): 
     region: toTextOrNull(payload.region),
     population: toTextOrNull(payload.population),
     recommendation_type: toTextOrNull(payload.recommendation_type),
-    no_recommendation: payload.no_recommendation,
+    no_recommendation: normalizeOptionalBooleanValue(payload.no_recommendation),
     notes: toTextOrNull(payload.notes),
     dose_min: toIntOrNull(payload.dose_min),
     dose_max: toIntOrNull(payload.dose_max),
     dose_unit: toTextOrNull(payload.dose_unit),
-    per_kg_body_weight: toIntOrNull(payload.per_kg_body_weight),
+    per_kg_body_weight: normalizeOptionalBooleanPayload(payload.per_kg_body_weight),
     frequency: toTextOrNull(payload.frequency),
     study_type: toTextOrNull(payload.study_type),
     evidence_quality: toTextOrNull(payload.evidence_quality),
@@ -2464,10 +2474,7 @@ function normalizeSourcePayload(payload: AdminIngredientResearchSourcePayload): 
     pubmed_id: toTextOrNull(payload.pubmed_id),
     source_date: payload.source_date !== undefined ? toDateOrNull(payload.source_date) : null,
     reviewed_at: payload.reviewed_at !== undefined ? toDateOrNull(payload.reviewed_at) : null,
-    is_retracted:
-      typeof payload.is_retracted === 'number'
-        ? payload.is_retracted !== 0
-        : payload.is_retracted ?? null,
+    is_retracted: normalizeOptionalBooleanPayload(payload.is_retracted),
     retraction_checked_at:
       payload.retraction_checked_at !== undefined ? toDateOrNull(payload.retraction_checked_at) : null,
     retraction_notice_url: toTextOrNull(payload.retraction_notice_url),
