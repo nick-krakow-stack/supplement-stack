@@ -1508,17 +1508,6 @@
   margin-left: 10px;
 }
 
-.admin-btn-success-soft {
-  border-color: var(--admin-success);
-  background: var(--admin-success);
-  color: #fff;
-}
-
-.admin-btn-success-soft:hover:not(:disabled) {
-  border-color: var(--admin-success-ink);
-  background: var(--admin-success-ink);
-}
-
 .admin-link-button {
   justify-self: start;
   border: 0;

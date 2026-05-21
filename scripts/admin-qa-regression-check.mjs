@@ -647,8 +647,18 @@ assert.match(
 )
 assert.match(
   ingredientsPage,
-  /className=\"admin-icon-btn admin-btn-success-soft\"[\s\S]*onClick=\{\(\) => void handleAddForm\(row\)\}[\s\S]*aria-label=\"Form hinzufügen\"[\s\S]*title=\"Form hinzufügen\"[\s\S]*<Plus size=\{13\} \/>/,
-  'Ingredient forms add-row action must be icon-only with Form hinzufügen label/title',
+  /className=\"admin-icon-btn admin-btn-success\"[\s\S]*onClick=\{\(\) => void handleAddForm\(row\)\}[\s\S]*aria-label=\"Form hinzufügen\"[\s\S]*title=\"Form hinzufügen\"[\s\S]*<Save size=\{14\} \/>/,
+  'Ingredient forms add-row action must use the same save icon and green style as existing form save buttons',
+)
+assert.doesNotMatch(
+  ingredientsPage,
+  /className=\"admin-icon-btn admin-btn-success-soft\"[\s\S]*onClick=\{\(\) => void handleAddForm\(row\)\}[\s\S]*<Plus size=\{13\} \/>/,
+  'Ingredient forms add-row action must not use the old plus icon or soft green style',
+)
+assert.doesNotMatch(
+  adminCss,
+  /\.admin-btn-success-soft/,
+  'Admin CSS must not keep the old soft green add-row button style',
 )
 const adminFormFieldLabelBlocks = adminCss.match(/\.admin-form-field-label\s*\{[^}]*\}/g) ?? []
 assert.ok(adminFormFieldLabelBlocks.length > 0, 'Admin CSS must define form field label styling')
