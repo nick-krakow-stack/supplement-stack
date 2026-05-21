@@ -10,6 +10,7 @@ import {
   PackageCheck,
   Plus,
   RefreshCw,
+  Save,
   Search,
   Trash2,
   X,
@@ -53,6 +54,14 @@ const PAGE_LIMIT_OPTIONS = [25, 50, 100] as const;
 
 type IngredientTaskFilter = 'all' | AdminIngredientTaskKey | 'knowledge' | 'dosing';
 type IngredientGroupFilter = 'all' | string;
+
+type NewFormRow = {
+  id: number;
+  name: string;
+  comment: string;
+  tags: string;
+  score: string;
+};
 
 const TASK_FILTERS: Array<{ value: IngredientTaskFilter; label: string }> = [
   { value: 'all', label: 'Alle Bearbeitungsstände' },
@@ -192,6 +201,10 @@ function parseModalNumber(value: string): number | null {
   if (!trimmed) return null;
   const parsed = Number(trimmed);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function createNewFormRow(id: number): NewFormRow {
+  return { id, name: '', comment: '', tags: '', score: '' };
 }
 
 function formatPackPrice(value: number | null): string {
@@ -599,9 +612,8 @@ function TaskModal({
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
 
-  const [formName, setFormName] = useState('');
-  const [formComment, setFormComment] = useState('');
-  const [formTags, setFormTags] = useState('');
+  const nextNewFormRowId = useRef(1);
+  const [newFormRows, setNewFormRows] = useState<NewFormRow[]>(() => [createNewFormRow(0)]);
   const [synonymName, setSynonymName] = useState('');
   const [formDrafts, setFormDrafts] = useState<Record<number, { name: string; comment: string; tags: string; score: string }>>({});
   const [synonymDrafts, setSynonymDrafts] = useState<Record<number, { synonym: string; language: string }>>({});
@@ -614,7 +626,7 @@ function TaskModal({
   const [precursorNote, setPrecursorNote] = useState('');
 
   const currentStatus = statuses[task]?.status ?? 'open';
-  const fieldsDisabled = saving || currentStatus === 'none';
+  const fieldsDisabled = saving || (task !== 'forms' && currentStatus === 'none');
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -693,22 +705,37 @@ function TaskModal({
     }
   };
 
-  const handleAddForm = async (event: FormEvent) => {
-    event.preventDefault();
-    if (!formName.trim()) return;
+  const updateNewFormRow = (rowId: number, patch: Partial<Omit<NewFormRow, 'id'>>) => {
+    setNewFormRows((previous) => previous.map((row) => (
+      row.id === rowId ? { ...row, ...patch } : row
+    )));
+  };
+
+  const appendNewFormRow = () => {
+    const nextId = nextNewFormRowId.current;
+    nextNewFormRowId.current += 1;
+    setNewFormRows((previous) => [...previous, createNewFormRow(nextId)]);
+  };
+
+  const handleAddForm = async (row: NewFormRow) => {
+    if (!row.name.trim()) return;
     setSaving(true);
     setError('');
     setMessage('');
     try {
       await addForm(ingredient.id, {
-        name: formName.trim(),
-        comment: formComment.trim() || undefined,
-        tags: formTags.trim() || undefined,
-        score: 0,
+        name: row.name.trim(),
+        comment: row.comment.trim() || undefined,
+        tags: row.tags.trim() || undefined,
+        score: parseModalNumber(row.score) ?? 0,
       });
-      setFormName('');
-      setFormComment('');
-      setFormTags('');
+      setNewFormRows((previous) => {
+        const remainingRows = previous.filter((entry) => entry.id !== row.id);
+        if (remainingRows.length > 0) return remainingRows;
+        const nextId = nextNewFormRowId.current;
+        nextNewFormRowId.current += 1;
+        return [createNewFormRow(nextId)];
+      });
       await reload();
       await onChanged();
       setMessage('Form hinzugefügt.');
@@ -970,107 +997,176 @@ function TaskModal({
         <AdminEmpty>Lade Daten...</AdminEmpty>
       ) : (
         <>
-          <TaskStatusControls
-            task={task}
-            status={currentStatus}
-            note={note}
-            disabled={saving}
-            onStatusChange={persistStatus}
-            onNoteChange={setNote}
-            onSaveNote={() => persistStatus(currentStatus, note)}
-          />
+          {task !== 'forms' && (
+            <TaskStatusControls
+              task={task}
+              status={currentStatus}
+              note={note}
+              disabled={saving}
+              onStatusChange={persistStatus}
+              onNoteChange={setNote}
+              onSaveNote={() => persistStatus(currentStatus, note)}
+            />
+          )}
 
           {task === 'forms' && (
             <div className="grid gap-3">
               <div className="admin-forms-list">
-                <p className="admin-muted text-xs">Höherer Score erscheint weiter oben in der Form-Auswahl.</p>
                 <div className="admin-forms-grid-header" aria-hidden="true">
-                  <span>Form</span>
-                  <span>Beschreibung/Kommentar</span>
-                  <span>Tags</span>
-                  <span>Score</span>
-                  <span>Aktionen</span>
+                  <div className="admin-forms-grid-inner">
+                    <span>Form</span>
+                    <span>Beschreibung/Kommentar</span>
+                    <span>Tags</span>
+                    <span>Score</span>
+                    <span>Aktionen</span>
+                  </div>
                 </div>
                 {forms.length === 0 ? (
                   <AdminEmpty>{TASK_META.forms.emptyLabel}</AdminEmpty>
                 ) : forms.map((form) => (
                   <div key={form.id} className="admin-forms-grid-row">
-                    <label className="admin-form-field">
-                      <span className="admin-form-field-label">Form</span>
-                      <input
-                        value={formDrafts[form.id]?.name ?? form.name}
-                        onChange={(event) => setFormDrafts((previous) => ({
-                          ...previous,
-                          [form.id]: { ...(previous[form.id] ?? { name: form.name, comment: form.comment ?? '', tags: form.tags ?? '', score: form.score == null ? '' : String(form.score) }), name: event.target.value },
-                        }))}
-                        className="admin-input"
-                        placeholder="Form"
-                        disabled={fieldsDisabled}
-                      />
-                    </label>
-                    <label className="admin-form-field">
-                      <span className="admin-form-field-label">Beschreibung/Kommentar</span>
-                      <input
-                        value={formDrafts[form.id]?.comment ?? form.comment ?? ''}
-                        onChange={(event) => setFormDrafts((previous) => ({
-                          ...previous,
-                          [form.id]: { ...(previous[form.id] ?? { name: form.name, comment: '', tags: form.tags ?? '', score: form.score == null ? '' : String(form.score) }), comment: event.target.value },
-                        }))}
-                        className="admin-input"
-                        placeholder="Kommentar"
-                        disabled={fieldsDisabled}
-                      />
-                    </label>
-                    <label className="admin-form-field">
-                      <span className="admin-form-field-label">Tags</span>
-                      <input
-                        value={formDrafts[form.id]?.tags ?? form.tags ?? ''}
-                        onChange={(event) => setFormDrafts((previous) => ({
-                          ...previous,
-                          [form.id]: { ...(previous[form.id] ?? { name: form.name, comment: form.comment ?? '', tags: '', score: form.score == null ? '' : String(form.score) }), tags: event.target.value },
-                        }))}
-                        className="admin-input"
-                        placeholder="Tags"
-                        disabled={fieldsDisabled}
-                      />
-                    </label>
-                    <label className="admin-form-field">
-                      <span className="admin-form-field-label">Score</span>
-                      <input
-                        value={formDrafts[form.id]?.score ?? (form.score == null ? '' : String(form.score))}
-                        onChange={(event) => setFormDrafts((previous) => ({
-                          ...previous,
-                          [form.id]: { ...(previous[form.id] ?? { name: form.name, comment: form.comment ?? '', tags: form.tags ?? '', score: '' }), score: event.target.value },
-                        }))}
-                        className="admin-input"
-                        placeholder="Score"
-                        inputMode="numeric"
-                        disabled={fieldsDisabled}
-                      />
-                    </label>
-                    <div className="admin-forms-actions">
-                      <AdminButton size="sm" onClick={() => void handleUpdateForm(form)} disabled={fieldsDisabled || !formDrafts[form.id]?.name?.trim()}>
-                        Speichern
-                      </AdminButton>
-                      <AdminButton size="sm" variant="danger" onClick={() => void handleDeleteForm(form)} disabled={fieldsDisabled}>
-                        <Trash2 size={13} />
-                      Löschen
-                      </AdminButton>
+                    <div className="admin-forms-grid-inner">
+                      <label className="admin-form-field">
+                        <span className="admin-form-field-label">Form</span>
+                        <input
+                          value={formDrafts[form.id]?.name ?? form.name}
+                          onChange={(event) => setFormDrafts((previous) => ({
+                            ...previous,
+                            [form.id]: { ...(previous[form.id] ?? { name: form.name, comment: form.comment ?? '', tags: form.tags ?? '', score: form.score == null ? '' : String(form.score) }), name: event.target.value },
+                          }))}
+                          className="admin-input"
+                          placeholder="Form"
+                          disabled={fieldsDisabled}
+                        />
+                      </label>
+                      <label className="admin-form-field">
+                        <span className="admin-form-field-label">Beschreibung/Kommentar</span>
+                        <input
+                          value={formDrafts[form.id]?.comment ?? form.comment ?? ''}
+                          onChange={(event) => setFormDrafts((previous) => ({
+                            ...previous,
+                            [form.id]: { ...(previous[form.id] ?? { name: form.name, comment: '', tags: form.tags ?? '', score: form.score == null ? '' : String(form.score) }), comment: event.target.value },
+                          }))}
+                          className="admin-input"
+                          placeholder="Kommentar"
+                          disabled={fieldsDisabled}
+                        />
+                      </label>
+                      <label className="admin-form-field">
+                        <span className="admin-form-field-label">Tags</span>
+                        <input
+                          value={formDrafts[form.id]?.tags ?? form.tags ?? ''}
+                          onChange={(event) => setFormDrafts((previous) => ({
+                            ...previous,
+                            [form.id]: { ...(previous[form.id] ?? { name: form.name, comment: form.comment ?? '', tags: '', score: form.score == null ? '' : String(form.score) }), tags: event.target.value },
+                          }))}
+                          className="admin-input"
+                          placeholder="Tags"
+                          disabled={fieldsDisabled}
+                        />
+                      </label>
+                      <label className="admin-form-field">
+                        <span className="admin-form-field-label">Score</span>
+                        <input
+                          value={formDrafts[form.id]?.score ?? (form.score == null ? '' : String(form.score))}
+                          onChange={(event) => setFormDrafts((previous) => ({
+                            ...previous,
+                            [form.id]: { ...(previous[form.id] ?? { name: form.name, comment: form.comment ?? '', tags: form.tags ?? '', score: '' }), score: event.target.value },
+                          }))}
+                          className="admin-input"
+                          placeholder="Score"
+                          inputMode="numeric"
+                          disabled={fieldsDisabled}
+                        />
+                      </label>
+                      <div className="admin-forms-actions">
+                        <AdminButton
+                          size="sm"
+                          className="admin-icon-btn admin-btn-success"
+                          onClick={() => void handleUpdateForm(form)}
+                          disabled={fieldsDisabled || !formDrafts[form.id]?.name?.trim()}
+                          aria-label={`Form speichern: ${form.name}`}
+                          title={`Form speichern: ${form.name}`}
+                        >
+                          <Save size={14} />
+                        </AdminButton>
+                        <AdminButton
+                          size="sm"
+                          variant="danger"
+                          className="admin-icon-btn"
+                          onClick={() => void handleDeleteForm(form)}
+                          disabled={fieldsDisabled}
+                          aria-label={`Form löschen: ${form.name}`}
+                          title={`Form löschen: ${form.name}`}
+                        >
+                          <Trash2 size={14} />
+                        </AdminButton>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {newFormRows.map((row) => (
+                  <div key={row.id} className="admin-forms-grid-row admin-forms-grid-row-add">
+                    <div className="admin-forms-grid-inner">
+                      <label className="admin-form-field">
+                        <span className="admin-form-field-label">Form</span>
+                        <input
+                          value={row.name}
+                          onChange={(event) => updateNewFormRow(row.id, { name: event.target.value })}
+                          className="admin-input"
+                          placeholder="Form, z. B. Magnesiumcitrat"
+                          disabled={fieldsDisabled}
+                        />
+                      </label>
+                      <label className="admin-form-field">
+                        <span className="admin-form-field-label">Beschreibung/Kommentar</span>
+                        <input
+                          value={row.comment}
+                          onChange={(event) => updateNewFormRow(row.id, { comment: event.target.value })}
+                          className="admin-input"
+                          placeholder="Kommentar, optional"
+                          disabled={fieldsDisabled}
+                        />
+                      </label>
+                      <label className="admin-form-field">
+                        <span className="admin-form-field-label">Tags</span>
+                        <input
+                          value={row.tags}
+                          onChange={(event) => updateNewFormRow(row.id, { tags: event.target.value })}
+                          className="admin-input"
+                          placeholder="Tags, optional"
+                          disabled={fieldsDisabled}
+                        />
+                      </label>
+                      <label className="admin-form-field">
+                        <span className="admin-form-field-label">Score</span>
+                        <input
+                          value={row.score}
+                          onChange={(event) => updateNewFormRow(row.id, { score: event.target.value })}
+                          className="admin-input"
+                          placeholder="Score"
+                          inputMode="numeric"
+                          disabled={fieldsDisabled}
+                        />
+                      </label>
+                      <div className="admin-forms-actions">
+                        <AdminButton
+                          size="sm"
+                          variant="primary"
+                          onClick={() => void handleAddForm(row)}
+                          disabled={fieldsDisabled || !row.name.trim()}
+                        >
+                          <Plus size={13} />
+                          Hinzufügen
+                        </AdminButton>
+                      </div>
                     </div>
                   </div>
                 ))}
               </div>
-              <form className="grid gap-2 rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] p-3" onSubmit={handleAddForm}>
-                <input value={formName} onChange={(event) => setFormName(event.target.value)} className="admin-input" placeholder="Form, z. B. Magnesiumcitrat" disabled={fieldsDisabled} />
-                <input value={formComment} onChange={(event) => setFormComment(event.target.value)} className="admin-input" placeholder="Kommentar, optional" disabled={fieldsDisabled} />
-                <input value={formTags} onChange={(event) => setFormTags(event.target.value)} className="admin-input" placeholder="Tags, optional" disabled={fieldsDisabled} />
-                <div className="flex justify-end">
-                  <AdminButton type="submit" variant="primary" disabled={fieldsDisabled || !formName.trim()}>
-                    <Plus size={13} />
-                    Form hinzufügen
-                  </AdminButton>
-                </div>
-              </form>
+              <button type="button" className="admin-link-button" onClick={appendNewFormRow} disabled={fieldsDisabled}>
+                Zeile hinzufügen
+              </button>
             </div>
           )}
 

@@ -587,18 +587,53 @@ assert.match(
 )
 assert.match(
   ingredientsPage,
-  /admin-forms-grid-header[\s\S]*Form[\s\S]*Beschreibung\/Kommentar[\s\S]*Tags[\s\S]*Score[\s\S]*Aktionen/,
-  'Ingredient forms modal must expose clear column headings including Score',
+  /\{task !== 'forms' && \(\s*<TaskStatusControls/,
+  'Ingredient forms modal must not render task status controls',
 )
 assert.match(
   ingredientsPage,
+  /const fieldsDisabled = saving \|\| \(task !== 'forms' && currentStatus === 'none'\)/,
+  'Ingredient forms fields must not be disabled by a stale none status',
+)
+assert.match(
+  ingredientsPage,
+  /admin-forms-grid-header[\s\S]*Form[\s\S]*Beschreibung\/Kommentar[\s\S]*Tags[\s\S]*Score[\s\S]*Aktionen/,
+  'Ingredient forms modal must expose clear column headings including Score',
+)
+assert.doesNotMatch(
+  ingredientsPage,
   /H(ö|\u00f6)herer Score erscheint weiter oben/,
-  'Ingredient forms modal must explain that higher scores rank forms higher',
+  'Ingredient forms modal must not show the old score helper line',
+)
+assert.match(
+  ingredientsPage,
+  /newFormRows[\s\S]*score:/,
+  'Ingredient forms add rows must include a score field and persist parsed score',
+)
+assert.match(
+  ingredientsPage,
+  /score:\s*parseModalNumber\(row\.score\) \?\? 0/,
+  'Ingredient forms add rows must persist parsed score',
+)
+assert.match(
+  ingredientsPage,
+  /Zeile hinzuf/,
+  'Ingredient forms modal must support adding multiple new form rows',
+)
+assert.match(
+  ingredientsPage,
+  /aria-label=\{`Form speichern: \$\{form\.name\}`\}[\s\S]*title=\{`Form speichern: \$\{form\.name\}`\}[\s\S]*<Save\b/,
+  'Ingredient forms save action must be icon-only with accessible label and title',
+)
+assert.match(
+  ingredientsPage,
+  /aria-label=\{`Form l.{1,4}schen: \$\{form\.name\}`\}[\s\S]*title=\{`Form l.{1,4}schen: \$\{form\.name\}`\}[\s\S]*<Trash2\b/,
+  'Ingredient forms delete action must be icon-only with accessible label and title',
 )
 assert.match(
   adminCss,
-  /\.admin-task-status-grid[\s\S]*\.admin-task-status-card\[aria-pressed="true"\][\s\S]*\.admin-forms-grid-header/,
-  'Admin CSS must style task status cards and forms grid headings',
+  /\.admin-forms-grid-inner\s*\{[\s\S]*grid-template-columns:[\s\S]*\.admin-forms-grid-row\s*>\s*\.admin-forms-grid-inner/,
+  'Admin CSS must align forms table header and rows with the same inner grid',
 )
 const adminFormFieldLabelBlocks = adminCss.match(/\.admin-form-field-label\s*\{[^}]*\}/g) ?? []
 assert.ok(adminFormFieldLabelBlocks.length > 0, 'Admin CSS must define form field label styling')

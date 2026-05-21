@@ -1450,8 +1450,7 @@
   gap: 8px;
 }
 
-.admin-forms-grid-header,
-.admin-forms-grid-row {
+.admin-forms-grid-inner {
   display: grid;
   grid-template-columns: minmax(150px, 1fr) minmax(180px, 1.2fr) minmax(120px, 0.8fr) 82px auto;
   gap: 8px;
@@ -1460,7 +1459,7 @@
 
 .admin-forms-grid-header {
   color: var(--admin-ink-3);
-  padding: 0 4px;
+  padding: 0 10px;
   font-size: 11px;
   font-weight: 700;
 }
@@ -1470,6 +1469,14 @@
   border-radius: var(--admin-r-sm);
   background: var(--admin-bg);
   padding: 10px;
+}
+
+.admin-forms-grid-row > .admin-forms-grid-inner {
+  width: 100%;
+}
+
+.admin-forms-grid-row-add {
+  background: var(--admin-bg-elev);
 }
 
 .admin-form-field {
@@ -1493,6 +1500,28 @@
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.admin-link-button {
+  justify-self: start;
+  border: 0;
+  background: transparent;
+  color: var(--admin-ink-2);
+  padding: 2px 0;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.admin-link-button:hover:not(:disabled) {
+  color: var(--admin-ink);
+}
+
+.admin-link-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.56;
 }
 
 .admin-input:focus,
@@ -1579,6 +1608,15 @@
   min-height: 30px;
   padding: 4px 10px;
   font-size: 12px;
+}
+
+.admin-btn.admin-icon-btn {
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  min-height: 34px;
+  padding: 0;
+  gap: 0;
 }
 
 .admin-export-btn {
@@ -2647,7 +2685,7 @@
   }
 
   .admin-task-status-grid,
-  .admin-forms-grid-row {
+  .admin-forms-grid-inner {
     grid-template-columns: minmax(0, 1fr);
   }
 
