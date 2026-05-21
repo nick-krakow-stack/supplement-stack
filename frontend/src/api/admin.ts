@@ -573,6 +573,83 @@ export interface AdminIngredientResearchSourcePayload {
   version?: number | null;
 }
 
+export const research_pipeline_migration_marker = 'research_pipeline_artifacts';
+
+export type AdminResearchPipelineStageKey = 'research' | 'interpretation' | 'interpreter' | 'writer' | (string & {});
+export type AdminResearchPipelineStatus = 'pending' | 'in_progress' | 'needs_changes' | 'approved' | 'archived' | (string & {});
+
+export interface AdminResearchPipelineStage {
+  ingredient_id: number;
+  stage: AdminResearchPipelineStageKey;
+  status: AdminResearchPipelineStatus;
+  artifact_id: number | null;
+  artifact_count: number;
+  source_count: number;
+  updated_at: string | null;
+  note: string | null;
+  version: number | null;
+  raw?: Record<string, unknown>;
+}
+
+export interface AdminResearchPipelineOverviewItem {
+  ingredient: AdminIngredientResearchIngredient;
+  stages: AdminResearchPipelineStage[];
+  artifact_count: number;
+  source_count: number;
+  raw?: Record<string, unknown>;
+}
+
+export interface AdminResearchPipelineOverviewResponse {
+  items: AdminResearchPipelineOverviewItem[];
+  total?: number | null;
+}
+
+export interface AdminResearchPipelineArtifact {
+  id: number;
+  ingredient_id: number;
+  stage: AdminResearchPipelineStageKey;
+  title: string | null;
+  content: string | null;
+  evidence_strength: string | null;
+  status: AdminResearchPipelineStatus;
+  source_ids: number[];
+  created_at: string | null;
+  updated_at: string | null;
+  version: number | null;
+  raw?: Record<string, unknown>;
+}
+
+export interface AdminResearchPipelineDetail {
+  ingredient: AdminIngredientResearchIngredient;
+  stages: AdminResearchPipelineStage[];
+  artifacts: AdminResearchPipelineArtifact[];
+  sources: AdminIngredientResearchSource[];
+  raw?: Record<string, unknown>;
+}
+
+export interface AdminResearchPipelineArtifactPayload {
+  stage: AdminResearchPipelineStageKey;
+  title?: string | null;
+  content?: string | null;
+  content_markdown?: string | null;
+  evidence_strength?: string | null;
+  source_ids?: number[];
+  version?: number | null;
+}
+
+export interface AdminResearchPipelineStatusPayload {
+  status: AdminResearchPipelineStatus;
+  note?: string | null;
+  version?: number | null;
+}
+
+export interface AdminResearchPipelineKnowledgeDraftResponse {
+  ok: boolean;
+  article: AdminKnowledgeArticle | null;
+  slug: string | null;
+  raw?: Record<string, unknown>;
+}
+
 export interface AdminPubMedLookup {
   pmid: string;
   doi: string | null;
@@ -1997,6 +2074,153 @@ function parseIngredientResearchSource(raw: Record<string, unknown>): AdminIngre
   };
 }
 
+function parseResearchPipelineStage(raw: Record<string, unknown>): AdminResearchPipelineStage {
+  return {
+    ingredient_id: toIntOrNull(raw.ingredient_id) ?? toIntOrNull(raw.ingredientId) ?? 0,
+    stage: (toTextOrNull(raw.stage ?? raw.stage_key ?? raw.key) ?? 'research') as AdminResearchPipelineStageKey,
+    status: (toTextOrNull(raw.status) ?? 'pending') as AdminResearchPipelineStatus,
+    artifact_id: toIntOrNull(raw.artifact_id ?? raw.artifactId),
+    artifact_count: toIntOrNull(raw.artifact_count) ?? 0,
+    source_count: toIntOrNull(raw.source_count) ?? 0,
+    updated_at: toDateOrNull(raw.updated_at),
+    note: toTextOrNull(raw.notes ?? raw.note ?? raw.status_note),
+    version: toIntOrNull(raw.version),
+    raw,
+  };
+}
+
+function parseSourceIds(raw: Record<string, unknown>): number[] {
+  const explicitIds = raw.source_ids ?? raw.sourceIds ?? raw.research_source_ids;
+  if (Array.isArray(explicitIds)) {
+    return explicitIds
+      .map((entry) => toIntOrNull(entry))
+      .filter((entry): entry is number => entry !== null && entry > 0);
+  }
+
+  const sources = raw.sources ?? raw.research_sources;
+  if (!Array.isArray(sources)) return [];
+
+  return sources
+    .map((entry) => {
+      if (entry && typeof entry === 'object') {
+        const source = entry as Record<string, unknown>;
+        return toIntOrNull(source.research_source_id ?? source.source_id ?? source.id);
+      }
+      return toIntOrNull(entry);
+    })
+    .filter((entry): entry is number => entry !== null && entry > 0);
+}
+
+function parseResearchPipelineArtifact(raw: Record<string, unknown>): AdminResearchPipelineArtifact {
+  return {
+    id: toIntOrNull(raw.id) ?? 0,
+    ingredient_id: toIntOrNull(raw.ingredient_id) ?? toIntOrNull(raw.ingredientId) ?? 0,
+    stage: (toTextOrNull(raw.stage ?? raw.stage_key) ?? 'research') as AdminResearchPipelineStageKey,
+    title: toTextOrNull(raw.title),
+    content: toTextOrNull(raw.content ?? raw.content_markdown ?? raw.body ?? raw.markdown ?? raw.agent_output),
+    evidence_strength: toTextOrNull(raw.evidence_strength ?? raw.evidence_grade ?? raw.evidence_level),
+    status: (toTextOrNull(raw.status) ?? 'pending') as AdminResearchPipelineStatus,
+    source_ids: parseSourceIds(raw),
+    created_at: toDateOrNull(raw.created_at),
+    updated_at: toDateOrNull(raw.updated_at),
+    version: toIntOrNull(raw.version),
+    raw,
+  };
+}
+
+function ingredientFromPipelineRaw(raw: Record<string, unknown>): AdminIngredientResearchIngredient {
+  const ingredient = raw.ingredient && typeof raw.ingredient === 'object'
+    ? raw.ingredient as Record<string, unknown>
+    : raw;
+  return parseIngredientResearchIngredient({
+    id: ingredient.id ?? ingredient.ingredient_id,
+    name: ingredient.name ?? ingredient.ingredient_name,
+    unit: ingredient.unit ?? ingredient.ingredient_unit,
+    category: ingredient.category,
+  });
+}
+
+function normalizeResearchPipelineStages(raw: Record<string, unknown>, ingredientId: number): AdminResearchPipelineStage[] {
+  const stagesRaw = raw.stages ?? raw.pipeline_stages ?? raw.stage_statuses;
+  if (!Array.isArray(stagesRaw)) return [];
+  return stagesRaw
+    .map((entry) => parseResearchPipelineStage(entry as Record<string, unknown>))
+    .map((stage) => ({ ...stage, ingredient_id: stage.ingredient_id || ingredientId }));
+}
+
+function parseResearchPipelineOverviewItem(raw: Record<string, unknown>): AdminResearchPipelineOverviewItem {
+  const ingredient = ingredientFromPipelineRaw(raw);
+  return {
+    ingredient,
+    stages: normalizeResearchPipelineStages(raw, ingredient.id),
+    artifact_count: toIntOrNull(raw.artifact_count) ?? toIntOrNull(raw.artifacts_count) ?? 0,
+    source_count: toIntOrNull(raw.source_count) ?? toIntOrNull(raw.sources_count) ?? 0,
+    raw,
+  };
+}
+
+function normalizeResearchPipelineOverviewResponse(raw: unknown): AdminResearchPipelineOverviewResponse {
+  const payload = raw && typeof raw === 'object' && !Array.isArray(raw)
+    ? raw as Record<string, unknown>
+    : {};
+  const listRaw = payload.items ?? payload.ingredients ?? payload.pipeline ?? payload.data;
+  const list = Array.isArray(listRaw) ? listRaw : [];
+  return {
+    items: list.map((entry) => parseResearchPipelineOverviewItem(entry as Record<string, unknown>)),
+    total: toIntOrNull(payload.total ?? payload.count),
+  };
+}
+
+function normalizeResearchPipelineDetailResponse(raw: unknown): AdminResearchPipelineDetail {
+  const payload = raw && typeof raw === 'object' && !Array.isArray(raw)
+    ? raw as Record<string, unknown>
+    : {};
+  const data = payload.data && typeof payload.data === 'object'
+    ? payload.data as Record<string, unknown>
+    : payload;
+  const ingredient = ingredientFromPipelineRaw(data);
+  const artifactsRaw = data.artifacts ?? data.research_artifacts;
+  const sourcesRaw = data.sources ?? data.research_sources ?? data.existing_research_sources;
+  return {
+    ingredient,
+    stages: normalizeResearchPipelineStages(data, ingredient.id),
+    artifacts: Array.isArray(artifactsRaw)
+      ? artifactsRaw.map((entry) => parseResearchPipelineArtifact(entry as Record<string, unknown>))
+      : [],
+    sources: Array.isArray(sourcesRaw)
+      ? sourcesRaw.map((entry) => parseIngredientResearchSource(entry as Record<string, unknown>))
+      : [],
+    raw: data,
+  };
+}
+
+function normalizeResearchPipelineArtifactPayload(
+  payload: AdminResearchPipelineArtifactPayload,
+): AdminResearchPipelineArtifactPayload {
+  const content = toTrimmedOrNull(payload.content ?? payload.content_markdown);
+  return {
+    stage: payload.stage,
+    title: toTrimmedOrNull(payload.title),
+    content,
+    content_markdown: content,
+    evidence_strength: toTrimmedOrNull(payload.evidence_strength),
+    source_ids: Array.isArray(payload.source_ids)
+      ? [...new Set(payload.source_ids.filter((id) => Number.isInteger(id) && id > 0))]
+      : [],
+    version: payload.version ?? null,
+  };
+}
+
+function normalizeResearchPipelineStatusPayload(
+  payload: AdminResearchPipelineStatusPayload,
+): AdminResearchPipelineStatusPayload {
+  return {
+    status: payload.status,
+    note: toTrimmedOrNull(payload.note),
+    version: payload.version ?? null,
+  };
+}
+
 function parseEvidenceSummary(raw: Record<string, unknown>): AdminEvidenceSummary {
   const countsRaw = (raw.counts && typeof raw.counts === 'object' ? raw.counts : raw) as Record<string, unknown>;
   const gradeCounts = parseCountMap(
@@ -3317,6 +3541,95 @@ export async function deleteIngredientSubIngredient(
   childIngredientId: number,
 ): Promise<void> {
   await apiClient.delete(`/admin/ingredient-sub-ingredients/${parentIngredientId}/${childIngredientId}`);
+}
+
+export async function getAdminResearchPipelineOverview(): Promise<AdminResearchPipelineOverviewResponse> {
+  const { data } = await apiClient.get<unknown>('/admin/research-pipeline');
+  return normalizeResearchPipelineOverviewResponse(data);
+}
+
+export async function getAdminResearchPipelineDetail(
+  ingredientId: number,
+): Promise<AdminResearchPipelineDetail> {
+  const { data } = await apiClient.get<unknown>(`/admin/research-pipeline/${ingredientId}`);
+  return normalizeResearchPipelineDetailResponse(data);
+}
+
+export async function createAdminResearchPipelineArtifact(
+  ingredientId: number,
+  payload: AdminResearchPipelineArtifactPayload,
+): Promise<AdminResearchPipelineArtifact> {
+  const normalized = normalizeResearchPipelineArtifactPayload(payload);
+  const { data } = await apiClient.post<Record<string, unknown>>(
+    `/admin/research-pipeline/${ingredientId}/artifacts`,
+    normalized,
+  );
+  const artifact = (data.artifact ?? data.research_artifact ?? data) as Record<string, unknown>;
+  return parseResearchPipelineArtifact(artifact);
+}
+
+export async function updateAdminResearchPipelineArtifact(
+  artifactId: number,
+  payload: AdminResearchPipelineArtifactPayload,
+  options: AdminMutationOptions = {},
+): Promise<AdminResearchPipelineArtifact> {
+  const normalized = normalizeResearchPipelineArtifactPayload(payload);
+  const { data } = await apiClient.put<Record<string, unknown>>(
+    `/admin/research-pipeline/artifacts/${artifactId}`,
+    normalized,
+    withIfMatch(normalized, options),
+  );
+  const artifact = (data.artifact ?? data.research_artifact ?? data) as Record<string, unknown>;
+  return parseResearchPipelineArtifact(artifact);
+}
+
+export async function setAdminResearchPipelineArtifactStatus(
+  artifactId: number,
+  payload: AdminResearchPipelineStatusPayload,
+  options: AdminMutationOptions = {},
+): Promise<AdminResearchPipelineArtifact> {
+  const normalized = normalizeResearchPipelineStatusPayload(payload);
+  const { data } = await apiClient.post<Record<string, unknown>>(
+    `/admin/research-pipeline/artifacts/${artifactId}/status`,
+    normalized,
+    withIfMatch(normalized, options),
+  );
+  const artifact = (data.artifact ?? data.research_artifact ?? data) as Record<string, unknown>;
+  return parseResearchPipelineArtifact(artifact);
+}
+
+export async function setAdminResearchPipelineStageStatus(
+  ingredientId: number,
+  stage: AdminResearchPipelineStageKey,
+  payload: AdminResearchPipelineStatusPayload,
+  options: AdminMutationOptions = {},
+): Promise<AdminResearchPipelineStage> {
+  const normalized = normalizeResearchPipelineStatusPayload(payload);
+  const { data } = await apiClient.put<Record<string, unknown>>(
+    `/admin/research-pipeline/${ingredientId}/stages/${stage}/status`,
+    normalized,
+    withIfMatch(normalized, options),
+  );
+  const stageStatus = (data.stage ?? data.stage_status ?? data) as Record<string, unknown>;
+  return parseResearchPipelineStage(stageStatus);
+}
+
+export async function createAdminResearchPipelineKnowledgeDraft(
+  artifactId: number,
+): Promise<AdminResearchPipelineKnowledgeDraftResponse> {
+  const { data } = await apiClient.post<Record<string, unknown>>(
+    `/admin/research-pipeline/artifacts/${artifactId}/knowledge-draft`,
+  );
+  const articleRaw = data.article && typeof data.article === 'object'
+    ? data.article as Record<string, unknown>
+    : null;
+  const article = articleRaw ? parseKnowledgeArticle(articleRaw) : null;
+  return {
+    ok: toBooleanOrNull(data.ok) ?? true,
+    article,
+    slug: toTextOrNull(data.slug) ?? article?.slug ?? null,
+    raw: data,
+  };
 }
 
 export async function getIngredientResearchItems(params: {

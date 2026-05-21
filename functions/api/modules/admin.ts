@@ -46,6 +46,13 @@
 //   PUT /ingredient-research/warnings/:warningId (admin)
 //   DELETE /ingredient-research/warnings/:warningId (admin)
 //   PUT /ingredient-research/:ingredientId/display-profile (admin)
+//   GET /research-pipeline (admin)
+//   GET /research-pipeline/:ingredientId (admin)
+//   POST /research-pipeline/:ingredientId/artifacts (admin)
+//   PUT /research-pipeline/artifacts/:artifactId (admin)
+//   POST /research-pipeline/artifacts/:artifactId/status (admin)
+//   PUT /research-pipeline/:ingredientId/stages/:stage/status (admin)
+//   POST /research-pipeline/artifacts/:artifactId/knowledge-draft (admin)
 //   GET /translations/ingredients — ingredient translations list (admin)
 //   PUT /translations/ingredients/:ingredientId/:language — upsert ingredient translation (admin)
 //   GET /translations/dose-recommendations — dose recommendation translations list (admin)
@@ -947,6 +954,69 @@ type IngredientResearchExportRow = {
   warning_slugs: string | null
 }
 
+type ResearchPipelineStage = typeof RESEARCH_PIPELINE_STAGES[number]
+type ResearchPipelineStatus = typeof RESEARCH_PIPELINE_STATUSES[number]
+type ResearchArtifactStatus = typeof RESEARCH_ARTIFACT_STATUSES[number]
+
+type ResearchPipelineIngredientRow = {
+  ingredient_id: number
+  name: string
+  category: string | null
+  unit: string | null
+  description: string | null
+  source_count: number
+  artifact_count: number
+}
+
+type ResearchPipelineStatusRow = {
+  ingredient_id: number
+  stage: string
+  agent_id: string | null
+  status: string
+  notes: string | null
+  artifact_id: number | null
+  approved_at: string | null
+  completed_at: string | null
+  created_at: string | null
+  updated_at: string | null
+  version: number | null
+}
+
+type ResearchArtifactRow = {
+  id: number
+  ingredient_id: number
+  stage: string
+  agent_id: string | null
+  title: string
+  summary: string | null
+  content_markdown: string | null
+  content_json: string | null
+  evidence_strength: string | null
+  status: string
+  approved_at: string | null
+  knowledge_article_slug: string | null
+  created_at: string | null
+  updated_at: string | null
+  version: number | null
+}
+
+type ResearchArtifactSourceLinkRow = {
+  artifact_id: number
+  source_id: number
+}
+
+type ResearchArtifactPayload = {
+  stage: ResearchPipelineStage
+  agent_id: string
+  title: string
+  summary: string | null
+  content_markdown: string | null
+  content_json: string | null
+  evidence_strength: string | null
+  status: ResearchArtifactStatus
+  source_ids?: number[]
+}
+
 const DOSE_RECOMMENDATION_SOURCE_TYPES = ['official', 'study', 'profile', 'user_private', 'user_public'] as const
 type DoseRecommendationSourceType = typeof DOSE_RECOMMENDATION_SOURCE_TYPES[number]
 
@@ -961,6 +1031,16 @@ const INGREDIENT_CALCULATION_STATUSES = ['not_started', 'in_progress', 'needs_re
 const INGREDIENT_RESEARCH_SOURCE_KINDS = ['official', 'study'] as const
 const INGREDIENT_WARNING_SEVERITIES = ['info', 'caution', 'danger'] as const
 const EVIDENCE_GRADES = ['A', 'B', 'C', 'D', 'F'] as const
+const RESEARCH_PIPELINE_STAGES = ['research', 'interpretation', 'writer'] as const
+const RESEARCH_PIPELINE_STATUSES = ['not_started', 'in_progress', 'pending_review', 'approved', 'needs_changes', 'blocked'] as const
+const RESEARCH_ARTIFACT_STATUSES = ['draft', 'pending_review', 'approved', 'needs_changes', 'archived'] as const
+const RESEARCH_EVIDENCE_STRENGTHS = ['STARK', 'MODERAT', 'SCHWACH', 'UNZUREICHEND'] as const
+const RESEARCH_PIPELINE_DEFAULT_CATEGORIES = ['vitamin_fat_soluble', 'vitamin_water_soluble'] as const
+const RESEARCH_PIPELINE_STAGE_AGENT_IDS: Record<ResearchPipelineStage, string> = {
+  research: 'nutrient-research-analyst',
+  interpretation: 'clinical-study-interpreter',
+  writer: 'german-health-science-writer',
+}
 const NUTRIENT_REFERENCE_VALUE_KINDS = ['rda', 'ai', 'ear', 'ul', 'pri', 'ar', 'lti', 'ri', 'nrv'] as const
 const KNOWLEDGE_ARTICLE_STATUSES = ['draft', 'published', 'archived'] as const
 const AFFILIATE_OWNER_TYPES = ['none', 'nick', 'user'] as const
@@ -2966,6 +3046,449 @@ function parseEvidenceGradeField(
   const grade = enumValue(body.evidence_grade, EVIDENCE_GRADES)
   if (!grade) return validationError(`evidence_grade must be one of ${EVIDENCE_GRADES.join(', ')} or null`)
   return { ok: true, value: grade }
+}
+
+function researchPipelineStage(value: unknown): ResearchPipelineStage | null {
+  if (typeof value !== 'string') return null
+  const normalized = value.trim().toLowerCase().replace(/[-\s]+/g, '_')
+  if (['research', 'stage_1', 'stage1', 'nutrient_research', 'nutrient_research_analyst'].includes(normalized)) return 'research'
+  if (['interpretation', 'interpreter', 'stage_2', 'stage2', 'clinical_interpretation', 'clinical_study_interpreter'].includes(normalized)) return 'interpretation'
+  if (['writer', 'writing', 'article', 'stage_3', 'stage3', 'german_writer', 'german_health_science_writer'].includes(normalized)) return 'writer'
+  return enumValue(value, RESEARCH_PIPELINE_STAGES)
+}
+
+function researchArtifactStatus(value: unknown, fallback: ResearchArtifactStatus): ResearchArtifactStatus | null {
+  if (value === undefined) return fallback
+  return enumValue(value, RESEARCH_ARTIFACT_STATUSES)
+}
+
+function researchPipelineStatus(value: unknown): ResearchPipelineStatus | null {
+  return enumValue(value, RESEARCH_PIPELINE_STATUSES)
+}
+
+function stageStatusFromArtifactStatus(status: ResearchArtifactStatus): ResearchPipelineStatus {
+  if (status === 'approved') return 'approved'
+  if (status === 'needs_changes') return 'needs_changes'
+  if (status === 'archived') return 'needs_changes'
+  return 'pending_review'
+}
+
+function parseResearchContentJson(value: unknown, existing?: string | null): ValidationResult<string | null> {
+  if (value === undefined) return { ok: true, value: existing ?? null }
+  if (value === null || value === '') return { ok: true, value: null }
+  if (typeof value === 'string') {
+    try {
+      JSON.parse(value)
+      return { ok: true, value }
+    } catch {
+      return validationError('content_json must be valid JSON')
+    }
+  }
+  try {
+    return { ok: true, value: JSON.stringify(value) }
+  } catch {
+    return validationError('content_json must be JSON serializable')
+  }
+}
+
+function parseResearchSourceIds(value: unknown): ValidationResult<number[] | undefined> {
+  if (value === undefined) return { ok: true, value: undefined }
+  if (value === null || value === '') return { ok: true, value: [] }
+  if (!Array.isArray(value)) return validationError('source_ids must be an array')
+  const ids: number[] = []
+  for (const raw of value) {
+    const id = normalizeInteger(raw)
+    if (!id || id <= 0) return validationError('source_ids must contain positive integers')
+    if (!ids.includes(id)) ids.push(id)
+  }
+  return { ok: true, value: ids }
+}
+
+function validateResearchArtifactPayload(
+  body: Record<string, unknown>,
+  existing: ResearchArtifactRow | null,
+): ValidationResult<ResearchArtifactPayload> {
+  const stageInput = hasOwnKey(body, 'stage') ? body.stage : existing?.stage
+  const stage = researchPipelineStage(stageInput)
+  if (!stage) return validationError(`stage must be one of ${RESEARCH_PIPELINE_STAGES.join(', ')}`)
+
+  const title = hasOwnKey(body, 'title')
+    ? requiredTextField(body, 'title', 500)
+    : existing ? { ok: true as const, value: existing.title } : validationError('title is required')
+  if (!title.ok) return title
+
+  const summary = optionalTextField(body, 'summary', 10000)
+  if (!summary.ok) return summary
+
+  const contentMarkdown = hasOwnKey(body, 'content_markdown') || hasOwnKey(body, 'content')
+    ? optionalTextField(body, hasOwnKey(body, 'content_markdown') ? 'content_markdown' : 'content', 1000000)
+    : existing ? { ok: true as const, value: existing.content_markdown } : requiredTextField(body, 'content_markdown', 1000000)
+  if (!contentMarkdown.ok) return contentMarkdown
+  if (!existing && !contentMarkdown.value) return validationError('content_markdown is required')
+
+  const contentJson = parseResearchContentJson(hasOwnKey(body, 'content_json') ? body.content_json : undefined, existing?.content_json ?? null)
+  if (!contentJson.ok) return contentJson
+
+  const evidenceStrength = optionalTextField(body, 'evidence_strength', 80)
+  if (!evidenceStrength.ok) return evidenceStrength
+  if (
+    evidenceStrength.value !== undefined &&
+    evidenceStrength.value !== null &&
+    !RESEARCH_EVIDENCE_STRENGTHS.includes(evidenceStrength.value as typeof RESEARCH_EVIDENCE_STRENGTHS[number])
+  ) {
+    return validationError(`evidence_strength must be one of ${RESEARCH_EVIDENCE_STRENGTHS.join(', ')} or null`)
+  }
+
+  const status = researchArtifactStatus(hasOwnKey(body, 'status') ? body.status : undefined, existing?.status as ResearchArtifactStatus | undefined ?? 'draft')
+  if (!status) return validationError(`status must be one of ${RESEARCH_ARTIFACT_STATUSES.join(', ')}`)
+
+  const sourceIds = parseResearchSourceIds(body.source_ids)
+  if (!sourceIds.ok) return sourceIds
+
+  return {
+    ok: true,
+    value: {
+      stage,
+      agent_id: RESEARCH_PIPELINE_STAGE_AGENT_IDS[stage],
+      title: title.value,
+      summary: summary.value === undefined ? existing?.summary ?? null : summary.value,
+      content_markdown: contentMarkdown.value === undefined ? existing?.content_markdown ?? null : contentMarkdown.value,
+      content_json: contentJson.value,
+      evidence_strength: evidenceStrength.value === undefined ? existing?.evidence_strength ?? null : evidenceStrength.value,
+      status,
+      source_ids: sourceIds.value,
+    },
+  }
+}
+
+function researchPipelineArtifactIdColumn(columns: Set<string>): string | null {
+  if (columns.has('artifact_id')) return 'artifact_id'
+  if (columns.has('latest_artifact_id')) return 'latest_artifact_id'
+  return null
+}
+
+function researchArtifactSourceIdColumn(columns: Set<string>): string | null {
+  if (columns.has('source_id')) return 'source_id'
+  if (columns.has('research_source_id')) return 'research_source_id'
+  return null
+}
+
+function researchPipelineStatusSelect(columns: Set<string>): string {
+  const artifactColumn = researchPipelineArtifactIdColumn(columns)
+  return [
+    'ingredient_id',
+    'stage',
+    columns.has('agent_id') ? 'agent_id' : 'NULL AS agent_id',
+    columns.has('status') ? 'status' : "'not_started' AS status",
+    columns.has('notes') ? 'notes' : columns.has('internal_notes') ? 'internal_notes AS notes' : 'NULL AS notes',
+    artifactColumn ? `${artifactColumn} AS artifact_id` : 'NULL AS artifact_id',
+    columns.has('approved_at') ? 'approved_at' : 'NULL AS approved_at',
+    columns.has('completed_at') ? 'completed_at' : 'NULL AS completed_at',
+    columns.has('created_at') ? 'created_at' : 'NULL AS created_at',
+    columns.has('updated_at') ? 'updated_at' : 'NULL AS updated_at',
+    versionSelect(columns),
+  ].join(',\n      ')
+}
+
+function researchArtifactSelect(columns: Set<string>, alias = ''): string {
+  const prefix = alias ? `${alias}.` : ''
+  return [
+    `${prefix}id`,
+    `${prefix}ingredient_id`,
+    `${prefix}stage`,
+    columns.has('agent_id') ? `${prefix}agent_id AS agent_id` : 'NULL AS agent_id',
+    `${prefix}title`,
+    columns.has('summary') ? `${prefix}summary AS summary` : 'NULL AS summary',
+    columns.has('content_markdown') ? `${prefix}content_markdown AS content_markdown` : 'NULL AS content_markdown',
+    columns.has('content_json') ? `${prefix}content_json AS content_json` : 'NULL AS content_json',
+    columns.has('evidence_strength') ? `${prefix}evidence_strength AS evidence_strength` : 'NULL AS evidence_strength',
+    columns.has('status') ? `${prefix}status AS status` : "'draft' AS status",
+    columns.has('approved_at') ? `${prefix}approved_at AS approved_at` : 'NULL AS approved_at',
+    columns.has('knowledge_article_slug') ? `${prefix}knowledge_article_slug AS knowledge_article_slug` : 'NULL AS knowledge_article_slug',
+    columns.has('created_at') ? `${prefix}created_at AS created_at` : 'NULL AS created_at',
+    columns.has('updated_at') ? `${prefix}updated_at AS updated_at` : 'NULL AS updated_at',
+    versionSelect(columns, alias || undefined),
+  ].join(',\n      ')
+}
+
+async function requireResearchPipelineTables(db: D1Database): Promise<ValidationResult<true>> {
+  const missing: string[] = []
+  for (const tableName of ['ingredient_research_pipeline_status', 'research_pipeline_artifacts', 'research_artifact_sources']) {
+    if (!(await hasTable(db, tableName))) missing.push(tableName)
+  }
+  if (missing.length > 0) return validationError(`Research pipeline migration is not applied: ${missing.join(', ')}`, 409)
+  return { ok: true, value: true }
+}
+
+async function getResearchArtifactRow(db: D1Database, artifactId: number): Promise<ResearchArtifactRow | null> {
+  const columns = await getTableColumns(db, 'research_pipeline_artifacts')
+  return await db.prepare(`
+    SELECT
+      ${researchArtifactSelect(columns)}
+    FROM research_pipeline_artifacts
+    WHERE id = ?
+  `).bind(artifactId).first<ResearchArtifactRow>()
+}
+
+async function loadResearchSourcesForIngredient(db: D1Database, ingredientId: number): Promise<IngredientResearchSourceRow[]> {
+  const columns = await getTableColumns(db, 'ingredient_research_sources')
+  const { results } = await db.prepare(`
+    SELECT
+      id,
+      ingredient_id,
+      source_kind,
+      organization,
+      country,
+      region,
+      population,
+      recommendation_type,
+      no_recommendation,
+      dose_min,
+      dose_max,
+      dose_unit,
+      per_kg_body_weight,
+      frequency,
+      study_type,
+      evidence_quality,
+      duration,
+      outcome,
+      finding,
+      source_title,
+      source_url,
+      doi,
+      pubmed_id,
+      notes,
+      source_date,
+      reviewed_at,
+      ${ingredientResearchEvidenceSelect(columns)},
+      created_at,
+      updated_at,
+      ${versionSelect(columns)}
+    FROM ingredient_research_sources
+    WHERE ingredient_id = ?
+    ORDER BY source_kind ASC, COALESCE(reviewed_at, source_date, created_at) DESC, id DESC
+  `).bind(ingredientId).all<IngredientResearchSourceRow>()
+  return results ?? []
+}
+
+async function validateResearchArtifactSourceIds(
+  db: D1Database,
+  ingredientId: number,
+  sourceIds: number[],
+): Promise<ValidationResult<true>> {
+  if (sourceIds.length === 0) return { ok: true, value: true }
+  const placeholders = sourceIds.map(() => '?').join(',')
+  const { results } = await db.prepare(`
+    SELECT id
+    FROM ingredient_research_sources
+    WHERE ingredient_id = ?
+      AND id IN (${placeholders})
+  `).bind(ingredientId, ...sourceIds).all<{ id: number }>()
+  const found = new Set((results ?? []).map((row) => row.id))
+  const missing = sourceIds.filter((id) => !found.has(id))
+  if (missing.length > 0) return validationError(`source_ids must belong to the same ingredient. Invalid source_ids: ${missing.join(', ')}`)
+  return { ok: true, value: true }
+}
+
+async function syncResearchArtifactSources(
+  db: D1Database,
+  artifactId: number,
+  sourceIds: number[] | undefined,
+): Promise<void> {
+  if (sourceIds === undefined) return
+  const columns = await getTableColumns(db, 'research_artifact_sources')
+  const sourceColumn = researchArtifactSourceIdColumn(columns)
+  if (!sourceColumn) return
+  await db.prepare('DELETE FROM research_artifact_sources WHERE artifact_id = ?').bind(artifactId).run()
+  for (const sourceId of sourceIds) {
+    const fields = ['artifact_id', sourceColumn]
+    if (columns.has('created_at')) fields.push('created_at')
+    if (columns.has('created_at')) {
+      await db.prepare(`
+        INSERT OR IGNORE INTO research_artifact_sources (${fields.join(', ')})
+        VALUES (?, ?, datetime('now'))
+      `).bind(artifactId, sourceId).run()
+    } else {
+      await db.prepare(`
+        INSERT OR IGNORE INTO research_artifact_sources (${fields.join(', ')})
+        VALUES (?, ?)
+      `).bind(artifactId, sourceId).run()
+    }
+  }
+}
+
+async function loadResearchArtifactSourceLinks(db: D1Database, artifactIds: number[]): Promise<ResearchArtifactSourceLinkRow[]> {
+  if (artifactIds.length === 0) return []
+  const columns = await getTableColumns(db, 'research_artifact_sources')
+  const sourceColumn = researchArtifactSourceIdColumn(columns)
+  if (!sourceColumn) return []
+  const placeholders = artifactIds.map(() => '?').join(',')
+  const { results } = await db.prepare(`
+    SELECT artifact_id, ${sourceColumn} AS source_id
+    FROM research_artifact_sources
+    WHERE artifact_id IN (${placeholders})
+  `).bind(...artifactIds).all<ResearchArtifactSourceLinkRow>()
+  return results ?? []
+}
+
+async function upsertResearchPipelineStageStatus(
+  db: D1Database,
+  ingredientId: number,
+  stage: ResearchPipelineStage,
+  status: ResearchPipelineStatus,
+  options: { artifactId?: number | null; notes?: string | null; approved?: boolean; expectedVersion?: number | null } = {},
+): Promise<ResearchPipelineStatusRow | null> {
+  const columns = await getTableColumns(db, 'ingredient_research_pipeline_status')
+  const artifactColumn = researchPipelineArtifactIdColumn(columns)
+  const setClauses: string[] = []
+  const bindings: Array<string | number | null> = []
+  if (columns.has('agent_id')) {
+    setClauses.push('agent_id = ?')
+    bindings.push(RESEARCH_PIPELINE_STAGE_AGENT_IDS[stage])
+  }
+  if (columns.has('status')) {
+    setClauses.push('status = ?')
+    bindings.push(status)
+  }
+  if (options.notes !== undefined && (columns.has('notes') || columns.has('internal_notes'))) {
+    setClauses.push(`${columns.has('notes') ? 'notes' : 'internal_notes'} = ?`)
+    bindings.push(options.notes)
+  }
+  if (artifactColumn && options.artifactId !== undefined) {
+    setClauses.push(`${artifactColumn} = ?`)
+    bindings.push(options.artifactId)
+  }
+  if (options.approved) {
+    if (columns.has('approved_at')) setClauses.push("approved_at = COALESCE(approved_at, datetime('now'))")
+    if (columns.has('completed_at')) setClauses.push("completed_at = COALESCE(completed_at, datetime('now'))")
+  }
+  if (columns.has('updated_at')) setClauses.push("updated_at = datetime('now')")
+  if (columns.has('version')) setClauses.push('version = COALESCE(version, 0) + 1')
+
+  const updateBindings = [...bindings, ingredientId, stage]
+  const enforceVersion = columns.has('version') && options.expectedVersion !== undefined && options.expectedVersion !== null
+  const whereSql = enforceVersion
+    ? 'ingredient_id = ? AND stage = ? AND version = ?'
+    : 'ingredient_id = ? AND stage = ?'
+  if (enforceVersion && options.expectedVersion !== undefined) updateBindings.push(options.expectedVersion)
+  const result = setClauses.length > 0
+    ? await db.prepare(`
+        UPDATE ingredient_research_pipeline_status
+        SET ${setClauses.join(',\n          ')}
+        WHERE ${whereSql}
+      `).bind(...updateBindings).run()
+    : { meta: { changes: 0 } } as D1Result
+
+  if (d1ChangeCount(result) === 0 && enforceVersion) return null
+
+  if (d1ChangeCount(result) === 0 && !enforceVersion) {
+    const fields = ['ingredient_id', 'stage']
+    const insertBindings: Array<string | number | null> = [ingredientId, stage]
+    if (columns.has('agent_id')) {
+      fields.push('agent_id')
+      insertBindings.push(RESEARCH_PIPELINE_STAGE_AGENT_IDS[stage])
+    }
+    if (columns.has('status')) {
+      fields.push('status')
+      insertBindings.push(status)
+    }
+    if ((columns.has('notes') || columns.has('internal_notes')) && options.notes !== undefined) {
+      fields.push(columns.has('notes') ? 'notes' : 'internal_notes')
+      insertBindings.push(options.notes)
+    }
+    if (artifactColumn && options.artifactId !== undefined) {
+      fields.push(artifactColumn)
+      insertBindings.push(options.artifactId)
+    }
+    if (options.approved && columns.has('approved_at')) fields.push('approved_at')
+    if (options.approved && columns.has('completed_at')) fields.push('completed_at')
+    if (columns.has('version')) {
+      fields.push('version')
+      insertBindings.push(1)
+    }
+    if (columns.has('created_at')) fields.push('created_at')
+    if (columns.has('updated_at')) fields.push('updated_at')
+    const placeholders = fields.map((field) => {
+      if ((field === 'approved_at' || field === 'completed_at' || field === 'created_at' || field === 'updated_at')) return "datetime('now')"
+      return '?'
+    })
+    await db.prepare(`
+      INSERT INTO ingredient_research_pipeline_status (${fields.join(', ')})
+      VALUES (${placeholders.join(', ')})
+    `).bind(...insertBindings).run()
+  }
+
+  return await db.prepare(`
+    SELECT
+      ${researchPipelineStatusSelect(columns)}
+    FROM ingredient_research_pipeline_status
+    WHERE ingredient_id = ?
+      AND stage = ?
+  `).bind(ingredientId, stage).first<ResearchPipelineStatusRow>()
+}
+
+function defaultResearchPipelineStatus(ingredientId: number, stage: ResearchPipelineStage): ResearchPipelineStatusRow {
+  return {
+    ingredient_id: ingredientId,
+    stage,
+    agent_id: RESEARCH_PIPELINE_STAGE_AGENT_IDS[stage],
+    status: 'not_started',
+    notes: null,
+    artifact_id: null,
+    approved_at: null,
+    completed_at: null,
+    created_at: null,
+    updated_at: null,
+    version: null,
+  }
+}
+
+function groupArtifactsByStage(artifacts: ResearchArtifactRow[]): Map<string, ResearchArtifactRow[]> {
+  const grouped = new Map<string, ResearchArtifactRow[]>()
+  for (const artifact of artifacts) {
+    const list = grouped.get(artifact.stage) ?? []
+    list.push(artifact)
+    grouped.set(artifact.stage, list)
+  }
+  return grouped
+}
+
+function createKnowledgeSlugBase(value: string): string {
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/\u00e4/g, 'ae')
+    .replace(/\u00f6/g, 'oe')
+    .replace(/\u00fc/g, 'ue')
+    .replace(/\u00df/g, 'ss')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .replace(/-{2,}/g, '-')
+  return normalized || 'research-artikel'
+}
+
+async function uniqueKnowledgeDraftSlug(db: D1Database, base: string, linkedSlug: string | null): Promise<ValidationResult<string>> {
+  const slug = createKnowledgeSlugBase(base)
+  if (linkedSlug) return { ok: true, value: linkedSlug }
+  const existing = await getKnowledgeArticleRow(db, slug)
+  if (!existing) return { ok: true, value: slug }
+  return validationError('Knowledge article slug already exists', 409)
+}
+
+function knowledgeSourcesFromResearchSources(sources: IngredientResearchSourceRow[]): KnowledgeArticleSourceInput[] {
+  const values: KnowledgeArticleSourceInput[] = []
+  for (const source of sources) {
+    if (!source.source_url) continue
+    try {
+      const parsed = new URL(source.source_url)
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') continue
+    } catch {
+      continue
+    }
+    const label = source.source_title ?? source.organization ?? source.doi ?? source.pubmed_id ?? source.source_url
+    values.push({ label, url: source.source_url, sort_order: values.length })
+  }
+  return values
 }
 
 function evidenceQualityToGrade(value: string | null): EvidenceGrade | null {
@@ -11641,6 +12164,585 @@ admin.delete('/dose-recommendations/:id', async (c) => {
   })
 
   return c.json({ ok: true, recommendation })
+})
+
+// GET /api/admin/research-pipeline?q=&category=&stage=&status= (admin only)
+admin.get('/research-pipeline', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const tableCheck = await requireResearchPipelineTables(c.env.DB)
+  if (!tableCheck.ok) return c.json({ error: tableCheck.error }, tableCheck.status ?? 409)
+
+  const q = c.req.query('q')?.trim() ?? ''
+  const category = c.req.query('category')?.trim() ?? ''
+  const stageFilter = c.req.query('stage')?.trim()
+  const statusFilter = c.req.query('status')?.trim()
+  const stage = stageFilter ? researchPipelineStage(stageFilter) : null
+  if (stageFilter && !stage) return c.json({ error: `stage must be one of ${RESEARCH_PIPELINE_STAGES.join(', ')}` }, 400)
+  const pipelineStatus = statusFilter ? researchPipelineStatus(statusFilter) : null
+  const artifactStatus = statusFilter ? enumValue(statusFilter, RESEARCH_ARTIFACT_STATUSES) : null
+  if (statusFilter && !pipelineStatus && !artifactStatus) {
+    return c.json({ error: `status must be one of ${[...RESEARCH_PIPELINE_STATUSES, ...RESEARCH_ARTIFACT_STATUSES].join(', ')}` }, 400)
+  }
+
+  const where: string[] = []
+  const bindings: Array<string | number> = []
+  if (q) {
+    const like = `%${q}%`
+    where.push('(i.name LIKE ? OR COALESCE(i.category, \'\') LIKE ?)')
+    bindings.push(like, like)
+  }
+  if (category) {
+    where.push('COALESCE(i.category, \'\') = ?')
+    bindings.push(category)
+  } else {
+    where.push(`COALESCE(i.category, '') IN (${RESEARCH_PIPELINE_DEFAULT_CATEGORIES.map(() => '?').join(', ')})`)
+    bindings.push(...RESEARCH_PIPELINE_DEFAULT_CATEGORIES)
+  }
+  const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''
+
+  const { results: ingredientRows } = await c.env.DB.prepare(`
+    SELECT
+      i.id AS ingredient_id,
+      i.name,
+      i.category,
+      i.unit,
+      i.description,
+      COALESCE(source_counts.source_count, 0) AS source_count,
+      COALESCE(artifact_counts.artifact_count, 0) AS artifact_count
+    FROM ingredients i
+    LEFT JOIN (
+      SELECT ingredient_id, COUNT(*) AS source_count
+      FROM ingredient_research_sources
+      GROUP BY ingredient_id
+    ) source_counts ON source_counts.ingredient_id = i.id
+    LEFT JOIN (
+      SELECT ingredient_id, COUNT(*) AS artifact_count
+      FROM research_pipeline_artifacts
+      GROUP BY ingredient_id
+    ) artifact_counts ON artifact_counts.ingredient_id = i.id
+    ${whereSql}
+    ORDER BY COALESCE(i.category, '') ASC, i.name ASC, i.id ASC
+  `).bind(...bindings).all<ResearchPipelineIngredientRow>()
+
+  const ingredients = ingredientRows ?? []
+  const ingredientIds = ingredients.map((ingredient) => ingredient.ingredient_id)
+  const statusColumns = await getTableColumns(c.env.DB, 'ingredient_research_pipeline_status')
+  const artifactColumns = await getTableColumns(c.env.DB, 'research_pipeline_artifacts')
+  const pipelineRows: ResearchPipelineStatusRow[] = []
+  const artifactRows: ResearchArtifactRow[] = []
+  if (ingredientIds.length > 0) {
+    const placeholders = ingredientIds.map(() => '?').join(',')
+    const { results: statuses } = await c.env.DB.prepare(`
+      SELECT
+        ${researchPipelineStatusSelect(statusColumns)}
+      FROM ingredient_research_pipeline_status
+      WHERE ingredient_id IN (${placeholders})
+      ORDER BY ingredient_id ASC, stage ASC
+    `).bind(...ingredientIds).all<ResearchPipelineStatusRow>()
+    pipelineRows.push(...(statuses ?? []))
+
+    const { results: artifacts } = await c.env.DB.prepare(`
+      SELECT
+        ${researchArtifactSelect(artifactColumns)}
+      FROM research_pipeline_artifacts
+      WHERE ingredient_id IN (${placeholders})
+      ORDER BY ingredient_id ASC, stage ASC, COALESCE(updated_at, created_at) DESC, id DESC
+    `).bind(...ingredientIds).all<ResearchArtifactRow>()
+    artifactRows.push(...(artifacts ?? []))
+  }
+
+  const statusesByIngredient = new Map<number, ResearchPipelineStatusRow[]>()
+  for (const row of pipelineRows) {
+    const list = statusesByIngredient.get(row.ingredient_id) ?? []
+    list.push(row)
+    statusesByIngredient.set(row.ingredient_id, list)
+  }
+  const artifactsByIngredient = new Map<number, ResearchArtifactRow[]>()
+  for (const row of artifactRows) {
+    const list = artifactsByIngredient.get(row.ingredient_id) ?? []
+    list.push(row)
+    artifactsByIngredient.set(row.ingredient_id, list)
+  }
+
+  const items = ingredients.map((ingredient) => {
+    const statusRows = statusesByIngredient.get(ingredient.ingredient_id) ?? []
+    const artifacts = artifactsByIngredient.get(ingredient.ingredient_id) ?? []
+    const artifactsByStage = groupArtifactsByStage(artifacts)
+    const stages = RESEARCH_PIPELINE_STAGES.map((stageName) => {
+      const existing = statusRows.find((row) => researchPipelineStage(row.stage) === stageName) ?? defaultResearchPipelineStatus(ingredient.ingredient_id, stageName)
+      const latestArtifact = artifactsByStage.get(existing.stage)?.[0] ?? artifactsByStage.get(stageName)?.[0] ?? null
+      return {
+        ...existing,
+        latest_artifact: latestArtifact,
+        artifact_count: artifactsByStage.get(existing.stage)?.length ?? artifactsByStage.get(stageName)?.length ?? 0,
+      }
+    }).filter((stageRow) => !stage || researchPipelineStage(stageRow.stage) === stage)
+    return { ...ingredient, stages }
+  }).filter((item) => {
+    if (!pipelineStatus && !artifactStatus) return true
+    return item.stages.some((stageRow) => {
+      const statusMatches = pipelineStatus ? stageRow.status === pipelineStatus : false
+      const artifactMatches = artifactStatus ? stageRow.latest_artifact?.status === artifactStatus : false
+      return statusMatches || artifactMatches
+    })
+  })
+
+  return c.json({ ingredients: items, items, total: items.length, stages: RESEARCH_PIPELINE_STAGES })
+})
+
+// GET /api/admin/research-pipeline/:ingredientId (admin only)
+admin.get('/research-pipeline/:ingredientId', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const tableCheck = await requireResearchPipelineTables(c.env.DB)
+  if (!tableCheck.ok) return c.json({ error: tableCheck.error }, tableCheck.status ?? 409)
+
+  const ingredientId = parsePositiveId(c.req.param('ingredientId'))
+  if (ingredientId === null) return c.json({ error: 'Invalid ingredient id' }, 400)
+  const ingredient = await c.env.DB.prepare(`
+    SELECT id, name, category, unit, description, external_url
+    FROM ingredients
+    WHERE id = ?
+  `).bind(ingredientId).first()
+  if (!ingredient) return c.json({ error: 'Ingredient not found' }, 404)
+
+  const statusColumns = await getTableColumns(c.env.DB, 'ingredient_research_pipeline_status')
+  const artifactColumns = await getTableColumns(c.env.DB, 'research_pipeline_artifacts')
+  const { results: statusRows } = await c.env.DB.prepare(`
+    SELECT
+      ${researchPipelineStatusSelect(statusColumns)}
+    FROM ingredient_research_pipeline_status
+    WHERE ingredient_id = ?
+    ORDER BY stage ASC
+  `).bind(ingredientId).all<ResearchPipelineStatusRow>()
+  const { results: artifacts } = await c.env.DB.prepare(`
+    SELECT
+      ${researchArtifactSelect(artifactColumns)}
+    FROM research_pipeline_artifacts
+    WHERE ingredient_id = ?
+    ORDER BY stage ASC, COALESCE(updated_at, created_at) DESC, id DESC
+  `).bind(ingredientId).all<ResearchArtifactRow>()
+  const artifactRows = artifacts ?? []
+  const artifactIds = artifactRows.map((artifact) => artifact.id)
+  const links = await loadResearchArtifactSourceLinks(c.env.DB, artifactIds)
+  const sources = await loadResearchSourcesForIngredient(c.env.DB, ingredientId)
+  const sourcesById = new Map(sources.map((source) => [source.id, source]))
+  const sourceIdsByArtifact = new Map<number, number[]>()
+  for (const link of links) {
+    const list = sourceIdsByArtifact.get(link.artifact_id) ?? []
+    list.push(link.source_id)
+    sourceIdsByArtifact.set(link.artifact_id, list)
+  }
+  const enrichedArtifacts = artifactRows.map((artifact) => {
+    const sourceIds = sourceIdsByArtifact.get(artifact.id) ?? []
+    return {
+      ...artifact,
+      source_ids: sourceIds,
+      sources: sourceIds.map((sourceId) => sourcesById.get(sourceId)).filter((source): source is IngredientResearchSourceRow => Boolean(source)),
+    }
+  })
+  const artifactsByStage = groupArtifactsByStage(artifactRows)
+  const stages = RESEARCH_PIPELINE_STAGES.map((stageName) => {
+    const existing = (statusRows ?? []).find((row) => researchPipelineStage(row.stage) === stageName) ?? defaultResearchPipelineStatus(ingredientId, stageName)
+    const stageArtifacts = artifactsByStage.get(existing.stage) ?? artifactsByStage.get(stageName) ?? []
+    return {
+      ...existing,
+      latest_artifact: stageArtifacts[0] ?? null,
+      artifact_count: stageArtifacts.length,
+    }
+  })
+
+  return c.json({
+    ingredient,
+    stages,
+    artifacts: enrichedArtifacts,
+    sources,
+    research_sources: sources,
+  })
+})
+
+// POST /api/admin/research-pipeline/:ingredientId/artifacts (admin only)
+admin.post('/research-pipeline/:ingredientId/artifacts', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const tableCheck = await requireResearchPipelineTables(c.env.DB)
+  if (!tableCheck.ok) return c.json({ error: tableCheck.error }, tableCheck.status ?? 409)
+
+  const ingredientId = parsePositiveId(c.req.param('ingredientId'))
+  if (ingredientId === null) return c.json({ error: 'Invalid ingredient id' }, 400)
+  if (!(await ingredientExists(c.env.DB, ingredientId))) return c.json({ error: 'Ingredient not found' }, 404)
+
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const validation = validateResearchArtifactPayload(body, null)
+  if (!validation.ok) return c.json({ error: validation.error }, validation.status ?? 400)
+  const data = validation.value
+  if (data.source_ids) {
+    const sourceValidation = await validateResearchArtifactSourceIds(c.env.DB, ingredientId, data.source_ids)
+    if (!sourceValidation.ok) return c.json({ error: sourceValidation.error }, sourceValidation.status ?? 400)
+  }
+
+  const columns = await getTableColumns(c.env.DB, 'research_pipeline_artifacts')
+  const fields: string[] = ['ingredient_id', 'stage', 'title']
+  const bindings: Array<string | number | null> = [ingredientId, data.stage, data.title]
+  if (columns.has('agent_id')) {
+    fields.push('agent_id')
+    bindings.push(data.agent_id)
+  }
+  if (columns.has('summary')) {
+    fields.push('summary')
+    bindings.push(data.summary)
+  }
+  if (columns.has('content_markdown')) {
+    fields.push('content_markdown')
+    bindings.push(data.content_markdown)
+  }
+  if (columns.has('content_json')) {
+    fields.push('content_json')
+    bindings.push(data.content_json)
+  }
+  if (columns.has('evidence_strength')) {
+    fields.push('evidence_strength')
+    bindings.push(data.evidence_strength)
+  }
+  if (columns.has('status')) {
+    fields.push('status')
+    bindings.push(data.status)
+  }
+  if (data.status === 'approved' && columns.has('approved_at')) fields.push('approved_at')
+  if (columns.has('version')) {
+    fields.push('version')
+    bindings.push(1)
+  }
+  if (columns.has('created_at')) fields.push('created_at')
+  if (columns.has('updated_at')) fields.push('updated_at')
+  const placeholders = fields.map((field) => {
+    if (field === 'approved_at' || field === 'created_at' || field === 'updated_at') return "datetime('now')"
+    return '?'
+  })
+  const result = await c.env.DB.prepare(`
+    INSERT INTO research_pipeline_artifacts (${fields.join(', ')})
+    VALUES (${placeholders.join(', ')})
+  `).bind(...bindings).run()
+
+  const artifactId = result.meta.last_row_id as number
+  await syncResearchArtifactSources(c.env.DB, artifactId, data.source_ids)
+  const stageStatus = await upsertResearchPipelineStageStatus(c.env.DB, ingredientId, data.stage, stageStatusFromArtifactStatus(data.status), {
+    artifactId,
+    approved: data.status === 'approved',
+  })
+  const artifact = await getResearchArtifactRow(c.env.DB, artifactId)
+  await logAdminAction(c, {
+    action: 'create_research_pipeline_artifact',
+    entity_type: 'research_artifact',
+    entity_id: artifactId,
+    changes: { artifact, stage_status: stageStatus, source_ids: data.source_ids ?? [] },
+  })
+
+  return c.json({ artifact, stage_status: stageStatus }, 201)
+})
+
+// PUT /api/admin/research-pipeline/artifacts/:artifactId (admin only)
+admin.put('/research-pipeline/artifacts/:artifactId', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const tableCheck = await requireResearchPipelineTables(c.env.DB)
+  if (!tableCheck.ok) return c.json({ error: tableCheck.error }, tableCheck.status ?? 409)
+
+  const artifactId = parsePositiveId(c.req.param('artifactId'))
+  if (artifactId === null) return c.json({ error: 'Invalid artifact id' }, 400)
+  const existing = await getResearchArtifactRow(c.env.DB, artifactId)
+  if (!existing) return c.json({ error: 'Artifact not found' }, 404)
+
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  const validation = validateResearchArtifactPayload(body, existing)
+  if (!validation.ok) return c.json({ error: validation.error }, validation.status ?? 400)
+  const data = validation.value
+  if (data.source_ids) {
+    const sourceValidation = await validateResearchArtifactSourceIds(c.env.DB, existing.ingredient_id, data.source_ids)
+    if (!sourceValidation.ok) return c.json({ error: sourceValidation.error }, sourceValidation.status ?? 400)
+  }
+
+  const columns = await getTableColumns(c.env.DB, 'research_pipeline_artifacts')
+  const lock = validateOptimisticLock(columns.has('version'), existing.version, requestVersion(c, body))
+  if (!lock.ok) return c.json({ error: lock.error, current_version: existing.version }, 409)
+  const fields: Array<[string, string | number | null]> = [
+    ['stage', data.stage],
+    ['title', data.title],
+  ]
+  if (columns.has('agent_id')) fields.push(['agent_id', data.agent_id])
+  if (columns.has('summary')) fields.push(['summary', data.summary])
+  if (columns.has('content_markdown')) fields.push(['content_markdown', data.content_markdown])
+  if (columns.has('content_json')) fields.push(['content_json', data.content_json])
+  if (columns.has('evidence_strength')) fields.push(['evidence_strength', data.evidence_strength])
+  if (columns.has('status')) fields.push(['status', data.status])
+  const setClauses = fields.map(([key]) => `${key} = ?`)
+  if (data.status === 'approved' && columns.has('approved_at')) setClauses.push("approved_at = COALESCE(approved_at, datetime('now'))")
+  if (columns.has('updated_at')) setClauses.push("updated_at = datetime('now')")
+  if (lock.value.enforce) setClauses.push('version = COALESCE(version, 0) + 1')
+  const bindingsForUpdate: Array<string | number | null> = [...fields.map(([, value]) => value), artifactId]
+  if (lock.value.enforce && lock.value.expectedVersion !== null) bindingsForUpdate.push(lock.value.expectedVersion)
+  const updateResult = await c.env.DB.prepare(`
+    UPDATE research_pipeline_artifacts
+    SET ${setClauses.join(',\n      ')}
+    WHERE ${lock.value.enforce ? 'id = ? AND version = ?' : 'id = ?'}
+  `).bind(...bindingsForUpdate).run()
+  if (lock.value.enforce && d1ChangeCount(updateResult) === 0) {
+    const current = await getResearchArtifactRow(c.env.DB, artifactId)
+    return c.json({ error: 'Version conflict', current_version: current?.version ?? existing.version }, 409)
+  }
+
+  await syncResearchArtifactSources(c.env.DB, artifactId, data.source_ids)
+  const stageStatus = await upsertResearchPipelineStageStatus(c.env.DB, existing.ingredient_id, data.stage, stageStatusFromArtifactStatus(data.status), {
+    artifactId,
+    approved: data.status === 'approved',
+  })
+  const artifact = await getResearchArtifactRow(c.env.DB, artifactId)
+  await logAdminAction(c, {
+    action: 'update_research_pipeline_artifact',
+    entity_type: 'research_artifact',
+    entity_id: artifactId,
+    changes: { before: existing, after: artifact, stage_status: stageStatus, source_ids: data.source_ids },
+  })
+
+  return c.json({ artifact, stage_status: stageStatus })
+})
+
+// POST /api/admin/research-pipeline/artifacts/:artifactId/status (admin only)
+admin.post('/research-pipeline/artifacts/:artifactId/status', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const tableCheck = await requireResearchPipelineTables(c.env.DB)
+  if (!tableCheck.ok) return c.json({ error: tableCheck.error }, tableCheck.status ?? 409)
+
+  const artifactId = parsePositiveId(c.req.param('artifactId'))
+  if (artifactId === null) return c.json({ error: 'Invalid artifact id' }, 400)
+  const existing = await getResearchArtifactRow(c.env.DB, artifactId)
+  if (!existing) return c.json({ error: 'Artifact not found' }, 404)
+  const stage = researchPipelineStage(existing.stage)
+  if (!stage) return c.json({ error: 'Artifact stage is not supported by the pipeline' }, 409)
+
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+  const status = enumValue(body.status, RESEARCH_ARTIFACT_STATUSES)
+  if (!status) return c.json({ error: `status must be one of ${RESEARCH_ARTIFACT_STATUSES.join(', ')}` }, 400)
+  const notes = optionalText(hasOwnKey(body, 'notes') ? body.notes : body.note)
+
+  const columns = await getTableColumns(c.env.DB, 'research_pipeline_artifacts')
+  const lock = validateOptimisticLock(columns.has('version'), existing.version, requestVersion(c, body))
+  if (!lock.ok) return c.json({ error: lock.error, current_version: existing.version }, 409)
+  const setClauses = ['status = ?']
+  if (status === 'approved' && columns.has('approved_at')) setClauses.push("approved_at = COALESCE(approved_at, datetime('now'))")
+  if (columns.has('updated_at')) setClauses.push("updated_at = datetime('now')")
+  if (lock.value.enforce) setClauses.push('version = COALESCE(version, 0) + 1')
+  const bindingsForUpdate: Array<string | number> = [status, artifactId]
+  if (lock.value.enforce && lock.value.expectedVersion !== null) bindingsForUpdate.push(lock.value.expectedVersion)
+  const updateResult = await c.env.DB.prepare(`
+    UPDATE research_pipeline_artifacts
+    SET ${setClauses.join(',\n      ')}
+    WHERE ${lock.value.enforce ? 'id = ? AND version = ?' : 'id = ?'}
+  `).bind(...bindingsForUpdate).run()
+  if (lock.value.enforce && d1ChangeCount(updateResult) === 0) {
+    const current = await getResearchArtifactRow(c.env.DB, artifactId)
+    return c.json({ error: 'Version conflict', current_version: current?.version ?? existing.version }, 409)
+  }
+
+  const stageStatus = await upsertResearchPipelineStageStatus(c.env.DB, existing.ingredient_id, stage, stageStatusFromArtifactStatus(status), {
+    artifactId,
+    notes: notes ?? undefined,
+    approved: status === 'approved',
+  })
+  const artifact = await getResearchArtifactRow(c.env.DB, artifactId)
+  await logAdminAction(c, {
+    action: 'update_research_pipeline_artifact_status',
+    entity_type: 'research_artifact',
+    entity_id: artifactId,
+    changes: { before: existing, after: artifact, notes, stage_status: stageStatus },
+  })
+
+  return c.json({ artifact, stage_status: stageStatus })
+})
+
+// PUT /api/admin/research-pipeline/:ingredientId/stages/:stage/status (admin only)
+admin.put('/research-pipeline/:ingredientId/stages/:stage/status', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const tableCheck = await requireResearchPipelineTables(c.env.DB)
+  if (!tableCheck.ok) return c.json({ error: tableCheck.error }, tableCheck.status ?? 409)
+
+  const ingredientId = parsePositiveId(c.req.param('ingredientId'))
+  if (ingredientId === null) return c.json({ error: 'Invalid ingredient id' }, 400)
+  if (!(await ingredientExists(c.env.DB, ingredientId))) return c.json({ error: 'Ingredient not found' }, 404)
+  const stage = researchPipelineStage(c.req.param('stage'))
+  if (!stage) return c.json({ error: `stage must be one of ${RESEARCH_PIPELINE_STAGES.join(', ')}` }, 400)
+
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+  const status = researchPipelineStatus(body.status)
+  if (!status) return c.json({ error: `status must be one of ${RESEARCH_PIPELINE_STATUSES.join(', ')}` }, 400)
+  const notes = optionalText(hasOwnKey(body, 'notes') ? body.notes : body.note)
+  const statusColumns = await getTableColumns(c.env.DB, 'ingredient_research_pipeline_status')
+  const existing = await c.env.DB.prepare(`
+    SELECT
+      ${researchPipelineStatusSelect(statusColumns)}
+    FROM ingredient_research_pipeline_status
+    WHERE ingredient_id = ?
+      AND stage = ?
+  `).bind(ingredientId, stage).first<ResearchPipelineStatusRow>()
+  const lock = validateOptimisticLock(statusColumns.has('version') && existing !== null, existing?.version ?? null, requestVersion(c, body))
+  if (!lock.ok) return c.json({ error: lock.error, current_version: existing?.version ?? null }, 409)
+  const stageStatus = await upsertResearchPipelineStageStatus(c.env.DB, ingredientId, stage, status, {
+    notes,
+    approved: status === 'approved',
+    expectedVersion: lock.value.expectedVersion,
+  })
+  if (lock.value.enforce && stageStatus === null) {
+    const current = await c.env.DB.prepare(`
+      SELECT
+        ${researchPipelineStatusSelect(statusColumns)}
+      FROM ingredient_research_pipeline_status
+      WHERE ingredient_id = ?
+        AND stage = ?
+    `).bind(ingredientId, stage).first<ResearchPipelineStatusRow>()
+    return c.json({ error: 'Version conflict', current_version: current?.version ?? existing?.version ?? null }, 409)
+  }
+  await logAdminAction(c, {
+    action: 'update_research_pipeline_stage_status',
+    entity_type: 'ingredient_research_pipeline_status',
+    entity_id: ingredientId,
+    changes: { before: existing, after: stageStatus, stage, status, notes },
+  })
+
+  return c.json({ stage_status: stageStatus })
+})
+
+// POST /api/admin/research-pipeline/artifacts/:artifactId/knowledge-draft (admin only)
+admin.post('/research-pipeline/artifacts/:artifactId/knowledge-draft', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+
+  const tableCheck = await requireResearchPipelineTables(c.env.DB)
+  if (!tableCheck.ok) return c.json({ error: tableCheck.error }, tableCheck.status ?? 409)
+
+  const artifactId = parsePositiveId(c.req.param('artifactId'))
+  if (artifactId === null) return c.json({ error: 'Invalid artifact id' }, 400)
+  const artifact = await getResearchArtifactRow(c.env.DB, artifactId)
+  if (!artifact) return c.json({ error: 'Artifact not found' }, 404)
+  if (researchPipelineStage(artifact.stage) !== 'writer') return c.json({ error: 'Knowledge drafts can only be created from writer stage artifacts' }, 400)
+  if (artifact.status !== 'approved') {
+    return c.json({ error: 'Knowledge drafts can only be created from approved writer artifacts' }, 409)
+  }
+
+  let body: Record<string, unknown> = {}
+  if (c.req.header('Content-Type')?.toLowerCase().includes('application/json')) {
+    try {
+      body = await c.req.json()
+    } catch {
+      return c.json({ error: 'Invalid JSON' }, 400)
+    }
+  }
+
+  const articleColumns = await getTableColumns(c.env.DB, 'knowledge_articles')
+  const artifactColumns = await getTableColumns(c.env.DB, 'research_pipeline_artifacts')
+  if (artifact.knowledge_article_slug) {
+    const article = await getKnowledgeArticleRow(c.env.DB, artifact.knowledge_article_slug)
+    if (article) return c.json({ ok: true, article, artifact, slug: article.slug })
+  }
+
+  const ingredient = await c.env.DB.prepare('SELECT id, name FROM ingredients WHERE id = ?')
+    .bind(artifact.ingredient_id)
+    .first<{ id: number; name: string }>()
+  if (!ingredient) return c.json({ error: 'Ingredient not found' }, 404)
+
+  const explicitSlug = hasOwnKey(body, 'slug') ? normalizeSlug(body.slug) : null
+  if (hasOwnKey(body, 'slug') && !explicitSlug) return c.json({ error: 'Invalid slug' }, 400)
+  const slugValidation = await uniqueKnowledgeDraftSlug(c.env.DB, explicitSlug ?? `${ingredient.name} ${artifact.title}`, artifact.knowledge_article_slug)
+  if (!slugValidation.ok) return c.json({ error: slugValidation.error }, slugValidation.status ?? 409)
+  const slug = slugValidation.value
+  const existingArticle = await getKnowledgeArticleRow(c.env.DB, slug)
+  if (existingArticle && artifact.knowledge_article_slug !== slug) return c.json({ error: 'Knowledge article slug already exists' }, 409)
+
+  const title = optionalText(body.title) ?? artifact.title
+  const plainContent = (artifact.content_markdown ?? '').replace(/[#*_`>\-[\]()]/g, ' ').replace(/\s+/g, ' ').trim()
+  const summary = (artifact.summary ?? plainContent.slice(0, 280)) || title
+  const linkedSources = await loadResearchArtifactSourceLinks(c.env.DB, [artifactId])
+  const allSources = await loadResearchSourcesForIngredient(c.env.DB, artifact.ingredient_id)
+  const linkedSourceIdSet = new Set(linkedSources.map((link) => link.source_id))
+  const articleSources = knowledgeSourcesFromResearchSources(allSources.filter((source) => linkedSourceIdSet.has(source.id)))
+  const sourcesJson = serializeKnowledgeSourcesFromStructured(articleSources)
+
+  const fields: string[] = ['slug', 'title', 'summary', 'body', 'status', 'sources_json']
+  const bindings: Array<string | number | null> = [slug, title, summary, artifact.content_markdown ?? '', 'draft', sourcesJson]
+  if (articleColumns.has('reviewed_at')) {
+    fields.push('reviewed_at')
+    bindings.push(null)
+  }
+  if (articleColumns.has('conclusion')) {
+    fields.push('conclusion')
+    bindings.push(null)
+  }
+  if (articleColumns.has('version')) {
+    fields.push('version')
+    bindings.push(1)
+  }
+  if (articleColumns.has('created_at')) fields.push('created_at')
+  if (articleColumns.has('updated_at')) fields.push('updated_at')
+  const placeholders = fields.map((field) => {
+    if (field === 'created_at' || field === 'updated_at') return "datetime('now')"
+    return '?'
+  })
+  await c.env.DB.prepare(`
+    INSERT INTO knowledge_articles (${fields.join(', ')})
+    VALUES (${placeholders.join(', ')})
+  `).bind(...bindings).run()
+  await syncKnowledgeArticleRelations(c.env.DB, slug, articleSources, [artifact.ingredient_id])
+
+  if (artifactColumns.has('knowledge_article_slug')) {
+    await c.env.DB.prepare(`
+      UPDATE research_pipeline_artifacts
+      SET knowledge_article_slug = ?,
+          ${artifactColumns.has('updated_at') ? "updated_at = datetime('now')," : ''}
+          ${artifactColumns.has('version') ? 'version = COALESCE(version, 0) + 1' : 'id = id'}
+      WHERE id = ?
+    `).bind(slug, artifactId).run()
+  }
+
+  const article = await getKnowledgeArticleRow(c.env.DB, slug)
+  const updatedArtifact = await getResearchArtifactRow(c.env.DB, artifactId)
+  await logAdminAction(c, {
+    action: 'create_research_pipeline_knowledge_draft',
+    entity_type: 'knowledge_article',
+    entity_id: artifactId,
+    changes: { slug, artifact_id: artifactId, ingredient_id: artifact.ingredient_id },
+  })
+
+  return c.json({ ok: true, article, artifact: updatedArtifact, slug }, 201)
 })
 
 // GET /api/admin/ingredient-research?q=&category=&status= (admin only)

@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
+  Microscope,
   Package,
   Settings,
   Users,
@@ -51,6 +52,7 @@ const NAV_GROUPS: NavigationGroup[] = [
       { label: 'Benutzerverwaltung', path: '/administrator/users', icon: <Users size={15} /> },
       { label: 'Shop-Domains', path: '/administrator/shop-domains', icon: <ExternalLink size={15} /> },
       { label: 'Verwaltung', path: '/administrator/management', icon: <Settings size={15} /> },
+      { label: 'Forschung', path: '/administrator/research', icon: <Microscope size={15} /> },
       { label: 'Rechtliches', path: '/administrator/legal', icon: <FileText size={15} /> },
     ],
   },
@@ -66,6 +68,7 @@ const ROUTE_TITLES: Record<string, { group: string; title: string }> = {
   '/administrator/users': { group: 'Verwaltung', title: 'Benutzerverwaltung' },
   '/administrator/shop-domains': { group: 'Verwaltung', title: 'Shop-Domains' },
   '/administrator/management': { group: 'Verwaltung', title: 'Verwaltung' },
+  '/administrator/research': { group: 'Verwaltung', title: 'Forschung' },
   '/administrator/legal': { group: 'Verwaltung', title: 'Rechtliches' },
   '/administrator/profile': { group: 'Konto', title: 'Admin-Profil' },
 };

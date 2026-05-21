@@ -25,6 +25,7 @@ const adminShell = read('frontend/src/pages/administrator/AdministratorShell.tsx
 const dashboardPage = read('frontend/src/pages/administrator/AdministratorDashboardPage.tsx')
 const ingredientsPage = read('frontend/src/pages/administrator/AdministratorIngredientsPage.tsx')
 const managementPage = read('frontend/src/pages/administrator/AdministratorManagementPage.tsx')
+const researchPage = assertFile('frontend/src/pages/administrator/AdministratorResearchPage.tsx')
 const productsPage = read('frontend/src/pages/administrator/AdministratorProductsPage.tsx')
 const productCreatePage = assertFile('frontend/src/pages/administrator/AdministratorProductCreatePage.tsx')
 const productDetailPage = read('frontend/src/pages/administrator/AdministratorProductDetailPage.tsx')
@@ -47,6 +48,7 @@ const migration77 = assertFile('d1-migrations/0077_signup_referral_attribution.s
 const migration79 = assertFile('d1-migrations/0079_managed_list_serving_units_cleanup.sql')
 const migration80 = assertFile('d1-migrations/0080_managed_list_serving_units_cleanup_hardening.sql')
 const migration81 = assertFile('d1-migrations/0081_managed_intake_timings.sql')
+const migration83 = assertFile('d1-migrations/0083_research_pipeline.sql')
 const adminNavGroupsBlock = extractRequiredBlock(
   adminShell,
   /const NAV_GROUPS:[\s\S]*?\n\];/,
@@ -136,6 +138,107 @@ assert.match(
   adminShell,
   /title: 'Verwaltung'[\s\S]*label: 'Verwaltung'[\s\S]*path: '\/administrator\/management'/,
   'Admin sidebar must keep management under a coherent Verwaltung group',
+)
+assert.match(
+  adminShell,
+  /title: 'Verwaltung'[\s\S]*label: 'Forschung'[\s\S]*path: '\/administrator\/research'/,
+  'Admin sidebar must expose Forschung under Verwaltung',
+)
+assert.match(
+  adminShell,
+  /'\/administrator\/research': \{ group: 'Verwaltung', title: 'Forschung' \}/,
+  'Admin shell route titles must include /administrator/research as Forschung',
+)
+assert.match(
+  appSource,
+  /const AdministratorResearchPage = lazy\(\(\) => import\('\.\/pages\/administrator\/AdministratorResearchPage'\)\)/,
+  'App routes must lazy-load the admin Forschung page',
+)
+assert.match(
+  appSource,
+  /<Route path="research" element=\{<AdministratorResearchPage \/>\} \/>/,
+  'App routes must include /administrator/research',
+)
+for (const endpoint of [
+  '/admin/research-pipeline',
+  '/admin/research-pipeline/${ingredientId}',
+  '/admin/research-pipeline/${ingredientId}/artifacts',
+  '/admin/research-pipeline/artifacts/${artifactId}',
+  '/admin/research-pipeline/artifacts/${artifactId}/status',
+  '/admin/research-pipeline/${ingredientId}/stages/${stage}/status',
+  '/admin/research-pipeline/artifacts/${artifactId}/knowledge-draft',
+]) {
+  assert.match(adminApi, new RegExp(escapeRegExp(endpoint)), `Frontend admin API must include ${endpoint}`)
+}
+for (const clientMarker of [
+  'AdminResearchPipelineOverviewItem',
+  'AdminResearchPipelineDetail',
+  'AdminResearchPipelineArtifactPayload',
+  'AdminResearchPipelineStatusPayload',
+  'getAdminResearchPipelineOverview',
+  'getAdminResearchPipelineDetail',
+  'createAdminResearchPipelineArtifact',
+  'updateAdminResearchPipelineArtifact',
+  'setAdminResearchPipelineArtifactStatus',
+  'setAdminResearchPipelineStageStatus',
+  'createAdminResearchPipelineKnowledgeDraft',
+  'research_pipeline_migration_marker',
+]) {
+  assert.match(adminApi, new RegExp(clientMarker), `Frontend admin API must expose research pipeline marker ${clientMarker}`)
+}
+for (const backendMarker of [
+  "admin.get('/research-pipeline'",
+  "admin.get('/research-pipeline/:ingredientId'",
+  "admin.post('/research-pipeline/:ingredientId/artifacts'",
+  "admin.put('/research-pipeline/artifacts/:artifactId'",
+  "admin.post('/research-pipeline/artifacts/:artifactId/status'",
+  "admin.put('/research-pipeline/:ingredientId/stages/:stage/status'",
+  "admin.post('/research-pipeline/artifacts/:artifactId/knowledge-draft'",
+]) {
+  assert.match(adminModule, new RegExp(escapeRegExp(backendMarker)), `Admin backend must expose Forschung endpoint marker ${backendMarker}`)
+}
+for (const migrationMarker of [
+  'CREATE TABLE IF NOT EXISTS research_pipeline_artifacts',
+  'CREATE TABLE IF NOT EXISTS ingredient_research_pipeline_status',
+  'CREATE TABLE IF NOT EXISTS research_artifact_sources',
+  "'nutrient-research-analyst'",
+  "'clinical-study-interpreter'",
+  "'german-health-science-writer'",
+  "'STARK', 'MODERAT', 'SCHWACH', 'UNZUREICHEND'",
+]) {
+  assert.match(migration83, new RegExp(escapeRegExp(migrationMarker)), `Migration 0083 must include Forschung marker ${migrationMarker}`)
+}
+for (const pageMarker of [
+  'Research-Durchlauf',
+  'Interpreter-Durchlauf',
+  'Writer-Durchlauf',
+  'Wissensdatenbank-Entwurf erstellen',
+  'createIngredientResearchSource',
+  'createAdminResearchPipelineKnowledgeDraft',
+  'admin-research-workspace',
+  'admin-research-source-checklist',
+]) {
+  assert.match(researchPage, new RegExp(escapeRegExp(pageMarker)), `Admin Forschung page must include ${pageMarker}`)
+}
+assert.doesNotMatch(
+  researchPage,
+  /<option value="other">Sonstige Quelle<\/option>/,
+  'Admin Forschung source creation must not offer unsupported source_kind=other',
+)
+assert.match(
+  adminApi,
+  /note: toTextOrNull\(raw\.notes \?\? raw\.note \?\? raw\.status_note\)/,
+  'Admin research pipeline stage parser must read stage notes from notes as well as note/status_note',
+)
+assert.match(
+  researchPage,
+  /if \(selectedArtifactId !== null\) \{[\s\S]*setSelectedArtifactId\(firstStageArtifact\?\.id \?\? null\);[\s\S]*setArtifactDraft\(firstStageArtifact \? artifactToDraft\(firstStageArtifact\) : emptyArtifactDraft\(activeStage\)\);[\s\S]*return;[\s\S]*}\s*[\r\n]+\s*const draftIsEmpty =[\s\S]*setArtifactDraft\(\(previous\) => \(\s*previous\.stage === activeStage \? previous : emptyArtifactDraft\(activeStage\)\s*\)\);/,
+  'Admin Forschung must preserve an unsaved new artifact draft while detail refreshes mutate source data',
+)
+assert.match(
+  adminModule,
+  /if \(artifact\.status !== 'approved'\) \{[\s\S]*Knowledge drafts can only be created from approved writer artifacts[\s\S]*409/,
+  'Admin backend must reject knowledge draft creation from non-approved writer artifacts',
 )
 assert.match(
   migration81,

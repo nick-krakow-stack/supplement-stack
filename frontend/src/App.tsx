@@ -45,6 +45,7 @@ const AdministratorSettingsPage = lazy(() => import('./pages/administrator/Admin
 const AdministratorLegalPage = lazy(() => import('./pages/administrator/AdministratorLegalPage'));
 const AdministratorProfilePage = lazy(() => import('./pages/administrator/AdministratorProfilePage'));
 const AdministratorManagementPage = lazy(() => import('./pages/administrator/AdministratorManagementPage'));
+const AdministratorResearchPage = lazy(() => import('./pages/administrator/AdministratorResearchPage'));
 
 function NotFoundPage() {
   return (
@@ -108,6 +109,7 @@ export default function App() {
             <Route path="users" element={<AdministratorUsersPage />} />
             <Route path="shop-domains" element={<AdministratorShopDomainsPage />} />
             <Route path="management" element={<AdministratorManagementPage />} />
+            <Route path="research" element={<AdministratorResearchPage />} />
             <Route path="legal" element={<AdministratorLegalPage />} />
             <Route path="profile" element={<AdministratorProfilePage />} />
             <Route path="rankings" element={<AdministratorRankingsPage />} />

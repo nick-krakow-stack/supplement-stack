@@ -1788,6 +1788,257 @@
   background: rgba(47, 111, 216, 0.08) !important;
 }
 
+.admin-research-workspace {
+  display: grid;
+  gap: 16px;
+}
+
+.admin-research-layout {
+  display: grid;
+  grid-template-columns: minmax(300px, 370px) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.admin-research-overview-list {
+  display: grid;
+  max-height: calc(100dvh - 300px);
+  min-height: 240px;
+  overflow-y: auto;
+  border-top: 1px solid var(--admin-line);
+}
+
+.admin-research-overview-item {
+  display: grid;
+  width: 100%;
+  gap: 9px;
+  border: 0;
+  border-bottom: 1px solid var(--admin-line);
+  background: transparent;
+  color: var(--admin-ink);
+  padding: 12px 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.admin-research-overview-item:hover,
+.admin-research-overview-item.active {
+  background: var(--admin-bg-sunk);
+}
+
+.admin-research-overview-item.active {
+  box-shadow: inset 3px 0 0 var(--admin-success-ink);
+}
+
+.admin-research-overview-main {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.admin-research-overview-main strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.admin-research-overview-main small,
+.admin-research-stage-card small,
+.admin-research-source-row small {
+  color: var(--admin-ink-3);
+  font-size: 11.5px;
+  line-height: 1.25;
+}
+
+.admin-research-mini-stages,
+.admin-research-stage-meta,
+.admin-research-status-actions,
+.admin-research-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.admin-research-detail {
+  display: grid;
+  min-width: 0;
+  gap: 14px;
+}
+
+.admin-research-stage-checklist {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.admin-research-stage-card {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 9px;
+  min-height: 118px;
+  border: 1px solid var(--admin-line);
+  border-radius: var(--admin-r-md);
+  background: var(--admin-bg);
+  color: var(--admin-ink);
+  padding: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.admin-research-stage-card:hover,
+.admin-research-stage-card.active {
+  border-color: var(--admin-line-strong);
+  background: var(--admin-bg-sunk);
+}
+
+.admin-research-stage-card.active {
+  box-shadow: inset 0 0 0 1px var(--admin-success-ink);
+}
+
+.admin-research-stage-icon {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--admin-success-soft);
+  color: var(--admin-success-ink);
+}
+
+.admin-research-stage-card strong {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 13px;
+}
+
+.admin-research-stage-meta {
+  margin-top: 9px;
+}
+
+.admin-research-editor-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 370px);
+  gap: 14px;
+  align-items: start;
+}
+
+.admin-research-artifact-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.admin-research-artifact-tabs button {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--admin-line);
+  border-radius: var(--admin-r-sm);
+  background: var(--admin-bg);
+  color: var(--admin-ink);
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.admin-research-artifact-tabs button.active,
+.admin-research-artifact-tabs button:hover {
+  border-color: var(--admin-line-strong);
+  background: var(--admin-bg-sunk);
+}
+
+.admin-research-artifact-tabs button span:not(.admin-badge) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-research-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.admin-research-form-grid label,
+.admin-research-output-field {
+  display: grid;
+  gap: 5px;
+  color: var(--admin-ink-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.admin-research-output-field {
+  margin-top: 12px;
+}
+
+.admin-research-output-field textarea {
+  min-height: 220px;
+  resize: vertical;
+  font-family: var(--admin-mono);
+  font-size: 12.5px;
+}
+
+.admin-research-actions,
+.admin-research-status-actions {
+  margin-top: 12px;
+}
+
+.admin-research-source-checklist {
+  display: grid;
+  max-height: 330px;
+  overflow-y: auto;
+  border: 1px solid var(--admin-line);
+  border-radius: var(--admin-r-md);
+}
+
+.admin-research-source-row {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 9px;
+  border-bottom: 1px solid var(--admin-line);
+  padding: 10px;
+}
+
+.admin-research-source-row:last-child {
+  border-bottom: 0;
+}
+
+.admin-research-source-row input {
+  margin-top: 2px;
+  accent-color: var(--admin-success-ink);
+}
+
+.admin-research-source-row strong {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 12.5px;
+}
+
+.admin-research-source-create {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  border-top: 1px solid var(--admin-line);
+  padding-top: 14px;
+}
+
+.admin-research-source-create h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.admin-success {
+  border: 1px solid var(--admin-success-soft);
+  border-radius: var(--admin-r-md);
+  background: var(--admin-success-soft);
+  color: var(--admin-success-ink);
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
 .admin-product-overview-card .admin-card-pad,
 .admin-product-shop-card .admin-card-pad {
   display: grid;
@@ -2170,6 +2421,15 @@
   .admin-dashboard-primary,
   .admin-dashboard-modules {
     grid-template-columns: 1fr;
+  }
+
+  .admin-research-layout,
+  .admin-research-editor-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-research-overview-list {
+    max-height: none;
   }
 
   .admin-row-2 {
@@ -2691,8 +2951,18 @@
   }
 
   .admin-task-status-grid,
-  .admin-forms-grid-inner {
+  .admin-forms-grid-inner,
+  .admin-research-stage-checklist,
+  .admin-research-form-grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-research-stage-card {
+    min-height: 72px;
+  }
+
+  .admin-research-source-checklist {
+    max-height: none;
   }
 
   .admin-task-status-card {
