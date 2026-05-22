@@ -49,6 +49,7 @@ const migration79 = assertFile('d1-migrations/0079_managed_list_serving_units_cl
 const migration80 = assertFile('d1-migrations/0080_managed_list_serving_units_cleanup_hardening.sql')
 const migration81 = assertFile('d1-migrations/0081_managed_intake_timings.sql')
 const migration83 = assertFile('d1-migrations/0083_research_pipeline.sql')
+const migration84 = assertFile('d1-migrations/0084_research_source_inventory_fields.sql')
 const adminNavGroupsBlock = extractRequiredBlock(
   adminShell,
   /const NAV_GROUPS:[\s\S]*?\n\];/,
@@ -208,6 +209,53 @@ for (const migrationMarker of [
 ]) {
   assert.match(migration83, new RegExp(escapeRegExp(migrationMarker)), `Migration 0083 must include Forschung marker ${migrationMarker}`)
 }
+for (const migrationMarker of [
+  'ALTER TABLE ingredient_research_sources ADD COLUMN source_language TEXT',
+  'ALTER TABLE ingredient_research_sources ADD COLUMN pdf_url TEXT',
+  "pdf_status TEXT CHECK (pdf_status IS NULL OR pdf_status IN ('not_checked', 'available', 'stored', 'paywalled', 'unavailable'))",
+  "stage2_priority TEXT CHECK (stage2_priority IS NULL OR stage2_priority IN ('niedrig', 'mittel', 'hoch'))",
+  'ALTER TABLE ingredient_research_sources ADD COLUMN meta_summary TEXT',
+]) {
+  assert.match(migration84, new RegExp(escapeRegExp(migrationMarker)), `Migration 0084 must include source inventory marker ${migrationMarker}`)
+}
+for (const sourceField of [
+  'source_language',
+  'source_country',
+  'publication_year',
+  'pdf_url',
+  'pdf_storage_key',
+  'pdf_status',
+  'archive_url',
+  'topic_summary',
+  'study_design',
+  'participant_count',
+  'duration_summary',
+  'meta_summary',
+  'stage2_priority',
+]) {
+  assert.match(adminModule, new RegExp(escapeRegExp(sourceField)), `Admin backend must preserve ${sourceField}`)
+  assert.match(adminApi, new RegExp(escapeRegExp(sourceField)), `Admin frontend API must normalize ${sourceField}`)
+}
+assert.match(
+  adminApi,
+  /const inventoryFields:[\s\S]*?stage2_priority[\s\S]*?hasOwnKey\(payload, field\)/,
+  'Admin frontend API must omit missing source inventory fields so older edit flows preserve them',
+)
+assert.match(
+  adminModule,
+  /RESEARCH_SOURCE_STAGE2_PRIORITIES = \['niedrig', 'mittel', 'hoch'\]/,
+  'Admin backend must persist German Stage-2 priority values',
+)
+assert.doesNotMatch(
+  adminModule,
+  /RESEARCH_SOURCE_STAGE2_PRIORITIES = \['low', 'medium', 'high'\]/,
+  'Admin backend must not persist English Stage-2 priority values',
+)
+assert.match(
+  adminModule,
+  /pdf_status = stored or available requires pdf_storage_key, pdf_url, or archive_url/,
+  'Admin backend must reject retrievable PDF statuses without a retrievable reference',
+)
 for (const pageMarker of [
   'Research-Durchlauf',
   'Interpreter-Durchlauf',
@@ -217,9 +265,27 @@ for (const pageMarker of [
   'createAdminResearchPipelineKnowledgeDraft',
   'admin-research-workspace',
   'admin-research-source-checklist',
+  'PDF-Status',
+  'Thema/Zweck',
+  'Metadaten',
 ]) {
   assert.match(researchPage, new RegExp(escapeRegExp(pageMarker)), `Admin Forschung page must include ${pageMarker}`)
 }
+assert.match(
+  researchPage,
+  /stage2_priority: 'mittel'/,
+  'Admin Forschung source draft must default Stage-2 priority to mittel',
+)
+assert.match(
+  researchPage,
+  /<option value="hoch">\{STAGE2_PRIORITY_LABELS\.hoch\}<\/option>[\s\S]*<option value="mittel">\{STAGE2_PRIORITY_LABELS\.mittel\}<\/option>[\s\S]*<option value="niedrig">\{STAGE2_PRIORITY_LABELS\.niedrig\}<\/option>/,
+  'Admin Forschung source form must use German Stage-2 priority option values',
+)
+assert.doesNotMatch(
+  researchPage,
+  /<option value="(?:low|medium|high)">/,
+  'Admin Forschung source form must not expose English Stage-2 priority option values',
+)
 assert.doesNotMatch(
   researchPage,
   /<option value="other">Sonstige Quelle<\/option>/,

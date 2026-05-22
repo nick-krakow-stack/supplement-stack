@@ -2016,6 +2016,30 @@
   font-size: 12.5px;
 }
 
+.admin-research-source-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.admin-research-source-heading em {
+  color: var(--admin-ink-3);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.admin-research-source-topic,
+.admin-research-source-meta {
+  display: block;
+  margin-top: 3px;
+}
+
+.admin-research-source-topic {
+  color: var(--admin-ink-2);
+}
+
 .admin-research-source-create {
   display: grid;
   gap: 10px;

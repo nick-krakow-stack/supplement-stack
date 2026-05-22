@@ -388,6 +388,21 @@ export interface AdminIngredientResearchSource {
   source_kind: string;
   source_title: string | null;
   source_url: string | null;
+  source_language: string | null;
+  source_country: string | null;
+  publication_year: number | null;
+  authors: string | null;
+  journal: string | null;
+  pdf_url: string | null;
+  pdf_storage_key: string | null;
+  pdf_status: string | null;
+  archive_url: string | null;
+  topic_summary: string | null;
+  study_design: string | null;
+  participant_count: number | null;
+  duration_summary: string | null;
+  meta_summary: string | null;
+  stage2_priority: string | null;
   organization: string | null;
   country: string | null;
   region: string | null;
@@ -545,6 +560,21 @@ export interface AdminIngredientResearchSourcePayload {
   source_kind?: string | null;
   source_title?: string | null;
   source_url?: string | null;
+  source_language?: string | null;
+  source_country?: string | null;
+  publication_year?: number | null;
+  authors?: string | null;
+  journal?: string | null;
+  pdf_url?: string | null;
+  pdf_storage_key?: string | null;
+  pdf_status?: string | null;
+  archive_url?: string | null;
+  topic_summary?: string | null;
+  study_design?: string | null;
+  participant_count?: number | null;
+  duration_summary?: string | null;
+  meta_summary?: string | null;
+  stage2_priority?: string | null;
   organization?: string | null;
   country?: string | null;
   region?: string | null;
@@ -1284,6 +1314,10 @@ function toIntOrNull(value: unknown): number | null {
     return Number.isFinite(parsed) ? parsed : null;
   }
   return null;
+}
+
+function hasOwnKey(data: object, key: PropertyKey): boolean {
+  return Object.prototype.hasOwnProperty.call(data, key);
 }
 
 function withIfMatch(
@@ -2060,6 +2094,21 @@ function parseIngredientResearchSource(raw: Record<string, unknown>): AdminIngre
     source_kind: normalizeSourceType(raw.source_kind ?? raw.source_type),
     source_title: toTextOrNull(raw.source_title ?? raw.title ?? raw.name ?? raw.label),
     source_url: toTextOrNull(raw.source_url ?? raw.url ?? raw.link ?? raw.reference_url),
+    source_language: toTextOrNull(raw.source_language ?? raw.language),
+    source_country: toTextOrNull(raw.source_country),
+    publication_year: toIntOrNull(raw.publication_year ?? raw.year),
+    authors: toTextOrNull(raw.authors),
+    journal: toTextOrNull(raw.journal),
+    pdf_url: toTextOrNull(raw.pdf_url),
+    pdf_storage_key: toTextOrNull(raw.pdf_storage_key),
+    pdf_status: toTextOrNull(raw.pdf_status),
+    archive_url: toTextOrNull(raw.archive_url),
+    topic_summary: toTextOrNull(raw.topic_summary),
+    study_design: toTextOrNull(raw.study_design),
+    participant_count: toIntOrNull(raw.participant_count),
+    duration_summary: toTextOrNull(raw.duration_summary),
+    meta_summary: toTextOrNull(raw.meta_summary),
+    stage2_priority: toTextOrNull(raw.stage2_priority),
     organization: toTextOrNull(raw.organization),
     country: toTextOrNull(raw.country),
     region: toTextOrNull(raw.region),
@@ -2448,7 +2497,38 @@ function normalizeStatusPayload(payload: AdminIngredientResearchStatusPayload): 
 }
 
 function normalizeSourcePayload(payload: AdminIngredientResearchSourcePayload): AdminIngredientResearchSourcePayload {
-  return {
+  type InventoryTextField =
+    | 'source_language'
+    | 'source_country'
+    | 'authors'
+    | 'journal'
+    | 'pdf_url'
+    | 'pdf_storage_key'
+    | 'pdf_status'
+    | 'archive_url'
+    | 'topic_summary'
+    | 'study_design'
+    | 'duration_summary'
+    | 'meta_summary'
+    | 'stage2_priority';
+  const inventoryFields: readonly (InventoryTextField | 'publication_year' | 'participant_count')[] = [
+    'source_language',
+    'source_country',
+    'publication_year',
+    'authors',
+    'journal',
+    'pdf_url',
+    'pdf_storage_key',
+    'pdf_status',
+    'archive_url',
+    'topic_summary',
+    'study_design',
+    'participant_count',
+    'duration_summary',
+    'meta_summary',
+    'stage2_priority',
+  ] as const;
+  const normalized: AdminIngredientResearchSourcePayload = {
     ingredient_id: toIntOrNull(payload.ingredient_id),
     source_kind: toTextOrNull(payload.source_kind),
     source_title: toTextOrNull(payload.source_title),
@@ -2481,6 +2561,17 @@ function normalizeSourcePayload(payload: AdminIngredientResearchSourcePayload): 
     evidence_grade: toTextOrNull(payload.evidence_grade)?.toUpperCase() ?? null,
     version: payload.version ?? null,
   };
+  for (const field of inventoryFields) {
+    if (!hasOwnKey(payload, field)) continue;
+    if (field === 'publication_year') {
+      normalized.publication_year = toIntOrNull(payload.publication_year);
+    } else if (field === 'participant_count') {
+      normalized.participant_count = toIntOrNull(payload.participant_count);
+    } else {
+      normalized[field as InventoryTextField] = toTextOrNull(payload[field]);
+    }
+  }
+  return normalized;
 }
 
 function normalizeNutrientReferenceValuePayload(

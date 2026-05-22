@@ -52,6 +52,21 @@ type SourceDraft = {
   source_kind: string;
   source_title: string;
   source_url: string;
+  source_language: string;
+  source_country: string;
+  publication_year: string;
+  authors: string;
+  journal: string;
+  pdf_url: string;
+  pdf_storage_key: string;
+  pdf_status: string;
+  archive_url: string;
+  topic_summary: string;
+  study_design: string;
+  participant_count: string;
+  duration_summary: string;
+  meta_summary: string;
+  stage2_priority: string;
   organization: string;
   evidence_quality: string;
   evidence_grade: string;
@@ -85,19 +100,47 @@ const STATUS_OPTIONS: Array<{ value: AdminResearchPipelineStatus; label: string;
   { value: 'not_started', label: 'Nicht gestartet', tone: 'neutral' },
   { value: 'draft', label: 'Entwurf', tone: 'neutral' },
   { value: 'pending', label: 'Offen', tone: 'neutral' },
-  { value: 'pending_review', label: 'Zur Pruefung', tone: 'info' },
+  { value: 'pending_review', label: 'Zur Prüfung', tone: 'info' },
   { value: 'in_progress', label: 'In Arbeit', tone: 'info' },
-  { value: 'needs_changes', label: 'Aenderungen', tone: 'warn' },
+  { value: 'needs_changes', label: 'Änderungen', tone: 'warn' },
   { value: 'approved', label: 'Freigegeben', tone: 'ok' },
   { value: 'archived', label: 'Archiviert', tone: 'neutral' },
 ];
 
 const EVIDENCE_STRENGTHS = ['STARK', 'MODERAT', 'SCHWACH', 'UNZUREICHEND'] as const;
+const PDF_STATUS_LABELS: Record<string, string> = {
+  not_checked: 'PDF nicht geprüft',
+  available: 'PDF verfügbar',
+  stored: 'PDF gespeichert',
+  paywalled: 'Paywall',
+  unavailable: 'PDF nicht verfügbar',
+};
+
+const STAGE2_PRIORITY_LABELS: Record<string, string> = {
+  hoch: 'Hoch',
+  mittel: 'Mittel',
+  niedrig: 'Niedrig',
+};
 
 const EMPTY_SOURCE_DRAFT: SourceDraft = {
   source_kind: 'study',
   source_title: '',
   source_url: '',
+  source_language: '',
+  source_country: '',
+  publication_year: '',
+  authors: '',
+  journal: '',
+  pdf_url: '',
+  pdf_storage_key: '',
+  pdf_status: 'not_checked',
+  archive_url: '',
+  topic_summary: '',
+  study_design: '',
+  participant_count: '',
+  duration_summary: '',
+  meta_summary: '',
+  stage2_priority: 'mittel',
   organization: '',
   evidence_quality: '',
   evidence_grade: '',
@@ -164,12 +207,74 @@ function sourceTitle(source: AdminIngredientResearchSource): string {
   return source.source_title || source.source_url || `Quelle #${source.id}`;
 }
 
+function sourceKindLabel(sourceKind?: string | null): string {
+  if (sourceKind === 'study') return 'Studie';
+  if (sourceKind === 'official') return 'Offizielle Quelle';
+  return sourceKind || 'Quelle';
+}
+
+function sourceEvidenceLabel(source: AdminIngredientResearchSource): string {
+  return source.evidence_quality || source.evidence_grade || 'ohne Einstufung';
+}
+
+function sourcePdfStatusLabel(source: AdminIngredientResearchSource): string {
+  if (source.pdf_status) return PDF_STATUS_LABELS[source.pdf_status] ?? source.pdf_status;
+  if (source.pdf_storage_key) return 'PDF gespeichert';
+  if (source.pdf_url) return 'PDF-Link';
+  return 'PDF nicht geprüft';
+}
+
+function compactJoin(values: Array<string | null | undefined>): string {
+  return values.map((value) => value?.trim()).filter((value): value is string => Boolean(value)).join(' · ');
+}
+
+function sourceLinkSummary(source: AdminIngredientResearchSource): string {
+  const parts = [
+    source.source_url ? 'Link' : null,
+    source.archive_url ? 'Archiv' : null,
+    sourcePdfStatusLabel(source),
+  ];
+  return compactJoin(parts) || 'kein Link';
+}
+
+function sourceMetaSummary(source: AdminIngredientResearchSource): string {
+  const country = source.source_country || source.country;
+  const duration = source.duration_summary || source.duration;
+  return compactJoin([
+    source.publication_year ? String(source.publication_year) : null,
+    source.source_language,
+    country,
+    source.study_design || source.study_type,
+    source.participant_count ? `${source.participant_count} Teilnehmende` : null,
+    duration,
+    source.population,
+    source.outcome ? `Endpunkt: ${source.outcome}` : null,
+  ]);
+}
+
 function sourceDraftToPayload(form: SourceDraft): AdminIngredientResearchSourcePayload {
   const sourceKind = form.source_kind.trim().toLowerCase();
+  const publicationYear = form.publication_year.trim() ? Number(form.publication_year) : null;
+  const participantCount = form.participant_count.trim() ? Number(form.participant_count) : null;
   return {
     source_kind: sourceKind === 'official' ? 'official' : 'study',
     source_title: form.source_title.trim() || null,
     source_url: form.source_url.trim() || null,
+    source_language: form.source_language.trim() || null,
+    source_country: form.source_country.trim() || null,
+    publication_year: Number.isFinite(publicationYear) ? publicationYear : null,
+    authors: form.authors.trim() || null,
+    journal: form.journal.trim() || null,
+    pdf_url: form.pdf_url.trim() || null,
+    pdf_storage_key: form.pdf_storage_key.trim() || null,
+    pdf_status: form.pdf_status.trim() || null,
+    archive_url: form.archive_url.trim() || null,
+    topic_summary: form.topic_summary.trim() || null,
+    study_design: form.study_design.trim() || null,
+    participant_count: Number.isFinite(participantCount) ? participantCount : null,
+    duration_summary: form.duration_summary.trim() || null,
+    meta_summary: form.meta_summary.trim() || null,
+    stage2_priority: form.stage2_priority.trim() || null,
     organization: form.organization.trim() || null,
     evidence_quality: form.evidence_quality.trim() || null,
     evidence_grade: form.evidence_grade.trim().toUpperCase() || null,
@@ -433,7 +538,7 @@ export default function AdministratorResearchPage() {
       const created = await createIngredientResearchSource(selectedIngredientId, sourceDraftToPayload(sourceDraft));
       setDetail((previous) => previous ? { ...previous, sources: [...previous.sources, created] } : previous);
       setSourceDraft(EMPTY_SOURCE_DRAFT);
-      setMessage('Quelle hinzugefuegt.');
+      setMessage('Quelle hinzugefügt.');
     } catch (errorValue) {
       setError(getErrorMessage(errorValue));
     } finally {
@@ -450,7 +555,7 @@ export default function AdministratorResearchPage() {
     <div className="admin-research-workspace">
       <AdminPageHeader
         title="Forschung"
-        subtitle="Agent-Ausgaben landen zuerst hier, werden redaktionell freigegeben und erst danach explizit in die Wissensdatenbank ueberfuehrt."
+        subtitle="Agent-Ausgaben landen zuerst hier, werden redaktionell freigegeben und erst danach explizit in die Wissensdatenbank überführt."
         meta={
           <div className="flex flex-wrap gap-2">
             <AdminBadge tone="info">{overviewCounts.vitamins} Vitamine</AdminBadge>
@@ -537,7 +642,7 @@ export default function AdministratorResearchPage() {
             <>
               <AdminCard
                 title={detail?.ingredient.name ?? selectedItem.ingredient.name}
-                subtitle="Dreistufige Freigabe vor Wissensdatenbank und Veroeffentlichung."
+                subtitle="Dreistufige Freigabe vor Wissensdatenbank und Veröffentlichung."
               >
                 <div className="admin-card-pad">
                   {detailLoading ? (
@@ -579,7 +684,7 @@ export default function AdministratorResearchPage() {
               <div className="admin-research-editor-grid">
                 <AdminCard
                   title={`${stageConfig(activeStage).label}: Agent-Ausgabe`}
-                  subtitle="Output einfuegen, Evidenzstaerke setzen, Quellen anhaken und zur Pruefung speichern."
+                  subtitle="Output einfügen, Evidenzstärke setzen, Quellen anhaken und zur Prüfung speichern."
                   actions={
                     <AdminButton size="sm" variant="ghost" onClick={() => handleSelectArtifact(null)}>
                       <Plus size={14} />
@@ -602,7 +707,7 @@ export default function AdministratorResearchPage() {
                         </button>
                       ))}
                       {activeStageArtifacts.length === 0 ? (
-                        <span className="admin-muted text-xs">Noch kein Artefakt fuer diesen Durchlauf.</span>
+                        <span className="admin-muted text-xs">Noch kein Artefakt für diesen Durchlauf.</span>
                       ) : null}
                     </div>
 
@@ -617,7 +722,7 @@ export default function AdministratorResearchPage() {
                         />
                       </label>
                       <label>
-                        <span>Evidenzstaerke</span>
+                        <span>Evidenzstärke</span>
                         <select
                           className="admin-select"
                           value={artifactDraft.evidence_strength}
@@ -638,7 +743,7 @@ export default function AdministratorResearchPage() {
                         value={artifactDraft.content}
                         onChange={(event) => updateArtifactDraft('content', event.target.value)}
                         rows={18}
-                        placeholder="Markdown, strukturierte Analyse oder Writer-Text einfuegen"
+                        placeholder="Markdown, strukturierte Analyse oder Writer-Text einfügen"
                       />
                     </label>
 
@@ -683,7 +788,7 @@ export default function AdministratorResearchPage() {
                           disabled={statusSaving !== null}
                         >
                           <XCircle size={14} />
-                          Aenderungen anfordern
+                          Änderungen anfordern
                         </AdminButton>
                         <AdminButton
                           size="sm"
@@ -709,7 +814,7 @@ export default function AdministratorResearchPage() {
                   </div>
                 </AdminCard>
 
-                <AdminCard title="Quellen" subtitle="Bestehende Research-Quellen an das Artefakt haengen.">
+                <AdminCard title="Quellen" subtitle="Bestehende Research-Quellen an das Artefakt hängen.">
                   <div className="admin-card-pad">
                     <div className="admin-research-source-checklist">
                       {detail?.sources.length ? (
@@ -721,9 +826,16 @@ export default function AdministratorResearchPage() {
                               onChange={(event) => handleToggleSource(source.id, event.target.checked)}
                             />
                             <span>
-                              <strong>{sourceTitle(source)}</strong>
-                              <small>
-                                {source.source_kind || 'Quelle'} · {source.evidence_quality || source.evidence_grade || 'ohne Einstufung'}
+                              <span className="admin-research-source-heading">
+                                <strong>{sourceTitle(source)}</strong>
+                                <em>{sourceKindLabel(source.source_kind)}</em>
+                              </span>
+                              <small>{sourceEvidenceLabel(source)} · {sourceLinkSummary(source)}</small>
+                              {source.topic_summary ? (
+                                <small className="admin-research-source-topic">Thema/Zweck: {source.topic_summary}</small>
+                              ) : null}
+                              <small className="admin-research-source-meta">
+                                {compactJoin([sourceMetaSummary(source), source.meta_summary]) || 'Metadaten offen'}
                               </small>
                             </span>
                           </label>
@@ -734,7 +846,7 @@ export default function AdministratorResearchPage() {
                     </div>
 
                     <div className="admin-research-source-create">
-                      <h3>Quelle hinzufuegen</h3>
+                      <h3>Quelle hinzufügen</h3>
                       <div className="admin-research-form-grid">
                         <label>
                           <span>Art</span>
@@ -764,6 +876,44 @@ export default function AdministratorResearchPage() {
                           />
                         </label>
                         <label>
+                          <span>PDF-Status</span>
+                          <select
+                            className="admin-select"
+                            value={sourceDraft.pdf_status}
+                            onChange={(event) => updateSourceDraft('pdf_status', event.target.value)}
+                          >
+                            <option value="not_checked">Nicht geprüft</option>
+                            <option value="available">Verfügbar</option>
+                            <option value="stored">Gespeichert</option>
+                            <option value="paywalled">Paywall</option>
+                            <option value="unavailable">Nicht verfügbar</option>
+                          </select>
+                        </label>
+                        <label>
+                          <span>PDF-Link</span>
+                          <input
+                            className="admin-input"
+                            value={sourceDraft.pdf_url}
+                            onChange={(event) => updateSourceDraft('pdf_url', event.target.value)}
+                          />
+                        </label>
+                        <label>
+                          <span>Archiv-Link</span>
+                          <input
+                            className="admin-input"
+                            value={sourceDraft.archive_url}
+                            onChange={(event) => updateSourceDraft('archive_url', event.target.value)}
+                          />
+                        </label>
+                        <label>
+                          <span>PDF-Speicherkey</span>
+                          <input
+                            className="admin-input"
+                            value={sourceDraft.pdf_storage_key}
+                            onChange={(event) => updateSourceDraft('pdf_storage_key', event.target.value)}
+                          />
+                        </label>
+                        <label>
                           <span>Organisation</span>
                           <input
                             className="admin-input"
@@ -772,7 +922,86 @@ export default function AdministratorResearchPage() {
                           />
                         </label>
                         <label>
-                          <span>Qualitaet</span>
+                          <span>Land</span>
+                          <input
+                            className="admin-input"
+                            value={sourceDraft.source_country}
+                            onChange={(event) => updateSourceDraft('source_country', event.target.value)}
+                          />
+                        </label>
+                        <label>
+                          <span>Sprache</span>
+                          <input
+                            className="admin-input"
+                            value={sourceDraft.source_language}
+                            onChange={(event) => updateSourceDraft('source_language', event.target.value)}
+                          />
+                        </label>
+                        <label>
+                          <span>Jahr</span>
+                          <input
+                            className="admin-input"
+                            type="number"
+                            value={sourceDraft.publication_year}
+                            onChange={(event) => updateSourceDraft('publication_year', event.target.value)}
+                          />
+                        </label>
+                        <label>
+                          <span>Autoren</span>
+                          <input
+                            className="admin-input"
+                            value={sourceDraft.authors}
+                            onChange={(event) => updateSourceDraft('authors', event.target.value)}
+                          />
+                        </label>
+                        <label>
+                          <span>Journal</span>
+                          <input
+                            className="admin-input"
+                            value={sourceDraft.journal}
+                            onChange={(event) => updateSourceDraft('journal', event.target.value)}
+                          />
+                        </label>
+                        <label>
+                          <span>Studiendesign</span>
+                          <input
+                            className="admin-input"
+                            value={sourceDraft.study_design}
+                            onChange={(event) => updateSourceDraft('study_design', event.target.value)}
+                          />
+                        </label>
+                        <label>
+                          <span>Teilnehmende</span>
+                          <input
+                            className="admin-input"
+                            type="number"
+                            min="0"
+                            value={sourceDraft.participant_count}
+                            onChange={(event) => updateSourceDraft('participant_count', event.target.value)}
+                          />
+                        </label>
+                        <label>
+                          <span>Dauer</span>
+                          <input
+                            className="admin-input"
+                            value={sourceDraft.duration_summary}
+                            onChange={(event) => updateSourceDraft('duration_summary', event.target.value)}
+                          />
+                        </label>
+                        <label>
+                          <span>Stage-2-Priorität</span>
+                          <select
+                            className="admin-select"
+                            value={sourceDraft.stage2_priority}
+                            onChange={(event) => updateSourceDraft('stage2_priority', event.target.value)}
+                          >
+                            <option value="hoch">{STAGE2_PRIORITY_LABELS.hoch}</option>
+                            <option value="mittel">{STAGE2_PRIORITY_LABELS.mittel}</option>
+                            <option value="niedrig">{STAGE2_PRIORITY_LABELS.niedrig}</option>
+                          </select>
+                        </label>
+                        <label>
+                          <span>Qualität</span>
                           <input
                             className="admin-input"
                             value={sourceDraft.evidence_quality}
@@ -804,6 +1033,24 @@ export default function AdministratorResearchPage() {
                           />
                         </label>
                       </div>
+                      <label className="admin-research-output-field">
+                        <span>Thema/Zweck</span>
+                        <textarea
+                          className="admin-input"
+                          value={sourceDraft.topic_summary}
+                          onChange={(event) => updateSourceDraft('topic_summary', event.target.value)}
+                          rows={2}
+                        />
+                      </label>
+                      <label className="admin-research-output-field">
+                        <span>Metadaten</span>
+                        <textarea
+                          className="admin-input"
+                          value={sourceDraft.meta_summary}
+                          onChange={(event) => updateSourceDraft('meta_summary', event.target.value)}
+                          rows={2}
+                        />
+                      </label>
                       <label className="admin-research-output-field">
                         <span>Notiz</span>
                         <textarea

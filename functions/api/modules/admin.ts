@@ -420,6 +420,8 @@ type AuditLogDbRow = {
 type IngredientResearchStatusValue = typeof INGREDIENT_RESEARCH_STATUSES[number]
 type IngredientCalculationStatusValue = typeof INGREDIENT_CALCULATION_STATUSES[number]
 type IngredientResearchSourceKind = typeof INGREDIENT_RESEARCH_SOURCE_KINDS[number]
+type ResearchSourcePdfStatus = typeof RESEARCH_SOURCE_PDF_STATUSES[number]
+type ResearchSourceStage2Priority = typeof RESEARCH_SOURCE_STAGE2_PRIORITIES[number]
 type IngredientWarningSeverity = typeof INGREDIENT_WARNING_SEVERITIES[number]
 type EvidenceGrade = typeof EVIDENCE_GRADES[number]
 type NutrientReferenceValueKind = typeof NUTRIENT_REFERENCE_VALUE_KINDS[number]
@@ -478,6 +480,21 @@ type IngredientResearchSourceRow = {
   finding: string | null
   source_title: string | null
   source_url: string | null
+  source_language: string | null
+  source_country: string | null
+  publication_year: number | null
+  authors: string | null
+  journal: string | null
+  pdf_url: string | null
+  pdf_storage_key: string | null
+  pdf_status: ResearchSourcePdfStatus | null
+  archive_url: string | null
+  topic_summary: string | null
+  study_design: string | null
+  participant_count: number | null
+  duration_summary: string | null
+  meta_summary: string | null
+  stage2_priority: ResearchSourceStage2Priority | null
   doi: string | null
   pubmed_id: string | null
   notes: string | null
@@ -1029,6 +1046,8 @@ type DoseRecommendationSexFilter = typeof DOSE_RECOMMENDATION_SEX_FILTERS[number
 const INGREDIENT_RESEARCH_STATUSES = ['unreviewed', 'researching', 'needs_review', 'reviewed', 'stale', 'blocked'] as const
 const INGREDIENT_CALCULATION_STATUSES = ['not_started', 'in_progress', 'needs_review', 'ready', 'not_applicable', 'blocked'] as const
 const INGREDIENT_RESEARCH_SOURCE_KINDS = ['official', 'study'] as const
+const RESEARCH_SOURCE_PDF_STATUSES = ['not_checked', 'available', 'stored', 'paywalled', 'unavailable'] as const
+const RESEARCH_SOURCE_STAGE2_PRIORITIES = ['niedrig', 'mittel', 'hoch'] as const
 const INGREDIENT_WARNING_SEVERITIES = ['info', 'caution', 'danger'] as const
 const EVIDENCE_GRADES = ['A', 'B', 'C', 'D', 'F'] as const
 const RESEARCH_PIPELINE_STAGES = ['research', 'interpretation', 'writer'] as const
@@ -3037,6 +3056,29 @@ function ingredientResearchEvidenceSelect(columns: Set<string>, tableAlias = '')
   ].join(',\n      ')
 }
 
+function ingredientResearchInventorySelect(columns: Set<string>, tableAlias = ''): string {
+  const prefix = tableAlias ? `${tableAlias}.` : ''
+  return [
+    'source_language',
+    'source_country',
+    'publication_year',
+    'authors',
+    'journal',
+    'pdf_url',
+    'pdf_storage_key',
+    'pdf_status',
+    'archive_url',
+    'topic_summary',
+    'study_design',
+    'participant_count',
+    'duration_summary',
+    'meta_summary',
+    'stage2_priority',
+  ].map((column) => (
+    columns.has(column) ? `${prefix}${column} AS ${column}` : `NULL AS ${column}`
+  )).join(',\n      ')
+}
+
 function parseEvidenceGradeField(
   body: Record<string, unknown>,
   existing: IngredientResearchSourceRow | null,
@@ -3255,6 +3297,7 @@ async function loadResearchSourcesForIngredient(db: D1Database, ingredientId: nu
       finding,
       source_title,
       source_url,
+      ${ingredientResearchInventorySelect(columns)},
       doi,
       pubmed_id,
       notes,
@@ -5774,6 +5817,7 @@ async function getIngredientResearchSourceRow(db: D1Database, sourceId: number):
       finding,
       source_title,
       source_url,
+      ${ingredientResearchInventorySelect(columns)},
       doi,
       pubmed_id,
       notes,
@@ -5890,6 +5934,15 @@ async function validateIngredientResearchSourcePayload(
     ['duration', 255],
     ['outcome', 1000],
     ['finding', 10000],
+    ['source_language', 64],
+    ['source_country', 100],
+    ['authors', 2000],
+    ['journal', 255],
+    ['pdf_storage_key', 512],
+    ['topic_summary', 2000],
+    ['study_design', 255],
+    ['duration_summary', 255],
+    ['meta_summary', 4000],
     ['doi', 255],
     ['pubmed_id', 100],
     ['notes', 10000],
@@ -5939,8 +5992,20 @@ async function validateIngredientResearchSourcePayload(
   const sourceUrl = normalizeHttpUrlField(body, 'source_url')
   if (!sourceUrl.ok) return sourceUrl
 
+  const pdfUrl = normalizeHttpUrlField(body, 'pdf_url')
+  if (!pdfUrl.ok) return pdfUrl
+
+  const archiveUrl = normalizeHttpUrlField(body, 'archive_url')
+  if (!archiveUrl.ok) return archiveUrl
+
   const sourceDate = optionalDateTextField(body, 'source_date')
   if (!sourceDate.ok) return sourceDate
+
+  const publicationYear = optionalNumberField(body, 'publication_year', { min: 1800, max: 2100, integer: true })
+  if (!publicationYear.ok) return publicationYear
+
+  const participantCount = optionalNumberField(body, 'participant_count', { min: 0, max: 1000000000, integer: true })
+  if (!participantCount.ok) return participantCount
 
   const reviewedAt = optionalDateTextField(body, 'reviewed_at')
   if (!reviewedAt.ok) return reviewedAt
@@ -5956,6 +6021,27 @@ async function validateIngredientResearchSourcePayload(
 
   const evidenceGrade = parseEvidenceGradeField(body, existing)
   if (!evidenceGrade.ok) return evidenceGrade
+
+  const pdfStatus = hasOwnKey(body, 'pdf_status')
+    ? enumValue(body.pdf_status, RESEARCH_SOURCE_PDF_STATUSES)
+    : existing?.pdf_status ?? null
+  if (hasOwnKey(body, 'pdf_status') && body.pdf_status !== null && body.pdf_status !== '' && !pdfStatus) {
+    return validationError(`pdf_status must be one of ${RESEARCH_SOURCE_PDF_STATUSES.join(', ')}`)
+  }
+
+  const finalPdfUrl = pdfUrl.value === undefined ? existing?.pdf_url ?? null : pdfUrl.value
+  const finalArchiveUrl = archiveUrl.value === undefined ? existing?.archive_url ?? null : archiveUrl.value
+  const finalPdfStorageKey = textValues.pdf_storage_key
+  if ((pdfStatus === 'stored' || pdfStatus === 'available') && !finalPdfStorageKey && !finalPdfUrl && !finalArchiveUrl) {
+    return validationError('pdf_status = stored or available requires pdf_storage_key, pdf_url, or archive_url')
+  }
+
+  const stage2Priority = hasOwnKey(body, 'stage2_priority')
+    ? enumValue(body.stage2_priority, RESEARCH_SOURCE_STAGE2_PRIORITIES)
+    : existing?.stage2_priority ?? null
+  if (hasOwnKey(body, 'stage2_priority') && body.stage2_priority !== null && body.stage2_priority !== '' && !stage2Priority) {
+    return validationError(`stage2_priority must be one of ${RESEARCH_SOURCE_STAGE2_PRIORITIES.join(', ')}`)
+  }
 
   const finalDoseMin = doseMin.value === undefined ? existing?.dose_min ?? null : doseMin.value
   const finalDoseMax = doseMax.value === undefined ? existing?.dose_max ?? null : doseMax.value
@@ -5988,6 +6074,21 @@ async function validateIngredientResearchSourcePayload(
       finding: textValues.finding,
       source_title: finalSourceTitle,
       source_url: sourceUrl.value === undefined ? existing?.source_url ?? null : sourceUrl.value,
+      source_language: textValues.source_language,
+      source_country: textValues.source_country,
+      publication_year: publicationYear.value === undefined ? existing?.publication_year ?? null : publicationYear.value,
+      authors: textValues.authors,
+      journal: textValues.journal,
+      pdf_url: finalPdfUrl,
+      pdf_storage_key: finalPdfStorageKey,
+      pdf_status: pdfStatus,
+      archive_url: finalArchiveUrl,
+      topic_summary: textValues.topic_summary,
+      study_design: textValues.study_design,
+      participant_count: participantCount.value === undefined ? existing?.participant_count ?? null : participantCount.value,
+      duration_summary: textValues.duration_summary,
+      meta_summary: textValues.meta_summary,
+      stage2_priority: stage2Priority,
       doi: textValues.doi,
       pubmed_id: textValues.pubmed_id,
       notes: textValues.notes,
@@ -12918,6 +13019,7 @@ admin.get('/ingredient-research/:ingredientId', async (c) => {
       finding,
       source_title,
       source_url,
+      ${ingredientResearchInventorySelect(researchSourceColumns)},
       doi,
       pubmed_id,
       notes,
@@ -13246,6 +13348,25 @@ admin.post('/ingredient-research/:ingredientId/sources', async (c) => {
   if (researchColumns.has('retraction_checked_at')) fields.push(['retraction_checked_at', data.retraction_checked_at])
   if (researchColumns.has('retraction_notice_url')) fields.push(['retraction_notice_url', data.retraction_notice_url])
   if (researchColumns.has('evidence_grade')) fields.push(['evidence_grade', data.evidence_grade])
+  for (const key of [
+    'source_language',
+    'source_country',
+    'publication_year',
+    'authors',
+    'journal',
+    'pdf_url',
+    'pdf_storage_key',
+    'pdf_status',
+    'archive_url',
+    'topic_summary',
+    'study_design',
+    'participant_count',
+    'duration_summary',
+    'meta_summary',
+    'stage2_priority',
+  ] as const) {
+    if (researchColumns.has(key)) fields.push([key, data[key]])
+  }
   const result = await c.env.DB.prepare(`
     INSERT INTO ingredient_research_sources (
       ${fields.map(([key]) => key).join(',\n      ')},
@@ -13328,6 +13449,25 @@ admin.put('/ingredient-research/sources/:sourceId', async (c) => {
   if (researchColumns.has('retraction_checked_at')) fields.push(['retraction_checked_at', data.retraction_checked_at])
   if (researchColumns.has('retraction_notice_url')) fields.push(['retraction_notice_url', data.retraction_notice_url])
   if (researchColumns.has('evidence_grade')) fields.push(['evidence_grade', data.evidence_grade])
+  for (const key of [
+    'source_language',
+    'source_country',
+    'publication_year',
+    'authors',
+    'journal',
+    'pdf_url',
+    'pdf_storage_key',
+    'pdf_status',
+    'archive_url',
+    'topic_summary',
+    'study_design',
+    'participant_count',
+    'duration_summary',
+    'meta_summary',
+    'stage2_priority',
+  ] as const) {
+    if (researchColumns.has(key)) fields.push([key, data[key]])
+  }
   const versionSet = lock.value.enforce ? ', version = COALESCE(version, 0) + 1' : ''
   const whereSql = lock.value.enforce ? optimisticWhere() : 'id = ?'
   const sourceBindings: Array<string | number | null> = [...fields.map(([, value]) => value), sourceId]
