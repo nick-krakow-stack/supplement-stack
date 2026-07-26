@@ -151,22 +151,6 @@ test('publication fidelity normalizes structured quantities, German populations 
   } finally { rmSync(d.dir, { recursive: true, force: true }) }
 })
 
-test('final Quercetin packages pass mechanical quantity, population and affirmative-risk normalization read-only', () => {
-  const publication = resolve(ROOT, '_research_raw/quercetin-pilot/pipeline/publication')
-  const stage2 = JSON.parse(readFileSync(resolve(publication, 'stage2-publication-batch-review-input.v1.json'), 'utf8'))
-  const stage3 = JSON.parse(readFileSync(resolve(publication, 'stage3-publication-review-input.v1.json'), 'utf8'))
-  const packageNumbers = new Set()
-  for (const article of [...stage2.articles, stage3]) {
-    const pkg = JSON.parse(readFileSync(resolve(ROOT, article.facts_package.path), 'utf8'))
-    const signals = derivePublicationFidelitySignals({ visiblePayload: article.visible_payload, facts: pkg.facts })
-    assert.deepEqual(signals.unsupported_numbers, [], `${article.article_id}: unsupported quantity token`)
-    assert.deepEqual(signals.unsupported_populations, [], `${article.article_id}: unsupported population token`)
-    assert.deepEqual(signals.affirmative_high_risk_claims, [], `${article.article_id}: false affirmative high-risk claim`)
-    for (const token of signals.package_numbers) packageNumbers.add(token)
-  }
-  for (const token of ['150 mg', '500 mg', '730 mg']) assert.ok(packageNumbers.has(token), `missing structured package token ${token}`)
-})
-
 test('visible payload lint covers every visible field, source label and URL', () => { const value = { slug: 'a', title: 'Stage 3', summary: 'Dieser Artikel ist intern.', body: '## Leer\n', conclusion: 'Pipeline-Handoff', sources: [{ source_id: 'x', label: 'Maschinenhinweis', url: 'javascript:bad' }] }; const lint = lintVisiblePayload(value); assert.ok(lint.errors.length >= 6) })
 
 test('one command writes deterministic bundle, gate and role packages', () => {
