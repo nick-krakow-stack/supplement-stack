@@ -249,7 +249,7 @@ function linkHealthFailureDescription(health: AdminAffiliateLinkHealth | null): 
 
 function linkHealthDetailsTooltip(health: AdminAffiliateLinkHealth | null): string {
   if (!health || health.status === null || health.status === 'unchecked') {
-    return 'Link wurde noch nicht geprÃ¼ft.';
+    return 'Link wurde noch nicht geprüft.';
   }
 
   if (health.status === 'ok') {
@@ -260,7 +260,7 @@ function linkHealthDetailsTooltip(health: AdminAffiliateLinkHealth | null): stri
   const detailParts = [
     reason ?? null,
     health.consecutive_failures ? `${health.consecutive_failures} Fehler in Folge` : null,
-    health.last_checked_at ? `Zuletzt geprÃ¼ft: ${health.last_checked_at}` : null,
+    health.last_checked_at ? `Zuletzt geprüft: ${health.last_checked_at}` : null,
   ].filter((entry): entry is string => typeof entry === 'string');
 
   return detailParts.length > 0 ? `${linkHealthLabel(health)}: ${detailParts.join(' | ')}` : linkHealthLabel(health);
@@ -800,7 +800,7 @@ function ShopLinksModal({
             {shopDomainFallback ? (
               <p className="admin-muted text-xs">
                 Freitext-Fallback:
-                Shop-Liste nicht verfÃ¼gbar. Du kannst den Shop im Freitextfeld erfassen.
+                Shop-Liste nicht verfügbar. Du kannst den Shop im Freitextfeld erfassen.
               </p>
             ) : null}
             {!healthAvailable && (
@@ -925,7 +925,7 @@ function ShopLinksModal({
                             }}
                             className="admin-select mt-1"
                           >
-                            <option value="" disabled>Shop auswÃ¤hlen</option>
+                            <option value="" disabled>Shop auswählen</option>
                             {shopDomains.map((domain) => (
                               <option key={domain.id} value={domain.id}>
                                 {domain.display_name}
@@ -1040,16 +1040,6 @@ function AffiliateStatusModal({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [messageIsError, setMessageIsError] = useState(false);
-  const productIdRef = useRef(product.id);
-
-  useEffect(() => {
-    if (productIdRef.current === product.id) return;
-    productIdRef.current = product.id;
-    setIsAffiliate(productIsAffiliate(product));
-    setShopLinkDraft(product.shop_link ?? '');
-    setMessage('');
-    setMessageIsError(false);
-  }, [product.id]);
 
   const hasUnsavedShopLinkChange = shopLinkDraft.trim() !== (product.shop_link ?? '').trim();
 
@@ -1594,6 +1584,7 @@ export default function AdministratorProductsPage() {
 
       {affiliateProduct && (
         <AffiliateStatusModal
+          key={affiliateProduct.id}
           product={affiliateProduct}
           onClose={() => setAffiliateProduct(null)}
           onSaved={handleSaved}

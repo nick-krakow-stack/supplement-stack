@@ -4,7 +4,6 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import CookieConsentBanner from './components/CookieConsentBanner';
-import StackWorkspace from './components/StackWorkspace';
 
 const LandingPage = lazy(() => import('./pages/LandingPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
@@ -19,7 +18,9 @@ const VerifyEmailPage = lazy(() => import('./pages/VerifyEmailPage'));
 const PrivacyPage = lazy(() => import('./pages/PrivacyPage'));
 const ImprintPage = lazy(() => import('./pages/ImprintPage'));
 const TermsPage = lazy(() => import('./pages/TermsPage'));
+const KnowledgeOverviewPage = lazy(() => import('./pages/KnowledgeOverviewPage'));
 const KnowledgeArticlePage = lazy(() => import('./pages/KnowledgeArticlePage'));
+const StackWorkspace = lazy(() => import('./components/StackWorkspace'));
 
 const AdministratorShell = lazy(() => import('./pages/administrator/AdministratorShell'));
 const AdministratorDashboardPage = lazy(() => import('./pages/administrator/AdministratorDashboardPage'));
@@ -68,6 +69,8 @@ function NotFoundPage() {
 }
 
 function RouteLoadingFallback() {
+  const location = useLocation();
+  if (location.pathname === '/wissen') return null;
   return (
     <div className="min-h-[40vh] flex items-center justify-center px-6">
       <div className="text-sm text-slate-500">Laden...</div>
@@ -168,6 +171,7 @@ export default function App() {
                   <Route path="/datenschutz" element={<PrivacyPage />} />
                   <Route path="/nutzungsbedingungen" element={<TermsPage />} />
                   <Route path="/agb" element={<TermsPage />} />
+                  <Route path="/wissen" element={<KnowledgeOverviewPage />} />
                   <Route path="/wissen/:slug" element={<KnowledgeArticlePage />} />
                   <Route
                     path="/my-products"

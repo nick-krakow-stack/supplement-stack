@@ -1,0 +1,56 @@
+{
+  "schema": "source_evidence_bundle.v1",
+  "bundle_id": "bundle-stage2-import-01",
+  "content_hash": "sha256:37dc85ca99e0a2af907486fda964391ac5ac2261a06359b3e2c759050d962317",
+  "records": [
+    {
+      "schema": "source_evidence_record.v1",
+      "record_id": "fact-primary-01",
+      "source_id": "src-primary",
+      "created_by": { "role": "clinical-study-interpreter", "id": "writer-stage2-01", "created_at": "2026-07-13T08:30:00Z" },
+      "source_locator": { "source_url": "https://example.org/primary", "doi": null, "pmid": null, "access_basis": "verified_full_text", "retrieved_at": "2026-07-13" },
+      "provenance": { "location": "Results, Table 2", "verbatim_quote": null, "faithful_paraphrase": "Begrenztes Ergebnis.", "language": "de" },
+      "claim_type": "safety",
+      "cluster_keys": ["safety"],
+      "population": "Erwachsene laut Studienkriterien",
+      "intervention_or_exposure": "Geprüfte Intervention",
+      "comparison": "Kontrollgruppe",
+      "outcome": "Berichteter Endpunkt",
+      "quantity": { "tested_amount": "500 mg/Tag", "schedule": "täglich", "duration": "12 Wochen", "is_recommendation": false },
+      "effect": "Berichtetes Ergebnis",
+      "uncertainty_or_limit": "Begrenzte Übertragbarkeit",
+      "stack_relevance": { "candidate": true, "use": "safety_context", "direct_user_dose_recommendation": false },
+      "validation": { "status": "pass", "reviewer_role": "source-facts-reviewer", "reviewer_id": "facts-reviewer-01", "reviewed_at": "2026-07-13T09:00:00Z", "scope": ["source_fidelity", "coverage_crossrefs", "safety"], "review_id": "evidence-review-01", "review_mode": "full", "risk_class": ["safety"], "source_content_hash": "sha256:1111111111111111111111111111111111111111111111111111111111111111", "artifact_payload_hash": "sha256:2436bcd8807c503676872d56293330dd9d337ee0c55f61514bbfdd1ace055bfb" }
+    },
+    {
+      "schema": "source_evidence_record.v1",
+      "record_id": "fact-support-01",
+      "source_id": "src-support",
+      "created_by": { "role": "clinical-study-interpreter", "id": "writer-stage2-01", "created_at": "2026-07-13T08:32:00Z" },
+      "source_locator": { "source_url": "https://example.org/support", "doi": null, "pmid": null, "access_basis": "verified_full_text", "retrieved_at": "2026-07-13" },
+      "provenance": { "location": "Discussion", "verbatim_quote": null, "faithful_paraphrase": "Ergänzender Kontext.", "language": "de" },
+      "claim_type": "safety",
+      "cluster_keys": ["safety"],
+      "population": "Erwachsene laut Studienkriterien",
+      "intervention_or_exposure": "Geprüfte Intervention",
+      "comparison": null,
+      "outcome": "Ergänzender Endpunkt",
+      "quantity": { "tested_amount": null, "schedule": null, "duration": null, "is_recommendation": false },
+      "effect": "Ergänzender Kontext",
+      "uncertainty_or_limit": "Nur ergänzende Quelle",
+      "stack_relevance": { "candidate": false, "use": "supporting_context", "direct_user_dose_recommendation": false },
+      "validation": { "status": "pass", "reviewer_role": "source-facts-reviewer", "reviewer_id": "facts-reviewer-01", "reviewed_at": "2026-07-13T09:00:00Z", "scope": ["source_fidelity", "coverage_crossrefs", "safety"], "review_id": "evidence-review-01", "review_mode": "full", "risk_class": ["safety"], "source_content_hash": "sha256:2222222222222222222222222222222222222222222222222222222222222222", "artifact_payload_hash": "sha256:3fc535120c3ef85a28973d16f83a1f16ae4cc6e9209fafd9fbc3b53ef63cfbe1" }
+    }
+  ],
+  "validation": {
+    "status": "pass",
+    "validated_record_ids": ["fact-primary-01", "fact-support-01"],
+    "validator": { "role": "source-facts-reviewer", "id": "facts-reviewer-01" },
+    "validated_at": "2026-07-13T09:05:00Z",
+    "content_hash": "sha256:37dc85ca99e0a2af907486fda964391ac5ac2261a06359b3e2c759050d962317",
+    "review_id": "evidence-review-01",
+    "review_mode": "full",
+    "scope": ["source_fidelity", "coverage_crossrefs", "safety"],
+    "risk_classes": ["safety"]
+  }
+}

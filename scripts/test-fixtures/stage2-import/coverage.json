@@ -1,0 +1,48 @@
+{
+  "schema": "coverage_plan.v1",
+  "coverage_plan_id": "coverage-stage2-import-01",
+  "content_hash": "sha256:bc3fcea28e358bc738a77b24bf4c3866154e02f856aeb2c28f6be652a0164891",
+  "substance": "Beispielstoff",
+  "stage3_archetype_decision": { "archetype": "essential_nutrient", "reason": "Die Fixture bildet einen klassischen Nährstoff ab.", "status": "planned" },
+  "clusters": [
+    { "cluster_key": "safety", "required": true, "status": "covered", "primary_source_ids": ["src-primary"], "supporting_source_ids": ["src-support"], "article_candidate_ids": ["article-01"] }
+  ],
+  "sources": [
+    { "source_id": "src-primary", "stage15_label": "ANCHOR", "source_url": "https://example.org/primary", "covered_by_source_ids": [], "assigned_article_ids": ["article-01"] },
+    { "source_id": "src-support", "stage15_label": "SUPPORTING", "source_url": "https://example.org/support", "covered_by_source_ids": ["src-primary"], "assigned_article_ids": ["article-01"] }
+  ],
+  "article_candidates": [
+    {
+      "article_id": "article-01",
+      "primary_source_id": "src-primary",
+      "integrated_source_ids": ["src-support"],
+      "cluster_keys": ["safety"],
+      "own_article_reason": "minimal_cluster_representative",
+      "risk_class": ["safety"],
+      "source_archetype": "authority_guideline_safety",
+      "framework_fit": {
+        "decision": "existing",
+        "framework_id": "single-study-v1",
+        "variant_id": "authority-guideline-safety-v1",
+        "reason": "Die vorhandene Sicherheitsvariante passt.",
+        "owner_approval": { "required": false, "status": "not_required", "approved_by": null, "approved_at": null },
+        "pilot": { "required": false, "status": "not_required", "artifact_id": null }
+      },
+      "publication_gate": { "status": "accepted", "result": "PASS", "review_id": "stage2-publication-01" },
+      "status": "accepted",
+      "facts_status": "complete",
+      "publication_status": "accepted"
+    }
+  ],
+  "facts_gate": {
+    "status": "pass",
+    "evidence_bundle_id": "bundle-stage2-import-01",
+    "evidence_bundle_content_hash": "sha256:37dc85ca99e0a2af907486fda964391ac5ac2261a06359b3e2c759050d962317",
+    "required_record_ids": ["fact-primary-01", "fact-support-01"],
+    "validated_record_ids": ["fact-primary-01", "fact-support-01"],
+    "source_facts_review_id": "evidence-review-01",
+    "gate_artifact_id": "facts-gate-stage2-import-01",
+    "missing_cluster_keys": [],
+    "blocking_gaps": []
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "schema":"coverage_plan.v1","coverage_plan_id":"coverage-example-01","content_hash":"sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff","substance":"Beispielstoff",
+  "stage3_archetype_decision":{"archetype":"essential_nutrient","reason":"Der Stoff besitzt physiologische Bedarfscluster.","status":"planned"},
+  "clusters":[{"cluster_key":"safety_ul_adults","required":true,"status":"covered","primary_source_ids":["src-01"],"supporting_source_ids":["src-02"],"article_candidate_ids":["article-01"]}],
+  "sources":[
+    {"source_id":"src-01","stage15_label":"ANCHOR","source_url":"https://doi.org/10.1000/example","covered_by_source_ids":[],"assigned_article_ids":["article-01"]},
+    {"source_id":"src-02","stage15_label":"SUPPORTING","source_url":"https://pubmed.ncbi.nlm.nih.gov/12345678/","covered_by_source_ids":["src-01"],"assigned_article_ids":["article-01"]}
+  ],
+  "article_candidates":[{"article_id":"article-01","primary_source_id":"src-01","integrated_source_ids":["src-02"],"cluster_keys":["safety_ul_adults"],"own_article_reason":"minimal_cluster_representative","risk_class":["safety"],"source_archetype":"authority_guideline_safety","framework_fit":{"decision":"existing","framework_id":"single-study-v1","variant_id":"authority-guideline-safety-v1","reason":"Die Variante passt.","owner_approval":{"required":false,"status":"not_required","approved_by":null,"approved_at":null},"pilot":{"required":false,"status":"not_required","artifact_id":null}},"publication_gate":{"status":"pending","result":null,"review_id":null},"status":"facts_complete"}],
+  "facts_gate":{"status":"pass","evidence_bundle_id":"bundle-example-01","evidence_bundle_content_hash":"sha256:bc35d70d08f55e2e8fd12309f7be1d0ba9e44925d174a13d79de955c5ce11e66","required_record_ids":["fact-src-01-01","fact-src-02-01"],"validated_record_ids":["fact-src-01-01","fact-src-02-01"],"source_facts_review_id":"review-01","gate_artifact_id":"facts-gate-01","missing_cluster_keys":[],"blocking_gaps":[]}
+}

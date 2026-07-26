@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520" role="img" aria-labelledby="title desc">
+  <title id="title">Zu viel Vitamin D kann Calcium im Körper verschieben</title>
+  <desc id="desc">Eine helle Sicherheitsgrafik zeigt hohe Vitamin-D-Aufnahme, ansteigendes Calcium im Blut und Urin sowie Nieren als Warnkontext.</desc>
+  <rect width="1200" height="520" rx="28" fill="#f8fafc"/>
+  <text x="60" y="72" font-family="Arial, sans-serif" font-size="34" font-weight="700" fill="#0f172a">Sicherheitsrahmen: Vitamin D und Calcium</text>
+  <text x="60" y="112" font-family="Arial, sans-serif" font-size="20" fill="#475569">Hohe Gesamtaufnahme ist kein Zielwert. Zu viel Vitamin D kann den Calciumstoffwechsel belasten.</text>
+
+  <g font-family="Arial, sans-serif">
+    <rect x="85" y="170" width="240" height="190" rx="24" fill="#fff7ed" stroke="#fdba74" stroke-width="4"/>
+    <circle cx="165" cy="255" r="46" fill="#fed7aa" stroke="#ea580c" stroke-width="5"/>
+    <text x="165" y="263" text-anchor="middle" font-size="24" font-weight="700" fill="#9a3412">D</text>
+    <path d="M225 290 H282" stroke="#ea580c" stroke-width="7" stroke-linecap="round"/>
+    <path d="M264 270 L292 290 L264 310" fill="none" stroke="#ea580c" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="205" y="218" text-anchor="middle" font-size="25" font-weight="700" fill="#9a3412">hohe Aufnahme</text>
+    <text x="205" y="335" text-anchor="middle" font-size="18" fill="#7c2d12">über längere Zeit</text>
+
+    <rect x="405" y="170" width="270" height="190" rx="24" fill="#fef2f2" stroke="#fca5a5" stroke-width="4"/>
+    <g fill="#fecaca" stroke="#dc2626" stroke-width="4">
+      <circle cx="492" cy="245" r="22"/>
+      <circle cx="548" cy="286" r="18"/>
+      <circle cx="590" cy="235" r="20"/>
+    </g>
+    <text x="540" y="218" text-anchor="middle" font-size="25" font-weight="700" fill="#991b1b">Calcium steigt</text>
+    <text x="540" y="335" text-anchor="middle" font-size="18" fill="#7f1d1d">Blut und Urin im Blick</text>
+
+    <path d="M700 270 H775" stroke="#dc2626" stroke-width="8" stroke-linecap="round"/>
+    <path d="M757 250 L785 270 L757 290" fill="none" stroke="#dc2626" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <rect x="810" y="170" width="270" height="190" rx="24" fill="#eef2ff" stroke="#a5b4fc" stroke-width="4"/>
+    <path d="M920 246 C895 220 904 190 933 190 C965 190 977 226 952 248 C980 268 970 314 933 314 C902 314 894 268 920 246 Z" fill="#e0e7ff" stroke="#4f46e5" stroke-width="5"/>
+    <path d="M955 248 C981 228 1021 242 1021 281 C1021 313 982 326 960 303" fill="#e0e7ff" stroke="#4f46e5" stroke-width="5" stroke-linecap="round"/>
+    <text x="945" y="218" text-anchor="middle" font-size="25" font-weight="700" fill="#3730a3">Nieren</text>
+    <text x="945" y="335" text-anchor="middle" font-size="18" fill="#312e81">früher Warnbereich</text>
+  </g>
+
+  <rect x="120" y="430" width="960" height="58" rx="18" fill="#ecfeff" stroke="#67e8f9" stroke-width="2"/>
+  <text x="600" y="455" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" fill="#155e75">EFSA-Oberwerte beschreiben Sicherheit für die Gesamtaufnahme.</text>
+  <text x="600" y="478" text-anchor="middle" font-family="Arial, sans-serif" font-size="18" fill="#155e75">Sie sind keine Zielwerte.</text>
+</svg>

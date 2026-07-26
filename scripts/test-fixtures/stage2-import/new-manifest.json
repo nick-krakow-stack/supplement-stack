@@ -1,0 +1,35 @@
+{
+  "schema": "stage2_article_import.v2",
+  "ingredient_id": 7,
+  "coverage_plan_path": "coverage.json",
+  "source_evidence_bundle_path": "evidence.json",
+  "article_metadata": [
+    {
+      "article_id": "article-01",
+      "slug": "article-01",
+      "article_path": "article.md",
+      "title": "Gut lesbare Studienauswertung",
+      "summary": "Kompakte Einordnung der Originalquellen.",
+      "facts_status": "complete",
+      "publication_gate": {
+        "status": "accepted",
+        "result": "PASS",
+        "review_id": "stage2-publication-01",
+        "reviewer": { "role": "article-reader-acceptance-reviewer", "id": "reader-reviewer-01" },
+        "batch_id": "stage2-batch-01",
+        "scope": ["article:article-01", "visible_reader_quality"],
+        "risk_classes": ["safety"],
+        "reviewed_at": "2026-07-13T10:00:00Z",
+        "article_hash": "sha256:7fd944d61ea858a09aa58547f3cbb08df0a31263f206c4534a1e746424793c96",
+        "content_lint": { "status": "PASS", "validator": "content-lint.v1", "article_hash": "sha256:7fd944d61ea858a09aa58547f3cbb08df0a31263f206c4534a1e746424793c96", "validated_at": "2026-07-13T09:55:00Z" },
+        "review_notes": "Stage-3.5 PASS"
+      },
+      "write_guard": { "mode": "create", "expected_status": "absent", "expected_version": 0 },
+      "source_evidence_record_ids": ["fact-primary-01", "fact-support-01"],
+      "source_relations": [
+        { "source_id": "src-primary", "db_source_id": 101, "label": "Hauptquelle", "url": "https://example.org/primary" },
+        { "source_id": 102, "source_key": "src-support", "label": "Ergänzende Quelle", "url": "https://example.org/support" }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "schema":"coverage_plan.v1","coverage_plan_id":"coverage-invalid","content_hash":"sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd","substance":"Beispielstoff",
+  "stage3_archetype_decision":{"archetype":"essential_nutrient","reason":"Einordnung.","status":"planned"},
+  "clusters":[{"cluster_key":"safety_ul_adults","required":true,"status":"covered","primary_source_ids":["src-01"],"supporting_source_ids":[],"article_candidate_ids":["missing-article"]}],
+  "sources":[{"source_id":"src-01","stage15_label":"ANCHOR","source_url":"https://example.org/source","covered_by_source_ids":[],"assigned_article_ids":["article-01"]}],
+  "article_candidates":[{"article_id":"article-01","primary_source_id":"src-01","integrated_source_ids":[],"cluster_keys":["safety_ul_adults"],"own_article_reason":"minimal_cluster_representative","risk_class":["standard","safety"],"source_archetype":"single_study","status":"delegated","framework_fit":{"decision":"new","framework_id":"new-v1","variant_id":"new-variant-v1","reason":"Neuer Archetyp.","owner_approval":{"required":true,"status":"pending"},"pilot":{"required":true,"status":"pending"}},"publication_gate":{"status":"pending","result":null,"review_id":null}}],
+  "facts_gate":{"status":"pending","required_record_ids":["fact-src-01-01"],"validated_record_ids":[],"missing_cluster_keys":[],"blocking_gaps":[]}
+}

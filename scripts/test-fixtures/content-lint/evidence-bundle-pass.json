@@ -1,0 +1,26 @@
+{
+  "schema": "source_evidence_bundle.v1",
+  "bundle_id": "bundle-example-01",
+  "records": [
+    {
+      "schema":"source_evidence_record.v1","record_id":"fact-src-01-01","source_id":"src-01",
+      "created_by":{"role":"clinical-study-interpreter","id":"writer-01","created_at":"2026-07-13T14:00:00+02:00"},
+      "source_locator":{"source_url":"https://doi.org/10.1000/example","doi":"10.1000/example","pmid":null,"access_basis":"verified_full_text","retrieved_at":"2026-07-13"},
+      "provenance":{"location":"Results, Table 2, row 3","verbatim_quote":null,"faithful_paraphrase":"Der berichtete Endpunkt trat seltener auf.","language":"en"},
+      "claim_type":"safety","cluster_keys":["safety_ul_adults"],"population":"Erwachsene","intervention_or_exposure":"Intervention","comparison":"Kontrollgruppe","outcome":"Endpunkt",
+      "quantity":{"tested_amount":"500 mg/Tag","schedule":"täglich","duration":"12 Wochen","is_recommendation":false},"effect":"Berichtetes Ergebnis","uncertainty_or_limit":"Begrenzte Übertragbarkeit","stack_relevance":{"candidate":true,"use":"safety_context","direct_user_dose_recommendation":false},
+      "validation":{"status":"pass","reviewer_role":"source-facts-reviewer","reviewer_id":"science-01","reviewed_at":"2026-07-13T14:30:00+02:00","source_content_hash":"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","artifact_payload_hash":"sha256:0b828720947c848a6eb48149bca969565faf86a1ec56f5b7c8e6fc4d0ca180df","scope":["source_fidelity","safety","quantity","coverage_crossrefs"],"risk_class":["safety"],"review_id":"review-01","review_mode":"full"}
+    },
+    {
+      "schema":"source_evidence_record.v1","record_id":"fact-src-02-01","source_id":"src-02",
+      "created_by":{"role":"clinical-study-interpreter","id":"writer-01","created_at":"2026-07-13T14:02:00+02:00"},
+      "source_locator":{"source_url":"https://pubmed.ncbi.nlm.nih.gov/12345678/","doi":null,"pmid":"12345678","access_basis":"verified_full_text","retrieved_at":"2026-07-13"},
+      "provenance":{"location":"Discussion, paragraph 3","verbatim_quote":null,"faithful_paraphrase":"Die Supporting-Quelle bestätigt den Sicherheitskontext.","language":"en"},
+      "claim_type":"safety","cluster_keys":["safety_ul_adults"],"population":"Erwachsene","intervention_or_exposure":"Intervention","comparison":"Kontrollgruppe","outcome":"Sicherheitsendpunkt",
+      "quantity":{"tested_amount":null,"schedule":null,"duration":null,"is_recommendation":false},"effect":"Bestätigender Kontext","uncertainty_or_limit":"Keine eigene Mengenprüfung","stack_relevance":{"candidate":false,"use":"safety_context","direct_user_dose_recommendation":false},
+      "validation":{"status":"pass","reviewer_role":"source-facts-reviewer","reviewer_id":"science-01","reviewed_at":"2026-07-13T14:30:00+02:00","source_content_hash":"sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","artifact_payload_hash":"sha256:b6f436ff7938220b37d838648bdbc9993c925fafc3ca0917dcf1883054cc7e4f","scope":["source_fidelity","safety","coverage_crossrefs"],"risk_class":["safety"],"review_id":"review-01","review_mode":"full"}
+    }
+  ],
+  "content_hash":"sha256:bc35d70d08f55e2e8fd12309f7be1d0ba9e44925d174a13d79de955c5ce11e66",
+  "validation":{"status":"pass","validated_record_ids":["fact-src-01-01","fact-src-02-01"],"validator":{"role":"source-facts-reviewer","id":"science-01"},"validated_at":"2026-07-13T14:30:00+02:00","content_hash":"sha256:bc35d70d08f55e2e8fd12309f7be1d0ba9e44925d174a13d79de955c5ce11e66","review_id":"review-01","review_mode":"full","scope":["source_fidelity","safety","quantity","coverage_crossrefs"],"risk_classes":["safety"]}
+}

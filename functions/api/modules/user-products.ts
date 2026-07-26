@@ -15,6 +15,8 @@ import { loadUserProductSafetyWarnings } from './knowledge'
 const userProducts = new Hono<AppContext>()
 
 const MAX_USER_PRODUCT_INGREDIENT_ROWS = 50
+const SUB_INGREDIENT_PRODUCT_SCHEMA_ERROR =
+  'Sub-Wirkstoffe werden jetzt ueber ingredient_parts verwaltet; das Produkt-Schema unterstuetzt Sub-Wirkstoffe noch nicht.'
 
 type UserProductIngredientInput = {
   ingredient_id: number
@@ -161,36 +163,7 @@ async function validateUserProductIngredientReferences(
   }
 
   const parentRows = ingredients.filter((row) => row.parent_ingredient_id !== null)
-  if (parentRows.length === 0) return null
-
-  for (const row of parentRows) {
-    if (row.parent_ingredient_id === row.ingredient_id) {
-      return 'Parent- und Sub-Wirkstoff duerfen nicht identisch sein.'
-    }
-  }
-
-  const parentIds = [...new Set(parentRows.map((row) => row.parent_ingredient_id as number))]
-  const parentPlaceholders = parentIds.map(() => '?').join(',')
-  const parentCount = await db.prepare(
-    `SELECT COUNT(*) as count FROM ingredients WHERE id IN (${parentPlaceholders})`
-  ).bind(...parentIds).first<{ count: number }>()
-  if ((parentCount?.count ?? 0) !== parentIds.length) {
-    return 'Mindestens ein Parent-Wirkstoff existiert nicht.'
-  }
-
-  const relationClauses = parentRows.map(() => '(parent_ingredient_id = ? AND child_ingredient_id = ?)').join(' OR ')
-  const relationBindings = parentRows.flatMap((row) => [row.parent_ingredient_id as number, row.ingredient_id])
-  const { results: relations } = await db.prepare(
-    `SELECT parent_ingredient_id, child_ingredient_id
-     FROM ingredient_sub_ingredients
-     WHERE ${relationClauses}`
-  ).bind(...relationBindings).all<{ parent_ingredient_id: number; child_ingredient_id: number }>()
-  const allowedRelations = new Set(relations.map((row) => `${row.parent_ingredient_id}:${row.child_ingredient_id}`))
-  for (const row of parentRows) {
-    if (!allowedRelations.has(`${row.parent_ingredient_id}:${row.ingredient_id}`)) {
-      return 'Mindestens eine Parent/Sub-Wirkstoff-Beziehung ist nicht zugelassen.'
-    }
-  }
+  if (parentRows.length > 0) return SUB_INGREDIENT_PRODUCT_SCHEMA_ERROR
 
   return null
 }

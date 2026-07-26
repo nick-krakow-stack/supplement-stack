@@ -3,7 +3,7 @@
 // Routes (mounted at /api/ingredients):
 //   GET /           — list all
 //   GET /search     — search by canonical name/synonym/form
-//   GET /:id        — single ingredient + synonyms + forms + precursors
+//   GET /:id        — single ingredient + synonyms + forms + parts/precursors
 //   GET /:id/sub-ingredients
 //   GET /:id/recommendations
 //   GET /:id/dosage-guidelines
@@ -84,6 +84,16 @@ type SubIngredientPromptRow = {
   sort_order: number
 }
 
+type IngredientPartLinkRow = {
+  ingredient_id: number
+  part_id: number
+  part_name: string
+  part_type: string | null
+  part_status: string | null
+  sort_order: number
+  created_at: string | null
+}
+
 type IngredientProductRow = {
   id: number
   [key: string]: unknown
@@ -155,25 +165,124 @@ async function getTableColumns(db: D1Database, tableName: string): Promise<Set<s
   }
 }
 
+const DOSE_RECOMMENDATION_STAGE4_COLUMNS = [
+  'stage4_cluster_id',
+  'stage4_source_kind',
+  'knowledge_article_slug',
+  'amount_type',
+  'reported_amount_text',
+  'stack_role',
+  'stack_visible',
+  'relevance_reason',
+  'is_controversial',
+  'valid_from',
+  'valid_until',
+  'stage4_status',
+] as const
+
+const DOSE_RECOMMENDATION_STAGE4_LEGACY_MARKER_COLUMNS = [
+  'stage4_cluster_id',
+  'stage4_source_kind',
+  'knowledge_article_slug',
+  'amount_type',
+  'reported_amount_text',
+  'stack_role',
+  'relevance_reason',
+  'valid_from',
+  'valid_until',
+] as const
+
+function hasDoseRecommendationStage4Columns(columns: Set<string>): boolean {
+  return DOSE_RECOMMENDATION_STAGE4_COLUMNS.every((column) => columns.has(column))
+}
+
+function doseRecommendationColumn(alias: string | null, column: string): string {
+  return alias ? `${alias}.${column}` : column
+}
+
+function doseRecommendationOperationalVisibilityPredicate(columns: Set<string>, alias: string | null): string | null {
+  if (!hasDoseRecommendationStage4Columns(columns)) return null
+  const column = (name: string) => doseRecommendationColumn(alias, name)
+  const legacyMarkerChecks = DOSE_RECOMMENDATION_STAGE4_LEGACY_MARKER_COLUMNS
+    .map((name) => `${column(name)} IS NULL`)
+    .join(' AND ')
+  return `((
+    ${column('stage4_status')} IS NULL
+    AND ${legacyMarkerChecks}
+    AND COALESCE(${column('is_controversial')}, 0) = 0
+  ) OR (
+    ${column('stage4_status')} = 'active'
+    AND ${column('stack_visible')} = 1
+  ))`
+}
+
+function doseRecommendationGuidelineVisibilityPredicate(columns: Set<string>, alias: string | null): string | null {
+  const operationalPredicate = doseRecommendationOperationalVisibilityPredicate(columns, alias)
+  if (!operationalPredicate) return null
+  const column = (name: string) => doseRecommendationColumn(alias, name)
+  return `((${operationalPredicate}) OR (
+    ${column('source_type')} = 'study'
+    AND ${column('stage4_status')} = 'active'
+    AND ${column('amount_type')} = 'tested_amount'
+  ))`
+}
+
+function doseRecommendationOptionalColumnSelect(columns: Set<string>, column: string): string {
+  return columns.has(column) ? column : `NULL AS ${column}`
+}
+
 async function getSubIngredientsForParent(
   db: D1Database,
   parentIngredientId: number | string,
 ): Promise<SubIngredientPromptRow[]> {
+  const partLinks = await getPartLinksForIngredient(db, parentIngredientId)
+  return partLinks.map((link) => ({
+    parent_ingredient_id: link.ingredient_id,
+    child_ingredient_id: link.part_id,
+    child_name: link.part_name,
+    child_unit: null,
+    prompt_label: null,
+    is_default_prompt: 0,
+    sort_order: link.sort_order,
+  }))
+}
+
+async function getPartLinksForIngredient(
+  db: D1Database,
+  ingredientId: number | string,
+): Promise<IngredientPartLinkRow[]> {
+  if (!(await hasTable(db, 'ingredient_part_links')) || !(await hasTable(db, 'ingredient_parts'))) return []
   const { results } = await db.prepare(`
     SELECT
-      isi.parent_ingredient_id,
-      isi.child_ingredient_id,
-      child.name AS child_name,
-      child.unit AS child_unit,
-      isi.prompt_label,
-      isi.is_default_prompt,
-      isi.sort_order
-    FROM ingredient_sub_ingredients isi
-    JOIN ingredients child ON child.id = isi.child_ingredient_id
-    WHERE isi.parent_ingredient_id = ?
-    ORDER BY isi.sort_order ASC, child.name ASC, isi.child_ingredient_id ASC
-  `).bind(parentIngredientId).all<SubIngredientPromptRow>()
+      l.ingredient_id,
+      l.part_id,
+      p.name AS part_name,
+      p.type AS part_type,
+      p.status AS part_status,
+      l.sort_order,
+      l.created_at
+    FROM ingredient_part_links l
+    JOIN ingredient_parts p ON p.id = l.part_id
+    WHERE l.ingredient_id = ?
+    ORDER BY l.sort_order ASC, p.name ASC, l.part_id ASC
+  `).bind(ingredientId).all<IngredientPartLinkRow>()
   return results
+}
+
+function partLinkToLegacyPrecursor(link: IngredientPartLinkRow): Record<string, string | number | null> {
+  return {
+    ingredient_id: link.ingredient_id,
+    precursor_ingredient_id: link.part_id,
+    precursor_name: link.part_name,
+    precursor_unit: null,
+    sort_order: link.sort_order,
+    note: null,
+    created_at: link.created_at,
+    part_id: link.part_id,
+    part_name: link.part_name,
+    part_type: link.part_type,
+    part_status: link.part_status,
+  }
 }
 
 function getUpperLimitStatus(
@@ -249,7 +358,7 @@ function getUpperLimitStatus(
 
 // GET /api/ingredients
 ingredients.get('/', async (c) => {
-  const { results } = await c.env.DB.prepare('SELECT * FROM ingredients').all<IngredientRow>()
+  const { results } = await c.env.DB.prepare('SELECT * FROM ingredients WHERE is_active = 1 ORDER BY name ASC').all<IngredientRow>()
   return c.json({ ingredients: results })
 })
 
@@ -271,7 +380,6 @@ ingredients.get('/search', async (c) => {
           ${normalizedLookupSql('child.name')} = ${normalizedLookupSql('f.name')}
           OR ${normalizedLookupSql('child.name')} = ${normalizedLookupSql('parent.name')} || ${normalizedLookupSql('f.name')}
           OR ${normalizedLookupSql('child.name')} = ${normalizedLookupSql('f.name')} || ${normalizedLookupSql('parent.name')}
-          OR ${normalizedLookupSql('f.name')} LIKE ${normalizedLookupSql('child.name')} || '%'
         )
     ),
     matched AS (
@@ -285,6 +393,7 @@ ingredients.get('/search', async (c) => {
         0 AS match_rank
       FROM ingredients i
       WHERE instr(${normalizedLookupSql('i.name')}, ?) > 0
+        AND i.is_active = 1
         AND NOT EXISTS (SELECT 1 FROM form_shadow fs WHERE fs.id = i.id)
 
       UNION ALL
@@ -300,6 +409,7 @@ ingredients.get('/search', async (c) => {
       FROM ingredient_synonyms s
       JOIN ingredients i ON i.id = s.ingredient_id
       WHERE instr(${normalizedLookupSql('s.synonym')}, ?) > 0
+        AND i.is_active = 1
         AND NOT EXISTS (SELECT 1 FROM form_shadow fs WHERE fs.id = i.id)
 
       UNION ALL
@@ -315,6 +425,7 @@ ingredients.get('/search', async (c) => {
       FROM ingredient_forms f
       JOIN ingredients i ON i.id = f.ingredient_id
       WHERE instr(${normalizedLookupSql('f.name')}, ?) > 0
+        AND i.is_active = 1
         AND NOT EXISTS (SELECT 1 FROM form_shadow fs WHERE fs.id = i.id)
     ),
     ranked AS (
@@ -394,7 +505,8 @@ ingredients.get('/:id/sub-ingredients', async (c) => {
   if (!parent) return c.json({ error: 'Not found' }, 404)
 
   const subIngredients = await getSubIngredientsForParent(c.env.DB, ingredientId)
-  return c.json({ parent, sub_ingredients: subIngredients })
+  const parts = await getPartLinksForIngredient(c.env.DB, ingredientId)
+  return c.json({ parent, parts, sub_ingredients: subIngredients })
 })
 
 // GET /api/ingredients/:id
@@ -410,23 +522,9 @@ ingredients.get('/:id', async (c) => {
     'SELECT * FROM ingredient_forms WHERE ingredient_id = ? ORDER BY score DESC, name ASC, id ASC'
   ).bind(id).all()
   const subIngredients = await getSubIngredientsForParent(c.env.DB, id)
-  const precursors = await hasTable(c.env.DB, 'ingredient_precursors')
-    ? (await c.env.DB.prepare(`
-      SELECT
-        p.ingredient_id,
-        p.precursor_ingredient_id,
-        pre.name AS precursor_name,
-        pre.unit AS precursor_unit,
-        p.sort_order,
-        p.note,
-        p.created_at
-      FROM ingredient_precursors p
-      JOIN ingredients pre ON pre.id = p.precursor_ingredient_id
-      WHERE p.ingredient_id = ?
-      ORDER BY p.sort_order ASC, pre.name ASC, p.precursor_ingredient_id ASC
-    `).bind(id).all()).results
-    : []
-  return c.json({ ingredient, synonyms, forms, sub_ingredients: subIngredients, precursors })
+  const parts = await getPartLinksForIngredient(c.env.DB, id)
+  const precursors = parts.map((link) => partLinkToLegacyPrecursor(link))
+  return c.json({ ingredient, synonyms, forms, parts, sub_ingredients: subIngredients, precursors })
 })
 
 // GET /api/ingredients/:id/recommendations
@@ -441,6 +539,10 @@ ingredients.get('/:id/recommendations', async (c) => {
       'SELECT id, name, upper_limit, upper_limit_unit FROM ingredients WHERE id = ?'
     ).bind(ingredientId).first<IngredientRow>()
     if (!ingredient) return c.json({ error: 'Not found' }, 404)
+
+    const recommendationColumns = await getTableColumns(c.env.DB, 'dose_recommendations')
+    const stage4VisibilityPredicate = doseRecommendationOperationalVisibilityPredicate(recommendationColumns, 'dr')
+    const stage4VisibilitySql = stage4VisibilityPredicate ? `AND ${stage4VisibilityPredicate}` : ''
 
     const { results: rows } = await c.env.DB.prepare(`
       SELECT
@@ -499,6 +601,7 @@ ingredients.get('/:id/recommendations', async (c) => {
         AND dr.is_active = 1
         AND dr.source_type <> 'user_private'
         AND (dr.source_type <> 'user_public' OR dr.is_public = 1)
+        ${stage4VisibilitySql}
       ORDER BY
         dr.relevance_score DESC,
         CASE dr.source_type
@@ -606,11 +709,15 @@ ingredients.get('/:id/recommendations', async (c) => {
 // GET /api/ingredients/:id/dosage-guidelines
 ingredients.get('/:id/dosage-guidelines', async (c) => {
   const id = c.req.param('id')
+  const recommendationColumns = await getTableColumns(c.env.DB, 'dose_recommendations')
+  const stage4VisibilityPredicate = doseRecommendationGuidelineVisibilityPredicate(recommendationColumns, null)
+  const stage4VisibilitySql = stage4VisibilityPredicate ? `AND ${stage4VisibilityPredicate}` : ''
   const { results: guidelines } = await c.env.DB.prepare(
     `
       SELECT
         id,
         ingredient_id,
+        source_type,
         CASE
           WHEN source_type = 'study' THEN 'study'
           WHEN source_type IN ('profile', 'user_private', 'user_public') THEN 'practice'
@@ -636,12 +743,17 @@ ingredients.get('/:id/dosage-guidelines', async (c) => {
         NULL AS frequency,
         timing,
         context_note AS notes,
-        is_default
+        is_default,
+        ${doseRecommendationOptionalColumnSelect(recommendationColumns, 'amount_type')},
+        ${doseRecommendationOptionalColumnSelect(recommendationColumns, 'stack_role')},
+        ${doseRecommendationOptionalColumnSelect(recommendationColumns, 'stage4_status')},
+        ${doseRecommendationOptionalColumnSelect(recommendationColumns, 'stack_visible')}
       FROM dose_recommendations
       WHERE ingredient_id = ?
         AND is_active = 1
         AND source_type <> 'user_private'
         AND (source_type <> 'user_public' OR is_public = 1)
+        ${stage4VisibilitySql}
       ORDER BY is_default DESC, source ASC, relevance_score DESC, id ASC
     `
   ).bind(id).all()
@@ -1056,29 +1168,18 @@ recommendationsApp.get('/', async (c) => {
     return c.json({ error: 'ingredient_id must be a positive integer' }, 400)
   try {
     const { results: recommendations } = await c.env.DB.prepare(`
-      WITH target_recommendations AS (
-        SELECT r.*
-        FROM product_recommendations r
-        WHERE r.ingredient_id = ?
-
-        UNION
-
-        SELECT r.*
-        FROM product_recommendations r
-        JOIN ingredient_sub_ingredients isi ON isi.child_ingredient_id = r.ingredient_id
-        WHERE isi.parent_ingredient_id = ?
-      )
-      SELECT DISTINCT tr.product_id, tr.type
-      FROM target_recommendations tr
-      JOIN products p ON p.id = tr.product_id
+      SELECT DISTINCT r.product_id, r.type
+      FROM product_recommendations r
+      JOIN products p ON p.id = r.product_id
       JOIN product_ingredients pi
         ON pi.product_id = p.id
        AND pi.search_relevant = 1
-       AND (pi.ingredient_id = tr.ingredient_id OR pi.parent_ingredient_id = tr.ingredient_id)
-      WHERE p.moderation_status = 'approved'
+       AND pi.ingredient_id = r.ingredient_id
+      WHERE r.ingredient_id = ?
+        AND p.moderation_status = 'approved'
         AND p.visibility = 'public'
-      ORDER BY CASE tr.type WHEN 'recommended' THEN 0 ELSE 1 END ASC
-    `).bind(ingredientId, ingredientId).all<{ product_id: number; type: string }>()
+      ORDER BY CASE r.type WHEN 'recommended' THEN 0 ELSE 1 END ASC
+    `).bind(ingredientId).all<{ product_id: number; type: string }>()
     return c.json({ recommendations })
   } catch {
     return c.json({ error: 'Failed to fetch recommendations' }, 500)

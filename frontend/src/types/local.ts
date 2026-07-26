@@ -20,6 +20,7 @@ export interface DosageGuideline {
   id: number;
   ingredient_id: number;
   source: 'DGE' | 'EFSA' | 'NIH' | 'study' | 'practice';
+  source_type?: string;
   source_title?: string;
   source_url?: string;
   population: string;
@@ -30,6 +31,10 @@ export interface DosageGuideline {
   timing?: string;
   notes?: string;
   is_default: number;
+  amount_type?: 'recommended_amount' | 'tested_amount' | 'reference_value' | null;
+  stack_role?: 'standard' | 'alternative' | 'tie' | 'not_in_stack' | null;
+  stage4_status?: 'draft' | 'active' | 'archived' | null;
+  stack_visible?: number | null;
 }
 
 export interface Ingredient {

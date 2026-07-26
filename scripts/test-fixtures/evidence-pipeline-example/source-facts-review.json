@@ -1,0 +1,19 @@
+{
+  "schema": "source_facts_review.v1",
+  "review_id": "example-review",
+  "bundle_id": "example-bundle",
+  "bundle_content_hash": "sha256:a52eae55315177655e702258c40157cff5fb9b398b6f15089707fc5d3e0e8dbe",
+  "status": "pass",
+  "reviewer": { "role": "source-facts-reviewer", "id": "example-reviewer" },
+  "reviewed_at": "2026-07-13T12:00:00.000Z",
+  "record_results": [{
+    "record_id": "example-fact",
+    "status": "pass",
+    "mode": "full",
+    "source_content_hash": "sha256:e81f3fe2458a6b6e56ff5760e1a33a4855cfc73d1caff9958397e32571a876f9",
+    "fact_payload_hash": "sha256:4cdf88396e30b37972f48f66826dc9f50f89e6a5ce19faac4b75ff65474426a1",
+    "scope": ["source_fidelity", "coverage_crossrefs"],
+    "risk_class": ["standard"],
+    "findings": []
+  }]
+}

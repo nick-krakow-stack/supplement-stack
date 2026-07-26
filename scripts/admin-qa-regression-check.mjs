@@ -50,6 +50,19 @@ const migration80 = assertFile('d1-migrations/0080_managed_list_serving_units_cl
 const migration81 = assertFile('d1-migrations/0081_managed_intake_timings.sql')
 const migration83 = assertFile('d1-migrations/0083_research_pipeline.sql')
 const migration84 = assertFile('d1-migrations/0084_research_source_inventory_fields.sql')
+const migration85 = assertFile('d1-migrations/0085_knowledge_article_layers.sql')
+const migration86 = assertFile('d1-migrations/0086_study_interpretation_records.sql')
+const knowledgePage = assertFile('frontend/src/pages/administrator/AdministratorKnowledgePage.tsx')
+for (const [label, source] of [
+  ['admin backend', adminModule],
+  ['admin ingredients', ingredientsPage],
+  ['admin products', productsPage],
+  ['admin knowledge', knowledgePage],
+]) {
+  assert.doesNotMatch(source, /\u00c3|\u00c2|\u00e2\u20ac|\ufffd/, `${label} must not contain Mojibake`)
+}
+assert.match(adminModule, /\[\\p\{L\}\\p\{N\}µ%\/\(\)\. _-\]/u, 'Admin value validation must accept the real micro sign')
+assert.match(adminModule, /\[\\p\{L\}\\p\{N\}µ%\/\(\)\. -\]/u, 'Admin serving-unit validation must accept the real micro sign')
 const adminNavGroupsBlock = extractRequiredBlock(
   adminShell,
   /const NAV_GROUPS:[\s\S]*?\n\];/,
@@ -218,6 +231,117 @@ for (const migrationMarker of [
 ]) {
   assert.match(migration84, new RegExp(escapeRegExp(migrationMarker)), `Migration 0084 must include source inventory marker ${migrationMarker}`)
 }
+for (const migrationMarker of [
+  "ALTER TABLE knowledge_articles ADD COLUMN article_layer TEXT NOT NULL DEFAULT 'main_article'",
+  'CREATE INDEX IF NOT EXISTS idx_knowledge_articles_layer_status_updated',
+]) {
+  assert.match(migration85, new RegExp(escapeRegExp(migrationMarker)), `Migration 0085 must include knowledge article layer marker ${migrationMarker}`)
+}
+for (const migrationMarker of [
+  'CREATE TABLE IF NOT EXISTS study_interpretation_records',
+  "structured_summary_json TEXT NOT NULL DEFAULT '{}'",
+  'stage3_reference_summary TEXT',
+  'idx_study_interpretation_records_article',
+  'idx_study_interpretation_records_source_status',
+]) {
+  assert.match(migration86, new RegExp(escapeRegExp(migrationMarker)), `Migration 0086 must include structured Stage-2 marker ${migrationMarker}`)
+}
+for (const backendMarker of [
+  "const KNOWLEDGE_ARTICLE_LAYERS = ['main_article', 'single_study'] as const",
+  "c.req.query('layer')",
+  "article_layer",
+  "fields.push('article_layer')",
+  "bindings.push('main_article')",
+]) {
+  assert.match(adminModule, new RegExp(escapeRegExp(backendMarker)), `Admin backend must include knowledge layer marker ${backendMarker}`)
+}
+for (const frontendMarker of [
+  'export type AdminKnowledgeArticleLayer =',
+  'article_layer: AdminKnowledgeArticleLayer',
+  'layer?: AdminKnowledgeArticleLayer |',
+  'article_layer: parseKnowledgeArticleLayer',
+]) {
+  assert.match(adminApi, new RegExp(escapeRegExp(frontendMarker)), `Frontend admin API must include knowledge layer marker ${frontendMarker}`)
+}
+for (const pageMarker of [
+  'LAYER_OPTIONS',
+  'Alle Schichten',
+  'Hauptartikel',
+  'Einzelstudien',
+  'Schicht',
+  'layerLabel(article.article_layer)',
+]) {
+  assert.match(knowledgePage, new RegExp(escapeRegExp(pageMarker)), `Admin Wissen page must include knowledge layer marker ${pageMarker}`)
+}
+for (const backendMarker of [
+  "const STUDY_INTERPRETATION_STATUSES = ['planned', 'delegated', 'drafted', 'reviewed', 'accepted', 'blocked', 'excluded'] as const",
+  "admin.get('/study-interpretation-records'",
+  "admin.post('/study-interpretation-records'",
+  "admin.put('/study-interpretation-records/:recordId'",
+  'validateStudyInterpretationRecordPayload',
+  'structured_summary_json',
+  'stage3_reference_summary',
+  'knowledge_article_slug',
+  'source_evidence_grade',
+  'source_evidence_quality',
+  'canonicalizeStructuredSummaryEvidence',
+  'SINGLE_STUDY_INTERNAL_BODY_MARKERS',
+  "'Stage 1'",
+  "'Stage-1'",
+  "'Stage1'",
+  "'Pipeline'",
+  "'Stage-3-Referenz'",
+  "'Übergabe an Stage'",
+  'findStudyInterpretationInternalMarker',
+  "['structured_summary_json', structuredSummary.value]",
+  "['stage3_reference_summary', finalStage3ReferenceSummary]",
+  'must not contain internal pipeline marker',
+]) {
+  assert.match(adminModule, new RegExp(escapeRegExp(backendMarker)), `Admin backend must include structured Stage-2 marker ${backendMarker}`)
+}
+for (const clientMarker of [
+  'AdminStudyInterpretationRecord',
+  'getAdminStudyInterpretationRecords',
+  'saveAdminStudyInterpretationRecord',
+  'updateAdminStudyInterpretationRecord',
+  'structured_summary_json',
+  'stage3_reference_summary',
+  'source_evidence_grade',
+  'source_evidence_quality',
+]) {
+  assert.match(adminApi, new RegExp(escapeRegExp(clientMarker)), `Frontend admin API must include structured Stage-2 marker ${clientMarker}`)
+}
+for (const pageMarker of [
+  'Optionale strukturierte Bestandsdaten (Legacy-JSON)',
+  'Optionale redaktionelle Kurznotiz (Legacy)',
+  'Keine optionalen Bestandsdaten hinterlegt.',
+  'Kein Pflichtfeld und keine Faktengrundlage für neue Hauptartikel.',
+  'Quellen-Evidenz',
+  'Artikeltext',
+  'studyInterpretationDraft',
+  "structured_summary_json: '{}'",
+  'saveAdminStudyInterpretationRecord',
+  'admin-study-interpretation-panel',
+]) {
+  assert.match(knowledgePage, new RegExp(escapeRegExp(pageMarker)), `Admin Wissen page must include structured Stage-2 marker ${pageMarker}`)
+}
+assert.match(
+  knowledgePage,
+  /structured_summary_json:\s*'\{\}'/,
+  'Admin Wissen page must keep an empty JSON object as the optional Legacy default',
+)
+for (const forbiddenPageMarker of [
+  'Strukturierte Auswertung für Stage 3',
+  'Stage-3-Referenz-Zusammenfassung',
+  'stage2_structured_evaluation',
+]) {
+  assert.doesNotMatch(knowledgePage, new RegExp(escapeRegExp(forbiddenPageMarker)), `Admin Wissen page must not use internal label ${forbiddenPageMarker}`)
+}
+assert.match(
+  adminCss,
+  /\.admin-study-interpretation-panel/,
+  'Admin CSS must include structured Stage-2 panel styling',
+)
 for (const sourceField of [
   'source_language',
   'source_country',
@@ -850,8 +974,8 @@ assert.match(
   /Alle Gruppen/,
   'Ingredient group dropdown must include Alle Gruppen',
 )
-for (const label of ['Vitamine', 'Mineralstoffe', 'Spurenelemente', 'Enzyme']) {
-  assert.match(ingredientsPage, new RegExp(label), `Ingredient group dropdown must include ${label}`)
+for (const groupValue of ['vitamin', 'mineral', 'trace_element', 'amino_acid_protein', 'fatty_acid', 'plant_extract', 'medicinal_mushroom', 'enzyme', 'probiotic', 'other']) {
+  assert.match(ingredientsPage, new RegExp(`value: '${groupValue}'`), `Ingredient group dropdown must include ${groupValue}`)
 }
 assert.match(
   adminCss,

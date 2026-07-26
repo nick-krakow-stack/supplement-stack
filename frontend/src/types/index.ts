@@ -258,10 +258,18 @@ export interface DemoSession {
 }
 
 export interface KnowledgeArticleSource {
+  source_id?: string;
   label: string;
   url: string;
   name?: string;
   link?: string;
+  internal_articles?: KnowledgeArticleInternalArticle[];
+}
+
+export interface KnowledgeArticleInternalArticle {
+  slug: string;
+  title: string;
+  url: string;
 }
 
 export interface KnowledgeArticleIngredient {
@@ -270,14 +278,26 @@ export interface KnowledgeArticleIngredient {
   sort_order?: number | null;
 }
 
+export interface KnowledgeArticleSeo {
+  meta_title: string;
+  meta_description: string;
+  canonical_url: string;
+  canonical_path: string;
+  robots: string;
+  indexable: boolean;
+  json_ld: Record<string, unknown>;
+}
+
 export interface KnowledgeArticle {
   slug: string;
   title: string;
   summary: string;
   body: string;
+  article_layer?: 'main_article' | 'single_study' | null;
   reviewed_at?: string | null;
   conclusion?: string | null;
   featured_image_url?: string | null;
+  featured_image_r2_key?: string | null;
   dose_min?: number | null;
   dose_max?: number | null;
   dose_unit?: string | null;
@@ -287,4 +307,26 @@ export interface KnowledgeArticle {
   ingredient_ids?: number[];
   created_at?: string;
   updated_at?: string;
+  published_at?: string | null;
+  modified_at?: string | null;
+  seo?: KnowledgeArticleSeo | null;
+}
+
+export interface KnowledgeArticleOverviewItem {
+  slug: string;
+  title: string;
+  summary: string;
+  reviewed_at?: string | null;
+  updated_at?: string | null;
+  created_at?: string | null;
+  sources_count: number;
+  ingredients?: KnowledgeArticleIngredient[];
+  ingredient_ids?: number[];
+}
+
+export interface KnowledgeNutrientStatus {
+  ingredient_id: number | string;
+  name?: string | null;
+  has_dge?: boolean;
+  has_studies?: boolean;
 }

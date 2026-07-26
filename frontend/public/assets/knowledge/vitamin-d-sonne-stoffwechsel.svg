@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520" role="img" aria-labelledby="title desc">
+  <title id="title">Vitamin D entsteht über Sonne und wird im Körper umgebaut</title>
+  <desc id="desc">Ein heller Ablauf von UVB-Licht auf der Haut über Leber und Blut bis zur aktiven Form in Niere und Zielgeweben.</desc>
+  <rect width="1200" height="520" rx="28" fill="#f8fafc"/>
+  <text x="60" y="72" font-family="Arial, sans-serif" font-size="34" font-weight="700" fill="#0f172a">Vom Sonnenlicht zum Vitamin-D-Signal</text>
+  <text x="60" y="112" font-family="Arial, sans-serif" font-size="20" fill="#475569">UVB-Licht startet die Bildung in der Haut. Danach entstehen 25(OH)D und die aktive Form Calcitriol.</text>
+
+  <g font-family="Arial, sans-serif">
+    <circle cx="142" cy="225" r="58" fill="#fef3c7" stroke="#f59e0b" stroke-width="5"/>
+    <g stroke="#f59e0b" stroke-width="6" stroke-linecap="round">
+      <path d="M142 138 V108"/>
+      <path d="M142 282 V312"/>
+      <path d="M55 225 H25"/>
+      <path d="M229 225 H259"/>
+      <path d="M80 163 L58 141"/>
+      <path d="M204 163 L226 141"/>
+      <path d="M80 287 L58 309"/>
+      <path d="M204 287 L226 309"/>
+    </g>
+    <text x="142" y="231" text-anchor="middle" font-size="24" font-weight="700" fill="#92400e">UVB</text>
+    <text x="142" y="354" text-anchor="middle" font-size="18" fill="#92400e">Sonnenlicht</text>
+
+    <path d="M280 250 H350" stroke="#f59e0b" stroke-width="8" stroke-linecap="round"/>
+    <path d="M332 230 L360 250 L332 270" fill="none" stroke="#f59e0b" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <rect x="380" y="170" width="180" height="160" rx="24" fill="#ecfeff" stroke="#67e8f9" stroke-width="4"/>
+    <path d="M435 260 C425 210 454 190 493 202 C528 213 536 253 514 284 C494 313 451 307 435 260 Z" fill="#cffafe" stroke="#0891b2" stroke-width="4"/>
+    <text x="470" y="382" text-anchor="middle" font-size="20" font-weight="700" fill="#155e75">Haut</text>
+    <text x="470" y="408" text-anchor="middle" font-size="17" fill="#155e75">Vitamin D3</text>
+
+    <path d="M585 250 H655" stroke="#0ea5e9" stroke-width="8" stroke-linecap="round"/>
+    <path d="M637 230 L665 250 L637 270" fill="none" stroke="#0ea5e9" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <rect x="690" y="170" width="180" height="160" rx="24" fill="#f0fdf4" stroke="#86efac" stroke-width="4"/>
+    <path d="M745 255 C760 205 820 205 840 238 C825 275 790 292 748 285 C733 282 731 269 745 255 Z" fill="#dcfce7" stroke="#16a34a" stroke-width="4"/>
+    <text x="780" y="382" text-anchor="middle" font-size="20" font-weight="700" fill="#166534">Leber</text>
+    <text x="780" y="408" text-anchor="middle" font-size="17" fill="#166534">25(OH)D</text>
+
+    <path d="M895 250 H965" stroke="#22c55e" stroke-width="8" stroke-linecap="round"/>
+    <path d="M947 230 L975 250 L947 270" fill="none" stroke="#22c55e" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <rect x="1000" y="170" width="140" height="160" rx="24" fill="#eef2ff" stroke="#a5b4fc" stroke-width="4"/>
+    <path d="M1050 238 C1030 218 1038 195 1062 195 C1088 195 1097 222 1078 239 C1096 252 1090 282 1062 282 C1037 282 1030 254 1050 238 Z" fill="#e0e7ff" stroke="#4f46e5" stroke-width="4"/>
+    <text x="1070" y="382" text-anchor="middle" font-size="20" font-weight="700" fill="#3730a3">Niere</text>
+    <text x="1070" y="408" text-anchor="middle" font-size="17" fill="#3730a3">Calcitriol</text>
+  </g>
+
+  <rect x="90" y="440" width="1020" height="48" rx="18" fill="#fffbeb" stroke="#fde68a" stroke-width="2"/>
+  <text x="600" y="471" text-anchor="middle" font-family="Arial, sans-serif" font-size="19" fill="#92400e">25(OH)D ist der übliche Blutmarker; Calcitriol ist die aktive Signalform.</text>
+</svg>

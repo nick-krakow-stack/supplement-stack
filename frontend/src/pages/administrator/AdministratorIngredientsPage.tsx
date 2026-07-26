@@ -16,10 +16,10 @@ import {
   X,
 } from 'lucide-react';
 import {
-  createIngredientPrecursor,
+  createIngredientPartLink,
   createIngredientResearchSource,
   deleteAdminIngredientProductRecommendation,
-  deleteIngredientPrecursor,
+  deleteIngredientPartLink,
   deleteIngredientResearchSource,
   getAdminProduct,
   getAdminIngredientProductRecommendations,
@@ -27,16 +27,19 @@ import {
   getAdminIngredients,
   getAdminProducts,
   getAdminProductShopLinks,
-  getIngredientPrecursors,
+  getIngredientParts,
   getIngredientResearchDetail,
-  updateIngredientPrecursor,
+  searchIngredientParts,
+  updateIngredientPartLink,
   updateIngredientResearchSource,
   updateAdminIngredientTaskStatus,
   upsertAdminIngredientProductRecommendation,
   type AdminCatalogProduct,
+  type AdminDoseRecommendation,
   type AdminIngredientGroupOption,
   type AdminIngredientListItem,
-  type AdminIngredientPrecursor,
+  type AdminIngredientPart,
+  type AdminIngredientPartLink,
   type AdminIngredientProductRecommendation,
   type AdminIngredientProductRecommendationSlot,
   type AdminIngredientProductRecommendationSlots,
@@ -63,6 +66,13 @@ type NewFormRow = {
   score: string;
 };
 
+type DgeSourceDraft = {
+  title: string;
+  url: string;
+  notes: string;
+  no_recommendation: boolean;
+};
+
 const TASK_FILTERS: Array<{ value: IngredientTaskFilter; label: string }> = [
   { value: 'all', label: 'Alle Bearbeitungsstände' },
   { value: 'forms', label: 'Fehlend: Formen' },
@@ -77,10 +87,16 @@ const RECOMMENDATION_SLOTS = ['primary', 'alternative_1', 'alternative_2'] as co
 
 const DEFAULT_INGREDIENT_GROUP_OPTIONS: AdminIngredientGroupOption[] = [
   { value: 'all', label: 'Alle Gruppen', count: 0 },
-  { value: 'vitamins', label: 'Vitamine', count: 0 },
-  { value: 'minerals', label: 'Mineralstoffe', count: 0 },
-  { value: 'trace_elements', label: 'Spurenelemente', count: 0 },
-  { value: 'enzymes', label: 'Enzyme', count: 0 },
+  { value: 'vitamin', label: 'Vitamine', count: 0 },
+  { value: 'mineral', label: 'Mineralstoffe', count: 0 },
+  { value: 'trace_element', label: 'Spurenelemente', count: 0 },
+  { value: 'amino_acid_protein', label: 'Aminos\u00e4uren & Proteine', count: 0 },
+  { value: 'fatty_acid', label: 'Fetts\u00e4uren', count: 0 },
+  { value: 'plant_extract', label: 'Pflanzenstoffe & Extrakte', count: 0 },
+  { value: 'medicinal_mushroom', label: 'Heilpilze', count: 0 },
+  { value: 'enzyme', label: 'Enzyme', count: 0 },
+  { value: 'probiotic', label: 'Probiotika', count: 0 },
+  { value: 'other', label: 'Sonstige', count: 0 },
 ];
 
 const TASK_META: Record<AdminIngredientTaskKey, {
@@ -140,7 +156,7 @@ function hasBlogCoverage(ingredient: AdminIngredientListItem): boolean {
 function taskCount(ingredient: AdminIngredientListItem, task: AdminIngredientTaskKey): number {
   if (task === 'forms') return ingredient.form_count;
   if (task === 'dge') return ingredient.dge_source_count;
-  if (task === 'precursors') return ingredient.precursor_count;
+  if (task === 'precursors') return ingredient.part_count || ingredient.precursor_count;
   return ingredient.synonym_count;
 }
 
@@ -183,6 +199,15 @@ function sourceMatchesDge(source: AdminIngredientResearchSource): boolean {
   );
 }
 
+function sourceToDgeDraft(source: AdminIngredientResearchSource): DgeSourceDraft {
+  return {
+    title: source.source_title ?? '',
+    url: source.source_url ?? '',
+    notes: source.notes ?? '',
+    no_recommendation: Boolean(source.no_recommendation),
+  };
+}
+
 function shopLinkHost(url: string | null): string {
   if (!url) return 'kein Shoplink';
   try {
@@ -201,6 +226,23 @@ function parseModalNumber(value: string): number | null {
   if (!trimmed) return null;
   const parsed = Number(trimmed);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatDoseNumber(value: number): string {
+  return new Intl.NumberFormat('de-DE', { maximumFractionDigits: 2 }).format(value);
+}
+
+function doseRecommendationLabel(recommendation: AdminDoseRecommendation): string {
+  const min = recommendation.dose_min == null ? '' : `${formatDoseNumber(recommendation.dose_min)} - `;
+  const max = recommendation.dose_max == null ? '-' : formatDoseNumber(recommendation.dose_max);
+  return `${min}${max} ${recommendation.unit ?? ''}`.trim();
+}
+
+function doseRecommendationMeta(recommendation: AdminDoseRecommendation): string {
+  return [
+    recommendation.population_name_de ?? recommendation.population_slug ?? null,
+    recommendation.source_label ?? null,
+  ].filter((value): value is string => Boolean(value && value.trim().length > 0)).join(' · ');
 }
 
 function createNewFormRow(id: number): NewFormRow {
@@ -241,8 +283,8 @@ function shopLinkBadge(link: AdminProductShopLink): RecommendationLinkBadge {
   }
   if (link.affiliate_owner_type === 'user') {
     return isCheckedHealth(link.health)
-      ? { label: 'Kunden-Link (geprÃ¼ft)', tone: 'info' }
-      : { label: 'Kunden-Link (ungeprÃ¼ft)', tone: 'danger' };
+      ? { label: 'Kunden-Link (geprüft)', tone: 'info' }
+      : { label: 'Kunden-Link (ungeprüft)', tone: 'danger' };
   }
   return {
     label: 'Normaler Link',
@@ -259,8 +301,8 @@ function catalogProductBadge(product: Pick<AdminCatalogProduct, 'is_affiliate' |
   }
   if (product.affiliate_owner_type === 'user') {
     return isCheckedHealth(product.link_health)
-      ? { label: 'Kunden-Link (geprÃ¼ft)', tone: 'info' }
-      : { label: 'Kunden-Link (ungeprÃ¼ft)', tone: 'danger' };
+      ? { label: 'Kunden-Link (geprüft)', tone: 'info' }
+      : { label: 'Kunden-Link (ungeprüft)', tone: 'danger' };
   }
   return {
     label: 'Normaler Link',
@@ -604,7 +646,7 @@ function TaskModal({
   const [statuses, setStatuses] = useState<AdminIngredientTaskStatusMap>({});
   const [forms, setForms] = useState<IngredientForm[]>([]);
   const [synonyms, setSynonyms] = useState<IngredientSynonym[]>([]);
-  const [precursors, setPrecursors] = useState<AdminIngredientPrecursor[]>([]);
+  const [parts, setParts] = useState<AdminIngredientPartLink[]>([]);
   const [dgeSources, setDgeSources] = useState<AdminIngredientResearchSource[]>([]);
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(true);
@@ -617,13 +659,12 @@ function TaskModal({
   const [synonymName, setSynonymName] = useState('');
   const [formDrafts, setFormDrafts] = useState<Record<number, { name: string; comment: string; tags: string; score: string }>>({});
   const [synonymDrafts, setSynonymDrafts] = useState<Record<number, { synonym: string; language: string }>>({});
-  const [precursorDrafts, setPrecursorDrafts] = useState<Record<number, { note: string; sort_order: string }>>({});
-  const [dgeDrafts, setDgeDrafts] = useState<Record<number, { title: string; url: string; notes: string; recommendation_type: string; no_recommendation: boolean; dose_min: string; dose_max: string; dose_unit: string }>>({});
-  const [newDge, setNewDge] = useState({ title: '', url: '', notes: '', recommendation_type: '', no_recommendation: false, dose_min: '', dose_max: '', dose_unit: '' });
-  const [precursorQuery, setPrecursorQuery] = useState('');
-  const [precursorResults, setPrecursorResults] = useState<AdminIngredientListItem[]>([]);
-  const [selectedPrecursorId, setSelectedPrecursorId] = useState<number | null>(null);
-  const [precursorNote, setPrecursorNote] = useState('');
+  const [partDrafts, setPartDrafts] = useState<Record<number, { sort_order: string }>>({});
+  const [dgeDrafts, setDgeDrafts] = useState<Record<number, DgeSourceDraft>>({});
+  const [newDge, setNewDge] = useState<DgeSourceDraft>({ title: '', url: '', notes: '', no_recommendation: false });
+  const [partQuery, setPartQuery] = useState('');
+  const [partResults, setPartResults] = useState<AdminIngredientPart[]>([]);
+  const [selectedPartId, setSelectedPartId] = useState<number | null>(null);
 
   const currentStatus = statuses[task]?.status ?? 'open';
   const fieldsDisabled = saving || (task !== 'forms' && currentStatus === 'none');
@@ -652,27 +693,17 @@ function TaskModal({
         }])));
       }
       if (task === 'precursors') {
-        const nextPrecursors = await getIngredientPrecursors(ingredient.id);
-        setPrecursors(nextPrecursors);
-        setPrecursorDrafts(Object.fromEntries(nextPrecursors.map((precursor) => [precursor.precursor_ingredient_id, {
-          note: precursor.note ?? '',
-          sort_order: String(precursor.sort_order ?? 0),
+        const nextParts = await getIngredientParts(ingredient.id);
+        setParts(nextParts);
+        setPartDrafts(Object.fromEntries(nextParts.map((part) => [part.part_id, {
+          sort_order: String(part.sort_order ?? 0),
         }])));
       }
       if (task === 'dge') {
         const detail = await getIngredientResearchDetail(ingredient.id);
         const sources = detail.sources.filter(sourceMatchesDge);
         setDgeSources(sources);
-        setDgeDrafts(Object.fromEntries(sources.map((source) => [source.id, {
-          title: source.source_title ?? '',
-          url: source.source_url ?? '',
-          notes: source.notes ?? '',
-          recommendation_type: source.recommendation_type ?? '',
-          no_recommendation: Boolean(source.no_recommendation),
-          dose_min: source.dose_min === null ? '' : String(source.dose_min),
-          dose_max: source.dose_max === null ? '' : String(source.dose_max),
-          dose_unit: source.dose_unit ?? '',
-        }])));
+        setDgeDrafts(Object.fromEntries(sources.map((source) => [source.id, sourceToDgeDraft(source)])));
       }
     } catch (modalError) {
       setError(getErrorMessage(modalError));
@@ -843,14 +874,13 @@ function TaskModal({
     }
   };
 
-  const handleSearchPrecursors = async (event?: FormEvent) => {
+  const handleSearchParts = async (event?: FormEvent) => {
     event?.preventDefault();
-    if (!precursorQuery.trim()) return;
+    if (!partQuery.trim()) return;
     setSaving(true);
     setError('');
     try {
-      const response = await getAdminIngredients({ q: precursorQuery.trim(), limit: 8 });
-      setPrecursorResults(response.ingredients.filter((entry) => entry.id !== ingredient.id));
+      setPartResults(await searchIngredientParts(partQuery.trim(), 8));
     } catch (modalError) {
       setError(getErrorMessage(modalError));
     } finally {
@@ -858,20 +888,19 @@ function TaskModal({
     }
   };
 
-  const handleAddPrecursor = async () => {
-    if (!selectedPrecursorId) return;
+  const handleAddPart = async () => {
+    if (!selectedPartId && !partQuery.trim()) return;
     setSaving(true);
     setError('');
     setMessage('');
     try {
-      await createIngredientPrecursor(ingredient.id, {
-        precursor_ingredient_id: selectedPrecursorId,
-        note: precursorNote.trim() || null,
+      await createIngredientPartLink(ingredient.id, {
+        part_id: selectedPartId,
+        part_name: selectedPartId ? null : partQuery.trim(),
       });
-      setSelectedPrecursorId(null);
-      setPrecursorQuery('');
-      setPrecursorResults([]);
-      setPrecursorNote('');
+      setSelectedPartId(null);
+      setPartQuery('');
+      setPartResults([]);
       await reload();
       await onChanged();
       setMessage('Wirkstoffteil hinzugefügt.');
@@ -882,13 +911,13 @@ function TaskModal({
     }
   };
 
-  const handleDeletePrecursor = async (precursor: AdminIngredientPrecursor) => {
-    if (!window.confirm(`Wirkstoffteil "${precursor.precursor_name}" löschen?`)) return;
+  const handleDeletePart = async (part: AdminIngredientPartLink) => {
+    if (!window.confirm(`Wirkstoffteil "${part.part_name}" löschen?`)) return;
     setSaving(true);
     setError('');
     setMessage('');
     try {
-      await deleteIngredientPrecursor(ingredient.id, precursor.precursor_ingredient_id);
+      await deleteIngredientPartLink(ingredient.id, part.part_id);
       await reload();
       await onChanged();
       setMessage('Wirkstoffteil gelöscht.');
@@ -899,15 +928,14 @@ function TaskModal({
     }
   };
 
-  const handleUpdatePrecursor = async (precursor: AdminIngredientPrecursor) => {
-    const draft = precursorDrafts[precursor.precursor_ingredient_id];
+  const handleUpdatePart = async (part: AdminIngredientPartLink) => {
+    const draft = partDrafts[part.part_id];
     if (!draft) return;
     setSaving(true);
     setError('');
     setMessage('');
     try {
-      await updateIngredientPrecursor(ingredient.id, precursor.precursor_ingredient_id, {
-        note: draft.note.trim() || null,
+      await updateIngredientPartLink(ingredient.id, part.part_id, {
         sort_order: parseModalNumber(draft.sort_order) ?? 0,
       });
       await reload();
@@ -920,17 +948,13 @@ function TaskModal({
     }
   };
 
-  const dgePayload = (draft: typeof newDge) => ({
+  const dgePayload = (draft: DgeSourceDraft) => ({
     source_kind: 'official',
     organization: 'Deutsche Gesellschaft für Ernährung',
     source_title: draft.title.trim() || 'Deutsche Gesellschaft für Ernährung',
     source_url: draft.url.trim() || null,
     notes: draft.notes.trim() || null,
-    recommendation_type: draft.recommendation_type.trim() || null,
     no_recommendation: draft.no_recommendation,
-    dose_min: parseModalNumber(draft.dose_min),
-    dose_max: parseModalNumber(draft.dose_max),
-    dose_unit: draft.dose_unit.trim() || null,
   });
 
   const handleCreateDgeSource = async () => {
@@ -939,7 +963,7 @@ function TaskModal({
     setMessage('');
     try {
       await createIngredientResearchSource(ingredient.id, dgePayload(newDge));
-      setNewDge({ title: '', url: '', notes: '', recommendation_type: '', no_recommendation: false, dose_min: '', dose_max: '', dose_unit: '' });
+      setNewDge({ title: '', url: '', notes: '', no_recommendation: false });
       await reload();
       await onChanged();
       setMessage('DGE-Quelle angelegt.');
@@ -1229,79 +1253,71 @@ function TaskModal({
           {task === 'precursors' && (
             <div className="grid gap-3">
               <div className="grid gap-2">
-                {precursors.length === 0 ? (
+                {parts.length === 0 ? (
                   <AdminEmpty>{TASK_META.precursors.emptyLabel}</AdminEmpty>
-                ) : precursors.map((precursor) => (
-                  <div key={precursor.precursor_ingredient_id} className="flex flex-wrap items-start justify-between gap-3 rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg)] p-3 text-sm">
+                ) : parts.map((part) => (
+                  <div key={part.part_id} className="flex flex-wrap items-start justify-between gap-3 rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg)] p-3 text-sm">
                     <div className="min-w-0">
-                      <div className="font-medium">{precursor.precursor_name}</div>
-                      {precursor.note ? <p className="admin-muted mt-1">{precursor.note}</p> : null}
+                      <div className="font-medium">{part.part_name}</div>
+                      <p className="admin-muted mt-1 text-xs">Part-ID {part.part_id}{part.part_type ? ` - ${part.part_type}` : ''}</p>
                     </div>
-                    <div className="grid min-w-[260px] flex-1 gap-2 md:grid-cols-[1fr_96px_auto]">
+                    <div className="grid min-w-[220px] flex-1 gap-2 md:grid-cols-[96px_auto]">
                       <input
-                        value={precursorDrafts[precursor.precursor_ingredient_id]?.note ?? precursor.note ?? ''}
-                        onChange={(event) => setPrecursorDrafts((previous) => ({
+                        value={partDrafts[part.part_id]?.sort_order ?? String(part.sort_order ?? 0)}
+                        onChange={(event) => setPartDrafts((previous) => ({
                           ...previous,
-                          [precursor.precursor_ingredient_id]: {
-                            ...(previous[precursor.precursor_ingredient_id] ?? { note: precursor.note ?? '', sort_order: String(precursor.sort_order ?? 0) }),
-                            note: event.target.value,
-                          },
-                        }))}
-                        className="admin-input"
-                        placeholder="Notiz"
-                        disabled={fieldsDisabled}
-                      />
-                      <input
-                        value={precursorDrafts[precursor.precursor_ingredient_id]?.sort_order ?? String(precursor.sort_order ?? 0)}
-                        onChange={(event) => setPrecursorDrafts((previous) => ({
-                          ...previous,
-                          [precursor.precursor_ingredient_id]: {
-                            ...(previous[precursor.precursor_ingredient_id] ?? { note: precursor.note ?? '', sort_order: String(precursor.sort_order ?? 0) }),
-                            sort_order: event.target.value,
-                          },
+                          [part.part_id]: { sort_order: event.target.value },
                         }))}
                         className="admin-input"
                         placeholder="Reihenfolge"
                         inputMode="numeric"
                         disabled={fieldsDisabled}
                       />
-                      <AdminButton size="sm" onClick={() => void handleUpdatePrecursor(precursor)} disabled={fieldsDisabled}>
+                      <AdminButton size="sm" onClick={() => void handleUpdatePart(part)} disabled={fieldsDisabled}>
                         Speichern
                       </AdminButton>
                     </div>
-                    <AdminButton size="sm" variant="danger" onClick={() => void handleDeletePrecursor(precursor)} disabled={fieldsDisabled}>
+                    <AdminButton size="sm" variant="danger" onClick={() => void handleDeletePart(part)} disabled={fieldsDisabled}>
                       <Trash2 size={13} />
                       Löschen
                     </AdminButton>
                   </div>
                 ))}
               </div>
-              <form className="grid gap-2 rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] p-3" onSubmit={handleSearchPrecursors}>
+              <form className="grid gap-2 rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] p-3" onSubmit={handleSearchParts}>
                 <div className="flex flex-wrap gap-2">
-                  <input value={precursorQuery} onChange={(event) => setPrecursorQuery(event.target.value)} className="admin-input min-w-[220px] flex-1" placeholder="Wirkstoffteil suchen" disabled={fieldsDisabled} />
-                  <AdminButton type="submit" disabled={fieldsDisabled || !precursorQuery.trim()}>
+                  <input
+                    value={partQuery}
+                    onChange={(event) => {
+                      setSelectedPartId(null);
+                      setPartQuery(event.target.value);
+                    }}
+                    className="admin-input min-w-[220px] flex-1"
+                    placeholder="Wirkstoffteil suchen oder neu eingeben"
+                    disabled={fieldsDisabled}
+                  />
+                  <AdminButton type="submit" disabled={fieldsDisabled || !partQuery.trim()}>
                     <Search size={13} />
                     Suchen
                   </AdminButton>
                 </div>
-                {precursorResults.length > 0 && (
+                {partResults.length > 0 && (
                   <select
-                    value={selectedPrecursorId ?? ''}
-                    onChange={(event) => setSelectedPrecursorId(event.target.value ? Number(event.target.value) : null)}
+                    value={selectedPartId ?? ''}
+                    onChange={(event) => setSelectedPartId(event.target.value ? Number(event.target.value) : null)}
                     className="admin-select"
                     disabled={fieldsDisabled}
                   >
                     <option value="">Wirkstoffteil auswählen</option>
-                    {precursorResults.map((entry) => (
+                    {partResults.map((entry) => (
                       <option key={entry.id} value={entry.id}>{entry.name}</option>
                     ))}
                   </select>
                 )}
-                <input value={precursorNote} onChange={(event) => setPrecursorNote(event.target.value)} className="admin-input" placeholder="Notiz, optional" disabled={fieldsDisabled} />
                 <div className="flex justify-end">
-                  <AdminButton variant="primary" onClick={() => void handleAddPrecursor()} disabled={fieldsDisabled || !selectedPrecursorId}>
+                  <AdminButton variant="primary" onClick={() => void handleAddPart()} disabled={fieldsDisabled || (!selectedPartId && !partQuery.trim())}>
                     <Plus size={13} />
-                    Wirkstoffteil hinzufügen
+                    {selectedPartId ? 'Treffer verknuepfen' : 'Neu anlegen und verknuepfen'}
                   </AdminButton>
                 </div>
               </form>
@@ -1319,10 +1335,24 @@ function TaskModal({
                       <div className="font-medium">{source.source_title || source.organization || 'DGE-Quelle'}</div>
                       <div className="admin-muted mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs">
                         {source.organization ? <span>{source.organization}</span> : null}
-                        {source.recommendation_type ? <span>{source.recommendation_type}</span> : null}
                         {source.no_recommendation ? <span>Keine Empfehlung</span> : null}
                       </div>
                       {source.notes ? <p className="admin-muted mt-2">{source.notes}</p> : null}
+                      {source.linked_dose_recommendations.length > 0 ? (
+                        <div className="mt-2 grid gap-1">
+                          {source.linked_dose_recommendations.map((recommendation) => (
+                            <div
+                              key={recommendation.id}
+                              className="rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg-soft)] px-2 py-1 text-xs"
+                            >
+                              <div className="font-medium">{doseRecommendationLabel(recommendation)}</div>
+                              <div className="admin-muted">{doseRecommendationMeta(recommendation) || `Dosiswert #${recommendation.id}`}</div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="admin-muted mt-2 text-xs">Noch nicht verkn&uuml;pft. Dosis-/Richtwerte im Dosis-Editor pflegen und mit dieser Quelle verkn&uuml;pfen.</p>
+                      )}
                     </div>
                     {source.source_url ? (
                       <a href={source.source_url} target="_blank" rel="noopener noreferrer" className="admin-icon-btn" aria-label="DGE-Quelle öffnen">
@@ -1336,16 +1366,7 @@ function TaskModal({
                         value={dgeDrafts[source.id]?.title ?? source.source_title ?? ''}
                         onChange={(event) => setDgeDrafts((previous) => ({
                           ...previous,
-                          [source.id]: { ...(previous[source.id] ?? {
-                            title: source.source_title ?? '',
-                            url: source.source_url ?? '',
-                            notes: source.notes ?? '',
-                            recommendation_type: source.recommendation_type ?? '',
-                            no_recommendation: Boolean(source.no_recommendation),
-                            dose_min: source.dose_min === null ? '' : String(source.dose_min),
-                            dose_max: source.dose_max === null ? '' : String(source.dose_max),
-                            dose_unit: source.dose_unit ?? '',
-                          }), title: event.target.value },
+                          [source.id]: { ...(previous[source.id] ?? sourceToDgeDraft(source)), title: event.target.value },
                         }))}
                         className="admin-input"
                         placeholder="Quellentitel"
@@ -1355,117 +1376,22 @@ function TaskModal({
                         value={dgeDrafts[source.id]?.url ?? source.source_url ?? ''}
                         onChange={(event) => setDgeDrafts((previous) => ({
                           ...previous,
-                          [source.id]: { ...(previous[source.id] ?? {
-                            title: source.source_title ?? '',
-                            url: source.source_url ?? '',
-                            notes: source.notes ?? '',
-                            recommendation_type: source.recommendation_type ?? '',
-                            no_recommendation: Boolean(source.no_recommendation),
-                            dose_min: source.dose_min === null ? '' : String(source.dose_min),
-                            dose_max: source.dose_max === null ? '' : String(source.dose_max),
-                            dose_unit: source.dose_unit ?? '',
-                          }), url: event.target.value },
+                          [source.id]: { ...(previous[source.id] ?? sourceToDgeDraft(source)), url: event.target.value },
                         }))}
                         className="admin-input"
                         placeholder="URL"
                         disabled={fieldsDisabled}
                       />
                     </div>
-                    <div className="grid gap-2 md:grid-cols-[1fr_0.7fr_0.7fr_0.7fr]">
-                      <input
-                        value={dgeDrafts[source.id]?.recommendation_type ?? source.recommendation_type ?? ''}
-                        onChange={(event) => setDgeDrafts((previous) => ({
-                          ...previous,
-                          [source.id]: { ...(previous[source.id] ?? {
-                            title: source.source_title ?? '',
-                            url: source.source_url ?? '',
-                            notes: source.notes ?? '',
-                            recommendation_type: source.recommendation_type ?? '',
-                            no_recommendation: Boolean(source.no_recommendation),
-                            dose_min: source.dose_min === null ? '' : String(source.dose_min),
-                            dose_max: source.dose_max === null ? '' : String(source.dose_max),
-                            dose_unit: source.dose_unit ?? '',
-                          }), recommendation_type: event.target.value },
-                        }))}
-                        className="admin-input"
-                        placeholder="Empfehlungstyp"
-                        disabled={fieldsDisabled}
-                      />
-                      <input
-                        value={dgeDrafts[source.id]?.dose_min ?? (source.dose_min === null ? '' : String(source.dose_min))}
-                        onChange={(event) => setDgeDrafts((previous) => ({
-                          ...previous,
-                          [source.id]: { ...(previous[source.id] ?? {
-                            title: source.source_title ?? '',
-                            url: source.source_url ?? '',
-                            notes: source.notes ?? '',
-                            recommendation_type: source.recommendation_type ?? '',
-                            no_recommendation: Boolean(source.no_recommendation),
-                            dose_min: source.dose_min === null ? '' : String(source.dose_min),
-                            dose_max: source.dose_max === null ? '' : String(source.dose_max),
-                            dose_unit: source.dose_unit ?? '',
-                          }), dose_min: event.target.value },
-                        }))}
-                        className="admin-input"
-                        placeholder="Min"
-                        inputMode="decimal"
-                        disabled={fieldsDisabled}
-                      />
-                      <input
-                        value={dgeDrafts[source.id]?.dose_max ?? (source.dose_max === null ? '' : String(source.dose_max))}
-                        onChange={(event) => setDgeDrafts((previous) => ({
-                          ...previous,
-                          [source.id]: { ...(previous[source.id] ?? {
-                            title: source.source_title ?? '',
-                            url: source.source_url ?? '',
-                            notes: source.notes ?? '',
-                            recommendation_type: source.recommendation_type ?? '',
-                            no_recommendation: Boolean(source.no_recommendation),
-                            dose_min: source.dose_min === null ? '' : String(source.dose_min),
-                            dose_max: source.dose_max === null ? '' : String(source.dose_max),
-                            dose_unit: source.dose_unit ?? '',
-                          }), dose_max: event.target.value },
-                        }))}
-                        className="admin-input"
-                        placeholder="Max"
-                        inputMode="decimal"
-                        disabled={fieldsDisabled}
-                      />
-                      <input
-                        value={dgeDrafts[source.id]?.dose_unit ?? source.dose_unit ?? ''}
-                        onChange={(event) => setDgeDrafts((previous) => ({
-                          ...previous,
-                          [source.id]: { ...(previous[source.id] ?? {
-                            title: source.source_title ?? '',
-                            url: source.source_url ?? '',
-                            notes: source.notes ?? '',
-                            recommendation_type: source.recommendation_type ?? '',
-                            no_recommendation: Boolean(source.no_recommendation),
-                            dose_min: source.dose_min === null ? '' : String(source.dose_min),
-                            dose_max: source.dose_max === null ? '' : String(source.dose_max),
-                            dose_unit: source.dose_unit ?? '',
-                          }), dose_unit: event.target.value },
-                        }))}
-                        className="admin-input"
-                        placeholder="Einheit"
-                        disabled={fieldsDisabled}
-                      />
-                    </div>
+                    <p className="admin-muted rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg-soft)] px-3 py-2 text-xs">
+                      Dosis-/Richtwerte im Dosis-Editor pflegen und dort mit dieser Quelle verkn&uuml;pfen.
+                    </p>
                     <textarea
                       value={dgeDrafts[source.id]?.notes ?? source.notes ?? ''}
-                      onChange={(event) => setDgeDrafts((previous) => ({
-                        ...previous,
-                        [source.id]: { ...(previous[source.id] ?? {
-                          title: source.source_title ?? '',
-                          url: source.source_url ?? '',
-                          notes: source.notes ?? '',
-                          recommendation_type: source.recommendation_type ?? '',
-                          no_recommendation: Boolean(source.no_recommendation),
-                          dose_min: source.dose_min === null ? '' : String(source.dose_min),
-                          dose_max: source.dose_max === null ? '' : String(source.dose_max),
-                          dose_unit: source.dose_unit ?? '',
-                        }), notes: event.target.value },
-                      }))}
+                        onChange={(event) => setDgeDrafts((previous) => ({
+                          ...previous,
+                          [source.id]: { ...(previous[source.id] ?? sourceToDgeDraft(source)), notes: event.target.value },
+                        }))}
                       className="admin-input min-h-[82px]"
                       placeholder="Notiz"
                       disabled={fieldsDisabled}
@@ -1477,16 +1403,7 @@ function TaskModal({
                           checked={dgeDrafts[source.id]?.no_recommendation ?? Boolean(source.no_recommendation)}
                           onChange={(event) => setDgeDrafts((previous) => ({
                             ...previous,
-                            [source.id]: { ...(previous[source.id] ?? {
-                              title: source.source_title ?? '',
-                              url: source.source_url ?? '',
-                              notes: source.notes ?? '',
-                              recommendation_type: source.recommendation_type ?? '',
-                              no_recommendation: Boolean(source.no_recommendation),
-                              dose_min: source.dose_min === null ? '' : String(source.dose_min),
-                              dose_max: source.dose_max === null ? '' : String(source.dose_max),
-                              dose_unit: source.dose_unit ?? '',
-                            }), no_recommendation: event.target.checked },
+                            [source.id]: { ...(previous[source.id] ?? sourceToDgeDraft(source)), no_recommendation: event.target.checked },
                           }))}
                           disabled={fieldsDisabled}
                         />
@@ -1528,38 +1445,9 @@ function TaskModal({
                     disabled={fieldsDisabled}
                   />
                 </div>
-                <div className="grid gap-2 md:grid-cols-[1fr_0.7fr_0.7fr_0.7fr]">
-                  <input
-                    value={newDge.recommendation_type}
-                    onChange={(event) => setNewDge((previous) => ({ ...previous, recommendation_type: event.target.value }))}
-                    className="admin-input"
-                    placeholder="Empfehlungstyp"
-                    disabled={fieldsDisabled}
-                  />
-                  <input
-                    value={newDge.dose_min}
-                    onChange={(event) => setNewDge((previous) => ({ ...previous, dose_min: event.target.value }))}
-                    className="admin-input"
-                    placeholder="Min"
-                    inputMode="decimal"
-                    disabled={fieldsDisabled}
-                  />
-                  <input
-                    value={newDge.dose_max}
-                    onChange={(event) => setNewDge((previous) => ({ ...previous, dose_max: event.target.value }))}
-                    className="admin-input"
-                    placeholder="Max"
-                    inputMode="decimal"
-                    disabled={fieldsDisabled}
-                  />
-                  <input
-                    value={newDge.dose_unit}
-                    onChange={(event) => setNewDge((previous) => ({ ...previous, dose_unit: event.target.value }))}
-                    className="admin-input"
-                    placeholder="Einheit"
-                    disabled={fieldsDisabled}
-                  />
-                </div>
+                <p className="admin-muted rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg-soft)] px-3 py-2 text-xs">
+                  Dosis-/Richtwerte im Dosis-Editor pflegen und dort mit der Quelle verkn&uuml;pfen.
+                </p>
                 <textarea
                   value={newDge.notes}
                   onChange={(event) => setNewDge((previous) => ({ ...previous, notes: event.target.value }))}

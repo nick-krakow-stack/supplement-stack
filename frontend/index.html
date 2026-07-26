@@ -7,6 +7,18 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      (() => {
+        const url = new URL(window.location.href);
+        if (url.pathname === '/wissen' && !url.searchParams.has('cfcheck')) {
+          const request = fetch('/api/knowledge', {
+            headers: { Accept: 'application/json' },
+          });
+          request.catch(() => undefined);
+          window.__knowledgeOverviewRequest = request;
+        }
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

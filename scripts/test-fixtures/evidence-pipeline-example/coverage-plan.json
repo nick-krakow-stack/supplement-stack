@@ -1,0 +1,61 @@
+{
+  "schema": "coverage_plan.v1",
+  "coverage_plan_id": "example-plan-v1",
+  "content_hash": "sha256:146adf751ee7cf0b3b6d27602fbfa50e071b7c18ed4bd889ac0cad8b97e87cd1",
+  "substance": "Beispielstoff",
+  "stage4_requested": false,
+  "stage3_archetype_decision": {
+    "archetype": "nonessential_or_endogenous",
+    "reason": "Static example archetype.",
+    "status": "approved",
+    "framework_id": "stage3.nonessential_or_endogenous",
+    "version": "2.0.3",
+    "variant": "nonessential_or_endogenous",
+    "decision": "existing"
+  },
+  "clusters": [{
+    "cluster_key": "overview",
+    "required": true,
+    "status": "covered",
+    "primary_source_ids": ["example-source"],
+    "supporting_source_ids": [],
+    "article_candidate_ids": ["example-article"]
+  }],
+  "sources": [{
+    "source_id": "example-source",
+    "stage15_label": "ANCHOR",
+    "source_url": "https://example.invalid/offline-source",
+    "title": "Fictional offline example source",
+    "covered_by_source_ids": [],
+    "assigned_article_ids": ["example-article"]
+  }],
+  "article_candidates": [{
+    "article_id": "example-article",
+    "primary_source_id": "example-source",
+    "integrated_source_ids": [],
+    "cluster_keys": ["overview"],
+    "own_article_reason": "minimal_cluster_representative",
+    "risk_class": ["standard"],
+    "source_archetype": "meta_review",
+    "framework_fit": {
+      "decision": "existing",
+      "framework_id": "stage2.meta_study",
+      "version": "2.0.0",
+      "variant_id": "systematic_review_or_meta_analysis",
+      "reason": "Static example fit.",
+      "owner_approval": { "required": false, "status": "not_required" },
+      "pilot": { "required": false, "status": "not_required" }
+    },
+    "publication_gate": { "status": "pending", "result": null, "review_id": null },
+    "status": "planned",
+    "facts_status": "pending",
+    "publication_status": "drafted"
+  }],
+  "facts_gate": {
+    "status": "pending",
+    "required_record_ids": [],
+    "validated_record_ids": [],
+    "missing_cluster_keys": [],
+    "blocking_gaps": []
+  }
+}

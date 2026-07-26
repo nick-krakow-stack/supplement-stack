@@ -1,0 +1,81 @@
+{
+  "schema": "framework_catalog.v1",
+  "catalog_version": "2.4.4",
+  "updated_at": "2026-07-20",
+  "lifecycle": {
+    "reuse": "Use an approved framework_id/version. Stoff-specific omission, renaming or reordering inside its flex rules remains reuse.",
+    "adapt_existing": "Create a versioned candidate only for a durable reusable contract change; bind the base framework, pass real compiler, render and publication pilots, then activate atomically against the expected old catalog hash.",
+    "new_archetype": "Create a candidate only when adaptation cannot work; require the separate owner approval receipt selected by the original gap, pass all pilots, then activate atomically without overwrite. A new substance alone is not a new archetype."
+  },
+  "frameworks": [
+    {
+      "framework_id": "stage2.clinical_single_study",
+      "version": "2.0.1",
+      "stage": "stage2",
+      "path": "codex-files/frameworks/01_framework_single_study.md",
+      "framework_sha256": "sha256:a9380ab450253210cff265bac33e85aa953c6298aebf3e3981404cb5fd02118a",
+      "variant": "clinical_single_study",
+      "preferred_batch_min": 2,
+      "batch_max": 4,
+      "allow_single_remainder": true,
+      "status": "approved"
+    },
+    {
+      "framework_id": "stage2.authority_guideline_safety",
+      "version": "2.0.1",
+      "stage": "stage2",
+      "path": "codex-files/frameworks/01_framework_single_study.md",
+      "framework_sha256": "sha256:a9380ab450253210cff265bac33e85aa953c6298aebf3e3981404cb5fd02118a",
+      "variant": "authority_guideline_safety",
+      "preferred_batch_min": 2,
+      "batch_max": 4,
+      "allow_single_remainder": true,
+      "status": "approved"
+    },
+    {
+      "framework_id": "stage2.meta_study",
+      "version": "2.0.1",
+      "stage": "stage2",
+      "path": "codex-files/frameworks/02_framework_meta_study.md",
+      "framework_sha256": "sha256:f2fb62536002c885a0f04f3ff9dcc60dd628dd8fca08448704d833ddeba71813",
+      "variant": "systematic_review_or_meta_analysis",
+      "preferred_batch_min": 2,
+      "batch_max": 4,
+      "allow_single_remainder": true,
+      "status": "approved"
+    },
+    {
+      "framework_id": "stage3.essential_nutrient",
+      "version": "2.0.3",
+      "stage": "stage3",
+      "path": "codex-files/frameworks/03_framework_hauptartikel.md",
+      "framework_sha256": "sha256:d7a6cab31f287c631226bc75d49e70470cbf84cc80c98445cd7001b7ed6bc727",
+      "contract_id": "knowledge_magazine_v1",
+      "render_profile": "knowledge_magazine_v1",
+      "variant": "essential_nutrient",
+      "status": "approved"
+    },
+    {
+      "framework_id": "stage3.nonessential_or_endogenous",
+      "version": "2.0.3",
+      "stage": "stage3",
+      "path": "codex-files/frameworks/03_framework_hauptartikel.md",
+      "framework_sha256": "sha256:d7a6cab31f287c631226bc75d49e70470cbf84cc80c98445cd7001b7ed6bc727",
+      "contract_id": "knowledge_magazine_v1",
+      "render_profile": "knowledge_magazine_v1",
+      "variant": "nonessential_or_endogenous",
+      "status": "approved"
+    },
+    {
+      "framework_id": "stage3.microorganism_extract_product_category",
+      "version": "2.0.3",
+      "stage": "stage3",
+      "path": "codex-files/frameworks/03_framework_hauptartikel.md",
+      "framework_sha256": "sha256:d7a6cab31f287c631226bc75d49e70470cbf84cc80c98445cd7001b7ed6bc727",
+      "contract_id": "knowledge_magazine_v1",
+      "render_profile": "knowledge_magazine_v1",
+      "variant": "microorganism_extract_product_category",
+      "status": "approved"
+    }
+  ]
+}
