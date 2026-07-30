@@ -1,50 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { apiPath } from '../api/base';
+import {
+  type KnowledgeOverviewResponse,
+  readCachedKnowledgeOverview,
+  writeCachedKnowledgeOverview,
+} from '../lib/knowledgeOverviewClient';
 import type { KnowledgeArticleOverviewItem, KnowledgeNutrientStatus } from '../types';
-
-type KnowledgeOverviewResponse = {
-  articles: KnowledgeArticleOverviewItem[];
-  nutrient_statuses?: KnowledgeNutrientStatus[];
-  total?: number;
-};
-
-declare global {
-  interface Window {
-    __knowledgeOverviewRequest?: Promise<Response>;
-  }
-}
-
-const OVERVIEW_SESSION_CACHE_KEY = 'knowledge-overview.v1';
-const OVERVIEW_SESSION_CACHE_TTL_MS = 5 * 60 * 1000;
-
-type CachedKnowledgeOverview = {
-  cached_at: number;
-  payload: KnowledgeOverviewResponse;
-};
-
-function readCachedKnowledgeOverview(): KnowledgeOverviewResponse | null {
-  try {
-    const raw = window.sessionStorage.getItem(OVERVIEW_SESSION_CACHE_KEY);
-    if (!raw) return null;
-    const cached = JSON.parse(raw) as CachedKnowledgeOverview;
-    if (!Number.isFinite(cached.cached_at) || Date.now() - cached.cached_at > OVERVIEW_SESSION_CACHE_TTL_MS) {
-      window.sessionStorage.removeItem(OVERVIEW_SESSION_CACHE_KEY);
-      return null;
-    }
-    return cached.payload && Array.isArray(cached.payload.articles) ? cached.payload : null;
-  } catch {
-    return null;
-  }
-}
-
-function writeCachedKnowledgeOverview(payload: KnowledgeOverviewResponse): void {
-  try {
-    window.sessionStorage.setItem(OVERVIEW_SESSION_CACHE_KEY, JSON.stringify({ cached_at: Date.now(), payload }));
-  } catch {
-    // The overview remains fully functional when storage is unavailable.
-  }
-}
 
 type CategoryKey =
   | 'vitamine'

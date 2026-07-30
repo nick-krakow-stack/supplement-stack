@@ -1,5 +1,12 @@
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { apiPath } from '../api/base';
 import { useAuth } from '../contexts/AuthContext';
+import {
+  type KnowledgeOverviewResponse,
+  readCachedKnowledgeOverview,
+  writeCachedKnowledgeOverview,
+} from '../lib/knowledgeOverviewClient';
 import {
   Search,
   Star,
@@ -249,12 +256,39 @@ function FeaturesSection() {
 // ---------------------------------------------------------------------------
 // Trust / Social Proof
 // ---------------------------------------------------------------------------
-const trustStats = [
-  { value: '500+', label: 'Wirkstoffe in der Datenbank' },
-  { value: '3', label: 'Wissenschaftliche Quellen (DGE, EFSA, NIH)' },
-  { value: '100 %', label: 'Kostenlos & datenschutzfreundlich' },
-  { value: '< 30 s', label: 'Bis zum ersten Ergebnis' },
-];
+type TrustStat = {
+  value: string;
+  label: string;
+};
+
+function formatStatValue(value: number): string {
+  return new Intl.NumberFormat('de-DE').format(value);
+}
+
+export function buildTrustStats(overview: KnowledgeOverviewResponse | null): TrustStat[] {
+  if (!overview) {
+    return [
+      { value: '–', label: 'Aktive Nährstoffe im Katalog' },
+      { value: '–', label: 'Veröffentlichte Wissensartikel' },
+      { value: '–', label: 'Quellenverknüpfungen in Wissensartikeln' },
+      { value: '–', label: 'Nährstoffe mit öffentlichen DGE-Werten' },
+    ];
+  }
+
+  const articles = Array.isArray(overview.articles) ? overview.articles : [];
+  const nutrientStatuses = Array.isArray(overview.nutrient_statuses) ? overview.nutrient_statuses : [];
+  const linkedSources = articles.reduce((total, article) => (
+    total + (Number.isFinite(article.sources_count) && article.sources_count > 0 ? article.sources_count : 0)
+  ), 0);
+  const dgeNutrients = nutrientStatuses.filter((status) => status.has_dge === true).length;
+
+  return [
+    { value: formatStatValue(nutrientStatuses.length), label: 'Aktive Nährstoffe im Katalog' },
+    { value: formatStatValue(articles.length), label: 'Veröffentlichte Wissensartikel' },
+    { value: formatStatValue(linkedSources), label: 'Quellenverknüpfungen in Wissensartikeln' },
+    { value: formatStatValue(dgeNutrients), label: 'Nährstoffe mit öffentlichen DGE-Werten' },
+  ];
+}
 
 const trustPoints = [
   'Keine Heilversprechen: Inhalte sind als Orientierung und Entscheidungshilfe gedacht.',
@@ -263,7 +297,42 @@ const trustPoints = [
   'Datenschutzbezug ist transparent geregelt (siehe Datenschutzerklärung); personenbezogene Daten werden nur wie beschrieben verarbeitet.',
 ];
 
-function TrustSection() {
+export function TrustSection() {
+  const [overview, setOverview] = useState<KnowledgeOverviewResponse | null>(() => readCachedKnowledgeOverview());
+  const trustStats = useMemo(() => buildTrustStats(overview), [overview]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let active = true;
+
+    fetch(apiPath('/knowledge'), {
+      signal: controller.signal,
+      headers: { Accept: 'application/json' },
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error('Startseiten-Kennzahlen konnten nicht geladen werden.');
+        return response.json() as Promise<KnowledgeOverviewResponse>;
+      })
+      .then((data) => {
+        if (!active) return;
+        const normalized: KnowledgeOverviewResponse = {
+          ...data,
+          articles: Array.isArray(data.articles) ? data.articles : [],
+          nutrient_statuses: Array.isArray(data.nutrient_statuses) ? data.nutrient_statuses : [],
+        };
+        setOverview(normalized);
+        writeCachedKnowledgeOverview(normalized);
+      })
+      .catch((error) => {
+        if (!active || (error instanceof DOMException && error.name === 'AbortError')) return;
+      });
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, []);
+
   return (
     <section className="py-20 md:py-28 bg-white">
       <div className="max-w-4xl mx-auto px-6">
@@ -279,7 +348,11 @@ function TrustSection() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
+        <div
+          className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12"
+          aria-live="polite"
+          aria-label="Aktuelle öffentliche Datenbasis"
+        >
           {trustStats.map(({ value, label }) => (
             <div
               key={label}
