@@ -10,6 +10,12 @@ type SqliteRunResult = {
   lastInsertRowid: number | bigint;
 };
 
+type InMemoryD1Result<T = Record<string, unknown>> = {
+  success: true;
+  meta: { changes: number; last_row_id: number };
+  results: T[];
+};
+
 type SqliteStatement = {
   all: (...bindings: SqlBinding[]) => unknown[];
   get: (...bindings: SqlBinding[]) => unknown;
@@ -85,11 +91,30 @@ class InMemoryD1PreparedStatement {
       results: [],
     };
   }
+
+  async executeBatch(): Promise<InMemoryD1Result> {
+    const normalizedQuery = this.#query.trimStart().toUpperCase();
+    if (
+      normalizedQuery.startsWith('SELECT')
+      || normalizedQuery.startsWith('PRAGMA')
+      || normalizedQuery.startsWith('WITH')
+    ) {
+      this.#onExecute();
+      const results = this.#database.prepare(this.#query).all(...this.#bindings) as Record<string, unknown>[];
+      return {
+        success: true,
+        meta: { changes: 0, last_row_id: 0 },
+        results,
+      };
+    }
+    return this.run();
+  }
 }
 
 class InMemoryD1Database {
   readonly #database: SqliteDatabase;
   #operationCount = 0;
+  #batchCallCount = 0;
 
   constructor(database: SqliteDatabase) {
     this.#database = database;
@@ -100,13 +125,15 @@ class InMemoryD1Database {
   }
 
   get operationCount(): number { return this.#operationCount; }
+  get batchCallCount(): number { return this.#batchCallCount; }
   resetOperationCount(): void { this.#operationCount = 0; }
 
-  async batch(statements: InMemoryD1PreparedStatement[]): Promise<Array<Awaited<ReturnType<InMemoryD1PreparedStatement['run']>>>> {
+  async batch(statements: InMemoryD1PreparedStatement[]): Promise<InMemoryD1Result[]> {
+    this.#batchCallCount += 1;
     this.#database.exec('BEGIN IMMEDIATE;');
     try {
-      const results: Array<Awaited<ReturnType<InMemoryD1PreparedStatement['run']>>> = [];
-      for (const statement of statements) results.push(await statement.run());
+      const results: InMemoryD1Result[] = [];
+      for (const statement of statements) results.push(await statement.executeBatch());
       this.#database.exec('COMMIT;');
       return results;
     } catch (error) {
@@ -172,6 +199,7 @@ export type ProductionKnowledgeHonoHarness = {
   fetch: (request: Request) => Promise<Response>;
   putR2Object: (key: string, bytes: Uint8Array, contentType: string) => void;
   databaseOperationCount: () => number;
+  databaseBatchCallCount: () => number;
   resetDatabaseOperationCount: () => void;
   run: (sql: string, ...bindings: unknown[]) => void;
 };
@@ -367,6 +395,7 @@ export function createProductionKnowledgeHonoHarness(): ProductionKnowledgeHonoH
   return {
     cache,
     db: d1,
+    databaseBatchCallCount(): number { return d1.batchCallCount; },
     databaseOperationCount(): number { return d1.operationCount; },
     exec(sql: string): void {
       if (closed) throw new Error('Hono-Testharness ist bereits geschlossen.');
