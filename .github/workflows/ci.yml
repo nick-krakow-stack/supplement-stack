@@ -34,6 +34,9 @@ jobs:
         with:
           node-version: 22
       - run: npm install
+      - name: Install Functions dependencies required by integration tests
+        run: npm install
+        working-directory: functions
       - run: npm run lint --if-present
       - run: npm run test --if-present -- --run
       - run: npm run build
