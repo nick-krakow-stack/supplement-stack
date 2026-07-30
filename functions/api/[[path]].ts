@@ -12,6 +12,7 @@ import ingredients, { recommendationsApp } from './modules/ingredients'
 import knowledge from './modules/knowledge'
 import legal from './modules/legal'
 import products, { r2App } from './modules/products'
+import publicStats from './modules/public-stats'
 import stacks, { stackWarningsApp } from './modules/stacks'
 import userProducts from './modules/user-products'
 import type { AppContext } from './lib/types'
@@ -33,6 +34,7 @@ app.route('/api/me', meApp)
 app.route('/api/ingredients', ingredients)
 app.route('/api/recommendations', recommendationsApp)
 app.route('/api/products', products)
+app.route('/api/public-stats', publicStats)
 app.route('/api/r2', r2App)
 app.route('/api/admin', admin)
 app.route('/api/shop-domains', shopDomainsPublicApp)

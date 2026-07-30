@@ -3,11 +3,6 @@ import { Link } from 'react-router-dom';
 import { apiPath } from '../api/base';
 import { useAuth } from '../contexts/AuthContext';
 import {
-  type KnowledgeOverviewResponse,
-  readCachedKnowledgeOverview,
-  writeCachedKnowledgeOverview,
-} from '../lib/knowledgeOverviewClient';
-import {
   Search,
   Star,
   Layers,
@@ -261,32 +256,34 @@ type TrustStat = {
   label: string;
 };
 
+type PublicStatsResponse = {
+  active_nutrients: number;
+  published_knowledge_articles: number;
+  prepared_studies: number;
+  public_approved_products: number;
+};
+
 function formatStatValue(value: number): string {
-  return new Intl.NumberFormat('de-DE').format(value);
+  return Number.isSafeInteger(value) && value >= 0
+    ? new Intl.NumberFormat('de-DE').format(value)
+    : '–';
 }
 
-export function buildTrustStats(overview: KnowledgeOverviewResponse | null): TrustStat[] {
-  if (!overview) {
+export function buildTrustStats(stats: PublicStatsResponse | null): TrustStat[] {
+  if (!stats) {
     return [
-      { value: '–', label: 'Aktive Nährstoffe im Katalog' },
-      { value: '–', label: 'Veröffentlichte Wissensartikel' },
-      { value: '–', label: 'Quellenverknüpfungen in Wissensartikeln' },
-      { value: '–', label: 'Nährstoffe mit öffentlichen DGE-Werten' },
+      { value: '–', label: 'Aktive Nährstoffe in unserer Datenbank' },
+      { value: '–', label: 'Wissensartikel mit den neuesten Erkenntnissen und Richtlinien' },
+      { value: '–', label: 'Durchsuchte und zum Lesen aufbereitete Studien' },
+      { value: '–', label: 'Verknüpfte Produkte mit geprüften Inhaltsstoffen' },
     ];
   }
 
-  const articles = Array.isArray(overview.articles) ? overview.articles : [];
-  const nutrientStatuses = Array.isArray(overview.nutrient_statuses) ? overview.nutrient_statuses : [];
-  const linkedSources = articles.reduce((total, article) => (
-    total + (Number.isFinite(article.sources_count) && article.sources_count > 0 ? article.sources_count : 0)
-  ), 0);
-  const dgeNutrients = nutrientStatuses.filter((status) => status.has_dge === true).length;
-
   return [
-    { value: formatStatValue(nutrientStatuses.length), label: 'Aktive Nährstoffe im Katalog' },
-    { value: formatStatValue(articles.length), label: 'Veröffentlichte Wissensartikel' },
-    { value: formatStatValue(linkedSources), label: 'Quellenverknüpfungen in Wissensartikeln' },
-    { value: formatStatValue(dgeNutrients), label: 'Nährstoffe mit öffentlichen DGE-Werten' },
+    { value: formatStatValue(stats.active_nutrients), label: 'Aktive Nährstoffe in unserer Datenbank' },
+    { value: formatStatValue(stats.published_knowledge_articles), label: 'Wissensartikel mit den neuesten Erkenntnissen und Richtlinien' },
+    { value: formatStatValue(stats.prepared_studies), label: 'Durchsuchte und zum Lesen aufbereitete Studien' },
+    { value: formatStatValue(stats.public_approved_products), label: 'Verknüpfte Produkte mit geprüften Inhaltsstoffen' },
   ];
 }
 
@@ -298,37 +295,37 @@ const trustPoints = [
 ];
 
 export function TrustSection() {
-  const [overview, setOverview] = useState<KnowledgeOverviewResponse | null>(() => readCachedKnowledgeOverview());
-  const trustStats = useMemo(() => buildTrustStats(overview), [overview]);
+  const [stats, setStats] = useState<PublicStatsResponse | null>(null);
+  const trustStats = useMemo(() => buildTrustStats(stats), [stats]);
 
   useEffect(() => {
     const controller = new AbortController();
     let active = true;
 
-    fetch(apiPath('/knowledge'), {
-      signal: controller.signal,
-      headers: { Accept: 'application/json' },
-    })
-      .then((response) => {
-        if (!response.ok) throw new Error('Startseiten-Kennzahlen konnten nicht geladen werden.');
-        return response.json() as Promise<KnowledgeOverviewResponse>;
+    const loadStats = () => {
+      fetch(apiPath('/public-stats'), {
+        signal: controller.signal,
+        headers: { Accept: 'application/json' },
       })
-      .then((data) => {
-        if (!active) return;
-        const normalized: KnowledgeOverviewResponse = {
-          ...data,
-          articles: Array.isArray(data.articles) ? data.articles : [],
-          nutrient_statuses: Array.isArray(data.nutrient_statuses) ? data.nutrient_statuses : [],
-        };
-        setOverview(normalized);
-        writeCachedKnowledgeOverview(normalized);
-      })
-      .catch((error) => {
-        if (!active || (error instanceof DOMException && error.name === 'AbortError')) return;
-      });
+        .then((response) => {
+          if (!response.ok) throw new Error('Startseiten-Kennzahlen konnten nicht geladen werden.');
+          return response.json() as Promise<PublicStatsResponse>;
+        })
+        .then((data) => {
+          if (!active) return;
+          setStats(data);
+        })
+        .catch((error) => {
+          if (!active || (error instanceof DOMException && error.name === 'AbortError')) return;
+        });
+    };
+
+    loadStats();
+    const refreshInterval = window.setInterval(loadStats, 5 * 60 * 1000);
 
     return () => {
       active = false;
+      window.clearInterval(refreshInterval);
       controller.abort();
     };
   }, []);
