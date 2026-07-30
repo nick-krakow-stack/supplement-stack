@@ -174,6 +174,24 @@ async function getTableColumns(db: D1Database, tableName: string): Promise<Set<s
   }
 }
 
+function buildInternalSourceArticleTargets(
+  rows: readonly InternalSourceArticleRow[],
+): Map<string, InternalSourceArticleTarget[]> {
+  const targets = new Map<string, InternalSourceArticleTarget[]>()
+  for (const row of rows) {
+    const keys = internalSourceArticleTargetLookupKeys(row)
+
+    for (const key of keys) {
+      const existing = targets.get(key) ?? []
+      if (!existing.some((target) => target.slug === row.internal_slug)) {
+        existing.push({ slug: row.internal_slug, title: row.internal_title })
+        targets.set(key, existing)
+      }
+    }
+  }
+  return targets
+}
+
 async function loadInternalSourceArticleTargets(
   db: D1Database,
   ingredientIds: number[],
@@ -238,20 +256,28 @@ async function loadInternalSourceArticleTargets(
     rows.push(...(results ?? []))
   }
 
-  const targets = new Map<string, InternalSourceArticleTarget[]>()
-  for (const row of rows) {
-    const keys = internalSourceArticleTargetLookupKeys(row)
+  return buildInternalSourceArticleTargets(rows)
+}
 
-    for (const key of keys) {
-      const existing = targets.get(key) ?? []
-      if (!existing.some((target) => target.slug === row.internal_slug)) {
-        existing.push({ slug: row.internal_slug, title: row.internal_title })
-        targets.set(key, existing)
-      }
-    }
+function resolveArticleSources(
+  fallbackJson: string,
+  sourceRows: ArticleSourceRow[],
+  articleLayer: string | null,
+  targets: Map<string, InternalSourceArticleTarget[]>,
+): ArticleSource[] {
+  const fallback = parseArticleSourcesPayload(fallbackJson)
+  const sources = fallback.isV2Projection || sourceRows.length > 0
+    ? bindV2ProjectionSourcesToRows(fallback, sourceRows)
+    : fallback.sources
+  if (articleLayer !== 'main_article') return sources
+
+  const externalSources = sources.filter((source) => /^https?:\/\//i.test(source.url))
+  if (externalSources.length > 0) {
+    const internalOnly = projectFullyCoveredV2SourcesToInternalArticles(externalSources, targets)
+    if (internalOnly) return internalOnly
   }
-
-  return targets
+  if (fallback.isV2Projection) return enrichV2SourcesWithInternalArticles(sources, targets)
+  return appendLegacyInternalSourceTargets(sources, targets)
 }
 
 async function loadArticleSources(
@@ -263,8 +289,7 @@ async function loadArticleSources(
     ingredientIds?: number[]
   } = {},
 ): Promise<ArticleSource[]> {
-  const fallback = parseArticleSourcesPayload(fallbackJson)
-  let sources: ArticleSource[] | null = null
+  let sourceRows: ArticleSourceRow[] = []
   if (await hasTable(db, 'knowledge_article_sources')) {
     const { results } = await db.prepare(`
       SELECT label, url, sort_order
@@ -272,25 +297,13 @@ async function loadArticleSources(
       WHERE article_slug = ?
       ORDER BY sort_order ASC, id ASC
     `).bind(slug).all<ArticleSourceRow>()
-    const sourceRows = results ?? []
-    if (fallback.isV2Projection || sourceRows.length > 0) {
-      sources = bindV2ProjectionSourcesToRows(fallback, sourceRows)
-    }
+    sourceRows = results ?? []
   }
 
-  sources = sources ?? fallback.sources
-  if (options.articleLayer !== 'main_article') return sources
-
-  const targets = await loadInternalSourceArticleTargets(db, options.ingredientIds ?? [])
-  const externalSources = sources.filter((source) => /^https?:\/\//i.test(source.url))
-  if (externalSources.length > 0) {
-    const internalOnly = projectFullyCoveredV2SourcesToInternalArticles(externalSources, targets)
-    if (internalOnly) return internalOnly
-  }
-  if (fallback.isV2Projection) {
-    return enrichV2SourcesWithInternalArticles(sources, targets)
-  }
-  return appendLegacyInternalSourceTargets(sources, targets)
+  const targets = options.articleLayer === 'main_article'
+    ? await loadInternalSourceArticleTargets(db, options.ingredientIds ?? [])
+    : new Map<string, InternalSourceArticleTarget[]>()
+  return resolveArticleSources(fallbackJson, sourceRows, options.articleLayer ?? null, targets)
 }
 
 async function loadArticleIngredients(db: D1Database, slug: string): Promise<ArticleIngredientRow[]> {
@@ -511,11 +524,10 @@ knowledge.get('/', async (c) => {
   return response
 })
 
-export async function loadPublishedKnowledgeArticle(
+async function loadPublishedKnowledgeArticleLegacy(
   db: D1Database,
   slug: string,
 ): Promise<PublicKnowledgeArticle | null> {
-  if (!/^[a-z0-9-]+$/.test(slug)) return null
   const columns = await getTableColumns(db, 'knowledge_articles')
 
   const article = await db.prepare(`
@@ -573,6 +585,170 @@ export async function loadPublishedKnowledgeArticle(
     published_at: article.created_at,
     modified_at: article.updated_at,
     seo: parsePublicKnowledgeArticleSeo(article.seo_json),
+  }
+}
+
+function batchRows<T>(result: D1Result): T[] {
+  return (result.results ?? []) as T[]
+}
+
+async function loadPublishedKnowledgeArticleCurrentSchema(
+  db: D1Database,
+  slug: string,
+): Promise<PublicKnowledgeArticle | null> {
+  const [
+    articleResult,
+    ingredientResult,
+    sourceResult,
+    relationTargetResult,
+    interpretationTargetResult,
+  ] = await db.batch([
+    db.prepare(`
+      SELECT
+        slug,
+        title,
+        summary,
+        body,
+        status,
+        article_layer,
+        reviewed_at,
+        sources_json,
+        conclusion,
+        featured_image_url,
+        featured_image_r2_key,
+        dose_min,
+        dose_max,
+        dose_unit,
+        product_note,
+        seo_json,
+        created_at,
+        updated_at
+      FROM knowledge_articles
+      WHERE slug = ?
+        AND status = 'published'
+    `).bind(slug),
+    db.prepare(`
+      SELECT kai.ingredient_id, i.name, kai.sort_order
+      FROM knowledge_article_ingredients kai
+      LEFT JOIN ingredients i ON i.id = kai.ingredient_id
+      WHERE kai.article_slug = ?
+      ORDER BY kai.sort_order ASC, i.name ASC
+    `).bind(slug),
+    db.prepare(`
+      SELECT label, url, sort_order
+      FROM knowledge_article_sources
+      WHERE article_slug = ?
+      ORDER BY sort_order ASC, id ASC
+    `).bind(slug),
+    db.prepare(`
+      SELECT
+        kas.url AS source_url,
+        NULL AS doi,
+        NULL AS pubmed_id,
+        kas.label AS source_label,
+        ka.slug AS internal_slug,
+        ka.title AS internal_title
+      FROM knowledge_article_sources kas
+      JOIN knowledge_articles ka
+        ON ka.slug = kas.article_slug
+      JOIN knowledge_article_ingredients kai
+        ON kai.article_slug = ka.slug
+      WHERE kai.ingredient_id IN (
+        SELECT ingredient_id
+        FROM knowledge_article_ingredients
+        WHERE article_slug = ?
+      )
+        AND EXISTS (
+          SELECT 1
+          FROM knowledge_articles owner
+          WHERE owner.slug = ?
+            AND owner.article_layer = 'main_article'
+        )
+        AND ka.status = 'published'
+        AND ka.article_layer = 'single_study'
+      ORDER BY ka.slug ASC, ka.title ASC, kas.sort_order ASC, kas.id ASC
+    `).bind(slug, slug),
+    db.prepare(`
+      SELECT
+        irs.source_url,
+        irs.doi,
+        irs.pubmed_id,
+        irs.source_title AS source_label,
+        ka.slug AS internal_slug,
+        ka.title AS internal_title
+      FROM ingredient_research_sources irs
+      JOIN study_interpretation_records sir
+        ON sir.source_id = irs.id
+       AND sir.ingredient_id = irs.ingredient_id
+      JOIN knowledge_articles ka
+        ON ka.slug = sir.knowledge_article_slug
+      WHERE irs.ingredient_id IN (
+        SELECT ingredient_id
+        FROM knowledge_article_ingredients
+        WHERE article_slug = ?
+      )
+        AND EXISTS (
+          SELECT 1
+          FROM knowledge_articles owner
+          WHERE owner.slug = ?
+            AND owner.article_layer = 'main_article'
+        )
+        AND sir.status = 'accepted'
+        AND sir.knowledge_article_slug IS NOT NULL
+        AND ka.status = 'published'
+        AND ka.article_layer = 'single_study'
+      ORDER BY ka.slug ASC, ka.title ASC
+    `).bind(slug, slug),
+  ])
+
+  const article = batchRows<KnowledgeArticleRow>(articleResult)[0]
+  if (!article) return null
+  const ingredients = batchRows<ArticleIngredientRow>(ingredientResult)
+  const targetRows = [
+    ...batchRows<InternalSourceArticleRow>(relationTargetResult),
+    ...batchRows<InternalSourceArticleRow>(interpretationTargetResult),
+  ]
+  const sources = resolveArticleSources(
+    article.sources_json,
+    batchRows<ArticleSourceRow>(sourceResult),
+    article.article_layer,
+    buildInternalSourceArticleTargets(targetRows),
+  )
+
+  return {
+    slug: article.slug,
+    title: article.title,
+    summary: article.summary,
+    body: article.body,
+    article_layer: article.article_layer,
+    reviewed_at: article.reviewed_at,
+    conclusion: article.conclusion,
+    featured_image_url: article.featured_image_url,
+    featured_image_r2_key: article.featured_image_r2_key,
+    dose_min: article.dose_min,
+    dose_max: article.dose_max,
+    dose_unit: article.dose_unit,
+    product_note: article.product_note,
+    sources,
+    ingredients,
+    ingredient_ids: ingredients.map((ingredient) => ingredient.ingredient_id),
+    created_at: article.created_at,
+    updated_at: article.updated_at,
+    published_at: article.created_at,
+    modified_at: article.updated_at,
+    seo: parsePublicKnowledgeArticleSeo(article.seo_json),
+  }
+}
+
+export async function loadPublishedKnowledgeArticle(
+  db: D1Database,
+  slug: string,
+): Promise<PublicKnowledgeArticle | null> {
+  if (!/^[a-z0-9-]+$/.test(slug)) return null
+  try {
+    return await loadPublishedKnowledgeArticleCurrentSchema(db, slug)
+  } catch {
+    return loadPublishedKnowledgeArticleLegacy(db, slug)
   }
 }
 

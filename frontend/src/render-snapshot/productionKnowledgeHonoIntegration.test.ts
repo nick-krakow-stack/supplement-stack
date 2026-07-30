@@ -247,10 +247,14 @@ describe.sequential('production Knowledge/R2 Hono integration', () => {
     expect(repaired.headers.get('x-knowledge-overview-source')).toBe('projection');
     expect(harness.databaseOperationCount()).toBe(1);
 
+    harness.resetDatabaseOperationCount();
+    const detailBatchCountBefore = harness.databaseBatchCallCount();
     const detailResponse = await harness.fetch(new Request(
       `https://test.local/api/knowledge/main-study-positive?cfcheck=sha256:${'c'.repeat(64)}`,
     ));
     expect(detailResponse.status).toBe(200);
+    expect(harness.databaseBatchCallCount()).toBe(detailBatchCountBefore + 1);
+    expect(harness.databaseOperationCount()).toBe(5);
     const detail = await detailResponse.json() as {
       article: {
         slug: string;
