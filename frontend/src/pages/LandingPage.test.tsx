@@ -2,7 +2,7 @@
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { TrustSection } from './LandingPage';
+import { buildTrustStats, TrustSection } from './LandingPage';
 
 describe('LandingPage trust statistics', () => {
   afterEach(() => {
@@ -11,20 +11,14 @@ describe('LandingPage trust statistics', () => {
     vi.unstubAllGlobals();
   });
 
-  it('renders current public knowledge counts instead of static claims', async () => {
+  it('renders current public catalog counts with the requested labels', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({
-        articles: [
-          { slug: 'magnesium', title: 'Magnesium', summary: '', sources_count: 12 },
-          { slug: 'vitamin-c', title: 'Vitamin C', summary: '', sources_count: 21 },
-        ],
-        nutrient_statuses: [
-          { ingredient_id: 1, has_dge: true },
-          { ingredient_id: 2, has_dge: false },
-          { ingredient_id: 3, has_dge: true },
-        ],
-        total: 2,
+        active_nutrients: 92,
+        published_knowledge_articles: 44,
+        prepared_studies: 707,
+        public_approved_products: 33,
       }),
     });
     vi.stubGlobal('fetch', fetchMock);
@@ -32,13 +26,17 @@ describe('LandingPage trust statistics', () => {
     render(<TrustSection />);
 
     const stats = screen.getByLabelText('Aktuelle öffentliche Datenbasis');
-    await waitFor(() => expect(within(stats).getByText('33')).toBeTruthy());
-    expect(within(stats).getByText('3')).toBeTruthy();
-    expect(within(stats).getAllByText('2')).toHaveLength(2);
-    expect(within(stats).queryByText('500+')).toBeNull();
-    expect(within(stats).queryByText('< 30 s')).toBeNull();
+    await waitFor(() => expect(within(stats).getByText('707')).toBeTruthy());
+    expect(within(stats).getByText('92')).toBeTruthy();
+    expect(within(stats).getByText('44')).toBeTruthy();
+    expect(within(stats).getByText('33')).toBeTruthy();
+    expect(within(stats).getByText('Aktive Nährstoffe in unserer Datenbank')).toBeTruthy();
+    expect(within(stats).getByText('Wissensartikel mit den neuesten Erkenntnissen und Richtlinien')).toBeTruthy();
+    expect(within(stats).getByText('Durchsuchte und zum Lesen aufbereitete Studien')).toBeTruthy();
+    expect(within(stats).getByText('Verknüpfte Produkte mit geprüften Inhaltsstoffen')).toBeTruthy();
+    expect(within(stats).queryByText('Quellenverknüpfungen in Wissensartikeln')).toBeNull();
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringMatching(/\/api\/knowledge$/),
+      expect.stringMatching(/\/api\/public-stats$/),
       expect.objectContaining({
         signal: expect.any(AbortSignal),
         headers: { Accept: 'application/json' },
@@ -54,6 +52,17 @@ describe('LandingPage trust statistics', () => {
     const stats = screen.getByLabelText('Aktuelle öffentliche Datenbasis');
     expect(within(stats).getAllByText('–')).toHaveLength(4);
     await waitFor(() => expect(within(stats).getAllByText('–')).toHaveLength(4));
-    expect(within(stats).queryByText('500+')).toBeNull();
+    expect(within(stats).queryByText('Quellenverknüpfungen in Wissensartikeln')).toBeNull();
+  });
+
+  it('does not display malformed API counts as real values', () => {
+    const stats = buildTrustStats({
+      active_nutrients: 92,
+      published_knowledge_articles: 44,
+      prepared_studies: Number.NaN,
+      public_approved_products: 33,
+    });
+
+    expect(stats[2].value).toBe('–');
   });
 });

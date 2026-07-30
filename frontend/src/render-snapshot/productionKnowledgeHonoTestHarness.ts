@@ -279,6 +279,7 @@ export function createProductionKnowledgeSchema(harness: ProductionKnowledgeHono
     CREATE TABLE ingredient_research_sources (
       id INTEGER PRIMARY KEY,
       ingredient_id INTEGER NOT NULL,
+      source_kind TEXT NOT NULL DEFAULT 'study',
       source_title TEXT,
       source_url TEXT,
       doi TEXT,
@@ -312,6 +313,16 @@ export function createProductionKnowledgeSchema(harness: ProductionKnowledgeHono
       valid_from TEXT,
       valid_until TEXT,
       stage4_status TEXT
+    );
+    CREATE TABLE products (
+      id INTEGER PRIMARY KEY,
+      moderation_status TEXT NOT NULL,
+      visibility TEXT NOT NULL
+    );
+    CREATE TABLE product_ingredients (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      product_id INTEGER NOT NULL,
+      ingredient_id INTEGER NOT NULL
     );
   `);
   harness.exec(readFileSync(
@@ -426,6 +437,7 @@ export function createProductionKnowledgeHonoHarness(): ProductionKnowledgeHonoH
       let response: Response;
       if (url.pathname === '/api/knowledge'
         || url.pathname.startsWith('/api/knowledge/')
+        || url.pathname === '/api/public-stats'
         || url.pathname === '/api/ingredients'
         || url.pathname.startsWith('/api/ingredients/')
         || url.pathname === '/api/r2'
