@@ -28,6 +28,7 @@ export {
 } from './knowledge-source-projection'
 
 const knowledge = new Hono<AppContext>()
+const KNOWLEDGE_ARTICLE_CACHE_CONTROL = 'public, max-age=300, stale-while-revalidate=3600'
 
 type KnowledgeArticleRow = {
   slug: string
@@ -575,12 +576,85 @@ export async function loadPublishedKnowledgeArticle(
   }
 }
 
+export type CachedPublishedKnowledgeArticle = {
+  article: PublicKnowledgeArticle | null
+  source: 'cache' | 'database'
+}
+
+export function knowledgeArticleCacheKey(requestUrl: string, slug: string): Request {
+  return new Request(new URL(`/api/knowledge/${slug}`, requestUrl).toString(), { method: 'GET' })
+}
+
+function defaultKnowledgeCache(): Cache | null {
+  return typeof caches === 'undefined' ? null : caches.default
+}
+
+export async function deletePublishedKnowledgeArticleCache(
+  requestUrl: string,
+  slug: string,
+): Promise<boolean> {
+  const cache = defaultKnowledgeCache()
+  if (!cache) return false
+  return cache.delete(knowledgeArticleCacheKey(requestUrl, slug))
+}
+
+export async function loadCachedPublishedKnowledgeArticle(
+  db: D1Database,
+  requestUrl: string,
+  slug: string,
+  options: {
+    bypassCache?: boolean
+    waitUntil?: (promise: Promise<void>) => void
+  } = {},
+): Promise<CachedPublishedKnowledgeArticle> {
+  const cache = defaultKnowledgeCache()
+  const cacheKey = knowledgeArticleCacheKey(requestUrl, slug)
+
+  if (cache && !options.bypassCache) {
+    const cached = await cache.match(cacheKey)
+    if (cached) {
+      try {
+        const payload = await cached.json() as { article?: PublicKnowledgeArticle }
+        if (payload.article?.slug === slug) return { article: payload.article, source: 'cache' }
+      } catch {
+        // A malformed cache entry must never hide the database-backed article.
+      }
+      await cache.delete(cacheKey)
+    }
+  }
+
+  const article = await loadPublishedKnowledgeArticle(db, slug)
+  if (article && cache && !options.bypassCache) {
+    const cacheWrite = cache.put(cacheKey, new Response(JSON.stringify({ article }), {
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': KNOWLEDGE_ARTICLE_CACHE_CONTROL,
+      },
+    }))
+    if (options.waitUntil) options.waitUntil(cacheWrite)
+    else await cacheWrite
+  }
+  return { article, source: 'database' }
+}
+
 knowledge.get('/:slug', async (c) => {
+  const startedAt = Date.now()
   const slug = c.req.param('slug')
   if (!/^[a-z0-9-]+$/.test(slug)) return c.json({ error: 'Invalid slug' }, 400)
-  const article = await loadPublishedKnowledgeArticle(c.env.DB, slug)
-  if (!article) return c.json({ error: 'Not found' }, 404)
-  return c.json({ article })
+  const requestUrl = new URL(c.req.url)
+  const result = await loadCachedPublishedKnowledgeArticle(c.env.DB, c.req.url, slug, {
+    bypassCache: requestUrl.searchParams.has('cfcheck'),
+    waitUntil: (promise) => c.executionCtx.waitUntil(promise),
+  })
+  if (!result.article) return c.json({ error: 'Not found' }, 404, { 'Cache-Control': 'no-store' })
+  return new Response(JSON.stringify({ article: result.article }), {
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': KNOWLEDGE_ARTICLE_CACHE_CONTROL,
+      'Server-Timing': `knowledge-article;dur=${Date.now() - startedAt}`,
+      'X-Knowledge-Article-Source': result.source,
+    },
+  })
 })
 
 export default knowledge

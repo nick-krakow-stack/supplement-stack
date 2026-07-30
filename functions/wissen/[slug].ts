@@ -1,5 +1,8 @@
 import type { Env } from '../api/lib/types'
-import { loadPublishedKnowledgeArticle } from '../api/modules/knowledge'
+import {
+  loadCachedPublishedKnowledgeArticle,
+  type PublicKnowledgeArticle,
+} from '../api/modules/knowledge'
 import {
   isValidKnowledgeSlug,
   knowledgeCanonicalUrl,
@@ -22,7 +25,7 @@ export async function failClosedKnowledgeShell(response: Response): Promise<Resp
 
 export async function buildKnowledgePrerenderResponse(
   shellResponse: Response,
-  article: Awaited<ReturnType<typeof loadPublishedKnowledgeArticle>> & object,
+  article: PublicKnowledgeArticle,
   slug: string,
 ): Promise<Response> {
   const shellHtml = await shellResponse.text()
@@ -49,7 +52,13 @@ export const onRequestGet: KnowledgePagesFunction = async (context) => {
   if (!slug || !isValidKnowledgeSlug(slug)) return await failClosedKnowledgeShell(shellResponse)
 
   let article
-  try { article = await loadPublishedKnowledgeArticle(context.env.DB, slug) }
+  try {
+    const result = await loadCachedPublishedKnowledgeArticle(context.env.DB, context.request.url, slug, {
+      bypassCache: new URL(context.request.url).searchParams.has('cfcheck'),
+      waitUntil: (promise) => context.waitUntil(promise),
+    })
+    article = result.article
+  }
   catch { return await failClosedKnowledgeShell(shellResponse) }
   if (!article) return await failClosedKnowledgeShell(shellResponse)
   return buildKnowledgePrerenderResponse(shellResponse, article, slug)

@@ -2,6 +2,10 @@ import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { ArrowLeft, ExternalLink } from 'lucide-react';
 import { apiPath } from '../api/base';
+import {
+  loadKnowledgeArticle,
+  readPrimedKnowledgeArticle,
+} from '../lib/knowledgeArticleClient';
 import type { KnowledgeArticle } from '../types';
 import {
   hasUnsafeKnowledgeUrlCharacters,
@@ -254,14 +258,21 @@ function createMetaTag(attributeName: 'name' | 'property', attributeValue: strin
 export default function KnowledgeArticlePage() {
   const { slug } = useParams();
   const location = useLocation();
-  const [article, setArticle] = useState<KnowledgeArticle | null>(null);
-  const [loading, setLoading] = useState(true);
+  const bypassPrimedArticle = useMemo(
+    () => new URLSearchParams(location.search).has('cfcheck'),
+    [location.search],
+  );
+  const initialArticle = useMemo(
+    () => slug && !bypassPrimedArticle ? readPrimedKnowledgeArticle(slug) : null,
+    [bypassPrimedArticle, slug],
+  );
+  const [article, setArticle] = useState<KnowledgeArticle | null>(initialArticle);
+  const [loading, setLoading] = useState(initialArticle === null);
   const [error, setError] = useState('');
   const articleApiEndpoint = useMemo(
     () => slug ? knowledgeApiPathWithCacheCheck(`/knowledge/${encodeURIComponent(slug)}`, location.search) : null,
     [location.search, slug],
   );
-
   useEffect(() => {
     if (!slug || !articleApiEndpoint) {
       setArticle(null);
@@ -270,28 +281,19 @@ export default function KnowledgeArticlePage() {
       return;
     }
 
-    const controller = new AbortController();
     let active = true;
-    setArticle(null);
-    setLoading(true);
+    const primedArticle = bypassPrimedArticle ? null : readPrimedKnowledgeArticle(slug);
+    setArticle(primedArticle);
+    setLoading(primedArticle === null);
     setError('');
 
-    fetch(articleApiEndpoint, { signal: controller.signal })
-      .then((response) => {
-        if (!response.ok) throw new Error(response.status === 404 ? 'Artikel nicht gefunden.' : 'Artikel konnte nicht geladen werden.');
-        return response.json() as Promise<{ article?: KnowledgeArticle }>;
-      })
-      .then((data) => {
+    loadKnowledgeArticle(slug, articleApiEndpoint, bypassPrimedArticle)
+      .then((loadedArticle) => {
         if (!active) return;
-        if (!data.article || data.article.slug !== slug) {
-          setArticle(null);
-          setError('Artikel konnte nicht eindeutig geladen werden.');
-          return;
-        }
-        setArticle(data.article);
+        setArticle(loadedArticle);
       })
       .catch((err) => {
-        if (!active || (err instanceof DOMException && err.name === 'AbortError')) return;
+        if (!active) return;
         setError(err instanceof Error ? err.message : 'Artikel konnte nicht geladen werden.');
       })
       .finally(() => {
@@ -300,9 +302,8 @@ export default function KnowledgeArticlePage() {
 
     return () => {
       active = false;
-      controller.abort();
     };
-  }, [articleApiEndpoint, slug]);
+  }, [articleApiEndpoint, bypassPrimedArticle, slug]);
 
   const visibleArticle = article && slug && article.slug === slug ? article : null;
 
