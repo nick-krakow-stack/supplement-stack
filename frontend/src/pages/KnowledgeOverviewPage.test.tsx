@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import KnowledgeArticlePage from "./KnowledgeArticlePage";
@@ -633,6 +633,60 @@ describe("KnowledgeOverviewPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /Suche/ }));
     expect(screen.getByLabelText("Aktuelle URL").textContent)
       .toBe("/wissen?category=mineralstoffe&cfcheck=sha256%3Aabc123");
+  });
+
+  it("prefetches a ready article when its card is approached", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      if (String(input).includes("/api/knowledge/magnesium")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({
+            article: {
+              slug: "magnesium",
+              title: "Magnesium",
+              summary: "Mineralstoffartikel",
+              body: "Vollständiger Artikel",
+              sources: [],
+            },
+          }),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({
+          articles: [{
+            slug: "magnesium",
+            title: "Magnesium",
+            summary: "Mineralstoffartikel",
+            sources_count: 6,
+            ingredients: [{ ingredient_id: 3, name: "Magnesium" }],
+            ingredient_ids: [3],
+          }],
+          nutrient_statuses: [],
+          total: 1,
+        }),
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <MemoryRouter>
+        <KnowledgeOverviewPage />
+      </MemoryRouter>,
+    );
+
+    const minerals = await screen.findByTestId("knowledge-category-mineralstoffe");
+    fireEvent.pointerEnter(within(minerals).getByRole("link", { name: /Magnesium/ }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(String(fetchMock.mock.calls[1][0])).toMatch(/\/api\/knowledge\/magnesium$/);
+    expect(JSON.parse(window.sessionStorage.getItem("knowledge-article.v1:magnesium") ?? "{}"))
+      .toMatchObject({
+        cached_at: expect.any(Number),
+        article: { slug: "magnesium", body: "Vollständiger Artikel" },
+      });
   });
 
   it("removes q when clearing search while keeping the selected category in the URL", async () => {

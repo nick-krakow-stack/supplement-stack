@@ -268,6 +268,24 @@ describe.sequential('production Knowledge/R2 Hono integration', () => {
       modified_at: '2026-07-14T11:00:00.000Z',
     });
 
+    harness.resetDatabaseOperationCount();
+    const uncachedDetail = await harness.fetch(new Request('https://test.local/api/knowledge/main-study-positive'));
+    expect(uncachedDetail.headers.get('cache-control')).toBe('public, max-age=300, stale-while-revalidate=3600');
+    expect(uncachedDetail.headers.get('x-knowledge-article-source')).toBe('database');
+    const firstDetailOperationCount = harness.databaseOperationCount();
+    expect(firstDetailOperationCount).toBeGreaterThan(0);
+
+    const cachedDetail = await harness.fetch(new Request('https://test.local/api/knowledge/main-study-positive'));
+    expect(cachedDetail.headers.get('x-knowledge-article-source')).toBe('cache');
+    expect(harness.databaseOperationCount()).toBe(firstDetailOperationCount);
+
+    harness.run("UPDATE knowledge_articles SET title = 'Cache-Bypass sichtbar' WHERE slug = 'main-study-positive'");
+    const bypassedDetail = await harness.fetch(new Request(
+      `https://test.local/api/knowledge/main-study-positive?cfcheck=sha256:${'9'.repeat(64)}`,
+    ));
+    expect(bypassedDetail.headers.get('x-knowledge-article-source')).toBe('database');
+    expect((await bypassedDetail.json() as { article: { title: string } }).article.title).toBe('Cache-Bypass sichtbar');
+
     const imageHash = 'd'.repeat(64);
     const imageBytes = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10]);
     harness.putR2Object(`knowledge/main-study-positive/${imageHash}.png`, imageBytes, 'image/png');

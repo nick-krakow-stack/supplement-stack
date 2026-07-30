@@ -64,7 +64,33 @@ function knowledgeResponse(article: Record<string, unknown>) {
 describe("KnowledgeMarkdown", () => {
   afterEach(() => {
     cleanup();
+    window.sessionStorage.clear();
+    delete window.__knowledgeArticleBootstrap;
     vi.unstubAllGlobals();
+  });
+  it("uses the server-provided article immediately without a duplicate request", () => {
+    const bootstrapArticle = {
+      slug: "vitamin-a",
+      title: "Vitamin A sofort sichtbar",
+      summary: "Zusammenfassung",
+      body: "Direkt bereitgestellter Artikeltext",
+      sources: [],
+    };
+    window.__knowledgeArticleBootstrap = { article: bootstrapArticle };
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <MemoryRouter initialEntries={["/wissen/vitamin-a"]}>
+        <Routes>
+          <Route path="/wissen/:slug" element={<KnowledgeArticlePage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("heading", { level: 1, name: "Vitamin A sofort sichtbar" })).toBeTruthy();
+    expect(screen.queryByText("Artikel wird geladen...")).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
   it("parses headings, paragraphs, lists, and simple tables", () => {
     const blocks = parseKnowledgeMarkdown(markdown);

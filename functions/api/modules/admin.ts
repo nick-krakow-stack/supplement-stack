@@ -95,7 +95,10 @@ import {
   isSupportedProductImageType,
   PRODUCT_IMAGE_MAX_UPLOAD_BYTES,
 } from '../lib/product-images'
-import { loadCatalogProductSafetyWarnings } from './knowledge'
+import {
+  deletePublishedKnowledgeArticleCache,
+  loadCatalogProductSafetyWarnings,
+} from './knowledge'
 import {
   auditKnowledgeOverviewProjection,
   refreshKnowledgeOverviewProjection,
@@ -110,6 +113,10 @@ function knowledgeOverviewCacheKey(requestUrl: string): Request {
   return new Request(new URL('/api/knowledge', requestUrl).toString(), { method: 'GET' })
 }
 
+function mutatedKnowledgeArticleSlug(path: string): string | null {
+  return path.match(/(?:^|\/)knowledge-articles\/([a-z0-9]+(?:-[a-z0-9]+)*)(?:\/|$)/)?.[1] ?? null
+}
+
 admin.use('*', async (c, next) => {
   await next()
   if (
@@ -118,12 +125,13 @@ admin.use('*', async (c, next) => {
     || !KNOWLEDGE_OVERVIEW_SOURCE_MUTATION.test(c.req.path)
   ) return
 
-  c.executionCtx.waitUntil(
-    Promise.all([
-      caches.default.delete(knowledgeOverviewCacheKey(c.req.url)),
-      refreshKnowledgeOverviewProjectionIfNeeded(c.env.DB),
-    ]).then(() => undefined).catch(() => undefined),
-  )
+  const articleSlug = mutatedKnowledgeArticleSlug(c.req.path)
+  const invalidations: Promise<unknown>[] = [
+    caches.default.delete(knowledgeOverviewCacheKey(c.req.url)),
+    refreshKnowledgeOverviewProjectionIfNeeded(c.env.DB),
+  ]
+  if (articleSlug) invalidations.push(deletePublishedKnowledgeArticleCache(c.req.url, articleSlug))
+  c.executionCtx.waitUntil(Promise.all(invalidations).then(() => undefined).catch(() => undefined))
 })
 
 type IngredientTranslationRow = {

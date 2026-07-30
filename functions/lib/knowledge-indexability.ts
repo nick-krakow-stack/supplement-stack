@@ -29,6 +29,17 @@ function escapeHtml(value: string): string {
     .replace(/'/g, '&#39;')
 }
 
+function serializeBootstrapJson(value: unknown): string {
+  const escapedCharacters: Record<string, string> = {
+    '<': '\\u003c',
+    '>': '\\u003e',
+    '&': '\\u0026',
+    '\u2028': '\\u2028',
+    '\u2029': '\\u2029',
+  }
+  return JSON.stringify(value).replace(/[<>&\u2028\u2029]/g, (character) => escapedCharacters[character])
+}
+
 function inlineMarkdownToText(value: string): string {
   return value
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
@@ -114,6 +125,7 @@ export function renderKnowledgeArticleHtml(
   const metaDescription = article.seo?.meta_description ?? article.summary
   const robots = article.seo?.robots ?? 'index,follow'
   const jsonLd = JSON.stringify(articleJsonLd(article, canonicalUrl)).replace(/</g, '\\u003c')
+  const articleBootstrap = serializeBootstrapJson({ article })
   const sourceItems = article.sources
     .map((source) => `        <li><a href="${escapeHtml(source.url)}">${escapeHtml(source.label)}</a></li>`)
     .join('\n')
@@ -140,6 +152,7 @@ ${sourceItems}
     `    <meta property="og:url" content="${escapeHtml(canonicalUrl)}" />`,
     '    <meta property="og:type" content="article" />',
     `    <script type="application/ld+json">${jsonLd}</script>`,
+    `    <script>window.__knowledgeArticleBootstrap=${articleBootstrap};</script>`,
   ].join('\n')
 
   return shellHtml

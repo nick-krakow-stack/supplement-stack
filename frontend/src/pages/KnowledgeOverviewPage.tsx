@@ -593,6 +593,18 @@ function ComingCard({ card }: { card: NutrientCard }) {
 function ReadyCard({ card, search }: { card: NutrientCard & { article: KnowledgeArticleOverviewItem }; search: string }) {
   const solubility = solubilityLabel(card.solubility);
   const ingredientIds = cardIngredientIds(card);
+  const prefetchArticle = () => {
+    if (new URLSearchParams(search).has('cfcheck')) return;
+    void Promise.all([
+      import('./KnowledgeArticlePage'),
+      import('../lib/knowledgeArticleClient').then(({ prefetchKnowledgeArticle }) => (
+        prefetchKnowledgeArticle(
+          card.article.slug,
+          apiPath(`/knowledge/${encodeURIComponent(card.article.slug)}`),
+        )
+      )),
+    ]).catch(() => undefined);
+  };
 
   return (
     <Link
@@ -601,6 +613,9 @@ function ReadyCard({ card, search }: { card: NutrientCard & { article: Knowledge
       data-name={normalizeSearchText(card.name)}
       data-cat={card.category}
       data-ingredient-ids={ingredientIds.length > 0 ? ingredientIds.join(' ') : undefined}
+      onFocus={prefetchArticle}
+      onPointerEnter={prefetchArticle}
+      onTouchStart={prefetchArticle}
     >
       <CardBody card={card} solubility={solubility} />
       <div className="nutri__foot">

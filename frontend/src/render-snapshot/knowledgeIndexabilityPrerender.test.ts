@@ -143,6 +143,11 @@ describe('knowledge indexability delivery', () => {
     expect(document.body.textContent).toContain(article.sources[0].label);
     expect(document.body.textContent).not.toContain('knowledge-template');
     expect(document.querySelector('a')?.getAttribute('href')).toBe(article.sources[0].url);
+    expect(
+      JSON.parse(
+        document.querySelector('script:not([type])')?.textContent?.replace('window.__knowledgeArticleBootstrap=', '').replace(/;$/, '') ?? '',
+      ),
+    ).toEqual({ article });
   });
 
   it('derives robots and sitemap delivery from the published slug inventory', () => {

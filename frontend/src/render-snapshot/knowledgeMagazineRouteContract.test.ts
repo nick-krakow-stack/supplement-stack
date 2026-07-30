@@ -1164,7 +1164,7 @@ describe('hydrated knowledge route browser contract', () => {
       expect(routeServer.request_log.filter((entry) => entry === '/robots.txt')).toHaveLength(1);
       expect(routeServer.request_log.filter((entry) => entry === '/sitemap.xml')).toHaveLength(1);
       const knowledgeApiRequests = routeServer.request_log.filter((entry) => entry.startsWith('/api/knowledge/'));
-      expect(knowledgeApiRequests.length).toBeGreaterThanOrEqual(4);
+      expect(knowledgeApiRequests).toHaveLength(2);
       expect(new Set(knowledgeApiRequests.map((entry) => new URL(entry, baseUrl).pathname))).toEqual(new Set([
         '/api/knowledge/study-contract',
         '/api/knowledge/render-contract',
