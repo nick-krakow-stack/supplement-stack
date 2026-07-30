@@ -1,0 +1,470 @@
+{
+  "schema": "knowledge_magazine_route_fixture.v2",
+  "route": "/wissen/render-contract",
+  "article": {
+    "slug": "render-contract",
+    "title": "Teststoff verständlich erklärt",
+    "summary": "Eine klare, überprüfbare Einordnung für Leserinnen und Leser.",
+    "article_layer": "main_article",
+    "body": "<!-- knowledge-template:magazine -->\n\n## Auf einen Blick\n\n- Teststoff wird verständlich eingeordnet.\n- Aussagen bleiben an Quellen gebunden.\n- Die Darstellung zeigt Tabellen, Grafik und Kontrollblöcke.\n\n## Was ist Teststoff?\n\nDieser Abschnitt erklärt den Begriff und verweist auf [Vitamin A](/wissen/vitamin-a).\n\n| Merkmal | Einordnung |\n| --- | --- |\n| Status | Beispiel |\n\n![Supplement-Stack-Logo](/api/r2/knowledge/render-contract/f88a1476e9546b8d9c64e9e80f1e43427523d57b15d4293982fba3d83fd93d21.png)\n*Die Grafik dient als kanonisches Render-Testbild.*\n\n## Lebensmittel im Überblick\n\n| Lebensmittelgruppe | Beispiele | Einordnung | Hinweis |\n| --- | --- | --- | --- |\n| Pflanzlich | Beispiel A | Gut einzuordnen | Vierter Wert bleibt erhalten |\n| Tierisch | Beispiel B | Ergänzende Einordnung | Zweite Tabellenzeile |\n\n## Häufige Fragen\n\n### Ist Teststoff relevant?\n\nJa, diese Antwort prüft das hydrierte FAQ-Disclosure.\n\n## Merkkasten\n\nDer Merkkasten bleibt als eigener sichtbarer Kontrollblock erhalten.\n\n## Rechtlicher Hinweis\n\nDieser Hinweis ersetzt keine individuelle medizinische Beratung.\n\n## Fazit\n\nTeststoff lässt sich knapp, verständlich und quellengebunden einordnen.\n\n## Quellen\n\n<!-- sources:auto -->",
+    "conclusion": null,
+    "reviewed_at": "2026-07-14",
+    "published_at": "2026-07-14T10:00:00.000Z",
+    "modified_at": "2026-07-14T10:00:00.000Z",
+    "featured_image_url": null,
+    "featured_image_r2_key": null,
+    "dose_min": null,
+    "dose_max": null,
+    "dose_unit": null,
+    "product_note": null,
+    "created_at": "2026-07-14T10:00:00.000Z",
+    "updated_at": "2026-07-14T10:00:00.000Z",
+    "sources": [
+      {
+        "source_id": "src-external",
+        "label": "Externe Originalquelle",
+        "url": "https://example.com/study"
+      },
+      {
+        "source_id": "src-internal",
+        "label": "Interne Vertiefung",
+        "url": "/wissen/vitamin-a"
+      }
+    ],
+    "ingredients": [
+      {
+        "ingredient_id": 42,
+        "name": "Teststoff",
+        "sort_order": 0
+      }
+    ]
+  },
+  "expected": {
+    "template": "magazine",
+    "ui_contract": "knowledge-magazine-ui.v2",
+    "h1": "Teststoff verständlich erklärt",
+    "eyebrow": "Wissen",
+    "toc_title": "Auf dieser Seite",
+    "ingredient_chip": "Wirkstoff: Teststoff",
+    "reviewed_date": "Geprüft am 14. Juli 2026",
+    "reading_time": "Lesezeit ca. 1 Minute",
+    "sources_label": "Quellen",
+    "sources_count": "2 Quellen",
+    "direct_section_ids": [
+      "ueberblick",
+      "was-ist-teststoff",
+      "lebensmittel-im-uberblick",
+      "haufige-fragen",
+      "merkkasten",
+      "rechtlicher-hinweis",
+      "fazit",
+      "quellen"
+    ],
+    "toc_section_ids": [
+      "ueberblick",
+      "was-ist-teststoff",
+      "lebensmittel-im-uberblick",
+      "haufige-fragen",
+      "fazit",
+      "quellen"
+    ],
+    "control_blocks": [
+      {
+        "section_id": "merkkasten",
+        "control_type": "merkkasten",
+        "heading": "Merkkasten"
+      },
+      {
+        "section_id": "rechtlicher-hinweis",
+        "control_type": "legal_notice",
+        "heading": "Rechtlicher Hinweis"
+      }
+    ],
+    "source_count": 2,
+    "faq_count": 1,
+    "image_count": 1,
+    "image_src": "/api/r2/knowledge/render-contract/f88a1476e9546b8d9c64e9e80f1e43427523d57b15d4293982fba3d83fd93d21.png",
+    "image_alt": "Supplement-Stack-Logo",
+    "image_caption": "Die Grafik dient als kanonisches Render-Testbild.",
+    "food_headers": [
+      "Lebensmittelgruppe",
+      "Beispiele",
+      "Einordnung",
+      "Hinweis"
+    ],
+    "food_rows": [
+      [
+        "Pflanzlich",
+        "Beispiel A",
+        "Gut einzuordnen",
+        "Vierter Wert bleibt erhalten"
+      ],
+      [
+        "Tierisch",
+        "Beispiel B",
+        "Ergänzende Einordnung",
+        "Zweite Tabellenzeile"
+      ]
+    ],
+    "projection": {
+      "template": "magazine",
+      "ui_contract": "knowledge-magazine-ui.v2",
+      "h1": "Teststoff verständlich erklärt",
+      "dek": "Eine klare, überprüfbare Einordnung für Leserinnen und Leser.",
+      "sections": [
+        {
+          "section_id": "ueberblick",
+          "kind": "overview",
+          "control_type": null,
+          "heading": "Auf einen Blick",
+          "number": null
+        },
+        {
+          "section_id": "was-ist-teststoff",
+          "kind": "content",
+          "control_type": null,
+          "heading": "Was ist Teststoff?",
+          "number": "01"
+        },
+        {
+          "section_id": "lebensmittel-im-uberblick",
+          "kind": "content",
+          "control_type": null,
+          "heading": "Lebensmittel im Überblick",
+          "number": "02"
+        },
+        {
+          "section_id": "haufige-fragen",
+          "kind": "content",
+          "control_type": null,
+          "heading": "Häufige Fragen",
+          "number": "03"
+        },
+        {
+          "section_id": "merkkasten",
+          "kind": "control",
+          "control_type": "merkkasten",
+          "heading": "Merkkasten",
+          "number": null
+        },
+        {
+          "section_id": "rechtlicher-hinweis",
+          "kind": "control",
+          "control_type": "legal_notice",
+          "heading": "Rechtlicher Hinweis",
+          "number": null
+        },
+        {
+          "section_id": "fazit",
+          "kind": "fazit",
+          "control_type": null,
+          "heading": "Fazit",
+          "number": "04"
+        },
+        {
+          "section_id": "quellen",
+          "kind": "sources",
+          "control_type": null,
+          "heading": "Quellen",
+          "number": null
+        }
+      ],
+      "leaves": [
+        {
+          "section_id": "hero",
+          "tag": "p",
+          "type": "dek",
+          "text": "Eine klare, überprüfbare Einordnung für Leserinnen und Leser."
+        },
+        {
+          "section_id": "ueberblick",
+          "tag": "li",
+          "type": "list-item",
+          "text": "Teststoff wird verständlich eingeordnet."
+        },
+        {
+          "section_id": "ueberblick",
+          "tag": "li",
+          "type": "list-item",
+          "text": "Aussagen bleiben an Quellen gebunden."
+        },
+        {
+          "section_id": "ueberblick",
+          "tag": "li",
+          "type": "list-item",
+          "text": "Die Darstellung zeigt Tabellen, Grafik und Kontrollblöcke."
+        },
+        {
+          "section_id": "was-ist-teststoff",
+          "tag": "p",
+          "type": "paragraph",
+          "text": "Dieser Abschnitt erklärt den Begriff und verweist auf Vitamin A."
+        },
+        {
+          "section_id": "haufige-fragen",
+          "tag": "button",
+          "type": "faq-question",
+          "text": "Ist Teststoff relevant?"
+        },
+        {
+          "section_id": "haufige-fragen",
+          "tag": "p",
+          "type": "paragraph",
+          "text": "Ja, diese Antwort prüft das hydrierte FAQ-Disclosure."
+        },
+        {
+          "section_id": "merkkasten",
+          "tag": "h2",
+          "type": "control-heading",
+          "text": "Merkkasten"
+        },
+        {
+          "section_id": "merkkasten",
+          "tag": "p",
+          "type": "paragraph",
+          "text": "Der Merkkasten bleibt als eigener sichtbarer Kontrollblock erhalten."
+        },
+        {
+          "section_id": "rechtlicher-hinweis",
+          "tag": "h2",
+          "type": "control-heading",
+          "text": "Rechtlicher Hinweis"
+        },
+        {
+          "section_id": "rechtlicher-hinweis",
+          "tag": "p",
+          "type": "paragraph",
+          "text": "Dieser Hinweis ersetzt keine individuelle medizinische Beratung."
+        },
+        {
+          "section_id": "fazit",
+          "tag": "p",
+          "type": "paragraph",
+          "text": "Teststoff lässt sich knapp, verständlich und quellengebunden einordnen."
+        }
+      ],
+      "toc": [
+        { "label": "Auf einen Blick", "href": "#ueberblick" },
+        { "label": "Was ist Teststoff?", "href": "#was-ist-teststoff" },
+        { "label": "Lebensmittel im Überblick", "href": "#lebensmittel-im-uberblick" },
+        { "label": "Häufige Fragen", "href": "#haufige-fragen" },
+        { "label": "Fazit", "href": "#fazit" },
+        { "label": "Quellen", "href": "#quellen" }
+      ],
+      "links": [
+        {
+          "section_id": "was-ist-teststoff",
+          "role": "content",
+          "tag": "a",
+          "label": "Vitamin A",
+          "href": "/wissen/vitamin-a"
+        },
+        {
+          "section_id": "quellen",
+          "role": "source",
+          "tag": "a",
+          "label": "Externe Originalquelle",
+          "href": "https://example.com/study"
+        },
+        {
+          "section_id": "quellen",
+          "role": "source",
+          "tag": "a",
+          "label": "Interne Vertiefung",
+          "href": "/wissen/vitamin-a"
+        }
+      ],
+      "tables": [
+        {
+          "section_id": "was-ist-teststoff",
+          "presentation": "data_table",
+          "headers": ["Merkmal", "Einordnung"],
+          "rows": [["Status", "Beispiel"]]
+        },
+        {
+          "section_id": "lebensmittel-im-uberblick",
+          "presentation": "food_grid",
+          "headers": ["Lebensmittelgruppe", "Beispiele", "Einordnung", "Hinweis"],
+          "rows": [
+            ["Pflanzlich", "Beispiel A", "Gut einzuordnen", "Vierter Wert bleibt erhalten"],
+            ["Tierisch", "Beispiel B", "Ergänzende Einordnung", "Zweite Tabellenzeile"]
+          ]
+        }
+      ],
+      "assets": [
+        {
+          "section_id": "was-ist-teststoff",
+          "tag": "img",
+          "src": "/api/r2/knowledge/render-contract/f88a1476e9546b8d9c64e9e80f1e43427523d57b15d4293982fba3d83fd93d21.png",
+          "alt": "Supplement-Stack-Logo",
+          "caption": "Die Grafik dient als kanonisches Render-Testbild."
+        }
+      ],
+      "faq": [
+        {
+          "section_id": "haufige-fragen",
+          "question": {
+            "tag": "button",
+            "type": "faq-question",
+            "text": "Ist Teststoff relevant?"
+          },
+          "answers": [
+            {
+              "tag": "p",
+              "type": "paragraph",
+              "text": "Ja, diese Antwort prüft das hydrierte FAQ-Disclosure."
+            }
+          ]
+        }
+      ],
+      "ui": {
+        "eyebrow": "Wissen",
+        "toc_title": "Auf dieser Seite",
+        "ingredient_chip": "Wirkstoff: Teststoff",
+        "reviewed_date": "Geprüft am 14. Juli 2026",
+        "reading_time": "Lesezeit ca. 1 Minute",
+        "sources_label": "Quellen",
+        "sources_count": "2 Quellen"
+      }
+    },
+    "release_projection": {
+      "schema": "article_render_projection.v2",
+      "article_id": "stage3-render-contract",
+      "route": "/wissen/render-contract",
+      "template": "magazine",
+      "h1": "Teststoff verständlich erklärt",
+      "dek": "Eine klare, überprüfbare Einordnung für Leserinnen und Leser.",
+      "ui": {
+        "contract_version": "knowledge-magazine-ui.v2",
+        "eyebrow": "Wissen",
+        "toc_title": "Auf dieser Seite",
+        "ingredient_chip": "Wirkstoff: Teststoff",
+        "reviewed_date": "Geprüft am 14. Juli 2026",
+        "reading_time": { "minutes": 1, "label": "Lesezeit ca. 1 Minute" },
+        "sources_label": "Quellen",
+        "sources_count": { "count": 2, "label": "2 Quellen" }
+      },
+      "sections": [
+        {
+          "section_id": "ueberblick",
+          "kind": "overview",
+          "control_type": null,
+          "heading": "Auf einen Blick",
+          "order": 0,
+          "number": null,
+          "normalized_text": "Teststoff wird verständlich eingeordnet. Aussagen bleiben an Quellen gebunden. Die Darstellung zeigt Tabellen, Grafik und Kontrollblöcke.",
+          "links": [],
+          "tables": [],
+          "assets": []
+        },
+        {
+          "section_id": "was-ist-teststoff",
+          "kind": "content",
+          "control_type": null,
+          "heading": "Was ist Teststoff?",
+          "order": 1,
+          "number": "01",
+          "normalized_text": "Dieser Abschnitt erklärt den Begriff und verweist auf Vitamin A. Merkmal Einordnung Status Beispiel Die Grafik dient als kanonisches Render-Testbild.",
+          "links": [{ "label": "Vitamin A", "url": "/wissen/vitamin-a" }],
+          "tables": [{ "presentation": "data_table", "headers": ["Merkmal", "Einordnung"], "rows": [["Status", "Beispiel"]] }],
+          "assets": [{ "src": "/api/r2/knowledge/render-contract/f88a1476e9546b8d9c64e9e80f1e43427523d57b15d4293982fba3d83fd93d21.png", "alt": "Supplement-Stack-Logo", "caption": "Die Grafik dient als kanonisches Render-Testbild." }]
+        },
+        {
+          "section_id": "lebensmittel-im-uberblick",
+          "kind": "content",
+          "control_type": null,
+          "heading": "Lebensmittel im Überblick",
+          "order": 2,
+          "number": "02",
+          "normalized_text": "Pflanzlich Beispiel A Gut einzuordnen Vierter Wert bleibt erhalten Tierisch Beispiel B Ergänzende Einordnung Zweite Tabellenzeile",
+          "links": [],
+          "tables": [{
+            "presentation": "food_grid",
+            "headers": ["Lebensmittelgruppe", "Beispiele", "Einordnung", "Hinweis"],
+            "rows": [
+              ["Pflanzlich", "Beispiel A", "Gut einzuordnen", "Vierter Wert bleibt erhalten"],
+              ["Tierisch", "Beispiel B", "Ergänzende Einordnung", "Zweite Tabellenzeile"]
+            ]
+          }],
+          "assets": []
+        },
+        {
+          "section_id": "haufige-fragen",
+          "kind": "content",
+          "control_type": null,
+          "heading": "Häufige Fragen",
+          "order": 3,
+          "number": "03",
+          "normalized_text": "Ist Teststoff relevant? Ja, diese Antwort prüft das hydrierte FAQ-Disclosure.",
+          "links": [],
+          "tables": [],
+          "assets": []
+        },
+        {
+          "section_id": "merkkasten",
+          "kind": "control",
+          "control_type": "merkkasten",
+          "heading": "Merkkasten",
+          "order": 4,
+          "number": null,
+          "normalized_text": "Der Merkkasten bleibt als eigener sichtbarer Kontrollblock erhalten.",
+          "links": [],
+          "tables": [],
+          "assets": []
+        },
+        {
+          "section_id": "rechtlicher-hinweis",
+          "kind": "control",
+          "control_type": "legal_notice",
+          "heading": "Rechtlicher Hinweis",
+          "order": 5,
+          "number": null,
+          "normalized_text": "Dieser Hinweis ersetzt keine individuelle medizinische Beratung.",
+          "links": [],
+          "tables": [],
+          "assets": []
+        },
+        {
+          "section_id": "fazit",
+          "kind": "fazit",
+          "control_type": null,
+          "heading": "Fazit",
+          "order": 6,
+          "number": "04",
+          "normalized_text": "Teststoff lässt sich knapp, verständlich und quellengebunden einordnen.",
+          "links": [],
+          "tables": [],
+          "assets": []
+        },
+        {
+          "section_id": "quellen",
+          "kind": "sources",
+          "control_type": null,
+          "heading": "Quellen",
+          "order": 7,
+          "number": null,
+          "normalized_text": "Externe Originalquelle Interne Vertiefung",
+          "links": [
+            { "label": "Externe Originalquelle", "url": "https://example.com/study" },
+            { "label": "Interne Vertiefung", "url": "/wissen/vitamin-a" }
+          ],
+          "tables": [],
+          "assets": []
+        }
+      ],
+      "toc": [
+        { "section_id": "ueberblick", "label": "Auf einen Blick", "href": "#ueberblick" },
+        { "section_id": "was-ist-teststoff", "label": "Was ist Teststoff?", "href": "#was-ist-teststoff" },
+        { "section_id": "lebensmittel-im-uberblick", "label": "Lebensmittel im Überblick", "href": "#lebensmittel-im-uberblick" },
+        { "section_id": "haufige-fragen", "label": "Häufige Fragen", "href": "#haufige-fragen" },
+        { "section_id": "fazit", "label": "Fazit", "href": "#fazit" },
+        { "section_id": "quellen", "label": "Quellen", "href": "#quellen" }
+      ],
+      "fazit": { "section_id": "fazit", "normalized_text": "Teststoff lässt sich knapp, verständlich und quellengebunden einordnen." },
+      "sources": [
+        { "source_id": "src-external", "label": "Externe Originalquelle", "url": "https://example.com/study", "order": 0 },
+        { "source_id": "src-internal", "label": "Interne Vertiefung", "url": "/wissen/vitamin-a", "order": 1 }
+      ]
+    }
+  }
+}

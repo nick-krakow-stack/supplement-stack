@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import LegalDisclaimer from './LegalDisclaimer';
@@ -12,6 +12,11 @@ interface LayoutProps {
 
 const navLinkClass =
   'flex min-h-11 items-center rounded-xl px-2 text-sm font-extrabold tracking-wide text-slate-500 transition-colors hover:bg-slate-50 hover:text-blue-700 md:min-h-0 md:px-0 md:hover:bg-transparent';
+const activeNavLinkClass = 'text-blue-700';
+
+function navClass({ isActive }: { isActive: boolean }): string {
+  return `${navLinkClass}${isActive ? ` ${activeNavLinkClass}` : ''}`;
+}
 
 export default function Layout({ children }: LayoutProps) {
   const { user, isAdmin, logout } = useAuth();
@@ -27,21 +32,24 @@ export default function Layout({ children }: LayoutProps) {
 
   const navLinks = (
     <>
-      <Link to="/stacks" className={navLinkClass} onClick={closeMobile}>
+      <NavLink to="/wissen" className={navClass} onClick={closeMobile}>
+        Wissen
+      </NavLink>
+      <NavLink to="/stacks" className={navClass} onClick={closeMobile}>
         Meine Stacks
-      </Link>
-      <Link to="/einnahmeplan" className={navLinkClass} onClick={closeMobile}>
+      </NavLink>
+      <NavLink to="/einnahmeplan" className={navClass} onClick={closeMobile}>
         Einnahmeplan
-      </Link>
+      </NavLink>
       {user && (
-        <Link to="/my-products" className={navLinkClass} onClick={closeMobile}>
+        <NavLink to="/my-products" className={navClass} onClick={closeMobile}>
           Eigene Produkte
-        </Link>
+        </NavLink>
       )}
       {!user && (
-        <Link to="/demo" className={navLinkClass} onClick={closeMobile}>
+        <NavLink to="/demo" className={navClass} onClick={closeMobile}>
           Demo
-        </Link>
+        </NavLink>
       )}
       {isAdmin && (
         <Link

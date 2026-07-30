@@ -1,0 +1,18 @@
+{
+  "schema": "source_evidence_record.v1",
+  "record_id": "fact-src-01-01",
+  "source_id": "src-01",
+  "created_by":{"role":"clinical-study-interpreter","id":"writer-01","created_at":"2026-07-13T14:00:00+02:00"},
+  "source_locator": {"source_url":"https://example.org/source","access_basis":"abstract","retrieved_at":"2026-07-13"},
+  "provenance": {"location":"","verbatim_quote":null,"faithful_paraphrase":"","language":"en"},
+  "claim_type":"safety",
+  "cluster_keys":["safety_ul_adults"],
+  "population":"Erwachsene",
+  "intervention_or_exposure":"Intervention",
+  "comparison":"Kontrolle",
+  "outcome":"Endpunkt",
+  "quantity":{"tested_amount":"500 mg/Tag","schedule":"täglich","duration":"12 Wochen","is_recommendation":false},
+  "effect":"Ergebnis",
+  "uncertainty_or_limit":"Grenze",
+  "stack_relevance":{"candidate":true,"use":"safety_context","direct_user_dose_recommendation":false}
+}

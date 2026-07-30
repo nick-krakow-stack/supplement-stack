@@ -2,18 +2,26 @@
 
 Stand: 2026-05-01
 
-This file is a snapshot. For the most current operational context, read:
+Status: historical implementation snapshot. All phase and implementation
+statements below describe the repository view on the date above; they are not
+current status claims.
+
+For current startup and context routing, follow `AGENTS.md`. The orientation
+order is:
 
 1. `AGENTS.md`
-2. `CLAUDE.md`
-3. `.agent-memory/current-state.md`
-4. `.agent-memory/handoff.md`
-5. `.agent-memory/next-steps.md`
+2. `.agent-memory/current-state.md`, when current architecture context is needed
+3. `.agent-memory/handoff.md`, when explicitly continuing unfinished work
+4. `.agent-memory/next-steps.md`, when additional priority context is needed
+
+`AGENTS.md` remains authoritative about which of these files a task actually
+requires. For the current nutrient-content workflow, use
+[`content-pipeline-v2.md`](content-pipeline-v2.md).
 
 When this file conflicts with code, migrations, or memory, use code and
 migrations first, then `.agent-memory/*`.
 
-## Current Phase
+## Snapshot Phase (2026-05-01)
 
 - Phase B is complete.
 - Phase C is complete.

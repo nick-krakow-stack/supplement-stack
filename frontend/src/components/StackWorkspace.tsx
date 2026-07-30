@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   ArrowRight,
   Calculator,
+  Check,
   FileText,
   Info,
   LayoutGrid,
@@ -430,6 +431,123 @@ function primaryDose(guideline?: DosageGuideline): ManualDose | null {
   const value = guideline.dose_max ?? guideline.dose_min;
   if (value == null || !guideline.unit) return null;
   return { value, unit: normalizeUnitToGerman(guideline.unit) };
+}
+
+function formatDoseAmount(doseValue?: ManualDose | null): string {
+  if (!doseValue) return '';
+  const value = doseValue.value.toLocaleString('de-DE', { maximumFractionDigits: 2 });
+  return `${value} ${doseValue.unit}`;
+}
+
+export function populationLabel(population?: string): string {
+  const normalized = (population ?? '').trim().toLowerCase();
+  switch (normalized) {
+    case 'adult_male':
+    case 'male':
+    case 'men':
+    case 'maenner':
+    case 'männer':
+      return 'Männer';
+    case 'adult_female':
+    case 'female':
+    case 'women':
+    case 'frauen':
+      return 'Frauen';
+    case 'pregnancy':
+    case 'pregnant':
+    case 'schwangere':
+      return 'Schwangere';
+    case 'lactation':
+    case 'breastfeeding':
+    case 'stillende':
+      return 'Stillzeit';
+    case 'children':
+    case 'kinder':
+      return 'Kinder';
+    case 'older':
+    case 'aeltere':
+    case 'ältere':
+      return 'Ältere';
+    case 'adult':
+    case 'adults':
+    case 'allgemein':
+      return 'Standard';
+    default:
+      return 'Standard';
+  }
+}
+
+export function modalVisibleGuidelineOptions(guidelines: DosageGuideline[]): DosageGuideline[] {
+  const seen = new Set<string>();
+  return guidelines.filter((guideline) => {
+    const label = populationLabel(guideline.population);
+    if (seen.has(label)) return false;
+    seen.add(label);
+    return true;
+  }).slice(0, 4);
+}
+
+export function modalIngredientDescription(ingredient: { name: string; description?: string | null }): string {
+  const fallback = `${ingredient.name} wird hier mit dem DGE-Wert und passenden Studienwerten verglichen.`;
+  const raw = ingredient.description?.replace(/\s+/g, ' ').trim() || fallback;
+  const sentences = raw.match(/[^.!?]+[.!?]+/g);
+  const compact = sentences && sentences.length > 0 ? sentences.slice(0, 2).join(' ').trim() : raw;
+  if (compact.length <= 180) return compact;
+  return `${compact.slice(0, 177).trim()}...`;
+}
+
+function isStudyContextGuideline(guideline: DosageGuideline): boolean {
+  return guideline.source === 'study' &&
+    (guideline.amount_type == null || guideline.amount_type === 'tested_amount') &&
+    (guideline.stage4_status == null || guideline.stage4_status === 'active');
+}
+
+export function selectStudyGuideline(
+  guidelines: DosageGuideline[],
+  referenceGuideline?: DosageGuideline,
+): DosageGuideline | undefined {
+  return guidelines.find((guideline) =>
+    guideline.id !== referenceGuideline?.id && isStudyContextGuideline(guideline),
+  );
+}
+
+export function describeStudyGuidelineContext(guideline?: DosageGuideline): string {
+  if (!guideline) return '';
+  const sourceTitle = guideline.source_title?.trim();
+  const notes = guideline.notes?.trim();
+  if (sourceTitle && notes) return `${sourceTitle}: ${notes}`;
+  return sourceTitle || notes || 'Studienwert aus hinterlegtem Studienkontext.';
+}
+
+export function describeStudyGuidelineEffect(guideline?: DosageGuideline): string {
+  if (!guideline) return '';
+  const notes = guideline.notes?.trim();
+  return notes || 'Wirkung noch nicht hinterlegt.';
+}
+
+function describeDgeGuideline(guideline?: DosageGuideline): string {
+  if (!guideline) return 'Kein offizieller Referenzwert verfügbar.';
+  const label = populationLabel(guideline.population);
+  return label === 'Standard' ? 'DGE-Referenzwert' : `Empfehlung für ${label}`;
+}
+
+const INGREDIENT_EFFECT_KEYWORDS: Array<{ pattern: RegExp; label: string }> = [
+  { pattern: /immun|abwehr/i, label: 'Immunsystem' },
+  { pattern: /bindegewebe|kollagen|haut/i, label: 'Bindegewebe' },
+  { pattern: /zellschutz|oxidativ|antioxid/i, label: 'Zellschutz' },
+  { pattern: /eisen/i, label: 'Eisenaufnahme' },
+  { pattern: /knochen|calcium|kalzium/i, label: 'Knochen' },
+  { pattern: /nerv|gehirn|konzentration/i, label: 'Nerven' },
+  { pattern: /energie|stoffwechsel/i, label: 'Stoffwechsel' },
+  { pattern: /blut|homocystein|folat/i, label: 'Blutbildung' },
+];
+
+function ingredientEffectChips(ingredient: Ingredient): string[] {
+  const haystack = `${ingredient.name} ${ingredient.description ?? ''}`;
+  const chips = INGREDIENT_EFFECT_KEYWORDS
+    .filter((entry) => entry.pattern.test(haystack))
+    .map((entry) => entry.label);
+  return Array.from(new Set(chips)).slice(0, 4);
 }
 
 function formatContentAmount(value: number): string {
@@ -1201,6 +1319,7 @@ function AddProductModal({
   const [selectedFormId, setSelectedFormId] = useState<number | null>(null);
   const [ingredientLoading, setIngredientLoading] = useState(false);
   const [guidelines, setGuidelines] = useState<DosageGuideline[]>([]);
+  const [selectedDgeGuidelineId, setSelectedDgeGuidelineId] = useState<number | null>(null);
   const [guidelinesLoading, setGuidelinesLoading] = useState(false);
   const [dose, setDose] = useState<ManualDose>({ value: 0, unit: '' });
   const [targetStackId, setTargetStackId] = useState(activeStackId);
@@ -1219,14 +1338,31 @@ function AddProductModal({
   );
   const duplicateProductKey = duplicateIngredient ? productStackKey(duplicateIngredient.product) : null;
 
-  const dgeGuideline = guidelines.find((gl) => gl.source === 'DGE' || gl.is_default) ?? guidelines[0];
-  const studyGuideline =
-    guidelines.find((gl) => gl.source === 'study') ??
-    guidelines.find((gl) => gl.id !== dgeGuideline?.id);
+  const dgeOptions = useMemo(
+    () => guidelines.filter((gl) => gl.source === 'DGE' || gl.is_default),
+    [guidelines],
+  );
+  const visibleDgeOptions = useMemo(
+    () => modalVisibleGuidelineOptions(dgeOptions),
+    [dgeOptions],
+  );
+  const dgeGuideline =
+    dgeOptions.find((gl) => gl.id === selectedDgeGuidelineId) ??
+    dgeOptions[0] ??
+    guidelines[0];
+  const dgeDose = primaryDose(dgeGuideline);
+  const studyGuideline = selectStudyGuideline(guidelines, dgeGuideline);
+  const studyDose = primaryDose(studyGuideline);
+  const studyGuidelineEffect = describeStudyGuidelineEffect(studyGuideline);
+  const studyGuidelineSource = studyGuideline?.source_title?.trim();
 
   const selectedForm = useMemo(
     () => forms.find((form) => form.id === selectedFormId) ?? null,
     [forms, selectedFormId],
+  );
+  const ingredientChips = useMemo(
+    () => (ingredient ? ingredientEffectChips(ingredient) : []),
+    [ingredient],
   );
 
   const findDuplicateIngredientProduct = useCallback(
@@ -1244,6 +1380,7 @@ function AddProductModal({
 
   const loadDosageGuidelines = useCallback((selected: Ingredient) => {
     setGuidelines([]);
+    setSelectedDgeGuidelineId(null);
     setGuidelinesLoading(true);
     setStep('dosage');
     credentialedFetch(apiPath(`/ingredients/${selected.id}/dosage-guidelines`))
@@ -1254,7 +1391,9 @@ function AddProductModal({
       .then((data) => {
         const loaded: DosageGuideline[] = data.guidelines ?? [];
         setGuidelines(loaded);
-        const defaultDose = primaryDose(loaded.find((gl) => gl.is_default) ?? loaded[0]);
+        const defaultGuideline = loaded.find((gl) => gl.is_default) ?? loaded.find((gl) => gl.source === 'DGE') ?? loaded[0];
+        setSelectedDgeGuidelineId(defaultGuideline?.id ?? null);
+        const defaultDose = primaryDose(defaultGuideline);
         setDose(defaultDose ?? { value: 0, unit: normalizeUnitToGerman(selected.unit) || '' });
       })
       .catch(() => {
@@ -1267,6 +1406,7 @@ function AddProductModal({
     setIngredient(selected);
     setError('');
     setGuidelines([]);
+    setSelectedDgeGuidelineId(null);
     setForms([]);
     setSelectedFormId(null);
     setIngredientLoading(true);
@@ -1391,30 +1531,36 @@ function AddProductModal({
           (dose.value / (dgeGuideline.dose_max ?? dgeGuideline.dose_min ?? dose.value)) * 100,
         )
       : null;
-  const modalWidthClass = step === 'products' ? 'max-w-xl' : 'max-w-3xl';
+  const modalStageClass = step === 'products'
+    ? 'stage ss-add-modal-stage ss-add-modal-stage--products'
+    : 'stage ss-add-modal-stage';
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/55 px-3 py-6 backdrop-blur-sm sm:px-6"
+      className="modal-wrap ss-add-modal-overlay"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className={`w-full ${modalWidthClass} rounded-[1.6rem] bg-white p-5 shadow-[0_30px_80px_rgba(15,23,42,0.35)] sm:p-6`}>
-        <div className="mb-6 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Plus size={28} className="text-emerald-600" />
-            <h2 className="text-2xl font-black tracking-tight text-slate-950 sm:text-3xl">
-              {title}
-            </h2>
-          </div>
-          <button
-            onClick={onClose}
-            className="rounded-2xl p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
-            aria-label="Schließen"
-          >
-            <X size={24} />
-          </button>
-        </div>
+      <div className={modalStageClass}>
+        <section className="modal ss-add-modal" role="dialog" aria-modal="true" aria-label={title}>
+          <header className="ss-add-modal-header">
+            <div className="ss-add-title-wrap">
+              <span className="ss-add-title-icon">
+                <Plus size={24} strokeWidth={3} />
+              </span>
+              <h2 className="ss-add-modal-title">
+                {title}
+              </h2>
+            </div>
+            <button
+              onClick={onClose}
+              className="ss-add-close"
+              aria-label="Schließen"
+            >
+              <X size={24} />
+            </button>
+          </header>
 
+          <div className="ss-add-modal-content">
         {step === 'search' && (
           <div className="rounded-2xl border border-blue-200 bg-blue-50/50 p-4 sm:p-5">
             <div className="mb-4 flex items-center gap-3 text-blue-900">
@@ -1434,131 +1580,175 @@ function AddProductModal({
 
         {step === 'dosage' && ingredient && (
           <>
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4 sm:p-5">
-              <div className="mb-4 flex items-center gap-3 text-emerald-800">
-                <Calculator size={24} />
-                <h3 className="text-xl font-black sm:text-2xl">
-                  Dosierung für {ingredient.name} festlegen
-                </h3>
+            <div className="ss-dosage-panel">
+              <div className="ss-dosage-head">
+                <span className="ss-dosage-icon">
+                  <Calculator size={22} />
+                </span>
+                <div>
+                  <h3 className="ss-dosage-title">
+                    Dosierung für {ingredient.name} festlegen
+                  </h3>
+                  <p className="ss-dosage-description">
+                    {modalIngredientDescription(ingredient)}
+                  </p>
+                  {ingredientChips.length > 0 && (
+                    <div className="ss-chip-row">
+                      {ingredientChips.map((chip) => (
+                        <span key={chip} className="ss-effect-chip">
+                          {chip}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {selectedForm && (
+                    <p className="ss-form-line">
+                      FORM <strong>{selectedForm.name}</strong>
+                    </p>
+                  )}
+                </div>
               </div>
 
+              <div className="ss-dosage-divider" />
+
               {guidelinesLoading ? (
-                <div className="py-8 text-center text-sm font-semibold text-slate-500">
+                <div className="ss-modal-loading">
                   Leitlinien werden geladen...
                 </div>
               ) : (
-                <div className="grid gap-4 md:grid-cols-2">
-                  {primaryDose(dgeGuideline) ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const nextDose = primaryDose(dgeGuideline);
-                        if (nextDose) setDose(nextDose);
-                      }}
-                      className="rounded-2xl border border-blue-200 bg-white/80 p-4 text-left transition hover:border-blue-400 hover:bg-blue-50"
-                    >
-                      <p className="text-base font-black text-blue-700">DGE-Referenzwert</p>
-                      <p className="mt-2 text-2xl font-black text-blue-600">
-                        {primaryDose(dgeGuideline)!.value}
-                        {primaryDose(dgeGuideline)!.unit}
-                      </p>
-                      <span className="mt-4 flex justify-center rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-black text-white">
-                        Referenzwert übernehmen
-                      </span>
-                    </button>
+                <div className="ss-reference-grid">
+                  {dgeDose ? (
+                    <div className="ss-reference-card ss-reference-card--dge">
+                      <div className="ss-reference-top">
+                        <p className="ss-reference-title">DGE Empfehlung</p>
+                        {visibleDgeOptions.length > 1 && (
+                          <div className="ss-pop-toggle" aria-label="DGE Zielgruppe wählen">
+                            {visibleDgeOptions.map((option) => (
+                              <button
+                                type="button"
+                                key={option.id}
+                                className={`ss-pop-option ${option.id === dgeGuideline?.id ? 'is-active' : ''}`}
+                                onClick={() => {
+                                  setSelectedDgeGuidelineId(option.id);
+                                  const nextDose = primaryDose(option);
+                                  if (nextDose) setDose(nextDose);
+                                }}
+                              >
+                                {populationLabel(option.population)}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <p className="ss-reference-value">{formatDoseAmount(dgeDose)}</p>
+                      <p className="ss-reference-note">{describeDgeGuideline(dgeGuideline)}</p>
+                      <button
+                        type="button"
+                        onClick={() => setDose(dgeDose)}
+                        className="ss-reference-cta ss-reference-cta--dge"
+                      >
+                        <Check size={18} />
+                        Empfehlung übernehmen
+                      </button>
+                    </div>
                   ) : (
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left cursor-default">
-                      <p className="text-base font-black text-slate-500">DGE-Referenzwert</p>
-                      <p className="mt-2 text-sm font-semibold text-slate-400">
-                        Kein offizieller Referenzwert verfügbar
-                      </p>
+                    <div className="ss-reference-card ss-reference-empty">
+                      <p className="ss-reference-title">DGE Empfehlung</p>
+                      <p className="ss-reference-note">Kein offizieller Referenzwert verfügbar.</p>
                     </div>
                   )}
-                  {primaryDose(studyGuideline) ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const nextDose = primaryDose(studyGuideline);
-                        if (nextDose) setDose(nextDose);
-                      }}
-                      className="rounded-2xl border border-violet-200 bg-white/80 p-4 text-left transition hover:border-violet-400 hover:bg-violet-50"
-                    >
-                      <p className="text-base font-black text-violet-700">Studienbasierter Richtwert</p>
-                      <p className="mt-2 text-2xl font-black text-violet-600">
-                        {primaryDose(studyGuideline)!.value}
-                        {primaryDose(studyGuideline)!.unit}
-                      </p>
-                      <span className="mt-4 flex justify-center rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-black text-white">
-                        Richtwert aus Studienquelle
-                      </span>
-                    </button>
+
+                  {studyDose ? (
+                    <div className="ss-reference-card ss-reference-card--study">
+                      <p className="ss-reference-title">Studien-Referenz</p>
+                      <p className="ss-reference-value">{formatDoseAmount(studyDose)}</p>
+                      <p className="ss-reference-note">{studyGuidelineEffect}</p>
+                      {studyGuidelineSource && (
+                        <p className="ss-reference-source">
+                          <FileText size={15} />
+                          <span>{studyGuidelineSource}</span>
+                        </p>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setDose(studyDose)}
+                        className="ss-reference-cta ss-reference-cta--study"
+                      >
+                        Referenz übernehmen
+                      </button>
+                    </div>
                   ) : (
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left cursor-default">
-                      <p className="text-base font-black text-slate-500">Studienbasierter Richtwert</p>
-                      <p className="mt-2 text-sm font-semibold text-slate-400">
-                        Keine Studiendaten hinterlegt
-                      </p>
+                    <div className="ss-reference-card ss-reference-empty">
+                      <p className="ss-reference-title">Studien-Referenz</p>
+                      <p className="ss-reference-note">Keine Studiendaten hinterlegt.</p>
                     </div>
                   )}
                 </div>
               )}
 
-              <label className="mt-5 block text-base font-black text-slate-700">
+              <label className="ss-input-label">
                 Geplante Tagesmenge ({dose.unit || normalizeUnitToGerman(ingredient.unit) || 'Einheit'})
               </label>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={dose.value ? String(dose.value).replace('.', ',') : ''}
-                onChange={(event) => {
-                  const normalized = event.target.value.replace(',', '.');
-                  const parsed = Number(normalized);
-                  setDose((prev) => ({ ...prev, value: Number.isFinite(parsed) ? parsed : 0 }));
-                }}
-                className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-xl font-semibold text-slate-950 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-4 focus:ring-blue-100"
-              />
-              <p className="mt-2 text-sm font-semibold text-slate-500">
-                Geben Sie die Menge ein, mit der gerechnet werden soll.
+              <div className="ss-amount-control">
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={dose.value ? String(dose.value).replace('.', ',') : ''}
+                  onChange={(event) => {
+                    const normalized = event.target.value.replace(',', '.');
+                    const parsed = Number(normalized);
+                    setDose((prev) => ({ ...prev, value: Number.isFinite(parsed) ? parsed : 0 }));
+                  }}
+                  className="ss-amount-input"
+                />
+                <span className="ss-amount-unit">
+                  {dose.unit || normalizeUnitToGerman(ingredient.unit) || 'mg'}
+                </span>
+              </div>
+              <p className="ss-helper-text">
+                Gib die Menge ein, mit der gerechnet werden soll.
               </p>
 
               {dosePercent != null && (
-                <div className="mt-5 flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-800">
-                  <AlertTriangle size={24} className="mt-0.5 flex-shrink-0" />
+                <div className="ss-dge-notice">
+                  <AlertTriangle size={23} />
                   <div>
-                    <p className="font-black">Im Bereich des DGE-Referenzwerts</p>
-                    <p className="mt-1 text-sm font-semibold">
-                      Diese Menge entspricht {dosePercent}% des DGE-Referenzwerts.
+                    <p className="ss-dge-notice-title">Rund um die DGE Empfehlung</p>
+                    <p className="ss-dge-notice-text">
+                      Diese Menge entspricht {dosePercent}% der DGE Empfehlung.
                     </p>
                   </div>
                 </div>
               )}
 
-              <label className="mt-5 block text-base font-black text-slate-700">Stack auswählen</label>
+              <label className="ss-input-label">Stack auswählen</label>
               <select
                 value={targetStackId}
                 onChange={(event) => setTargetStackId(event.target.value)}
-                className="mt-3 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-lg font-semibold text-slate-950 shadow-sm focus:border-blue-400 focus:outline-none focus:ring-4 focus:ring-blue-100"
+                className="ss-stack-select"
               >
                 {stacks.map((stack) => (
                   <option key={stack.id} value={stack.id}>{stack.name}</option>
                 ))}
               </select>
-              <p className="mt-2 text-sm font-semibold text-slate-500">
+              <p className="ss-helper-text">
                 Produkt wird diesem Stack hinzugefügt.
               </p>
             </div>
 
-            <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="ss-modal-actions ss-modal-actions-main">
               <button
+                type="button"
                 onClick={() => setStep('search')}
-                className="inline-flex items-center gap-2 rounded-xl px-2 py-2 text-base font-semibold text-blue-600 hover:text-blue-800"
+                className="ss-back-link"
               >
                 <ArrowLeft size={20} />
-                Zuruck zur Suche
+                Zurück zur Suche
               </button>
               <button
+                type="button"
                 onClick={() => loadProducts()}
-                className="inline-flex items-center justify-center gap-3 rounded-xl bg-emerald-600 px-6 py-3 text-lg font-black text-white shadow-lg shadow-emerald-600/20 hover:bg-emerald-700"
+                className="ss-next-btn"
               >
                 Weiter zu Produkten
                 <ArrowRight size={24} />
@@ -1781,6 +1971,8 @@ function AddProductModal({
             </div>
           </div>
         )}
+          </div>
+        </section>
       </div>
     </div>
   );

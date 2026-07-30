@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   CircleDot,
   ClipboardCheck,
+  ExternalLink,
   FileText,
   Loader2,
   Plus,
@@ -73,6 +74,13 @@ type SourceDraft = {
   notes: string;
   doi: string;
   pubmed_id: string;
+};
+
+type SourceLocatorItem = {
+  key: string;
+  label: string;
+  value: string;
+  href: string | null;
 };
 
 const STAGES: StageConfig[] = [
@@ -228,13 +236,108 @@ function compactJoin(values: Array<string | null | undefined>): string {
   return values.map((value) => value?.trim()).filter((value): value is string => Boolean(value)).join(' · ');
 }
 
-function sourceLinkSummary(source: AdminIngredientResearchSource): string {
-  const parts = [
-    source.source_url ? 'Link' : null,
-    source.archive_url ? 'Archiv' : null,
-    sourcePdfStatusLabel(source),
-  ];
-  return compactJoin(parts) || 'kein Link';
+function toExternalHref(value: string | null | undefined): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  return /^https?:\/\//i.test(trimmed) ? trimmed : null;
+}
+
+function doiHref(doi: string | null | undefined): string | null {
+  const trimmed = doi?.trim();
+  if (!trimmed) return null;
+  const existingUrl = toExternalHref(trimmed);
+  if (existingUrl) return existingUrl;
+  const normalized = trimmed.replace(/^doi:\s*/i, '');
+  return normalized ? `https://doi.org/${normalized}` : null;
+}
+
+function pubmedHref(pubmedId: string | null | undefined): string | null {
+  const trimmed = pubmedId?.trim();
+  if (!trimmed) return null;
+  const existingUrl = toExternalHref(trimmed);
+  if (existingUrl) return existingUrl;
+  const match = trimmed.match(/\d+/);
+  return match ? `https://pubmed.ncbi.nlm.nih.gov/${match[0]}/` : null;
+}
+
+function sourceLocatorItems(source: AdminIngredientResearchSource): SourceLocatorItem[] {
+  const items: SourceLocatorItem[] = [];
+  const sourceUrl = source.source_url?.trim();
+  const pdfUrl = source.pdf_url?.trim();
+  const archiveUrl = source.archive_url?.trim();
+  const storageKey = source.pdf_storage_key?.trim();
+  const doi = source.doi?.trim();
+  const pubmedId = source.pubmed_id?.trim();
+
+  if (sourceUrl) items.push({ key: 'source_url', label: 'Quelle', value: sourceUrl, href: toExternalHref(sourceUrl) });
+  if (pdfUrl) items.push({ key: 'pdf_url', label: 'PDF', value: pdfUrl, href: toExternalHref(pdfUrl) });
+  if (archiveUrl) items.push({ key: 'archive_url', label: 'Archiv', value: archiveUrl, href: toExternalHref(archiveUrl) });
+  if (storageKey) items.push({ key: 'pdf_storage_key', label: 'Ablage', value: storageKey, href: toExternalHref(storageKey) });
+  if (doi) items.push({ key: 'doi', label: 'DOI', value: doi, href: doiHref(doi) });
+  if (pubmedId) items.push({ key: 'pubmed_id', label: 'PubMed', value: pubmedId, href: pubmedHref(pubmedId) });
+
+  return items;
+}
+
+function copyStorageKey(value: string): void {
+  if (typeof navigator === 'undefined' || !navigator.clipboard) return;
+  void navigator.clipboard.writeText(value);
+}
+
+function SourceLocatorList({ source }: { source: AdminIngredientResearchSource }) {
+  const locators = sourceLocatorItems(source);
+  if (!locators.length) {
+    return <small className="admin-research-source-locators-empty">Kein sichtbarer Locator erfasst.</small>;
+  }
+
+  return (
+    <div className="admin-research-source-locators" aria-label="Quellen-Locators">
+      {locators.map((locator) => {
+        const content = (
+          <>
+            <span className="admin-research-source-locator-label">{locator.label}</span>
+            <span className="admin-research-source-locator-value">{locator.value}</span>
+            {locator.href ? <ExternalLink size={12} /> : null}
+          </>
+        );
+
+        if (locator.href) {
+          return (
+            <a
+              key={locator.key}
+              className="admin-research-source-locator"
+              href={locator.href}
+              target="_blank"
+              rel="noreferrer"
+              title={locator.value}
+            >
+              {content}
+            </a>
+          );
+        }
+
+        if (locator.key === 'pdf_storage_key') {
+          return (
+            <button
+              key={locator.key}
+              type="button"
+              className="admin-research-source-locator admin-research-source-locator-button"
+              title={`Ablage-Key kopieren: ${locator.value}`}
+              onClick={() => copyStorageKey(locator.value)}
+            >
+              {content}
+            </button>
+          );
+        }
+
+        return (
+          <span key={locator.key} className="admin-research-source-locator" title={locator.value}>
+            {content}
+          </span>
+        );
+      })}
+    </div>
+  );
 }
 
 function sourceMetaSummary(source: AdminIngredientResearchSource): string {
@@ -722,7 +825,7 @@ export default function AdministratorResearchPage() {
                         />
                       </label>
                       <label>
-                        <span>Evidenzstärke</span>
+                        <span>Artefakt-Evidenznotiz</span>
                         <select
                           className="admin-select"
                           value={artifactDraft.evidence_strength}
@@ -819,9 +922,10 @@ export default function AdministratorResearchPage() {
                     <div className="admin-research-source-checklist">
                       {detail?.sources.length ? (
                         detail.sources.map((source) => (
-                          <label key={source.id} className="admin-research-source-row">
+                          <div key={source.id} className="admin-research-source-row">
                             <input
                               type="checkbox"
+                              aria-label={`Quelle ${sourceTitle(source)} auswählen`}
                               checked={artifactDraft.source_ids.includes(source.id)}
                               onChange={(event) => handleToggleSource(source.id, event.target.checked)}
                             />
@@ -830,7 +934,8 @@ export default function AdministratorResearchPage() {
                                 <strong>{sourceTitle(source)}</strong>
                                 <em>{sourceKindLabel(source.source_kind)}</em>
                               </span>
-                              <small>{sourceEvidenceLabel(source)} · {sourceLinkSummary(source)}</small>
+                              <small>{sourceEvidenceLabel(source)} · {sourcePdfStatusLabel(source)}</small>
+                              <SourceLocatorList source={source} />
                               {source.topic_summary ? (
                                 <small className="admin-research-source-topic">Thema/Zweck: {source.topic_summary}</small>
                               ) : null}
@@ -838,7 +943,7 @@ export default function AdministratorResearchPage() {
                                 {compactJoin([sourceMetaSummary(source), source.meta_summary]) || 'Metadaten offen'}
                               </small>
                             </span>
-                          </label>
+                          </div>
                         ))
                       ) : (
                         <AdminEmpty>Keine Quellen vorhanden.</AdminEmpty>

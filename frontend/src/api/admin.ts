@@ -58,6 +58,26 @@ export interface AdminIngredientSubIngredient {
   created_at?: number | string | null;
 }
 
+export interface AdminIngredientPart {
+  id: number;
+  name: string;
+  type: string | null;
+  status: string | null;
+  internal_comment: string | null;
+  raw?: Record<string, unknown>;
+}
+
+export interface AdminIngredientPartLink {
+  ingredient_id: number;
+  part_id: number;
+  part_name: string;
+  part_type: string | null;
+  part_status: string | null;
+  sort_order: number;
+  created_at: string | null;
+  raw?: Record<string, unknown>;
+}
+
 export interface IngredientLookup {
   id: number;
   name: string;
@@ -85,6 +105,7 @@ export interface AdminIngredientListItem extends IngredientLookup {
   warning_count: number;
   form_count: number;
   synonym_count: number;
+  part_count: number;
   precursor_count: number;
   has_blog_url: boolean;
   task_statuses: AdminIngredientTaskStatusMap;
@@ -162,6 +183,7 @@ export interface AdminDoseRecommendation {
   ingredient_name?: string | null;
   population_id?: number | null;
   population_slug?: string | null;
+  population_name_de?: string | null;
   source_type?: string | null;
   source_label?: string | null;
   source_url?: string | null;
@@ -428,6 +450,7 @@ export interface AdminIngredientResearchSource {
   retraction_checked_at: string | null;
   retraction_notice_url: string | null;
   evidence_grade: string | null;
+  linked_dose_recommendations: AdminDoseRecommendation[];
   version: number | null;
   raw?: Record<string, unknown>;
 }
@@ -541,6 +564,7 @@ export interface AdminIngredientResearchDetail {
   sources: AdminIngredientResearchSource[];
   warnings: AdminIngredientResearchWarning[];
   forms: AdminIngredientResearchForm[];
+  parts: AdminIngredientPartLink[];
   precursors: AdminIngredientPrecursor[];
   display_profiles: AdminIngredientDisplayProfile[];
 }
@@ -582,10 +606,6 @@ export interface AdminIngredientResearchSourcePayload {
   recommendation_type?: string | null;
   no_recommendation?: boolean | null;
   notes?: string | null;
-  dose_min?: number | null;
-  dose_max?: number | null;
-  dose_unit?: string | null;
-  per_kg_body_weight?: number | null;
   frequency?: string | null;
   study_type?: string | null;
   evidence_quality?: string | null;
@@ -721,12 +741,15 @@ export interface AdminIngredientDisplayProfilePayload {
   version?: number | null;
 }
 
+export type AdminKnowledgeArticleLayer = 'main_article' | 'single_study';
+
 export interface AdminKnowledgeArticle {
   slug: string;
   title: string;
   summary: string | null;
   body: string | null;
   status: string;
+  article_layer: AdminKnowledgeArticleLayer;
   reviewed_at: string | null;
   sources_json: unknown;
   sources: AdminKnowledgeArticleSource[];
@@ -767,6 +790,7 @@ export interface AdminKnowledgeArticlePayload {
   summary?: string | null;
   body?: string | null;
   status?: string | null;
+  article_layer?: AdminKnowledgeArticleLayer | null;
   reviewed_at?: string | null;
   sources_json?: unknown;
   sources?: AdminKnowledgeArticleSource[];
@@ -781,9 +805,75 @@ export interface AdminKnowledgeArticlePayload {
   version?: number | null;
 }
 
+export type AdminStudyInterpretationStatus =
+  | 'planned'
+  | 'delegated'
+  | 'drafted'
+  | 'reviewed'
+  | 'accepted'
+  | 'blocked'
+  | 'excluded';
+
+export interface AdminStudyInterpretationRecord {
+  id: number;
+  ingredient_id: number;
+  ingredient_name: string | null;
+  source_id: number;
+  source_title: string | null;
+  source_url: string | null;
+  source_evidence_grade: string | null;
+  source_evidence_quality: string | null;
+  research_artifact_id: number | null;
+  research_artifact_title: string | null;
+  knowledge_article_slug: string | null;
+  knowledge_article_id: string | null;
+  knowledge_article_title: string | null;
+  status: AdminStudyInterpretationStatus;
+  structured_summary_json: string;
+  stage3_reference_summary: string | null;
+  notes: string | null;
+  review_notes: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  version: number | null;
+  raw?: Record<string, unknown>;
+}
+
+export interface AdminStudyInterpretationRecordPayload {
+  ingredient_id?: number | null;
+  source_id?: number | null;
+  research_artifact_id?: number | null;
+  knowledge_article_slug?: string | null;
+  knowledge_article_id?: string | null;
+  status?: AdminStudyInterpretationStatus | null;
+  structured_summary_json?: string | Record<string, unknown> | unknown[] | null;
+  stage3_reference_summary?: string | null;
+  notes?: string | null;
+  review_notes?: string | null;
+  version?: number | null;
+}
+
 export interface AdminKnowledgeArticlesResponse {
   articles: AdminKnowledgeArticle[];
   total?: number | null;
+  page?: number | null;
+  limit?: number | null;
+  offset?: number | null;
+}
+
+export interface AdminKnowledgeOverviewProjectionAudit {
+  schema: 'knowledge_overview_projection_audit.v1';
+  available: boolean;
+  consistent: boolean;
+  active_generation: number;
+  source_version: number;
+  projected_source_version: number;
+  projected_record_count: number;
+  live_record_count: number;
+  projected_content_hash: string | null;
+  live_content_hash: string;
+  refreshed_at: string | null;
+  differing_row_keys: string[];
 }
 
 export interface AdminOpsDashboard {
@@ -1404,6 +1494,10 @@ function parseTotals(payload: Record<string, unknown>): Record<string, number> {
   return totals;
 }
 
+function parseKnowledgeArticleLayer(value: unknown): AdminKnowledgeArticleLayer {
+  return value === 'single_study' ? 'single_study' : 'main_article';
+}
+
 function parseKnowledgeArticle(raw: Record<string, unknown>): AdminKnowledgeArticle {
   const slug = toTextOrNull(raw.slug) || '';
   const sourcesRaw = Array.isArray(raw.sources) ? raw.sources : [];
@@ -1445,6 +1539,7 @@ function parseKnowledgeArticle(raw: Record<string, unknown>): AdminKnowledgeArti
     summary: toTextOrNull(raw.summary),
     body: toTextOrNull(raw.body),
     status: toTextOrNull(raw.status) || 'draft',
+    article_layer: parseKnowledgeArticleLayer(raw.article_layer ?? raw.layer),
     reviewed_at: toDateOrNull(raw.reviewed_at),
     sources_json: raw.sources_json ?? raw.sources ?? null,
     sources,
@@ -1465,6 +1560,48 @@ function parseKnowledgeArticle(raw: Record<string, unknown>): AdminKnowledgeArti
   };
 }
 
+function parseStudyInterpretationStatus(value: unknown): AdminStudyInterpretationStatus {
+  const text = toTextOrNull(value);
+  if (
+    text === 'delegated' ||
+    text === 'drafted' ||
+    text === 'reviewed' ||
+    text === 'accepted' ||
+    text === 'blocked' ||
+    text === 'excluded'
+  ) {
+    return text;
+  }
+  return 'planned';
+}
+
+function parseAdminStudyInterpretationRecord(raw: Record<string, unknown>): AdminStudyInterpretationRecord {
+  return {
+    id: toIntOrNull(raw.id) ?? 0,
+    ingredient_id: toIntOrNull(raw.ingredient_id ?? raw.ingredientId) ?? 0,
+    ingredient_name: toTextOrNull(raw.ingredient_name ?? raw.ingredientName),
+    source_id: toIntOrNull(raw.source_id ?? raw.sourceId) ?? 0,
+    source_title: toTextOrNull(raw.source_title ?? raw.sourceTitle),
+    source_url: toTextOrNull(raw.source_url ?? raw.sourceUrl),
+    source_evidence_grade: toTextOrNull(raw.source_evidence_grade ?? raw.sourceEvidenceGrade),
+    source_evidence_quality: toTextOrNull(raw.source_evidence_quality ?? raw.sourceEvidenceQuality),
+    research_artifact_id: toIntOrNull(raw.research_artifact_id ?? raw.researchArtifactId),
+    research_artifact_title: toTextOrNull(raw.research_artifact_title ?? raw.researchArtifactTitle),
+    knowledge_article_slug: toTextOrNull(raw.knowledge_article_slug ?? raw.knowledgeArticleSlug ?? raw.knowledge_article_id),
+    knowledge_article_id: toTextOrNull(raw.knowledge_article_id ?? raw.knowledge_article_slug ?? raw.knowledgeArticleId),
+    knowledge_article_title: toTextOrNull(raw.knowledge_article_title ?? raw.knowledgeArticleTitle),
+    status: parseStudyInterpretationStatus(raw.status),
+    structured_summary_json: toTextOrNull(raw.structured_summary_json ?? raw.structuredSummaryJson) ?? '{}',
+    stage3_reference_summary: toTextOrNull(raw.stage3_reference_summary ?? raw.stage3ReferenceSummary),
+    notes: toTextOrNull(raw.notes),
+    review_notes: toTextOrNull(raw.review_notes ?? raw.reviewNotes),
+    created_at: toDateOrNull(raw.created_at),
+    updated_at: toDateOrNull(raw.updated_at),
+    version: toIntOrNull(raw.version),
+    raw,
+  };
+}
+
 function normalizeKnowledgeArticlePayload(
   payload: AdminKnowledgeArticlePayload,
 ): AdminKnowledgeArticlePayload {
@@ -1474,6 +1611,7 @@ function normalizeKnowledgeArticlePayload(
     summary: toTextOrNull(payload.summary),
     body: toTextOrNull(payload.body),
     status: toTextOrNull(payload.status) ?? 'draft',
+    article_layer: parseKnowledgeArticleLayer(payload.article_layer),
     reviewed_at: payload.reviewed_at !== undefined ? toDateOrNull(payload.reviewed_at) : null,
     sources_json: payload.sources_json ?? payload.sources?.map((source) => ({ label: source.name, url: source.link })) ?? null,
     sources: payload.sources?.map((source, index) => ({
@@ -1490,6 +1628,24 @@ function normalizeKnowledgeArticlePayload(
     dose_unit: toTextOrNull(payload.dose_unit),
     product_note: toTextOrNull(payload.product_note),
     version: payload.version ?? null,
+  };
+}
+
+function normalizeStudyInterpretationRecordPayload(
+  payload: AdminStudyInterpretationRecordPayload,
+): AdminStudyInterpretationRecordPayload {
+  return {
+    ingredient_id: toIntOrNull(payload.ingredient_id),
+    source_id: toIntOrNull(payload.source_id),
+    research_artifact_id: toIntOrNull(payload.research_artifact_id),
+    knowledge_article_slug: toTextOrNull(payload.knowledge_article_slug ?? payload.knowledge_article_id),
+    knowledge_article_id: toTextOrNull(payload.knowledge_article_id ?? payload.knowledge_article_slug),
+    status: payload.status ? parseStudyInterpretationStatus(payload.status) : 'planned',
+    structured_summary_json: payload.structured_summary_json ?? '{}',
+    stage3_reference_summary: toTextOrNull(payload.stage3_reference_summary),
+    notes: toTextOrNull(payload.notes),
+    review_notes: toTextOrNull(payload.review_notes),
+    version: toIntOrNull(payload.version),
   };
 }
 
@@ -1864,7 +2020,8 @@ function parseAdminIngredientListItem(raw: Record<string, unknown>): AdminIngred
     warning_count: toIntOrNull(raw.warning_count) ?? 0,
     form_count: toIntOrNull(raw.form_count) ?? 0,
     synonym_count: toIntOrNull(raw.synonym_count) ?? 0,
-    precursor_count: toIntOrNull(raw.precursor_count) ?? 0,
+    part_count: toIntOrNull(raw.part_count ?? raw.parts_count ?? raw.ingredient_part_count) ?? 0,
+    precursor_count: toIntOrNull(raw.part_count ?? raw.parts_count ?? raw.ingredient_part_count ?? raw.precursor_count) ?? 0,
     has_blog_url: toBooleanOrNull(raw.has_blog_url) ?? (toIntOrNull(raw.has_blog_url) ?? 0) > 0,
     task_statuses,
     product_recommendations,
@@ -2088,6 +2245,12 @@ function normalizeSourceType(value: unknown): string {
 }
 
 function parseIngredientResearchSource(raw: Record<string, unknown>): AdminIngredientResearchSource {
+  const linkedDoseRecommendations = Array.isArray(raw.linked_dose_recommendations)
+    ? raw.linked_dose_recommendations
+        .filter((entry): entry is Record<string, unknown> => Boolean(entry) && typeof entry === 'object' && !Array.isArray(entry))
+        .map((entry) => parseDoseRecommendation(entry))
+    : [];
+
   return {
     id: toIntOrNull(raw.id) ?? 0,
     ingredient_id: toIntOrNull(raw.ingredient_id) ?? 0,
@@ -2134,6 +2297,7 @@ function parseIngredientResearchSource(raw: Record<string, unknown>): AdminIngre
     retraction_checked_at: toDateOrNull(raw.retraction_checked_at),
     retraction_notice_url: toTextOrNull(raw.retraction_notice_url),
     evidence_grade: toTextOrNull(raw.evidence_grade),
+    linked_dose_recommendations: linkedDoseRecommendations,
     version: toIntOrNull(raw.version),
     raw,
   };
@@ -2392,6 +2556,32 @@ function parseIngredientPrecursor(raw: Record<string, unknown>): AdminIngredient
   };
 }
 
+function parseIngredientPart(raw: Record<string, unknown>): AdminIngredientPart {
+  const partId = toIntOrNull(raw.part_id ?? raw.id) ?? 0;
+  return {
+    id: partId,
+    name: toTextOrNull(raw.part_name ?? raw.name) || `Wirkstoffteil ${partId}`,
+    type: toTextOrNull(raw.part_type ?? raw.type),
+    status: toTextOrNull(raw.part_status ?? raw.status),
+    internal_comment: toTextOrNull(raw.internal_comment ?? raw.comment),
+    raw,
+  };
+}
+
+function parseIngredientPartLink(raw: Record<string, unknown>): AdminIngredientPartLink {
+  const partId = toIntOrNull(raw.part_id ?? raw.id) ?? 0;
+  return {
+    ingredient_id: toIntOrNull(raw.ingredient_id) ?? 0,
+    part_id: partId,
+    part_name: toTextOrNull(raw.part_name ?? raw.name) || `Wirkstoffteil ${partId}`,
+    part_type: toTextOrNull(raw.part_type ?? raw.type),
+    part_status: toTextOrNull(raw.part_status ?? raw.status),
+    sort_order: toIntOrNull(raw.sort_order) ?? 0,
+    created_at: toDateOrNull(raw.created_at),
+    raw,
+  };
+}
+
 function parseIngredientDisplayProfile(raw: Record<string, unknown>): AdminIngredientDisplayProfile {
   return {
     id: toIntOrNull(raw.id) ?? 0,
@@ -2436,6 +2626,8 @@ function normalizeIngredientResearchDetailResponse(raw: unknown): AdminIngredien
     sources?: unknown;
     warnings?: unknown;
     forms?: unknown;
+    parts?: unknown;
+    ingredient_parts?: unknown;
     precursors?: unknown;
     display_profiles?: unknown;
     data?: unknown;
@@ -2454,6 +2646,12 @@ function normalizeIngredientResearchDetailResponse(raw: unknown): AdminIngredien
     | unknown[]
     | undefined;
   const rawForms = (payload.forms ?? (payload.data as { forms?: unknown } | undefined)?.forms) as
+    | unknown[]
+    | undefined;
+  const rawParts = (payload.parts ??
+    payload.ingredient_parts ??
+    (payload.data as { parts?: unknown; ingredient_parts?: unknown } | undefined)?.parts ??
+    (payload.data as { ingredient_parts?: unknown } | undefined)?.ingredient_parts) as
     | unknown[]
     | undefined;
   const rawPrecursors = (payload.precursors ?? (payload.data as { precursors?: unknown } | undefined)?.precursors) as
@@ -2477,6 +2675,7 @@ function normalizeIngredientResearchDetailResponse(raw: unknown): AdminIngredien
     sources: Array.isArray(rawSources) ? rawSources.map((sourceEntry) => parseIngredientResearchSource(sourceEntry as Record<string, unknown>)) : [],
     warnings: Array.isArray(rawWarnings) ? rawWarnings.map((warningEntry) => parseIngredientResearchWarning(warningEntry as Record<string, unknown>)) : [],
     forms: Array.isArray(rawForms) ? rawForms.map((formEntry) => parseIngredientResearchForm(formEntry as Record<string, unknown>)) : [],
+    parts: Array.isArray(rawParts) ? rawParts.map((entry) => parseIngredientPartLink(entry as Record<string, unknown>)) : [],
     precursors: Array.isArray(rawPrecursors) ? rawPrecursors.map((entry) => parseIngredientPrecursor(entry as Record<string, unknown>)) : [],
     display_profiles: Array.isArray(rawDisplayProfiles)
       ? rawDisplayProfiles.map((profileEntry) => parseIngredientDisplayProfile(profileEntry as Record<string, unknown>))
@@ -2540,10 +2739,6 @@ function normalizeSourcePayload(payload: AdminIngredientResearchSourcePayload): 
     recommendation_type: toTextOrNull(payload.recommendation_type),
     no_recommendation: normalizeOptionalBooleanValue(payload.no_recommendation),
     notes: toTextOrNull(payload.notes),
-    dose_min: toIntOrNull(payload.dose_min),
-    dose_max: toIntOrNull(payload.dose_max),
-    dose_unit: toTextOrNull(payload.dose_unit),
-    per_kg_body_weight: normalizeOptionalBooleanPayload(payload.per_kg_body_weight),
     frequency: toTextOrNull(payload.frequency),
     study_type: toTextOrNull(payload.study_type),
     evidence_quality: toTextOrNull(payload.evidence_quality),
@@ -2850,6 +3045,7 @@ function parseDoseRecommendation(raw: Record<string, unknown>): AdminDoseRecomme
     ingredient_name: toTextOrNull(raw.ingredient_name),
     population_id: toIntOrNull(raw.population_id),
     population_slug: toTextOrNull(raw.population_slug),
+    population_name_de: toTextOrNull(raw.population_name_de),
     source_type: toTextOrNull(raw.source_type),
     source_label: toTextOrNull(raw.source_label),
     source_url: toTextOrNull(raw.source_url),
@@ -2954,23 +3150,59 @@ export async function getOpsDashboard(): Promise<AdminOpsDashboard> {
   return normalizeOpsDashboard(res.data);
 }
 
+export async function getKnowledgeOverviewProjectionAudit(): Promise<AdminKnowledgeOverviewProjectionAudit> {
+  const res = await apiClient.get<{ audit: AdminKnowledgeOverviewProjectionAudit }>(
+    '/admin/knowledge-overview-projection',
+  );
+  return res.data.audit;
+}
+
+export async function refreshKnowledgeOverviewProjection(
+  audit: AdminKnowledgeOverviewProjectionAudit,
+): Promise<{ applied: boolean; audit: AdminKnowledgeOverviewProjectionAudit }> {
+  const res = await apiClient.post<{ applied: boolean; audit: AdminKnowledgeOverviewProjectionAudit }>(
+    '/admin/knowledge-overview-projection/refresh',
+    {
+      expected_active_generation: audit.active_generation,
+      expected_source_version: audit.source_version,
+      expected_live_record_count: audit.live_record_count,
+      expected_live_content_hash: audit.live_content_hash,
+    },
+  );
+  return res.data;
+}
+
 export async function getKnowledgeArticles(params: {
   q?: string;
   status?: string;
+  layer?: AdminKnowledgeArticleLayer | '';
+  page?: number;
+  limit?: number;
+  offset?: number;
 } = {}): Promise<AdminKnowledgeArticlesResponse> {
   const query = toQueryParams({
     q: params.q,
     status: params.status,
+    layer: params.layer,
+    page: params.page,
+    limit: params.limit,
+    offset: params.offset,
   });
   const res = await apiClient.get<{
     articles?: unknown;
     total?: number | null;
     count?: number | null;
+    page?: number | null;
+    limit?: number | null;
+    offset?: number | null;
   }>('/admin/knowledge-articles', { params: query });
   const list = Array.isArray(res.data.articles) ? res.data.articles : [];
   return {
     articles: list.map((article) => parseKnowledgeArticle(article as Record<string, unknown>)),
     total: res.data.total ?? res.data.count ?? null,
+    page: res.data.page ?? null,
+    limit: res.data.limit ?? null,
+    offset: res.data.offset ?? null,
   };
 }
 
@@ -3018,6 +3250,58 @@ export async function archiveKnowledgeArticle(
   );
   const article = (res.data.article ?? {}) as Record<string, unknown>;
   return parseKnowledgeArticle(article);
+}
+
+export async function getAdminStudyInterpretationRecords(params: {
+  knowledge_article_slug?: string | null;
+  knowledge_article_id?: string | null;
+  ingredient_id?: number | null;
+  source_id?: number | null;
+  research_artifact_id?: number | null;
+  status?: AdminStudyInterpretationStatus | '';
+} = {}): Promise<{ records: AdminStudyInterpretationRecord[]; total: number | null }> {
+  const query = toQueryParams({
+    knowledge_article_slug: params.knowledge_article_slug ?? params.knowledge_article_id,
+    ingredient_id: params.ingredient_id,
+    source_id: params.source_id,
+    research_artifact_id: params.research_artifact_id,
+    status: params.status,
+  });
+  const res = await apiClient.get<{ records?: unknown; total?: number | null; count?: number | null }>(
+    '/admin/study-interpretation-records',
+    { params: query },
+  );
+  const records = Array.isArray(res.data.records) ? res.data.records : [];
+  return {
+    records: records.map((record) => parseAdminStudyInterpretationRecord(record as Record<string, unknown>)),
+    total: res.data.total ?? res.data.count ?? null,
+  };
+}
+
+export async function saveAdminStudyInterpretationRecord(
+  payload: AdminStudyInterpretationRecordPayload,
+): Promise<AdminStudyInterpretationRecord> {
+  const res = await apiClient.post<{ record?: unknown }>(
+    '/admin/study-interpretation-records',
+    normalizeStudyInterpretationRecordPayload(payload),
+  );
+  const record = (res.data.record ?? res.data) as Record<string, unknown>;
+  return parseAdminStudyInterpretationRecord(record);
+}
+
+export async function updateAdminStudyInterpretationRecord(
+  recordId: number,
+  payload: AdminStudyInterpretationRecordPayload,
+  options: AdminMutationOptions = {},
+): Promise<AdminStudyInterpretationRecord> {
+  const normalized = normalizeStudyInterpretationRecordPayload(payload);
+  const res = await apiClient.put<{ record?: unknown }>(
+    `/admin/study-interpretation-records/${recordId}`,
+    normalized,
+    withIfMatch(normalized, options),
+  );
+  const record = (res.data.record ?? res.data) as Record<string, unknown>;
+  return parseAdminStudyInterpretationRecord(record);
 }
 
 export async function getAdminUserProducts(params: {
@@ -3645,6 +3929,88 @@ export async function deleteIngredientSubIngredient(
   childIngredientId: number,
 ): Promise<void> {
   await apiClient.delete(`/admin/ingredient-sub-ingredients/${parentIngredientId}/${childIngredientId}`);
+}
+
+export async function searchIngredientParts(query: string, limit = 12): Promise<AdminIngredientPart[]> {
+  const trimmedQuery = query.trim();
+  if (!trimmedQuery) return [];
+  const res = await apiClient.get<Record<string, unknown>>('/admin/ingredient-parts', {
+    params: { q: trimmedQuery, limit },
+  });
+  const rows = (Array.isArray(res.data.parts)
+    ? res.data.parts
+    : Array.isArray(res.data.results)
+      ? res.data.results
+      : Array.isArray(res.data.data)
+        ? res.data.data
+        : []) as unknown[];
+  return rows.map((entry) => parseIngredientPart(entry as Record<string, unknown>));
+}
+
+export async function getIngredientParts(ingredientId: number): Promise<AdminIngredientPartLink[]> {
+  const { data } = await apiClient.get<Record<string, unknown>>(`/admin/ingredients/${ingredientId}/parts`);
+  const rows = (Array.isArray(data.parts)
+    ? data.parts
+    : Array.isArray(data.links)
+      ? data.links
+      : Array.isArray(data.data)
+        ? data.data
+        : []) as unknown[];
+  return rows.map((entry) => parseIngredientPartLink(entry as Record<string, unknown>));
+}
+
+export async function createIngredientPartLink(
+  ingredientId: number,
+  payload: {
+    part_id?: number | null;
+    part_name?: string | null;
+    name?: string | null;
+    sort_order?: number | null;
+  },
+): Promise<AdminIngredientPartLink> {
+  const partId = toIntOrNull(payload.part_id);
+  const partName = toTrimmedOrNull(payload.part_name ?? payload.name);
+  const { data } = await apiClient.post<Record<string, unknown>>(
+    `/admin/ingredients/${ingredientId}/parts`,
+    {
+      part_id: partId,
+      part_name: partName,
+      name: partName,
+      sort_order: payload.sort_order ?? 0,
+    },
+  );
+  const created = data.part_link ?? data.link ?? data.part ?? data;
+  if (created && typeof created === 'object') {
+    return parseIngredientPartLink(created as Record<string, unknown>);
+  }
+  throw new Error('Could not parse ingredient part response.');
+}
+
+export async function updateIngredientPartLink(
+  ingredientId: number,
+  partId: number,
+  payload: {
+    sort_order?: number | null;
+  },
+): Promise<AdminIngredientPartLink> {
+  const { data } = await apiClient.patch<Record<string, unknown>>(
+    `/admin/ingredients/${ingredientId}/parts/${partId}`,
+    {
+      sort_order: payload.sort_order ?? 0,
+    },
+  );
+  const updated = data.part_link ?? data.link ?? data.part ?? data;
+  if (updated && typeof updated === 'object') {
+    return parseIngredientPartLink(updated as Record<string, unknown>);
+  }
+  throw new Error('Could not parse ingredient part response.');
+}
+
+export async function deleteIngredientPartLink(
+  ingredientId: number,
+  partId: number,
+): Promise<void> {
+  await apiClient.delete(`/admin/ingredients/${ingredientId}/parts/${partId}`);
 }
 
 export async function getAdminResearchPipelineOverview(): Promise<AdminResearchPipelineOverviewResponse> {

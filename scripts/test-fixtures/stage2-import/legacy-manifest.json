@@ -1,0 +1,13 @@
+{
+  "schema": "legacy-stage2-import",
+  "articles": [
+    {
+      "slug": "legacy-article",
+      "ingredient_id": 7,
+      "article_path": "article.md",
+      "extract_path": "legacy-extract.json",
+      "source_ids": [101],
+      "source_links": [{ "label": "Legacy source", "url": "https://example.org/legacy" }]
+    }
+  ]
+}

@@ -8,7 +8,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint . --ext .ts,.tsx --resolve-plugins-relative-to . --parser @typescript-eslint/parser",
-    "test": "vitest --passWithNoTests"
+    "test": "vitest --passWithNoTests",
+    "content:lint": "node ../scripts/content-lint.mjs",
+    "content:lint:test": "node --test ../scripts/content-lint.test.mjs"
   },
   "dependencies": {
     "react": "^18.0.0",

@@ -27,6 +27,19 @@ functions/.dev.vars
 /logo.png
 .claude/deploy-errors.log
 
+# Local research, generated reports, and transient QA output
+/_research_raw/
+/outputs/
+/tmp/
+/test-results/
+/frontend-vite-*.log
+/frontend-vite-*.err.log
+/temp_*.js
+/temp_*.html
+/temp_*.png
+/temp_*.pdf
+/System.Collections.Specialized.OrderedDictionary
+
 # Agent local-only state
 .agent-memory/
 .codex/

@@ -1980,6 +1980,115 @@
   font-size: 12.5px;
 }
 
+.admin-study-interpretation-panel {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--admin-line);
+  border-radius: var(--admin-r-sm);
+  background: var(--admin-bg-sunk);
+  padding: 12px;
+}
+
+.admin-study-interpretation-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.admin-study-interpretation-head h3 {
+  margin: 0;
+  color: var(--admin-ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.admin-study-interpretation-head p {
+  margin: 4px 0 0;
+  color: var(--admin-ink-2);
+  font-size: 12px;
+}
+
+.admin-study-interpretation-actions,
+.admin-study-interpretation-save-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.admin-study-interpretation-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-study-interpretation-tabs button {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--admin-line);
+  border-radius: var(--admin-r-sm);
+  background: var(--admin-bg);
+  color: var(--admin-ink);
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.admin-study-interpretation-tabs button.active,
+.admin-study-interpretation-tabs button:hover {
+  border-color: var(--admin-line-strong);
+  background: var(--admin-bg-sunk);
+}
+
+.admin-study-interpretation-tabs button span:not(.admin-badge) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-study-interpretation-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.admin-study-interpretation-grid label,
+.admin-study-interpretation-field {
+  display: grid;
+  gap: 5px;
+  color: var(--admin-ink-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.admin-study-interpretation-field textarea {
+  resize: vertical;
+}
+
+.admin-study-interpretation-help {
+  color: var(--admin-ink-2);
+  font-size: 11.5px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+.admin-study-interpretation-empty {
+  width: fit-content;
+  border-radius: var(--admin-r-sm);
+  background: var(--admin-bg);
+  color: var(--admin-ink-2);
+  padding: 5px 8px;
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.admin-study-interpretation-grid-notes {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .admin-research-actions,
 .admin-research-status-actions {
   margin-top: 12px;
@@ -2028,6 +2137,58 @@
   font-size: 11px;
   font-style: normal;
   font-weight: 700;
+}
+
+.admin-research-source-locators {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 6px;
+}
+
+.admin-research-source-locator {
+  display: inline-flex;
+  max-width: min(100%, 420px);
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--admin-line);
+  border-radius: var(--admin-r-sm);
+  background: var(--admin-bg);
+  color: var(--admin-ink-2);
+  padding: 3px 6px;
+  font-size: 11px;
+  line-height: 1.2;
+  text-decoration: none;
+}
+
+.admin-research-source-locator:hover {
+  border-color: var(--admin-line-strong);
+  background: var(--admin-bg-sunk);
+  color: var(--admin-ink);
+}
+
+.admin-research-source-locator-button {
+  cursor: pointer;
+}
+
+.admin-research-source-locator-label {
+  flex: 0 0 auto;
+  color: var(--admin-ink-3);
+  font-weight: 700;
+}
+
+.admin-research-source-locator-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-research-source-locators-empty {
+  display: block;
+  margin-top: 4px;
+  color: var(--admin-danger-ink);
 }
 
 .admin-research-source-topic,
@@ -2977,8 +3138,19 @@
   .admin-task-status-grid,
   .admin-forms-grid-inner,
   .admin-research-stage-checklist,
-  .admin-research-form-grid {
+  .admin-research-form-grid,
+  .admin-study-interpretation-grid,
+  .admin-study-interpretation-grid-notes {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-study-interpretation-head {
+    display: grid;
+  }
+
+  .admin-study-interpretation-actions,
+  .admin-study-interpretation-save-row {
+    justify-content: flex-start;
   }
 
   .admin-research-stage-card {

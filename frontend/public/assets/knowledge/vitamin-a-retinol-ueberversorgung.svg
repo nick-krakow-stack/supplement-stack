@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="560" viewBox="0 0 1200 560" role="img" aria-labelledby="title desc">
+  <title id="title">Chronische Retinolüberversorgung</title>
+  <desc id="desc">Schematische Übersicht, warum dauerhaft hohe Mengen vorgebildeten Vitamin A Leber, Haut, Kopf, Blutwerte und Knochen betreffen können.</desc>
+  <rect width="1200" height="560" rx="28" fill="#f8fafc"/>
+  <text x="60" y="62" font-family="Arial, sans-serif" font-size="34" font-weight="700" fill="#0f172a">Warum dauerhaft viel Retinol riskant sein kann</text>
+  <text x="60" y="100" font-family="Arial, sans-serif" font-size="18" fill="#475569">Vorgebildetes Vitamin A kann gespeichert werden. Das macht lange hohe Aufnahmen anders als einzelne Schwankungen.</text>
+
+  <rect x="70" y="145" width="1060" height="120" rx="24" fill="#fff7ed" stroke="#fed7aa" stroke-width="3"/>
+  <text x="110" y="195" font-family="Arial, sans-serif" font-size="25" font-weight="700" fill="#9a3412">Wochen bis Monate hoher Aufnahme</text>
+  <text x="110" y="229" font-family="Arial, sans-serif" font-size="18" fill="#7c2d12">Vor allem Retinol und Retinylester stehen im Speicher- und Sicherheitskontext.</text>
+  <path d="M860 206 H1060" stroke="#d97706" stroke-width="8" stroke-linecap="round"/>
+  <path d="M1042 188 L1070 206 L1042 224" fill="none" stroke="#d97706" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <g font-family="Arial, sans-serif">
+    <rect x="85" y="325" width="190" height="130" rx="22" fill="#fee2e2" stroke="#fecaca" stroke-width="3"/>
+    <text x="180" y="372" text-anchor="middle" font-size="22" font-weight="700" fill="#991b1b">Leber</text>
+    <text x="180" y="405" text-anchor="middle" font-size="17" fill="#7f1d1d">Speicher und</text>
+    <text x="180" y="428" text-anchor="middle" font-size="17" fill="#7f1d1d">Belastung</text>
+
+    <rect x="325" y="325" width="190" height="130" rx="22" fill="#ffedd5" stroke="#fed7aa" stroke-width="3"/>
+    <text x="420" y="372" text-anchor="middle" font-size="22" font-weight="700" fill="#9a3412">Haut &amp; Haare</text>
+    <text x="420" y="405" text-anchor="middle" font-size="17" fill="#7c2d12">Veränderungen</text>
+    <text x="420" y="428" text-anchor="middle" font-size="17" fill="#7c2d12">möglich</text>
+
+    <rect x="565" y="325" width="190" height="130" rx="22" fill="#e0f2fe" stroke="#bae6fd" stroke-width="3"/>
+    <text x="660" y="372" text-anchor="middle" font-size="22" font-weight="700" fill="#075985">Kopf &amp; Sehen</text>
+    <text x="660" y="405" text-anchor="middle" font-size="17" fill="#0c4a6e">Kopfschmerz,</text>
+    <text x="660" y="428" text-anchor="middle" font-size="17" fill="#0c4a6e">Sehzeichen</text>
+
+    <rect x="805" y="325" width="190" height="130" rx="22" fill="#fef3c7" stroke="#fde68a" stroke-width="3"/>
+    <text x="900" y="372" text-anchor="middle" font-size="22" font-weight="700" fill="#92400e">Knochen</text>
+    <text x="900" y="405" text-anchor="middle" font-size="17" fill="#78350f">Fraktursignale</text>
+    <text x="900" y="428" text-anchor="middle" font-size="17" fill="#78350f">in Studien</text>
+  </g>
+
+  <rect x="70" y="490" width="1060" height="48" rx="16" fill="#ecfdf5" stroke="#bbf7d0"/>
+  <text x="600" y="521" text-anchor="middle" font-family="Arial, sans-serif" font-size="17" fill="#166534">Wichtig: Beta-Carotin aus Lebensmitteln ist nicht dasselbe wie isolierte Hochdosis-Präparate in Risikogruppen.</text>
+</svg>

@@ -1,0 +1,8 @@
+[
+  {
+    "results": [
+      { "row_kind": "ingredient", "entity_id": 9, "entity_slug": "teststoff" },
+      { "row_kind": "population", "entity_id": 7, "entity_slug": "adult" }
+    ]
+  }
+]

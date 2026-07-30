@@ -1,17 +1,26 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Archive, FilePlus, ImagePlus, Plus, RefreshCw, Save, Search, Trash2, X } from 'lucide-react';
+import { Archive, ChevronLeft, ChevronRight, FilePlus, ImagePlus, Plus, RefreshCw, Save, Search, Trash2, X } from 'lucide-react';
 import {
   archiveKnowledgeArticle,
   createKnowledgeArticle,
   getAdminIngredients,
+  getAdminStudyInterpretationRecords,
   getKnowledgeArticle,
   getKnowledgeArticles,
+  getKnowledgeOverviewProjectionAudit,
+  refreshKnowledgeOverviewProjection,
+  saveAdminStudyInterpretationRecord,
   uploadKnowledgeArticleImage,
+  updateAdminStudyInterpretationRecord,
   updateKnowledgeArticle,
   type AdminIngredientListItem,
   type AdminKnowledgeArticle,
+  type AdminKnowledgeArticleLayer,
   type AdminKnowledgeArticlePayload,
   type AdminKnowledgeArticleSource,
+  type AdminKnowledgeOverviewProjectionAudit,
+  type AdminStudyInterpretationRecord,
+  type AdminStudyInterpretationStatus,
 } from '../../api/admin';
 import {
   AdminBadge,
@@ -31,6 +40,22 @@ const STATUS_OPTIONS = [
 ] as const;
 
 const EDIT_STATUS_OPTIONS = STATUS_OPTIONS.filter((option) => option.value);
+const LAYER_OPTIONS: Array<{ value: AdminKnowledgeArticleLayer | ''; label: string }> = [
+  { value: '', label: 'Alle Schichten' },
+  { value: 'main_article', label: 'Hauptartikel' },
+  { value: 'single_study', label: 'Einzelstudien' },
+];
+const EDIT_LAYER_OPTIONS = LAYER_OPTIONS.filter((option): option is { value: AdminKnowledgeArticleLayer; label: string } => Boolean(option.value));
+const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
+const STUDY_INTERPRETATION_STATUS_OPTIONS: Array<{ value: AdminStudyInterpretationStatus; label: string }> = [
+  { value: 'planned', label: 'Geplant' },
+  { value: 'delegated', label: 'Delegiert' },
+  { value: 'drafted', label: 'Entwurf' },
+  { value: 'reviewed', label: 'Geprüft' },
+  { value: 'accepted', label: 'Akzeptiert' },
+  { value: 'blocked', label: 'Blockiert' },
+  { value: 'excluded', label: 'Ausgeschlossen' },
+];
 
 type EditorMode = 'create' | 'edit';
 
@@ -40,6 +65,7 @@ type ArticleDraft = {
   summary: string;
   body: string;
   status: string;
+  article_layer: AdminKnowledgeArticleLayer;
   reviewed_at: string;
   sources: AdminKnowledgeArticleSource[];
   conclusion: string;
@@ -50,6 +76,19 @@ type ArticleDraft = {
   product_note: string;
   ingredient_ids: number[];
   ingredients: Array<{ ingredient_id: number; name: string | null }>;
+  version: number | null;
+};
+
+type StudyInterpretationDraft = {
+  id: number | null;
+  ingredient_id: string;
+  source_id: string;
+  research_artifact_id: string;
+  status: AdminStudyInterpretationStatus;
+  structured_summary_json: string;
+  stage3_reference_summary: string;
+  notes: string;
+  review_notes: string;
   version: number | null;
 };
 
@@ -65,6 +104,14 @@ function statusTone(status: string): AdminTone {
   return 'danger';
 }
 
+function layerLabel(layer: AdminKnowledgeArticleLayer | string): string {
+  return layer === 'single_study' ? 'Einzelstudie' : 'Hauptartikel';
+}
+
+function layerTone(layer: AdminKnowledgeArticleLayer | string): AdminTone {
+  return layer === 'single_study' ? 'info' : 'neutral';
+}
+
 function toDateInput(value?: string | null): string {
   if (!value) return '';
   return value.slice(0, 10);
@@ -77,6 +124,7 @@ function emptyDraft(): ArticleDraft {
     summary: '',
     body: '',
     status: 'draft',
+    article_layer: 'main_article',
     reviewed_at: '',
     sources: [{ name: '', link: '', sort_order: 0 }],
     conclusion: '',
@@ -91,6 +139,33 @@ function emptyDraft(): ArticleDraft {
   };
 }
 
+function emptyStudyInterpretationDraft(defaultIngredientId: number | null = null): StudyInterpretationDraft {
+  return {
+    id: null,
+    ingredient_id: defaultIngredientId ? String(defaultIngredientId) : '',
+    source_id: '',
+    research_artifact_id: '',
+    status: 'planned',
+    structured_summary_json: '{}',
+    stage3_reference_summary: '',
+    notes: '',
+    review_notes: '',
+    version: null,
+  };
+}
+
+function isEmptyJsonObject(value: string): boolean {
+  try {
+    const parsed: unknown = JSON.parse(value.trim() || '{}');
+    return typeof parsed === 'object'
+      && parsed !== null
+      && !Array.isArray(parsed)
+      && Object.keys(parsed).length === 0;
+  } catch {
+    return false;
+  }
+}
+
 function articleToDraft(article: AdminKnowledgeArticle): ArticleDraft {
   return {
     slug: article.slug,
@@ -98,6 +173,7 @@ function articleToDraft(article: AdminKnowledgeArticle): ArticleDraft {
     summary: article.summary ?? '',
     body: article.body ?? '',
     status: article.status || 'draft',
+    article_layer: article.article_layer,
     reviewed_at: toDateInput(article.reviewed_at),
     sources: article.sources.length > 0
       ? article.sources.map((source, index) => ({
@@ -116,6 +192,45 @@ function articleToDraft(article: AdminKnowledgeArticle): ArticleDraft {
     ingredients: article.ingredients,
     version: article.version,
   };
+}
+
+function studyInterpretationRecordToDraft(record: AdminStudyInterpretationRecord): StudyInterpretationDraft {
+  return {
+    id: record.id,
+    ingredient_id: String(record.ingredient_id),
+    source_id: String(record.source_id),
+    research_artifact_id: record.research_artifact_id ? String(record.research_artifact_id) : '',
+    status: record.status,
+    structured_summary_json: record.structured_summary_json || '{}',
+    stage3_reference_summary: record.stage3_reference_summary ?? '',
+    notes: record.notes ?? '',
+    review_notes: record.review_notes ?? '',
+    version: record.version,
+  };
+}
+
+function parseRequiredPositiveInteger(value: string, label: string): number {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed <= 0) throw new Error(`${label} muss eine positive ID sein.`);
+  return parsed;
+}
+
+function parseOptionalPositiveInteger(value: string, label: string): number | null {
+  if (!value.trim()) return null;
+  return parseRequiredPositiveInteger(value, label);
+}
+
+function studyInterpretationStatusLabel(status: AdminStudyInterpretationStatus): string {
+  return STUDY_INTERPRETATION_STATUS_OPTIONS.find((option) => option.value === status)?.label ?? 'Geplant';
+}
+
+function sourceEvidenceLabel(record: AdminStudyInterpretationRecord | null): string {
+  if (!record) return 'Nach dem Speichern aus der verknüpften Quelle';
+  const parts = [
+    record.source_evidence_quality,
+    record.source_evidence_grade ? `Grad ${record.source_evidence_grade}` : null,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(' / ') : 'Keine Einstufung an der Quelle';
 }
 
 function normalizeSources(sources: AdminKnowledgeArticleSource[]): AdminKnowledgeArticleSource[] {
@@ -147,6 +262,10 @@ export default function AdministratorKnowledgePage() {
   const [draft, setDraft] = useState<ArticleDraft>(() => emptyDraft());
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('');
+  const [layer, setLayer] = useState<AdminKnowledgeArticleLayer | ''>('');
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState<(typeof PAGE_SIZE_OPTIONS)[number]>(25);
+  const [totalArticles, setTotalArticles] = useState(0);
   const [loadingList, setLoadingList] = useState(true);
   const [loadingArticle, setLoadingArticle] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -155,12 +274,31 @@ export default function AdministratorKnowledgePage() {
   const [ingredientQuery, setIngredientQuery] = useState('');
   const [ingredientResults, setIngredientResults] = useState<AdminIngredientListItem[]>([]);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [studyInterpretations, setStudyInterpretations] = useState<AdminStudyInterpretationRecord[]>([]);
+  const [studyInterpretationDraft, setStudyInterpretationDraft] = useState<StudyInterpretationDraft>(() => emptyStudyInterpretationDraft());
+  const [loadingStudyInterpretations, setLoadingStudyInterpretations] = useState(false);
+  const [savingStudyInterpretation, setSavingStudyInterpretation] = useState(false);
+  const [overviewAudit, setOverviewAudit] = useState<AdminKnowledgeOverviewProjectionAudit | null>(null);
+  const [checkingOverview, setCheckingOverview] = useState(false);
+  const [refreshingOverview, setRefreshingOverview] = useState(false);
 
   const isCreateMode = mode === 'create';
+  const isSingleStudyArticle = draft.article_layer === 'single_study';
   const filteredStatusLabel = useMemo(
     () => STATUS_OPTIONS.find((option) => option.value === status)?.label ?? 'Alle Status',
     [status],
   );
+  const filteredLayerLabel = useMemo(
+    () => LAYER_OPTIONS.find((option) => option.value === layer)?.label ?? 'Alle Schichten',
+    [layer],
+  );
+  const selectedStudyInterpretation = useMemo(
+    () => studyInterpretations.find((record) => record.id === studyInterpretationDraft.id) ?? null,
+    [studyInterpretationDraft.id, studyInterpretations],
+  );
+  const totalPages = Math.max(1, Math.ceil(totalArticles / limit));
+  const listStart = totalArticles === 0 ? 0 : (page - 1) * limit + 1;
+  const listEnd = Math.min(page * limit, totalArticles);
 
   const loadList = useCallback(async () => {
     setLoadingList(true);
@@ -170,31 +308,70 @@ export default function AdministratorKnowledgePage() {
       const response = await getKnowledgeArticles({
         q: query.trim() || undefined,
         status: status || undefined,
+        layer: layer || undefined,
+        page,
+        limit,
       });
+      const nextTotal = Math.max(0, response.total ?? 0);
+      const nextTotalPages = Math.max(1, Math.ceil(nextTotal / limit));
+      setTotalArticles(nextTotal);
+      if (page > nextTotalPages) {
+        setPage(nextTotalPages);
+        return;
+      }
       const nextArticles = response.articles;
       setArticles(nextArticles);
 
       if (mode === 'edit') {
-        if (!selectedSlug) {
-          setSelectedSlug(nextArticles[0]?.slug ?? null);
-          return;
-        }
-
-        const stillPresent = nextArticles.some((article) => article.slug === selectedSlug);
-        if (!stillPresent) {
-          setSelectedSlug(nextArticles[0]?.slug ?? null);
-        }
+        setSelectedSlug((currentSlug) => {
+          if (!currentSlug) return nextArticles[0]?.slug ?? null;
+          const stillPresent = nextArticles.some((article) => article.slug === currentSlug);
+          return stillPresent ? currentSlug : nextArticles[0]?.slug ?? null;
+        });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Artikel konnten nicht geladen werden.');
     } finally {
       setLoadingList(false);
     }
-  }, [mode, query, selectedSlug, status]);
+  }, [layer, limit, mode, page, query, status]);
+
+  const loadOverviewAudit = useCallback(async () => {
+    setCheckingOverview(true);
+    try {
+      setOverviewAudit(await getKnowledgeOverviewProjectionAudit());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Der Wissensübersicht-Abgleich konnte nicht geladen werden.');
+    } finally {
+      setCheckingOverview(false);
+    }
+  }, []);
+
+  const loadStudyInterpretations = useCallback(async (articleSlug: string, defaultIngredientId: number | null) => {
+    setLoadingStudyInterpretations(true);
+    try {
+      const response = await getAdminStudyInterpretationRecords({ knowledge_article_slug: articleSlug });
+      const records = response.records;
+      setStudyInterpretations(records);
+      setStudyInterpretationDraft(records[0]
+        ? studyInterpretationRecordToDraft(records[0])
+        : emptyStudyInterpretationDraft(defaultIngredientId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Quellenbezüge konnten nicht geladen werden.');
+      setStudyInterpretations([]);
+      setStudyInterpretationDraft(emptyStudyInterpretationDraft(defaultIngredientId));
+    } finally {
+      setLoadingStudyInterpretations(false);
+    }
+  }, []);
 
   useEffect(() => {
     void loadList();
   }, [loadList]);
+
+  useEffect(() => {
+    void loadOverviewAudit();
+  }, [loadOverviewAudit]);
 
   useEffect(() => {
     if (!selectedSlug || mode === 'create') {
@@ -225,8 +402,33 @@ export default function AdministratorKnowledgePage() {
     };
   }, [mode, selectedSlug]);
 
-  const updateDraft = (field: keyof ArticleDraft, value: string) => {
+  useEffect(() => {
+    if (mode === 'create' || !selectedSlug || draft.article_layer !== 'single_study') {
+      setStudyInterpretations([]);
+      setStudyInterpretationDraft(emptyStudyInterpretationDraft(draft.ingredient_ids[0] ?? null));
+      return;
+    }
+
+    void loadStudyInterpretations(selectedSlug, draft.ingredient_ids[0] ?? null);
+  }, [draft.article_layer, draft.ingredient_ids, loadStudyInterpretations, mode, selectedSlug]);
+
+  const updateDraft = <K extends keyof ArticleDraft>(field: K, value: ArticleDraft[K]) => {
     setDraft((previous) => ({ ...previous, [field]: value }));
+  };
+
+  const updateStudyInterpretationDraft = <K extends keyof StudyInterpretationDraft>(
+    field: K,
+    value: StudyInterpretationDraft[K],
+  ) => {
+    setStudyInterpretationDraft((previous) => ({ ...previous, [field]: value }));
+  };
+
+  const startNewStudyInterpretation = () => {
+    setStudyInterpretationDraft(emptyStudyInterpretationDraft(draft.ingredient_ids[0] ?? null));
+  };
+
+  const selectStudyInterpretation = (record: AdminStudyInterpretationRecord) => {
+    setStudyInterpretationDraft(studyInterpretationRecordToDraft(record));
   };
 
   const updateSource = (index: number, field: 'name' | 'link', value: string) => {
@@ -344,6 +546,7 @@ export default function AdministratorKnowledgePage() {
         summary: draft.summary.trim() || null,
         body: draft.body.trim() || null,
         status: draft.status,
+        article_layer: draft.article_layer,
         reviewed_at: draft.reviewed_at || null,
         sources,
         ingredient_ids: draft.ingredient_ids,
@@ -396,6 +599,50 @@ export default function AdministratorKnowledgePage() {
     }
   };
 
+  const handleSaveStudyInterpretation = async () => {
+    if (!selectedSlug || isCreateMode) {
+      setError('Der Quellenbezug kann erst nach dem Speichern des Einzelstudien-Artikels verknüpft werden.');
+      return;
+    }
+
+    setSavingStudyInterpretation(true);
+    setError('');
+    setNotice('');
+
+    try {
+      JSON.parse(studyInterpretationDraft.structured_summary_json || '{}');
+      const payload = {
+        ingredient_id: parseRequiredPositiveInteger(studyInterpretationDraft.ingredient_id, 'Wirkstoff-ID'),
+        source_id: parseRequiredPositiveInteger(studyInterpretationDraft.source_id, 'Quellen-ID'),
+        research_artifact_id: parseOptionalPositiveInteger(studyInterpretationDraft.research_artifact_id, 'Forschungsartefakt-ID'),
+        knowledge_article_slug: selectedSlug,
+        status: studyInterpretationDraft.status,
+        structured_summary_json: studyInterpretationDraft.structured_summary_json.trim() || '{}',
+        stage3_reference_summary: studyInterpretationDraft.stage3_reference_summary.trim() || null,
+        notes: studyInterpretationDraft.notes.trim() || null,
+        review_notes: studyInterpretationDraft.review_notes.trim() || null,
+        version: studyInterpretationDraft.version,
+      };
+
+      const saved = studyInterpretationDraft.id
+        ? await updateAdminStudyInterpretationRecord(studyInterpretationDraft.id, payload)
+        : await saveAdminStudyInterpretationRecord(payload);
+      setStudyInterpretationDraft(studyInterpretationRecordToDraft(saved));
+      setNotice('Quellenbezug und optionale Bestandsdaten wurden gespeichert.');
+      await loadStudyInterpretations(selectedSlug, draft.ingredient_ids[0] ?? null);
+    } catch (err) {
+      setError(
+        err instanceof SyntaxError
+          ? 'Die optionalen Legacy-JSON-Daten müssen gültiges JSON sein.'
+          : err instanceof Error
+            ? err.message
+            : 'Quellenbezug und optionale Bestandsdaten konnten nicht gespeichert werden.',
+      );
+    } finally {
+      setSavingStudyInterpretation(false);
+    }
+  };
+
   const handleArchive = async () => {
     if (!selectedSlug) return;
 
@@ -416,13 +663,81 @@ export default function AdministratorKnowledgePage() {
     }
   };
 
+  const handleRefreshOverview = async () => {
+    if (!overviewAudit || overviewAudit.consistent || !overviewAudit.available) return;
+    setRefreshingOverview(true);
+    setError('');
+    setNotice('');
+    try {
+      const result = await refreshKnowledgeOverviewProjection(overviewAudit);
+      setOverviewAudit(result.audit);
+      setNotice(result.applied
+        ? 'Die Wissensübersicht wurde atomar aktualisiert und der öffentliche Cache geleert.'
+        : 'Die Wissensübersicht war bereits aktuell.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Die Wissensübersicht konnte nicht aktualisiert werden.');
+      await loadOverviewAudit();
+    } finally {
+      setRefreshingOverview(false);
+    }
+  };
+
   return (
     <>
       <AdminPageHeader
         title="Wissen"
         subtitle="Artikel schreiben, prüfen und veröffentlichen."
-        meta={<AdminBadge tone="info">{articles.length} Artikelliste</AdminBadge>}
+        meta={<AdminBadge tone="info">{totalArticles} Artikel</AdminBadge>}
       />
+
+      <div className="mb-4">
+        <AdminCard
+          title="Öffentliche Wissensübersicht"
+          subtitle="Materialisierte Karteikarten- und Badge-Daten für einen schnellen öffentlichen Aufruf."
+          actions={(
+            <div className="admin-toolbar-inline">
+              <AdminButton size="sm" onClick={() => void loadOverviewAudit()} disabled={checkingOverview || refreshingOverview}>
+                <RefreshCw size={14} />
+                {checkingOverview ? 'Prüft...' : 'Abgleich prüfen'}
+              </AdminButton>
+              <AdminButton
+                size="sm"
+                variant="primary"
+                onClick={() => void handleRefreshOverview()}
+                disabled={!overviewAudit || !overviewAudit.available || overviewAudit.consistent || refreshingOverview}
+              >
+                <RefreshCw size={14} />
+                {refreshingOverview ? 'Aktualisiert...' : 'Status aktualisieren'}
+              </AdminButton>
+            </div>
+          )}
+        >
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <AdminBadge tone={overviewAudit?.consistent ? 'ok' : overviewAudit?.available === false ? 'danger' : 'warn'}>
+              {overviewAudit?.consistent
+                ? 'Synchron'
+                : overviewAudit?.available === false
+                  ? 'Migration fehlt'
+                  : overviewAudit
+                    ? 'Abgleich nötig'
+                    : 'Wird geprüft'}
+            </AdminBadge>
+            {overviewAudit && (
+              <>
+                <span className="admin-muted">
+                  Projektion {overviewAudit.projected_record_count} / Quelle {overviewAudit.live_record_count} Datensätze
+                </span>
+                <span className="admin-muted">Quellversion {overviewAudit.source_version}</span>
+                {overviewAudit.refreshed_at && (
+                  <span className="admin-muted">
+                    Aktualisiert {new Date(overviewAudit.refreshed_at).toLocaleString('de-DE')}
+                  </span>
+                )}
+              </>
+            )}
+          </div>
+        </AdminCard>
+      </div>
 
       <div className="mb-4 admin-toolbar">
         <div className="admin-toolbar-inline">
@@ -433,7 +748,10 @@ export default function AdministratorKnowledgePage() {
             </span>
             <input
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => {
+                setPage(1);
+                setQuery(event.target.value);
+              }}
               placeholder="Titel oder Slug suchen"
               className="admin-input"
             />
@@ -442,13 +760,52 @@ export default function AdministratorKnowledgePage() {
             <span className="admin-muted">Status</span>
             <select
               value={status}
-              onChange={(event) => setStatus(event.target.value)}
+              onChange={(event) => {
+                setPage(1);
+                setStatus(event.target.value);
+              }}
               className="admin-select"
               aria-label={filteredStatusLabel}
             >
               {STATUS_OPTIONS.map((option) => (
                 <option key={option.value || 'all'} value={option.value}>
                   {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="admin-toolbar-inline text-xs font-medium text-[color:var(--admin-ink-2)]">
+            <span className="admin-muted">Schicht</span>
+            <select
+              value={layer}
+              onChange={(event) => {
+                setPage(1);
+                setLayer(event.target.value as AdminKnowledgeArticleLayer | '');
+              }}
+              className="admin-select"
+              aria-label={filteredLayerLabel}
+            >
+              {LAYER_OPTIONS.map((option) => (
+                <option key={option.value || 'all'} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="admin-toolbar-inline text-xs font-medium text-[color:var(--admin-ink-2)]">
+            <span className="admin-muted">Pro Seite</span>
+            <select
+              value={limit}
+              onChange={(event) => {
+                setPage(1);
+                setLimit(Number(event.target.value) as (typeof PAGE_SIZE_OPTIONS)[number]);
+              }}
+              className="admin-select"
+              aria-label="Artikel pro Seite"
+            >
+              {PAGE_SIZE_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
                 </option>
               ))}
             </select>
@@ -468,7 +825,36 @@ export default function AdministratorKnowledgePage() {
       {notice && <div className="admin-empty">{notice}</div>}
 
       <div className="grid gap-4 xl:grid-cols-[360px_minmax(0,1fr)]">
-        <AdminCard title="Artikel" subtitle="Artikel auswählen oder neu anlegen." padded>
+        <AdminCard
+          title="Artikel"
+          subtitle={totalArticles > 0 ? `${listStart}-${listEnd} von ${totalArticles}` : 'Artikel auswählen oder neu anlegen.'}
+          actions={(
+            <div className="admin-toolbar-inline">
+              <AdminButton
+                size="sm"
+                variant="ghost"
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+                disabled={loadingList || page <= 1}
+                aria-label="Vorherige Artikelseite"
+              >
+                <ChevronLeft size={14} />
+              </AdminButton>
+              <span className="admin-muted text-xs">
+                Seite {page} / {totalPages}
+              </span>
+              <AdminButton
+                size="sm"
+                variant="ghost"
+                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                disabled={loadingList || page >= totalPages}
+                aria-label="Nächste Artikelseite"
+              >
+                <ChevronRight size={14} />
+              </AdminButton>
+            </div>
+          )}
+          padded
+        >
           {loadingList ? (
             <AdminEmpty>Lade Artikel...</AdminEmpty>
           ) : articles.length === 0 ? (
@@ -491,7 +877,10 @@ export default function AdministratorKnowledgePage() {
                       <p className="truncate text-sm font-semibold">{article.title}</p>
                       <p className="admin-muted mt-1 text-xs">{article.slug}</p>
                     </div>
-                    <AdminBadge tone={statusTone(article.status)}>{statusLabel(article.status)}</AdminBadge>
+                    <div className="flex flex-shrink-0 flex-wrap justify-end gap-1">
+                      <AdminBadge tone={layerTone(article.article_layer)}>{layerLabel(article.article_layer)}</AdminBadge>
+                      <AdminBadge tone={statusTone(article.status)}>{statusLabel(article.status)}</AdminBadge>
+                    </div>
                   </div>
                   {article.reviewed_at && <p className="admin-muted mt-1 text-xs">Geprüft: {article.reviewed_at}</p>}
                 </button>
@@ -508,7 +897,7 @@ export default function AdministratorKnowledgePage() {
             <AdminEmpty>Lade Artikelinhalt...</AdminEmpty>
           ) : (
             <div className="space-y-3 p-3">
-              <div className="grid gap-3 lg:grid-cols-[minmax(200px,1fr)_140px]">
+              <div className="grid gap-3 lg:grid-cols-[minmax(200px,1fr)_140px_160px]">
                 <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
                   Slug
                   <input
@@ -526,6 +915,20 @@ export default function AdministratorKnowledgePage() {
                     className="admin-select mt-1"
                   >
                     {EDIT_STATUS_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
+                  Schicht
+                  <select
+                    value={draft.article_layer}
+                    onChange={(event) => updateDraft('article_layer', event.target.value as AdminKnowledgeArticleLayer)}
+                    className="admin-select mt-1"
+                  >
+                    {EDIT_LAYER_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>
                         {option.label}
                       </option>
@@ -553,8 +956,169 @@ export default function AdministratorKnowledgePage() {
                 />
               </label>
 
+              {isSingleStudyArticle && (
+                <div className="admin-study-interpretation-panel">
+                  <div className="admin-study-interpretation-head">
+                    <div>
+                      <h3>Quellenbezug und optionale Bestandsdaten</h3>
+                      <p>
+                        Die neue Pipeline arbeitet mit Coverage-Plan und direkt aus der Quelle erfassten Fakten.
+                        Bestehende strukturierte Auswertungen bleiben hier zur Nachvollziehbarkeit erhalten.
+                      </p>
+                    </div>
+                    <div className="admin-study-interpretation-actions">
+                      <AdminBadge tone="info">{studyInterpretations.length} Quellenbezüge</AdminBadge>
+                      <AdminButton size="sm" onClick={startNewStudyInterpretation} disabled={isCreateMode}>
+                        <FilePlus size={13} />
+                        Neu
+                      </AdminButton>
+                    </div>
+                  </div>
+
+                  {isCreateMode ? (
+                    <AdminEmpty>Speichere den Einzelstudien-Artikel zuerst. Danach können Quelle und optionale Bestandsdaten verknüpft werden.</AdminEmpty>
+                  ) : loadingStudyInterpretations ? (
+                    <AdminEmpty>Lade Quellenbezüge...</AdminEmpty>
+                  ) : (
+                    <>
+                      {studyInterpretations.length > 0 && (
+                        <div className="admin-study-interpretation-tabs">
+                          {studyInterpretations.map((record) => (
+                            <button
+                              key={record.id}
+                              type="button"
+                              className={record.id === studyInterpretationDraft.id ? 'active' : undefined}
+                              onClick={() => selectStudyInterpretation(record)}
+                            >
+                              <span>{record.source_title || `Quelle #${record.source_id}`}</span>
+                              <AdminBadge tone={record.status === 'accepted' ? 'ok' : record.status === 'blocked' ? 'danger' : 'neutral'}>
+                                {studyInterpretationStatusLabel(record.status)}
+                              </AdminBadge>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="admin-study-interpretation-grid">
+                        <label>
+                          Wirkstoff-ID
+                          <input
+                            value={studyInterpretationDraft.ingredient_id}
+                            onChange={(event) => updateStudyInterpretationDraft('ingredient_id', event.target.value)}
+                            className="admin-input mt-1"
+                            inputMode="numeric"
+                          />
+                        </label>
+                        <label>
+                          Quellen-ID
+                          <input
+                            value={studyInterpretationDraft.source_id}
+                            onChange={(event) => updateStudyInterpretationDraft('source_id', event.target.value)}
+                            className="admin-input mt-1"
+                            inputMode="numeric"
+                          />
+                        </label>
+                        <label>
+                          Quellen-Evidenz
+                          <input
+                            value={sourceEvidenceLabel(selectedStudyInterpretation)}
+                            className="admin-input mt-1"
+                            readOnly
+                          />
+                        </label>
+                        <label>
+                          Forschungsartefakt-ID
+                          <input
+                            value={studyInterpretationDraft.research_artifact_id}
+                            onChange={(event) => updateStudyInterpretationDraft('research_artifact_id', event.target.value)}
+                            className="admin-input mt-1"
+                            inputMode="numeric"
+                            placeholder="Optional"
+                          />
+                        </label>
+                        <label>
+                          Status
+                          <select
+                            value={studyInterpretationDraft.status}
+                            onChange={(event) => updateStudyInterpretationDraft('status', event.target.value as AdminStudyInterpretationStatus)}
+                            className="admin-select mt-1"
+                          >
+                            {STUDY_INTERPRETATION_STATUS_OPTIONS.map((option) => (
+                              <option key={option.value} value={option.value}>{option.label}</option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+
+                      <label className="admin-study-interpretation-field">
+                        Optionale strukturierte Bestandsdaten (Legacy-JSON)
+                        <textarea
+                          value={studyInterpretationDraft.structured_summary_json}
+                          onChange={(event) => updateStudyInterpretationDraft('structured_summary_json', event.target.value)}
+                          rows={12}
+                          className="admin-input mt-1 font-mono text-xs"
+                          aria-describedby="study-interpretation-json-help"
+                        />
+                        <span id="study-interpretation-json-help" className="admin-study-interpretation-help">
+                          Nur für vorhandene Legacy-Daten oder einen kompakten Provenienzverweis. Neue Quellenfakten werden im Coverage-/Source-Evidence-Flow geführt.
+                        </span>
+                        {isEmptyJsonObject(studyInterpretationDraft.structured_summary_json) && (
+                          <span className="admin-study-interpretation-empty">Keine optionalen Bestandsdaten hinterlegt.</span>
+                        )}
+                      </label>
+
+                      <label className="admin-study-interpretation-field">
+                        Optionale redaktionelle Kurznotiz (Legacy)
+                        <textarea
+                          value={studyInterpretationDraft.stage3_reference_summary}
+                          onChange={(event) => updateStudyInterpretationDraft('stage3_reference_summary', event.target.value)}
+                          rows={4}
+                          className="admin-input mt-1"
+                          placeholder="Keine Kurznotiz hinterlegt"
+                          aria-describedby="stage3-reference-summary-help"
+                        />
+                        <span id="stage3-reference-summary-help" className="admin-study-interpretation-help">
+                          Kein Pflichtfeld und keine Faktengrundlage für neue Hauptartikel.
+                        </span>
+                        {!studyInterpretationDraft.stage3_reference_summary.trim() && (
+                          <span className="admin-study-interpretation-empty">Keine optionale Kurznotiz hinterlegt.</span>
+                        )}
+                      </label>
+
+                      <div className="admin-study-interpretation-grid admin-study-interpretation-grid-notes">
+                        <label>
+                          Notizen
+                          <textarea
+                            value={studyInterpretationDraft.notes}
+                            onChange={(event) => updateStudyInterpretationDraft('notes', event.target.value)}
+                            rows={3}
+                            className="admin-input mt-1"
+                          />
+                        </label>
+                        <label>
+                          Review-Notizen
+                          <textarea
+                            value={studyInterpretationDraft.review_notes}
+                            onChange={(event) => updateStudyInterpretationDraft('review_notes', event.target.value)}
+                            rows={3}
+                            className="admin-input mt-1"
+                          />
+                        </label>
+                      </div>
+
+                      <div className="admin-study-interpretation-save-row">
+                        <AdminButton onClick={() => void handleSaveStudyInterpretation()} disabled={savingStudyInterpretation}>
+                          <Save size={14} />
+                          {savingStudyInterpretation ? 'Speichert...' : 'Quellenbezug speichern'}
+                        </AdminButton>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
               <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
-                Inhalt
+                Artikeltext
                 <textarea
                   value={draft.body}
                   onChange={(event) => updateDraft('body', event.target.value)}

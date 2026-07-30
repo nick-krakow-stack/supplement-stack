@@ -1,0 +1,8 @@
+{
+  "schema":"coverage_plan.v1","coverage_plan_id":"coverage-other","content_hash":"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","substance":"Anderer Stoff",
+  "stage3_archetype_decision":{"archetype":"nonessential_or_endogenous","reason":"Andere Einordnung.","status":"planned"},
+  "clusters":[{"cluster_key":"different_cluster","required":true,"status":"covered","primary_source_ids":["src-99"],"supporting_source_ids":[],"article_candidate_ids":["article-99"]}],
+  "sources":[{"source_id":"src-99","stage15_label":"ANCHOR","source_url":"https://example.org/source-99","covered_by_source_ids":[],"assigned_article_ids":["article-99"]}],
+  "article_candidates":[{"article_id":"article-99","primary_source_id":"src-99","integrated_source_ids":[],"cluster_keys":["different_cluster"],"own_article_reason":"minimal_cluster_representative","risk_class":["standard"],"source_archetype":"single_study","framework_fit":{"decision":"existing","framework_id":"single-study-v1","variant_id":"single-study-standard-v1","reason":"Passt.","owner_approval":{"required":false,"status":"not_required"},"pilot":{"required":false,"status":"not_required"}},"publication_gate":{"status":"pending","result":null,"review_id":null},"status":"planned"}],
+  "facts_gate":{"status":"pending","required_record_ids":["fact-src-99-01"],"validated_record_ids":[],"missing_cluster_keys":[],"blocking_gaps":[]}
+}

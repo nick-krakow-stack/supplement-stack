@@ -1,0 +1,38 @@
+{
+  "schema": "source_evidence_record.v1",
+  "record_id": "fact-src-01-01",
+  "source_id": "src-01",
+  "created_by": {"role":"clinical-study-interpreter","id":"writer-01","created_at":"2026-07-13T14:00:00+02:00"},
+  "source_locator": {
+    "source_url": "https://doi.org/10.1000/example",
+    "doi": "10.1000/example",
+    "pmid": null,
+    "access_basis": "verified_full_text",
+    "retrieved_at": "2026-07-13"
+  },
+  "provenance": {
+    "location": "Results, Table 2, row 3",
+    "verbatim_quote": null,
+    "faithful_paraphrase": "Der berichtete Endpunkt trat in der untersuchten Gruppe seltener auf.",
+    "language": "en"
+  },
+  "claim_type": "safety",
+  "cluster_keys": ["safety_ul_adults"],
+  "population": "Erwachsene laut Ein- und Ausschlusskriterien",
+  "intervention_or_exposure": "Geprüfte Intervention",
+  "comparison": "Kontrollgruppe",
+  "outcome": "Berichteter Endpunkt",
+  "quantity": {
+    "tested_amount": "500 mg/Tag",
+    "schedule": "täglich",
+    "duration": "12 Wochen",
+    "is_recommendation": false
+  },
+  "effect": "Berichtetes Ergebnis",
+  "uncertainty_or_limit": "Begrenzte Übertragbarkeit",
+  "stack_relevance": {
+    "candidate": true,
+    "use": "safety_context",
+    "direct_user_dose_recommendation": false
+  }
+}

@@ -1,0 +1,1 @@
+Static fictional source bytes for the offline evidence-pipeline example.
