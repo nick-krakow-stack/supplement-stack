@@ -5,7 +5,9 @@ import {
   createKnowledgeArticle,
   getAdminIngredients,
   getAdminStudyInterpretationRecords,
+  getIngredientParts,
   getKnowledgeArticle,
+  getKnowledgeArticleParts,
   getKnowledgeArticles,
   getKnowledgeOverviewProjectionAudit,
   refreshKnowledgeOverviewProjection,
@@ -13,9 +15,12 @@ import {
   uploadKnowledgeArticleImage,
   updateAdminStudyInterpretationRecord,
   updateKnowledgeArticle,
+  updateKnowledgeArticleParts,
+  type AdminIngredientPartLink,
   type AdminIngredientListItem,
   type AdminKnowledgeArticle,
   type AdminKnowledgeArticleLayer,
+  type AdminKnowledgeArticlePart,
   type AdminKnowledgeArticlePayload,
   type AdminKnowledgeArticleSource,
   type AdminKnowledgeOverviewProjectionAudit,
@@ -273,6 +278,9 @@ export default function AdministratorKnowledgePage() {
   const [notice, setNotice] = useState('');
   const [ingredientQuery, setIngredientQuery] = useState('');
   const [ingredientResults, setIngredientResults] = useState<AdminIngredientListItem[]>([]);
+  const [knowledgePartLinks, setKnowledgePartLinks] = useState<AdminKnowledgeArticlePart[]>([]);
+  const [ingredientPartOptions, setIngredientPartOptions] = useState<Record<number, AdminIngredientPartLink[]>>({});
+  const [loadingKnowledgeParts, setLoadingKnowledgeParts] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [studyInterpretations, setStudyInterpretations] = useState<AdminStudyInterpretationRecord[]>([]);
   const [studyInterpretationDraft, setStudyInterpretationDraft] = useState<StudyInterpretationDraft>(() => emptyStudyInterpretationDraft());
@@ -403,6 +411,34 @@ export default function AdministratorKnowledgePage() {
   }, [mode, selectedSlug]);
 
   useEffect(() => {
+    if (!selectedSlug || mode === 'create') {
+      setKnowledgePartLinks([]);
+      return;
+    }
+    let alive = true;
+    setLoadingKnowledgeParts(true);
+    setKnowledgePartLinks([]);
+    getKnowledgeArticleParts(selectedSlug)
+      .then((parts) => { if (alive) setKnowledgePartLinks(parts); })
+      .catch((err) => { if (alive) setError(err instanceof Error ? err.message : 'Sub-Wirkstoff-Verknüpfungen konnten nicht geladen werden.'); })
+      .finally(() => { if (alive) setLoadingKnowledgeParts(false); });
+    return () => { alive = false; };
+  }, [mode, selectedSlug]);
+
+  useEffect(() => {
+    const missing = draft.ingredient_ids.filter((ingredientId) => !ingredientPartOptions[ingredientId]);
+    if (missing.length === 0) return;
+    let alive = true;
+    Promise.all(missing.map(async (ingredientId) => [ingredientId, await getIngredientParts(ingredientId)] as const))
+      .then((entries) => {
+        if (!alive) return;
+        setIngredientPartOptions((previous) => ({ ...previous, ...Object.fromEntries(entries) }));
+      })
+      .catch((err) => { if (alive) setError(err instanceof Error ? err.message : 'Sub-Wirkstoffe konnten nicht geladen werden.'); });
+    return () => { alive = false; };
+  }, [draft.ingredient_ids, ingredientPartOptions]);
+
+  useEffect(() => {
     if (mode === 'create' || !selectedSlug || draft.article_layer !== 'single_study') {
       setStudyInterpretations([]);
       setStudyInterpretationDraft(emptyStudyInterpretationDraft(draft.ingredient_ids[0] ?? null));
@@ -485,6 +521,24 @@ export default function AdministratorKnowledgePage() {
       ingredient_ids: previous.ingredient_ids.filter((id) => id !== ingredientId),
       ingredients: previous.ingredients.filter((ingredient) => ingredient.ingredient_id !== ingredientId),
     }));
+    setKnowledgePartLinks((previous) => previous.filter((part) => part.ingredient_id !== ingredientId));
+  };
+
+  const toggleKnowledgePart = (ingredientId: number, ingredientName: string | null, part: AdminIngredientPartLink) => {
+    setKnowledgePartLinks((previous) => {
+      const exists = previous.some((entry) => entry.ingredient_id === ingredientId && entry.part_id === part.part_id);
+      if (exists) return previous.filter((entry) => !(entry.ingredient_id === ingredientId && entry.part_id === part.part_id));
+      return [...previous, {
+        article_slug: selectedSlug ?? draft.slug,
+        ingredient_id: ingredientId,
+        ingredient_name: ingredientName,
+        part_id: part.part_id,
+        part_name: part.part_name,
+        part_type: part.part_type,
+        part_status: part.part_status,
+        sort_order: previous.length,
+      }];
+    });
   };
 
   const handleImageUpload = async (file: File | null) => {
@@ -511,6 +565,7 @@ export default function AdministratorKnowledgePage() {
     setMode('create');
     setSelectedSlug(null);
     setDraft(emptyDraft());
+    setKnowledgePartLinks([]);
     setError('');
     setNotice('');
   };
@@ -526,6 +581,7 @@ export default function AdministratorKnowledgePage() {
   const loadArticle = (slug: string) => {
     setMode('edit');
     setSelectedSlug(slug);
+    setKnowledgePartLinks([]);
     setNotice('');
     setError('');
   };
@@ -580,6 +636,12 @@ export default function AdministratorKnowledgePage() {
         }
         saved = await updateKnowledgeArticle(targetSlug, payload);
       }
+
+      await updateKnowledgeArticleParts(saved.slug, knowledgePartLinks.map((part, index) => ({
+        ingredient_id: part.ingredient_id,
+        part_id: part.part_id,
+        sort_order: index,
+      })));
 
       setMode('edit');
       setSelectedSlug(saved.slug);
@@ -1251,6 +1313,52 @@ export default function AdministratorKnowledgePage() {
                         {ingredient.name}
                       </button>
                     ))}
+                  </div>
+                )}
+                {draft.ingredients.length > 0 && (
+                  <div className="mt-3 border-t border-[color:var(--admin-line)] pt-3">
+                    <h4 className="text-xs font-semibold uppercase tracking-wide text-[color:var(--admin-ink-2)]">Sub-Wirkstoff-Verknüpfungen</h4>
+                    <p className="admin-muted mt-1 text-xs">Nur auswählen, wenn der Artikel diesen Sub-Wirkstoff tatsächlich behandelt.</p>
+                    {loadingKnowledgeParts ? <p className="admin-muted mt-2 text-xs">Lade Verknüpfungen...</p> : null}
+                    <div className="mt-2 grid gap-2">
+                      {draft.ingredients.map((ingredient) => {
+                        const options = ingredientPartOptions[ingredient.ingredient_id] ?? [];
+                        const historical = knowledgePartLinks.filter((link) => (
+                          link.ingredient_id === ingredient.ingredient_id
+                          && !options.some((option) => option.part_id === link.part_id)
+                        ));
+                        if (options.length === 0 && historical.length === 0) return null;
+                        return (
+                          <fieldset key={`parts-${ingredient.ingredient_id}`} className="rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] p-2">
+                            <legend className="px-1 text-xs font-semibold">{ingredient.name ?? `Wirkstoff ${ingredient.ingredient_id}`}</legend>
+                            <div className="flex flex-wrap gap-2">
+                              {[...options.map((part) => ({
+                                ...part,
+                                historical: false,
+                              })), ...historical.map((part) => ({
+                                ingredient_id: part.ingredient_id,
+                                part_id: part.part_id,
+                                part_name: part.part_name,
+                                part_type: part.part_type,
+                                part_status: part.part_status,
+                                sort_order: part.sort_order,
+                                created_at: null,
+                                historical: true,
+                              }))].map((part) => {
+                                const checked = knowledgePartLinks.some((link) => link.ingredient_id === ingredient.ingredient_id && link.part_id === part.part_id);
+                                return (
+                                  <label key={part.part_id} className="admin-input inline-flex min-h-[38px] items-center gap-2 text-xs">
+                                    <input type="checkbox" checked={checked} onChange={() => toggleKnowledgePart(ingredient.ingredient_id, ingredient.name, part)} />
+                                    {part.part_name}
+                                    {part.historical ? <AdminBadge tone="warn">historisch</AdminBadge> : null}
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </fieldset>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </div>

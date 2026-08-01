@@ -50,6 +50,8 @@ function ProductRow({
       ? formatNumber(product.serving_size)
       : null;
   const locked = product.status === 'approved';
+  const partSummary = (product.ingredients ?? []).flatMap((ingredient) => (ingredient.parts ?? [])
+    .map((part) => `davon ${part.part_name ?? `Sub-Wirkstoff ${part.part_id}`}${part.quantity != null ? `: ${formatNumber(part.quantity)} ${part.unit ?? ''}` : ''}`));
 
   return (
     <div className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-gray-50 max-[430px]:flex-col">
@@ -66,6 +68,9 @@ function ProductRow({
             <span>{formatNumber(product.servings_per_container)} Portionen</span>
           )}
         </div>
+        {partSummary.length > 0 && (
+          <p className="mt-1 text-xs text-gray-500">{partSummary.join(' · ')}</p>
+        )}
         {locked && (
           <p className="mt-1 text-xs text-gray-500">
             Dieses Produkt ist freigegeben und kann nicht mehr bearbeitet oder gelöscht werden.

@@ -15,6 +15,7 @@ import type { AppContext, StackRow, StackItemRow, InteractionRow } from '../lib/
 import { checkRateLimit, ensureAuth } from '../lib/helpers'
 import { sendMail } from '../lib/mail'
 import { calculateProductUsage, ingredientAmountPerProductServing } from '../lib/stack-calculations'
+import { loadIngredientPartsByParentRows, type IngredientPartRead } from '../lib/ingredient-parts'
 import { loadCatalogProductSafetyWarnings, loadUserProductSafetyWarnings } from './knowledge'
 
 const stacks = new Hono<AppContext>()
@@ -89,6 +90,8 @@ type StackMailItem = {
 
 type StackMailIngredient = {
   stack_item_id: number
+  parent_row_id: number
+  product_type: StackProductType
   ingredient_id: number
   ingredient_name: string
   parent_ingredient_id: number | null
@@ -97,9 +100,43 @@ type StackMailIngredient = {
   basis_quantity: number | null
   basis_unit: string | null
   search_relevant: number
+  parts: IngredientPartRead[]
 }
 
-type StackItemResponseIngredient = Pick<StackMailIngredient, 'ingredient_id' | 'quantity' | 'unit' | 'basis_quantity' | 'basis_unit' | 'search_relevant'>
+type StackItemResponseIngredient = Pick<StackMailIngredient, 'ingredient_id' | 'ingredient_name' | 'quantity' | 'unit' | 'basis_quantity' | 'basis_unit' | 'search_relevant' | 'parts'>
+
+type StackIngredientTotalAmount = {
+  quantity: number
+  unit: string
+}
+
+type StackIngredientPartTotal = {
+  part_id: number
+  part_name: string
+  totals: StackIngredientTotalAmount[]
+}
+
+type StackIngredientTotal = {
+  ingredient_id: number
+  ingredient_name: string
+  totals: StackIngredientTotalAmount[]
+  parts: StackIngredientPartTotal[]
+}
+
+type StackIngredientAggregationItem = Pick<StackMailItem,
+  | 'quantity'
+  | 'intake_interval_days'
+  | 'dosage_text'
+  | 'serving_size'
+  | 'serving_unit'
+  | 'servings_per_container'
+  | 'container_count'
+  | 'product_price'
+> & {
+  ingredients: StackItemResponseIngredient[]
+}
+
+type StackItemWithIngredients = StackItemRow & StackIngredientAggregationItem
 
 type StackMailPreparedItem = StackMailItem & {
   dailyAmountLabel: string
@@ -231,6 +268,106 @@ function normalizeFamilyMemberId(value: unknown): number | null | undefined {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined
 }
 
+function amountForStackAggregation(
+  value: number,
+  unit?: string | null,
+): { key: string; quantity: number; unit: string } | null {
+  if (!Number.isFinite(value) || value <= 0) return null
+  const normalized = normalizeComparableUnit(unit)
+  if (!normalized) return null
+  if (normalized === 'g') return { key: 'mass:mg', quantity: value * 1000, unit: 'mg' }
+  if (normalized === 'mg') return { key: 'mass:mg', quantity: value, unit: 'mg' }
+  if (normalized === 'µg') return { key: 'mass:mg', quantity: value / 1000, unit: 'mg' }
+  if (normalized === 'iu') return { key: 'iu', quantity: value, unit: 'IE' }
+  return { key: `exact:${normalized}`, quantity: value, unit: normalized }
+}
+
+function addStackAggregationAmount(
+  target: Map<string, StackIngredientTotalAmount>,
+  value: number,
+  unit?: string | null,
+): void {
+  const amount = amountForStackAggregation(value, unit)
+  if (!amount) return
+  const current = target.get(amount.key)
+  target.set(amount.key, {
+    quantity: (current?.quantity ?? 0) + amount.quantity,
+    unit: amount.unit,
+  })
+}
+
+function finalizeStackAggregationAmounts(
+  target: Map<string, StackIngredientTotalAmount>,
+): StackIngredientTotalAmount[] {
+  return [...target.entries()]
+    .sort(([left], [right]) => left.localeCompare(right, 'de'))
+    .map(([, amount]) => ({
+      quantity: Number(amount.quantity.toFixed(12)),
+      unit: amount.unit,
+    }))
+}
+
+function aggregateStackIngredientTotals(items: StackIngredientAggregationItem[]): StackIngredientTotal[] {
+  const totals = new Map<number, {
+    ingredient_name: string
+    totals: Map<string, StackIngredientTotalAmount>
+    parts: Map<number, { part_name: string; totals: Map<string, StackIngredientTotalAmount> }>
+  }>()
+
+  for (const item of items) {
+    const usage = calculateProductUsage({ ...item, ingredients: item.ingredients }, item.product_price)
+    const dailyServingFactor = usage.effectiveDailyUsage
+    if (!Number.isFinite(dailyServingFactor) || dailyServingFactor <= 0) continue
+
+    for (const ingredient of item.ingredients) {
+      if (ingredient.search_relevant !== 1) continue
+      const aggregate = totals.get(ingredient.ingredient_id) ?? {
+        ingredient_name: ingredient.ingredient_name,
+        totals: new Map<string, StackIngredientTotalAmount>(),
+        parts: new Map<number, { part_name: string; totals: Map<string, StackIngredientTotalAmount> }>(),
+      }
+      const amountPerServing = ingredientAmountPerProductServing(ingredient, item)
+      if (amountPerServing !== null) {
+        addStackAggregationAmount(aggregate.totals, amountPerServing * dailyServingFactor, ingredient.unit)
+      }
+
+      for (const part of ingredient.parts) {
+        if (part.search_relevant !== 1) continue
+        const effectivePart = {
+          ...part,
+          basis_quantity: part.basis_quantity ?? ingredient.basis_quantity,
+          basis_unit: part.basis_unit ?? ingredient.basis_unit,
+        }
+        const partAmountPerServing = ingredientAmountPerProductServing(effectivePart, item)
+        if (partAmountPerServing === null) continue
+        const partAggregate = aggregate.parts.get(part.part_id) ?? {
+          part_name: part.part_name,
+          totals: new Map<string, StackIngredientTotalAmount>(),
+        }
+        addStackAggregationAmount(partAggregate.totals, partAmountPerServing * dailyServingFactor, part.unit)
+        aggregate.parts.set(part.part_id, partAggregate)
+      }
+      totals.set(ingredient.ingredient_id, aggregate)
+    }
+  }
+
+  return [...totals.entries()]
+    .sort(([, left], [, right]) => left.ingredient_name.localeCompare(right.ingredient_name, 'de'))
+    .map(([ingredientId, ingredient]) => ({
+      ingredient_id: ingredientId,
+      ingredient_name: ingredient.ingredient_name,
+      totals: finalizeStackAggregationAmounts(ingredient.totals),
+      parts: [...ingredient.parts.entries()]
+        .sort(([, left], [, right]) => left.part_name.localeCompare(right.part_name, 'de'))
+        .map(([partId, part]) => ({
+          part_id: partId,
+          part_name: part.part_name,
+          totals: finalizeStackAggregationAmounts(part.totals),
+        })),
+    }))
+    .filter((ingredient) => ingredient.totals.length > 0 || ingredient.parts.length > 0)
+}
+
 function normalizeStackCategoryName(value: unknown): StackCategoryValidation | null {
   if (typeof value !== 'string') return null
   const normalizedSpacing = value.trim().replace(/\s+/g, ' ')
@@ -336,9 +473,22 @@ function prepareMailItems(
       : `${formatDailyUnit(usage.servingsPerIntake, 'Portionen')}/Einnahmetag`
     const dailyIngredientLabels = ingredients
       .filter((ingredient) => ingredient.search_relevant === 1 && ingredient.quantity != null && ingredient.quantity > 0)
-      .map((ingredient) => {
+      .flatMap((ingredient) => {
         const amountPerServing = ingredientAmountPerProductServing(ingredient, item) ?? ingredient.quantity ?? 0
-        return `${ingredient.ingredient_name}: ${formatDailyUnit(amountPerServing * usage.servingsPerIntake, ingredient.unit)}/Einnahmetag`
+        const labels = [
+          `${ingredient.ingredient_name}: ${formatDailyUnit(amountPerServing * usage.effectiveDailyUsage, ingredient.unit)}/Tag`,
+        ]
+        for (const part of ingredient.parts) {
+          if (part.search_relevant !== 1 || part.quantity === null || part.quantity <= 0) continue
+          const effectivePart = {
+            ...part,
+            basis_quantity: part.basis_quantity ?? ingredient.basis_quantity,
+            basis_unit: part.basis_unit ?? ingredient.basis_unit,
+          }
+          const partAmountPerServing = ingredientAmountPerProductServing(effectivePart, item) ?? part.quantity
+          labels.push(`davon ${part.part_name}: ${formatDailyUnit(partAmountPerServing * usage.effectiveDailyUsage, part.unit)}/Tag`)
+        }
+        return labels
       })
 
     return {
@@ -353,7 +503,19 @@ function prepareMailItems(
   })
 }
 
-function buildStackEmailHtml(stack: StackRow, items: StackMailPreparedItem[], totalOnce: number, totalMonthly: number): string {
+function formatStackTotalAmounts(amounts: StackIngredientTotalAmount[]): string {
+  return amounts.length > 0
+    ? amounts.map((amount) => formatDailyUnit(amount.quantity, amount.unit)).join(' + ')
+    : 'Menge nicht angegeben'
+}
+
+function buildStackEmailHtml(
+  stack: StackRow,
+  items: StackMailPreparedItem[],
+  totalOnce: number,
+  totalMonthly: number,
+  ingredientTotals: StackIngredientTotal[],
+): string {
   const rows = items.map((item) => {
     const productImage = item.image_url
       ? `<img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.name)}" width="56" height="56" style="width:56px;height:56px;object-fit:cover;border-radius:10px;border:1px solid #e5e7eb;background:#f8fafc;">`
@@ -392,6 +554,18 @@ function buildStackEmailHtml(stack: StackRow, items: StackMailPreparedItem[], to
     `
   }).join('')
 
+  const ingredientSummary = ingredientTotals.length > 0
+    ? `<div style="margin:0 0 18px;padding:14px 16px;border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0;">
+        <strong>Wirkstoffe pro Tag</strong>
+        ${ingredientTotals.map((ingredient) => `
+          <div style="margin-top:8px;">
+            <strong>${escapeHtml(ingredient.ingredient_name)}:</strong> ${escapeHtml(formatStackTotalAmounts(ingredient.totals))}
+            ${ingredient.parts.map((part) => `<br><span style="padding-left:14px;color:#475569;">davon ${escapeHtml(part.part_name)}: ${escapeHtml(formatStackTotalAmounts(part.totals))}</span>`).join('')}
+          </div>
+        `).join('')}
+      </div>`
+    : ''
+
   return `
     <div style="font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#0f172a;line-height:1.5;">
       <h1 style="font-size:22px;margin:0 0 8px;">${escapeHtml(stack.name)}</h1>
@@ -400,6 +574,7 @@ function buildStackEmailHtml(stack: StackRow, items: StackMailPreparedItem[], to
         <strong>Einmaliger Kaufpreis:</strong> ${formatEuro(totalOnce)}
         <br><strong>Geschätzte Monatskosten:</strong> ${formatEuro(totalMonthly)}
       </div>
+      ${ingredientSummary}
       <table style="width:100%;border-collapse:collapse;font-size:14px;">
         <thead>
           <tr style="background:#f8fafc;">
@@ -667,10 +842,12 @@ async function loadStackItems(
       LEFT JOIN ingredient_display_profiles idp_form
         ON idp_form.ingredient_id = pi_main.ingredient_id
        AND idp_form.form_id = pi_main.form_id
+       AND idp_form.part_id IS NULL
        AND idp_form.sub_ingredient_id IS NULL
       LEFT JOIN ingredient_display_profiles idp_base
         ON idp_base.ingredient_id = pi_main.ingredient_id
        AND idp_base.form_id IS NULL
+       AND idp_base.part_id IS NULL
        AND idp_base.sub_ingredient_id IS NULL
       WHERE si.stack_id = ?
         AND si.catalog_product_id IS NOT NULL
@@ -720,10 +897,12 @@ async function loadStackItems(
       LEFT JOIN ingredient_display_profiles idp_form
         ON idp_form.ingredient_id = upi_main.ingredient_id
        AND idp_form.form_id = upi_main.form_id
+       AND idp_form.part_id IS NULL
        AND idp_form.sub_ingredient_id IS NULL
       LEFT JOIN ingredient_display_profiles idp_base
         ON idp_base.ingredient_id = upi_main.ingredient_id
        AND idp_base.form_id IS NULL
+       AND idp_base.part_id IS NULL
        AND idp_base.sub_ingredient_id IS NULL
       WHERE si.stack_id = ?
         AND si.user_product_id IS NOT NULL
@@ -753,6 +932,8 @@ async function loadStackMailIngredients(
     FROM (
       SELECT
         si.id AS stack_item_id,
+        pi.id AS parent_row_id,
+        'catalog' AS product_type,
         pi.ingredient_id,
         i.name AS ingredient_name,
         pi.parent_ingredient_id,
@@ -771,6 +952,8 @@ async function loadStackMailIngredients(
 
       SELECT
         si.id AS stack_item_id,
+        upi.id AS parent_row_id,
+        'user_product' AS product_type,
         upi.ingredient_id,
         i.name AS ingredient_name,
         upi.parent_ingredient_id,
@@ -787,8 +970,29 @@ async function loadStackMailIngredients(
         AND si.user_product_id IS NOT NULL
     )
     ORDER BY stack_item_id ASC, search_relevant DESC, ingredient_name ASC
-  `).bind(stackId, ownerUserId, stackId).all<StackMailIngredient>()
-  return results
+  `).bind(stackId, ownerUserId, stackId).all<Omit<StackMailIngredient, 'parts'>>()
+  const catalogRows = results.filter((row) => row.product_type === 'catalog')
+  const userRows = results.filter((row) => row.product_type === 'user_product')
+  const [catalogParts, userParts] = await Promise.all([
+    loadIngredientPartsByParentRows(
+      db,
+      'product_ingredient_parts',
+      'product_ingredient_id',
+      catalogRows.map((row) => row.parent_row_id),
+      { publicOnly: true },
+    ),
+    loadIngredientPartsByParentRows(
+      db,
+      'user_product_ingredient_parts',
+      'user_product_ingredient_id',
+      userRows.map((row) => row.parent_row_id),
+      { publicOnly: false },
+    ),
+  ])
+  return results.map((row) => ({
+    ...row,
+    parts: (row.product_type === 'catalog' ? catalogParts : userParts).get(row.parent_row_id) ?? [],
+  }))
 }
 
 function groupIngredientsByStackItem(ingredients: StackMailIngredient[]): Map<number, StackMailIngredient[]> {
@@ -805,7 +1009,7 @@ async function loadStackItemsWithIngredients(
   db: D1Database,
   stackId: number | string,
   ownerUserId: number,
-): Promise<Array<StackItemRow & { ingredients: StackItemResponseIngredient[] }>> {
+): Promise<StackItemWithIngredients[]> {
   const items = await loadStackItems(db, stackId, ownerUserId)
   const ingredients = await loadStackMailIngredients(db, stackId, ownerUserId)
   const ingredientsByItem = groupIngredientsByStackItem(ingredients)
@@ -821,21 +1025,25 @@ async function loadStackItemsWithIngredients(
   ])
 
   return items.map((item) => {
-    const typedItem = item as StackItemRow & { stack_item_id: number; product_type?: StackProductType }
+    const typedItem = item as StackItemRow
+      & Omit<StackIngredientAggregationItem, 'ingredients'>
+      & { stack_item_id: number; product_type?: StackProductType }
     const stackItemId = typedItem.stack_item_id
     const warnings = typedItem.product_type === 'user_product'
       ? userWarnings.get(item.id) ?? []
       : catalogWarnings.get(item.id) ?? []
     return {
-      ...item,
+      ...typedItem,
       warnings,
       ingredients: (ingredientsByItem.get(stackItemId) ?? []).map((ingredient) => ({
         ingredient_id: ingredient.ingredient_id,
+        ingredient_name: ingredient.ingredient_name,
         quantity: ingredient.quantity,
         unit: ingredient.unit,
         basis_quantity: ingredient.basis_quantity,
         basis_unit: ingredient.basis_unit,
         search_relevant: ingredient.search_relevant,
+        parts: ingredient.parts,
       })),
     }
   })
@@ -1363,7 +1571,8 @@ stacks.put('/:id/items/layout', async (c) => {
 
   const items = await loadStackItemsWithIngredients(c.env.DB, stack.id, stack.user_id)
   const categories = await loadStackCategories(c.env.DB, stack.id)
-  return c.json({ items, categories })
+  const ingredientTotals = aggregateStackIngredientTotals(items)
+  return c.json({ items, categories, ingredient_totals: ingredientTotals })
 })
 
 // GET /api/stacks/:id
@@ -1383,7 +1592,8 @@ stacks.get('/:id', async (c) => {
   const items = await loadStackItemsWithIngredients(c.env.DB, stack.id, stack.user_id)
   const categories = await loadStackCategories(c.env.DB, stack.id)
   const total = items.reduce((sum, i) => sum + i.product_price, 0)
-  return c.json({ stack, items, categories, total })
+  const ingredientTotals = aggregateStackIngredientTotals(items)
+  return c.json({ stack, items, categories, total, ingredient_totals: ingredientTotals })
 })
 
 // POST /api/stacks/:id/email
@@ -1404,12 +1614,17 @@ stacks.post('/:id/email', async (c) => {
   const ingredientsByItem = groupIngredientsByStackItem(ingredients)
   const warningsByItem = await loadStackMailWarnings(c.env.DB, ingredientsByItem)
   const preparedItems = prepareMailItems(items, ingredientsByItem, warningsByItem)
+  const itemIngredients = items.map((item) => ({
+    ...item,
+    ingredients: ingredientsByItem.get(item.stack_item_id) ?? [],
+  }))
+  const ingredientTotals = aggregateStackIngredientTotals(itemIngredients)
   const totalOnce = preparedItems.reduce((sum, item) => sum + item.product_price, 0)
   const totalMonthly = preparedItems.reduce((sum, item) => sum + (item.monthlyCost ?? 0), 0)
   const result = await sendMail(c.env, {
     to: user.email,
     subject: `Dein Supplement Stack: ${stack.name}`,
-    html: buildStackEmailHtml(stack, preparedItems, totalOnce, totalMonthly),
+    html: buildStackEmailHtml(stack, preparedItems, totalOnce, totalMonthly, ingredientTotals),
   })
 
   if (!result.ok) {
@@ -1565,7 +1780,8 @@ stacks.put('/:id', async (c) => {
   `).bind(id).first()
   const items = await loadStackItemsWithIngredients(c.env.DB, id, stack.user_id)
   const categories = await loadStackCategories(c.env.DB, id)
-  return c.json({ stack: updated, items, categories })
+  const ingredientTotals = aggregateStackIngredientTotals(items)
+  return c.json({ stack: updated, items, categories, ingredient_totals: ingredientTotals })
 })
 
 export default stacks

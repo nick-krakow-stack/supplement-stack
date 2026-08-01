@@ -39,6 +39,7 @@ import {
 import type { FamilyMember, ProductSafetyWarning, User } from '../types';
 import type { DosageGuideline, Ingredient, ShopDomain } from '../types/local';
 import {
+  aggregateStackIngredientTotals,
   calculateProductUsage,
   intakeIntervalDays as calculateIntakeIntervalDays,
   productTotalServings as calculateTotalServings,
@@ -93,15 +94,31 @@ export interface DemoProduct {
   status?: 'pending' | 'approved' | 'rejected' | 'blocked';
   user_product_status?: 'pending' | 'approved' | 'rejected' | 'blocked';
   published_product_id?: number | null;
+  matched_part_id?: number | null;
+  matched_part_name?: string | null;
+  matched_part_quantity?: number | null;
+  matched_part_unit?: string | null;
+  matched_part_basis_quantity?: number | null;
+  matched_part_basis_unit?: string | null;
   ingredients?: Array<{
     ingredient_id: number;
+    ingredient_name?: string;
     form_id?: number | null;
     quantity?: number | null;
     unit?: string | null;
     basis_quantity?: number | null;
     basis_unit?: string | null;
     search_relevant?: number | boolean;
-    parent_ingredient_id?: number | null;
+    parts?: Array<{
+      part_id: number;
+      part_name?: string;
+      part_status?: string | null;
+      quantity?: number | null;
+      unit?: string | null;
+      basis_quantity?: number | null;
+      basis_unit?: string | null;
+      search_relevant?: number | boolean;
+    }>;
   }>;
 }
 
@@ -553,6 +570,12 @@ function ingredientEffectChips(ingredient: Ingredient): string[] {
 function formatContentAmount(value: number): string {
   const rounded = value >= 100 ? Math.round(value / 10) * 10 : Math.round(value);
   return rounded.toLocaleString('de-DE', { maximumFractionDigits: 0 });
+}
+
+function formatStackSummaryAmounts(amounts: Array<{ quantity: number; unit: string }>): string {
+  return amounts.length > 0
+    ? amounts.map((amount) => `${amount.quantity.toLocaleString('de-DE', { maximumFractionDigits: 6 })} ${normalizeUnitToGerman(amount.unit)}`).join(' + ')
+    : 'Menge nicht angegeben';
 }
 
 function productContentLabel(product: DemoProduct, previewProduct: DemoProduct): string {
@@ -1371,7 +1394,9 @@ function AddProductModal({
       return stack?.products.find((product) =>
         productStackKey(product) !== ignoredExistingProductKey &&
         product.ingredients?.some((row) =>
-          row.ingredient_id === selected.id || row.parent_ingredient_id === selected.id,
+          row.ingredient_id === selected.id && (
+            selected.matched_part_id == null || row.parts?.some((part) => part.part_id === selected.matched_part_id)
+          ),
         ),
       ) ?? null;
     },
@@ -1383,7 +1408,8 @@ function AddProductModal({
     setSelectedDgeGuidelineId(null);
     setGuidelinesLoading(true);
     setStep('dosage');
-    credentialedFetch(apiPath(`/ingredients/${selected.id}/dosage-guidelines`))
+    const guidelineParams = selected.matched_part_id == null ? '' : `?part_id=${selected.matched_part_id}`;
+    credentialedFetch(apiPath(`/ingredients/${selected.id}/dosage-guidelines${guidelineParams}`))
       .then((response) => {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         return response.json();
@@ -1448,6 +1474,7 @@ function AddProductModal({
     setError('');
     const productParams = new URLSearchParams();
     if (formId !== null) productParams.set('form_id', String(formId));
+    if (ingredient.matched_part_id != null) productParams.set('part_id', String(ingredient.matched_part_id));
     const productQuery = productParams.toString();
     const catalogPromise = credentialedFetch(apiPath(`/ingredients/${ingredient.id}/products${productQuery ? `?${productQuery}` : ''}`))
       .then((response) => {
@@ -1472,20 +1499,30 @@ function AddProductModal({
           .filter((product) => product.user_product_status !== 'rejected' && product.status !== 'rejected')
           .filter((product) => product.published_product_id == null || !catalogIds.has(product.published_product_id))
           .filter((product) => product.ingredients?.some((row) => (
-            (row.ingredient_id === ingredient.id || row.parent_ingredient_id === ingredient.id) &&
+            row.ingredient_id === ingredient.id &&
             Boolean(row.search_relevant ?? 1) &&
+            (ingredient.matched_part_id == null || row.parts?.some((part) => (
+              part.part_id === ingredient.matched_part_id && Boolean(part.search_relevant ?? 1)
+            ))) &&
             (formId === null || row.form_id === formId)
           )))
           .map((product) => {
             const matchingIngredient = product.ingredients?.find((row) => (
-              (row.ingredient_id === ingredient.id || row.parent_ingredient_id === ingredient.id) &&
+              row.ingredient_id === ingredient.id &&
               (formId === null || row.form_id === formId)
             ));
+            const matchingPart = ingredient.matched_part_id == null
+              ? null
+              : matchingIngredient?.parts?.find((part) => part.part_id === ingredient.matched_part_id);
             return {
               ...product,
               product_type: 'user_product' as const,
-              quantity: product.quantity ?? matchingIngredient?.quantity ?? undefined,
-              unit: product.unit ?? matchingIngredient?.unit ?? undefined,
+              quantity: product.quantity ?? matchingPart?.quantity ?? matchingIngredient?.quantity ?? undefined,
+              unit: product.unit ?? matchingPart?.unit ?? matchingIngredient?.unit ?? undefined,
+              basis_quantity: product.basis_quantity ?? matchingPart?.basis_quantity ?? matchingIngredient?.basis_quantity ?? undefined,
+              basis_unit: product.basis_unit ?? matchingPart?.basis_unit ?? matchingIngredient?.basis_unit ?? undefined,
+              matched_part_id: ingredient.matched_part_id,
+              matched_part_name: ingredient.matched_part_name,
               user_product_status: product.user_product_status ?? product.status,
             };
           })
@@ -1587,7 +1624,7 @@ function AddProductModal({
                 </span>
                 <div>
                   <h3 className="ss-dosage-title">
-                    Dosierung für {ingredient.name} festlegen
+                    Dosierung für {ingredient.matched_part_name ?? ingredient.name} festlegen
                   </h3>
                   <p className="ss-dosage-description">
                     {modalIngredientDescription(ingredient)}
@@ -1762,7 +1799,7 @@ function AddProductModal({
             <div className="mb-5">
               <h3 className="text-2xl font-black tracking-tight text-slate-950">Produkt auswählen</h3>
               <p className="mt-1 text-base font-semibold text-slate-500">
-                {ingredient.name} · {dose.value || 1} {dose.unit || normalizeUnitToGerman(ingredient.unit)}
+                {ingredient.matched_part_name ? `${ingredient.matched_part_name} in ${ingredient.name}` : ingredient.name} · {dose.value || 1} {dose.unit || normalizeUnitToGerman(ingredient.unit)}
                 {selectedForm ? ` · ${selectedForm.name}` : ''}
               </p>
             </div>
@@ -3308,6 +3345,10 @@ export function StackWorkspace({
     () => applySequentialSortOrder(activeStack?.products ?? []),
     [activeStack],
   );
+  const activeIngredientTotals = useMemo(
+    () => aggregateStackIngredientTotals(activeProducts),
+    [activeProducts],
+  );
   const displayedProducts = productLayoutPreviewProducts ?? activeProducts;
   const productSections = useMemo(
     () => buildProductSections(displayedProducts, activeCategories, productSortMode, productCategoryMode),
@@ -4241,6 +4282,29 @@ export function StackWorkspace({
           >
             {activeDescription}
           </div>
+        )}
+
+        {activeIngredientTotals.length > 0 && (
+          <section
+            aria-label="Tägliche Wirkstoffmengen im Stack"
+            className="mb-6 rounded-2xl border border-slate-200 bg-slate-50 p-5"
+          >
+            <h2 className="text-lg font-black text-slate-950">Wirkstoffe pro Tag</h2>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {activeIngredientTotals.map((ingredient) => (
+                <div key={ingredient.ingredient_id} className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                  <p className="font-black text-slate-900">
+                    {ingredient.ingredient_name}: {formatStackSummaryAmounts(ingredient.totals)}
+                  </p>
+                  {ingredient.parts.map((part) => (
+                    <p key={part.part_id} className="mt-1 pl-3 text-sm font-semibold text-slate-600">
+                      davon {part.part_name}: {formatStackSummaryAmounts(part.totals)}
+                    </p>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </section>
         )}
 
         <div className="ss-section-title ss-products-title">

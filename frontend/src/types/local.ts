@@ -49,15 +49,29 @@ export interface Ingredient {
   external_url?: string;
   matched_form_id?: number | null;
   matched_form_name?: string | null;
+  matched_part_id?: number | null;
+  matched_part_name?: string | null;
 }
 
-export interface IngredientSubIngredient {
-  parent_ingredient_id: number;
-  child_ingredient_id: number;
-  child_name: string;
-  child_unit?: string;
-  prompt_label?: string;
+export interface IngredientPartOption {
+  ingredient_id: number;
+  part_id: number;
+  part_name: string;
+  part_type?: string | null;
+  part_status?: string | null;
   sort_order?: number;
+}
+
+export interface IngredientPartAmount {
+  part_id: number;
+  part_name?: string;
+  part_type?: string | null;
+  part_status?: string | null;
+  quantity?: number | null;
+  unit?: string | null;
+  basis_quantity?: number | null;
+  basis_unit?: string | null;
+  search_relevant?: number | boolean;
 }
 
 export interface ProductIngredient {
@@ -70,6 +84,7 @@ export interface ProductIngredient {
   basis_unit?: string | null;
   is_main?: number;
   search_relevant?: number | boolean;
+  parts?: IngredientPartAmount[];
 }
 
 export interface UserProductIngredient {
@@ -77,11 +92,11 @@ export interface UserProductIngredient {
   form_id?: number | null;
   quantity?: number | null;
   unit?: string | null;
-  basis_quantity: number;
-  basis_unit: string;
+  basis_quantity?: number | null;
+  basis_unit?: string | null;
   search_relevant: number | boolean;
-  parent_ingredient_id?: number | null;
   ingredient_name?: string;
+  parts?: IngredientPartAmount[];
 }
 
 export interface Product {
@@ -107,6 +122,12 @@ export interface Product {
   /** Present on lightweight product-by-ingredient responses. */
   ingredient_id?: number;
   ingredient_name?: string;
+  matched_part_id?: number | null;
+  matched_part_name?: string | null;
+  matched_part_quantity?: number | null;
+  matched_part_unit?: string | null;
+  matched_part_basis_quantity?: number | null;
+  matched_part_basis_unit?: string | null;
   quantity?: number;
   unit?: string;
   basis_quantity?: number | null;

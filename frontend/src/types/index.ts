@@ -119,6 +119,20 @@ export interface Ingredient {
   forms?: IngredientForm[];
   matched_form_id?: number | null;
   matched_form_name?: string | null;
+  matched_part_id?: number | null;
+  matched_part_name?: string | null;
+}
+
+export interface IngredientPartAmount {
+  part_id: number;
+  part_name?: string;
+  part_type?: string | null;
+  part_status?: string | null;
+  quantity?: number | null;
+  unit?: string | null;
+  basis_quantity?: number | null;
+  basis_unit?: string | null;
+  search_relevant?: number | boolean;
 }
 
 export interface ProductIngredient {
@@ -133,6 +147,7 @@ export interface ProductIngredient {
   form_id?: number;
   ingredient_name?: string;
   search_relevant?: number | boolean;
+  parts?: IngredientPartAmount[];
 }
 
 export interface ProductSafetyWarning {
@@ -169,6 +184,12 @@ export interface Product {
   moderation_status: string;
   visibility: string;
   ingredients?: ProductIngredient[];
+  matched_part_id?: number | null;
+  matched_part_name?: string | null;
+  matched_part_quantity?: number | null;
+  matched_part_unit?: string | null;
+  matched_part_basis_quantity?: number | null;
+  matched_part_basis_unit?: string | null;
   is_affiliate?: number;         // 0 or 1
   image_r2_key?: string;
   discontinued_at?: string;

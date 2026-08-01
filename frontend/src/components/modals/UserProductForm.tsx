@@ -1,12 +1,13 @@
-import { type FormEvent, useMemo, useState } from 'react';
+import { type FormEvent, useEffect, useMemo, useState } from 'react';
 import ModalWrapper from './ModalWrapper';
 import ImageCropModal from '../ImageCropModal';
 import SearchBar from '../SearchBar';
 import { Camera, ChevronDown, ChevronUp, Plus, X } from 'lucide-react';
-import { getIngredient, getSubIngredients } from '../../api/ingredients';
+import { getIngredient, getIngredientParts } from '../../api/ingredients';
 import type {
   Ingredient,
-  IngredientSubIngredient,
+  IngredientPartAmount,
+  IngredientPartOption,
   UserProductIngredient as UserProductIngredientType,
 } from '../../types/local';
 
@@ -38,12 +39,23 @@ interface UserProductFormProps {
   initialProduct?: UserProduct;
 }
 
-interface IngredientSubIngredientState {
-  items: IngredientSubIngredient[];
+interface IngredientPartState {
+  items: IngredientPartOption[];
   loading: boolean;
 }
 
-interface IngredientFormRow {
+interface IngredientPartFormRow {
+  partId: number;
+  partName: string;
+  partStatus?: string | null;
+  quantity: string;
+  unit: string;
+  basisQuantity: string;
+  basisUnit: string;
+  searchRelevant: boolean;
+}
+
+export interface IngredientFormRow {
   clientId: string;
   ingredientId: number | null;
   ingredientName: string;
@@ -54,8 +66,7 @@ interface IngredientFormRow {
   basisQuantity: string;
   basisUnit: string;
   searchRelevant: boolean;
-  parentIngredientId: number | null;
-  parentIngredientName?: string;
+  parts: IngredientPartFormRow[];
 }
 
 const JSON_HEADERS: Record<string, string> = {
@@ -92,6 +103,18 @@ const fieldHintClass = 'text-xs text-gray-500 mt-1';
 const makeClientId = () => `ingredient_${Date.now()}_${Math.random().toString(16).slice(2)}`;
 const formatInputNumber = (value: number) => String(value).replace('.', ',');
 
+function massInMilligrams(value: number, unit: string): number | null {
+  const normalized = unit.trim().toLowerCase().replace('μ', 'µ');
+  if (normalized === 'mg') return value;
+  if (normalized === 'g') return value * 1000;
+  if (['µg', 'ug', 'mcg'].includes(normalized)) return value / 1000;
+  return null;
+}
+
+function normalizedBasisUnit(value: string): string {
+  return value.trim().toLocaleLowerCase('de').replace(/\s+/g, ' ');
+}
+
 export default function UserProductForm({ onClose, onSaved, initialProduct }: UserProductFormProps) {
   const isEdit = initialProduct !== undefined;
 
@@ -123,26 +146,21 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
       availableForms: [],
       quantity: ingredient.quantity == null ? '' : formatInputNumber(ingredient.quantity),
       unit: ingredient.unit ?? '',
-      basisQuantity: ingredient.basis_quantity == null ? '1' : formatInputNumber(ingredient.basis_quantity),
+      basisQuantity: ingredient.basis_quantity == null ? '' : formatInputNumber(ingredient.basis_quantity),
       basisUnit: ingredient.basis_unit ?? '',
       searchRelevant: Boolean(ingredient.search_relevant),
-      parentIngredientId: ingredient.parent_ingredient_id ?? null,
+      parts: (ingredient.parts ?? []).map((part) => ({
+        partId: part.part_id,
+        partName: part.part_name ?? `Sub-Wirkstoff ${part.part_id}`,
+        partStatus: part.part_status,
+        quantity: part.quantity == null ? '' : formatInputNumber(part.quantity),
+        unit: part.unit ?? '',
+        basisQuantity: part.basis_quantity == null ? '' : formatInputNumber(part.basis_quantity),
+        basisUnit: part.basis_unit ?? '',
+        searchRelevant: Boolean(part.search_relevant),
+      })),
     }));
-
-    if (mapped.length > 0) {
-      const ingredientNameById = new Map<number, string>();
-      for (const row of mapped) {
-        if (row.ingredientId != null && row.ingredientName) {
-          ingredientNameById.set(row.ingredientId, row.ingredientName);
-        }
-      }
-      mapped.forEach((row) => {
-        if (row.parentIngredientId != null && row.parentIngredientName == null) {
-          row.parentIngredientName = ingredientNameById.get(row.parentIngredientId);
-        }
-      });
-      return mapped;
-    }
+    if (mapped.length > 0) return mapped;
 
     return [
       {
@@ -156,11 +174,11 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
         basisQuantity: '',
         basisUnit: initialProduct?.serving_unit ?? '',
         searchRelevant: true,
-        parentIngredientId: null,
+        parts: [],
       },
     ];
   });
-  const [rowSubIngredients, setRowSubIngredients] = useState<Record<string, IngredientSubIngredientState>>({});
+  const [rowIngredientParts, setRowIngredientParts] = useState<Record<string, IngredientPartState>>({});
 
   const [showCrop, setShowCrop] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -188,7 +206,7 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
     basisQuantity: '',
     basisUnit: defaultBasisUnit(),
     searchRelevant: true,
-    parentIngredientId: null,
+    parts: [],
     ...overrides,
   });
 
@@ -196,16 +214,16 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
     setIngredientRows((rows) => rows.map((row) => (row.clientId === clientId ? { ...row, ...patch } : row)));
   };
 
-  const clearSubIngredientState = (clientId: string) => {
-    setRowSubIngredients((state) => {
+  const clearIngredientPartState = (clientId: string) => {
+    setRowIngredientParts((state) => {
       const next = { ...state };
       delete next[clientId];
       return next;
     });
   };
 
-  const loadSubIngredients = async (clientId: string, ingredientId: number) => {
-    setRowSubIngredients((state) => ({
+  const loadIngredientParts = async (clientId: string, ingredientId: number) => {
+    setRowIngredientParts((state) => ({
       ...state,
       [clientId]: {
         items: [],
@@ -214,16 +232,16 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
     }));
 
     try {
-      const subIngredients = await getSubIngredients(ingredientId);
-      setRowSubIngredients((state) => ({
+      const parts = await getIngredientParts(ingredientId);
+      setRowIngredientParts((state) => ({
         ...state,
         [clientId]: {
-          items: subIngredients,
+          items: parts,
           loading: false,
         },
       }));
     } catch {
-      setRowSubIngredients((state) => ({
+      setRowIngredientParts((state) => ({
         ...state,
         [clientId]: {
           items: [],
@@ -232,6 +250,16 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
       }));
     }
   };
+
+  useEffect(() => {
+    ingredientRows.forEach((row) => {
+      if (row.ingredientId != null && !rowIngredientParts[row.clientId]) {
+        void loadIngredientParts(row.clientId, row.ingredientId);
+      }
+    });
+  // Initial/edit hydration only; selections call the loader directly.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const addIngredientRow = () => {
     if (isIngredientLimitReached) {
@@ -249,7 +277,7 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
       if (next.length > 0) return next;
       return [createIngredientRow()];
     });
-    clearSubIngredientState(clientId);
+    clearIngredientPartState(clientId);
   };
 
   const handleSelectIngredient = async (clientId: string, ingredient: Ingredient) => {
@@ -267,10 +295,9 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
       ingredientName: ingredient.name,
       formId: null,
       availableForms: forms,
-      parentIngredientId: null,
-      parentIngredientName: undefined,
+      parts: [],
     });
-    await loadSubIngredients(clientId, ingredient.id);
+    await loadIngredientParts(clientId, ingredient.id);
   };
 
   const clearIngredientSelection = (clientId: string) => {
@@ -284,10 +311,9 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
       basisQuantity: '',
       basisUnit: defaultBasisUnit(),
       searchRelevant: true,
-      parentIngredientId: null,
-      parentIngredientName: undefined,
+      parts: [],
     });
-    clearSubIngredientState(clientId);
+    clearIngredientPartState(clientId);
   };
 
   const parseDecimal = (value: string): number | null => {
@@ -297,47 +323,50 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
     return Number.isFinite(parsed) ? parsed : null;
   };
 
-  const getSubIngredientState = (clientId: string) => rowSubIngredients[clientId];
+  const getIngredientPartState = (clientId: string) => rowIngredientParts[clientId];
 
-  const handleAddSubIngredient = (parentClientId: string, subIngredient: IngredientSubIngredient) => {
-    if (isIngredientLimitReached) {
-      setError(ROW_LIMIT_MESSAGE);
-      setShowIngredientSection(true);
-      return;
-    }
-
+  const handleAddIngredientPart = (parentClientId: string, part: IngredientPartOption) => {
     setIngredientRows((rows) => {
       const parentRow = rows.find((row) => row.clientId === parentClientId);
       if (!parentRow || parentRow.ingredientId == null) {
         return rows;
       }
 
-      const alreadyAdded = rows.some(
-        (row) =>
-          row.parentIngredientId === parentRow.ingredientId &&
-          row.ingredientId === subIngredient.child_ingredient_id
-      );
+      const alreadyAdded = parentRow.parts.some((entry) => entry.partId === part.part_id);
       if (alreadyAdded) {
-        setError('Dieser Unterwirkstoff wurde bereits hinzugefügt.');
+        setError('Dieser Sub-Wirkstoff wurde bereits hinzugefügt.');
         return rows;
       }
 
       setError('');
-      return [
-        ...rows,
-        createIngredientRow({
-          ingredientId: subIngredient.child_ingredient_id,
-          ingredientName: subIngredient.child_name,
-          unit: subIngredient.child_unit ?? '',
+      return rows.map((row) => row.clientId === parentClientId ? {
+        ...row,
+        parts: [...row.parts, {
+          partId: part.part_id,
+          partName: part.part_name,
+          partStatus: part.part_status,
           quantity: '',
-          basisQuantity: parentRow.basisQuantity,
-          basisUnit: parentRow.basisUnit || defaultBasisUnit(),
+          unit: row.unit,
+          basisQuantity: row.basisQuantity && row.basisUnit ? row.basisQuantity : '',
+          basisUnit: row.basisQuantity && row.basisUnit ? row.basisUnit : '',
           searchRelevant: true,
-          parentIngredientId: parentRow.ingredientId,
-          parentIngredientName: parentRow.ingredientName,
-        }),
-      ];
+        }],
+      } : row);
     });
+  };
+
+  const updateIngredientPart = (clientId: string, partId: number, patch: Partial<IngredientPartFormRow>) => {
+    setIngredientRows((rows) => rows.map((row) => row.clientId === clientId ? {
+      ...row,
+      parts: row.parts.map((part) => part.partId === partId ? { ...part, ...patch } : part),
+    } : row));
+  };
+
+  const removeIngredientPart = (clientId: string, partId: number) => {
+    setIngredientRows((rows) => rows.map((row) => row.clientId === clientId ? {
+      ...row,
+      parts: row.parts.filter((part) => part.partId !== partId),
+    } : row));
   };
 
   interface BuiltIngredientsResult {
@@ -371,6 +400,13 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
       const parsedBasisQuantity = parseDecimal(row.basisQuantity);
       const trimmedBasisUnit = row.basisUnit.trim();
 
+      if (hasBasisQuantity !== hasBasisUnit) {
+        return {
+          ingredients: [],
+          error: `Wirkstoff ${line}: Bezugsmenge und Bezugseinheit müssen gemeinsam angegeben oder beide leer sein.`,
+        };
+      }
+
       if (row.searchRelevant) {
         if (!hasQuantity || !hasUnit) {
           return {
@@ -384,16 +420,10 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
             error: `Wirkstoff ${line}: Die Menge muss größer als 0 sein.`,
           };
         }
-        if (parsedBasisQuantity == null || parsedBasisQuantity <= 0) {
+        if (hasBasisQuantity && (parsedBasisQuantity == null || parsedBasisQuantity <= 0)) {
           return {
             ingredients: [],
-            error: `Wirkstoff ${line}: Bezugsgröße ist für die Suche erforderlich und muss größer als 0 sein.`,
-          };
-        }
-        if (!trimmedBasisUnit) {
-          return {
-            ingredients: [],
-            error: `Wirkstoff ${line}: Bezugsgröße braucht eine Einheit.`,
+            error: `Wirkstoff ${line}: Bezugsgröße muss größer als 0 sein, falls angegeben.`,
           };
         }
       } else {
@@ -425,15 +455,81 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
         };
       }
 
+      const normalizedParts: IngredientPartAmount[] = [];
+      for (const part of row.parts) {
+        const partQuantity = parseDecimal(part.quantity);
+        const partBasisQuantity = parseDecimal(part.basisQuantity);
+        const partUnit = part.unit.trim();
+        const partBasisUnit = part.basisUnit.trim();
+        const hasPartBasisQuantity = part.basisQuantity.trim().length > 0;
+        const hasPartBasisUnit = partBasisUnit.length > 0;
+
+        if (part.searchRelevant && (!partUnit || partQuantity == null || partQuantity <= 0)) {
+          return {
+            ingredients: [],
+            error: `${row.ingredientName}, davon ${part.partName}: Für Suche und Vergleich sind eine positive Menge und Einheit erforderlich.`,
+          };
+        }
+        if (!part.searchRelevant && part.quantity.trim() && (partQuantity == null || partQuantity <= 0)) {
+          return {
+            ingredients: [],
+            error: `${row.ingredientName}, davon ${part.partName}: Die Menge muss größer als 0 sein, falls angegeben.`,
+          };
+        }
+        if (hasPartBasisQuantity !== hasPartBasisUnit) {
+          return {
+            ingredients: [],
+            error: `${row.ingredientName}, davon ${part.partName}: Bezugsmenge und Bezugseinheit müssen gemeinsam angegeben oder beide leer sein.`,
+          };
+        }
+        if (hasPartBasisQuantity && (partBasisQuantity == null || partBasisQuantity <= 0)) {
+          return {
+            ingredients: [],
+            error: `${row.ingredientName}, davon ${part.partName}: Die Bezugsgröße muss positiv sein.`,
+          };
+        }
+        normalizedParts.push({
+          part_id: part.partId,
+          part_name: part.partName,
+          part_status: part.partStatus,
+          quantity: partQuantity,
+          unit: partUnit || null,
+          basis_quantity: partBasisQuantity,
+          basis_unit: partBasisUnit || null,
+          search_relevant: part.searchRelevant ? 1 : 0,
+        });
+      }
+
+      if (parsedQuantity != null && parsedQuantity > 0 && parsedBasisQuantity != null && parsedBasisQuantity > 0) {
+        const parentMass = massInMilligrams(parsedQuantity, row.unit);
+        const parentBasisUnit = normalizedBasisUnit(trimmedBasisUnit);
+        if (parentMass != null && parentBasisUnit) {
+          const comparablePartTotal = normalizedParts.reduce<number | null>((total, part) => {
+            if (total == null || part.quantity == null || !part.unit) return total;
+            const partMass = massInMilligrams(part.quantity, part.unit);
+            const partBasis = part.basis_quantity ?? parsedBasisQuantity;
+            const partBasisUnit = normalizedBasisUnit(part.basis_unit ?? trimmedBasisUnit);
+            if (partMass == null || partBasis <= 0 || partBasisUnit !== parentBasisUnit) return null;
+            return total + (partMass / partBasis);
+          }, 0);
+          if (comparablePartTotal != null && comparablePartTotal > (parentMass / parsedBasisQuantity) + 1e-9) {
+            return {
+              ingredients: [],
+              error: `${row.ingredientName}: Die Summe der vergleichbaren Teilmengen darf die Hauptmenge nicht überschreiten.`,
+            };
+          }
+        }
+      }
+
       normalized.push({
         ingredient_id: ingredientId,
         form_id: row.formId,
         quantity: hasQuantity ? parsedQuantity : null,
         unit: hasUnit ? row.unit.trim() : null,
-        basis_quantity: parsedBasisQuantity == null ? 1 : parsedBasisQuantity,
-        basis_unit: hasBasisUnit ? trimmedBasisUnit : row.basisUnit.trim(),
+        basis_quantity: parsedBasisQuantity,
+        basis_unit: hasBasisUnit ? trimmedBasisUnit : null,
         search_relevant: row.searchRelevant ? 1 : 0,
-        parent_ingredient_id: row.parentIngredientId,
+        parts: normalizedParts,
       });
     }
 
@@ -582,33 +678,99 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
     }
   };
 
-  const renderSubIngredientHint = (row: IngredientFormRow) => {
-    const state = getSubIngredientState(row.clientId);
-    if (!state || (!state.loading && state.items.length === 0)) return null;
+  const renderIngredientParts = (row: IngredientFormRow) => {
+    const state = getIngredientPartState(row.clientId);
+    if ((!state || (!state.loading && state.items.length === 0)) && row.parts.length === 0) return null;
 
-    if (state.loading) {
+    if (state?.loading && row.parts.length === 0) {
       return <p className="text-xs text-gray-500">Weitere Details werden geladen…</p>;
     }
 
-    if (!state.items.length) return null;
+    const availableParts = state?.items ?? [];
 
     return (
       <div className="rounded-lg border border-indigo-100 bg-indigo-50/60 p-2 text-sm">
-        <p className="text-xs text-gray-700">Für diesen Wirkstoff können Details erfasst werden:</p>
+        <p className="text-xs font-semibold text-gray-700">Enthaltene Sub-Wirkstoffe</p>
+        <p className="mt-0.5 text-xs text-gray-500">Teilmengen sind in der Hauptmenge enthalten und werden nicht addiert.</p>
         <div className="mt-2 flex flex-wrap gap-2">
-          {state.items.map((subIngredient) => (
+          {availableParts.filter((part) => !row.parts.some((entry) => entry.partId === part.part_id)).map((part) => (
             <button
-              key={`${row.clientId}-${subIngredient.child_ingredient_id}`}
+              key={`${row.clientId}-${part.part_id}`}
               type="button"
-              onClick={() => handleAddSubIngredient(row.clientId, subIngredient)}
-              disabled={isIngredientLimitReached}
+              onClick={() => handleAddIngredientPart(row.clientId, part)}
               className="inline-flex items-center gap-1 rounded-md border border-indigo-200 bg-white px-2 py-1 text-xs text-indigo-700 transition hover:bg-indigo-50 disabled:cursor-not-allowed disabled:border-gray-200 disabled:text-gray-400"
             >
               <Plus size={12} />
-              {isIngredientLimitReached ? 'Limit erreicht' : `+ ${subIngredient.child_name} hinzufügen`}
+              {`${part.part_name} hinzufügen`}
             </button>
           ))}
         </div>
+        {row.parts.length > 0 && (
+          <div className="mt-3 space-y-2">
+            {row.parts.map((part) => (
+              <fieldset key={part.partId} className="rounded-lg border border-indigo-100 bg-white p-2">
+                <legend className="px-1 text-xs font-semibold text-indigo-800">
+                  davon {part.partName}
+                  {part.partStatus && part.partStatus !== 'active' ? ` (${part.partStatus === 'deprecated' ? 'veraltet' : 'inaktiv'})` : ''}
+                </legend>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto_1fr_1fr_auto]">
+                  <input
+                    aria-label={`Menge ${part.partName}`}
+                    type="number"
+                    value={part.quantity}
+                    onChange={(event) => updateIngredientPart(row.clientId, part.partId, { quantity: event.target.value })}
+                    className={inputClass}
+                    placeholder="Menge"
+                    step="any"
+                    min="0.000001"
+                  />
+                  <input
+                    aria-label={`Einheit ${part.partName}`}
+                    value={part.unit}
+                    onChange={(event) => updateIngredientPart(row.clientId, part.partId, { unit: event.target.value })}
+                    className={inputClass}
+                    placeholder="z. B. mg"
+                  />
+                  <span className="self-center text-xs text-gray-500">pro</span>
+                  <input
+                    aria-label={`Bezugsgröße ${part.partName}`}
+                    type="number"
+                    value={part.basisQuantity}
+                    onChange={(event) => updateIngredientPart(row.clientId, part.partId, { basisQuantity: event.target.value })}
+                    className={inputClass}
+                    placeholder="Basis"
+                    step="any"
+                    min="0.000001"
+                  />
+                  <input
+                    aria-label={`Bezugseinheit ${part.partName}`}
+                    value={part.basisUnit}
+                    onChange={(event) => updateIngredientPart(row.clientId, part.partId, { basisUnit: event.target.value })}
+                    className={inputClass}
+                    placeholder={row.basisUnit || defaultBasisUnit() || 'Einheit'}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeIngredientPart(row.clientId, part.partId)}
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50"
+                    aria-label={`${part.partName} entfernen`}
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+                <label className="mt-2 inline-flex items-center gap-2 text-xs text-gray-600">
+                  <input
+                    type="checkbox"
+                    checked={part.searchRelevant}
+                    onChange={(event) => updateIngredientPart(row.clientId, part.partId, { searchRelevant: event.target.checked })}
+                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  Für Suche und Produktvergleich berücksichtigen
+                </label>
+              </fieldset>
+            ))}
+          </div>
+        )}
       </div>
     );
   };
@@ -678,11 +840,6 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
                       Auswahl löschen
                     </button>
                   )}
-                  {row.parentIngredientId ? (
-                    <p className="text-xs text-gray-500">
-                      Teil von: {row.parentIngredientName ?? `Wirkstoff ${row.parentIngredientId}`}
-                    </p>
-                  ) : null}
                 </div>
                 <button
                   type="button"
@@ -754,7 +911,7 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
                 Für Suche und Produktvergleich berücksichtigen
               </label>
 
-              {renderSubIngredientHint(row)}
+              {renderIngredientParts(row)}
             </div>
           ))}
 

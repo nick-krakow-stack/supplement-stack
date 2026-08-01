@@ -77,6 +77,7 @@ export type PublicKnowledgeArticle = {
   product_note: string | null
   sources: ArticleSource[]
   ingredients: ArticleIngredientRow[]
+  parts: ArticlePartRow[]
   ingredient_ids: number[]
   created_at: string
   updated_at: string
@@ -112,9 +113,20 @@ type ArticleIngredientRow = {
   sort_order: number
 }
 
+type ArticlePartRow = {
+  part_id: number
+  part_name: string
+  part_type: string | null
+  ingredient_id: number
+  ingredient_name: string
+  sort_order: number
+}
+
 export type ProductSafetyWarning = {
   id: number
   ingredient_id: number
+  part_id: number | null
+  part_name: string | null
   short_label: string
   popover_text: string
   severity: 'info' | 'caution' | 'danger'
@@ -127,6 +139,8 @@ type WarningMatchRow = {
   product_id: number
   id: number
   ingredient_id: number
+  part_id: number | null
+  part_name: string | null
   short_label: string
   popover_text: string
   severity: string
@@ -318,6 +332,21 @@ async function loadArticleIngredients(db: D1Database, slug: string): Promise<Art
   return results ?? []
 }
 
+async function loadArticleParts(db: D1Database, slug: string): Promise<ArticlePartRow[]> {
+  if (!(await hasTable(db, 'knowledge_article_parts'))) return []
+  const { results } = await db.prepare(`
+    SELECT kap.part_id, p.name AS part_name, p.type AS part_type,
+           kap.ingredient_id, i.name AS ingredient_name, kap.sort_order
+    FROM knowledge_article_parts kap
+    JOIN ingredient_parts p ON p.id = kap.part_id AND p.status = 'active'
+    JOIN ingredients i ON i.id = kap.ingredient_id
+    JOIN ingredient_part_links l ON l.ingredient_id = kap.ingredient_id AND l.part_id = kap.part_id
+    WHERE kap.article_slug = ?
+    ORDER BY kap.sort_order ASC, p.name ASC, p.id ASC
+  `).bind(slug).all<ArticlePartRow>()
+  return results ?? []
+}
+
 function normalizeMassUnit(unit?: string | null): 'ug' | 'mg' | 'g' | null {
   const normalized = (unit ?? '').trim().toLowerCase().replace(/\u03bc/g, '\u00b5')
   if (['ug', 'mcg', '\u00b5g'].includes(normalized)) return 'ug'
@@ -379,6 +408,8 @@ function groupWarnings(rows: WarningMatchRow[]): Map<number, ProductSafetyWarnin
     warnings.push({
       id: row.id,
       ingredient_id: row.ingredient_id,
+      part_id: row.part_id,
+      part_name: row.part_name,
       short_label: row.short_label,
       popover_text: row.popover_text,
       severity: row.severity === 'danger' || row.severity === 'info' ? row.severity : 'caution',
@@ -410,6 +441,8 @@ export async function loadCatalogProductSafetyWarnings(
       pi.product_id,
       w.id,
       w.ingredient_id,
+      w.part_id,
+      part.name AS part_name,
       w.short_label,
       w.popover_text,
       w.severity,
@@ -417,19 +450,24 @@ export async function loadCatalogProductSafetyWarnings(
       ka.title AS article_title,
       w.min_amount,
       w.unit AS warning_unit,
-      pi.quantity,
-      pi.unit,
-      pi.basis_quantity,
-      pi.basis_unit,
+      CASE WHEN w.part_id IS NULL THEN pi.quantity ELSE pip.quantity END AS quantity,
+      CASE WHEN w.part_id IS NULL THEN pi.unit ELSE pip.unit END AS unit,
+      CASE WHEN w.part_id IS NULL THEN pi.basis_quantity ELSE COALESCE(pip.basis_quantity, pi.basis_quantity) END AS basis_quantity,
+      CASE WHEN w.part_id IS NULL THEN pi.basis_unit ELSE COALESCE(pip.basis_unit, pi.basis_unit) END AS basis_unit,
       p.serving_size,
       p.serving_unit
     FROM ingredient_safety_warnings w
     JOIN product_ingredients pi
       ON pi.ingredient_id = w.ingredient_id
      AND (w.form_id IS NULL OR w.form_id = pi.form_id)
+    LEFT JOIN product_ingredient_parts pip
+      ON pip.product_ingredient_id = pi.id
+     AND pip.part_id = w.part_id
+    LEFT JOIN ingredient_parts part ON part.id = w.part_id
     JOIN products p ON p.id = pi.product_id
     LEFT JOIN knowledge_articles ka ON ka.slug = w.article_slug AND ka.status = 'published'
     WHERE w.active = 1
+      AND (w.part_id IS NULL OR (pip.id IS NOT NULL AND part.status = 'active'))
       AND pi.product_id IN (${placeholders})
     ORDER BY pi.product_id ASC, w.id ASC
   `).bind(...ids).all<WarningMatchRow>()
@@ -450,6 +488,8 @@ export async function loadUserProductSafetyWarnings(
       upi.user_product_id AS product_id,
       w.id,
       w.ingredient_id,
+      w.part_id,
+      part.name AS part_name,
       w.short_label,
       w.popover_text,
       w.severity,
@@ -457,19 +497,24 @@ export async function loadUserProductSafetyWarnings(
       ka.title AS article_title,
       w.min_amount,
       w.unit AS warning_unit,
-      upi.quantity,
-      upi.unit,
-      upi.basis_quantity,
-      upi.basis_unit,
+      CASE WHEN w.part_id IS NULL THEN upi.quantity ELSE upip.quantity END AS quantity,
+      CASE WHEN w.part_id IS NULL THEN upi.unit ELSE upip.unit END AS unit,
+      CASE WHEN w.part_id IS NULL THEN upi.basis_quantity ELSE COALESCE(upip.basis_quantity, upi.basis_quantity) END AS basis_quantity,
+      CASE WHEN w.part_id IS NULL THEN upi.basis_unit ELSE COALESCE(upip.basis_unit, upi.basis_unit) END AS basis_unit,
       up.serving_size,
       up.serving_unit
     FROM ingredient_safety_warnings w
     JOIN user_product_ingredients upi
       ON upi.ingredient_id = w.ingredient_id
      AND (w.form_id IS NULL OR w.form_id = upi.form_id)
+    LEFT JOIN user_product_ingredient_parts upip
+      ON upip.user_product_ingredient_id = upi.id
+     AND upip.part_id = w.part_id
+    LEFT JOIN ingredient_parts part ON part.id = w.part_id
     JOIN user_products up ON up.id = upi.user_product_id
     LEFT JOIN knowledge_articles ka ON ka.slug = w.article_slug AND ka.status = 'published'
     WHERE w.active = 1
+      AND (w.part_id IS NULL OR upip.id IS NOT NULL)
       AND upi.user_product_id IN (${placeholders})
     ORDER BY upi.user_product_id ASC, w.id ASC
   `).bind(...ids).all<WarningMatchRow>()
@@ -557,6 +602,7 @@ async function loadPublishedKnowledgeArticleLegacy(
 
   if (!article) return null
   const ingredients = await loadArticleIngredients(db, article.slug)
+  const parts = await loadArticleParts(db, article.slug)
   const ingredientIds = ingredients.map((ingredient) => ingredient.ingredient_id)
   const sources = await loadArticleSources(db, article.slug, article.sources_json, {
     articleLayer: article.article_layer,
@@ -579,6 +625,7 @@ async function loadPublishedKnowledgeArticleLegacy(
     product_note: article.product_note,
     sources,
     ingredients,
+    parts,
     ingredient_ids: ingredientIds,
     created_at: article.created_at,
     updated_at: article.updated_at,
@@ -599,6 +646,7 @@ async function loadPublishedKnowledgeArticleCurrentSchema(
   const [
     articleResult,
     ingredientResult,
+    partResult,
     sourceResult,
     relationTargetResult,
     interpretationTargetResult,
@@ -633,6 +681,16 @@ async function loadPublishedKnowledgeArticleCurrentSchema(
       LEFT JOIN ingredients i ON i.id = kai.ingredient_id
       WHERE kai.article_slug = ?
       ORDER BY kai.sort_order ASC, i.name ASC
+    `).bind(slug),
+    db.prepare(`
+      SELECT kap.part_id, p.name AS part_name, p.type AS part_type,
+             kap.ingredient_id, i.name AS ingredient_name, kap.sort_order
+      FROM knowledge_article_parts kap
+      JOIN ingredient_parts p ON p.id = kap.part_id AND p.status = 'active'
+      JOIN ingredients i ON i.id = kap.ingredient_id
+      JOIN ingredient_part_links l ON l.ingredient_id = kap.ingredient_id AND l.part_id = kap.part_id
+      WHERE kap.article_slug = ?
+      ORDER BY kap.sort_order ASC, p.name ASC, p.id ASC
     `).bind(slug),
     db.prepare(`
       SELECT label, url, sort_order
@@ -704,6 +762,7 @@ async function loadPublishedKnowledgeArticleCurrentSchema(
   const article = batchRows<KnowledgeArticleRow>(articleResult)[0]
   if (!article) return null
   const ingredients = batchRows<ArticleIngredientRow>(ingredientResult)
+  const parts = batchRows<ArticlePartRow>(partResult)
   const targetRows = [
     ...batchRows<InternalSourceArticleRow>(relationTargetResult),
     ...batchRows<InternalSourceArticleRow>(interpretationTargetResult),
@@ -731,6 +790,7 @@ async function loadPublishedKnowledgeArticleCurrentSchema(
     product_note: article.product_note,
     sources,
     ingredients,
+    parts,
     ingredient_ids: ingredients.map((ingredient) => ingredient.ingredient_id),
     created_at: article.created_at,
     updated_at: article.updated_at,

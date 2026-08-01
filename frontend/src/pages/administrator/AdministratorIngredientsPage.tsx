@@ -77,7 +77,7 @@ const TASK_FILTERS: Array<{ value: IngredientTaskFilter; label: string }> = [
   { value: 'all', label: 'Alle Bearbeitungsstände' },
   { value: 'forms', label: 'Fehlend: Formen' },
   { value: 'dge', label: 'Fehlend: DGE' },
-  { value: 'precursors', label: 'Fehlend: Wirkstoffteile' },
+  { value: 'precursors', label: 'Fehlend: Sub-Wirkstoffe' },
   { value: 'synonyms', label: 'Fehlend: Synonyme' },
   { value: 'knowledge', label: 'Fehlend: Blog / Wissen' },
   { value: 'dosing', label: 'Fehlend: Richtwerte' },
@@ -118,10 +118,10 @@ const TASK_META: Record<AdminIngredientTaskKey, {
     emptyLabel: 'Keine DGE-Quelle hinterlegt.',
   },
   precursors: {
-    label: 'Wirkstoffteile',
-    noneLabel: 'Keine speziellen Wirkstoffteile vorhanden',
-    doneLabel: 'Wirkstoffteile geprüft',
-    emptyLabel: 'Keine Wirkstoffteile hinterlegt.',
+    label: 'Sub-Wirkstoffe',
+    noneLabel: 'Keine speziellen Sub-Wirkstoffe vorhanden',
+    doneLabel: 'Sub-Wirkstoffe geprüft',
+    emptyLabel: 'Keine Sub-Wirkstoffe hinterlegt.',
   },
   synonyms: {
     label: 'Synonyme',
@@ -903,7 +903,7 @@ function TaskModal({
       setPartResults([]);
       await reload();
       await onChanged();
-      setMessage('Wirkstoffteil hinzugefügt.');
+      setMessage('Sub-Wirkstoff hinzugefügt.');
     } catch (modalError) {
       setError(getErrorMessage(modalError));
     } finally {
@@ -912,7 +912,7 @@ function TaskModal({
   };
 
   const handleDeletePart = async (part: AdminIngredientPartLink) => {
-    if (!window.confirm(`Wirkstoffteil "${part.part_name}" löschen?`)) return;
+    if (!window.confirm(`Sub-Wirkstoff "${part.part_name}" löschen?`)) return;
     setSaving(true);
     setError('');
     setMessage('');
@@ -920,7 +920,7 @@ function TaskModal({
       await deleteIngredientPartLink(ingredient.id, part.part_id);
       await reload();
       await onChanged();
-      setMessage('Wirkstoffteil gelöscht.');
+      setMessage('Sub-Wirkstoff gelöscht.');
     } catch (modalError) {
       setError(getErrorMessage(modalError));
     } finally {
@@ -940,7 +940,7 @@ function TaskModal({
       });
       await reload();
       await onChanged();
-      setMessage('Wirkstoffteil gespeichert.');
+      setMessage('Sub-Wirkstoff gespeichert.');
     } catch (modalError) {
       setError(getErrorMessage(modalError));
     } finally {
@@ -1293,7 +1293,7 @@ function TaskModal({
                       setPartQuery(event.target.value);
                     }}
                     className="admin-input min-w-[220px] flex-1"
-                    placeholder="Wirkstoffteil suchen oder neu eingeben"
+                    placeholder="Sub-Wirkstoff suchen oder neu eingeben"
                     disabled={fieldsDisabled}
                   />
                   <AdminButton type="submit" disabled={fieldsDisabled || !partQuery.trim()}>
@@ -1308,7 +1308,7 @@ function TaskModal({
                     className="admin-select"
                     disabled={fieldsDisabled}
                   >
-                    <option value="">Wirkstoffteil auswählen</option>
+                    <option value="">Sub-Wirkstoff auswählen</option>
                     {partResults.map((entry) => (
                       <option key={entry.id} value={entry.id}>{entry.name}</option>
                     ))}

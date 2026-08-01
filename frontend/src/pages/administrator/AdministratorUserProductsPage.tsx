@@ -56,7 +56,13 @@ function ingredientSummary(product: AdminUserProduct): string {
         ? ''
         : `pro ${ingredient.basis_quantity} ${ingredient.basis_unit}`;
     const relevance = ingredient.search_relevant === false || ingredient.search_relevant === 0 ? 'Zusatzstoff' : '';
-    return [name, quantity, basis, relevance].filter(Boolean).join(' ');
+    const parts = (ingredient.parts ?? [])
+      .map((part) => {
+        const partQuantity = part.quantity == null ? '' : ` ${part.quantity}${part.unit ?? ''}`;
+        return `davon ${part.part_name}${partQuantity}`;
+      })
+      .join(', ');
+    return [[name, quantity, basis, relevance].filter(Boolean).join(' '), parts].filter(Boolean).join(' · ');
   });
   const rest = ingredients.length - visible.length;
   return `${visible.join(' | ')}${rest > 0 ? ` +${rest} weitere` : ''}`;

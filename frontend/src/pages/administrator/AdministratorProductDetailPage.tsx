@@ -12,6 +12,7 @@ import {
   getAdminProduct,
   getAdminProductShopLinks,
   getAllIngredients,
+  getIngredientParts,
   searchIngredients,
   updateAdminProductIngredient,
   updateAdminProductShopLink,
@@ -21,7 +22,9 @@ import {
   type AdminManagedListItem,
   type AdminProductDetail,
   type AdminProductIngredient,
+  type AdminProductIngredientPart,
   type AdminProductIngredientPayload,
+  type AdminIngredientPartLink,
   type AdminProductShopLink,
   type AdminProductShopLinkPayload,
   type AdminProductWarning,
@@ -88,8 +91,19 @@ type ProductIngredientForm = {
   basis_quantity: string;
   basis_unit: string;
   form_id: string;
-  parent_ingredient_id: string;
   is_main: boolean;
+  search_relevant: boolean;
+  parts: ProductIngredientPartForm[];
+};
+
+type ProductIngredientPartForm = {
+  part_id: number;
+  part_name: string;
+  part_status: string | null;
+  quantity: string;
+  unit: string;
+  basis_quantity: string;
+  basis_unit: string;
   search_relevant: boolean;
 };
 
@@ -530,7 +544,7 @@ function linkHealthExplanation(health: AdminProductLinkHealth | null): string | 
   return null;
 }
 
-function formatAmount(row: AdminProductIngredient): string {
+function formatAmount(row: Pick<AdminProductIngredient, 'quantity' | 'unit' | 'basis_quantity' | 'basis_unit'>): string {
   const amount = row.quantity === null ? '-' : `${numberText(row.quantity)} ${row.unit ?? ''}`.trim();
   if (row.basis_quantity === null || !row.basis_unit) return amount;
   return `${amount} pro ${numberText(row.basis_quantity)} ${row.basis_unit}`;
@@ -613,9 +627,22 @@ function emptyProductIngredientForm(): ProductIngredientForm {
     basis_quantity: '',
     basis_unit: '',
     form_id: '',
-    parent_ingredient_id: '',
     is_main: false,
     search_relevant: true,
+    parts: [],
+  };
+}
+
+function formFromProductIngredientPart(part: AdminProductIngredientPart): ProductIngredientPartForm {
+  return {
+    part_id: part.part_id,
+    part_name: part.part_name,
+    part_status: part.part_status,
+    quantity: numberText(part.quantity),
+    unit: part.unit ?? '',
+    basis_quantity: numberText(part.basis_quantity),
+    basis_unit: part.basis_unit ?? '',
+    search_relevant: part.search_relevant !== 0,
   };
 }
 
@@ -627,9 +654,9 @@ function formFromProductIngredient(row: AdminProductIngredient): ProductIngredie
     basis_quantity: numberText(row.basis_quantity),
     basis_unit: row.basis_unit ?? '',
     form_id: row.form_id === null ? '' : String(row.form_id),
-    parent_ingredient_id: row.parent_ingredient_id === null ? '' : String(row.parent_ingredient_id),
     is_main: row.is_main === 1,
     search_relevant: row.search_relevant !== 0,
+    parts: row.parts.map(formFromProductIngredientPart),
   };
 }
 
@@ -660,9 +687,16 @@ function payloadFromProductIngredientForm(form: ProductIngredientForm): AdminPro
     basis_quantity: parseOptionalNumberText(form.basis_quantity, 'Basis-Menge'),
     basis_unit: textValue(form.basis_unit),
     form_id: parseOptionalPositiveIntegerText(form.form_id, 'Form-ID'),
-    parent_ingredient_id: parseOptionalPositiveIntegerText(form.parent_ingredient_id, 'Übergeordneter Wirkstoff'),
     is_main: form.is_main ? 1 : 0,
     search_relevant: form.search_relevant ? 1 : 0,
+    parts: form.parts.map((part) => ({
+      part_id: part.part_id,
+      quantity: parseOptionalNumberText(part.quantity, `${part.part_name}: Menge`),
+      unit: textValue(part.unit),
+      basis_quantity: parseOptionalNumberText(part.basis_quantity, `${part.part_name}: Basis-Menge`),
+      basis_unit: textValue(part.basis_unit),
+      search_relevant: part.search_relevant ? 1 : 0,
+    })),
   };
 }
 
@@ -681,9 +715,6 @@ function productIngredientLookupRows(product: AdminProductDetail): IngredientLoo
   const rows: IngredientLookup[] = [];
   product.ingredients.forEach((row) => {
     rows.push({ id: row.ingredient_id, name: row.ingredient_name, unit: row.ingredient_unit });
-    if (row.parent_ingredient_id && row.parent_ingredient_name) {
-      rows.push({ id: row.parent_ingredient_id, name: row.parent_ingredient_name });
-    }
   });
   return rows;
 }
@@ -848,6 +879,7 @@ export default function AdministratorProductDetailPage() {
   const [servingUnitOptions, setServingUnitOptions] = useState<AdminManagedListItem[]>(FALLBACK_SERVING_UNITS);
   const [servingUnitsLoading, setServingUnitsLoading] = useState(false);
   const [ingredientOptions, setIngredientOptions] = useState<IngredientLookup[]>([]);
+  const [ingredientPartOptions, setIngredientPartOptions] = useState<Record<number, AdminIngredientPartLink[]>>({});
   const [ingredientLookupQuery, setIngredientLookupQuery] = useState('');
   const [ingredientLookupLoading, setIngredientLookupLoading] = useState(false);
   const [ingredientSavingId, setIngredientSavingId] = useState<number | 'create' | 'delete' | null>(null);
@@ -935,6 +967,19 @@ export default function AdministratorProductDetailPage() {
     }
   }, []);
 
+  const loadIngredientPartOptions = useCallback(async (ingredientId: number) => {
+    if (!Number.isInteger(ingredientId) || ingredientId <= 0 || ingredientPartOptions[ingredientId]) return;
+    try {
+      const rows = await getIngredientParts(ingredientId);
+      setIngredientPartOptions((previous) => ({
+        ...previous,
+        [ingredientId]: rows.filter((part) => part.part_status === null || part.part_status === 'active'),
+      }));
+    } catch (errorValue) {
+      setError(getErrorMessage(errorValue));
+    }
+  }, [ingredientPartOptions]);
+
   useEffect(() => {
     void loadProduct();
   }, [loadProduct]);
@@ -959,8 +1004,9 @@ export default function AdministratorProductDetailPage() {
     if (product) {
       setForm(formFromProduct(product));
       setIngredientOptions((previous) => mergeIngredientOptions(previous, productIngredientLookupRows(product)));
+      product.ingredients.forEach((row) => { void loadIngredientPartOptions(row.ingredient_id); });
     }
-  }, [product]);
+  }, [loadIngredientPartOptions, product]);
 
   const updateField = <K extends keyof ProductEditForm>(field: K, value: ProductEditForm[K]) => {
     setForm((previous) => ({ ...previous, [field]: value }));
@@ -1786,7 +1832,12 @@ export default function AdministratorProductDetailPage() {
   ) => (
     <div className="rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg)] p-3">
       <div className="grid gap-3 lg:grid-cols-[minmax(220px,1.5fr)_repeat(4,minmax(90px,1fr))]">
-        {renderIngredientSelect('Wirkstoff', currentForm.ingredient_id, (value) => onChange('ingredient_id', value))}
+        {renderIngredientSelect('Wirkstoff', currentForm.ingredient_id, (value) => {
+          onChange('ingredient_id', value);
+          onChange('parts', []);
+          const ingredientId = Number(value);
+          if (Number.isInteger(ingredientId) && ingredientId > 0) void loadIngredientPartOptions(ingredientId);
+        })}
         <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
           Menge
           <input
@@ -1824,7 +1875,7 @@ export default function AdministratorProductDetailPage() {
           />
         </label>
       </div>
-      <div className="mt-3 grid gap-3 md:grid-cols-[140px_minmax(220px,1fr)_auto]">
+      <div className="mt-3 grid gap-3 md:grid-cols-[140px_auto]">
         <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
           Form-ID
           <input
@@ -1835,12 +1886,6 @@ export default function AdministratorProductDetailPage() {
             placeholder="optional"
           />
         </label>
-        {renderIngredientSelect(
-          'Übergeordneter Wirkstoff',
-          currentForm.parent_ingredient_id,
-          (value) => onChange('parent_ingredient_id', value),
-          true,
-        )}
         <div className="flex flex-wrap items-end gap-3">
           <label className="admin-input inline-flex min-h-[38px] items-center gap-2">
             <input
@@ -1860,6 +1905,58 @@ export default function AdministratorProductDetailPage() {
           </label>
         </div>
       </div>
+      {currentForm.ingredient_id && (
+        <div className="mt-3 rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] bg-white p-3">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <div className="text-sm font-semibold">Enthaltene Sub-Wirkstoffe</div>
+              <p className="admin-muted text-xs">Die Teilmengen sind in der Hauptmenge enthalten und werden nicht addiert.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {(ingredientPartOptions[Number(currentForm.ingredient_id)] ?? [])
+                .filter((part) => !currentForm.parts.some((entry) => entry.part_id === part.part_id))
+                .map((part) => (
+                  <AdminButton
+                    key={part.part_id}
+                    size="sm"
+                    onClick={() => onChange('parts', [...currentForm.parts, {
+                      part_id: part.part_id,
+                      part_name: part.part_name,
+                      part_status: part.part_status,
+                      quantity: '',
+                      unit: currentForm.unit,
+                      basis_quantity: currentForm.basis_quantity,
+                      basis_unit: currentForm.basis_unit,
+                      search_relevant: true,
+                    }])}
+                  >
+                    <Plus size={13} /> {part.part_name}
+                  </AdminButton>
+                ))}
+            </div>
+          </div>
+          {currentForm.parts.length > 0 ? (
+            <div className="mt-3 grid gap-2">
+              {currentForm.parts.map((part) => {
+                const updatePart = (patch: Partial<ProductIngredientPartForm>) => onChange('parts', currentForm.parts.map((entry) => entry.part_id === part.part_id ? { ...entry, ...patch } : entry));
+                return (
+                  <fieldset key={part.part_id} className="rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] p-2">
+                    <legend className="px-1 text-xs font-semibold">davon {part.part_name}{part.part_status && part.part_status !== 'active' ? ' (historisch)' : ''}</legend>
+                    <div className="grid gap-2 md:grid-cols-[1fr_1fr_1fr_1fr_auto_auto]">
+                      <input value={part.quantity} onChange={(event) => updatePart({ quantity: event.target.value })} className="admin-input" inputMode="decimal" placeholder="Menge" aria-label={`Menge ${part.part_name}`} />
+                      <input value={part.unit} onChange={(event) => updatePart({ unit: event.target.value })} className="admin-input" placeholder="Einheit" aria-label={`Einheit ${part.part_name}`} />
+                      <input value={part.basis_quantity} onChange={(event) => updatePart({ basis_quantity: event.target.value })} className="admin-input" inputMode="decimal" placeholder="Basis-Menge" aria-label={`Basis-Menge ${part.part_name}`} />
+                      <input value={part.basis_unit} onChange={(event) => updatePart({ basis_unit: event.target.value })} className="admin-input" placeholder="Basis-Einheit" aria-label={`Basis-Einheit ${part.part_name}`} />
+                      <label className="admin-input inline-flex items-center gap-2 text-xs"><input type="checkbox" checked={part.search_relevant} onChange={(event) => updatePart({ search_relevant: event.target.checked })} /> Suchrelevant</label>
+                      <AdminButton size="sm" variant="danger" onClick={() => onChange('parts', currentForm.parts.filter((entry) => entry.part_id !== part.part_id))}><Trash2 size={13} /></AdminButton>
+                    </div>
+                  </fieldset>
+                );
+              })}
+            </div>
+          ) : <p className="admin-muted mt-2 text-xs">Keine Sub-Wirkstoffe erfasst.</p>}
+        </div>
+      )}
       <div className="mt-3 flex flex-wrap justify-end gap-2">
         {onCancel ? (
           <AdminButton variant="ghost" onClick={onCancel} disabled={busy}>
@@ -1927,7 +2024,7 @@ export default function AdministratorProductDetailPage() {
                         <div>
                           <div className="font-medium">{row.ingredient_name}</div>
                           <div className="admin-muted text-xs">
-                            {row.form_name || 'Basisform'}{row.parent_ingredient_name ? ` - übergeordnet: ${row.parent_ingredient_name}` : ''}
+                            {row.form_name || 'Basisform'}
                           </div>
                         </div>
                         <AdminBadge tone={row.is_main === 1 ? 'ok' : row.search_relevant === 0 ? 'neutral' : 'info'}>
@@ -1935,6 +2032,11 @@ export default function AdministratorProductDetailPage() {
                         </AdminBadge>
                       </div>
                       <p className="admin-mono mt-2 text-xs">{formatAmount(row)}</p>
+                      {row.parts.length > 0 ? (
+                        <ul className="admin-muted mt-2 space-y-1 text-xs">
+                          {row.parts.map((part) => <li key={part.part_id}>davon {part.part_name}: {formatAmount(part)}</li>)}
+                        </ul>
+                      ) : null}
                       {row.effect_summary ? <p className="admin-muted mt-2 text-xs">{row.effect_summary}</p> : null}
                       <div className="mt-3 flex flex-wrap gap-2">
                         <AdminButton size="sm" variant="ghost" onClick={() => handleEditIngredient(row)} disabled={ingredientSavingId !== null}>
@@ -1984,8 +2086,12 @@ export default function AdministratorProductDetailPage() {
                           <div className="admin-muted mt-1 text-xs">
                             ID {row.ingredient_id}
                             {row.form_name ? ` - ${row.form_name}` : ''}
-                            {row.parent_ingredient_name ? ` - übergeordnet: ${row.parent_ingredient_name}` : ''}
                           </div>
+                          {row.parts.length > 0 ? (
+                            <div className="admin-muted mt-1 text-xs">
+                              {row.parts.map((part) => `davon ${part.part_name}: ${formatAmount(part)}`).join(' · ')}
+                            </div>
+                          ) : null}
                         </td>
                         <td className="admin-mono text-[12px]">{formatAmount(row)}</td>
                         <td>

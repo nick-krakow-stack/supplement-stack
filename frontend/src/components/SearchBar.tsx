@@ -197,7 +197,7 @@ export default function SearchBar({ onSelect, placeholder = 'Wirkstoff suchen…
           )}
           {results.map((ingredient, index) => (
             <li
-              key={ingredient.id}
+              key={`${ingredient.id}-${ingredient.matched_part_id ?? 'base'}-${ingredient.matched_form_id ?? 'base'}`}
               id={`suggestion-${index}`}
               role="option"
               aria-selected={index === activeIndex}
@@ -217,6 +217,11 @@ export default function SearchBar({ onSelect, placeholder = 'Wirkstoff suchen…
               {ingredient.matched_form_name && (
                 <span className="text-xs font-semibold text-blue-500 mt-0.5 truncate">
                   Form: {ingredient.matched_form_name}
+                </span>
+              )}
+              {ingredient.matched_part_name && (
+                <span className="text-xs font-semibold text-indigo-600 mt-0.5 truncate">
+                  Enthält: {ingredient.matched_part_name}
                 </span>
               )}
               {ingredient.synonyms && ingredient.synonyms.length > 0 && (

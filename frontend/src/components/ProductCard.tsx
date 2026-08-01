@@ -44,11 +44,22 @@ interface ProductCardProduct {
   ingredient_intake_hint?: string | null;
   ingredients?: Array<{
     ingredient_id: number;
+    ingredient_name?: string;
     quantity?: number | null;
     unit?: string | null;
     basis_quantity?: number | null;
     basis_unit?: string | null;
     search_relevant?: number | boolean;
+    parts?: Array<{
+      part_id: number;
+      part_name?: string;
+      part_status?: string | null;
+      quantity?: number | null;
+      unit?: string | null;
+      basis_quantity?: number | null;
+      basis_unit?: string | null;
+      search_relevant?: number | boolean;
+    }>;
   }>;
   effect_summary?: string;
   warning_title?: string;
@@ -57,6 +68,12 @@ interface ProductCardProduct {
   alternative_note?: string;
   warnings?: ProductSafetyWarning[];
   ingredient_category?: string;
+  matched_part_id?: number | null;
+  matched_part_name?: string | null;
+  matched_part_quantity?: number | null;
+  matched_part_unit?: string | null;
+  matched_part_basis_quantity?: number | null;
+  matched_part_basis_unit?: string | null;
 }
 
 interface ProductWarning {
@@ -103,6 +120,25 @@ function formatAmount(value: number): string {
 
 function formatCompactAmount(value: number): string {
   return new Intl.NumberFormat('de-DE', { maximumFractionDigits: 2 }).format(value);
+}
+
+function visiblePartBreakdown(product: ProductCardProduct): string[] {
+  const nested = (product.ingredients ?? []).flatMap((ingredient) => (ingredient.parts ?? [])
+    .filter((part) => part.part_status == null || part.part_status === 'active')
+    .filter((part) => typeof part.quantity === 'number' && Number.isFinite(part.quantity) && part.quantity > 0 && Boolean(part.unit?.trim()))
+    .map((part) => {
+      const basis = part.basis_quantity != null && part.basis_unit
+        ? ` pro ${formatCompactAmount(part.basis_quantity)} ${part.basis_unit}`
+        : '';
+      return `davon ${part.part_name ?? `Sub-Wirkstoff ${part.part_id}`}: ${formatCompactAmount(part.quantity as number)} ${part.unit}${basis}`;
+    }));
+  if (nested.length > 0 || product.matched_part_id == null || !product.matched_part_name || product.matched_part_quantity == null || !product.matched_part_unit) {
+    return nested;
+  }
+  const basis = product.matched_part_basis_quantity != null && product.matched_part_basis_unit
+    ? ` pro ${formatCompactAmount(product.matched_part_basis_quantity)} ${product.matched_part_basis_unit}`
+    : '';
+  return [`davon ${product.matched_part_name}: ${formatCompactAmount(product.matched_part_quantity)} ${product.matched_part_unit}${basis}`];
 }
 
 const LIST_COUNT_UNITS = [
@@ -519,6 +555,7 @@ export default function ProductCard({
   const monthlyPrice = calcMonthlyPrice(product, price);
   const daysSupply = getDaysSupply(product);
   const dose = getDose(product);
+  const partBreakdown = visiblePartBreakdown(product);
   const effectText = product.ingredient_effect_summary?.trim() ?? product.effect_summary?.trim() ?? '';
   const effects = effectPoints(effectText);
   const intervalDays = getIntakeIntervalDays(product);
@@ -586,6 +623,7 @@ export default function ProductCard({
             <span className="ss-product-list-meta-item">
               <span>Dosierung</span>
               {listDose}
+              {partBreakdown.map((part) => <small key={part} className="block text-[11px] font-medium text-slate-500">{part}</small>)}
             </span>
             <span className="ss-product-list-meta-item">
               <span>Reicht f&uuml;r</span>
@@ -814,6 +852,9 @@ export default function ProductCard({
         <div>
           <div className="text-[10px] font-bold uppercase tracking-[0.4px] text-slate-400 mb-0.5">Dosierung</div>
           <div className="text-[12.5px] font-bold text-slate-700">{dose}</div>
+          {partBreakdown.map((part) => (
+            <div key={part} className="mt-0.5 text-[11px] font-semibold text-slate-500">{part}</div>
+          ))}
           {showInterval && <div className="mt-0.5 text-[11px] font-semibold text-slate-500">{intervalLabel}</div>}
         </div>
         <div>

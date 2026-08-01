@@ -167,7 +167,7 @@ type InteractionTypeFilter = 'all' | 'avoid' | 'caution' | 'danger';
 const TAB_OPTIONS: { key: TabName; label: string }[] = [
   { key: 'overview', label: '\u00dcberblick' },
   { key: 'forms', label: 'Formen' },
-  { key: 'precursors', label: 'Wirkstoffteile' },
+  { key: 'precursors', label: 'Sub-Wirkstoffe' },
   { key: 'dosing', label: 'Dosiswerte' },
   { key: 'research', label: 'Quellen' },
   { key: 'interactions', label: 'Wechselwirkungen' },
@@ -774,14 +774,14 @@ function normalizeStatusForm(detail: AdminIngredientResearchDetail): StatusFormS
 }
 
 function baseDisplayProfile(profiles: AdminIngredientDisplayProfile[]): AdminIngredientDisplayProfile | null {
-  return profiles.find((profile) => profile.form_id === null && profile.sub_ingredient_id === null) ?? null;
+  return profiles.find((profile) => profile.form_id === null && profile.part_id === null) ?? null;
 }
 
 function formDisplayProfile(
   profiles: AdminIngredientDisplayProfile[],
   formId: number,
 ): AdminIngredientDisplayProfile | null {
-  return profiles.find((profile) => profile.form_id === formId && profile.sub_ingredient_id === null) ?? null;
+  return profiles.find((profile) => profile.form_id === formId && profile.part_id === null) ?? null;
 }
 
 function profileToForm(profile: AdminIngredientDisplayProfile | null): ProfileFormState {
@@ -1371,7 +1371,7 @@ export default function AdministratorIngredientDetailPage() {
     try {
       const next = await upsertIngredientDisplayProfile(ingredientId, {
         form_id: null,
-        sub_ingredient_id: null,
+        part_id: null,
         effect_summary: displayProfileForm.effect_summary.trim() || null,
         timing: displayProfileForm.timing.trim() || null,
         timing_note: displayProfileForm.timing_note.trim() || null,
@@ -1381,7 +1381,7 @@ export default function AdministratorIngredientDetailPage() {
       });
       setDetail((previous) => {
         if (!previous) return previous;
-        const filtered = previous.display_profiles.filter((profile) => !(profile.form_id === null && profile.sub_ingredient_id === null));
+        const filtered = previous.display_profiles.filter((profile) => !(profile.form_id === null && profile.part_id === null));
         return { ...previous, display_profiles: [next, ...filtered] };
       });
       setMessage('Basis-Profil gespeichert.');
@@ -1421,7 +1421,7 @@ export default function AdministratorIngredientDetailPage() {
     try {
       const next = await upsertIngredientDisplayProfile(ingredientId, {
         form_id: form.id,
-        sub_ingredient_id: null,
+        part_id: null,
         effect_summary: formState.effect_summary.trim() || null,
         timing: formState.timing.trim() || null,
         timing_note: formState.timing_note.trim() || null,
@@ -1432,7 +1432,7 @@ export default function AdministratorIngredientDetailPage() {
       setDetail((previous) => {
         if (!previous) return previous;
         const filtered = previous.display_profiles.filter(
-          (profile) => !(profile.form_id === form.id && profile.sub_ingredient_id === null),
+          (profile) => !(profile.form_id === form.id && profile.part_id === null),
         );
         return { ...previous, display_profiles: [next, ...filtered] };
       });
@@ -1474,7 +1474,7 @@ export default function AdministratorIngredientDetailPage() {
     const sortOrder = Number(partSortOrder || 0);
     const query = partQuery.trim();
     if (!selectedPartId && !query) {
-      setError('Bitte einen Wirkstoffteil auswahlen oder neu eingeben.');
+      setError('Bitte einen Sub-Wirkstoff auswählen oder neu eingeben.');
       return;
     }
     if (!Number.isInteger(sortOrder)) {
@@ -1504,7 +1504,7 @@ export default function AdministratorIngredientDetailPage() {
       setPartQuery('');
       setPartSearchResults([]);
       setPartSortOrder('0');
-      setMessage('Wirkstoffteil hinzugefuegt.');
+      setMessage('Sub-Wirkstoff hinzugefügt.');
       setTimeout(() => setMessage(''), 2000);
     } catch (err) {
       setError(getErrorMessage(err));
@@ -1531,7 +1531,7 @@ export default function AdministratorIngredientDetailPage() {
         ...previous,
         [updated.part_id]: { sort_order: String(updated.sort_order ?? 0) },
       }));
-      setMessage('Wirkstoffteil gespeichert.');
+      setMessage('Sub-Wirkstoff gespeichert.');
       setTimeout(() => setMessage(''), 2000);
     } catch (err) {
       setError(getErrorMessage(err));
@@ -1552,7 +1552,7 @@ export default function AdministratorIngredientDetailPage() {
         delete next[part.part_id];
         return next;
       });
-      setMessage('Wirkstoffteil entfernt.');
+      setMessage('Sub-Wirkstoff entfernt.');
       setTimeout(() => setMessage(''), 2000);
     } catch (err) {
       setError(getErrorMessage(err));
@@ -2327,13 +2327,13 @@ export default function AdministratorIngredientDetailPage() {
   const renderPartsTab = (parts: AdminIngredientPartLink[]) => (
     <div className="grid gap-4">
       <AdminCard
-        title="Wirkstoffteile"
-        subtitle="Eigenstaendige Wirkstoffteile wie EPA oder DHA verknuepfen, ohne dafuer separate Wirkstoffe anzulegen."
+        title="Sub-Wirkstoffe"
+        subtitle="Eigenständige Sub-Wirkstoffe wie EPA oder DHA verknüpfen, ohne dafür separate Wirkstoffe anzulegen."
       >
         {partLookupError ? <AdminError>{partLookupError}</AdminError> : null}
         <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_120px]">
           <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
-            Wirkstoffteil suchen oder neu eingeben
+            Sub-Wirkstoff suchen oder neu eingeben
             <input
               className="admin-input mt-1"
               value={partQuery}
@@ -2389,14 +2389,14 @@ export default function AdministratorIngredientDetailPage() {
         </div>
       </AdminCard>
 
-      <AdminCard title="Verknuepfte Wirkstoffteile" subtitle={`${parts.length} Eintraege`}>
+      <AdminCard title="Verknüpfte Sub-Wirkstoffe" subtitle={`${parts.length} Einträge`}>
         {partsLoading ? (
           <AdminEmpty>
             <Loader2 size={15} className="mr-2 inline animate-spin" />
-            Lade Wirkstoffteile...
+            Lade Sub-Wirkstoffe...
           </AdminEmpty>
         ) : parts.length === 0 ? (
-          <AdminEmpty>Noch keine Wirkstoffteile hinterlegt.</AdminEmpty>
+          <AdminEmpty>Noch keine Sub-Wirkstoffe hinterlegt.</AdminEmpty>
         ) : (
           <div className="grid gap-2">
             {parts.map((part) => (
@@ -3550,7 +3550,7 @@ export default function AdministratorIngredientDetailPage() {
   ) => {
     const extraProfiles = profiles.filter(
       (entry) =>
-        entry.sub_ingredient_id !== null ||
+        entry.part_id !== null ||
         (entry.form_id !== null && !forms.some((form) => form.id === entry.form_id)),
     );
     return (
@@ -3706,12 +3706,12 @@ export default function AdministratorIngredientDetailPage() {
             <div className="grid gap-2">
               {extraProfiles.map((profile) => (
                 <article
-                  key={`${profile.id}-${profile.form_id ?? 'base'}-${profile.sub_ingredient_id ?? 'base'}`}
+                  key={`${profile.id}-${profile.form_id ?? 'base'}-${profile.part_id ?? 'base'}`}
                   className="rounded-[var(--admin-r-md)] border border-[color:var(--admin-line)] p-3"
                 >
                   <p className="font-medium text-sm">
                     {formProfileName(profile, forms)}
-                    {profile.sub_ingredient_id ? `, Sub-Wirkstoff ${profile.sub_ingredient_id}` : ''}
+                    {profile.part_id ? `, Sub-Wirkstoff ${profile.part_id}` : ''}
                   </p>
                   <p className="admin-muted text-xs mt-1">{profile.effect_summary || '-'}</p>
                 </article>

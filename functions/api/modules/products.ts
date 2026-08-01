@@ -20,13 +20,20 @@ import {
   PRODUCT_IMAGE_MAX_UPLOAD_BYTES,
 } from '../lib/product-images'
 import { attachWarningsToProducts, loadCatalogProductSafetyWarnings } from './knowledge'
+import {
+  buildIngredientPartInsert,
+  loadIngredientPartsByParentRows,
+  parseIngredientParts,
+  reserveIntegerIds,
+  validateIngredientPartReferences,
+  validatePartAmountSum,
+  type IngredientPartInput,
+} from '../lib/ingredient-parts'
 
 const products = new Hono<AppContext>()
 
 const MAX_PRODUCT_INGREDIENT_ROWS = 50
 const AFFILIATE_OWNER_TYPES = ['none', 'nick', 'user'] as const
-const SUB_INGREDIENT_PRODUCT_SCHEMA_ERROR =
-  'Sub-Wirkstoffe werden jetzt ueber ingredient_parts verwaltet; das Produkt-Schema unterstuetzt Sub-Wirkstoffe noch nicht.'
 
 type AffiliateOwnerType = typeof AFFILIATE_OWNER_TYPES[number]
 
@@ -46,13 +53,13 @@ type ProductShopLinkRedirectRow = {
 type ProductIngredientInput = {
   ingredient_id: number
   is_main: boolean
-  quantity: number
-  unit: string
+  quantity: number | null
+  unit: string | null
   basis_quantity: number | null
   basis_unit: string | null
   search_relevant: number
-  parent_ingredient_id: number | null
   form_id: number | null
+  parts: IngredientPartInput[]
 }
 
 type ProductCoreInput = {
@@ -317,12 +324,12 @@ function validateIngredients(value: unknown): { ingredients?: ProductIngredientI
     }
     const ingredient = row as Record<string, unknown>
     const ingredientId = positiveInteger(ingredient.ingredient_id)
-    const quantity = positiveNumber(ingredient.quantity)
-    const unit = requiredText(ingredient.unit)
+    const quantity = optionalPositiveNumberOrNull(ingredient.quantity)
+    const unit = optionalCardText(ingredient.unit)
     const formId = optionalPositiveIntegerOrNull(ingredient.form_id)
     const basisQuantity = optionalPositiveNumberOrNull(ingredient.basis_quantity)
     const basisUnit = optionalCardText(ingredient.basis_unit)
-    const parentIngredientId = optionalPositiveIntegerOrNull(ingredient.parent_ingredient_id)
+    const partsResult = parseIngredientParts(ingredient.parts)
     const isMain = ingredient.is_main === 1 || ingredient.is_main === true
     const searchRelevant = ingredient.search_relevant === undefined
       ? 1
@@ -333,29 +340,45 @@ function validateIngredients(value: unknown): { ingredients?: ProductIngredientI
           : undefined
 
     if (!ingredientId) return { error: 'Jeder Wirkstoff braucht eine gültige ingredient_id.' }
-    if (quantity === undefined) return { error: 'Jeder Wirkstoff braucht eine positive Menge.' }
-    if (!unit) return { error: 'Jeder Wirkstoff braucht eine Einheit.' }
+    if (quantity === undefined && hasOwnKey(ingredient, 'quantity')) {
+      return { error: 'quantity muss groesser als 0 oder null sein.' }
+    }
+    if ((unit === undefined || unit === '') && hasOwnKey(ingredient, 'unit')) {
+      return { error: 'unit darf nicht leer sein.' }
+    }
     if (formId === undefined && hasOwnKey(ingredient, 'form_id')) {
       return { error: 'form_id muss eine positive Ganzzahl sein, wenn sie angegeben wird.' }
     }
     if (basisQuantity === undefined && hasOwnKey(ingredient, 'basis_quantity')) {
       return { error: 'basis_quantity muss groesser als 0 sein, wenn sie angegeben wird.' }
     }
-    if (parentIngredientId === undefined && hasOwnKey(ingredient, 'parent_ingredient_id')) {
-      return { error: 'parent_ingredient_id muss eine positive Ganzzahl sein, wenn sie angegeben wird.' }
+    if (hasOwnKey(ingredient, 'parent_ingredient_id')) {
+      return { error: 'parent_ingredient_id wird nicht mehr unterstützt. Sub-Wirkstoffe gehören in parts.' }
     }
+    if (partsResult.error || !partsResult.parts) return { error: partsResult.error ?? 'Ungültige Sub-Wirkstoffdaten.' }
     if (searchRelevant === undefined) return { error: 'search_relevant muss true/false oder 1/0 sein.' }
+
+    const finalQuantity = quantity ?? null
+    const finalUnit = unit ?? null
+    const finalBasisQuantity = basisQuantity ?? null
+    const finalBasisUnit = basisUnit ?? null
+    if ((finalQuantity === null) !== (finalUnit === null)) {
+      return { error: 'quantity und unit müssen gemeinsam angegeben oder beide null sein.' }
+    }
+    if ((finalBasisQuantity === null) !== (finalBasisUnit === null)) {
+      return { error: 'basis_quantity und basis_unit müssen gemeinsam angegeben oder beide null sein.' }
+    }
 
     ingredients.push({
       ingredient_id: ingredientId,
       is_main: isMain,
-      quantity,
-      unit,
-      basis_quantity: basisQuantity ?? null,
-      basis_unit: basisUnit ?? null,
+      quantity: finalQuantity,
+      unit: finalUnit,
+      basis_quantity: finalBasisQuantity,
+      basis_unit: finalBasisUnit,
       search_relevant: searchRelevant,
-      parent_ingredient_id: parentIngredientId ?? null,
       form_id: formId ?? null,
+      parts: partsResult.parts,
     })
   }
 
@@ -392,10 +415,81 @@ async function validateProductIngredientReferences(
     }
   }
 
-  const parentRows = ingredients.filter((row) => row.parent_ingredient_id !== null)
-  if (parentRows.length > 0) return SUB_INGREDIENT_PRODUCT_SCHEMA_ERROR
+  for (const row of ingredients) {
+    const referenceError = await validateIngredientPartReferences(db, row.ingredient_id, row.parts, { requireActive: true })
+    if (referenceError) return referenceError
+    const amountError = validatePartAmountSum(row, row.parts)
+    if (amountError) return amountError
+  }
 
   return null
+}
+
+async function loadCatalogProductIngredients(
+  db: D1Database,
+  productIds: number[],
+  publicOnly: boolean,
+): Promise<Map<number, Array<Record<string, unknown> & { parts: unknown[] }>>> {
+  const byProduct = new Map<number, Array<Record<string, unknown> & { parts: unknown[] }>>()
+  const ids = [...new Set(productIds.filter((id) => Number.isInteger(id) && id > 0))]
+  if (ids.length === 0) return byProduct
+  const placeholders = ids.map(() => '?').join(', ')
+  const { results } = await db.prepare(`
+    SELECT pi.*, i.name AS ingredient_name, i.unit AS ingredient_unit,
+           i.description AS ingredient_description
+    FROM product_ingredients pi
+    JOIN ingredients i ON i.id = pi.ingredient_id
+    WHERE pi.product_id IN (${placeholders})
+    ORDER BY pi.product_id ASC, pi.is_main DESC, pi.search_relevant DESC, pi.id ASC
+  `).bind(...ids).all<Record<string, unknown>>()
+  const rowIds = (results ?? []).map((row) => Number(row.id)).filter((id) => Number.isInteger(id) && id > 0)
+  const partsByRow = await loadIngredientPartsByParentRows(
+    db,
+    'product_ingredient_parts',
+    'product_ingredient_id',
+    rowIds,
+    { publicOnly },
+  )
+  for (const row of results ?? []) {
+    const productId = Number(row.product_id)
+    const list = byProduct.get(productId) ?? []
+    list.push({ ...row, parts: partsByRow.get(Number(row.id)) ?? [] })
+    byProduct.set(productId, list)
+  }
+  return byProduct
+}
+
+function buildCatalogProductIngredientStatements(
+  db: D1Database,
+  productId: number,
+  parentRowId: number,
+  ingredient: ProductIngredientInput,
+): D1PreparedStatement[] {
+  const statements = [db.prepare(`
+    INSERT INTO product_ingredients (
+      id, product_id, ingredient_id, is_main, quantity, unit, form_id,
+      basis_quantity, basis_unit, search_relevant, parent_ingredient_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+  `).bind(
+    parentRowId,
+    productId,
+    ingredient.ingredient_id,
+    ingredient.is_main ? 1 : 0,
+    ingredient.quantity,
+    ingredient.unit,
+    ingredient.form_id,
+    ingredient.basis_quantity,
+    ingredient.basis_unit,
+    ingredient.search_relevant,
+  )]
+  statements.push(...ingredient.parts.map((part) => buildIngredientPartInsert(
+      db,
+      'product_ingredient_parts',
+      'product_ingredient_id',
+      parentRowId,
+      part,
+    )))
+  return statements
 }
 
 function validateProductPayload(
@@ -512,16 +606,29 @@ products.get('/', async (c) => {
     LEFT JOIN ingredient_display_profiles idp_form
       ON idp_form.ingredient_id = pi.ingredient_id
      AND idp_form.form_id = pi.form_id
+     AND idp_form.part_id IS NULL
      AND idp_form.sub_ingredient_id IS NULL
     LEFT JOIN ingredient_display_profiles idp_base
       ON idp_base.ingredient_id = pi.ingredient_id
      AND idp_base.form_id IS NULL
+     AND idp_base.part_id IS NULL
      AND idp_base.sub_ingredient_id IS NULL
     WHERE p.visibility = 'public'
       AND p.moderation_status = 'approved'`
   ).all<ProductRow>()
+  const ingredientsByProduct = await loadCatalogProductIngredients(
+    c.env.DB,
+    results.map((product) => product.id),
+    true,
+  )
   const warningsByProduct = await loadCatalogProductSafetyWarnings(c.env.DB, results.map((product) => product.id))
-  return c.json({ products: attachWarningsToProducts(results, warningsByProduct) })
+  const withWarnings = attachWarningsToProducts(results, warningsByProduct)
+  return c.json({
+    products: withWarnings.map((product) => ({
+      ...product,
+      ingredients: ingredientsByProduct.get(product.id) ?? [],
+    })),
+  })
 })
 
 // GET /api/products/:id/out
@@ -600,26 +707,20 @@ products.get('/:id', async (c) => {
     LEFT JOIN ingredient_display_profiles idp_form
       ON idp_form.ingredient_id = pi.ingredient_id
      AND idp_form.form_id = pi.form_id
+     AND idp_form.part_id IS NULL
      AND idp_form.sub_ingredient_id IS NULL
     LEFT JOIN ingredient_display_profiles idp_base
       ON idp_base.ingredient_id = pi.ingredient_id
      AND idp_base.form_id IS NULL
+     AND idp_base.part_id IS NULL
      AND idp_base.sub_ingredient_id IS NULL
     WHERE p.id = ?
       AND p.visibility = 'public'
       AND p.moderation_status = 'approved'
   `).bind(id).first<ProductRow>()
   if (!product) return c.json({ error: 'Not found' }, 404)
-  const { results: ingredients } = await c.env.DB.prepare(`
-    SELECT pi.*, i.name as ingredient_name, i.unit as ingredient_unit,
-           i.description as ingredient_description,
-           parent.name as parent_ingredient_name
-    FROM product_ingredients pi
-    JOIN ingredients i ON i.id = pi.ingredient_id
-    LEFT JOIN ingredients parent ON parent.id = pi.parent_ingredient_id
-    WHERE pi.product_id = ?
-    ORDER BY pi.is_main DESC, pi.search_relevant DESC, pi.id ASC
-  `).bind(id).all()
+  const ingredientsByProduct = await loadCatalogProductIngredients(c.env.DB, [Number(id)], true)
+  const ingredients = ingredientsByProduct.get(Number(id)) ?? []
   const { results: recommendations } = await c.env.DB.prepare(
     'SELECT r.* FROM product_recommendations r WHERE r.product_id = ?'
   ).bind(id).all()
@@ -683,13 +784,16 @@ products.post('/', async (c) => {
   ).bind(user.userId).first<{ is_blocked_product_submitter: number | null }>()
   const moderationStatus = submitter?.is_blocked_product_submitter === 1 ? 'blocked' : 'pending'
 
-  const result = await c.env.DB.prepare(
+  const [productId] = await reserveIntegerIds(c.env.DB, 'products', 1)
+  const ingredientRowIds = await reserveIntegerIds(c.env.DB, 'product_ingredients', ingredients.length)
+  const statements: D1PreparedStatement[] = [c.env.DB.prepare(
     `INSERT INTO products (
-      name, brand, form, price, shop_link, image_url, moderation_status, visibility,
+      id, name, brand, form, price, shop_link, image_url, moderation_status, visibility,
       is_affiliate, affiliate_owner_type, affiliate_owner_user_id,
       serving_size, serving_unit, servings_per_container, container_count
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
+    productId,
     data.name,
     data.brand,
     data.form,
@@ -705,28 +809,11 @@ products.post('/', async (c) => {
     data.serving_unit,
     data.servings_per_container,
     data.container_count,
-  ).run()
-  const productId = result.meta.last_row_id
-
-  for (const ing of ingredients) {
-    await c.env.DB.prepare(
-      `INSERT INTO product_ingredients (
-        product_id, ingredient_id, is_main, quantity, unit, form_id,
-        basis_quantity, basis_unit, search_relevant, parent_ingredient_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    ).bind(
-      productId,
-      ing.ingredient_id,
-      ing.is_main ? 1 : 0,
-      ing.quantity,
-      ing.unit,
-      ing.form_id,
-      ing.basis_quantity,
-      ing.basis_unit,
-      ing.search_relevant,
-      ing.parent_ingredient_id,
-    ).run()
-  }
+  )]
+  ingredients.forEach((ingredient, index) => {
+    statements.push(...buildCatalogProductIngredientStatements(c.env.DB, productId, ingredientRowIds[index], ingredient))
+  })
+  await c.env.DB.batch(statements)
 
   return c.json({ productId })
 })
@@ -765,7 +852,7 @@ products.put('/:id', async (c) => {
     const ingredientReferenceError = await validateProductIngredientReferences(c.env.DB, data.ingredients)
     if (ingredientReferenceError) return c.json({ error: ingredientReferenceError }, 400)
   }
-  await c.env.DB.prepare(`
+  const updateStatement = c.env.DB.prepare(`
     UPDATE products SET
       name = COALESCE(?, name),
       brand = COALESCE(?, brand),
@@ -810,30 +897,19 @@ products.put('/:id', async (c) => {
     data.warning_type ?? null,
     data.alternative_note ?? null,
     id,
-  ).run()
+  )
   if (data.ingredients) {
-    await c.env.DB.batch([
+    const ingredientRowIds = await reserveIntegerIds(c.env.DB, 'product_ingredients', data.ingredients.length)
+    const statements: D1PreparedStatement[] = [
+      updateStatement,
       c.env.DB.prepare('DELETE FROM product_ingredients WHERE product_id = ?').bind(id),
-      ...data.ingredients.map((ing) =>
-        c.env.DB.prepare(
-          `INSERT INTO product_ingredients (
-            product_id, ingredient_id, is_main, quantity, unit, form_id,
-            basis_quantity, basis_unit, search_relevant, parent_ingredient_id
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        ).bind(
-          id,
-          ing.ingredient_id,
-          ing.is_main ? 1 : 0,
-          ing.quantity,
-          ing.unit,
-          ing.form_id,
-          ing.basis_quantity,
-          ing.basis_unit,
-          ing.search_relevant,
-          ing.parent_ingredient_id,
-        ),
-      ),
-    ])
+    ]
+    data.ingredients.forEach((ingredient, index) => {
+      statements.push(...buildCatalogProductIngredientStatements(c.env.DB, Number(id), ingredientRowIds[index], ingredient))
+    })
+    await c.env.DB.batch(statements)
+  } else {
+    await updateStatement.run()
   }
   const updated = await c.env.DB.prepare('SELECT * FROM products WHERE id = ?').bind(id).first()
   await logAdminAction(c, {

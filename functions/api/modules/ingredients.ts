@@ -31,6 +31,8 @@ const ingredients = new Hono<AppContext>()
 type DoseRecommendationQueryRow = {
   id: number
   ingredient_id: number
+  part_id: number | null
+  part_name: string | null
   population_id: number
   population_slug: string | null
   population_name_de: string | null
@@ -264,6 +266,7 @@ async function getPartLinksForIngredient(
     FROM ingredient_part_links l
     JOIN ingredient_parts p ON p.id = l.part_id
     WHERE l.ingredient_id = ?
+      AND p.status = 'active'
     ORDER BY l.sort_order ASC, p.name ASC, l.part_id ASC
   `).bind(ingredientId).all<IngredientPartLinkRow>()
   return results
@@ -390,6 +393,8 @@ ingredients.get('/search', async (c) => {
         i.description,
         NULL AS matched_form_id,
         NULL AS matched_form_name,
+        NULL AS matched_part_id,
+        NULL AS matched_part_name,
         0 AS match_rank
       FROM ingredients i
       WHERE instr(${normalizedLookupSql('i.name')}, ?) > 0
@@ -405,6 +410,8 @@ ingredients.get('/search', async (c) => {
         i.description,
         NULL AS matched_form_id,
         NULL AS matched_form_name,
+        NULL AS matched_part_id,
+        NULL AS matched_part_name,
         1 AS match_rank
       FROM ingredient_synonyms s
       JOIN ingredients i ON i.id = s.ingredient_id
@@ -421,12 +428,53 @@ ingredients.get('/search', async (c) => {
         i.description,
         f.id AS matched_form_id,
         f.name AS matched_form_name,
-        2 AS match_rank
+        NULL AS matched_part_id,
+        NULL AS matched_part_name,
+        3 AS match_rank
       FROM ingredient_forms f
       JOIN ingredients i ON i.id = f.ingredient_id
       WHERE instr(${normalizedLookupSql('f.name')}, ?) > 0
         AND i.is_active = 1
         AND NOT EXISTS (SELECT 1 FROM form_shadow fs WHERE fs.id = i.id)
+
+      UNION ALL
+
+      SELECT
+        i.id,
+        i.name,
+        i.unit,
+        i.description,
+        NULL AS matched_form_id,
+        NULL AS matched_form_name,
+        p.id AS matched_part_id,
+        p.name AS matched_part_name,
+        2 AS match_rank
+      FROM ingredient_part_links l
+      JOIN ingredient_parts p ON p.id = l.part_id
+      JOIN ingredients i ON i.id = l.ingredient_id
+      WHERE instr(${normalizedLookupSql('p.name')}, ?) > 0
+        AND p.status = 'active'
+        AND i.is_active = 1
+
+      UNION ALL
+
+      SELECT
+        i.id,
+        i.name,
+        i.unit,
+        i.description,
+        NULL AS matched_form_id,
+        NULL AS matched_form_name,
+        p.id AS matched_part_id,
+        p.name AS matched_part_name,
+        2 AS match_rank
+      FROM ingredient_part_synonyms ps
+      JOIN ingredient_parts p ON p.id = ps.part_id
+      JOIN ingredient_part_links l ON l.part_id = p.id
+      JOIN ingredients i ON i.id = l.ingredient_id
+      WHERE instr(${normalizedLookupSql('ps.synonym')}, ?) > 0
+        AND p.status = 'active'
+        AND i.is_active = 1
     ),
     ranked AS (
       SELECT
@@ -436,8 +484,9 @@ ingredients.get('/search', async (c) => {
           ORDER BY
             CASE
               WHEN matched.match_rank = 0 THEN 0
-              WHEN matched.matched_form_id IS NOT NULL THEN 1
-              ELSE 2
+              WHEN matched.matched_part_id IS NOT NULL THEN 1
+              WHEN matched.matched_form_id IS NOT NULL THEN 2
+              ELSE 3
             END ASC,
             matched.match_rank ASC,
             length(matched.name) ASC,
@@ -446,22 +495,26 @@ ingredients.get('/search', async (c) => {
         ) AS row_rank
       FROM matched
     )
-    SELECT id, name, unit, description, matched_form_id, matched_form_name, match_rank
+    SELECT id, name, unit, description, matched_form_id, matched_form_name,
+           matched_part_id, matched_part_name, match_rank
     FROM ranked
     WHERE row_rank = 1
     ORDER BY
       CASE
         WHEN match_rank = 0 THEN 0
-        WHEN matched_form_id IS NOT NULL THEN 1
-        ELSE 2
+        WHEN matched_part_id IS NOT NULL THEN 1
+        WHEN matched_form_id IS NOT NULL THEN 2
+        ELSE 3
       END ASC,
       match_rank ASC,
       length(name) ASC,
       name ASC
     LIMIT 10
-  `).bind(qNorm, qNorm, qNorm).all<IngredientRow & {
+  `).bind(qNorm, qNorm, qNorm, qNorm, qNorm).all<IngredientRow & {
     matched_form_id: number | null
     matched_form_name: string | null
+    matched_part_id: number | null
+    matched_part_name: string | null
     match_rank: number
   }>()
 
@@ -484,6 +537,8 @@ ingredients.get('/search', async (c) => {
     description: i.description,
     matched_form_id: i.matched_form_id,
     matched_form_name: i.matched_form_name,
+    matched_part_id: i.matched_part_id,
+    matched_part_name: i.matched_part_name,
     synonyms: synMap[i.id] ?? [],
   }))
   return c.json({ ingredients: ingredientsResult })
@@ -533,6 +588,18 @@ ingredients.get('/:id/recommendations', async (c) => {
   if (ingredientId === null) return c.json({ error: 'id must be a positive integer' }, 400)
 
   const language = (c.req.query('language') || 'de').trim().toLowerCase()
+  const rawPartId = c.req.query('part_id')?.trim()
+  const requestedPartId = rawPartId ? parsePositiveInteger(rawPartId) : null
+  if (rawPartId && requestedPartId === null) return c.json({ error: 'part_id must be a positive integer' }, 400)
+  if (requestedPartId !== null) {
+    const linkedPart = await c.env.DB.prepare(`
+      SELECT p.id
+      FROM ingredient_part_links l
+      JOIN ingredient_parts p ON p.id = l.part_id
+      WHERE l.ingredient_id = ? AND l.part_id = ? AND p.status = 'active'
+    `).bind(ingredientId, requestedPartId).first<{ id: number }>()
+    if (!linkedPart) return c.json({ error: 'part_id does not belong to this ingredient or is not active' }, 400)
+  }
 
   try {
     const ingredient = await c.env.DB.prepare(
@@ -548,6 +615,8 @@ ingredients.get('/:id/recommendations', async (c) => {
       SELECT
         dr.id,
         dr.ingredient_id,
+        dr.part_id,
+        part.name AS part_name,
         dr.population_id,
         p.slug AS population_slug,
         p.name_de AS population_name_de,
@@ -591,6 +660,7 @@ ingredients.get('/:id/recommendations', async (c) => {
         i.upper_limit_unit
       FROM dose_recommendations dr
       JOIN ingredients i ON i.id = dr.ingredient_id
+      LEFT JOIN ingredient_parts part ON part.id = dr.part_id
       JOIN populations p ON p.id = dr.population_id
       LEFT JOIN verified_profiles vp ON vp.id = dr.verified_profile_id
       LEFT JOIN dose_recommendation_translations drt
@@ -598,11 +668,13 @@ ingredients.get('/:id/recommendations', async (c) => {
       LEFT JOIN verified_profile_translations vpt
         ON vpt.verified_profile_id = vp.id AND vpt.language = ?
       WHERE dr.ingredient_id = ?
+        AND ((? IS NULL AND dr.part_id IS NULL) OR (? IS NOT NULL AND (dr.part_id = ? OR dr.part_id IS NULL)))
         AND dr.is_active = 1
         AND dr.source_type <> 'user_private'
         AND (dr.source_type <> 'user_public' OR dr.is_public = 1)
         ${stage4VisibilitySql}
       ORDER BY
+        CASE WHEN dr.part_id = ? THEN 0 ELSE 1 END ASC,
         dr.relevance_score DESC,
         CASE dr.source_type
           WHEN 'official' THEN 0
@@ -613,21 +685,32 @@ ingredients.get('/:id/recommendations', async (c) => {
         END ASC,
         COALESCE(dr.published_at, dr.verified_at, dr.updated_at, dr.created_at) DESC,
         dr.id ASC
-    `).bind(language, language, ingredientId).all<DoseRecommendationQueryRow>()
+    `).bind(
+      language,
+      language,
+      ingredientId,
+      requestedPartId,
+      requestedPartId,
+      requestedPartId,
+      requestedPartId,
+    ).all<DoseRecommendationQueryRow>()
 
     const recommendations = rows.map((row) => {
       const upperLimitStatus = getUpperLimitStatus(
         row.dose_max,
         row.unit,
         row.per_kg_body_weight,
-        row.upper_limit,
-        row.upper_limit_unit,
+        row.part_id === null ? row.upper_limit : null,
+        row.part_id === null ? row.upper_limit_unit : null,
         { name: ingredient.name }
       )
 
       return {
         id: row.id,
         ingredient_id: row.ingredient_id,
+        part_id: row.part_id,
+        part_name: row.part_name,
+        is_parent_fallback: requestedPartId !== null && row.part_id === null,
         source: {
           type: row.source_type,
           label: row.translated_source_label ?? row.source_label,
@@ -676,8 +759,8 @@ ingredients.get('/:id/recommendations', async (c) => {
           missing: row.verified_profile_is_verified === null,
         },
         upper_limit: {
-          value: row.upper_limit,
-          unit: row.upper_limit_unit,
+          value: row.part_id === null ? row.upper_limit : null,
+          unit: row.part_id === null ? row.upper_limit_unit : null,
           ...upperLimitStatus,
         },
         metadata: {
@@ -708,7 +791,20 @@ ingredients.get('/:id/recommendations', async (c) => {
 
 // GET /api/ingredients/:id/dosage-guidelines
 ingredients.get('/:id/dosage-guidelines', async (c) => {
-  const id = c.req.param('id')
+  const id = parsePositiveInteger(c.req.param('id'))
+  if (id === null) return c.json({ error: 'id must be a positive integer' }, 400)
+  const rawPartId = c.req.query('part_id')?.trim()
+  const partId = rawPartId ? parsePositiveInteger(rawPartId) : null
+  if (rawPartId && partId === null) return c.json({ error: 'part_id must be a positive integer' }, 400)
+  if (partId !== null) {
+    const linkedPart = await c.env.DB.prepare(`
+      SELECT p.id
+      FROM ingredient_part_links l
+      JOIN ingredient_parts p ON p.id = l.part_id
+      WHERE l.ingredient_id = ? AND l.part_id = ? AND p.status = 'active'
+    `).bind(id, partId).first<{ id: number }>()
+    if (!linkedPart) return c.json({ error: 'part_id does not belong to this ingredient or is not active' }, 400)
+  }
   const recommendationColumns = await getTableColumns(c.env.DB, 'dose_recommendations')
   const stage4VisibilityPredicate = doseRecommendationGuidelineVisibilityPredicate(recommendationColumns, null)
   const stage4VisibilitySql = stage4VisibilityPredicate ? `AND ${stage4VisibilityPredicate}` : ''
@@ -717,6 +813,9 @@ ingredients.get('/:id/dosage-guidelines', async (c) => {
       SELECT
         id,
         ingredient_id,
+        part_id,
+        (SELECT name FROM ingredient_parts WHERE id = dose_recommendations.part_id) AS part_name,
+        CASE WHEN ? IS NOT NULL AND part_id IS NULL THEN 1 ELSE 0 END AS is_parent_fallback,
         source_type,
         CASE
           WHEN source_type = 'study' THEN 'study'
@@ -750,13 +849,14 @@ ingredients.get('/:id/dosage-guidelines', async (c) => {
         ${doseRecommendationOptionalColumnSelect(recommendationColumns, 'stack_visible')}
       FROM dose_recommendations
       WHERE ingredient_id = ?
+        AND ((? IS NULL AND part_id IS NULL) OR (? IS NOT NULL AND (part_id = ? OR part_id IS NULL)))
         AND is_active = 1
         AND source_type <> 'user_private'
         AND (source_type <> 'user_public' OR is_public = 1)
         ${stage4VisibilitySql}
-      ORDER BY is_default DESC, source ASC, relevance_score DESC, id ASC
+      ORDER BY CASE WHEN part_id = ? THEN 0 ELSE 1 END ASC, is_default DESC, source ASC, relevance_score DESC, id ASC
     `
-  ).bind(id).all()
+  ).bind(partId, id, partId, partId, partId, partId).all()
   return c.json({ guidelines })
 })
 
@@ -767,11 +867,23 @@ ingredients.get('/:id/products', async (c) => {
   const rawFormId = c.req.query('form_id')?.trim()
   const formId = rawFormId ? parsePositiveInteger(rawFormId) : null
   if (rawFormId && formId === null) return c.json({ error: 'form_id must be a positive integer' }, 400)
+  const rawPartId = c.req.query('part_id')?.trim()
+  const partId = rawPartId ? parsePositiveInteger(rawPartId) : null
+  if (rawPartId && partId === null) return c.json({ error: 'part_id must be a positive integer' }, 400)
   if (formId !== null) {
     const form = await c.env.DB.prepare(
       'SELECT id FROM ingredient_forms WHERE id = ? AND ingredient_id = ?'
     ).bind(formId, id).first<{ id: number }>()
     if (!form) return c.json({ error: 'form_id does not belong to this ingredient' }, 400)
+  }
+  if (partId !== null) {
+    const part = await c.env.DB.prepare(`
+      SELECT p.id
+      FROM ingredient_part_links l
+      JOIN ingredient_parts p ON p.id = l.part_id
+      WHERE l.ingredient_id = ? AND l.part_id = ? AND p.status = 'active'
+    `).bind(id, partId).first<{ id: number }>()
+    if (!part) return c.json({ error: 'part_id does not belong to this ingredient or is not active' }, 400)
   }
   const recommendationColumns = await getTableColumns(c.env.DB, 'product_recommendations')
   const hasRecommendationSlots = recommendationColumns.has('recommendation_slot') && recommendationColumns.has('shop_link_id')
@@ -812,9 +924,46 @@ ingredients.get('/:id/products', async (c) => {
             END ASC,
             COALESCE(rec.sort_order, 999) ASC,`
     : ''
-  const bindings: Array<number | null> = hasRecommendationSlots
-    ? [id, id, id, id, formId, formId]
-    : [id, id, id, formId, formId]
+  const partSelect = partId === null
+    ? `NULL AS matched_part_id, NULL AS matched_part_name,
+       NULL AS matched_part_quantity, NULL AS matched_part_unit,
+       NULL AS matched_part_basis_quantity, NULL AS matched_part_basis_unit,`
+    : `pip.part_id AS matched_part_id, part.name AS matched_part_name,
+       pip.quantity AS matched_part_quantity, pip.unit AS matched_part_unit,
+       COALESCE(pip.basis_quantity, pi.basis_quantity) AS matched_part_basis_quantity,
+       COALESCE(pip.basis_unit, pi.basis_unit) AS matched_part_basis_unit,`
+  const partJoin = partId === null
+    ? ''
+    : `JOIN product_ingredient_parts pip
+         ON pip.product_ingredient_id = pi.id
+        AND pip.part_id = ?
+        AND pip.search_relevant = 1
+       JOIN ingredient_parts part ON part.id = pip.part_id AND part.status = 'active'`
+  const partDisplaySelect = partId === null
+    ? {
+        effect: 'COALESCE(idp_form.effect_summary, idp_base.effect_summary)',
+        timing: 'COALESCE(idp_form.timing, idp_base.timing)',
+        timingNote: 'COALESCE(idp_form.timing_note, idp_base.timing_note)',
+        intakeHint: 'COALESCE(idp_form.intake_hint, idp_base.intake_hint)',
+      }
+    : {
+        effect: 'COALESCE(idp_part.effect_summary, idp_form.effect_summary, idp_base.effect_summary)',
+        timing: 'COALESCE(idp_part.timing, idp_form.timing, idp_base.timing)',
+        timingNote: 'COALESCE(idp_part.timing_note, idp_form.timing_note, idp_base.timing_note)',
+        intakeHint: 'COALESCE(idp_part.intake_hint, idp_form.intake_hint, idp_base.intake_hint)',
+      }
+  const partDisplayJoin = partId === null
+    ? ''
+    : `LEFT JOIN ingredient_display_profiles idp_part
+         ON idp_part.ingredient_id = pi.ingredient_id
+        AND idp_part.part_id = ?
+        AND idp_part.form_id IS NULL
+        AND idp_part.sub_ingredient_id IS NULL`
+  const bindings: Array<number | null> = [id]
+  if (partId !== null) bindings.push(partId)
+  if (partId !== null) bindings.push(partId)
+  if (hasRecommendationSlots) bindings.push(id)
+  bindings.push(id, formId, formId)
   const { results: products } = await c.env.DB.prepare(`
     WITH matching_rows AS (
       SELECT
@@ -828,12 +977,13 @@ ingredients.get('/:id/products', async (c) => {
         pi.parent_ingredient_id,
         pi.ingredient_id AS matched_ingredient_id,
         pi.form_id,
-        COALESCE(idp_form.effect_summary, idp_base.effect_summary) AS effect_summary,
-        COALESCE(idp_form.effect_summary, idp_base.effect_summary) AS ingredient_effect_summary,
-        COALESCE(idp_form.timing, idp_base.timing, p.timing) AS timing,
-        COALESCE(idp_form.timing, idp_base.timing) AS ingredient_timing,
-        COALESCE(idp_form.timing_note, idp_base.timing_note) AS ingredient_timing_note,
-        COALESCE(idp_form.intake_hint, idp_base.intake_hint) AS ingredient_intake_hint,
+        ${partSelect}
+        ${partDisplaySelect.effect} AS effect_summary,
+        ${partDisplaySelect.effect} AS ingredient_effect_summary,
+        COALESCE(${partDisplaySelect.timing}, p.timing) AS timing,
+        ${partDisplaySelect.timing} AS ingredient_timing,
+        ${partDisplaySelect.timingNote} AS ingredient_timing_note,
+        ${partDisplaySelect.intakeHint} AS ingredient_intake_hint,
         ${recommendationSelect}
         ROW_NUMBER() OVER (
           PARTITION BY p.id
@@ -845,16 +995,20 @@ ingredients.get('/:id/products', async (c) => {
         ) AS row_rank
       FROM products p
       JOIN product_ingredients pi ON pi.product_id = p.id
+      ${partJoin}
+      ${partDisplayJoin}
       LEFT JOIN ingredient_display_profiles idp_form
         ON idp_form.ingredient_id = pi.ingredient_id
        AND idp_form.form_id = pi.form_id
+       AND idp_form.part_id IS NULL
        AND idp_form.sub_ingredient_id IS NULL
       LEFT JOIN ingredient_display_profiles idp_base
         ON idp_base.ingredient_id = pi.ingredient_id
        AND idp_base.form_id IS NULL
+       AND idp_base.part_id IS NULL
        AND idp_base.sub_ingredient_id IS NULL
       ${recommendationJoin}
-      WHERE (pi.ingredient_id = ? OR pi.parent_ingredient_id = ?)
+      WHERE pi.ingredient_id = ?
         AND (? IS NULL OR pi.form_id = ?)
         AND pi.search_relevant = 1
         AND p.visibility = 'public'

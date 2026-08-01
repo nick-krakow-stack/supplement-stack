@@ -12,6 +12,7 @@ import type { Context } from 'hono'
 import { checkRateLimit } from '../lib/helpers'
 import type { AppContext } from '../lib/types'
 import { attachWarningsToProducts, loadCatalogProductSafetyWarnings } from './knowledge'
+import { loadIngredientPartsByParentRows } from '../lib/ingredient-parts'
 
 const demo = new Hono<AppContext>()
 const DEMO_SESSION_RATE_LIMIT = 10
@@ -35,6 +36,7 @@ demo.get('/products', async (c) => {
   const { results: products } = await c.env.DB.prepare(`
     SELECT
       p.*,
+      pi.id AS product_ingredient_id,
       pi.ingredient_id,
       i.name AS ingredient_name,
       i.category AS ingredient_category,
@@ -63,10 +65,12 @@ demo.get('/products', async (c) => {
     LEFT JOIN ingredient_display_profiles idp_form
       ON idp_form.ingredient_id = pi.ingredient_id
      AND idp_form.form_id = pi.form_id
+     AND idp_form.part_id IS NULL
      AND idp_form.sub_ingredient_id IS NULL
     LEFT JOIN ingredient_display_profiles idp_base
       ON idp_base.ingredient_id = pi.ingredient_id
      AND idp_base.form_id IS NULL
+     AND idp_base.part_id IS NULL
      AND idp_base.sub_ingredient_id IS NULL
     WHERE p.visibility = 'public'
       AND p.moderation_status = 'approved'
@@ -75,8 +79,20 @@ demo.get('/products', async (c) => {
       p.id ASC
     LIMIT 7
   `).all<DemoProductRow>()
+  const partsByIngredient = await loadIngredientPartsByParentRows(
+    c.env.DB,
+    'product_ingredient_parts',
+    'product_ingredient_id',
+    products.map((product) => Number(product.product_ingredient_id)),
+    { publicOnly: true },
+  )
   const warningsByProduct = await loadCatalogProductSafetyWarnings(c.env.DB, products.map((product) => product.id))
-  return c.json({ products: attachWarningsToProducts(products, warningsByProduct) })
+  return c.json({
+    products: attachWarningsToProducts(products, warningsByProduct).map((product) => ({
+      ...product,
+      parts: partsByIngredient.get(Number(product.product_ingredient_id)) ?? [],
+    })),
+  })
 })
 
 // POST /api/demo/sessions

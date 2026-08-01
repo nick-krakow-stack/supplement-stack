@@ -1,15 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, Loader2, Plus, RefreshCw, Search, Save, Trash2 } from 'lucide-react';
+import { AlertCircle, Edit3, Loader2, Plus, RefreshCw, Search, Save, Trash2, X } from 'lucide-react';
 import {
+  createIngredientPart,
   createIngredientPartLink,
+  createIngredientPartSynonym,
+  deleteIngredientPart,
   deleteIngredientPartLink,
+  deleteIngredientPartSynonym,
   getAllIngredients,
   getIngredientParts,
   searchIngredientParts,
   searchIngredients,
+  updateIngredientPart,
   updateIngredientPartLink,
+  updateIngredientPartSynonym,
   type AdminIngredientPart,
   type AdminIngredientPartLink,
+  type AdminIngredientPartStatus,
+  type AdminIngredientPartSynonym,
   type IngredientLookup,
 } from '../../api/admin';
 import { AdminBadge, AdminButton, AdminCard, AdminEmpty, AdminError, AdminPageHeader } from './AdminUi';
@@ -62,6 +70,15 @@ function sortPartLinks(rows: AdminIngredientPartLink[]): AdminIngredientPartLink
 }
 
 export default function AdministratorSubIngredientsPage() {
+  const [masterParts, setMasterParts] = useState<AdminIngredientPart[]>([]);
+  const [masterQuery, setMasterQuery] = useState('');
+  const [masterStatus, setMasterStatus] = useState<'' | AdminIngredientPartStatus>('');
+  const [editingPartId, setEditingPartId] = useState<number | 'new' | null>(null);
+  const [masterDraft, setMasterDraft] = useState({ name: '', type: '', status: 'active' as AdminIngredientPartStatus, internal_comment: '' });
+  const [synonymDrafts, setSynonymDrafts] = useState<Record<number, { synonym: string; language: string }>>({});
+  const [newSynonym, setNewSynonym] = useState({ synonym: '', language: 'de' });
+  const [loadingMaster, setLoadingMaster] = useState(false);
+  const [savingMaster, setSavingMaster] = useState(false);
   const [ingredients, setIngredients] = useState<IngredientLookup[]>([]);
   const [ingredientQuery, setIngredientQuery] = useState('');
   const [ingredientSuggestions, setIngredientSuggestions] = useState<IngredientLookup[]>([]);
@@ -115,6 +132,18 @@ export default function AdministratorSubIngredientsPage() {
     }
   }, []);
 
+  const loadMasterParts = useCallback(async (query: string, status: '' | AdminIngredientPartStatus) => {
+    setLoadingMaster(true);
+    setLoadError('');
+    try {
+      setMasterParts(await searchIngredientParts(query, 100, status || undefined));
+    } catch (error) {
+      setLoadError(getErrorMessage(error));
+    } finally {
+      setLoadingMaster(false);
+    }
+  }, []);
+
   const loadPartsForIngredient = useCallback(async (ingredientId: number | null) => {
     if (!ingredientId) {
       setPartLinks([]);
@@ -138,7 +167,8 @@ export default function AdministratorSubIngredientsPage() {
 
   useEffect(() => {
     void loadIngredients();
-  }, [loadIngredients]);
+    void loadMasterParts('', '');
+  }, [loadIngredients, loadMasterParts]);
 
   useEffect(() => {
     void loadPartsForIngredient(selectedIngredientId);
@@ -179,7 +209,7 @@ export default function AdministratorSubIngredientsPage() {
   const selectIngredientFromInput = () => {
     const ingredientId = parseIngredientId(ingredientQuery, ingredients);
     if (!ingredientId) {
-      setActionError('Bitte einen Wirkstoff auswaehlen.');
+      setActionError('Bitte einen Wirkstoff auswählen.');
       return;
     }
     setSelectedIngredientId(ingredientId);
@@ -208,7 +238,7 @@ export default function AdministratorSubIngredientsPage() {
 
   const handleCreatePartLink = async () => {
     if (!selectedIngredientId) {
-      setActionError('Bitte zuerst einen Wirkstoff auswaehlen.');
+      setActionError('Bitte zuerst einen Wirkstoff auswählen.');
       return;
     }
     const sort = Number(sortOrder);
@@ -217,7 +247,7 @@ export default function AdministratorSubIngredientsPage() {
       return;
     }
     if (!selectedPartId && !partQuery.trim()) {
-      setActionError('Bitte einen Wirkstoffteil auswaehlen oder neu eingeben.');
+      setActionError('Bitte einen Sub-Wirkstoff auswählen oder neu eingeben.');
       return;
     }
 
@@ -239,7 +269,7 @@ export default function AdministratorSubIngredientsPage() {
       setPartQuery('');
       setPartResults([]);
       setSortOrder('0');
-      setStatusMessage('Wirkstoffteil verknuepft.');
+      setStatusMessage('Sub-Wirkstoff verknüpft.');
     } catch (error) {
       setActionError(getErrorMessage(error));
     } finally {
@@ -261,7 +291,7 @@ export default function AdministratorSubIngredientsPage() {
       const updated = await updateIngredientPartLink(selectedIngredientId, part.part_id, { sort_order: sort });
       setPartLinks((previous) => sortPartLinks(previous.map((entry) => (entry.part_id === updated.part_id ? updated : entry))));
       setPartDrafts((previous) => ({ ...previous, [updated.part_id]: String(updated.sort_order ?? 0) }));
-      setStatusMessage('Wirkstoffteil gespeichert.');
+      setStatusMessage('Sub-Wirkstoff gespeichert.');
     } catch (error) {
       setActionError(getErrorMessage(error));
     } finally {
@@ -271,7 +301,7 @@ export default function AdministratorSubIngredientsPage() {
 
   const handleDeletePartLink = async (part: AdminIngredientPartLink) => {
     if (!selectedIngredientId) return;
-    const confirmed = window.confirm(`Wirkstoffteil "${part.part_name}" wirklich entfernen?`);
+    const confirmed = window.confirm(`Sub-Wirkstoff "${part.part_name}" wirklich entfernen?`);
     if (!confirmed) return;
 
     setDeletingPartId(part.part_id);
@@ -285,7 +315,7 @@ export default function AdministratorSubIngredientsPage() {
         delete next[part.part_id];
         return next;
       });
-      setStatusMessage('Wirkstoffteil entfernt.');
+      setStatusMessage('Sub-Wirkstoff entfernt.');
     } catch (error) {
       setActionError(getErrorMessage(error));
     } finally {
@@ -293,13 +323,246 @@ export default function AdministratorSubIngredientsPage() {
     }
   };
 
+  const beginCreateMasterPart = () => {
+    setEditingPartId('new');
+    setMasterDraft({ name: '', type: '', status: 'active', internal_comment: '' });
+    setSynonymDrafts({});
+    setNewSynonym({ synonym: '', language: 'de' });
+    setActionError('');
+  };
+
+  const beginEditMasterPart = (part: AdminIngredientPart) => {
+    setEditingPartId(part.id);
+    setMasterDraft({
+      name: part.name,
+      type: part.type ?? '',
+      status: part.status === 'inactive' || part.status === 'deprecated' ? part.status : 'active',
+      internal_comment: part.internal_comment ?? '',
+    });
+    setSynonymDrafts(Object.fromEntries(part.synonyms.map((synonym) => [synonym.id, {
+      synonym: synonym.synonym,
+      language: synonym.language,
+    }])));
+    setNewSynonym({ synonym: '', language: 'de' });
+    setActionError('');
+  };
+
+  const handleSaveMasterPart = async () => {
+    const name = masterDraft.name.trim();
+    if (!name) {
+      setActionError('Bitte einen Namen für den Sub-Wirkstoff eingeben.');
+      return;
+    }
+    setSavingMaster(true);
+    setActionError('');
+    try {
+      const payload = {
+        name,
+        type: masterDraft.type.trim() || null,
+        status: masterDraft.status,
+        internal_comment: masterDraft.internal_comment.trim() || null,
+      };
+      if (editingPartId === 'new') {
+        await createIngredientPart(payload);
+        setStatusMessage('Sub-Wirkstoff angelegt.');
+      } else if (typeof editingPartId === 'number') {
+        await updateIngredientPart(editingPartId, payload);
+        setStatusMessage('Sub-Wirkstoff gespeichert.');
+      }
+      setEditingPartId(null);
+      await Promise.all([
+        loadMasterParts(masterQuery, masterStatus),
+        loadPartsForIngredient(selectedIngredientId),
+      ]);
+    } catch (error) {
+      setActionError(getErrorMessage(error));
+    } finally {
+      setSavingMaster(false);
+    }
+  };
+
+  const handleDeleteMasterPart = async (part: AdminIngredientPart) => {
+    if (!window.confirm(`Sub-Wirkstoff "${part.name}" wirklich löschen? Verknüpfte Einträge können nicht gelöscht werden.`)) return;
+    setSavingMaster(true);
+    setActionError('');
+    try {
+      await deleteIngredientPart(part.id);
+      if (editingPartId === part.id) setEditingPartId(null);
+      await loadMasterParts(masterQuery, masterStatus);
+      setStatusMessage('Sub-Wirkstoff gelöscht.');
+    } catch (error) {
+      setActionError(getErrorMessage(error));
+    } finally {
+      setSavingMaster(false);
+    }
+  };
+
+  const handleSaveSynonym = async (synonym: AdminIngredientPartSynonym) => {
+    const draft = synonymDrafts[synonym.id];
+    if (!draft?.synonym.trim()) {
+      setActionError('Das Synonym darf nicht leer sein.');
+      return;
+    }
+    setSavingMaster(true);
+    try {
+      await updateIngredientPartSynonym(synonym.id, {
+        synonym: draft.synonym.trim(),
+        language: draft.language.trim() || 'de',
+      });
+      await loadMasterParts(masterQuery, masterStatus);
+      setStatusMessage('Synonym gespeichert.');
+    } catch (error) {
+      setActionError(getErrorMessage(error));
+    } finally {
+      setSavingMaster(false);
+    }
+  };
+
+  const handleAddSynonym = async (partId: number) => {
+    if (!newSynonym.synonym.trim()) {
+      setActionError('Bitte ein Synonym eingeben.');
+      return;
+    }
+    setSavingMaster(true);
+    try {
+      await createIngredientPartSynonym(partId, {
+        synonym: newSynonym.synonym.trim(),
+        language: newSynonym.language.trim() || 'de',
+      });
+      setNewSynonym({ synonym: '', language: 'de' });
+      await loadMasterParts(masterQuery, masterStatus);
+      setStatusMessage('Synonym hinzugefügt.');
+    } catch (error) {
+      setActionError(getErrorMessage(error));
+    } finally {
+      setSavingMaster(false);
+    }
+  };
+
+  const handleDeleteSynonym = async (synonymId: number) => {
+    setSavingMaster(true);
+    try {
+      await deleteIngredientPartSynonym(synonymId);
+      await loadMasterParts(masterQuery, masterStatus);
+      setStatusMessage('Synonym entfernt.');
+    } catch (error) {
+      setActionError(getErrorMessage(error));
+    } finally {
+      setSavingMaster(false);
+    }
+  };
+
+  const editingMasterPart = typeof editingPartId === 'number'
+    ? masterParts.find((part) => part.id === editingPartId) ?? null
+    : null;
+
   return (
     <>
       <AdminPageHeader
-        title="Wirkstoffteile"
-        subtitle="Parts einem Wirkstoff zuordnen, ohne separate Wirkstoff-Datensaetze anzulegen."
-        meta={<AdminBadge tone="info">{partLinks.length} Verknuepfungen</AdminBadge>}
+        title="Sub-Wirkstoffe"
+        subtitle="Sub-Wirkstoffe vollständig pflegen und Hauptwirkstoffen eindeutig zuordnen."
+        meta={<AdminBadge tone="info">{partLinks.length} Verknüpfungen</AdminBadge>}
       />
+
+      <AdminCard
+        title="Sub-Wirkstoff-Stammdaten"
+        subtitle="Name, Typ, Status, interne Hinweise und sprachgebundene Synonyme."
+        actions={<AdminButton variant="primary" onClick={beginCreateMasterPart}><Plus size={14} /> Neu</AdminButton>}
+      >
+        <div className="mb-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_180px_auto]">
+          <label className="text-xs font-medium">
+            Stammdaten durchsuchen
+            <input value={masterQuery} onChange={(event) => setMasterQuery(event.target.value)} className="admin-input mt-1" placeholder="Name oder Synonym" />
+          </label>
+          <label className="text-xs font-medium">
+            Status
+            <select value={masterStatus} onChange={(event) => setMasterStatus(event.target.value as '' | AdminIngredientPartStatus)} className="admin-select mt-1">
+              <option value="">alle</option>
+              <option value="active">aktiv</option>
+              <option value="inactive">inaktiv</option>
+              <option value="deprecated">veraltet</option>
+            </select>
+          </label>
+          <div className="flex items-end">
+            <AdminButton onClick={() => void loadMasterParts(masterQuery, masterStatus)} disabled={loadingMaster}>
+              {loadingMaster ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />} Suchen
+            </AdminButton>
+          </div>
+        </div>
+
+        {editingPartId !== null && (
+          <div className="mb-4 rounded-[var(--admin-r-sm)] border border-[color:var(--admin-line)] bg-[color:var(--admin-bg)] p-3">
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="text-xs font-medium">Name
+                <input value={masterDraft.name} onChange={(event) => setMasterDraft((draft) => ({ ...draft, name: event.target.value }))} className="admin-input mt-1" />
+              </label>
+              <label className="text-xs font-medium">Typ
+                <input value={masterDraft.type} onChange={(event) => setMasterDraft((draft) => ({ ...draft, type: event.target.value }))} className="admin-input mt-1" placeholder="z. B. Fettsäure" />
+              </label>
+              <label className="text-xs font-medium">Status
+                <select value={masterDraft.status} onChange={(event) => setMasterDraft((draft) => ({ ...draft, status: event.target.value as AdminIngredientPartStatus }))} className="admin-select mt-1">
+                  <option value="active">aktiv</option>
+                  <option value="inactive">inaktiv</option>
+                  <option value="deprecated">veraltet</option>
+                </select>
+              </label>
+              <label className="text-xs font-medium">Interner Hinweis
+                <textarea value={masterDraft.internal_comment} onChange={(event) => setMasterDraft((draft) => ({ ...draft, internal_comment: event.target.value }))} className="admin-input mt-1" rows={2} />
+              </label>
+            </div>
+            <div className="mt-3 flex justify-end gap-2">
+              <AdminButton variant="ghost" onClick={() => setEditingPartId(null)} disabled={savingMaster}><X size={14} /> Abbrechen</AdminButton>
+              <AdminButton variant="primary" onClick={() => void handleSaveMasterPart()} disabled={savingMaster}><Save size={14} /> Speichern</AdminButton>
+            </div>
+
+            {editingMasterPart && (
+              <div className="mt-4 border-t border-[color:var(--admin-line)] pt-3">
+                <h3 className="text-sm font-semibold">Synonyme</h3>
+                <div className="mt-2 grid gap-2">
+                  {editingMasterPart.synonyms.map((synonym) => {
+                    const draft = synonymDrafts[synonym.id] ?? { synonym: synonym.synonym, language: synonym.language };
+                    return (
+                      <div key={synonym.id} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_100px_auto]">
+                        <input value={draft.synonym} onChange={(event) => setSynonymDrafts((rows) => ({ ...rows, [synonym.id]: { ...draft, synonym: event.target.value } }))} className="admin-input" aria-label={`Synonym ${synonym.synonym}`} />
+                        <input value={draft.language} onChange={(event) => setSynonymDrafts((rows) => ({ ...rows, [synonym.id]: { ...draft, language: event.target.value } }))} className="admin-input" aria-label={`Sprache ${synonym.synonym}`} />
+                        <div className="flex gap-1">
+                          <AdminButton size="sm" onClick={() => void handleSaveSynonym(synonym)} disabled={savingMaster}><Save size={13} /></AdminButton>
+                          <AdminButton size="sm" variant="danger" onClick={() => void handleDeleteSynonym(synonym.id)} disabled={savingMaster}><Trash2 size={13} /></AdminButton>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_100px_auto]">
+                    <input value={newSynonym.synonym} onChange={(event) => setNewSynonym((draft) => ({ ...draft, synonym: event.target.value }))} className="admin-input" placeholder="Neues Synonym" />
+                    <input value={newSynonym.language} onChange={(event) => setNewSynonym((draft) => ({ ...draft, language: event.target.value }))} className="admin-input" placeholder="de" />
+                    <AdminButton size="sm" onClick={() => void handleAddSynonym(editingMasterPart.id)} disabled={savingMaster || !newSynonym.synonym.trim()}><Plus size={13} /> Hinzufügen</AdminButton>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {loadingMaster ? <AdminEmpty>Lade Sub-Wirkstoffe...</AdminEmpty> : masterParts.length === 0 ? <AdminEmpty>Keine Sub-Wirkstoffe gefunden.</AdminEmpty> : (
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead><tr><th>Name</th><th>Typ</th><th>Status</th><th>Synonyme</th><th>Aktionen</th></tr></thead>
+              <tbody>{masterParts.map((part) => (
+                <tr key={part.id}>
+                  <td><div className="font-medium">{part.name}</div><div className="admin-muted text-xs">ID {part.id}</div></td>
+                  <td>{part.type || '-'}</td>
+                  <td><AdminBadge tone={part.status === 'active' ? 'ok' : part.status === 'deprecated' ? 'warn' : 'neutral'}>{part.status === 'active' ? 'aktiv' : part.status === 'deprecated' ? 'veraltet' : 'inaktiv'}</AdminBadge></td>
+                  <td className="max-w-[280px] text-xs">{part.synonyms.map((synonym) => `${synonym.synonym} (${synonym.language})`).join(', ') || '-'}</td>
+                  <td><div className="flex gap-2">
+                    <AdminButton size="sm" variant="ghost" onClick={() => beginEditMasterPart(part)}><Edit3 size={13} /> Bearbeiten</AdminButton>
+                    <AdminButton size="sm" variant="danger" onClick={() => void handleDeleteMasterPart(part)} disabled={savingMaster}><Trash2 size={13} /> Löschen</AdminButton>
+                  </div></td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        )}
+      </AdminCard>
 
       <section className="admin-toolbar">
         <div className="admin-toolbar-inline">
@@ -316,7 +579,7 @@ export default function AdministratorSubIngredientsPage() {
             />
           </label>
           <AdminButton onClick={selectIngredientFromInput} disabled={loadingIngredients || !ingredientQuery.trim()}>
-            Auswaehlen
+            Auswählen
           </AdminButton>
           <AdminButton onClick={() => void loadPartsForIngredient(selectedIngredientId)} disabled={!selectedIngredientId || loadingParts}>
             <RefreshCw size={14} className={loadingParts ? 'animate-spin' : ''} />
@@ -344,12 +607,12 @@ export default function AdministratorSubIngredientsPage() {
       ) : null}
 
       <AdminCard
-        title="Neue Part-Verknuepfung"
-        subtitle={selectedIngredient ? `Ziel-Wirkstoff: ${selectedIngredient.name}` : 'Zuerst einen Wirkstoff auswaehlen.'}
+        title="Neue Sub-Wirkstoff-Verknüpfung"
+        subtitle={selectedIngredient ? `Ziel-Wirkstoff: ${selectedIngredient.name}` : 'Zuerst einen Wirkstoff auswählen.'}
       >
         <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_120px]">
           <label className="text-xs font-medium">
-            Wirkstoffteil suchen oder neu eingeben
+            Sub-Wirkstoff suchen oder neu eingeben
             <input
               value={partQuery}
               onChange={(event) => {
@@ -422,8 +685,8 @@ export default function AdministratorSubIngredientsPage() {
       ) : null}
 
       <AdminCard
-        title="Verknuepfte Wirkstoffteile"
-        subtitle={selectedIngredient ? `${filteredPartLinks.length} Treffer fuer ${selectedIngredient.name}` : 'Kein Wirkstoff ausgewaehlt'}
+        title="Verknüpfte Sub-Wirkstoffe"
+        subtitle={selectedIngredient ? `${filteredPartLinks.length} Treffer für ${selectedIngredient.name}` : 'Kein Wirkstoff ausgewählt'}
         actions={
           <label className="admin-input inline-flex min-h-[34px] items-center gap-2">
             <Search size={13} className="admin-muted" />
@@ -437,20 +700,20 @@ export default function AdministratorSubIngredientsPage() {
         }
       >
         {!selectedIngredientId ? (
-          <AdminEmpty>Wirkstoff auswaehlen, um seine Wirkstoffteile zu pflegen.</AdminEmpty>
+          <AdminEmpty>Wirkstoff auswählen, um seine Sub-Wirkstoffe zu pflegen.</AdminEmpty>
         ) : loadingParts ? (
           <AdminEmpty>
             <Loader2 size={14} className="mr-2 inline animate-spin" />
-            Lade Wirkstoffteile...
+            Lade Sub-Wirkstoffe...
           </AdminEmpty>
         ) : filteredPartLinks.length === 0 ? (
-          <AdminEmpty>Keine Wirkstoffteile gefunden.</AdminEmpty>
+          <AdminEmpty>Keine Sub-Wirkstoffe gefunden.</AdminEmpty>
         ) : (
           <div className="admin-table-wrap">
             <table className="admin-table">
               <thead>
                 <tr>
-                  <th>Wirkstoffteil</th>
+                  <th>Sub-Wirkstoff</th>
                   <th>Typ</th>
                   <th>Status</th>
                   <th>Reihenfolge</th>

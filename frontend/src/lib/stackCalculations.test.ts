@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calculateProductUsage, ingredientAmountPerProductServing } from './stackCalculations';
+import { aggregateStackIngredientTotals, calculateProductUsage, ingredientAmountPerProductServing } from './stackCalculations';
 
 describe('stackCalculations', () => {
   it('keeps the D3 drops calculation interval-aware', () => {
@@ -122,4 +122,120 @@ describe('stackCalculations', () => {
     expect(usage.daysSupply).toBe(30);
     expect(usage.monthlyCost).toBeCloseTo(15, 2);
   });
-}); 
+
+  it('never adds contained sub-ingredient amounts to the parent amount', () => {
+    const usage = calculateProductUsage({
+      dosage_text: '1000 mg täglich',
+      servings_per_container: 60,
+      ingredients: [{
+        ingredient_id: 10,
+        quantity: 1000,
+        unit: 'mg',
+        basis_quantity: 1,
+        basis_unit: 'Kapsel',
+        parts: [
+          { part_id: 1, part_name: 'EPA', quantity: 300, unit: 'mg', basis_quantity: 1, basis_unit: 'Kapsel' },
+          { part_id: 2, part_name: 'DHA', quantity: 200, unit: 'mg', basis_quantity: 1, basis_unit: 'Kapsel' },
+        ],
+      }],
+    });
+
+    expect(usage.servingsPerIntake).toBe(1);
+    expect(usage.matchedIngredient?.quantity).toBe(1000);
+  });
+
+  it('uses only the requested sub-ingredient for an explicit part target', () => {
+    const usage = calculateProductUsage({
+      matched_part_id: 1,
+      dosage_text: '600 mg täglich',
+      servings_per_container: 60,
+      ingredients: [{
+        ingredient_id: 10,
+        quantity: 1000,
+        unit: 'mg',
+        parts: [
+          { part_id: 1, part_name: 'EPA', quantity: 300, unit: 'mg' },
+          { part_id: 2, part_name: 'DHA', quantity: 200, unit: 'mg' },
+        ],
+      }],
+    });
+
+    expect(usage.servingsPerIntake).toBe(2);
+    expect(usage.matchedIngredient).toMatchObject({ part_id: 1, quantity: 300 });
+  });
+
+  it('uses lightweight matched-part fields without replacing the parent amount', () => {
+    const usage = calculateProductUsage({
+      matched_part_id: 1,
+      matched_part_name: 'EPA',
+      matched_part_quantity: 300,
+      matched_part_unit: 'mg',
+      quantity: 1000,
+      unit: 'mg',
+      dosage_text: '600 mg täglich',
+      servings_per_container: 60,
+    });
+
+    expect(usage.servingsPerIntake).toBe(2);
+    expect(usage.matchedIngredient).toMatchObject({ part_id: 1, quantity: 300 });
+  });
+
+  it('aggregates parents and contained parts separately across servings and intervals', () => {
+    const totals = aggregateStackIngredientTotals([
+      {
+        quantity: 1,
+        intake_interval_days: 1,
+        ingredients: [{
+          ingredient_id: 10,
+          ingredient_name: 'Omega-3',
+          quantity: 1000,
+          unit: 'mg',
+          basis_quantity: 1,
+          basis_unit: 'Portion',
+          parts: [
+            { part_id: 1, part_name: 'EPA', quantity: 300, unit: 'mg', basis_quantity: 1, basis_unit: 'Portion' },
+            { part_id: 2, part_name: 'DHA', quantity: 200, unit: 'mg', basis_quantity: 1, basis_unit: 'Portion' },
+          ],
+        }],
+      },
+      {
+        quantity: 2,
+        intake_interval_days: 2,
+        ingredients: [{
+          ingredient_id: 10,
+          ingredient_name: 'Omega-3',
+          quantity: 2,
+          unit: 'g',
+          basis_quantity: 2,
+          basis_unit: 'Portionen',
+          parts: [
+            // No own basis: the effective basis is inherited from Omega-3.
+            { part_id: 1, part_name: 'EPA', quantity: 400, unit: 'mg', basis_quantity: null, basis_unit: null },
+          ],
+        }],
+      },
+    ]);
+
+    expect(totals).toEqual([{
+      ingredient_id: 10,
+      ingredient_name: 'Omega-3',
+      totals: [{ quantity: 2000, unit: 'mg' }],
+      parts: [
+        { part_id: 2, part_name: 'DHA', totals: [{ quantity: 200, unit: 'mg' }] },
+        { part_id: 1, part_name: 'EPA', totals: [{ quantity: 500, unit: 'mg' }] },
+      ],
+    }]);
+  });
+
+  it('keeps incompatible aggregation units in separate totals', () => {
+    const [total] = aggregateStackIngredientTotals([
+      { ingredients: [{ ingredient_id: 1, ingredient_name: 'Test', quantity: 10, unit: 'mg' }] },
+      { ingredients: [{ ingredient_id: 1, ingredient_name: 'Test', quantity: 20, unit: 'IU' }] },
+    ]);
+
+    expect(total.totals).toEqual([
+      { quantity: 20, unit: 'IE' },
+      { quantity: 10, unit: 'mg' },
+    ]);
+  });
+});

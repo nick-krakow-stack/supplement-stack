@@ -31,6 +31,7 @@ functions/.dev.vars
 /_research_raw/
 /outputs/
 /tmp/
+/.tmp/
 /test-results/
 /frontend-vite-*.log
 /frontend-vite-*.err.log

@@ -244,6 +244,25 @@ export function createProductionKnowledgeSchema(harness: ProductionKnowledgeHono
       ingredient_id INTEGER NOT NULL,
       name TEXT NOT NULL
     );
+    CREATE TABLE ingredient_parts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      type TEXT,
+      internal_comment TEXT,
+      status TEXT NOT NULL DEFAULT 'active'
+    );
+    CREATE TABLE ingredient_part_synonyms (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      part_id INTEGER NOT NULL,
+      synonym TEXT NOT NULL,
+      language TEXT NOT NULL DEFAULT 'de'
+    );
+    CREATE TABLE ingredient_part_links (
+      ingredient_id INTEGER NOT NULL,
+      part_id INTEGER NOT NULL,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (ingredient_id, part_id)
+    );
     CREATE TABLE knowledge_articles (
       slug TEXT PRIMARY KEY,
       title TEXT NOT NULL,
@@ -268,6 +287,13 @@ export function createProductionKnowledgeSchema(harness: ProductionKnowledgeHono
       ingredient_id INTEGER NOT NULL,
       sort_order INTEGER NOT NULL DEFAULT 0,
       created_at TEXT
+    );
+    CREATE TABLE knowledge_article_parts (
+      article_slug TEXT NOT NULL,
+      ingredient_id INTEGER NOT NULL,
+      part_id INTEGER NOT NULL,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (article_slug, ingredient_id, part_id)
     );
     CREATE TABLE knowledge_article_sources (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

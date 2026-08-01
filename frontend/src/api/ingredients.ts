@@ -1,6 +1,6 @@
 import { apiClient } from './client';
 import type { Ingredient, IngredientSynonym, IngredientForm, Recommendation } from '../types';
-import type { IngredientSubIngredient } from '../types/local';
+import type { IngredientPartOption } from '../types/local';
 
 export async function searchIngredients(query: string): Promise<{ ingredients: Ingredient[] }> {
   const res = await apiClient.get<{ ingredients: Ingredient[] }>('/ingredients/search', {
@@ -91,54 +91,56 @@ export async function getRecommendations(ingredientId: number): Promise<Recommen
   return res.data;
 }
 
-type RawIngredientSubIngredient = Partial<IngredientSubIngredient & {
+type RawIngredientPart = Partial<IngredientPartOption & {
+  parent_ingredient_id?: number;
+  child_ingredient_id?: number;
+  child_name?: string;
   childIngredientId?: number;
   childName?: string;
-  child_unit?: string;
-  unit?: string;
-  promptLabel?: string;
   sortOrder?: number;
 }>;
 
-function normalizeSubIngredientCandidate(raw: RawIngredientSubIngredient): IngredientSubIngredient | null {
-  const parentIngredientId = raw.parent_ingredient_id ?? -1;
-  const childIngredientId = raw.child_ingredient_id ?? raw.childIngredientId;
-  const childName = raw.child_name ?? raw.childName;
+function normalizeIngredientPart(raw: RawIngredientPart, ingredientId: number): IngredientPartOption | null {
+  const partId = raw.part_id ?? raw.child_ingredient_id ?? raw.childIngredientId;
+  const partName = raw.part_name ?? raw.child_name ?? raw.childName;
 
-  if (!Number.isFinite(childIngredientId as number) || childIngredientId === undefined || childIngredientId === null) {
+  if (!Number.isFinite(partId as number) || partId === undefined || partId === null) {
     return null;
   }
 
-  if (!childName || typeof childName !== 'string' || !childName.trim()) {
+  if (!partName || typeof partName !== 'string' || !partName.trim()) {
     return null;
   }
 
   return {
-    parent_ingredient_id: parentIngredientId,
-    child_ingredient_id: childIngredientId,
-    child_name: childName.trim(),
-    child_unit: raw.child_unit ?? raw.unit,
-    prompt_label: raw.prompt_label ?? raw.promptLabel ?? undefined,
+    ingredient_id: raw.ingredient_id ?? raw.parent_ingredient_id ?? ingredientId,
+    part_id: partId,
+    part_name: partName.trim(),
+    part_type: raw.part_type ?? null,
+    part_status: raw.part_status ?? 'active',
     sort_order: raw.sort_order ?? raw.sortOrder,
   };
 }
 
-export async function getSubIngredients(ingredientId: number): Promise<IngredientSubIngredient[]> {
+export async function getIngredientParts(ingredientId: number): Promise<IngredientPartOption[]> {
   try {
     const res = await apiClient.get<unknown>(`/ingredients/${ingredientId}/sub-ingredients`);
     const rawPayload = res.data as
-      | IngredientSubIngredient[]
-      | { sub_ingredients?: IngredientSubIngredient[]; children?: IngredientSubIngredient[]; data?: IngredientSubIngredient[] };
+      | IngredientPartOption[]
+      | { parts?: IngredientPartOption[]; sub_ingredients?: IngredientPartOption[]; data?: IngredientPartOption[] };
 
     const rawList = Array.isArray(rawPayload)
       ? rawPayload
-      : rawPayload?.sub_ingredients ?? rawPayload?.children ?? rawPayload?.data ?? [];
+      : rawPayload?.parts ?? rawPayload?.sub_ingredients ?? rawPayload?.data ?? [];
 
     return rawList
-      .map((entry) => normalizeSubIngredientCandidate(entry as RawIngredientSubIngredient))
-      .filter((item): item is IngredientSubIngredient => item !== null)
+      .map((entry) => normalizeIngredientPart(entry as RawIngredientPart, ingredientId))
+      .filter((item): item is IngredientPartOption => item !== null && item.part_status !== 'inactive' && item.part_status !== 'deprecated')
       .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
   } catch {
     return [];
   }
 }
+
+/** @deprecated Use getIngredientParts; kept temporarily for import compatibility. */
+export const getSubIngredients = getIngredientParts;

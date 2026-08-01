@@ -42,6 +42,7 @@ const article: PublicKnowledgeArticle = {
   product_note: null,
   sources: [{ source_id: 'source-a', label: 'Institution (2026). Quelle.', url: 'https://example.com/?a=1&b=2' }],
   ingredients: [],
+  parts: [],
   ingredient_ids: [7],
   created_at: '2026-07-15T10:00:00.000Z',
   updated_at: '2026-07-15T11:00:00.000Z',

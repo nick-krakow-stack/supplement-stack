@@ -104,6 +104,16 @@ import {
   refreshKnowledgeOverviewProjection,
   refreshKnowledgeOverviewProjectionIfNeeded,
 } from './knowledge-overview-projection'
+import {
+  buildIngredientPartInsert,
+  loadIngredientPartsByParentRows,
+  parseIngredientParts,
+  reserveIntegerIds,
+  validateIngredientPartReferences,
+  validatePartAmountSum,
+  type IngredientPartInput,
+  type IngredientPartRead,
+} from '../lib/ingredient-parts'
 
 const admin = new Hono<AppContext>()
 
@@ -225,6 +235,15 @@ type UserProductIngredientRow = {
   ingredient_name: string
   ingredient_unit: string | null
   parent_ingredient_name: string | null
+  parts?: IngredientPartRead[]
+}
+
+type IngredientPartSynonymRow = {
+  id: number
+  part_id: number
+  synonym: string
+  language: string
+  created_at: string
 }
 
 type UserProductBulkModerationRow = {
@@ -302,6 +321,8 @@ type DoseRecommendationAdminRow = {
   id: number
   ingredient_id: number
   ingredient_name: string
+  part_id: number | null
+  part_name: string | null
   population_id: number
   population_slug: string | null
   population_name_de: string | null
@@ -404,6 +425,7 @@ type DoseRecommendationSourceMutation = {
 
 type DoseRecommendationMutation = {
   ingredient_id: number
+  part_id: number | null
   population_id: number
   source_type: DoseRecommendationSourceType
   source_label: string
@@ -606,6 +628,8 @@ type IngredientSafetyWarningAdminRow = {
   ingredient_name: string | null
   form_id: number | null
   form_name: string | null
+  part_id: number | null
+  part_name: string | null
   short_label: string
   popover_text: string
   severity: IngredientWarningSeverity
@@ -647,7 +671,7 @@ type IngredientPartAdminRow = {
   internal_comment: string | null
   status: string
   created_at: string | null
-  synonyms: string | null
+  synonyms: IngredientPartSynonymRow[]
   linked_ingredient_count: number
   match_rank?: number
 }
@@ -667,6 +691,7 @@ type IngredientDisplayProfileRow = {
   ingredient_id: number
   form_id: number | null
   sub_ingredient_id: number | null
+  part_id: number | null
   effect_summary: string | null
   timing: string | null
   timing_note: string | null
@@ -681,7 +706,7 @@ type IngredientResearchSourceMutation = Omit<
   IngredientResearchSourceRow,
   'id' | 'created_at' | 'updated_at' | 'version' | 'dose_min' | 'dose_max' | 'dose_unit' | 'per_kg_body_weight'
 >
-type IngredientSafetyWarningMutation = Omit<IngredientSafetyWarningAdminRow, 'id' | 'ingredient_name' | 'form_name' | 'article_title' | 'created_at' | 'version'>
+type IngredientSafetyWarningMutation = Omit<IngredientSafetyWarningAdminRow, 'id' | 'ingredient_name' | 'form_name' | 'part_name' | 'article_title' | 'created_at' | 'version'>
 
 type KnowledgeArticleStatus = typeof KNOWLEDGE_ARTICLE_STATUSES[number]
 type KnowledgeArticleLayer = typeof KNOWLEDGE_ARTICLE_LAYERS[number]
@@ -1075,6 +1100,7 @@ type AdminProductIngredientRow = {
   timing_note: string | null
   intake_hint: string | null
   card_note: string | null
+  parts: IngredientPartRead[]
 }
 
 type ProductIngredientPayload = {
@@ -1086,7 +1112,7 @@ type ProductIngredientPayload = {
   basis_quantity: number | null
   basis_unit: string | null
   search_relevant: number
-  parent_ingredient_id: number | null
+  parts: IngredientPartInput[]
 }
 
 type IngredientResearchExportRow = {
@@ -1574,6 +1600,57 @@ function normalizedPartLookupSql(expression: string): string {
 
 function normalizePartLookupValue(value: string): string {
   return value.toLowerCase().replace(/[\s\-_]/g, '')
+}
+
+async function ingredientPartNormalizedConflict(
+  db: D1Database,
+  value: string,
+  excludedPartId: number | null = null,
+  excludedSynonymId: number | null = null,
+): Promise<{ part_id: number; source: 'name' | 'synonym' } | null> {
+  const normalized = normalizePartLookupValue(value)
+  const name = await db.prepare(`
+    SELECT id AS part_id
+    FROM ingredient_parts
+    WHERE ${normalizedPartLookupSql('name')} = ?
+      AND (? IS NULL OR id <> ?)
+    LIMIT 1
+  `).bind(normalized, excludedPartId, excludedPartId).first<{ part_id: number }>()
+  if (name) return { part_id: name.part_id, source: 'name' }
+  const synonym = await db.prepare(`
+    SELECT part_id
+    FROM ingredient_part_synonyms
+    WHERE ${normalizedPartLookupSql('synonym')} = ?
+      AND (? IS NULL OR id <> ?)
+    LIMIT 1
+  `).bind(
+    normalized,
+    excludedSynonymId,
+    excludedSynonymId,
+  ).first<{ part_id: number }>()
+  return synonym ? { part_id: synonym.part_id, source: 'synonym' } : null
+}
+
+function ingredientPartStatus(value: unknown): 'active' | 'inactive' | 'deprecated' | null {
+  return typeof value === 'string' && ['active', 'inactive', 'deprecated'].includes(value.trim())
+    ? value.trim() as 'active' | 'inactive' | 'deprecated'
+    : null
+}
+
+function ingredientPartLanguage(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const normalized = value.trim().toLowerCase()
+  return /^[a-z]{2}(?:-[a-z]{2})?$/.test(normalized) ? normalized : null
+}
+
+async function loadIngredientPartSynonyms(db: D1Database, partId: number): Promise<IngredientPartSynonymRow[]> {
+  const { results } = await db.prepare(`
+    SELECT id, part_id, synonym, language, created_at
+    FROM ingredient_part_synonyms
+    WHERE part_id = ?
+    ORDER BY language ASC, synonym ASC, id ASC
+  `).bind(partId).all<IngredientPartSynonymRow>()
+  return results ?? []
 }
 
 function adminSearchSubtitle(parts: Array<string | null | undefined>): string | undefined {
@@ -2543,6 +2620,7 @@ async function buildDomainChecks(): Promise<LaunchCheck[]> {
       (data) => data.includes('v=DKIM1') || data.includes('p='),
     ),
   ])
+
   return results
 }
 
@@ -2858,6 +2936,10 @@ function isUniqueConstraintError(error: unknown): boolean {
   return error instanceof Error && /unique|constraint/i.test(error.message)
 }
 
+function isIngredientPartNormalizedConflictError(error: unknown): boolean {
+  return error instanceof Error && /Normalisierte(?:r|s) Part-(?:Name|Synonym) ist bereits vergeben/i.test(error.message)
+}
+
 function normalizeShopHostname(value: string): string | null {
   const raw = value.trim().toLowerCase()
   if (!raw) return null
@@ -3085,7 +3167,7 @@ async function validateProductIngredientPayload(
     'basis_quantity',
     'basis_unit',
     'search_relevant',
-    'parent_ingredient_id',
+    'parts',
     'version',
   ])
   for (const key of Object.keys(body)) {
@@ -3105,14 +3187,7 @@ async function validateProductIngredientPayload(
     return validationError('form_id must belong to the selected ingredient')
   }
 
-  const parentIngredientId = optionalPositiveIntegerField(body, 'parent_ingredient_id')
-  if (!parentIngredientId.ok) return parentIngredientId
-  const finalParentIngredientId = parentIngredientId.value === undefined
-    ? existing?.parent_ingredient_id ?? null
-    : parentIngredientId.value
-  if (finalParentIngredientId !== null && !(await ingredientExists(db, finalParentIngredientId))) {
-    return validationError('parent_ingredient_id must reference an existing ingredient', 404)
-  }
+  if (hasOwnKey(body, 'parent_ingredient_id')) return validationError('parent_ingredient_id wird nicht mehr unterstützt. Sub-Wirkstoffe gehören in parts.')
 
   const quantity = optionalNumberField(body, 'quantity', { min: 0, max: 1000000000 })
   if (!quantity.ok) return quantity
@@ -3129,18 +3204,42 @@ async function validateProductIngredientPayload(
   const searchRelevant = optionalBooleanField(body, 'search_relevant')
   if (!searchRelevant.ok) return searchRelevant
 
+  const parsedParts = hasOwnKey(body, 'parts')
+    ? parseIngredientParts(body.parts)
+    : { parts: existing?.parts ?? [] }
+  if (parsedParts.error || !parsedParts.parts) return validationError(parsedParts.error ?? 'Ungültige Sub-Wirkstoffdaten.')
+  const partReferenceError = await validateIngredientPartReferences(db, rawIngredientId, parsedParts.parts, { requireActive: true })
+  if (partReferenceError) return validationError(partReferenceError)
+  const finalQuantity = quantity.value === undefined ? existing?.quantity ?? null : quantity.value
+  const finalUnit = unit.value === undefined ? existing?.unit ?? null : unit.value
+  const finalBasisQuantity = basisQuantity.value === undefined ? existing?.basis_quantity ?? null : basisQuantity.value
+  const finalBasisUnit = basisUnit.value === undefined ? existing?.basis_unit ?? null : basisUnit.value
+  if ((finalQuantity === null) !== (finalUnit === null)) {
+    return validationError('quantity und unit müssen gemeinsam angegeben oder beide null sein.')
+  }
+  if ((finalBasisQuantity === null) !== (finalBasisUnit === null)) {
+    return validationError('basis_quantity und basis_unit müssen gemeinsam angegeben oder beide null sein.')
+  }
+  const sumError = validatePartAmountSum({
+    quantity: finalQuantity,
+    unit: finalUnit,
+    basis_quantity: finalBasisQuantity,
+    basis_unit: finalBasisUnit,
+  }, parsedParts.parts)
+  if (sumError) return validationError(sumError)
+
   return {
     ok: true,
     value: {
       ingredient_id: rawIngredientId,
       is_main: isMain.value ?? existing?.is_main ?? 0,
-      quantity: quantity.value === undefined ? existing?.quantity ?? null : quantity.value,
-      unit: unit.value === undefined ? existing?.unit ?? null : unit.value,
+      quantity: finalQuantity,
+      unit: finalUnit,
       form_id: finalFormId,
-      basis_quantity: basisQuantity.value === undefined ? existing?.basis_quantity ?? null : basisQuantity.value,
-      basis_unit: basisUnit.value === undefined ? existing?.basis_unit ?? null : basisUnit.value,
+      basis_quantity: finalBasisQuantity,
+      basis_unit: finalBasisUnit,
       search_relevant: searchRelevant.value ?? existing?.search_relevant ?? 1,
-      parent_ingredient_id: finalParentIngredientId,
+      parts: parsedParts.parts,
     },
   }
 }
@@ -5415,7 +5514,7 @@ async function getProductIngredientRow(
   productId: number,
   rowId: number,
 ): Promise<AdminProductIngredientRow | null> {
-  return await db.prepare(`
+  const row = await db.prepare(`
     SELECT
       pi.id,
       pi.product_id,
@@ -5445,14 +5544,25 @@ async function getProductIngredientRow(
     LEFT JOIN ingredient_display_profiles idp_form
       ON idp_form.ingredient_id = pi.ingredient_id
      AND idp_form.form_id = pi.form_id
+     AND idp_form.part_id IS NULL
      AND idp_form.sub_ingredient_id IS NULL
     LEFT JOIN ingredient_display_profiles idp_base
       ON idp_base.ingredient_id = pi.ingredient_id
      AND idp_base.form_id IS NULL
+     AND idp_base.part_id IS NULL
      AND idp_base.sub_ingredient_id IS NULL
     WHERE pi.product_id = ?
       AND pi.id = ?
-  `).bind(productId, rowId).first<AdminProductIngredientRow>()
+  `).bind(productId, rowId).first<Omit<AdminProductIngredientRow, 'parts'>>()
+  if (!row) return null
+  const parts = await loadIngredientPartsByParentRows(
+    db,
+    'product_ingredient_parts',
+    'product_ingredient_id',
+    [rowId],
+    { publicOnly: false },
+  )
+  return { ...row, parts: parts.get(rowId) ?? [] }
 }
 
 async function loadProductWarnings(db: D1Database, productId: number, includeInactive = false): Promise<ProductWarningRow[]> {
@@ -6457,6 +6567,8 @@ async function getIngredientSafetyWarningAdminRow(db: D1Database, warningId: num
       i.name AS ingredient_name,
       w.form_id,
       f.name AS form_name,
+      w.part_id,
+      p.name AS part_name,
       w.short_label,
       w.popover_text,
       w.severity,
@@ -6470,6 +6582,7 @@ async function getIngredientSafetyWarningAdminRow(db: D1Database, warningId: num
     FROM ingredient_safety_warnings w
     LEFT JOIN ingredients i ON i.id = w.ingredient_id
     LEFT JOIN ingredient_forms f ON f.id = w.form_id
+    LEFT JOIN ingredient_parts p ON p.id = w.part_id
     LEFT JOIN knowledge_articles a ON a.slug = w.article_slug
     WHERE w.id = ?
   `).bind(warningId).first<IngredientSafetyWarningAdminRow>()
@@ -6707,6 +6820,22 @@ async function validateIngredientWarningPayload(
     return validationError('form_id must belong to the warning ingredient')
   }
 
+  const partId = optionalPositiveIntegerField(body, 'part_id')
+  if (!partId.ok) return partId
+  const finalPartId = partId.value === undefined ? existing?.part_id ?? null : partId.value
+  if (finalFormId !== null && finalPartId !== null) {
+    return validationError('form_id und part_id dürfen nicht gleichzeitig gesetzt sein')
+  }
+  if (finalPartId !== null) {
+    const linkedPart = await db.prepare(`
+      SELECT p.id
+      FROM ingredient_part_links l
+      JOIN ingredient_parts p ON p.id = l.part_id
+      WHERE l.ingredient_id = ? AND l.part_id = ?
+    `).bind(targetIngredientId, finalPartId).first<{ id: number }>()
+    if (!linkedPart) return validationError('part_id must belong to the warning ingredient')
+  }
+
   const shortLabel = hasOwnKey(body, 'short_label')
     ? requiredTextField(body, 'short_label', 255)
     : hasOwnKey(body, 'title')
@@ -6751,6 +6880,7 @@ async function validateIngredientWarningPayload(
     value: {
       ingredient_id: targetIngredientId,
       form_id: finalFormId,
+      part_id: finalPartId,
       short_label: shortLabel.value,
       popover_text: popoverText.value,
       severity,
@@ -6768,6 +6898,7 @@ async function getIngredientDisplayProfileRow(
   db: D1Database,
   ingredientId: number,
   formId: number | null,
+  partId: number | null,
   subIngredientId: number | null,
 ): Promise<IngredientDisplayProfileRow | null> {
   const columns = await getTableColumns(db, 'ingredient_display_profiles')
@@ -6776,6 +6907,7 @@ async function getIngredientDisplayProfileRow(
       id,
       ingredient_id,
       form_id,
+      part_id,
       sub_ingredient_id,
       effect_summary,
       timing,
@@ -6788,8 +6920,9 @@ async function getIngredientDisplayProfileRow(
     FROM ingredient_display_profiles
     WHERE ingredient_id = ?
       AND ((form_id IS NULL AND ? IS NULL) OR form_id = ?)
+      AND ((part_id IS NULL AND ? IS NULL) OR part_id = ?)
       AND ((sub_ingredient_id IS NULL AND ? IS NULL) OR sub_ingredient_id = ?)
-  `).bind(ingredientId, formId, formId, subIngredientId, subIngredientId).first<IngredientDisplayProfileRow>()
+  `).bind(ingredientId, formId, formId, partId, partId, subIngredientId, subIngredientId).first<IngredientDisplayProfileRow>()
 }
 
 async function validateIngredientDisplayProfilePayload(
@@ -6803,15 +6936,25 @@ async function validateIngredientDisplayProfilePayload(
   if (!formIdResult.ok) return formIdResult
   const subIngredientIdResult = optionalPositiveIntegerField(body, 'sub_ingredient_id')
   if (!subIngredientIdResult.ok) return subIngredientIdResult
+  const partIdResult = optionalPositiveIntegerField(body, 'part_id')
+  if (!partIdResult.ok) return partIdResult
 
   const formId = formIdResult.value ?? null
   const subIngredientId = subIngredientIdResult.value ?? null
+  const partId = partIdResult.value ?? null
 
   if (formId !== null && !(await formBelongsToIngredient(db, formId, ingredientId))) {
     return validationError('form_id must belong to the ingredient')
   }
   if (subIngredientId !== null) {
     return validationError('sub_ingredient_id display profiles are not supported after ingredient parts consolidation')
+  }
+  if (formId !== null && partId !== null) return validationError('form_id und part_id dürfen nicht gleichzeitig gesetzt sein')
+  if (partId !== null) {
+    const linkedPart = await db.prepare(`
+      SELECT part_id FROM ingredient_part_links WHERE ingredient_id = ? AND part_id = ?
+    `).bind(ingredientId, partId).first<{ part_id: number }>()
+    if (!linkedPart) return validationError('part_id must belong to the ingredient')
   }
 
   const effectSummary = optionalTextField(body, 'effect_summary', 500)
@@ -6830,6 +6973,7 @@ async function validateIngredientDisplayProfilePayload(
     value: {
       ingredient_id: ingredientId,
       form_id: formId,
+      part_id: partId,
       sub_ingredient_id: subIngredientId,
       effect_summary: effectSummary.value ?? null,
       timing: timing.value ?? null,
@@ -7123,6 +7267,8 @@ async function getDoseRecommendationAdminRow(db: D1Database, id: number): Promis
       dr.id,
       dr.ingredient_id,
       i.name AS ingredient_name,
+      dr.part_id,
+      part.name AS part_name,
       dr.population_id,
       p.slug AS population_slug,
       p.name_de AS population_name_de,
@@ -7159,6 +7305,7 @@ async function getDoseRecommendationAdminRow(db: D1Database, id: number): Promis
       ${versionSelect(columns, 'dr')}
     FROM dose_recommendations dr
     JOIN ingredients i ON i.id = dr.ingredient_id
+    LEFT JOIN ingredient_parts part ON part.id = dr.part_id
     JOIN populations p ON p.id = dr.population_id
     LEFT JOIN users u ON u.id = dr.created_by_user_id
     LEFT JOIN verified_profiles vp ON vp.id = dr.verified_profile_id
@@ -7185,6 +7332,19 @@ async function validateDoseRecommendationPayload(
     .bind(ingredientId)
     .first<{ id: number }>()
   if (!ingredient) return validationError('Ingredient not found', 404)
+
+  const partIdResult = optionalPositiveIntegerField(body, 'part_id')
+  if (!partIdResult.ok) return partIdResult
+  const partId = partIdResult.value === undefined ? existing?.part_id ?? null : partIdResult.value
+  if (partId !== null) {
+    const part = await db.prepare(`
+      SELECT p.id
+      FROM ingredient_part_links l
+      JOIN ingredient_parts p ON p.id = l.part_id
+      WHERE l.ingredient_id = ? AND l.part_id = ?
+    `).bind(ingredientId, partId).first<{ id: number }>()
+    if (!part) return validationError('part_id must belong to the selected ingredient')
+  }
 
   let population: PopulationLookupRow | null = null
   if (hasOwnKey(body, 'population_id')) {
@@ -7349,6 +7509,7 @@ async function validateDoseRecommendationPayload(
 
   const mutation: DoseRecommendationMutation = {
     ingredient_id: ingredientId,
+    part_id: partId,
     population_id: population.id,
     source_type: sourceType,
     source_label: sourceLabelResult.value,
@@ -7384,6 +7545,7 @@ async function validateDoseRecommendationPayload(
       SELECT id
       FROM dose_recommendations
       WHERE ingredient_id = ?
+        AND COALESCE(part_id, -1) = COALESCE(?, -1)
         AND population_id = ?
         AND COALESCE(sex_filter, '_') = COALESCE(?, '_')
         AND purpose = ?
@@ -7394,6 +7556,7 @@ async function validateDoseRecommendationPayload(
       LIMIT 1
     `).bind(
       mutation.ingredient_id,
+      mutation.part_id,
       mutation.population_id,
       mutation.sex_filter,
       mutation.purpose,
@@ -7614,7 +7777,7 @@ async function buildDosePlausibilityWarnings(
   db: D1Database,
   recommendation: DoseRecommendationAdminRow | DoseRecommendationMutation | null,
 ): Promise<DosePlausibilityWarning[]> {
-  if (!recommendation || (recommendation.per_kg_body_weight ?? 0) > 0) return []
+  if (!recommendation || recommendation.part_id !== null || (recommendation.per_kg_body_weight ?? 0) > 0) return []
   const warnings: DosePlausibilityWarning[] = []
   const ingredientLimit = await db.prepare(`
     SELECT upper_limit, upper_limit_unit, upper_limit_note
@@ -7746,10 +7909,18 @@ async function attachUserProductIngredients(
     ORDER BY upi.user_product_id ASC, upi.is_main DESC, upi.search_relevant DESC, upi.id ASC
   `).bind(...ids).all<UserProductIngredientRow>()
 
+  const partsByRow = await loadIngredientPartsByParentRows(
+    db,
+    'user_product_ingredient_parts',
+    'user_product_ingredient_id',
+    results.map((row) => row.id),
+    { publicOnly: false },
+  )
+
   const byProduct = new Map<number, UserProductIngredientRow[]>()
   for (const row of results) {
     const list = byProduct.get(row.user_product_id) ?? []
-    list.push(row)
+    list.push({ ...row, parts: partsByRow.get(row.id) ?? [] })
     byProduct.set(row.user_product_id, list)
   }
 
@@ -7759,17 +7930,19 @@ async function attachUserProductIngredients(
   }))
 }
 
-function buildProductIngredientInsert(
+function buildPublishedProductIngredientStatements(
   db: D1Database,
   productId: number,
+  productIngredientId: number,
   ingredient: UserProductIngredientRow,
-): D1PreparedStatement {
-  return db.prepare(`
+): D1PreparedStatement[] {
+  const statements = [db.prepare(`
     INSERT INTO product_ingredients (
-      product_id, ingredient_id, is_main, quantity, unit, form_id,
+      id, product_id, ingredient_id, is_main, quantity, unit, form_id,
       basis_quantity, basis_unit, search_relevant, parent_ingredient_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
   `).bind(
+    productIngredientId,
     productId,
     ingredient.ingredient_id,
     ingredient.is_main === 1 ? 1 : 0,
@@ -7779,8 +7952,16 @@ function buildProductIngredientInsert(
     ingredient.basis_quantity,
     ingredient.basis_unit,
     ingredient.search_relevant,
-    ingredient.parent_ingredient_id,
-  )
+  )]
+  const parts = ingredient.parts ?? []
+  statements.push(...parts.map((part) => buildIngredientPartInsert(
+      db,
+      'product_ingredient_parts',
+      'product_ingredient_id',
+      productIngredientId,
+      part,
+    )))
+  return statements
 }
 
 async function getProductPublishPayloadByProductId(
@@ -7789,15 +7970,24 @@ async function getProductPublishPayloadByProductId(
 ): Promise<{ product: ProductRow; ingredients: unknown[] } | null> {
   const product = await db.prepare('SELECT * FROM products WHERE id = ?').bind(productId).first<ProductRow>()
   if (!product) return null
-  const { results: ingredients } = await db.prepare(`
-    SELECT pi.*, i.name as ingredient_name, i.unit as ingredient_unit,
-           parent.name as parent_ingredient_name
+  const { results: ingredientRows } = await db.prepare(`
+    SELECT pi.*, i.name as ingredient_name, i.unit as ingredient_unit
     FROM product_ingredients pi
     JOIN ingredients i ON i.id = pi.ingredient_id
-    LEFT JOIN ingredients parent ON parent.id = pi.parent_ingredient_id
     WHERE pi.product_id = ?
     ORDER BY pi.is_main DESC, pi.search_relevant DESC, pi.id ASC
-  `).bind(productId).all()
+  `).bind(productId).all<Record<string, unknown>>()
+  const partsByRow = await loadIngredientPartsByParentRows(
+    db,
+    'product_ingredient_parts',
+    'product_ingredient_id',
+    ingredientRows.map((row) => Number(row.id)),
+    { publicOnly: false },
+  )
+  const ingredients = ingredientRows.map((row) => ({
+    ...row,
+    parts: partsByRow.get(Number(row.id)) ?? [],
+  }))
   return { product, ingredients }
 }
 
@@ -7830,19 +8020,24 @@ async function validateUserProductPublish(
 
     if (row.search_relevant === 1) {
       searchRelevantCount += 1
-      if (
-        row.quantity === null ||
-        row.quantity <= 0 ||
-        !row.unit ||
-        row.unit.trim().length === 0 ||
-        row.basis_quantity === null ||
-        row.basis_quantity <= 0 ||
-        !row.basis_unit ||
-        row.basis_unit.trim().length === 0
-      ) {
-        return 'Suchrelevante Wirkstoffe brauchen quantity, unit, basis_quantity und basis_unit.'
-      }
     }
+    if ((row.quantity === null) !== (row.unit === null)) {
+      return 'quantity und unit müssen gemeinsam angegeben oder beide null sein.'
+    }
+    if (row.quantity !== null && (row.quantity <= 0 || !row.unit?.trim())) {
+      return 'quantity muss größer als 0 sein und eine nicht leere unit besitzen.'
+    }
+    if ((row.basis_quantity === null) !== (row.basis_unit === null)) {
+      return 'basis_quantity und basis_unit müssen gemeinsam angegeben oder beide null sein.'
+    }
+    if (row.basis_quantity !== null && (row.basis_quantity <= 0 || !row.basis_unit?.trim())) {
+      return 'basis_quantity muss größer als 0 sein und eine nicht leere basis_unit besitzen.'
+    }
+    const parts = row.parts ?? []
+    const referenceError = await validateIngredientPartReferences(db, row.ingredient_id, parts, { requireActive: true })
+    if (referenceError) return referenceError
+    const amountError = validatePartAmountSum(row, parts)
+    if (amountError) return amountError
   }
 
   if (searchRelevantCount === 0) return 'Mindestens ein suchrelevanter Wirkstoff ist fuer Publish erforderlich.'
@@ -9000,12 +9195,6 @@ admin.get('/ingredient-parts', async (c) => {
   }
 
   const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''
-  const synonymSelect = hasSynonyms
-    ? `(SELECT GROUP_CONCAT(s.synonym)
-        FROM ingredient_part_synonyms s
-        WHERE s.part_id = p.id
-        ORDER BY s.language ASC, s.synonym ASC) AS synonyms`
-    : 'NULL AS synonyms'
   const linkedCountSelect = await hasTable(c.env.DB, 'ingredient_part_links')
     ? `(SELECT COUNT(*) FROM ingredient_part_links l WHERE l.part_id = p.id) AS linked_ingredient_count`
     : '0 AS linked_ingredient_count'
@@ -9018,16 +9207,284 @@ admin.get('/ingredient-parts', async (c) => {
       p.internal_comment,
       p.status,
       p.created_at,
-      ${synonymSelect},
       ${linkedCountSelect},
       ${matchRankSql}
     FROM ingredient_parts p
     ${whereSql}
     ORDER BY match_rank ASC, p.status ASC, p.name ASC, p.id ASC
     LIMIT ?
-  `).bind(...rankBindings, ...whereBindings, limit).all<IngredientPartAdminRow>()
+  `).bind(...rankBindings, ...whereBindings, limit).all<Omit<IngredientPartAdminRow, 'synonyms'>>()
 
-  return c.json({ parts: results ?? [] })
+  const parts: IngredientPartAdminRow[] = await Promise.all((results ?? []).map(async (part) => ({
+    ...part,
+    synonyms: hasSynonyms ? await loadIngredientPartSynonyms(c.env.DB, part.id) : [],
+  })))
+  return c.json({ parts })
+})
+
+// POST /api/admin/ingredient-parts (admin only)
+admin.post('/ingredient-parts', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+  const name = optionalText(body.name)
+  if (!name) return c.json({ error: 'name ist erforderlich.' }, 400)
+  const status = body.status === undefined ? 'active' : ingredientPartStatus(body.status)
+  if (!status) return c.json({ error: 'status muss active, inactive oder deprecated sein.' }, 400)
+  const type = optionalText(body.type)
+  const internalComment = optionalText(body.internal_comment)
+  const conflict = await ingredientPartNormalizedConflict(c.env.DB, name)
+  if (conflict) return c.json({ error: 'Name oder Synonym wird bereits von einem Sub-Wirkstoff verwendet.', conflict }, 409)
+
+  const rawSynonyms = body.synonyms === undefined ? [] : body.synonyms
+  if (!Array.isArray(rawSynonyms)) return c.json({ error: 'synonyms muss eine Liste sein.' }, 400)
+  const synonyms: Array<{ synonym: string; language: string }> = []
+  const incomingNormalized = new Set([normalizePartLookupValue(name)])
+  for (const raw of rawSynonyms) {
+    if (!raw || typeof raw !== 'object') return c.json({ error: 'Ungültige Synonymdaten.' }, 400)
+    const value = raw as Record<string, unknown>
+    const synonym = optionalText(value.synonym)
+    const language = ingredientPartLanguage(value.language ?? 'de')
+    if (!synonym || !language) return c.json({ error: 'Jedes Synonym braucht synonym und eine gültige language.' }, 400)
+    const normalized = normalizePartLookupValue(synonym)
+    if (incomingNormalized.has(normalized)) return c.json({ error: 'Normalisierte Dubletten in Name oder Synonymen sind nicht erlaubt.' }, 409)
+    const synonymConflict = await ingredientPartNormalizedConflict(c.env.DB, synonym)
+    if (synonymConflict) return c.json({ error: 'Name oder Synonym wird bereits von einem Sub-Wirkstoff verwendet.', conflict: synonymConflict }, 409)
+    incomingNormalized.add(normalized)
+    synonyms.push({ synonym, language })
+  }
+
+  const [partId] = await reserveIntegerIds(c.env.DB, 'ingredient_parts', 1)
+  const statements: D1PreparedStatement[] = [c.env.DB.prepare(`
+    INSERT INTO ingredient_parts (id, name, type, internal_comment, status)
+    VALUES (?, ?, ?, ?, ?)
+  `).bind(partId, name, type, internalComment, status)]
+  statements.push(...synonyms.map((synonym) => c.env.DB.prepare(`
+      INSERT INTO ingredient_part_synonyms (part_id, synonym, language)
+      VALUES (?, ?, ?)
+    `).bind(partId, synonym.synonym, synonym.language)))
+  try {
+    await c.env.DB.batch(statements)
+  } catch (error) {
+    if (isIngredientPartNormalizedConflictError(error) || isUniqueConstraintError(error)) {
+      return c.json({ error: 'Name oder Synonym wird bereits von einem Sub-Wirkstoff verwendet.' }, 409)
+    }
+    throw error
+  }
+  const part = await c.env.DB.prepare(`
+    SELECT id, name, type, internal_comment, status, created_at
+    FROM ingredient_parts WHERE id = ?
+  `).bind(partId).first<IngredientPartAdminRow>()
+  await logAdminAction(c, {
+    action: 'create_ingredient_part',
+    entity_type: 'ingredient_part',
+    entity_id: partId,
+    changes: { part, synonyms },
+  })
+  return c.json({ part: { ...part, synonyms: await loadIngredientPartSynonyms(c.env.DB, partId) } }, 201)
+})
+
+// PATCH /api/admin/ingredient-parts/:partId (admin only)
+admin.patch('/ingredient-parts/:partId', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+  const partId = parsePositiveId(c.req.param('partId'))
+  if (partId === null) return c.json({ error: 'Invalid part id' }, 400)
+  const before = await c.env.DB.prepare(`
+    SELECT id, name, type, internal_comment, status, created_at
+    FROM ingredient_parts WHERE id = ?
+  `).bind(partId).first<IngredientPartAdminRow>()
+  if (!before) return c.json({ error: 'Part not found' }, 404)
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+  const supported = ['name', 'type', 'internal_comment', 'status']
+  if (!supported.some((key) => hasOwnKey(body, key))) return c.json({ error: 'No supported fields provided' }, 400)
+  const name = hasOwnKey(body, 'name') ? optionalText(body.name) : before.name
+  if (!name) return c.json({ error: 'name darf nicht leer sein.' }, 400)
+  const type = hasOwnKey(body, 'type') ? optionalText(body.type) : before.type
+  const internalComment = hasOwnKey(body, 'internal_comment') ? optionalText(body.internal_comment) : before.internal_comment
+  const status = hasOwnKey(body, 'status') ? ingredientPartStatus(body.status) : ingredientPartStatus(before.status)
+  if (!status) return c.json({ error: 'status muss active, inactive oder deprecated sein.' }, 400)
+  if (name !== before.name) {
+    const conflict = await ingredientPartNormalizedConflict(c.env.DB, name, partId)
+    if (conflict) return c.json({ error: 'Name oder Synonym wird bereits von einem Sub-Wirkstoff verwendet.', conflict }, 409)
+  }
+  try {
+    await c.env.DB.prepare(`
+      UPDATE ingredient_parts
+      SET name = ?, type = ?, internal_comment = ?, status = ?
+      WHERE id = ?
+    `).bind(name, type, internalComment, status, partId).run()
+  } catch (error) {
+    if (isIngredientPartNormalizedConflictError(error) || isUniqueConstraintError(error)) {
+      return c.json({ error: 'Name oder Synonym wird bereits von einem Sub-Wirkstoff verwendet.' }, 409)
+    }
+    throw error
+  }
+  const after = await c.env.DB.prepare(`
+    SELECT id, name, type, internal_comment, status, created_at
+    FROM ingredient_parts WHERE id = ?
+  `).bind(partId).first<IngredientPartAdminRow>()
+  await logAdminAction(c, {
+    action: 'update_ingredient_part',
+    entity_type: 'ingredient_part',
+    entity_id: partId,
+    changes: { before, after },
+  })
+  return c.json({ part: { ...after, synonyms: await loadIngredientPartSynonyms(c.env.DB, partId) } })
+})
+
+// POST /api/admin/ingredient-parts/:partId/synonyms (admin only)
+admin.post('/ingredient-parts/:partId/synonyms', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+  const partId = parsePositiveId(c.req.param('partId'))
+  if (partId === null) return c.json({ error: 'Invalid part id' }, 400)
+  if (!(await partExists(c.env.DB, partId))) return c.json({ error: 'Part not found' }, 404)
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+  const synonym = optionalText(body.synonym)
+  const language = ingredientPartLanguage(body.language ?? 'de')
+  if (!synonym || !language) return c.json({ error: 'synonym und eine gültige language sind erforderlich.' }, 400)
+  const conflict = await ingredientPartNormalizedConflict(c.env.DB, synonym)
+  if (conflict) return c.json({ error: 'Name oder Synonym wird bereits von einem Sub-Wirkstoff verwendet.', conflict }, 409)
+  let result: D1Result
+  try {
+    result = await c.env.DB.prepare(`
+      INSERT INTO ingredient_part_synonyms (part_id, synonym, language)
+      VALUES (?, ?, ?)
+    `).bind(partId, synonym, language).run()
+  } catch (error) {
+    if (isIngredientPartNormalizedConflictError(error) || isUniqueConstraintError(error)) {
+      return c.json({ error: 'Name oder Synonym wird bereits von einem Sub-Wirkstoff verwendet.' }, 409)
+    }
+    throw error
+  }
+  const synonymId = Number(result.meta.last_row_id)
+  const created = await c.env.DB.prepare(`
+    SELECT id, part_id, synonym, language, created_at
+    FROM ingredient_part_synonyms WHERE id = ?
+  `).bind(synonymId).first<IngredientPartSynonymRow>()
+  await logAdminAction(c, {
+    action: 'create_ingredient_part_synonym',
+    entity_type: 'ingredient_part_synonym',
+    entity_id: synonymId,
+    changes: created ?? { part_id: partId, synonym, language },
+  })
+  return c.json({ synonym: created }, 201)
+})
+
+// PATCH /api/admin/ingredient-part-synonyms/:synonymId (admin only)
+admin.patch('/ingredient-part-synonyms/:synonymId', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+  const synonymId = parsePositiveId(c.req.param('synonymId'))
+  if (synonymId === null) return c.json({ error: 'Invalid synonym id' }, 400)
+  const before = await c.env.DB.prepare(`
+    SELECT id, part_id, synonym, language, created_at
+    FROM ingredient_part_synonyms WHERE id = ?
+  `).bind(synonymId).first<IngredientPartSynonymRow>()
+  if (!before) return c.json({ error: 'Synonym not found' }, 404)
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+  const synonym = hasOwnKey(body, 'synonym') ? optionalText(body.synonym) : before.synonym
+  const language = hasOwnKey(body, 'language') ? ingredientPartLanguage(body.language) : before.language
+  if (!synonym || !language) return c.json({ error: 'synonym und eine gültige language sind erforderlich.' }, 400)
+  const conflict = await ingredientPartNormalizedConflict(c.env.DB, synonym, null, synonymId)
+  if (conflict) return c.json({ error: 'Name oder Synonym wird bereits von einem Sub-Wirkstoff verwendet.', conflict }, 409)
+  try {
+    await c.env.DB.prepare(`
+      UPDATE ingredient_part_synonyms SET synonym = ?, language = ? WHERE id = ?
+    `).bind(synonym, language, synonymId).run()
+  } catch (error) {
+    if (isIngredientPartNormalizedConflictError(error) || isUniqueConstraintError(error)) {
+      return c.json({ error: 'Name oder Synonym wird bereits von einem Sub-Wirkstoff verwendet.' }, 409)
+    }
+    throw error
+  }
+  const after = await c.env.DB.prepare(`
+    SELECT id, part_id, synonym, language, created_at
+    FROM ingredient_part_synonyms WHERE id = ?
+  `).bind(synonymId).first<IngredientPartSynonymRow>()
+  await logAdminAction(c, {
+    action: 'update_ingredient_part_synonym',
+    entity_type: 'ingredient_part_synonym',
+    entity_id: synonymId,
+    changes: { before, after },
+  })
+  return c.json({ synonym: after })
+})
+
+// DELETE /api/admin/ingredient-part-synonyms/:synonymId (admin only)
+admin.delete('/ingredient-part-synonyms/:synonymId', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+  const synonymId = parsePositiveId(c.req.param('synonymId'))
+  if (synonymId === null) return c.json({ error: 'Invalid synonym id' }, 400)
+  const before = await c.env.DB.prepare(`
+    SELECT id, part_id, synonym, language, created_at
+    FROM ingredient_part_synonyms WHERE id = ?
+  `).bind(synonymId).first<IngredientPartSynonymRow>()
+  if (!before) return c.json({ error: 'Synonym not found' }, 404)
+  await c.env.DB.prepare('DELETE FROM ingredient_part_synonyms WHERE id = ?').bind(synonymId).run()
+  await logAdminAction(c, {
+    action: 'delete_ingredient_part_synonym',
+    entity_type: 'ingredient_part_synonym',
+    entity_id: synonymId,
+    changes: { before },
+  })
+  return c.json({ ok: true })
+})
+
+// DELETE /api/admin/ingredient-parts/:partId (admin only)
+admin.delete('/ingredient-parts/:partId', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+  const partId = parsePositiveId(c.req.param('partId'))
+  if (partId === null) return c.json({ error: 'Invalid part id' }, 400)
+  const before = await c.env.DB.prepare(`
+    SELECT id, name, type, internal_comment, status, created_at
+    FROM ingredient_parts WHERE id = ?
+  `).bind(partId).first<IngredientPartAdminRow>()
+  if (!before) return c.json({ error: 'Part not found' }, 404)
+  const refs = await c.env.DB.prepare(`
+    SELECT
+      (SELECT COUNT(*) FROM ingredient_part_links WHERE part_id = ?) +
+      (SELECT COUNT(*) FROM product_ingredient_parts WHERE part_id = ?) +
+      (SELECT COUNT(*) FROM user_product_ingredient_parts WHERE part_id = ?) +
+      (SELECT COUNT(*) FROM ingredient_display_profiles WHERE part_id = ?) +
+      (SELECT COUNT(*) FROM dose_recommendations WHERE part_id = ?) +
+      (SELECT COUNT(*) FROM ingredient_safety_warnings WHERE part_id = ?) +
+      (SELECT COUNT(*) FROM knowledge_article_parts WHERE part_id = ?) AS count
+  `).bind(partId, partId, partId, partId, partId, partId, partId).first<CountRow>()
+  if ((refs?.count ?? 0) > 0) {
+    return c.json({ error: 'Verknüpfte Sub-Wirkstoffe können nicht gelöscht werden. Setze den Status stattdessen auf inactive oder deprecated.' }, 409)
+  }
+  await c.env.DB.prepare('DELETE FROM ingredient_parts WHERE id = ?').bind(partId).run()
+  await logAdminAction(c, {
+    action: 'delete_ingredient_part',
+    entity_type: 'ingredient_part',
+    entity_id: partId,
+    changes: { before },
+  })
+  return c.json({ ok: true })
 })
 
 // GET /api/admin/ingredients/:id/parts (admin only)
@@ -9189,7 +9646,8 @@ admin.get('/ingredients/:id/precursors', async (c) => {
 admin.post('/ingredients/:id/precursors', async (c) => {
   const authErr = await ensureAdmin(c)
   if (authErr) return authErr
-
+  return c.json({ error: 'Diese Legacy-Route ist schreibgeschützt. Verwende /ingredients/:id/parts.' }, 410)
+  /* Legacy implementation retained only as migration reference; it is not compiled or executable.
   const ingredientId = parsePositiveId(c.req.param('id'))
   if (ingredientId === null) return c.json({ error: 'Invalid ingredient id' }, 400)
   if (!(await ingredientExists(c.env.DB, ingredientId))) return c.json({ error: 'Ingredient not found' }, 404)
@@ -9243,13 +9701,15 @@ admin.post('/ingredients/:id/precursors', async (c) => {
   const created = (await loadIngredientPrecursors(c.env.DB, ingredientId))
     .find((row) => row.precursor_ingredient_id === precursorId.value)
   return c.json({ precursor: created ?? null }, 201)
+  */
 })
 
 // DELETE /api/admin/ingredients/:id/precursors/:precursorId (admin only)
 admin.patch('/ingredients/:id/precursors/:precursorId', async (c) => {
   const authErr = await ensureAdmin(c)
   if (authErr) return authErr
-
+  return c.json({ error: 'Diese Legacy-Route ist schreibgeschützt. Verwende /ingredients/:id/parts/:partId.' }, 410)
+  /* Legacy implementation retained only as migration reference; it is not compiled or executable.
   const ingredientId = parsePositiveId(c.req.param('id'))
   const precursorId = parsePositiveId(c.req.param('precursorId'))
   if (ingredientId === null) return c.json({ error: 'Invalid ingredient id' }, 400)
@@ -9293,13 +9753,15 @@ admin.patch('/ingredients/:id/precursors/:precursorId', async (c) => {
   })
 
   return c.json({ precursor: updated ?? null })
+  */
 })
 
 // DELETE /api/admin/ingredients/:id/precursors/:precursorId (admin only)
 admin.delete('/ingredients/:id/precursors/:precursorId', async (c) => {
   const authErr = await ensureAdmin(c)
   if (authErr) return authErr
-
+  return c.json({ error: 'Diese Legacy-Route ist schreibgeschützt. Verwende /ingredients/:id/parts/:partId.' }, 410)
+  /* Legacy implementation retained only as migration reference; it is not compiled or executable.
   const ingredientId = parsePositiveId(c.req.param('id'))
   const precursorId = parsePositiveId(c.req.param('precursorId'))
   if (ingredientId === null) return c.json({ error: 'Invalid ingredient id' }, 400)
@@ -9325,6 +9787,7 @@ admin.delete('/ingredients/:id/precursors/:precursorId', async (c) => {
   })
 
   return c.json({ ok: true })
+  */
 })
 
 // GET /api/admin/ingredients/:id/evidence-summary (admin only)
@@ -10047,10 +10510,12 @@ admin.get('/products/:id', async (c) => {
       LEFT JOIN ingredient_display_profiles idp_form
         ON idp_form.ingredient_id = pi.ingredient_id
        AND idp_form.form_id = pi.form_id
+       AND idp_form.part_id IS NULL
        AND idp_form.sub_ingredient_id IS NULL
       LEFT JOIN ingredient_display_profiles idp_base
         ON idp_base.ingredient_id = pi.ingredient_id
        AND idp_base.form_id IS NULL
+       AND idp_base.part_id IS NULL
        AND idp_base.sub_ingredient_id IS NULL
       WHERE pi.product_id = ?
       ORDER BY pi.is_main DESC, pi.search_relevant DESC, i.name ASC, pi.id ASC
@@ -10121,6 +10586,18 @@ admin.get('/products/:id', async (c) => {
     `).bind(id).first<CountRow>(),
   ])
 
+  const adminPartsByIngredientRow = await loadIngredientPartsByParentRows(
+    c.env.DB,
+    'product_ingredient_parts',
+    'product_ingredient_id',
+    (ingredientsResult.results ?? []).map((row) => row.id),
+    { publicOnly: false },
+  )
+  const productIngredients = (ingredientsResult.results ?? []).map((row) => ({
+    ...row,
+    parts: adminPartsByIngredientRow.get(row.id) ?? [],
+  }))
+
   const qaIssues = qa ? productQaIssues(qa) : []
   const warnings = warningsByProduct.get(id) ?? []
   const activeProductWarnings = productWarnings.filter((warning) => warning.active !== 0)
@@ -10129,7 +10606,7 @@ admin.get('/products/:id', async (c) => {
 
   return c.json({
     product: withAffiliateLinkHealth(product),
-    ingredients: ingredientsResult.results ?? [],
+    ingredients: productIngredients,
     qa: qa ? formatProductQaRow(qa) : null,
     qa_counts: {
       ingredient_count: qa?.ingredient_count ?? ingredientsResult.results?.length ?? 0,
@@ -10364,8 +10841,10 @@ admin.post('/products/:id/ingredients', async (c) => {
   const lock = await reserveProductVersionForMutation(c.env.DB, productId, productColumns, requestVersion(c, body))
   if (!lock.ok) return c.json({ error: lock.error, current_version: lock.current_version }, 409)
 
-  const result = await c.env.DB.prepare(`
+  const [rowId] = await reserveIntegerIds(c.env.DB, 'product_ingredients', 1)
+  const statements: D1PreparedStatement[] = [c.env.DB.prepare(`
     INSERT INTO product_ingredients (
+      id,
       product_id,
       ingredient_id,
       is_main,
@@ -10377,8 +10856,9 @@ admin.post('/products/:id/ingredients', async (c) => {
       search_relevant,
       parent_ingredient_id
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
   `).bind(
+    rowId,
     productId,
     data.ingredient_id,
     data.is_main,
@@ -10388,10 +10868,15 @@ admin.post('/products/:id/ingredients', async (c) => {
     data.basis_quantity,
     data.basis_unit,
     data.search_relevant,
-    data.parent_ingredient_id,
-  ).run()
-
-  const rowId = result.meta.last_row_id as number
+  )]
+  statements.push(...data.parts.map((part) => buildIngredientPartInsert(
+      c.env.DB,
+      'product_ingredient_parts',
+      'product_ingredient_id',
+      rowId,
+      part,
+    )))
+  await c.env.DB.batch(statements)
   const row = await getProductIngredientRow(c.env.DB, productId, rowId)
   const productVersionAfter = lock.productVersion ?? await incrementProductVersionAfterMutation(c.env.DB, productId, productColumns)
   await logAdminAction(c, {
@@ -10435,7 +10920,7 @@ admin.put('/products/:id/ingredients/:rowId', async (c) => {
   const lock = await reserveProductVersionForMutation(c.env.DB, productId, productColumns, requestVersion(c, body))
   if (!lock.ok) return c.json({ error: lock.error, current_version: lock.current_version }, 409)
 
-  await c.env.DB.prepare(`
+  const statements: D1PreparedStatement[] = [c.env.DB.prepare(`
     UPDATE product_ingredients
     SET
       ingredient_id = ?,
@@ -10446,7 +10931,7 @@ admin.put('/products/:id/ingredients/:rowId', async (c) => {
       basis_quantity = ?,
       basis_unit = ?,
       search_relevant = ?,
-      parent_ingredient_id = ?
+      parent_ingredient_id = NULL
     WHERE id = ?
       AND product_id = ?
   `).bind(
@@ -10458,10 +10943,21 @@ admin.put('/products/:id/ingredients/:rowId', async (c) => {
     data.basis_quantity,
     data.basis_unit,
     data.search_relevant,
-    data.parent_ingredient_id,
     rowId,
     productId,
-  ).run()
+  )]
+
+  if (hasOwnKey(body, 'parts')) {
+    statements.push(c.env.DB.prepare('DELETE FROM product_ingredient_parts WHERE product_ingredient_id = ?').bind(rowId))
+    statements.push(...data.parts.map((part) => buildIngredientPartInsert(
+        c.env.DB,
+        'product_ingredient_parts',
+        'product_ingredient_id',
+        rowId,
+        part,
+      )))
+  }
+  await c.env.DB.batch(statements)
 
   const row = await getProductIngredientRow(c.env.DB, productId, rowId)
   const productVersionAfter = lock.productVersion ?? await incrementProductVersionAfterMutation(c.env.DB, productId, productColumns)
@@ -11597,6 +12093,84 @@ admin.delete('/knowledge-articles/:slug', async (c) => {
   })
 
   return c.json({ ok: true, article: hydrated })
+})
+
+// GET /api/admin/knowledge-articles/:slug/parts (admin only)
+admin.get('/knowledge-articles/:slug/parts', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+  const slug = normalizeSlug(c.req.param('slug'))
+  if (!slug) return c.json({ error: 'Invalid slug' }, 400)
+  if (!(await getKnowledgeArticleRow(c.env.DB, slug))) return c.json({ error: 'Knowledge article not found' }, 404)
+  const { results } = await c.env.DB.prepare(`
+    SELECT kap.article_slug, kap.ingredient_id, i.name AS ingredient_name,
+           kap.part_id, p.name AS part_name, p.type AS part_type,
+           p.status AS part_status, kap.sort_order, kap.created_at
+    FROM knowledge_article_parts kap
+    JOIN ingredient_parts p ON p.id = kap.part_id
+    JOIN ingredients i ON i.id = kap.ingredient_id
+    WHERE kap.article_slug = ?
+    ORDER BY kap.sort_order ASC, p.name ASC, p.id ASC
+  `).bind(slug).all()
+  return c.json({ parts: results ?? [] })
+})
+
+// PUT /api/admin/knowledge-articles/:slug/parts (admin only; complete replacement)
+admin.put('/knowledge-articles/:slug/parts', async (c) => {
+  const authErr = await ensureAdmin(c)
+  if (authErr) return authErr
+  const slug = normalizeSlug(c.req.param('slug'))
+  if (!slug) return c.json({ error: 'Invalid slug' }, 400)
+  if (!(await getKnowledgeArticleRow(c.env.DB, slug))) return c.json({ error: 'Knowledge article not found' }, 404)
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+  if (!Array.isArray(body.parts)) return c.json({ error: 'parts muss eine Liste sein.' }, 400)
+  if (body.parts.length > 100) return c.json({ error: 'Maximal 100 Wissensverknüpfungen sind erlaubt.' }, 400)
+  const parts: Array<{ ingredient_id: number; part_id: number; sort_order: number }> = []
+  const seen = new Set<string>()
+  for (let index = 0; index < body.parts.length; index += 1) {
+    const raw = body.parts[index]
+    if (!raw || typeof raw !== 'object') return c.json({ error: 'Ungültige Wissensverknüpfung.' }, 400)
+    const row = raw as Record<string, unknown>
+    const ingredientId = normalizeInteger(row.ingredient_id)
+    const partId = normalizeInteger(row.part_id)
+    const sortOrder = row.sort_order === undefined ? index : normalizeInteger(row.sort_order)
+    if (!ingredientId || ingredientId <= 0 || !partId || partId <= 0 || sortOrder === undefined || sortOrder < 0) {
+      return c.json({ error: 'ingredient_id, part_id und sort_order müssen gültig sein.' }, 400)
+    }
+    const key = `${ingredientId}:${partId}`
+    if (seen.has(key)) return c.json({ error: 'Doppelte Wissensverknüpfungen sind nicht erlaubt.' }, 409)
+    const linked = await c.env.DB.prepare(`
+      SELECT p.id
+      FROM ingredient_part_links l
+      JOIN ingredient_parts p ON p.id = l.part_id
+      WHERE l.ingredient_id = ? AND l.part_id = ?
+    `).bind(ingredientId, partId).first<{ id: number }>()
+    if (!linked) return c.json({ error: 'part_id muss mit ingredient_id verknüpft sein.' }, 400)
+    seen.add(key)
+    parts.push({ ingredient_id: ingredientId, part_id: partId, sort_order: sortOrder })
+  }
+  const { results: before } = await c.env.DB.prepare(`
+    SELECT ingredient_id, part_id, sort_order FROM knowledge_article_parts WHERE article_slug = ?
+  `).bind(slug).all()
+  await c.env.DB.batch([
+    c.env.DB.prepare('DELETE FROM knowledge_article_parts WHERE article_slug = ?').bind(slug),
+    ...parts.map((part) => c.env.DB.prepare(`
+      INSERT INTO knowledge_article_parts (article_slug, ingredient_id, part_id, sort_order)
+      VALUES (?, ?, ?, ?)
+    `).bind(slug, part.ingredient_id, part.part_id, part.sort_order)),
+  ])
+  await logAdminAction(c, {
+    action: 'replace_knowledge_article_parts',
+    entity_type: 'knowledge_article',
+    entity_id: null,
+    changes: { slug, before: before ?? [], after: parts },
+  })
+  return c.json({ ok: true, parts })
 })
 
 // GET /api/admin/study-interpretation-records (admin only)
@@ -13225,6 +13799,8 @@ admin.get('/dose-recommendations', async (c) => {
       dr.id,
       dr.ingredient_id,
       i.name AS ingredient_name,
+      dr.part_id,
+      part.name AS part_name,
       dr.population_id,
       p.slug AS population_slug,
       p.name_de AS population_name_de,
@@ -13261,6 +13837,7 @@ admin.get('/dose-recommendations', async (c) => {
       ${versionSelect(columns, 'dr')}
     FROM dose_recommendations dr
     JOIN ingredients i ON i.id = dr.ingredient_id
+    LEFT JOIN ingredient_parts part ON part.id = dr.part_id
     JOIN populations p ON p.id = dr.population_id
     LEFT JOIN users u ON u.id = dr.created_by_user_id
     LEFT JOIN verified_profiles vp ON vp.id = dr.verified_profile_id
@@ -13297,6 +13874,7 @@ admin.post('/dose-recommendations', async (c) => {
     result = await c.env.DB.prepare(`
       INSERT INTO dose_recommendations (
         ingredient_id,
+        part_id,
         population_id,
         source_type,
         source_label,
@@ -13327,9 +13905,10 @@ admin.post('/dose-recommendations', async (c) => {
         created_at,
         updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s','now'), strftime('%s','now'))
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, strftime('%s','now'), strftime('%s','now'))
     `).bind(
       data.ingredient_id,
+      data.part_id,
       data.population_id,
       data.source_type,
       data.source_label,
@@ -13428,6 +14007,7 @@ admin.put('/dose-recommendations/:id', async (c) => {
   const whereSql = lock.value.enforce ? optimisticWhere() : 'id = ?'
   const updateBindings: Array<string | number | null> = [
     data.ingredient_id,
+    data.part_id,
     data.population_id,
     data.source_type,
     data.source_label,
@@ -13463,6 +14043,7 @@ admin.put('/dose-recommendations/:id', async (c) => {
       UPDATE dose_recommendations
       SET
         ingredient_id = ?,
+        part_id = ?,
         population_id = ?,
         source_type = ?,
         source_label = ?,
@@ -14349,6 +14930,8 @@ admin.get('/ingredient-research/:ingredientId', async (c) => {
       i.name AS ingredient_name,
       w.form_id,
       f.name AS form_name,
+      w.part_id,
+      part.name AS part_name,
       w.short_label,
       w.popover_text,
       w.severity,
@@ -14362,6 +14945,7 @@ admin.get('/ingredient-research/:ingredientId', async (c) => {
     FROM ingredient_safety_warnings w
     LEFT JOIN ingredients i ON i.id = w.ingredient_id
     LEFT JOIN ingredient_forms f ON f.id = w.form_id
+    LEFT JOIN ingredient_parts part ON part.id = w.part_id
     LEFT JOIN knowledge_articles a ON a.slug = w.article_slug
     WHERE w.ingredient_id = ?
     ORDER BY w.active DESC, w.severity DESC, w.id DESC
@@ -14379,6 +14963,7 @@ admin.get('/ingredient-research/:ingredientId', async (c) => {
       id,
       ingredient_id,
       form_id,
+      part_id,
       sub_ingredient_id,
       effect_summary,
       timing,
@@ -14392,12 +14977,13 @@ admin.get('/ingredient-research/:ingredientId', async (c) => {
     WHERE ingredient_id = ?
     ORDER BY
       CASE
-        WHEN form_id IS NULL AND sub_ingredient_id IS NULL THEN 0
-        WHEN form_id IS NOT NULL AND sub_ingredient_id IS NULL THEN 1
-        WHEN form_id IS NULL AND sub_ingredient_id IS NOT NULL THEN 2
+        WHEN form_id IS NULL AND part_id IS NULL AND sub_ingredient_id IS NULL THEN 0
+        WHEN form_id IS NOT NULL THEN 1
+        WHEN part_id IS NOT NULL THEN 2
         ELSE 3
       END ASC,
       form_id ASC,
+      part_id ASC,
       sub_ingredient_id ASC,
       id ASC
   `).bind(ingredientId).all<IngredientDisplayProfileRow>()
@@ -14537,7 +15123,7 @@ admin.put('/ingredient-research/:ingredientId/display-profile', async (c) => {
   if (!validation.ok) return c.json({ error: validation.error }, validation.status ?? 400)
 
   const data = validation.value
-  const existing = await getIngredientDisplayProfileRow(c.env.DB, ingredientId, data.form_id, data.sub_ingredient_id)
+  const existing = await getIngredientDisplayProfileRow(c.env.DB, ingredientId, data.form_id, data.part_id, data.sub_ingredient_id)
   const columns = await getTableColumns(c.env.DB, 'ingredient_display_profiles')
   const lock = validateOptimisticLock(columns.has('version') && existing !== null, existing?.version ?? null, requestVersion(c, body))
   if (!lock.ok) return c.json({ error: lock.error, current_version: existing?.version ?? null }, 409)
@@ -14565,7 +15151,7 @@ admin.put('/ingredient-research/:ingredientId/display-profile', async (c) => {
       WHERE ${whereSql}
     `).bind(...profileBindings).run()
     if (lock.value.enforce && d1ChangeCount(profileResult) === 0) {
-      const current = await getIngredientDisplayProfileRow(c.env.DB, ingredientId, data.form_id, data.sub_ingredient_id)
+      const current = await getIngredientDisplayProfileRow(c.env.DB, ingredientId, data.form_id, data.part_id, data.sub_ingredient_id)
       return c.json({ error: 'Version conflict', current_version: current?.version ?? existing.version }, 409)
     }
   } else {
@@ -14573,6 +15159,7 @@ admin.put('/ingredient-research/:ingredientId/display-profile', async (c) => {
       INSERT INTO ingredient_display_profiles (
         ingredient_id,
         form_id,
+        part_id,
         sub_ingredient_id,
         effect_summary,
         timing,
@@ -14581,10 +15168,11 @@ admin.put('/ingredient-research/:ingredientId/display-profile', async (c) => {
         card_note,
         created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
     `).bind(
       data.ingredient_id,
       data.form_id,
+      data.part_id,
       data.sub_ingredient_id,
       data.effect_summary,
       data.timing,
@@ -14594,7 +15182,7 @@ admin.put('/ingredient-research/:ingredientId/display-profile', async (c) => {
     ).run()
   }
 
-  const profile = await getIngredientDisplayProfileRow(c.env.DB, ingredientId, data.form_id, data.sub_ingredient_id)
+  const profile = await getIngredientDisplayProfileRow(c.env.DB, ingredientId, data.form_id, data.part_id, data.sub_ingredient_id)
   await logAdminAction(c, {
     action: 'upsert_ingredient_display_profile',
     entity_type: 'ingredient_display_profile',
@@ -14863,6 +15451,7 @@ admin.post('/ingredient-research/:ingredientId/warnings', async (c) => {
     INSERT INTO ingredient_safety_warnings (
       ingredient_id,
       form_id,
+      part_id,
       short_label,
       popover_text,
       severity,
@@ -14871,10 +15460,11 @@ admin.post('/ingredient-research/:ingredientId/warnings', async (c) => {
       unit,
       active
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     data.ingredient_id,
     data.form_id,
+    data.part_id,
     data.short_label,
     data.popover_text,
     data.severity,
@@ -14926,6 +15516,7 @@ admin.put('/ingredient-research/warnings/:warningId', async (c) => {
   const warningBindings: Array<string | number | null> = [
     data.ingredient_id,
     data.form_id,
+    data.part_id,
     data.short_label,
     data.popover_text,
     data.severity,
@@ -14941,6 +15532,7 @@ admin.put('/ingredient-research/warnings/:warningId', async (c) => {
     SET
       ingredient_id = ?,
       form_id = ?,
+      part_id = ?,
       short_label = ?,
       popover_text = ?,
       severity = ?,
@@ -15693,41 +16285,72 @@ admin.put('/user-products/:id/publish', async (c) => {
     ORDER BY upi.is_main DESC, upi.search_relevant DESC, upi.id ASC
   `).bind(id).all<UserProductIngredientRow>()
 
-  const validationError = await validateUserProductPublish(c.env.DB, ingredients)
+  const partsByIngredientRow = await loadIngredientPartsByParentRows(
+    c.env.DB,
+    'user_product_ingredient_parts',
+    'user_product_ingredient_id',
+    ingredients.map((ingredient) => ingredient.id),
+    { publicOnly: false },
+  )
+  const ingredientsWithParts = ingredients.map((ingredient) => ({
+    ...ingredient,
+    parts: partsByIngredientRow.get(ingredient.id) ?? [],
+  }))
+
+  const validationError = await validateUserProductPublish(c.env.DB, ingredientsWithParts)
   if (validationError) return c.json({ error: validationError }, 400)
 
-  let productId: number
+  const [productId] = await reserveIntegerIds(c.env.DB, 'products', 1)
+  const ingredientRowIds = await reserveIntegerIds(c.env.DB, 'product_ingredients', ingredientsWithParts.length)
+  const statements: D1PreparedStatement[] = [c.env.DB.prepare(`
+    INSERT INTO products (
+      id, name, brand, form, price, shop_link, image_url, moderation_status, visibility,
+      is_affiliate, affiliate_owner_type, affiliate_owner_user_id,
+      serving_size, serving_unit, servings_per_container, container_count,
+      dosage_text, warning_title, warning_message,
+      warning_type, alternative_note, source_user_product_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'approved', 'public', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    productId,
+    userProduct.name,
+    userProduct.brand,
+    userProduct.form,
+    userProduct.price,
+    userProduct.shop_link ?? null,
+    userProduct.image_url ?? null,
+    ownership.is_affiliate,
+    ownership.affiliate_owner_type,
+    ownership.affiliate_owner_user_id,
+    userProduct.serving_size,
+    userProduct.serving_unit,
+    userProduct.servings_per_container,
+    userProduct.container_count,
+    userProduct.dosage_text ?? null,
+    userProduct.warning_title ?? null,
+    userProduct.warning_message ?? null,
+    userProduct.warning_type ?? null,
+    userProduct.alternative_note ?? null,
+    id,
+  )]
+  ingredientsWithParts.forEach((ingredient, index) => {
+    statements.push(...buildPublishedProductIngredientStatements(
+      c.env.DB,
+      productId,
+      ingredientRowIds[index],
+      ingredient,
+    ))
+  })
+  statements.push(c.env.DB.prepare(`
+    UPDATE user_products
+    SET status = 'approved',
+        approved_at = COALESCE(approved_at, datetime('now')),
+        published_product_id = ?,
+        published_at = datetime('now')
+    WHERE id = ?
+  `).bind(productId, id))
+
   try {
-    const result = await c.env.DB.prepare(`
-      INSERT INTO products (
-        name, brand, form, price, shop_link, image_url, moderation_status, visibility,
-        is_affiliate, affiliate_owner_type, affiliate_owner_user_id,
-        serving_size, serving_unit, servings_per_container, container_count,
-        dosage_text, warning_title, warning_message,
-        warning_type, alternative_note, source_user_product_id
-      ) VALUES (?, ?, ?, ?, ?, ?, 'approved', 'public', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).bind(
-      userProduct.name,
-      userProduct.brand,
-      userProduct.form,
-      userProduct.price,
-      userProduct.shop_link ?? null,
-      userProduct.image_url ?? null,
-      ownership.is_affiliate,
-      ownership.affiliate_owner_type,
-      ownership.affiliate_owner_user_id,
-      userProduct.serving_size,
-      userProduct.serving_unit,
-      userProduct.servings_per_container,
-      userProduct.container_count,
-      userProduct.dosage_text ?? null,
-      userProduct.warning_title ?? null,
-      userProduct.warning_message ?? null,
-      userProduct.warning_type ?? null,
-      userProduct.alternative_note ?? null,
-      id,
-    ).run()
-    productId = result.meta.last_row_id as number
+    await c.env.DB.batch(statements)
   } catch (error) {
     if (isUniqueConstraintError(error)) {
       const payload = await getProductPublishPayloadBySourceUserProductId(c.env.DB, id)
@@ -15743,23 +16366,6 @@ admin.put('/user-products/:id/publish', async (c) => {
         return c.json({ ok: true, product: payload.product, ingredients: payload.ingredients, idempotent: true })
       }
     }
-    throw error
-  }
-
-  try {
-    await c.env.DB.batch([
-      ...ingredients.map((ingredient) => buildProductIngredientInsert(c.env.DB, productId, ingredient)),
-      c.env.DB.prepare(`
-        UPDATE user_products
-        SET status = 'approved',
-            approved_at = COALESCE(approved_at, datetime('now')),
-            published_product_id = ?,
-            published_at = datetime('now')
-        WHERE id = ?
-      `).bind(productId, id),
-    ])
-  } catch (error) {
-    await c.env.DB.prepare('DELETE FROM products WHERE id = ?').bind(productId).run()
     throw error
   }
 
@@ -16184,7 +16790,8 @@ admin.get('/ingredient-sub-ingredients', async (c) => {
 admin.put('/ingredient-sub-ingredients', async (c) => {
   const authErr = await ensureAdmin(c)
   if (authErr) return authErr
-
+  return c.json({ error: 'Diese Legacy-Route ist schreibgeschützt. Verwende die Part-Endpunkte.' }, 410)
+  /* Legacy implementation retained only as migration reference; it is not compiled or executable.
   let body: Record<string, unknown>
   try {
     body = await c.req.json()
@@ -16239,13 +16846,15 @@ admin.put('/ingredient-sub-ingredients', async (c) => {
   })
 
   return c.json({ mapping })
+  */
 })
 
 // DELETE /api/admin/ingredient-sub-ingredients/:parentId/:childId (admin)
 admin.delete('/ingredient-sub-ingredients/:parentId/:childId', async (c) => {
   const authErr = await ensureAdmin(c)
   if (authErr) return authErr
-
+  return c.json({ error: 'Diese Legacy-Route ist schreibgeschützt. Verwende die Part-Endpunkte.' }, 410)
+  /* Legacy implementation retained only as migration reference; it is not compiled or executable.
   const parentIngredientId = parsePositiveId(c.req.param('parentId'))
   const childIngredientId = parsePositiveId(c.req.param('childId'))
   if (parentIngredientId === null || childIngredientId === null) {
@@ -16273,6 +16882,7 @@ admin.delete('/ingredient-sub-ingredients/:parentId/:childId', async (c) => {
   })
 
   return c.json({ ok: true })
+  */
 })
 
 // GET /api/admin/translations/managed-list-items?language=en&q=&limit=50&offset=0 (admin)

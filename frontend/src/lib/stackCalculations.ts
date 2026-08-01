@@ -1,13 +1,44 @@
 export interface CalculableIngredient {
   ingredient_id?: number;
+  ingredient_name?: string;
   quantity?: number | null;
   unit?: string | null;
   basis_quantity?: number | null;
   basis_unit?: string | null;
   search_relevant?: number | boolean | null;
+  parts?: CalculableIngredientPart[];
+}
+
+export interface CalculableIngredientPart extends Omit<CalculableIngredient, 'ingredient_id' | 'parts'> {
+  part_id: number;
+  part_name?: string;
+}
+
+export interface StackIngredientTotalAmount {
+  quantity: number;
+  unit: string;
+}
+
+export interface StackIngredientPartTotal {
+  part_id: number;
+  part_name: string;
+  totals: StackIngredientTotalAmount[];
+}
+
+export interface StackIngredientTotal {
+  ingredient_id: number;
+  ingredient_name: string;
+  totals: StackIngredientTotalAmount[];
+  parts: StackIngredientPartTotal[];
 }
 
 export interface CalculableProduct {
+  matched_part_id?: number | null;
+  matched_part_name?: string | null;
+  matched_part_quantity?: number | null;
+  matched_part_unit?: string | null;
+  matched_part_basis_quantity?: number | null;
+  matched_part_basis_unit?: string | null;
   price?: number | null;
   quantity?: number | null;
   unit?: string | null;
@@ -115,6 +146,118 @@ function convertCompatibleAmount(value: number, fromUnit?: string | null, toUnit
   return null;
 }
 
+type AggregationAmount = StackIngredientTotalAmount & { key: string };
+
+function amountForAggregation(value: number, unit?: string | null): AggregationAmount | null {
+  if (!Number.isFinite(value) || value <= 0) return null;
+  const normalized = normalizeCalculationUnit(unit);
+  if (!normalized.key) return null;
+  if (normalized.kind === 'mass') {
+    const micrograms = massToMicrograms(value, unit ?? '');
+    if (micrograms == null) return null;
+    return { key: 'mass:mg', quantity: micrograms / 1000, unit: 'mg' };
+  }
+  if (normalized.kind === 'iu') return { key: 'iu', quantity: value, unit: 'IE' };
+  return {
+    key: `${normalized.kind}:${normalized.key}`,
+    quantity: value,
+    unit: normalized.key,
+  };
+}
+
+function addAggregationAmount(
+  target: Map<string, StackIngredientTotalAmount>,
+  value: number,
+  unit?: string | null,
+): void {
+  const amount = amountForAggregation(value, unit);
+  if (!amount) return;
+  const current = target.get(amount.key);
+  target.set(amount.key, {
+    quantity: (current?.quantity ?? 0) + amount.quantity,
+    unit: amount.unit,
+  });
+}
+
+function finalizedAmounts(values: Map<string, StackIngredientTotalAmount>): StackIngredientTotalAmount[] {
+  return [...values.entries()]
+    .sort(([left], [right]) => left.localeCompare(right, 'de'))
+    .map(([, amount]) => ({
+      quantity: Number(amount.quantity.toFixed(12)),
+      unit: amount.unit,
+    }));
+}
+
+/**
+ * Aggregates effective daily parent and contained part amounts separately.
+ * Known mass units are converted to mg; incompatible or unknown unit families
+ * remain separate totals and are never guessed or combined.
+ */
+export function aggregateStackIngredientTotals(products: CalculableProduct[]): StackIngredientTotal[] {
+  const ingredients = new Map<number, {
+    ingredient_name: string;
+    totals: Map<string, StackIngredientTotalAmount>;
+    parts: Map<number, {
+      part_name: string;
+      totals: Map<string, StackIngredientTotalAmount>;
+    }>;
+  }>();
+
+  for (const product of products) {
+    const usage = calculateProductUsage(product);
+    const dailyServingFactor = usage.effectiveDailyUsage;
+    if (!Number.isFinite(dailyServingFactor) || dailyServingFactor <= 0) continue;
+
+    for (const ingredient of product.ingredients ?? []) {
+      const ingredientId = ingredient.ingredient_id;
+      if (!ingredientId || !ingredientIsSearchRelevant(ingredient)) continue;
+      const amountPerServing = ingredientAmountPerProductServing(ingredient, product);
+      const aggregate = ingredients.get(ingredientId) ?? {
+        ingredient_name: ingredient.ingredient_name?.trim() || `Wirkstoff ${ingredientId}`,
+        totals: new Map<string, StackIngredientTotalAmount>(),
+        parts: new Map<number, { part_name: string; totals: Map<string, StackIngredientTotalAmount> }>(),
+      };
+      if (amountPerServing != null) {
+        addAggregationAmount(aggregate.totals, amountPerServing * dailyServingFactor, ingredient.unit);
+      }
+
+      for (const part of ingredient.parts ?? []) {
+        if (!ingredientIsSearchRelevant(part)) continue;
+        const effectivePart = {
+          ...part,
+          basis_quantity: part.basis_quantity ?? ingredient.basis_quantity,
+          basis_unit: part.basis_unit ?? ingredient.basis_unit,
+        };
+        const partAmountPerServing = ingredientAmountPerProductServing(effectivePart, product);
+        if (partAmountPerServing == null) continue;
+        const partAggregate = aggregate.parts.get(part.part_id) ?? {
+          part_name: part.part_name?.trim() || `Sub-Wirkstoff ${part.part_id}`,
+          totals: new Map<string, StackIngredientTotalAmount>(),
+        };
+        addAggregationAmount(partAggregate.totals, partAmountPerServing * dailyServingFactor, part.unit);
+        aggregate.parts.set(part.part_id, partAggregate);
+      }
+      ingredients.set(ingredientId, aggregate);
+    }
+  }
+
+  return [...ingredients.entries()]
+    .sort(([, left], [, right]) => left.ingredient_name.localeCompare(right.ingredient_name, 'de'))
+    .map(([ingredientId, ingredient]) => ({
+      ingredient_id: ingredientId,
+      ingredient_name: ingredient.ingredient_name,
+      totals: finalizedAmounts(ingredient.totals),
+      parts: [...ingredient.parts.entries()]
+        .sort(([, left], [, right]) => left.part_name.localeCompare(right.part_name, 'de'))
+        .map(([partId, part]) => ({
+          part_id: partId,
+          part_name: part.part_name,
+          totals: finalizedAmounts(part.totals),
+        })),
+    }))
+    .filter((ingredient) => ingredient.totals.length > 0 || ingredient.parts.length > 0);
+}
+
 function parseGermanNumber(value: string): number | null {
   const trimmed = value.trim();
   const normalized = trimmed.includes(',')
@@ -139,6 +282,28 @@ function ingredientIsSearchRelevant(ingredient: CalculableIngredient): boolean {
 }
 
 function ingredientCandidates(product: CalculableProduct): CalculableIngredient[] {
+  // Sub-Wirkstoffmengen sind bereits in der Hauptmenge enthalten. Sie werden
+  // deshalb niemals als zusätzliche Kandidaten in die Produktgesamtdosis
+  // aufgenommen. Ein explizites Part-Ziel liefert die API als Treffermenge.
+  const explicitScalarPart = product.matched_part_id != null && positiveNumber(product.matched_part_quantity) != null
+    ? [{
+        part_id: product.matched_part_id,
+        part_name: product.matched_part_name ?? undefined,
+        quantity: product.matched_part_quantity,
+        unit: product.matched_part_unit,
+        basis_quantity: product.matched_part_basis_quantity,
+        basis_unit: product.matched_part_basis_unit,
+        search_relevant: true,
+      }]
+    : [];
+  const explicitPartCandidates = explicitScalarPart.length > 0
+    ? explicitScalarPart
+    : product.matched_part_id == null
+      ? []
+      : (product.ingredients ?? []).flatMap((ingredient) => ingredient.parts ?? [])
+          .filter((part) => part.part_id === product.matched_part_id);
+  if (explicitPartCandidates.length > 0) return explicitPartCandidates;
+
   const candidates = [...(product.ingredients ?? [])];
   if (positiveNumber(product.quantity) != null && product.unit) {
     candidates.push({

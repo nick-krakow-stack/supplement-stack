@@ -45,26 +45,43 @@ export interface AdminInteractionPayload {
   version?: number | null;
 }
 
-export interface AdminIngredientSubIngredient {
-  parent_ingredient_id: number;
-  parent_name: string;
-  parent_unit?: string | null;
-  child_ingredient_id: number;
-  child_name: string;
-  child_unit?: string | null;
-  prompt_label: string | null;
-  is_default_prompt: number;
-  sort_order: number;
-  created_at?: number | string | null;
-}
-
 export interface AdminIngredientPart {
   id: number;
   name: string;
   type: string | null;
   status: string | null;
   internal_comment: string | null;
+  synonyms: AdminIngredientPartSynonym[];
   raw?: Record<string, unknown>;
+}
+
+export interface AdminIngredientPartSynonym {
+  id: number;
+  part_id: number;
+  synonym: string;
+  language: string;
+}
+
+export type AdminIngredientPartStatus = 'active' | 'inactive' | 'deprecated';
+
+export interface AdminIngredientPartPayload {
+  name?: string;
+  type?: string | null;
+  status?: AdminIngredientPartStatus;
+  internal_comment?: string | null;
+  synonyms?: Array<{ synonym: string; language: string }>;
+}
+
+export interface AdminProductIngredientPart {
+  part_id: number;
+  part_name: string;
+  part_type: string | null;
+  part_status: string | null;
+  quantity: number | null;
+  unit: string | null;
+  basis_quantity: number | null;
+  basis_unit: string | null;
+  search_relevant: number;
 }
 
 export interface AdminIngredientPartLink {
@@ -320,7 +337,7 @@ export interface AdminUserProductIngredient {
   basis_quantity?: number | null;
   basis_unit?: string | null;
   search_relevant?: number | boolean | null;
-  parent_ingredient_id?: number | null;
+  parts?: AdminProductIngredientPart[];
 }
 
 export interface AdminUserProduct {
@@ -548,7 +565,7 @@ export interface AdminIngredientDisplayProfile {
   id: number;
   ingredient_id: number;
   form_id: number | null;
-  sub_ingredient_id: number | null;
+  part_id: number | null;
   effect_summary: string | null;
   timing: string | null;
   timing_note: string | null;
@@ -732,7 +749,7 @@ export interface AdminIngredientResearchWarningPayload {
 
 export interface AdminIngredientDisplayProfilePayload {
   form_id?: number | null;
-  sub_ingredient_id?: number | null;
+  part_id?: number | null;
   effect_summary?: string | null;
   timing?: string | null;
   timing_note?: string | null;
@@ -1206,8 +1223,7 @@ export interface AdminProductIngredient {
   ingredient_description: string | null;
   form_id: number | null;
   form_name: string | null;
-  parent_ingredient_id: number | null;
-  parent_ingredient_name: string | null;
+  parts: AdminProductIngredientPart[];
   is_main: number;
   search_relevant: number;
   quantity: number | null;
@@ -1231,7 +1247,14 @@ export interface AdminProductIngredientPayload {
   basis_quantity?: number | null;
   basis_unit?: string | null;
   search_relevant?: number | boolean;
-  parent_ingredient_id?: number | null;
+  parts?: Array<{
+    part_id: number;
+    quantity?: number | null;
+    unit?: string | null;
+    basis_quantity?: number | null;
+    basis_unit?: string | null;
+    search_relevant?: number | boolean;
+  }>;
   version?: number | null;
 }
 
@@ -2039,8 +2062,9 @@ function parseProductIngredient(raw: Record<string, unknown>): AdminProductIngre
     ingredient_description: toTextOrNull(raw.ingredient_description),
     form_id: toIntOrNull(raw.form_id),
     form_name: toTextOrNull(raw.form_name),
-    parent_ingredient_id: toIntOrNull(raw.parent_ingredient_id),
-    parent_ingredient_name: toTextOrNull(raw.parent_ingredient_name),
+    parts: Array.isArray(raw.parts)
+      ? raw.parts.map((entry) => parseProductIngredientPart(entry as Record<string, unknown>))
+      : [],
     is_main: toBooleanOrNull(raw.is_main) ? 1 : 0,
     search_relevant: toBooleanOrNull(raw.search_relevant) === false ? 0 : 1,
     quantity: toNumberOrNull(raw.quantity),
@@ -2558,13 +2582,48 @@ function parseIngredientPrecursor(raw: Record<string, unknown>): AdminIngredient
 
 function parseIngredientPart(raw: Record<string, unknown>): AdminIngredientPart {
   const partId = toIntOrNull(raw.part_id ?? raw.id) ?? 0;
+  const rawSynonyms = Array.isArray(raw.synonyms) ? raw.synonyms : [];
   return {
     id: partId,
-    name: toTextOrNull(raw.part_name ?? raw.name) || `Wirkstoffteil ${partId}`,
+    name: toTextOrNull(raw.part_name ?? raw.name) || `Sub-Wirkstoff ${partId}`,
     type: toTextOrNull(raw.part_type ?? raw.type),
     status: toTextOrNull(raw.part_status ?? raw.status),
     internal_comment: toTextOrNull(raw.internal_comment ?? raw.comment),
+    synonyms: rawSynonyms.map((entry) => {
+      const synonym = entry as Record<string, unknown>;
+      return {
+        id: toIntOrNull(synonym.id) ?? 0,
+        part_id: toIntOrNull(synonym.part_id) ?? partId,
+        synonym: toTextOrNull(synonym.synonym) ?? '',
+        language: toTextOrNull(synonym.language) ?? 'de',
+      };
+    }).filter((entry) => entry.id > 0 && entry.synonym.length > 0),
     raw,
+  };
+}
+
+export interface AdminKnowledgeArticlePart {
+  article_slug: string;
+  ingredient_id: number;
+  ingredient_name: string | null;
+  part_id: number;
+  part_name: string;
+  part_type: string | null;
+  part_status: string | null;
+  sort_order: number;
+}
+
+function parseProductIngredientPart(raw: Record<string, unknown>): AdminProductIngredientPart {
+  return {
+    part_id: toIntOrNull(raw.part_id) ?? 0,
+    part_name: toTextOrNull(raw.part_name) || `Sub-Wirkstoff ${toIntOrNull(raw.part_id) ?? ''}`,
+    part_type: toTextOrNull(raw.part_type),
+    part_status: toTextOrNull(raw.part_status),
+    quantity: toNumberOrNull(raw.quantity),
+    unit: toTextOrNull(raw.unit),
+    basis_quantity: toNumberOrNull(raw.basis_quantity),
+    basis_unit: toTextOrNull(raw.basis_unit),
+    search_relevant: toBooleanOrNull(raw.search_relevant) === false ? 0 : 1,
   };
 }
 
@@ -2573,7 +2632,7 @@ function parseIngredientPartLink(raw: Record<string, unknown>): AdminIngredientP
   return {
     ingredient_id: toIntOrNull(raw.ingredient_id) ?? 0,
     part_id: partId,
-    part_name: toTextOrNull(raw.part_name ?? raw.name) || `Wirkstoffteil ${partId}`,
+    part_name: toTextOrNull(raw.part_name ?? raw.name) || `Sub-Wirkstoff ${partId}`,
     part_type: toTextOrNull(raw.part_type ?? raw.type),
     part_status: toTextOrNull(raw.part_status ?? raw.status),
     sort_order: toIntOrNull(raw.sort_order) ?? 0,
@@ -2587,7 +2646,7 @@ function parseIngredientDisplayProfile(raw: Record<string, unknown>): AdminIngre
     id: toIntOrNull(raw.id) ?? 0,
     ingredient_id: toIntOrNull(raw.ingredient_id) ?? 0,
     form_id: toIntOrNull(raw.form_id),
-    sub_ingredient_id: toIntOrNull(raw.sub_ingredient_id),
+    part_id: toIntOrNull(raw.part_id ?? raw.sub_ingredient_id),
     effect_summary: toTextOrNull(raw.effect_summary),
     timing: toTextOrNull(raw.timing),
     timing_note: toTextOrNull(raw.timing_note),
@@ -2807,7 +2866,7 @@ function normalizeDisplayProfilePayload(
 ): AdminIngredientDisplayProfilePayload {
   return {
     form_id: payload.form_id ?? null,
-    sub_ingredient_id: payload.sub_ingredient_id ?? null,
+    part_id: payload.part_id ?? null,
     effect_summary: toTextOrNull(payload.effect_summary),
     timing: toTextOrNull(payload.timing),
     timing_note: toTextOrNull(payload.timing_note),
@@ -2920,7 +2979,9 @@ function parseAdminUserProductIngredient(raw: Record<string, unknown>): AdminUse
     basis_quantity: toNumberOrNull(raw.basis_quantity),
     basis_unit: toTextOrNull(raw.basis_unit),
     search_relevant: toBooleanOrNull(raw.search_relevant) ?? toIntOrNull(raw.search_relevant),
-    parent_ingredient_id: toIntOrNull(raw.parent_ingredient_id),
+    parts: Array.isArray(raw.parts)
+      ? raw.parts.map((entry) => parseProductIngredientPart(entry as Record<string, unknown>))
+      : [],
   };
 }
 
@@ -3883,59 +3944,14 @@ export async function getAllIngredients(): Promise<IngredientLookup[]> {
   return res.data.ingredients ?? [];
 }
 
-export async function getIngredientSubIngredients(params?: {
-  parentIngredientId?: number | null;
-}): Promise<AdminIngredientSubIngredient[]> {
-  const query = params?.parentIngredientId
-    ? { parent_ingredient_id: params.parentIngredientId }
-    : {};
-  const res = await apiClient.get<{ mappings: AdminIngredientSubIngredient[] }>(
-    '/admin/ingredient-sub-ingredients',
-    {
-      params: query,
-    },
-  );
-  return res.data.mappings ?? [];
-}
-
-export async function upsertIngredientSubIngredient(payload: {
-  parent_ingredient_id: number;
-  child_ingredient_id: number;
-  sort_order: number;
-  prompt_label?: string | null;
-  is_default_prompt?: number | boolean;
-}): Promise<AdminIngredientSubIngredient> {
-  const normalizedPayload = {
-    parent_ingredient_id: payload.parent_ingredient_id,
-    child_ingredient_id: payload.child_ingredient_id,
-    sort_order: payload.sort_order,
-    prompt_label: toTrimmedOrNull(payload.prompt_label),
-    is_default_prompt:
-      typeof payload.is_default_prompt === 'boolean'
-        ? payload.is_default_prompt
-          ? 1
-          : 0
-        : payload.is_default_prompt ?? 0,
-  };
-  const res = await apiClient.put<{ mapping: AdminIngredientSubIngredient }>(
-    '/admin/ingredient-sub-ingredients',
-    normalizedPayload,
-  );
-  return res.data.mapping;
-}
-
-export async function deleteIngredientSubIngredient(
-  parentIngredientId: number,
-  childIngredientId: number,
-): Promise<void> {
-  await apiClient.delete(`/admin/ingredient-sub-ingredients/${parentIngredientId}/${childIngredientId}`);
-}
-
-export async function searchIngredientParts(query: string, limit = 12): Promise<AdminIngredientPart[]> {
+export async function searchIngredientParts(
+  query = '',
+  limit = 50,
+  status?: AdminIngredientPartStatus,
+): Promise<AdminIngredientPart[]> {
   const trimmedQuery = query.trim();
-  if (!trimmedQuery) return [];
   const res = await apiClient.get<Record<string, unknown>>('/admin/ingredient-parts', {
-    params: { q: trimmedQuery, limit },
+    params: { ...(trimmedQuery ? { q: trimmedQuery } : {}), ...(status ? { status } : {}), limit },
   });
   const rows = (Array.isArray(res.data.parts)
     ? res.data.parts
@@ -3945,6 +3961,76 @@ export async function searchIngredientParts(query: string, limit = 12): Promise<
         ? res.data.data
         : []) as unknown[];
   return rows.map((entry) => parseIngredientPart(entry as Record<string, unknown>));
+}
+
+export async function getKnowledgeArticleParts(slug: string): Promise<AdminKnowledgeArticlePart[]> {
+  const { data } = await apiClient.get<{ parts?: unknown[] }>(`/admin/knowledge-articles/${encodeURIComponent(slug)}/parts`);
+  return (data.parts ?? []).map((entry) => {
+    const row = entry as Record<string, unknown>;
+    return {
+      article_slug: toTextOrNull(row.article_slug) ?? slug,
+      ingredient_id: toIntOrNull(row.ingredient_id) ?? 0,
+      ingredient_name: toTextOrNull(row.ingredient_name),
+      part_id: toIntOrNull(row.part_id) ?? 0,
+      part_name: toTextOrNull(row.part_name) ?? `Sub-Wirkstoff ${toIntOrNull(row.part_id) ?? ''}`,
+      part_type: toTextOrNull(row.part_type),
+      part_status: toTextOrNull(row.part_status),
+      sort_order: toIntOrNull(row.sort_order) ?? 0,
+    };
+  }).filter((row) => row.ingredient_id > 0 && row.part_id > 0);
+}
+
+export async function updateKnowledgeArticleParts(
+  slug: string,
+  parts: Array<{ ingredient_id: number; part_id: number; sort_order: number }>,
+): Promise<void> {
+  await apiClient.put(`/admin/knowledge-articles/${encodeURIComponent(slug)}/parts`, { parts });
+}
+
+export async function createIngredientPart(payload: Required<Pick<AdminIngredientPartPayload, 'name'>> & AdminIngredientPartPayload): Promise<AdminIngredientPart> {
+  const { data } = await apiClient.post<Record<string, unknown>>('/admin/ingredient-parts', payload);
+  return parseIngredientPart((data.part ?? data) as Record<string, unknown>);
+}
+
+export async function updateIngredientPart(partId: number, payload: AdminIngredientPartPayload): Promise<AdminIngredientPart> {
+  const { data } = await apiClient.patch<Record<string, unknown>>(`/admin/ingredient-parts/${partId}`, payload);
+  return parseIngredientPart((data.part ?? data) as Record<string, unknown>);
+}
+
+export async function deleteIngredientPart(partId: number): Promise<void> {
+  await apiClient.delete(`/admin/ingredient-parts/${partId}`);
+}
+
+export async function createIngredientPartSynonym(
+  partId: number,
+  payload: { synonym: string; language: string },
+): Promise<AdminIngredientPartSynonym> {
+  const { data } = await apiClient.post<Record<string, unknown>>(`/admin/ingredient-parts/${partId}/synonyms`, payload);
+  const synonym = (data.synonym ?? data) as Record<string, unknown>;
+  return {
+    id: toIntOrNull(synonym.id) ?? 0,
+    part_id: toIntOrNull(synonym.part_id) ?? partId,
+    synonym: toTextOrNull(synonym.synonym) ?? payload.synonym,
+    language: toTextOrNull(synonym.language) ?? payload.language,
+  };
+}
+
+export async function updateIngredientPartSynonym(
+  synonymId: number,
+  payload: { synonym: string; language: string },
+): Promise<AdminIngredientPartSynonym> {
+  const { data } = await apiClient.patch<Record<string, unknown>>(`/admin/ingredient-part-synonyms/${synonymId}`, payload);
+  const synonym = (data.synonym ?? data) as Record<string, unknown>;
+  return {
+    id: toIntOrNull(synonym.id) ?? synonymId,
+    part_id: toIntOrNull(synonym.part_id) ?? 0,
+    synonym: toTextOrNull(synonym.synonym) ?? payload.synonym,
+    language: toTextOrNull(synonym.language) ?? payload.language,
+  };
+}
+
+export async function deleteIngredientPartSynonym(synonymId: number): Promise<void> {
+  await apiClient.delete(`/admin/ingredient-part-synonyms/${synonymId}`);
 }
 
 export async function getIngredientParts(ingredientId: number): Promise<AdminIngredientPartLink[]> {
@@ -4210,58 +4296,6 @@ export async function getIngredientPrecursors(ingredientId: number): Promise<Adm
   const { data } = await apiClient.get<Record<string, unknown>>(`/admin/ingredients/${ingredientId}/precursors`);
   const rows = Array.isArray(data.precursors) ? data.precursors : [];
   return rows.map((entry) => parseIngredientPrecursor(entry as Record<string, unknown>));
-}
-
-export async function createIngredientPrecursor(
-  ingredientId: number,
-  payload: {
-    precursor_ingredient_id: number;
-    sort_order?: number | null;
-    note?: string | null;
-  },
-): Promise<AdminIngredientPrecursor> {
-  const { data } = await apiClient.post<Record<string, unknown>>(
-    `/admin/ingredients/${ingredientId}/precursors`,
-    {
-      precursor_ingredient_id: payload.precursor_ingredient_id,
-      sort_order: payload.sort_order ?? 0,
-      note: toTrimmedOrNull(payload.note),
-    },
-  );
-  const created = data.precursor ?? data;
-  if (created && typeof created === 'object') {
-    return parseIngredientPrecursor(created as Record<string, unknown>);
-  }
-  throw new Error('Could not parse precursor response.');
-}
-
-export async function updateIngredientPrecursor(
-  ingredientId: number,
-  precursorIngredientId: number,
-  payload: {
-    sort_order?: number | null;
-    note?: string | null;
-  },
-): Promise<AdminIngredientPrecursor> {
-  const { data } = await apiClient.patch<Record<string, unknown>>(
-    `/admin/ingredients/${ingredientId}/precursors/${precursorIngredientId}`,
-    {
-      sort_order: payload.sort_order ?? 0,
-      note: toTrimmedOrNull(payload.note),
-    },
-  );
-  const updated = data.precursor ?? data;
-  if (updated && typeof updated === 'object') {
-    return parseIngredientPrecursor(updated as Record<string, unknown>);
-  }
-  throw new Error('Could not parse precursor response.');
-}
-
-export async function deleteIngredientPrecursor(
-  ingredientId: number,
-  precursorIngredientId: number,
-): Promise<void> {
-  await apiClient.delete(`/admin/ingredients/${ingredientId}/precursors/${precursorIngredientId}`);
 }
 
 export async function updateIngredientResearchStatus(
