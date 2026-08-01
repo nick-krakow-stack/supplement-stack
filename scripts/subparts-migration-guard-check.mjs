@@ -7,6 +7,10 @@ const migration = readFileSync(
   new URL('../d1-migrations/0097_ingredient_part_amounts.sql', import.meta.url),
   'utf8',
 )
+const sequenceMigration = readFileSync(
+  new URL('../d1-migrations/0098_normalize_subpart_id_sequences.sql', import.meta.url),
+  'utf8',
+)
 
 function createFixture({
   conflict = false,
@@ -328,4 +332,46 @@ test('normalized part names and synonyms are globally unique on insert and updat
     /Normalisiertes Part-Synonym ist bereits vergeben/,
   )
   assert.equal(db.prepare('PRAGMA foreign_key_check').all().length, 0)
+})
+
+test('duplicate AUTOINCREMENT metadata is normalized and reserves disjoint ranges', () => {
+  const db = new DatabaseSync(':memory:')
+  for (const table of [
+    'products',
+    'product_ingredients',
+    'user_products',
+    'user_product_ingredients',
+    'ingredient_parts',
+  ]) {
+    db.exec(`CREATE TABLE ${table} (id INTEGER PRIMARY KEY AUTOINCREMENT);`)
+    db.prepare(`INSERT INTO ${table} (id) VALUES (?)`).run(table === 'user_product_ingredients' ? 5 : 2)
+    db.prepare('INSERT INTO sqlite_sequence(name, seq) VALUES (?, ?)').run(table, 1)
+  }
+
+  db.exec(sequenceMigration)
+  for (const table of [
+    'products',
+    'product_ingredients',
+    'user_products',
+    'user_product_ingredients',
+    'ingredient_parts',
+  ]) {
+    const rows = db.prepare('SELECT seq FROM sqlite_sequence WHERE name = ?').all(table)
+    assert.equal(rows.length, 1)
+    const before = Number(rows[0].seq)
+    const first = db.prepare(`
+      UPDATE sqlite_sequence
+      SET seq = MAX(seq, (SELECT COALESCE(MAX(id), 0) FROM ${table})) + 2
+      WHERE name = ?
+      RETURNING seq - 2 + 1 AS first_id
+    `).get(table).first_id
+    const second = db.prepare(`
+      UPDATE sqlite_sequence
+      SET seq = MAX(seq, (SELECT COALESCE(MAX(id), 0) FROM ${table})) + 2
+      WHERE name = ?
+      RETURNING seq - 2 + 1 AS first_id
+    `).get(table).first_id
+    assert.equal(first, before + 1)
+    assert.equal(second, before + 3)
+  }
 })

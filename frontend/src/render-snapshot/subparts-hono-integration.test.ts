@@ -94,7 +94,7 @@ function applyAllMigrations(target: ProductionKnowledgeHonoHarness): void {
     .filter((name) => /^\d+.*\.sql$/.test(name))
     .sort((left, right) => left.localeCompare(right));
 
-  expect(migrationFiles).toContain('0097_ingredient_part_amounts.sql');
+  expect(migrationFiles).toContain('0098_normalize_subpart_id_sequences.sql');
   for (const migrationFile of migrationFiles) {
     target.exec(readFileSync(`${migrationsDirectory}/${migrationFile}`, 'utf8'));
   }
@@ -282,7 +282,7 @@ function seedUsersAndCatalog(): void {
   );
 }
 
-describe.sequential('Sub-Wirkstoffe: echte Hono-Routen auf D1-Schema bis 0097', () => {
+describe.sequential('Sub-Wirkstoffe: echte Hono-Routen auf D1-Schema bis 0098', () => {
   beforeAll(async () => {
     harness = createProductionKnowledgeHonoHarness();
     applyAllMigrations(harness);
