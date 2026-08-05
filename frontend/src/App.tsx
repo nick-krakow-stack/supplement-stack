@@ -21,6 +21,8 @@ const TermsPage = lazy(() => import('./pages/TermsPage'));
 const KnowledgeOverviewPage = lazy(() => import('./pages/KnowledgeOverviewPage'));
 const KnowledgeArticlePage = lazy(() => import('./pages/KnowledgeArticlePage'));
 const StackWorkspace = lazy(() => import('./components/StackWorkspace'));
+const CreatorSharingPage = lazy(() => import('./pages/CreatorSharingPage'));
+const CreatorShareImportPage = lazy(() => import('./pages/CreatorShareImportPage'));
 
 const AdministratorShell = lazy(() => import('./pages/administrator/AdministratorShell'));
 const AdministratorDashboardPage = lazy(() => import('./pages/administrator/AdministratorDashboardPage'));
@@ -47,6 +49,7 @@ const AdministratorLegalPage = lazy(() => import('./pages/administrator/Administ
 const AdministratorProfilePage = lazy(() => import('./pages/administrator/AdministratorProfilePage'));
 const AdministratorManagementPage = lazy(() => import('./pages/administrator/AdministratorManagementPage'));
 const AdministratorResearchPage = lazy(() => import('./pages/administrator/AdministratorResearchPage'));
+const AdministratorCreatorSharingPage = lazy(() => import('./pages/administrator/AdministratorCreatorSharingPage'));
 
 function NotFoundPage() {
   return (
@@ -118,6 +121,7 @@ export default function App() {
             <Route path="rankings" element={<AdministratorRankingsPage />} />
             <Route path="sub-ingredients" element={<AdministratorSubIngredientsPage />} />
             <Route path="settings" element={<AdministratorSettingsPage />} />
+            <Route path="creator-sharing" element={<AdministratorCreatorSharingPage />} />
             <Route path="*" element={<Navigate to="/administrator/dashboard" replace />} />
           </Route>
 
@@ -136,6 +140,16 @@ export default function App() {
             element={
               <Layout>
                 <DemoPage />
+              </Layout>
+            }
+          />
+          <Route
+            path="/creator"
+            element={
+              <Layout>
+                <ProtectedRoute>
+                  <CreatorSharingPage />
+                </ProtectedRoute>
               </Layout>
             }
           />
@@ -173,6 +187,7 @@ export default function App() {
                   <Route path="/agb" element={<TermsPage />} />
                   <Route path="/wissen" element={<KnowledgeOverviewPage />} />
                   <Route path="/wissen/:slug" element={<KnowledgeArticlePage />} />
+                  <Route path="/share/:token" element={<CreatorShareImportPage />} />
                   <Route
                     path="/my-products"
                     element={

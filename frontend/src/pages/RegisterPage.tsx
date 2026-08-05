@@ -36,6 +36,7 @@ export default function RegisterPage() {
   const { register } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const authRedirect = getAuthRedirect(location);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -195,7 +196,7 @@ export default function RegisterPage() {
 
         <p className="mt-4 text-sm text-center text-gray-600">
           Bereits registriert?{' '}
-          <Link to="/login" className="text-blue-600 hover:underline font-medium">
+          <Link to={`/login?redirect=${encodeURIComponent(authRedirect)}`} className="text-blue-600 hover:underline font-medium">
             Anmelden
           </Link>
         </p>

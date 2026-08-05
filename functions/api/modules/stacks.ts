@@ -17,6 +17,11 @@ import { sendMail } from '../lib/mail'
 import { calculateProductUsage, ingredientAmountPerProductServing } from '../lib/stack-calculations'
 import { loadIngredientPartsByParentRows, type IngredientPartRead } from '../lib/ingredient-parts'
 import { loadCatalogProductSafetyWarnings, loadUserProductSafetyWarnings } from './knowledge'
+import {
+  getProductShopTarget,
+  reserveIds,
+  resolveBindingForNewItem,
+} from '../lib/creator-sharing-service'
 
 const stacks = new Hono<AppContext>()
 
@@ -786,6 +791,30 @@ async function validateStackCategoryIds(
   return (row?.count ?? 0) === uniqueIds.length
 }
 
+async function stackItemBindingStatement(
+  db: D1Database,
+  stackItemId: number,
+  catalogProductId: number,
+  contextPartyId: number | null,
+): Promise<D1PreparedStatement | null> {
+  const target = await getProductShopTarget(db, catalogProductId)
+  if (!target) return null
+  const binding = await resolveBindingForNewItem(db, target, contextPartyId)
+  if (!binding) return null
+  return db.prepare(`
+    INSERT INTO stack_item_link_bindings (
+      stack_item_id, shop_link_id, resolution_kind,
+      affiliate_version_id, resolved_party_id, bound_at
+    ) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+  `).bind(
+    stackItemId,
+    target.id,
+    binding.resolution_kind,
+    binding.affiliate_version_id,
+    binding.resolved_party_id,
+  )
+}
+
 async function loadStackItems(
   db: D1Database,
   stackId: number | string,
@@ -809,7 +838,7 @@ async function loadStackItems(
         p.price as product_price,
         p.image_url,
         p.shop_link,
-        p.is_affiliate,
+        CASE WHEN binding.resolution_kind IS NOT NULL AND binding.resolution_kind <> 'bare' THEN 1 ELSE p.is_affiliate END AS is_affiliate,
         p.discontinued_at,
         p.serving_size,
         p.serving_unit,
@@ -826,12 +855,23 @@ async function loadStackItems(
         p.warning_message,
         p.warning_type,
         p.alternative_note,
+        si.source_share_link_id,
+        si.creator_statement_snapshot,
+        si.amount_source,
+        si.version,
+        CASE
+          WHEN binding.stack_item_id IS NOT NULL
+            THEN '/api/products/' || p.id || '/out?stack_item_id=' || si.id || '&context=creator_stack'
+          ELSE '/api/products/' || p.id || '/out?context=stack'
+        END AS click_url,
+        CASE WHEN si.source_share_link_id IS NOT NULL OR binding.resolved_party_id IS NOT NULL THEN 1 ELSE 0 END AS has_attribution,
         si.sort_order,
         si.category_id,
         si.quantity,
         si.intake_interval_days
       FROM stack_items si
       JOIN products p ON p.id = si.catalog_product_id
+      LEFT JOIN stack_item_link_bindings binding ON binding.stack_item_id = si.id
       LEFT JOIN product_ingredients pi_main ON pi_main.id = (
         SELECT pi2.id
         FROM product_ingredients pi2
@@ -881,6 +921,12 @@ async function loadStackItems(
         up.warning_message,
         up.warning_type,
         up.alternative_note,
+        si.source_share_link_id,
+        si.creator_statement_snapshot,
+        si.amount_source,
+        si.version,
+        NULL AS click_url,
+        0 AS has_attribution,
         si.sort_order,
         si.category_id,
         si.quantity,
@@ -1130,14 +1176,20 @@ stacks.get('/', async (c) => {
   const { results } = await c.env.DB.prepare(`
     SELECT
       s.*,
+      origin.name AS origin_party_name,
+      origin.type AS origin_party_type,
       fp.first_name AS family_member_first_name,
       COUNT(si.id) as items_count
     FROM stacks s
     LEFT JOIN stack_items si ON si.stack_id = s.id
     LEFT JOIN family_profiles fp ON fp.id = s.family_member_id AND fp.user_id = s.user_id
+    LEFT JOIN parties origin ON origin.id = s.origin_party_id
     WHERE s.user_id = ?
     GROUP BY s.id
-    ORDER BY s.created_at DESC
+    ORDER BY
+      CASE WHEN s.last_opened_at IS NULL THEN 1 ELSE 0 END,
+      s.last_opened_at DESC,
+      s.created_at DESC
   `).bind(user.userId).all()
   return c.json({ stacks: results })
 })
@@ -1177,10 +1229,18 @@ stacks.post('/', async (c) => {
   const stackId = stackResult.meta.last_row_id
   const defaultCategory = await ensureDefaultStackCategory(c.env.DB, stackId)
 
+  const itemIds = await reserveIds(c.env.DB, 'stack_items', normalized.items.length)
+  const itemStatements: D1PreparedStatement[] = []
   for (const [index, item] of normalized.items.entries()) {
-    await c.env.DB.prepare(
-      'INSERT INTO stack_items (stack_id, catalog_product_id, user_product_id, quantity, intake_interval_days, dosage_text, timing, sort_order, category_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).bind(
+    const stackItemId = itemIds[index]
+    itemStatements.push(c.env.DB.prepare(`
+      INSERT INTO stack_items (
+        id, stack_id, catalog_product_id, user_product_id, quantity,
+        intake_interval_days, dosage_text, timing, sort_order, category_id,
+        amount_source, version
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'user', 1)
+    `).bind(
+      stackItemId,
       stackId,
       item.product_type === 'catalog' ? item.id : null,
       item.product_type === 'user_product' ? item.id : null,
@@ -1190,8 +1250,13 @@ stacks.post('/', async (c) => {
       item.timing,
       index,
       defaultCategory.id,
-    ).run()
+    ))
+    if (item.product_type === 'catalog') {
+      const binding = await stackItemBindingStatement(c.env.DB, stackItemId, item.id, null)
+      if (binding) itemStatements.push(binding)
+    }
   }
+  if (itemStatements.length > 0) await c.env.DB.batch(itemStatements)
   return c.json({ id: stackId, name: data.name, family_member_id: familyMemberId })
 })
 
@@ -1581,9 +1646,11 @@ stacks.get('/:id', async (c) => {
   if (authErr) return authErr
   const user = c.get('user')
   const stack = await c.env.DB.prepare(`
-    SELECT s.*, fp.first_name AS family_member_first_name
+    SELECT s.*, fp.first_name AS family_member_first_name,
+      origin.name AS origin_party_name, origin.type AS origin_party_type
     FROM stacks s
     LEFT JOIN family_profiles fp ON fp.id = s.family_member_id AND fp.user_id = s.user_id
+    LEFT JOIN parties origin ON origin.id = s.origin_party_id
     WHERE s.id = ?
   `).bind(c.req.param('id')).first<StackRow>()
   if (!stack) return c.json({ error: 'Not found' }, 404)
@@ -1685,7 +1752,28 @@ stacks.put('/:id', async (c) => {
     stack_item_id: number
     sort_order: number
     category_id: number | null
+    version: number
+    has_binding: number
+    quantity: number
+    intake_interval_days: number
+    dosage_text: string | null
+    timing: string | null
+    amount_source: string | null
   }>()
+  let existingItemRows: Array<{
+    stack_item_id: number
+    sort_order: number
+    category_id: number | null
+    version: number
+    has_binding: number
+    quantity: number
+    intake_interval_days: number
+    dosage_text: string | null
+    timing: string | null
+    amount_source: string | null
+    product_type: StackProductType
+    product_id: number
+  }> = []
   let nextFallbackSortOrder = 0
   if (data.product_ids !== undefined) {
     const normalized = normalizeStackProductItems(data.product_ids)
@@ -1703,24 +1791,27 @@ stacks.put('/:id', async (c) => {
     }
     const { results: existingLayoutRows } = await c.env.DB.prepare(`
       SELECT
-        id AS stack_item_id,
-        sort_order,
-        category_id,
+        stack_items.id AS stack_item_id,
+        stack_items.sort_order,
+        stack_items.category_id,
+        stack_items.version,
+        stack_items.quantity,
+        stack_items.intake_interval_days,
+        stack_items.dosage_text,
+        stack_items.timing,
+        stack_items.amount_source,
+        CASE WHEN binding.stack_item_id IS NULL THEN 0 ELSE 1 END AS has_binding,
         CASE
-          WHEN catalog_product_id IS NOT NULL THEN 'catalog'
+          WHEN stack_items.catalog_product_id IS NOT NULL THEN 'catalog'
           ELSE 'user_product'
         END AS product_type,
-        COALESCE(catalog_product_id, user_product_id) AS product_id
+        COALESCE(stack_items.catalog_product_id, stack_items.user_product_id) AS product_id
       FROM stack_items
-      WHERE stack_id = ?
-      ORDER BY sort_order ASC, id ASC
-    `).bind(id).all<{
-      stack_item_id: number
-      sort_order: number
-      category_id: number | null
-      product_type: StackProductType
-      product_id: number
-    }>()
+      LEFT JOIN stack_item_link_bindings binding ON binding.stack_item_id = stack_items.id
+      WHERE stack_items.stack_id = ?
+      ORDER BY stack_items.sort_order ASC, stack_items.id ASC
+    `).bind(id).all<typeof existingItemRows[number]>()
+    existingItemRows = existingLayoutRows
     for (const existing of existingLayoutRows) {
       const productKey = `${existing.product_type}:${existing.product_id}`
       if (!existingLayoutByProductKey.has(productKey)) {
@@ -1728,6 +1819,13 @@ stacks.put('/:id', async (c) => {
           stack_item_id: existing.stack_item_id,
           sort_order: existing.sort_order,
           category_id: existing.category_id,
+          version: existing.version,
+          has_binding: existing.has_binding,
+          quantity: existing.quantity,
+          intake_interval_days: existing.intake_interval_days,
+          dosage_text: existing.dosage_text,
+          timing: existing.timing,
+          amount_source: existing.amount_source,
         })
       }
     }
@@ -1746,17 +1844,61 @@ stacks.put('/:id', async (c) => {
     statements.push(c.env.DB.prepare('UPDATE stacks SET family_member_id = ? WHERE id = ?').bind(familyMemberId, id))
   }
   if (normalizedItems !== null) {
-    statements.push(c.env.DB.prepare('DELETE FROM stack_items WHERE stack_id = ?').bind(id))
-    statements.push(...normalizedItems.map((item) => {
+    const retainedIds = new Set<number>()
+    const newItems = normalizedItems.filter((item) => !existingLayoutByProductKey.has(`${item.product_type}:${item.id}`))
+    const newItemIds = await reserveIds(c.env.DB, 'stack_items', newItems.length)
+    let newItemIndex = 0
+    for (const item of normalizedItems) {
       const productKey = `${item.product_type}:${item.id}`
       const existingLayout = existingLayoutByProductKey.get(productKey)
       const sortOrder = item.sort_order ?? existingLayout?.sort_order ?? nextFallbackSortOrder++
       const categoryId = item.category_id === undefined
         ? (typeof existingLayout?.category_id === 'number' ? existingLayout.category_id : defaultCategory.id)
         : (item.category_id ?? defaultCategory.id)
-      return c.env.DB.prepare(
-        'INSERT INTO stack_items (stack_id, catalog_product_id, user_product_id, quantity, intake_interval_days, dosage_text, timing, sort_order, category_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-      ).bind(
+      if (existingLayout) {
+        retainedIds.add(existingLayout.stack_item_id)
+        const amountChanged = existingLayout.quantity !== item.quantity
+          || existingLayout.intake_interval_days !== item.intake_interval_days
+          || existingLayout.dosage_text !== item.dosage_text
+          || existingLayout.timing !== item.timing
+        statements.push(c.env.DB.prepare(`
+          UPDATE stack_items
+          SET quantity = ?, intake_interval_days = ?, dosage_text = ?, timing = ?,
+              sort_order = ?, category_id = ?, amount_source = ?, version = version + 1
+          WHERE id = ? AND stack_id = ? AND version = ?
+        `).bind(
+          item.quantity,
+          item.intake_interval_days,
+          item.dosage_text,
+          item.timing,
+          sortOrder,
+          categoryId,
+          amountChanged ? 'user' : existingLayout.amount_source,
+          existingLayout.stack_item_id,
+          id,
+          existingLayout.version,
+        ))
+        if (item.product_type === 'catalog' && existingLayout.has_binding === 0) {
+          const binding = await stackItemBindingStatement(
+            c.env.DB,
+            existingLayout.stack_item_id,
+            item.id,
+            stack.origin_party_id ?? null,
+          )
+          if (binding) statements.push(binding)
+        }
+        continue
+      }
+
+      const stackItemId = newItemIds[newItemIndex++]
+      statements.push(c.env.DB.prepare(`
+        INSERT INTO stack_items (
+          id, stack_id, catalog_product_id, user_product_id, quantity,
+          intake_interval_days, dosage_text, timing, sort_order, category_id,
+          amount_source, version
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'user', 1)
+      `).bind(
+        stackItemId,
         id,
         item.product_type === 'catalog' ? item.id : null,
         item.product_type === 'user_product' ? item.id : null,
@@ -1766,16 +1908,34 @@ stacks.put('/:id', async (c) => {
         item.timing,
         sortOrder,
         categoryId,
-      )
-    }))
+      ))
+      if (item.product_type === 'catalog') {
+        const binding = await stackItemBindingStatement(
+          c.env.DB,
+          stackItemId,
+          item.id,
+          stack.origin_party_id ?? null,
+        )
+        if (binding) statements.push(binding)
+      }
+    }
+    for (const existing of existingItemRows) {
+      if (!retainedIds.has(existing.stack_item_id)) {
+        statements.push(c.env.DB.prepare(`
+          DELETE FROM stack_items WHERE id = ? AND stack_id = ? AND version = ?
+        `).bind(existing.stack_item_id, id, existing.version))
+      }
+    }
   }
   if (statements.length > 0) {
     await c.env.DB.batch(statements)
   }
   const updated = await c.env.DB.prepare(`
-    SELECT s.*, fp.first_name AS family_member_first_name
+    SELECT s.*, fp.first_name AS family_member_first_name,
+      origin.name AS origin_party_name, origin.type AS origin_party_type
     FROM stacks s
     LEFT JOIN family_profiles fp ON fp.id = s.family_member_id AND fp.user_id = s.user_id
+    LEFT JOIN parties origin ON origin.id = s.origin_party_id
     WHERE s.id = ?
   `).bind(id).first()
   const items = await loadStackItemsWithIngredients(c.env.DB, id, stack.user_id)

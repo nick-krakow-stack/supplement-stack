@@ -35,6 +35,8 @@ jobs:
 
       - name: Build frontend
         run: cd frontend && npm run build
+        env:
+          VITE_CREATOR_STACK_SHARING_ENABLED: 'true'
 
       - name: Verify build output
         run: |

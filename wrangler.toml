@@ -13,6 +13,7 @@ SMTP_PORT = "465"
 SMTP_USERNAME = "noreply@supplementstack.de"
 SMTP_FROM_EMAIL = "noreply@supplementstack.de"
 SMTP_FROM_NAME = "Supplement Stack"
+CREATOR_STACK_SHARING_ENABLED = "true"
 
 [[d1_databases]]
 binding = "DB"

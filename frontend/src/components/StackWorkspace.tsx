@@ -36,6 +36,7 @@ import {
   type PublicIntakeTimingOption,
   type StackCategoryRecord,
 } from '../api/stacks';
+import { creatorSharingEnabled, markStackOpened } from '../api/creatorSharing';
 import type { FamilyMember, ProductSafetyWarning, User } from '../types';
 import type { DosageGuideline, Ingredient, ShopDomain } from '../types/local';
 import {
@@ -59,8 +60,13 @@ export interface DemoProduct {
   brand?: string;
   product_brand?: string | null;
   shop_link?: string;
+  click_url?: string;
   image_url?: string;
   is_affiliate?: number;
+  source_share_link_id?: number | null;
+  creator_statement_snapshot?: string | null;
+  amount_source?: 'user' | 'creator_snapshot' | null;
+  has_attribution?: number;
   discontinued_at?: string;
   serving_size?: number;
   serving_unit?: string;
@@ -138,6 +144,8 @@ export interface DemoStack {
   description?: string;
   family_member_id?: number | null;
   family_member_first_name?: string | null;
+  origin_party_id?: number | null;
+  origin_party_name?: string | null;
 }
 
 type IngredientFormOption = {
@@ -261,7 +269,7 @@ function credentialedFetch(input: RequestInfo | URL, init: RequestInit = {}): Pr
 }
 
 function mapStackDetail(
-  stack: { id: number | string; name: string; family_member_id?: number | null; family_member_first_name?: string | null },
+  stack: { id: number | string; name: string; family_member_id?: number | null; family_member_first_name?: string | null; origin_party_id?: number | null; origin_party_name?: string | null },
   detail?: Record<string, unknown>,
 ): DemoStack {
   const stackId = String(stack.id);
@@ -278,6 +286,8 @@ function mapStackDetail(
     name?: string;
     family_member_id?: number | null;
     family_member_first_name?: string | null;
+    origin_party_id?: number | null;
+    origin_party_name?: string | null;
   } | undefined;
   const categories = normalizeStackCategories(stack.id, detail?.categories);
   const defaultCategory = categories.find((category) => category.is_default) ?? createDefaultCategory(stackId);
@@ -297,6 +307,8 @@ function mapStackDetail(
     categories,
     family_member_id: stackDetail?.family_member_id ?? stack.family_member_id ?? null,
     family_member_first_name: stackDetail?.family_member_first_name ?? stack.family_member_first_name ?? null,
+    origin_party_id: stackDetail?.origin_party_id ?? stack.origin_party_id ?? null,
+    origin_party_name: stackDetail?.origin_party_name ?? stack.origin_party_name ?? null,
   };
 }
 
@@ -1486,13 +1498,23 @@ function AddProductModal({
           .then((response) => (response.ok ? response.json() : { products: [] }))
           .catch(() => ({ products: [] }))
       : Promise.resolve({ products: [] });
+    const defaultProductPromise = !isDemo && creatorSharingEnabled
+      ? credentialedFetch(apiPath(`/creator-sharing/stacks/${targetStackId}/default-product/${ingredient.id}`), { headers: JSON_HEADERS })
+          .then((response) => (response.ok ? response.json() as Promise<{ product?: { product_id: number } | null }> : { product: null }))
+          .catch(() => ({ product: null }))
+      : Promise.resolve({ product: null as { product_id: number } | null });
 
-    Promise.all([catalogPromise, userProductsPromise])
-      .then(([catalogData, userData]) => {
+    Promise.all([catalogPromise, userProductsPromise, defaultProductPromise])
+      .then(([catalogData, userData, defaultData]) => {
         const catalogProducts = (catalogData.products ?? []).map((product) => ({
           ...product,
           product_type: 'catalog' as const,
-        }));
+        })).sort((left, right) => {
+          const preferredId = defaultData.product?.product_id;
+          if (left.id === preferredId) return -1;
+          if (right.id === preferredId) return 1;
+          return 0;
+        });
         const catalogKeys = new Set(catalogProducts.map(productStackKey));
         const catalogIds = new Set(catalogProducts.map((product) => product.id));
         const ownProducts = ((userData.products ?? []) as DemoProduct[])
@@ -2950,6 +2972,14 @@ export function StackWorkspace({
   }, [loadAuthenticatedStacks, loadFamilyProfiles, mode]);
 
   const activeStack = state.stacks.find((s) => s.id === state.activeStackId) ?? state.stacks[0];
+
+  useEffect(() => {
+    if (mode !== 'authenticated' || !creatorSharingEnabled || !activeStack?.id) return;
+    const numericId = Number(activeStack.id);
+    if (Number.isSafeInteger(numericId) && numericId > 0) {
+      void markStackOpened(numericId).catch(() => { /* Selection remains usable if tracking is unavailable. */ });
+    }
+  }, [activeStack?.id, mode]);
 
   const handleRegisterFromDemo = useCallback(() => {
     if (isDemo) {
@@ -4443,6 +4473,15 @@ export function StackWorkspace({
           </div>
         </div>
 
+        {!loading && activeStack && (
+          activeStack.origin_party_id != null || activeStack.products.some((product) => product.has_attribution === 1)
+        ) && (
+          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+            <strong>{activeStack.origin_party_name ? `Creator-Stack von ${activeStack.origin_party_name}. ` : 'Creator-Empfehlung. '}</strong>
+            Einige Produktlinks sind Affiliate-Links. Die Plattform oder der Stack-Anbieter kann daran verdienen; für dich ändert sich der Preis nicht.
+          </div>
+        )}
+
         {loading && (
           <div style={{ padding: 40, textAlign: 'center' }}>
             <div
@@ -4593,6 +4632,11 @@ export function StackWorkspace({
                               </div>
                             )}
                             {isProductLayoutEditMode && <div className="ss-product-layout-edit-overlay" aria-hidden="true" />}
+                            {product.creator_statement_snapshot && (
+                              <div className="mb-2 rounded-md border border-indigo-100 bg-indigo-50 px-3 py-2 text-xs text-indigo-950">
+                                <strong>Hinweis des Creators:</strong> {product.creator_statement_snapshot}
+                              </div>
+                            )}
                             <ProductCard
                               product={product}
                               shopDomains={shopDomains}

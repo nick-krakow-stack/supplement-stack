@@ -95,6 +95,7 @@ function applyAllMigrations(target: ProductionKnowledgeHonoHarness): void {
     .sort((left, right) => left.localeCompare(right));
 
   expect(migrationFiles).toContain('0098_normalize_subpart_id_sequences.sql');
+  expect(migrationFiles).toContain('0099_creator_stack_sharing.sql');
   for (const migrationFile of migrationFiles) {
     target.exec(readFileSync(`${migrationsDirectory}/${migrationFile}`, 'utf8'));
   }
@@ -212,8 +213,8 @@ function seedUsersAndCatalog(): void {
   harness.run(
     `INSERT INTO products (
        id, name, brand, form, price, moderation_status, visibility,
-       serving_size, serving_unit, servings_per_container, container_count
-     ) VALUES (?, 'Omega Parts Public', 'Integrationstest', 'Kapseln', 20, 'approved', 'public', 1, 'Portion', 30, 1)`,
+       serving_size, serving_unit, servings_per_container, container_count, owner_party_id
+     ) VALUES (?, 'Omega Parts Public', 'Integrationstest', 'Kapseln', 20, 'approved', 'public', 1, 'Portion', 30, 1, (SELECT id FROM parties WHERE slug = 'platform'))`,
     catalogOmegaProductId,
   );
   harness.run(
@@ -240,8 +241,8 @@ function seedUsersAndCatalog(): void {
   harness.run(
     `INSERT INTO products (
        id, name, brand, form, price, moderation_status, visibility,
-       serving_size, serving_unit, servings_per_container, container_count
-     ) VALUES (?, 'Omega Parts Hidden', 'Integrationstest', 'Kapseln', 20, 'pending', 'hidden', 1, 'Portion', 30, 1)`,
+       serving_size, serving_unit, servings_per_container, container_count, owner_party_id
+     ) VALUES (?, 'Omega Parts Hidden', 'Integrationstest', 'Kapseln', 20, 'pending', 'hidden', 1, 'Portion', 30, 1, (SELECT id FROM parties WHERE slug = 'platform'))`,
     hiddenOmegaProductId,
   );
   harness.run(
@@ -262,8 +263,8 @@ function seedUsersAndCatalog(): void {
   harness.run(
     `INSERT INTO products (
        id, name, brand, form, price, moderation_status, visibility,
-       serving_size, serving_unit, servings_per_container, container_count
-     ) VALUES (?, 'Acetyl Parts Public', 'Integrationstest', 'Kapseln', 20, 'approved', 'public', 1, 'Portion', 30, 1)`,
+       serving_size, serving_unit, servings_per_container, container_count, owner_party_id
+     ) VALUES (?, 'Acetyl Parts Public', 'Integrationstest', 'Kapseln', 20, 'approved', 'public', 1, 'Portion', 30, 1, (SELECT id FROM parties WHERE slug = 'platform'))`,
     catalogCarnitineProductId,
   );
   harness.run(
@@ -282,7 +283,7 @@ function seedUsersAndCatalog(): void {
   );
 }
 
-describe.sequential('Sub-Wirkstoffe: echte Hono-Routen auf D1-Schema bis 0098', () => {
+describe.sequential('Sub-Wirkstoffe: echte Hono-Routen auf D1-Schema bis 0099', () => {
   beforeAll(async () => {
     harness = createProductionKnowledgeHonoHarness();
     applyAllMigrations(harness);
