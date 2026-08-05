@@ -24,6 +24,7 @@ import { Hono } from 'hono'
 import type { AppContext, IngredientRow } from '../lib/types'
 import { ensureAuth, requireAdmin, logAdminAction } from '../lib/helpers'
 import { convertAmount, normalizeUnit } from '../lib/units'
+import { globalProductVisibilitySql } from '../lib/creator-sharing-service'
 import { attachWarningsToProducts, loadCatalogProductSafetyWarnings } from './knowledge'
 
 const ingredients = new Hono<AppContext>()
@@ -862,6 +863,7 @@ ingredients.get('/:id/dosage-guidelines', async (c) => {
 
 // GET /api/ingredients/:id/products
 ingredients.get('/:id/products', async (c) => {
+  const productVisibility = await globalProductVisibilitySql(c.env.DB, 'p')
   const id = parsePositiveInteger(c.req.param('id'))
   if (id === null) return c.json({ error: 'id must be a positive integer' }, 400)
   const rawFormId = c.req.query('form_id')?.trim()
@@ -1011,8 +1013,7 @@ ingredients.get('/:id/products', async (c) => {
       WHERE pi.ingredient_id = ?
         AND (? IS NULL OR pi.form_id = ?)
         AND pi.search_relevant = 1
-        AND p.visibility = 'public'
-        AND p.moderation_status = 'approved'
+        AND ${productVisibility}
     )
     SELECT *
     FROM matching_rows
@@ -1321,6 +1322,7 @@ recommendationsApp.get('/', async (c) => {
   if (!Number.isInteger(ingredientId) || ingredientId <= 0)
     return c.json({ error: 'ingredient_id must be a positive integer' }, 400)
   try {
+    const productVisibility = await globalProductVisibilitySql(c.env.DB, 'p')
     const { results: recommendations } = await c.env.DB.prepare(`
       SELECT DISTINCT r.product_id, r.type
       FROM product_recommendations r
@@ -1330,8 +1332,7 @@ recommendationsApp.get('/', async (c) => {
        AND pi.search_relevant = 1
        AND pi.ingredient_id = r.ingredient_id
       WHERE r.ingredient_id = ?
-        AND p.moderation_status = 'approved'
-        AND p.visibility = 'public'
+        AND ${productVisibility}
       ORDER BY CASE r.type WHEN 'recommended' THEN 0 ELSE 1 END ASC
     `).bind(ingredientId).all<{ product_id: number; type: string }>()
     return c.json({ recommendations })

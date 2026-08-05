@@ -114,6 +114,8 @@ import {
   type IngredientPartInput,
   type IngredientPartRead,
 } from '../lib/ingredient-parts'
+import { hostMatchesDomain, validateProductTargetUrl } from '../lib/creator-sharing'
+import { ensureUserParty, getPlatformParty } from '../lib/creator-sharing-service'
 
 const admin = new Hono<AppContext>()
 
@@ -1739,7 +1741,7 @@ function buildAdminExportQuery(entity: AdminExportEntity, query: {
             p.brand,
             p.form,
             p.price,
-            p.shop_link,
+            ${canonicalProductTargetUrlSql('p')} AS shop_link,
             COALESCE(p.is_affiliate, 0) AS is_affiliate,
             COALESCE(
               p.affiliate_owner_type,
@@ -1970,7 +1972,7 @@ function buildAdminExportQuery(entity: AdminExportEntity, query: {
               p.brand,
               p.form,
               p.price,
-              p.shop_link,
+              ${canonicalProductTargetUrlSql('p')} AS shop_link,
               COALESCE(p.is_affiliate, 0) AS is_affiliate,
               COALESCE(
                 p.affiliate_owner_type,
@@ -1986,7 +1988,7 @@ function buildAdminExportQuery(entity: AdminExportEntity, query: {
               COALESCE(ic.ingredient_count, 0) AS ingredient_count,
               COALESCE(ic.main_ingredient_count, 0) AS main_ingredient_count,
               CASE WHEN COALESCE(p.image_url, '') = '' AND COALESCE(p.image_r2_key, '') = '' THEN 1 ELSE 0 END AS missing_image,
-              CASE WHEN COALESCE(p.shop_link, '') = '' THEN 1 ELSE 0 END AS missing_shop_link,
+              CASE WHEN ${missingCanonicalProductTargetSql('p')} THEN 1 ELSE 0 END AS missing_shop_link,
               CASE
                 WHEN p.serving_size IS NULL
                   OR p.serving_size <= 0
@@ -2000,8 +2002,7 @@ function buildAdminExportQuery(entity: AdminExportEntity, query: {
               CASE WHEN p.price <= 0 OR p.price > 300 THEN 1 ELSE 0 END AS suspicious_price_zero_or_high,
               CASE WHEN COALESCE(ic.ingredient_count, 0) = 0 THEN 1 ELSE 0 END AS missing_ingredient_rows,
               CASE
-                WHEN COALESCE(p.shop_link, '') <> ''
-                  AND COALESCE(p.affiliate_owner_type, '') = ''
+                WHEN ${legacyAffiliateFlagIssueSql('p')}
                 THEN 1 ELSE 0
               END AS no_affiliate_flag_on_shop_link
             FROM products p
@@ -2077,7 +2078,7 @@ function buildAdminExportQuery(entity: AdminExportEntity, query: {
           r.product_name,
           r.shop_link_snapshot,
           CASE
-            WHEN r.product_type = 'catalog' THEN p.shop_link
+            WHEN r.product_type = 'catalog' THEN ${canonicalProductTargetUrlSql('p')}
             ELSE up.shop_link
           END AS current_shop_link,
           r.reason,
@@ -5002,132 +5003,6 @@ function validateManagedListReorderItems(body: unknown): ValidationResult<Manage
   return { ok: true, value: items }
 }
 
-async function syncPrimaryProductShopLinkFromProduct(db: D1Database, productId: number): Promise<void> {
-  if (!(await hasTable(db, 'product_shop_links'))) return
-
-  const product = await db.prepare(`
-    SELECT
-      id,
-      shop_link,
-      COALESCE(is_affiliate, 0) AS is_affiliate,
-      COALESCE(
-        affiliate_owner_type,
-        CASE WHEN COALESCE(is_affiliate, 0) = 1 THEN 'nick' ELSE 'none' END
-      ) AS affiliate_owner_type,
-      affiliate_owner_user_id
-    FROM products
-    WHERE id = ?
-  `).bind(productId).first<{
-    id: number
-    shop_link: string | null
-    is_affiliate: number
-    affiliate_owner_type: AffiliateOwnerType
-    affiliate_owner_user_id: number | null
-  }>()
-  if (!product) return
-
-  await db.prepare(`
-    UPDATE product_shop_links
-    SET is_primary = 0,
-        updated_at = datetime('now'),
-        version = COALESCE(version, 0) + 1
-    WHERE product_id = ?
-  `).bind(productId).run()
-
-  const shopLink = typeof product.shop_link === 'string' ? product.shop_link.trim() : ''
-  if (!shopLink) return
-
-  const existing = await db.prepare(`
-    SELECT id
-    FROM product_shop_links
-    WHERE product_id = ?
-      AND url = ?
-    ORDER BY id ASC
-    LIMIT 1
-  `).bind(productId, shopLink).first<{ id: number }>()
-
-  if (existing) {
-    await db.prepare(`
-      UPDATE product_shop_links
-      SET is_primary = 1,
-          active = 1,
-          is_affiliate = ?,
-          affiliate_owner_type = ?,
-          affiliate_owner_user_id = ?,
-          source_type = COALESCE(source_type, 'admin'),
-          updated_at = datetime('now'),
-          version = COALESCE(version, 0) + 1
-      WHERE id = ?
-    `).bind(
-      product.is_affiliate,
-      product.affiliate_owner_type,
-      product.affiliate_owner_user_id,
-      existing.id,
-    ).run()
-    return
-  }
-
-  await db.prepare(`
-    INSERT INTO product_shop_links (
-      product_id,
-      url,
-      is_affiliate,
-      affiliate_owner_type,
-      affiliate_owner_user_id,
-      source_type,
-      is_primary,
-      active,
-      sort_order,
-      created_at,
-      updated_at
-    )
-    VALUES (?, ?, ?, ?, ?, 'admin', 1, 1, 0, datetime('now'), datetime('now'))
-  `).bind(
-    productId,
-    shopLink,
-    product.is_affiliate,
-    product.affiliate_owner_type,
-    product.affiliate_owner_user_id,
-  ).run()
-}
-
-async function syncProductLegacyShopLinkFromPrimary(db: D1Database, productId: number): Promise<void> {
-  if (!(await hasTable(db, 'product_shop_links'))) return
-
-  const primary = await db.prepare(`
-    SELECT
-      url,
-      COALESCE(is_affiliate, 0) AS is_affiliate,
-      COALESCE(affiliate_owner_type, 'none') AS affiliate_owner_type,
-      affiliate_owner_user_id
-    FROM product_shop_links
-    WHERE product_id = ?
-      AND active = 1
-    ORDER BY is_primary DESC, sort_order ASC, id ASC
-    LIMIT 1
-  `).bind(productId).first<{
-    url: string
-    is_affiliate: number
-    affiliate_owner_type: AffiliateOwnerType
-    affiliate_owner_user_id: number | null
-  }>()
-
-  await db.prepare(`
-    UPDATE products
-    SET shop_link = ?,
-        is_affiliate = ?,
-        affiliate_owner_type = ?,
-        affiliate_owner_user_id = ?
-    WHERE id = ?
-  `).bind(
-    primary?.url ?? null,
-    primary?.is_affiliate ?? 0,
-    primary?.affiliate_owner_type ?? 'none',
-    primary?.affiliate_owner_user_id ?? null,
-    productId,
-  ).run()
-}
-
 function isPrivateIpv4Host(host: string): boolean {
   const parts = host.split('.')
   if (parts.length !== 4) return false
@@ -5631,6 +5506,35 @@ function productQaIssues(row: ProductQaRow): ProductQaIssue[] {
   return PRODUCT_QA_ISSUES.filter((issue) => row[issue] === 1)
 }
 
+function canonicalProductTargetUrlSql(productAlias: string): string {
+  return `COALESCE((
+    SELECT psl.url
+    FROM product_shop_links psl
+    WHERE psl.product_id = ${productAlias}.id
+      AND psl.active = 1
+      AND psl.blocked_at IS NULL
+      AND psl.link_kind IS NOT NULL
+    ORDER BY psl.is_primary DESC, psl.sort_order ASC, psl.id ASC
+    LIMIT 1
+  ), ${productAlias}.shop_link)`
+}
+
+function missingCanonicalProductTargetSql(productAlias: string): string {
+  return `COALESCE(${canonicalProductTargetUrlSql(productAlias)}, '') = ''`
+}
+
+function legacyAffiliateFlagIssueSql(productAlias: string): string {
+  return `NOT EXISTS (
+      SELECT 1 FROM product_shop_links psl
+      WHERE psl.product_id = ${productAlias}.id
+        AND psl.active = 1
+        AND psl.blocked_at IS NULL
+        AND psl.link_kind IS NOT NULL
+    )
+    AND COALESCE(${productAlias}.shop_link, '') <> ''
+    AND COALESCE(${productAlias}.affiliate_owner_type, '') = ''`
+}
+
 async function getProductQaRow(
   db: D1Database,
   productId: number,
@@ -5658,7 +5562,7 @@ async function getProductQaRow(
         p.brand,
         p.form,
         p.price,
-        p.shop_link,
+        ${canonicalProductTargetUrlSql('p')} AS shop_link,
         p.image_url,
         p.image_r2_key,
         COALESCE(p.is_affiliate, 0) AS is_affiliate,
@@ -5678,7 +5582,7 @@ async function getProductQaRow(
         COALESCE(ic.ingredient_count, 0) AS ingredient_count,
         COALESCE(ic.main_ingredient_count, 0) AS main_ingredient_count,
         CASE WHEN COALESCE(p.image_url, '') = '' AND COALESCE(p.image_r2_key, '') = '' THEN 1 ELSE 0 END AS missing_image,
-        CASE WHEN COALESCE(p.shop_link, '') = '' THEN 1 ELSE 0 END AS missing_shop_link,
+        CASE WHEN ${missingCanonicalProductTargetSql('p')} THEN 1 ELSE 0 END AS missing_shop_link,
         CASE
           WHEN p.serving_size IS NULL
             OR p.serving_size <= 0
@@ -5692,8 +5596,7 @@ async function getProductQaRow(
         CASE WHEN p.price <= 0 OR p.price > 300 THEN 1 ELSE 0 END AS suspicious_price_zero_or_high,
         CASE WHEN COALESCE(ic.ingredient_count, 0) = 0 THEN 1 ELSE 0 END AS missing_ingredient_rows,
         CASE
-          WHEN COALESCE(p.shop_link, '') <> ''
-            AND COALESCE(p.affiliate_owner_type, '') = ''
+          WHEN ${legacyAffiliateFlagIssueSql('p')}
           THEN 1 ELSE 0
         END AS no_affiliate_flag_on_shop_link
         ${linkHealthSelect}
@@ -5882,9 +5785,11 @@ function validateProductCreatePayload(body: Record<string, unknown>): Validation
   })
   if (!containerCount.ok) return containerCount
 
-  const fallbackOwner: Partial<AffiliateOwnership> = shopLink.value
-    ? { affiliate_owner_type: 'nick', affiliate_owner_user_id: null, is_affiliate: 1 }
-    : { affiliate_owner_type: 'none', affiliate_owner_user_id: null, is_affiliate: 0 }
+  const fallbackOwner: Partial<AffiliateOwnership> = {
+    affiliate_owner_type: 'none',
+    affiliate_owner_user_id: null,
+    is_affiliate: 0,
+  }
   const ownership = normalizeAffiliateOwnership(body, fallbackOwner)
   if (!ownership.ok) return ownership
 
@@ -5896,9 +5801,9 @@ function validateProductCreatePayload(body: Record<string, unknown>): Validation
       form: form.value ?? null,
       price: normalizePriceCents(price.value),
       shop_link: shopLink.value ?? null,
-      is_affiliate: shopLink.value ? ownership.value.is_affiliate : 0,
-      affiliate_owner_type: shopLink.value ? ownership.value.affiliate_owner_type : 'none',
-      affiliate_owner_user_id: shopLink.value ? ownership.value.affiliate_owner_user_id : null,
+      is_affiliate: ownership.value.is_affiliate,
+      affiliate_owner_type: ownership.value.affiliate_owner_type,
+      affiliate_owner_user_id: ownership.value.affiliate_owner_user_id,
       moderation_status: moderationStatus,
       visibility,
       serving_size: servingSize.value ?? null,
@@ -6401,7 +6306,7 @@ async function loadIngredientProductRecommendations(
       COALESCE(r.sort_order, 0) AS sort_order,
       p.name AS product_name,
       p.brand AS product_brand,
-      p.shop_link AS product_shop_link,
+      ${canonicalProductTargetUrlSql('p')} AS product_shop_link,
       p.moderation_status AS product_moderation_status,
       p.visibility AS product_visibility,
       ${shopLinkSelect}
@@ -8611,11 +8516,30 @@ admin.post('/products', async (c) => {
     is_affiliate: data.is_affiliate ?? 0,
   })
   if (!affiliateOwner.ok) return c.json({ error: affiliateOwner.error }, affiliateOwner.status)
-  data.affiliate_owner_type = data.shop_link ? affiliateOwner.value.affiliate_owner_type : 'none'
-  data.affiliate_owner_user_id = data.shop_link ? affiliateOwner.value.affiliate_owner_user_id : null
-  data.is_affiliate = data.shop_link ? affiliateOwner.value.is_affiliate : 0
+  if (affiliateOwner.value.is_affiliate !== 0 || affiliateOwner.value.affiliate_owner_type !== 'none') {
+    return c.json({ error: 'Affiliate-Codes werden getrennt als versionierte Partei-/Shop-Konfiguration gepflegt.' }, 409)
+  }
+  const requestedTargetUrl = data.shop_link ?? null
+  let requestedTarget: { url: string; shopDomainId: number; displayName: string; domain: string } | null = null
+  if (requestedTargetUrl) {
+    const parsed = new URL(requestedTargetUrl)
+    const { results: domains } = await c.env.DB.prepare(`SELECT id, domain, display_name FROM shop_domains`).all<{
+      id: number; domain: string; display_name: string
+    }>()
+    const domain = domains.find((candidate) => hostMatchesDomain(parsed.hostname, candidate.domain))
+    if (!domain) return c.json({ error: 'Produktlink passt zu keiner hinterlegten Shop-Domain.' }, 400)
+    const safe = validateProductTargetUrl(requestedTargetUrl, domain.domain)
+    if (!safe.url) return c.json({ error: safe.error }, 400)
+    requestedTarget = { url: safe.url, shopDomainId: domain.id, displayName: domain.display_name, domain: domain.domain }
+  }
+  data.shop_link = null
+  data.affiliate_owner_type = 'none'
+  data.affiliate_owner_user_id = null
+  data.is_affiliate = 0
 
   const productColumns = await getTableColumns(c.env.DB, 'products')
+  const platformParty = await getPlatformParty(c.env.DB)
+  if (!platformParty) return c.json({ error: 'Platform party is not configured' }, 409)
   const createFields = [
     'name',
     'brand',
@@ -8633,25 +8557,37 @@ admin.post('/products', async (c) => {
     'container_count',
   ] as const
   const fields: Array<[string, string | number | null]> = []
+  const [productId] = await reserveIntegerIds(c.env.DB, 'products', 1)
+  fields.push(['id', productId])
   for (const field of createFields) {
     if (productColumns.has(field)) fields.push([field, data[field] ?? null])
   }
   if (productColumns.has('version')) fields.push(['version', 1])
+  if (productColumns.has('owner_party_id')) fields.push(['owner_party_id', platformParty.id])
 
-  const insertResult = await c.env.DB.prepare(`
+  const statements: D1PreparedStatement[] = [c.env.DB.prepare(`
     INSERT INTO products (
       ${fields.map(([field]) => field).join(',\n      ')}
     )
     VALUES (${fields.map(() => '?').join(', ')})
-  `).bind(...fields.map(([, value]) => value)).run()
-  const productId = Number(insertResult.meta.last_row_id)
-  if (!Number.isInteger(productId) || productId <= 0) {
-    return c.json({ error: 'Product could not be created' }, 500)
-  }
+  `).bind(...fields.map(([, value]) => value))]
 
-  if (data.shop_link) {
-    await syncPrimaryProductShopLinkFromProduct(c.env.DB, productId)
+  if (requestedTarget) {
+    statements.push(c.env.DB.prepare(`
+      INSERT INTO product_shop_links (
+        product_id, shop_domain_id, shop_name, url, normalized_host,
+        is_affiliate, affiliate_owner_type, affiliate_owner_user_id,
+        source_type, is_primary, active, sort_order, link_kind
+      ) VALUES (?, ?, ?, ?, ?, 0, 'none', NULL, 'admin', 1, 1, 0, 'base_target')
+    `).bind(
+      productId,
+      requestedTarget.shopDomainId,
+      requestedTarget.displayName,
+      requestedTarget.url,
+      requestedTarget.domain,
+    ))
   }
+  await c.env.DB.batch(statements)
 
   const includeLinkHealth = await hasAffiliateLinkHealthTable(c.env.DB)
   const product = await getProductQaRow(c.env.DB, productId, includeLinkHealth)
@@ -10133,18 +10069,28 @@ admin.post('/products/:id/shop-links', async (c) => {
   const data = validation.value
   if (!data.url) return c.json({ error: 'url is required' }, 400)
   const url = data.url
+  if (data.shop_domain_id === undefined || data.shop_domain_id === null) {
+    return c.json({ error: 'shop_domain_id is required for immutable product targets' }, 400)
+  }
   const affiliateOwner = await validateAffiliateOwnerUser(c.env.DB, {
     affiliate_owner_type: data.affiliate_owner_type ?? 'none',
     affiliate_owner_user_id: data.affiliate_owner_user_id ?? null,
     is_affiliate: data.is_affiliate ?? 0,
   })
   if (!affiliateOwner.ok) return c.json({ error: affiliateOwner.error }, affiliateOwner.status)
+  if (affiliateOwner.value.is_affiliate !== 0 || affiliateOwner.value.affiliate_owner_type !== 'none') {
+    return c.json({ error: 'Affiliate configuration must be managed as a party shop version, not on a product target' }, 409)
+  }
 
   if (data.shop_domain_id !== undefined && data.shop_domain_id !== null) {
-    const domain = await c.env.DB.prepare('SELECT id FROM shop_domains WHERE id = ?')
+    const domain = await c.env.DB.prepare('SELECT id, domain FROM shop_domains WHERE id = ?')
       .bind(data.shop_domain_id)
-      .first<{ id: number }>()
+      .first<{ id: number; domain: string }>()
     if (!domain) return c.json({ error: 'shop_domain_id must reference an existing shop domain' }, 400)
+    const safeUrl = validateProductTargetUrl(url, domain.domain)
+    if (!safeUrl.url) return c.json({ error: safeUrl.error }, 400)
+    data.url = safeUrl.url
+    data.normalized_host = domain.domain.toLowerCase().replace(/^www\./, '')
   }
 
   const activeLinkCount = await c.env.DB.prepare(`
@@ -10163,17 +10109,7 @@ admin.post('/products/:id/shop-links', async (c) => {
   const isPrimary = data.is_primary ?? ((activeLinkCount?.count ?? 0) === 0 && active === 1 ? 1 : 0)
   const sortOrder = data.sort_order ?? ((maxSortRow?.sort_order ?? -10) + 10)
 
-  if (isPrimary === 1 && active === 1) {
-    await c.env.DB.prepare(`
-      UPDATE product_shop_links
-      SET is_primary = 0,
-          updated_at = datetime('now'),
-          version = COALESCE(version, 0) + 1
-      WHERE product_id = ?
-    `).bind(productId).run()
-  }
-
-  const result = await c.env.DB.prepare(`
+  const insertStatement = c.env.DB.prepare(`
     INSERT INTO product_shop_links (
       product_id,
       shop_domain_id,
@@ -10187,15 +10123,16 @@ admin.post('/products/:id/shop-links', async (c) => {
       is_primary,
       active,
       sort_order,
+      link_kind,
       created_at,
       updated_at
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'base_target', datetime('now'), datetime('now'))
   `).bind(
     productId,
     data.shop_domain_id ?? null,
     data.shop_name ?? null,
-    url,
+    data.url,
     data.normalized_host ?? null,
     affiliateOwner.value.is_affiliate,
     affiliateOwner.value.affiliate_owner_type,
@@ -10204,7 +10141,20 @@ admin.post('/products/:id/shop-links', async (c) => {
     isPrimary,
     active,
     sortOrder,
-  ).run()
+  )
+  const writeStatements: D1PreparedStatement[] = []
+  if (isPrimary === 1 && active === 1) {
+    writeStatements.push(c.env.DB.prepare(`
+      UPDATE product_shop_links
+      SET is_primary = 0,
+          updated_at = datetime('now'),
+          version = COALESCE(version, 0) + 1
+      WHERE product_id = ?
+    `).bind(productId))
+  }
+  writeStatements.push(insertStatement)
+  const writeResults = await c.env.DB.batch(writeStatements)
+  const result = writeResults[writeResults.length - 1]
 
   const shopLinkId = result.meta.last_row_id as number
   const includeHealth = await hasTable(c.env.DB, 'product_shop_link_health')
@@ -10218,10 +10168,9 @@ admin.post('/products/:id/shop-links', async (c) => {
         updated_at
       )
       VALUES (?, ?, 'unchecked', datetime('now'), datetime('now'))
-    `).bind(shopLinkId, url).run()
+    `).bind(shopLinkId, data.url).run()
   }
 
-  await syncProductLegacyShopLinkFromPrimary(c.env.DB, productId)
   const row = await getProductShopLinkRow(c.env.DB, productId, shopLinkId, includeHealth)
 
   await logAdminAction(c, {
@@ -10262,6 +10211,18 @@ admin.patch('/products/:id/shop-links/:shopLinkId', async (c) => {
   if (!validation.ok) return c.json({ error: validation.error }, validation.status)
   const data = validation.value
   if (Object.keys(data).length === 0) return c.json({ error: 'At least one product shop link field is required' }, 400)
+  const classified = (existing as typeof existing & { link_kind?: string | null }).link_kind
+  if (classified && (
+    hasOwnKey(data, 'url')
+    || hasOwnKey(data, 'shop_domain_id')
+    || hasOwnKey(data, 'is_affiliate')
+    || hasOwnKey(data, 'affiliate_owner_type')
+    || hasOwnKey(data, 'affiliate_owner_user_id')
+  )) {
+    return c.json({
+      error: 'Classified product targets are immutable. Create a new base target and deactivate this row.',
+    }, 409)
+  }
 
   if (
     data.affiliate_owner_type !== undefined ||
@@ -10291,16 +10252,6 @@ admin.patch('/products/:id/shop-links/:shopLinkId', async (c) => {
 
   const nextActive = data.active ?? existing.active
   const nextPrimary = data.is_primary ?? existing.is_primary
-  if (nextPrimary === 1 && nextActive === 1) {
-    await c.env.DB.prepare(`
-      UPDATE product_shop_links
-      SET is_primary = 0,
-          updated_at = datetime('now'),
-          version = COALESCE(version, 0) + 1
-      WHERE product_id = ?
-        AND id <> ?
-    `).bind(productId, shopLinkId).run()
-  }
 
   const fields = [
     'shop_domain_id',
@@ -10329,7 +10280,7 @@ admin.patch('/products/:id/shop-links/:shopLinkId', async (c) => {
   setClauses.push("updated_at = datetime('now')", 'version = COALESCE(version, 0) + 1')
   const whereSql = lock.value.enforce ? 'product_id = ? AND id = ? AND version = ?' : 'product_id = ? AND id = ?'
 
-  const updateResult = await c.env.DB.prepare(`
+  const updateStatement = c.env.DB.prepare(`
     UPDATE product_shop_links
     SET ${setClauses.join(', ')}
     WHERE ${whereSql}
@@ -10338,7 +10289,24 @@ admin.patch('/products/:id/shop-links/:shopLinkId', async (c) => {
     productId,
     shopLinkId,
     ...(lock.value.enforce ? [lock.value.expectedVersion] : []),
-  ).run()
+  )
+  const updateStatements: D1PreparedStatement[] = [updateStatement]
+  if (nextPrimary === 1 && nextActive === 1) {
+    updateStatements.push(c.env.DB.prepare(`
+      UPDATE product_shop_links
+      SET is_primary = 0,
+          updated_at = datetime('now'),
+          version = COALESCE(version, 0) + 1
+      WHERE product_id = ?
+        AND id <> ?
+        AND EXISTS (
+          SELECT 1 FROM product_shop_links target
+          WHERE target.id = ? AND target.product_id = ? AND target.version = ?
+        )
+    `).bind(productId, shopLinkId, shopLinkId, productId, (existing.version ?? 0) + 1))
+  }
+  const updateResults = await c.env.DB.batch(updateStatements)
+  const updateResult = updateResults[0]
   if (lock.value.enforce && d1ChangeCount(updateResult) === 0) {
     const current = await getProductShopLinkRow(c.env.DB, productId, shopLinkId, includeHealth)
     return c.json({ error: 'Version conflict', current_version: current?.version ?? existing.version }, 409)
@@ -10358,7 +10326,6 @@ admin.patch('/products/:id/shop-links/:shopLinkId', async (c) => {
     `).bind(shopLinkId, data.url).run()
   }
 
-  await syncProductLegacyShopLinkFromPrimary(c.env.DB, productId)
   const row = await getProductShopLinkRow(c.env.DB, productId, shopLinkId, includeHealth)
 
   await logAdminAction(c, {
@@ -10404,7 +10371,6 @@ admin.delete('/products/:id/shop-links/:shopLinkId', async (c) => {
     return c.json({ error: 'Version conflict', current_version: current?.version ?? existing.version }, 409)
   }
 
-  await syncProductLegacyShopLinkFromPrimary(c.env.DB, productId)
   await logAdminAction(c, {
     action: 'delete_product_shop_link',
     entity_type: 'product_shop_link',
@@ -10534,7 +10500,7 @@ admin.get('/products/:id', async (c) => {
         r.product_id,
         r.product_name,
         r.shop_link_snapshot,
-        p.shop_link AS current_shop_link,
+        ${canonicalProductTargetUrlSql('p')} AS current_shop_link,
         r.reason,
         r.status,
         r.created_at
@@ -12530,7 +12496,7 @@ admin.get('/ops-dashboard', async (c) => {
       FROM products p
       LEFT JOIN ingredient_counts ic ON ic.product_id = p.id
       WHERE (COALESCE(p.image_url, '') = '' AND COALESCE(p.image_r2_key, '') = '')
-         OR COALESCE(p.shop_link, '') = ''
+         OR ${missingCanonicalProductTargetSql('p')}
          OR p.serving_size IS NULL
          OR p.serving_size <= 0
          OR COALESCE(p.serving_unit, '') = ''
@@ -12541,10 +12507,7 @@ admin.get('/ops-dashboard', async (c) => {
          OR p.price <= 0
          OR p.price > 300
          OR COALESCE(ic.ingredient_count, 0) = 0
-         OR (
-           COALESCE(p.shop_link, '') <> ''
-           AND COALESCE(p.affiliate_owner_type, '') = ''
-         )
+         OR (${legacyAffiliateFlagIssueSql('p')})
     `),
     c.env.DB.prepare(`
       WITH ingredient_counts AS (
@@ -12562,7 +12525,7 @@ admin.get('/ops-dashboard', async (c) => {
           p.brand,
           p.form,
           p.price,
-          p.shop_link,
+          ${canonicalProductTargetUrlSql('p')} AS shop_link,
           p.image_url,
           p.image_r2_key,
           COALESCE(p.is_affiliate, 0) AS is_affiliate,
@@ -12581,7 +12544,7 @@ admin.get('/ops-dashboard', async (c) => {
           COALESCE(ic.ingredient_count, 0) AS ingredient_count,
           COALESCE(ic.main_ingredient_count, 0) AS main_ingredient_count,
           CASE WHEN COALESCE(p.image_url, '') = '' AND COALESCE(p.image_r2_key, '') = '' THEN 1 ELSE 0 END AS missing_image,
-          CASE WHEN COALESCE(p.shop_link, '') = '' THEN 1 ELSE 0 END AS missing_shop_link,
+          CASE WHEN ${missingCanonicalProductTargetSql('p')} THEN 1 ELSE 0 END AS missing_shop_link,
           CASE
             WHEN p.serving_size IS NULL
               OR p.serving_size <= 0
@@ -12595,8 +12558,7 @@ admin.get('/ops-dashboard', async (c) => {
           CASE WHEN p.price <= 0 OR p.price > 300 THEN 1 ELSE 0 END AS suspicious_price_zero_or_high,
           CASE WHEN COALESCE(ic.ingredient_count, 0) = 0 THEN 1 ELSE 0 END AS missing_ingredient_rows,
           CASE
-            WHEN COALESCE(p.shop_link, '') <> ''
-              AND COALESCE(p.affiliate_owner_type, '') = ''
+            WHEN ${legacyAffiliateFlagIssueSql('p')}
             THEN 1 ELSE 0
           END AS no_affiliate_flag_on_shop_link
         FROM products p
@@ -12633,7 +12595,7 @@ admin.get('/ops-dashboard', async (c) => {
         r.product_name,
         r.shop_link_snapshot,
         CASE
-          WHEN r.product_type = 'catalog' THEN p.shop_link
+          WHEN r.product_type = 'catalog' THEN ${canonicalProductTargetUrlSql('p')}
           ELSE up.shop_link
         END AS current_shop_link,
         r.reason,
@@ -12854,7 +12816,7 @@ admin.get('/health', async (c) => {
       SELECT COUNT(*) AS count
       FROM products p
       LEFT JOIN ingredient_counts ic ON ic.product_id = p.id
-      WHERE COALESCE(p.shop_link, '') = ''
+      WHERE ${missingCanonicalProductTargetSql('p')}
          OR p.serving_size IS NULL
          OR p.serving_size <= 0
          OR COALESCE(p.serving_unit, '') = ''
@@ -12899,8 +12861,8 @@ admin.get('/health', async (c) => {
     href: '/administrator/products',
     sql: `
       SELECT COUNT(*) AS count
-      FROM products
-      WHERE COALESCE(shop_link, '') = ''
+      FROM products p
+      WHERE ${missingCanonicalProductTargetSql('p')}
     `,
     okWhen: (count) => count === 0,
     details: (count) => count === 0
@@ -13125,7 +13087,7 @@ admin.get('/launch-checks', async (c) => {
         FROM products p
         LEFT JOIN ingredient_counts ic ON ic.product_id = p.id
         WHERE (COALESCE(p.image_url, '') = '' AND COALESCE(p.image_r2_key, '') = '')
-           OR COALESCE(p.shop_link, '') = ''
+           OR ${missingCanonicalProductTargetSql('p')}
            OR p.serving_size IS NULL
            OR p.serving_size <= 0
            OR COALESCE(p.serving_unit, '') = ''
@@ -13136,10 +13098,7 @@ admin.get('/launch-checks', async (c) => {
            OR p.price <= 0
            OR p.price > 300
            OR COALESCE(ic.ingredient_count, 0) = 0
-           OR (
-             COALESCE(p.shop_link, '') <> ''
-             AND COALESCE(p.affiliate_owner_type, '') = ''
-           )
+           OR (${legacyAffiliateFlagIssueSql('p')})
       `,
       details: (count) => `${count} Produkt(e) mit QA-Auffaelligkeiten.`,
       okWhen: (count) => count === 0,
@@ -13253,7 +13212,7 @@ admin.get('/product-qa', async (c) => {
         p.brand,
         p.form,
         p.price,
-        p.shop_link,
+        ${canonicalProductTargetUrlSql('p')} AS shop_link,
         p.image_url,
         p.image_r2_key,
         COALESCE(p.is_affiliate, 0) AS is_affiliate,
@@ -13273,7 +13232,7 @@ admin.get('/product-qa', async (c) => {
         COALESCE(ic.ingredient_count, 0) AS ingredient_count,
         COALESCE(ic.main_ingredient_count, 0) AS main_ingredient_count,
         CASE WHEN COALESCE(p.image_url, '') = '' AND COALESCE(p.image_r2_key, '') = '' THEN 1 ELSE 0 END AS missing_image,
-        CASE WHEN COALESCE(p.shop_link, '') = '' THEN 1 ELSE 0 END AS missing_shop_link,
+        CASE WHEN ${missingCanonicalProductTargetSql('p')} THEN 1 ELSE 0 END AS missing_shop_link,
         CASE
           WHEN p.serving_size IS NULL
             OR p.serving_size <= 0
@@ -13287,8 +13246,7 @@ admin.get('/product-qa', async (c) => {
         CASE WHEN p.price <= 0 OR p.price > 300 THEN 1 ELSE 0 END AS suspicious_price_zero_or_high,
         CASE WHEN COALESCE(ic.ingredient_count, 0) = 0 THEN 1 ELSE 0 END AS missing_ingredient_rows,
         CASE
-          WHEN COALESCE(p.shop_link, '') <> ''
-            AND COALESCE(p.affiliate_owner_type, '') = ''
+          WHEN ${legacyAffiliateFlagIssueSql('p')}
           THEN 1 ELSE 0
         END AS no_affiliate_flag_on_shop_link
         ${linkHealthSelect}
@@ -13378,6 +13336,17 @@ admin.patch('/product-qa/:id', async (c) => {
     return c.json({ error: 'Invalid JSON' }, 400)
   }
 
+  if (
+    hasOwnKey(body, 'shop_link') ||
+    hasOwnKey(body, 'is_affiliate') ||
+    hasOwnKey(body, 'affiliate_owner_type') ||
+    hasOwnKey(body, 'affiliate_owner_user_id')
+  ) {
+    return c.json({
+      error: 'Shopziele und Affiliate-Zuordnungen werden ausschließlich über die Produkt-Shoplink- und Creator-Affiliate-Verwaltung gepflegt.',
+    }, 409)
+  }
+
   const validation = validateProductQaPatch(body)
   if (!validation.ok) return c.json({ error: validation.error }, validation.status)
   const data = validation.value
@@ -13453,23 +13422,6 @@ admin.patch('/product-qa/:id', async (c) => {
   if (lock.value.enforce && d1ChangeCount(updateResult) === 0) {
     const current = await getProductQaRow(c.env.DB, id, includeLinkHealth)
     return c.json({ error: 'Version conflict', current_version: current?.version ?? existing.version }, 409)
-  }
-
-  if (hasOwnKey(data, 'shop_link') && includeLinkHealth) {
-    await c.env.DB.prepare(`
-      DELETE FROM affiliate_link_health
-      WHERE product_id = ?
-        AND COALESCE(url, '') <> COALESCE(?, '')
-    `).bind(id, data.shop_link ?? null).run()
-  }
-
-  if (
-    hasOwnKey(data, 'shop_link') ||
-    hasOwnKey(data, 'is_affiliate') ||
-    hasOwnKey(data, 'affiliate_owner_type') ||
-    hasOwnKey(data, 'affiliate_owner_user_id')
-  ) {
-    await syncPrimaryProductShopLinkFromProduct(c.env.DB, id)
   }
 
   const updated = await getProductQaRow(c.env.DB, id, includeLinkHealth)
@@ -13562,7 +13514,7 @@ admin.get('/link-reports', async (c) => {
       r.product_name,
       r.shop_link_snapshot,
       CASE
-        WHEN r.product_type = 'catalog' THEN p.shop_link
+        WHEN r.product_type = 'catalog' THEN ${canonicalProductTargetUrlSql('p')}
         ELSE up.shop_link
       END AS current_shop_link,
       r.reason,
@@ -13641,7 +13593,7 @@ admin.patch('/link-reports/:id', async (c) => {
       r.product_name,
       r.shop_link_snapshot,
       CASE
-        WHEN r.product_type = 'catalog' THEN p.shop_link
+        WHEN r.product_type = 'catalog' THEN ${canonicalProductTargetUrlSql('p')}
         ELSE up.shop_link
       END AS current_shop_link,
       r.reason,
@@ -16246,7 +16198,9 @@ admin.put('/user-products/:id/publish', async (c) => {
     if (!ownerUser.ok) return c.json({ error: ownerUser.error }, ownerUser.status)
     ownership = ownerUser.value
   } else {
-    const ownerType: AffiliateOwnerType = sourceHasShopLink ? 'user' : isAffiliate === 1 ? 'nick' : 'none'
+    const sourceAffiliateFlag = booleanFlag(userProduct.is_affiliate) ?? 0
+    const effectiveAffiliateFlag = hasOwnKey(body, 'is_affiliate') ? isAffiliate ?? 0 : sourceAffiliateFlag
+    const ownerType: AffiliateOwnerType = sourceHasShopLink && effectiveAffiliateFlag === 1 ? 'user' : 'none'
     ownership = {
       affiliate_owner_type: ownerType,
       affiliate_owner_user_id: ownerType === 'user' ? sourceUserId : null,
@@ -16301,6 +16255,29 @@ admin.put('/user-products/:id/publish', async (c) => {
   if (validationError) return c.json({ error: validationError }, 400)
 
   const [productId] = await reserveIntegerIds(c.env.DB, 'products', 1)
+  const ownerParty = await ensureUserParty(c.env.DB, sourceUserId)
+  let publishedTarget: { url: string; shopDomainId: number; displayName: string; domain: string; legacyPartyId: number | null } | null = null
+  if (sourceHasShopLink) {
+    const rawUrl = String(userProduct.shop_link)
+    let parsed: URL
+    try { parsed = new URL(rawUrl) } catch { return c.json({ error: 'User product shop link is invalid' }, 400) }
+    const { results: domains } = await c.env.DB.prepare(`SELECT id, domain, display_name FROM shop_domains`).all<{
+      id: number; domain: string; display_name: string
+    }>()
+    const domain = domains.find((candidate) => hostMatchesDomain(parsed.hostname, candidate.domain))
+    if (!domain) return c.json({ error: 'User product shop link does not match a configured shop domain' }, 400)
+    const safe = validateProductTargetUrl(rawUrl, domain.domain)
+    if (!safe.url) return c.json({ error: safe.error }, 400)
+    const platformParty = ownership.affiliate_owner_type === 'nick' ? await getPlatformParty(c.env.DB) : null
+    if (ownership.affiliate_owner_type === 'nick' && !platformParty) return c.json({ error: 'Platform party is not configured' }, 409)
+    publishedTarget = {
+      url: safe.url,
+      shopDomainId: domain.id,
+      displayName: domain.display_name,
+      domain: domain.domain,
+      legacyPartyId: ownership.affiliate_owner_type === 'user' ? ownerParty.id : platformParty?.id ?? null,
+    }
+  }
   const ingredientRowIds = await reserveIntegerIds(c.env.DB, 'product_ingredients', ingredientsWithParts.length)
   const statements: D1PreparedStatement[] = [c.env.DB.prepare(`
     INSERT INTO products (
@@ -16308,19 +16285,19 @@ admin.put('/user-products/:id/publish', async (c) => {
       is_affiliate, affiliate_owner_type, affiliate_owner_user_id,
       serving_size, serving_unit, servings_per_container, container_count,
       dosage_text, warning_title, warning_message,
-      warning_type, alternative_note, source_user_product_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'approved', 'public', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      warning_type, alternative_note, source_user_product_id, owner_party_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'approved', 'public', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     productId,
     userProduct.name,
     userProduct.brand,
     userProduct.form,
     userProduct.price,
-    userProduct.shop_link ?? null,
+    null,
     userProduct.image_url ?? null,
-    ownership.is_affiliate,
-    ownership.affiliate_owner_type,
-    ownership.affiliate_owner_user_id,
+    0,
+    'none',
+    null,
     userProduct.serving_size,
     userProduct.serving_unit,
     userProduct.servings_per_container,
@@ -16331,7 +16308,30 @@ admin.put('/user-products/:id/publish', async (c) => {
     userProduct.warning_type ?? null,
     userProduct.alternative_note ?? null,
     id,
+    ownerParty.id,
   )]
+  if (publishedTarget) {
+    statements.push(c.env.DB.prepare(`
+      INSERT INTO product_shop_links (
+        product_id, shop_domain_id, shop_name, url, normalized_host,
+        is_affiliate, affiliate_owner_type, affiliate_owner_user_id,
+        source_type, submitted_by_user_id, is_primary, active, sort_order,
+        link_kind, legacy_party_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'user_submission', ?, 1, 1, 0, ?, ?)
+    `).bind(
+      productId,
+      publishedTarget.shopDomainId,
+      publishedTarget.displayName,
+      publishedTarget.url,
+      publishedTarget.domain,
+      ownership.is_affiliate,
+      ownership.affiliate_owner_type,
+      ownership.affiliate_owner_user_id,
+      sourceUserId,
+      ownership.is_affiliate === 1 ? 'legacy_resolved' : 'base_target',
+      ownership.is_affiliate === 1 ? publishedTarget.legacyPartyId : null,
+    ))
+  }
   ingredientsWithParts.forEach((ingredient, index) => {
     statements.push(...buildPublishedProductIngredientStatements(
       c.env.DB,
@@ -16368,8 +16368,6 @@ admin.put('/user-products/:id/publish', async (c) => {
     }
     throw error
   }
-
-  await syncPrimaryProductShopLinkFromProduct(c.env.DB, productId)
 
   const payload = await getProductPublishPayloadByProductId(c.env.DB, productId)
 

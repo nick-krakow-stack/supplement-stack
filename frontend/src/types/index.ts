@@ -231,6 +231,11 @@ export interface StackItem {
   category_id?: number | null;
   category_name?: string | null;
   category_is_default?: boolean | null;
+  click_url?: string | null;
+  source_share_link_id?: number | null;
+  creator_statement_snapshot?: string | null;
+  amount_source?: 'user' | 'creator_snapshot' | null;
+  has_attribution?: number;
   ingredients?: Array<Pick<ProductIngredient, 'ingredient_id' | 'form_id' | 'quantity' | 'unit' | 'basis_quantity' | 'basis_unit' | 'search_relevant'>>;
   product?: Product;
 }
@@ -249,6 +254,10 @@ export interface Stack {
   name: string;
   family_member_id?: number | null;
   family_member_first_name?: string | null;
+  origin_party_id?: number | null;
+  origin_party_name?: string | null;
+  origin_party_type?: string | null;
+  last_opened_at?: string | null;
   created_at: string;
   items?: StackItem[];
   categories?: StackCategory[];

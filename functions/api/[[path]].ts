@@ -15,6 +15,8 @@ import products, { r2App } from './modules/products'
 import publicStats from './modules/public-stats'
 import stacks, { stackWarningsApp } from './modules/stacks'
 import userProducts from './modules/user-products'
+import creatorSharing from './modules/creator-sharing'
+import creatorSharingAdmin from './modules/creator-sharing-admin'
 import type { AppContext } from './lib/types'
 import { isAllowedFrontendOrigin } from './lib/helpers'
 
@@ -36,12 +38,14 @@ app.route('/api/recommendations', recommendationsApp)
 app.route('/api/products', products)
 app.route('/api/public-stats', publicStats)
 app.route('/api/r2', r2App)
+app.route('/api/admin/creator-sharing', creatorSharingAdmin)
 app.route('/api/admin', admin)
 app.route('/api/shop-domains', shopDomainsPublicApp)
 app.route('/api/stacks', stacks)
 app.route('/api/stack-warnings', stackWarningsApp)
 app.route('/api/interactions', interactionsApp)
 app.route('/api/user-products', userProducts)
+app.route('/api/creator-sharing', creatorSharing)
 app.route('/api/demo', demo)
 app.route('/api/family', family)
 app.route('/api/knowledge', knowledge)

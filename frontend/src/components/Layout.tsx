@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import LegalDisclaimer from './LegalDisclaimer';
 import AppLogo from './AppLogo';
 import { resetAnalyticsConsentChoice } from '../lib/analytics';
+import { creatorSharingEnabled } from '../api/creatorSharing';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -44,6 +45,11 @@ export default function Layout({ children }: LayoutProps) {
       {user && (
         <NavLink to="/my-products" className={navClass} onClick={closeMobile}>
           Eigene Produkte
+        </NavLink>
+      )}
+      {user && creatorSharingEnabled && (
+        <NavLink to="/creator" className={navClass} onClick={closeMobile}>
+          Creator
         </NavLink>
       )}
       {!user && (

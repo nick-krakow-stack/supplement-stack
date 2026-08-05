@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import type { AppContext } from '../lib/types'
+import { globalProductVisibilitySql } from '../lib/creator-sharing-service'
 
 const publicStats = new Hono<AppContext>()
 
@@ -14,6 +15,7 @@ function resultCount(result: D1Result): number {
 }
 
 publicStats.get('/', async (c) => {
+  const productVisibility = await globalProductVisibilitySql(c.env.DB, 'p')
   const requestUrl = new URL(c.req.url)
   const bypassCache = requestUrl.searchParams.has('cfcheck')
   const cacheUrl = new URL(c.req.url)
@@ -58,8 +60,7 @@ publicStats.get('/', async (c) => {
     c.env.DB.prepare(`
       SELECT COUNT(*) AS count
       FROM products p
-      WHERE p.visibility = 'public'
-        AND p.moderation_status = 'approved'
+      WHERE ${productVisibility}
         AND EXISTS (
           SELECT 1
           FROM product_ingredients pi

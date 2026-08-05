@@ -539,9 +539,10 @@ export default function ProductCard({
 
   const productHost = normalizeShopHostname(product.shop_link);
   const directShopHref = normalizeShopHref(product.shop_link);
-  const shopHref = directShopHref
-    ? product.click_url ?? (product.product_type === 'user_product' ? directShopHref : `/api/products/${product.id}/out?context=product_card`)
-    : null;
+  const shopHref = product.click_url
+    ?? (directShopHref
+      ? (product.product_type === 'user_product' ? directShopHref : `/api/products/${product.id}/out?context=product_card`)
+      : null);
   const matchedShop = productHost
     ? shopDomains?.find((s) => {
         const domain = normalizeShopHostname(s.domain);
@@ -691,6 +692,7 @@ export default function ProductCard({
                 <span>{buttonText}</span>
               </a>
             )}
+            {shopHref && product.is_affiliate === 1 && <span className="text-[11px] text-slate-500">Affiliate-Link</span>}
             {!shopHref && onReportMissingLink && (
               <button
                 type="button"
@@ -999,6 +1001,7 @@ export default function ProductCard({
             {buttonText}
           </a>
         )}
+        {shopHref && product.is_affiliate === 1 && <span className="self-center text-[10px] text-slate-500">Affiliate</span>}
         {!shopHref && onReportMissingLink && (
           <button
             onClick={(e) => { e.stopPropagation(); onReportMissingLink(product, reportReason); }}

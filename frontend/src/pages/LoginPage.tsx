@@ -13,6 +13,7 @@ export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const authRedirect = getAuthRedirect(location);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -95,7 +96,7 @@ export default function LoginPage() {
 
         <p className="mt-4 text-sm text-center text-gray-600">
           Noch kein Konto?{' '}
-          <Link to="/register" className="text-blue-600 hover:underline font-medium">
+          <Link to={`/register?redirect=${encodeURIComponent(authRedirect)}`} className="text-blue-600 hover:underline font-medium">
             Jetzt registrieren
           </Link>
         </p>

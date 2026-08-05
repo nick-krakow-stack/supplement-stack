@@ -41,7 +41,7 @@ export function normalizeUnit(raw: string): CanonicalUnit | null {
   if (norm === 'µg' || norm === 'mcg' || norm === 'ug') return 'µg'
   if (norm === 'mg') return 'mg'
   if (norm === 'g') return 'g'
-  if (norm === 'iu') return 'IU'
+  if (norm === 'iu' || norm === 'ie') return 'IU'
 
   return null
 }

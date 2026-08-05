@@ -29,6 +29,8 @@ import {
   validatePartAmountSum,
   type IngredientPartInput,
 } from '../lib/ingredient-parts'
+import { creatorSharingEnabled } from '../lib/creator-sharing'
+import { ensureUserParty, globalProductVisibilitySql, resolveBoundOutbound, resolvePublicProductOutbound } from '../lib/creator-sharing-service'
 
 const products = new Hono<AppContext>()
 
@@ -201,6 +203,7 @@ async function primaryProductShopLink(
   productId: number,
   preferredShopLinkId: number | null = null,
 ): Promise<ProductShopLinkRedirectRow | null> {
+  const visibility = await globalProductVisibilitySql(db, 'p')
   if (await hasTable(db, 'product_shop_links')) {
     if (preferredShopLinkId !== null) {
       return await db.prepare(`
@@ -212,8 +215,7 @@ async function primaryProductShopLink(
         FROM products p
         JOIN product_shop_links psl ON psl.product_id = p.id
         WHERE p.id = ?
-          AND p.visibility = 'public'
-          AND p.moderation_status = 'approved'
+          AND ${visibility}
           AND psl.id = ?
           AND psl.active = 1
         LIMIT 1
@@ -229,8 +231,7 @@ async function primaryProductShopLink(
       FROM products p
       JOIN product_shop_links psl ON psl.product_id = p.id
       WHERE p.id = ?
-        AND p.visibility = 'public'
-        AND p.moderation_status = 'approved'
+        AND ${visibility}
         AND psl.active = 1
       ORDER BY psl.is_primary DESC, psl.sort_order ASC, psl.id ASC
       LIMIT 1
@@ -246,8 +247,7 @@ async function primaryProductShopLink(
       COALESCE(p.is_affiliate, 0) AS is_affiliate
     FROM products p
     WHERE p.id = ?
-      AND p.visibility = 'public'
-      AND p.moderation_status = 'approved'
+      AND ${visibility}
     LIMIT 1
   `).bind(productId).first<ProductShopLinkRedirectRow>()
 }
@@ -579,6 +579,7 @@ function validateProductPayload(
 
 // GET /api/products
 products.get('/', async (c) => {
+  const visibility = await globalProductVisibilitySql(c.env.DB, 'p')
   const { results } = await c.env.DB.prepare(
     `SELECT
       p.*,
@@ -613,8 +614,7 @@ products.get('/', async (c) => {
      AND idp_base.form_id IS NULL
      AND idp_base.part_id IS NULL
      AND idp_base.sub_ingredient_id IS NULL
-    WHERE p.visibility = 'public'
-      AND p.moderation_status = 'approved'`
+    WHERE ${visibility}`
   ).all<ProductRow>()
   const ingredientsByProduct = await loadCatalogProductIngredients(
     c.env.DB,
@@ -639,12 +639,30 @@ products.get('/:id/out', async (c) => {
   const shopLinkId = rawShopLinkId ? positiveIntegerOrNull(rawShopLinkId) : null
   if (rawShopLinkId && shopLinkId === null) return c.json({ error: 'Invalid shop link id' }, 400)
 
-  const link = await primaryProductShopLink(c.env.DB, productId, shopLinkId)
-  const targetUrl = outboundUrl(link?.url)
-  if (!link || !targetUrl) return c.json({ error: 'Product link not found' }, 404)
+  const rawStackItemId = c.req.query('stack_item_id')?.trim()
+  const stackItemId = rawStackItemId ? positiveIntegerOrNull(rawStackItemId) : null
+  if (rawStackItemId && stackItemId === null) return c.json({ error: 'Invalid stack item id' }, 400)
+
+  let resolution
+  if (stackItemId !== null) {
+    if (!creatorSharingEnabled(c.env)) return c.json({ error: 'Not found' }, 404)
+    const authErr = await ensureAuth(c)
+    if (authErr) return authErr
+    resolution = await resolveBoundOutbound(c.env.DB, {
+      stackItemId,
+      expectedUserId: c.get('user').userId,
+    })
+    if (!resolution.value) {
+      return c.json({ error: resolution.error ?? 'Product link not found' }, resolution.status === 409 ? 409 : 404)
+    }
+    if (resolution.value.product_id !== productId) return c.json({ error: 'Product link not found' }, 404)
+  } else {
+    resolution = await resolvePublicProductOutbound(c.env.DB, productId, shopLinkId)
+    if (!resolution.value) return c.json({ error: resolution.error ?? 'Product link not found' }, 404)
+  }
+  const link = resolution.value
 
   if (await hasTable(c.env.DB, 'product_link_clicks')) {
-    const stackId = positiveIntegerOrNull(c.req.query('stack_id'))
     const context = compactQueryText(c.req.query('context'), 'product_card')
     const referrerPath = (() => {
       const referer = c.req.header('Referer')
@@ -667,26 +685,36 @@ products.get('/:id/out', async (c) => {
         is_affiliate,
         url_snapshot,
         context,
-        referrer_path
+        referrer_path,
+        resolved_party_id,
+        creator_context_party_id,
+        affiliate_version_id,
+        source_share_link_id,
+        resolution_kind
       )
-      VALUES ('catalog', ?, ?, NULL, ?, ?, ?, ?, ?)
+      VALUES ('catalog', ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       link.product_id,
       link.shop_link_id,
-      stackId,
-      link.is_affiliate === 1 ? 1 : 0,
-      targetUrl,
+      link.is_affiliate,
+      link.url,
       context,
-      referrerPath,
+      stackItemId !== null ? null : referrerPath,
+      link.resolved_party_id,
+      link.creator_context_party_id,
+      link.affiliate_version_id,
+      link.source_share_link_id,
+      link.resolution_kind,
     ).run()
   }
 
-  return c.redirect(targetUrl, 302)
+  return c.redirect(link.url, 302)
 })
 
 // GET /api/products/:id
 products.get('/:id', async (c) => {
   const id = c.req.param('id')
+  const visibility = await globalProductVisibilitySql(c.env.DB, 'p')
   const product = await c.env.DB.prepare(`
     SELECT
       p.*,
@@ -715,8 +743,7 @@ products.get('/:id', async (c) => {
      AND idp_base.part_id IS NULL
      AND idp_base.sub_ingredient_id IS NULL
     WHERE p.id = ?
-      AND p.visibility = 'public'
-      AND p.moderation_status = 'approved'
+      AND ${visibility}
   `).bind(id).first<ProductRow>()
   if (!product) return c.json({ error: 'Not found' }, 404)
   const ingredientsByProduct = await loadCatalogProductIngredients(c.env.DB, [Number(id)], true)
@@ -744,6 +771,14 @@ products.post('/', async (c) => {
     return parseJsonBodyError()
   }
   const payload = { ...body }
+  if (
+    hasOwnKey(payload, 'shop_link') ||
+    hasOwnKey(payload, 'is_affiliate') ||
+    hasOwnKey(payload, 'affiliate_owner_type') ||
+    hasOwnKey(payload, 'affiliate_owner_user_id')
+  ) {
+    return c.json({ error: 'Neue Nutzereingaben mit Produktlink gehören in den eigenen Produktbereich; Katalogziele werden erst bei der Moderation separat angelegt.' }, 409)
+  }
   const requestedOwnerType = parseAffiliateOwnerType(payload.affiliate_owner_type)
   if (requestedOwnerType === 'nick' || (!requestedOwnerType && booleanFlag(payload.is_affiliate) === 1)) {
     return c.json({ error: 'Nick affiliate ownership can only be assigned by an admin.' }, 403)
@@ -783,6 +818,7 @@ products.post('/', async (c) => {
     'SELECT is_blocked_product_submitter FROM users WHERE id = ?'
   ).bind(user.userId).first<{ is_blocked_product_submitter: number | null }>()
   const moderationStatus = submitter?.is_blocked_product_submitter === 1 ? 'blocked' : 'pending'
+  const ownerParty = await ensureUserParty(c.env.DB, user.userId)
 
   const [productId] = await reserveIntegerIds(c.env.DB, 'products', 1)
   const ingredientRowIds = await reserveIntegerIds(c.env.DB, 'product_ingredients', ingredients.length)
@@ -790,8 +826,8 @@ products.post('/', async (c) => {
     `INSERT INTO products (
       id, name, brand, form, price, shop_link, image_url, moderation_status, visibility,
       is_affiliate, affiliate_owner_type, affiliate_owner_user_id,
-      serving_size, serving_unit, servings_per_container, container_count
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      serving_size, serving_unit, servings_per_container, container_count, owner_party_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
     productId,
     data.name,
@@ -809,6 +845,7 @@ products.post('/', async (c) => {
     data.serving_unit,
     data.servings_per_container,
     data.container_count,
+    ownerParty.id,
   )]
   ingredients.forEach((ingredient, index) => {
     statements.push(...buildCatalogProductIngredientStatements(c.env.DB, productId, ingredientRowIds[index], ingredient))
@@ -833,21 +870,21 @@ products.put('/:id', async (c) => {
   } catch {
     return parseJsonBodyError()
   }
+  if (
+    hasOwnKey(body, 'shop_link') ||
+    hasOwnKey(body, 'is_affiliate') ||
+    hasOwnKey(body, 'affiliate_owner_type') ||
+    hasOwnKey(body, 'affiliate_owner_user_id')
+  ) {
+    return c.json({
+      error: 'Shopziele und Affiliate-Zuordnungen werden ausschließlich über die dafür vorgesehenen Verwaltungsbereiche gepflegt.',
+    }, 409)
+  }
   const validation = validateProductPayload(body, 'update')
   if (validation.error || !validation.data) {
     return c.json({ error: validation.error ?? 'Ungültige Produktdaten.' }, 400)
   }
   const data = validation.data
-  const ownership = normalizeAffiliateOwnership(body, {
-    affiliate_owner_type: product.affiliate_owner_type ?? (product.is_affiliate === 1 ? 'nick' : 'none'),
-    affiliate_owner_user_id: product.affiliate_owner_user_id,
-    is_affiliate: product.is_affiliate === 1 ? 1 : 0,
-  })
-  if (ownership.error || !ownership.value) {
-    return c.json({ error: ownership.error ?? 'Ungueltige Affiliate-Owner-Daten.' }, 400)
-  }
-  const affiliateOwnerError = await validateAffiliateOwnerUser(c.env.DB, ownership.value)
-  if (affiliateOwnerError) return c.json({ error: affiliateOwnerError }, 400)
   if (data.ingredients) {
     const ingredientReferenceError = await validateProductIngredientReferences(c.env.DB, data.ingredients)
     if (ingredientReferenceError) return c.json({ error: ingredientReferenceError }, 400)
@@ -858,12 +895,8 @@ products.put('/:id', async (c) => {
       brand = COALESCE(?, brand),
       form = COALESCE(?, form),
       price = COALESCE(?, price),
-      shop_link = COALESCE(?, shop_link),
       image_url = COALESCE(?, image_url),
       image_r2_key = COALESCE(?, image_r2_key),
-      is_affiliate = ?,
-      affiliate_owner_type = ?,
-      affiliate_owner_user_id = ?,
       discontinued_at = COALESCE(?, discontinued_at),
       serving_size = COALESCE(?, serving_size),
       serving_unit = COALESCE(?, serving_unit),
@@ -880,12 +913,8 @@ products.put('/:id', async (c) => {
     data.brand ?? null,
     data.form ?? null,
     data.price ?? null,
-    data.shop_link ?? null,
     data.image_url ?? null,
     data.image_r2_key ?? null,
-    ownership.value.is_affiliate,
-    ownership.value.affiliate_owner_type,
-    ownership.value.affiliate_owner_user_id,
     data.discontinued_at ?? null,
     data.serving_size ?? null,
     data.serving_unit ?? null,
@@ -916,7 +945,7 @@ products.put('/:id', async (c) => {
     action: 'update_product',
     entity_type: 'product',
     entity_id: Number(id),
-    changes: { ...data, ...ownership.value },
+    changes: data,
   })
   return c.json({ product: updated })
 })

@@ -19,6 +19,7 @@ export type Env = {
   PRODUCT_IMAGES?: R2Bucket
   RATE_LIMITER?: KVNamespace
   RESEND_API_KEY?: string
+  CREATOR_STACK_SHARING_ENABLED?: string
 }
 
 export type Variables = { user: { userId: number; email: string; role: string } }
@@ -91,6 +92,7 @@ export type ProductRow = {
   warning_message: string | null
   warning_type: string | null
   alternative_note: string | null
+  owner_party_id?: number | null
 }
 
 export type StackRow = {
@@ -100,6 +102,9 @@ export type StackRow = {
   family_member_id: number | null
   family_member_first_name?: string | null
   created_at: string
+  origin_party_id?: number | null
+  origin_party_name?: string | null
+  last_opened_at?: string | null
 }
 
 export type StackItemRow = {

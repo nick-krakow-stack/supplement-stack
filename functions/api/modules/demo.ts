@@ -11,6 +11,7 @@ import { Hono } from 'hono'
 import type { Context } from 'hono'
 import { checkRateLimit } from '../lib/helpers'
 import type { AppContext } from '../lib/types'
+import { globalProductVisibilitySql } from '../lib/creator-sharing-service'
 import { attachWarningsToProducts, loadCatalogProductSafetyWarnings } from './knowledge'
 import { loadIngredientPartsByParentRows } from '../lib/ingredient-parts'
 
@@ -33,6 +34,7 @@ function clientIp(c: Context<AppContext>): string {
 
 // GET /api/demo/products
 demo.get('/products', async (c) => {
+  const productVisibility = await globalProductVisibilitySql(c.env.DB, 'p')
   const { results: products } = await c.env.DB.prepare(`
     SELECT
       p.*,
@@ -72,8 +74,7 @@ demo.get('/products', async (c) => {
      AND idp_base.form_id IS NULL
      AND idp_base.part_id IS NULL
      AND idp_base.sub_ingredient_id IS NULL
-    WHERE p.visibility = 'public'
-      AND p.moderation_status = 'approved'
+    WHERE ${productVisibility}
     ORDER BY
       CASE WHEN p.discontinued_at IS NULL THEN 0 ELSE 1 END,
       p.id ASC
