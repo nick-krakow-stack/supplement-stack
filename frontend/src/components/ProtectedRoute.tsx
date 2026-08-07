@@ -1,5 +1,6 @@
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { authPath, currentLocationReturnTo } from '../lib/returnTo';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -8,6 +9,7 @@ interface ProtectedRouteProps {
 
 export default function ProtectedRoute({ children, adminOnly = false }: ProtectedRouteProps) {
   const { user, isAdmin, loading } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -18,7 +20,8 @@ export default function ProtectedRoute({ children, adminOnly = false }: Protecte
   }
 
   if (!user) {
-    return <Navigate to="/login" replace />;
+    const returnTo = currentLocationReturnTo(location);
+    return <Navigate to={authPath('/login', returnTo)} replace state={{ returnTo }} />;
   }
 
   if (adminOnly && !isAdmin) {

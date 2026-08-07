@@ -185,22 +185,48 @@ export async function sendPasswordResetEmail(
   })
 }
 
+function escapeEmailHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+export function buildEmailVerificationMessage(
+  frontendUrl: string,
+  verificationToken: string,
+  returnTo: string | null = null,
+): { verifyUrl: string; html: string } {
+  const verifyUrl = new URL('/verify-email', `${frontendUrl.replace(/\/$/, '')}/`)
+  verifyUrl.searchParams.set('token', verificationToken)
+  if (returnTo) verifyUrl.searchParams.set('returnTo', returnTo)
+  const rawUrl = verifyUrl.toString()
+  const escapedUrl = escapeEmailHtml(rawUrl)
+  return {
+    verifyUrl: rawUrl,
+    html: `
+      <p>Hallo,</p>
+      <p>bitte bestätige deine E-Mail-Adresse für Supplement Stack.</p>
+      <p><a href="${escapedUrl}" style="background:#2563eb;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;">E-Mail bestätigen</a></p>
+      <p>Oder kopiere diesen Link: ${escapedUrl}</p>
+      <p>Der Link ist 48 Stunden gültig. Falls du kein Konto erstellt hast, ignoriere diese Mail.</p>
+    `,
+  }
+}
+
 export async function sendEmailVerificationEmail(
   env: Env,
   frontendUrl: string,
   toEmail: string,
   verificationToken: string,
+  returnTo: string | null = null,
 ): Promise<MailResult> {
-  const verifyUrl = `${frontendUrl.replace(/\/$/, '')}/verify-email?token=${encodeURIComponent(verificationToken)}`
+  const message = buildEmailVerificationMessage(frontendUrl, verificationToken, returnTo)
   return sendMail(env, {
     to: toEmail,
     subject: 'E-Mail-Adresse bestätigen',
-    html: `
-      <p>Hallo,</p>
-      <p>bitte bestätige deine E-Mail-Adresse für Supplement Stack.</p>
-      <p><a href="${verifyUrl}" style="background:#2563eb;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;">E-Mail bestätigen</a></p>
-      <p>Oder kopiere diesen Link: ${verifyUrl}</p>
-      <p>Der Link ist 48 Stunden gültig. Falls du kein Konto erstellt hast, ignoriere diese Mail.</p>
-    `,
+    html: message.html,
   })
 }

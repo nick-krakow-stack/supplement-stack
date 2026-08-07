@@ -3,7 +3,13 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fetchCreatorSharingHono } from './creatorSharingHonoHandlers.mjs';
 import { createProductionKnowledgeHonoHarness, type ProductionKnowledgeHonoHarness } from './productionKnowledgeHonoTestHarness';
-import { buildAffiliateUrl, validateProductTargetUrl } from '../../../functions/api/lib/creator-sharing';
+import {
+  buildAffiliateUrl,
+  canonicalJson,
+  parseCreatorShareSnapshot,
+  snapshotHash,
+  validateProductTargetUrl,
+} from '../../../functions/api/lib/creator-sharing';
 import { convertAmount } from '../../../functions/api/lib/units';
 
 type TestStatement = {
@@ -52,6 +58,30 @@ async function jsonRequest(
   }, { waitUntil() {}, passThroughOnException() {}, props: {} });
 }
 
+async function preflightAndSave(
+  harness: ProductionKnowledgeHonoHarness,
+  token: string,
+  auth: string,
+  selection: Record<string, unknown>,
+  write: Record<string, unknown>,
+): Promise<{ preflight: Record<string, unknown>; response: Response }> {
+  const preflightResponse = await jsonRequest(harness, `/api/creator-sharing/shares/${token}/preflight`, {
+    method: 'POST', token: auth, body: selection,
+  });
+  expect(preflightResponse.status).toBe(200);
+  const preflight = await preflightResponse.json() as Record<string, unknown>;
+  const response = await jsonRequest(harness, `/api/creator-sharing/shares/${token}/import`, {
+    method: 'POST', token: auth,
+    body: {
+      ...selection,
+      ...write,
+      preflight_fingerprint: preflight.preflight_fingerprint,
+      expected_snapshot_hash: preflight.snapshot_hash,
+    },
+  });
+  return { preflight, response };
+}
+
 function applyAllMigrations(harness: ProductionKnowledgeHonoHarness): void {
   const directory = resolve(process.cwd(), '..', 'd1-migrations');
   for (const file of readdirSync(directory).filter((name) => /^\d+.*\.sql$/.test(name)).sort()) {
@@ -98,11 +128,619 @@ describe('creator stack sharing runtime contract', () => {
     expect(response.status).toBe(404);
   });
 
+  it('returns exact public recovery states and prevents a save after the share becomes unavailable', async () => {
+    const creator = await authToken(100, 'user', 'creator@test.invalid');
+    const importer = await authToken(101, 'user', 'importer@test.invalid');
+    const createdResponse = await jsonRequest(harness, '/api/creator-sharing/shares', {
+      method: 'POST', token: creator,
+      body: { party_id: 100, stack_id: 100, stack_item_id: 100, type: 'dose_recommendation', title: 'Statuswechsel' },
+    });
+    const share = await createdResponse.json() as { id: number; token: string };
+
+    const pending = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}`);
+    expect(pending.status).toBe(409);
+    expect(await pending.json()).toMatchObject({ code: 'SHARE_PENDING' });
+
+    harness.run(`UPDATE share_links SET moderation_status = 'approved', expires_at = strftime('%s', 'now') - 1 WHERE id = ?`, share.id);
+    const expired = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}`);
+    expect(expired.status).toBe(410);
+    expect(await expired.json()).toMatchObject({ code: 'SHARE_EXPIRED' });
+
+    harness.run(`UPDATE share_links SET moderation_status = 'blocked', expires_at = NULL WHERE id = ?`, share.id);
+    const blocked = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}`);
+    expect(blocked.status).toBe(410);
+    expect(await blocked.json()).toEqual(expect.objectContaining({ code: 'SHARE_UNAVAILABLE' }));
+
+    harness.run(`UPDATE share_links SET moderation_status = 'approved', is_revoked = 1 WHERE id = ?`, share.id);
+    const revoked = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}`);
+    expect(revoked.status).toBe(410);
+    expect(await revoked.json()).toEqual(expect.objectContaining({ code: 'SHARE_UNAVAILABLE' }));
+
+    const unknown = await jsonRequest(harness, '/api/creator-sharing/shares/unknownunknownunknownunknown');
+    expect(unknown.status).toBe(404);
+    expect(await unknown.json()).toMatchObject({ code: 'SHARE_UNKNOWN' });
+
+    harness.run(`UPDATE share_links SET moderation_status = 'approved', is_revoked = 0, expires_at = NULL WHERE id = ?`, share.id);
+    const selection = { target_mode: 'new', stack_name: 'Nicht mehr speichern' };
+    const preflightResponse = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}/preflight`, {
+      method: 'POST', token: importer, body: selection,
+    });
+    expect(preflightResponse.status).toBe(200);
+    const preflight = await preflightResponse.json() as { preflight_fingerprint: string; snapshot_hash: string };
+    harness.run(`UPDATE share_links SET is_revoked = 1 WHERE id = ?`, share.id);
+    const beforeOperations = (await db.prepare('SELECT COUNT(*) AS count FROM share_import_operations').first<{ count: number }>())?.count;
+    const save = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}/import`, {
+      method: 'POST', token: importer,
+      body: {
+        ...selection,
+        idempotency_key: 'share-status-race-no-write-0001',
+        decision: 'add',
+        preflight_fingerprint: preflight.preflight_fingerprint,
+        expected_snapshot_hash: preflight.snapshot_hash,
+      },
+    });
+    expect(save.status).toBe(410);
+    expect(await save.json()).toMatchObject({ code: 'SHARE_UNAVAILABLE' });
+    expect((await db.prepare('SELECT COUNT(*) AS count FROM share_import_operations').first<{ count: number }>())?.count).toBe(beforeOperations);
+    expect((await db.prepare('SELECT imports FROM share_links WHERE id = ?').bind(share.id).first<{ imports: number }>())?.imports).toBe(0);
+  });
+
+  it('fails closed instead of saving a partial stack and identifies products that need attention', async () => {
+    const creator = await authToken(100, 'user', 'creator@test.invalid');
+    const source = await db.prepare(`
+      SELECT si.catalog_product_id AS product_id, pi.ingredient_id
+      FROM stack_items si
+      JOIN product_ingredients pi ON pi.product_id = si.catalog_product_id AND pi.is_main = 1
+      WHERE si.id = 100 LIMIT 1
+    `).first<{ product_id: number; ingredient_id: number }>();
+    const platform = await db.prepare(`SELECT id FROM parties WHERE slug = 'platform'`).first<{ id: number }>();
+    harness.run(`INSERT INTO products (id, name, price, moderation_status, visibility, owner_party_id) VALUES (998, 'Produkt ohne Shop-Link', 1, 'approved', 'public', ?)`, platform!.id);
+    harness.run(`INSERT INTO product_ingredients (product_id, ingredient_id, is_main, quantity, unit) VALUES (998, ?, 1, 1, 'mg')`, source!.ingredient_id);
+    harness.run(`INSERT INTO stack_items (id, stack_id, catalog_product_id, quantity, intake_interval_days, sort_order, category_id) VALUES (101, 100, 998, 1, 1, 1, 100)`);
+
+    const readiness = await jsonRequest(harness, '/api/creator-sharing/stacks/100/share-readiness?party_id=100', { token: creator });
+    expect(readiness.status).toBe(200);
+    expect(await readiness.json()).toMatchObject({
+      ready: false,
+      shareable_stack_item_ids: [100],
+      unshareable_products: [{ stack_item_id: 101, product_name: 'Produkt ohne Shop-Link' }],
+    });
+
+    const incomplete = await jsonRequest(harness, '/api/creator-sharing/shares', {
+      method: 'POST', token: creator,
+      body: { party_id: 100, stack_id: 100, type: 'stack', title: 'Darf nicht teilweise entstehen' },
+    });
+    expect(incomplete.status).toBe(409);
+    expect(await incomplete.json()).toMatchObject({
+      code: 'STACK_NOT_FULLY_SHAREABLE',
+      products: [{ stack_item_id: 101, product_name: 'Produkt ohne Shop-Link' }],
+    });
+    expect((await db.prepare(`SELECT COUNT(*) AS count FROM share_links`).first<{ count: number }>())?.count).toBe(0);
+
+    const single = await jsonRequest(harness, '/api/creator-sharing/shares', {
+      method: 'POST', token: creator,
+      body: { party_id: 100, stack_id: 100, stack_item_id: 100, type: 'dose_recommendation', title: 'Teilbares Produkt' },
+    });
+    expect(single.status).toBe(201);
+
+  });
+
+  it('builds a write-free preflight and exposes a private note only to its owner', async () => {
+    const creator = await authToken(100, 'user', 'creator@test.invalid');
+    const importer = await authToken(101, 'user', 'importer@test.invalid');
+    harness.run(`INSERT INTO users (id, email, password_hash, role, email_verified_at) VALUES (103, 'other@test.invalid', 'x', 'user', CURRENT_TIMESTAMP)`);
+    const other = await authToken(103, 'user', 'other@test.invalid');
+    const source = await db.prepare(`
+      SELECT si.catalog_product_id AS product_id, pi.ingredient_id
+      FROM stack_items si
+      JOIN product_ingredients pi ON pi.product_id = si.catalog_product_id AND pi.is_main = 1
+      WHERE si.id = 100 LIMIT 1
+    `).first<{ product_id: number; ingredient_id: number }>();
+    expect(source).not.toBeNull();
+
+    const created = await jsonRequest(harness, '/api/creator-sharing/shares', {
+      method: 'POST', token: creator,
+      body: { party_id: 100, stack_id: 100, stack_item_id: 100, type: 'dose_recommendation', title: 'Meine Empfehlung' },
+    });
+    const share = await created.json() as { id: number; token: string };
+    harness.run(`UPDATE share_links SET moderation_status = 'approved' WHERE id = ?`, share.id);
+    harness.run(`INSERT INTO stacks (id, user_id, name) VALUES (101, 101, 'Mein Ziel')`);
+    harness.run(`INSERT INTO stack_categories (id, stack_id, name, name_normalized, sort_order, is_default) VALUES (101, 101, 'Morgens', 'morgens', 4, 1)`);
+    harness.run(`
+      INSERT INTO user_products (id, user_id, name, serving_unit, notes)
+      VALUES (501, 101, 'Mein eigenes Produkt', 'Tablette', 'Nur für mich sichtbar')
+    `);
+    harness.run(`INSERT INTO user_product_ingredients (id, user_product_id, ingredient_id, is_main) VALUES (501, 501, ?, 1)`, source!.ingredient_id);
+    harness.run(`
+      INSERT INTO stack_items (
+        id, stack_id, catalog_product_id, user_product_id, quantity,
+        intake_interval_days, dosage_text, timing, sort_order, category_id, version
+      ) VALUES (501, 101, NULL, 501, 2, 2, 'Zwei Tabletten', 'morgens', 8, 101, 3)
+    `);
+
+    const publicPreview = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}`);
+    expect(publicPreview.status).toBe(200);
+    expect(JSON.stringify(await publicPreview.json())).not.toContain('Nur für mich sichtbar');
+    const before = await db.prepare(`
+      SELECT
+        (SELECT COUNT(*) FROM share_import_operations) AS operations,
+        (SELECT COUNT(*) FROM stacks WHERE user_id = 101) AS stacks,
+        (SELECT COUNT(*) FROM stack_items WHERE stack_id = 101) AS items,
+        (SELECT imports FROM share_links WHERE id = ?) AS imports
+    `).bind(share.id).first<{ operations: number; stacks: number; items: number; imports: number }>();
+
+    const preflightResponse = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}/preflight`, {
+      method: 'POST', token: importer,
+      body: { target_mode: 'existing', target_stack_id: 101 },
+    });
+    expect(preflightResponse.status).toBe(200);
+    const preflight = await preflightResponse.json() as {
+      main_ingredient_names: string[];
+      preflight_fingerprint: string;
+      similar_products: Array<{ stack_item_id: number; version: number; private_note: string | null; main_ingredient_names: string[] }>;
+    };
+    expect(preflight.preflight_fingerprint).toMatch(/^[a-f0-9]{64}$/);
+    expect(preflight.main_ingredient_names.length).toBeGreaterThan(0);
+    expect(preflight.similar_products).toEqual([expect.objectContaining({
+      stack_item_id: 501,
+      version: 3,
+      private_note: 'Nur für mich sichtbar',
+      main_ingredient_names: preflight.main_ingredient_names,
+    })]);
+    const after = await db.prepare(`
+      SELECT
+        (SELECT COUNT(*) FROM share_import_operations) AS operations,
+        (SELECT COUNT(*) FROM stacks WHERE user_id = 101) AS stacks,
+        (SELECT COUNT(*) FROM stack_items WHERE stack_id = 101) AS items,
+        (SELECT imports FROM share_links WHERE id = ?) AS imports
+    `).bind(share.id).first<{ operations: number; stacks: number; items: number; imports: number }>();
+    expect(after).toEqual(before);
+
+    const foreign = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}/preflight`, {
+      method: 'POST', token: other,
+      body: { target_mode: 'existing', target_stack_id: 101 },
+    });
+    expect(foreign.status).toBe(409);
+    expect(JSON.stringify(await foreign.json())).not.toContain('Nur für mich sichtbar');
+  });
+
+  it('keeps without counting and replaces only the chosen stack entry while retaining the own product', async () => {
+    const creator = await authToken(100, 'user', 'creator@test.invalid');
+    const importer = await authToken(101, 'user', 'importer@test.invalid');
+    const source = await db.prepare(`
+      SELECT si.catalog_product_id AS product_id, pi.ingredient_id
+      FROM stack_items si JOIN product_ingredients pi ON pi.product_id = si.catalog_product_id AND pi.is_main = 1
+      WHERE si.id = 100 LIMIT 1
+    `).first<{ product_id: number; ingredient_id: number }>();
+    const created = await jsonRequest(harness, '/api/creator-sharing/shares', {
+      method: 'POST', token: creator,
+      body: { party_id: 100, stack_id: 100, stack_item_id: 100, type: 'dose_recommendation', title: 'Ein Produkt' },
+    });
+    const share = await created.json() as { id: number; token: string };
+    harness.run(`UPDATE share_links SET moderation_status = 'approved' WHERE id = ?`, share.id);
+    harness.run(`INSERT INTO stacks (id, user_id, name) VALUES (101, 101, 'Zielstack')`);
+    harness.run(`INSERT INTO stack_categories (id, stack_id, name, name_normalized, sort_order, is_default) VALUES (101, 101, 'Abends', 'abends', 4, 1)`);
+    harness.run(`INSERT INTO user_products (id, user_id, name, serving_unit, notes) VALUES (501, 101, 'Eigenes Magnesium', 'Tablette', 'Private Erinnerung')`);
+    harness.run(`INSERT INTO user_product_ingredients (id, user_product_id, ingredient_id, is_main) VALUES (501, 501, ?, 1)`, source!.ingredient_id);
+    harness.run(`
+      INSERT INTO stack_items (
+        id, stack_id, catalog_product_id, user_product_id, quantity,
+        intake_interval_days, dosage_text, timing, sort_order, category_id, version
+      ) VALUES (501, 101, NULL, 501, 2, 2, 'Zwei Tabletten', 'abends', 8, 101, 3)
+    `);
+
+    const selection = { target_mode: 'existing', target_stack_id: 101 };
+    const keepPreflightResponse = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}/preflight`, {
+      method: 'POST', token: importer, body: selection,
+    });
+    const keepPreflight = await keepPreflightResponse.json() as {
+      preflight_fingerprint: string;
+      snapshot_hash: string;
+      similar_products: Array<{ stack_item_id: number; version: number }>;
+    };
+    const candidate = keepPreflight.similar_products[0];
+    const keep = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}/import`, {
+      method: 'POST', token: importer,
+      body: {
+        ...selection,
+        idempotency_key: 'keep-without-counting-0001',
+        decision: 'keep',
+        selected_stack_item_id: candidate.stack_item_id,
+        expected_stack_item_version: candidate.version,
+        preflight_fingerprint: keepPreflight.preflight_fingerprint,
+        expected_snapshot_hash: keepPreflight.snapshot_hash,
+      },
+    });
+    expect(keep.status).toBe(200);
+    expect(await keep.json()).toMatchObject({ action: 'kept_existing', existing_product_name: 'Eigenes Magnesium' });
+    expect((await db.prepare('SELECT COUNT(*) AS count FROM share_import_operations').first<{ count: number }>())?.count).toBe(0);
+    expect((await db.prepare('SELECT imports FROM share_links WHERE id = ?').bind(share.id).first<{ imports: number }>())?.imports).toBe(0);
+    expect(await db.prepare('SELECT user_product_id, category_id, sort_order, version FROM stack_items WHERE id = 501').first()).toMatchObject({
+      user_product_id: 501, category_id: 101, sort_order: 8, version: 3,
+    });
+
+    const replacePreflightResponse = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}/preflight`, {
+      method: 'POST', token: importer, body: selection,
+    });
+    const replacePreflight = await replacePreflightResponse.json() as typeof keepPreflight;
+    const replaceCandidate = replacePreflight.similar_products[0];
+    const replaceBody = {
+      ...selection,
+      idempotency_key: 'replace-one-entry-0001',
+      decision: 'replace',
+      selected_stack_item_id: replaceCandidate.stack_item_id,
+      expected_stack_item_version: replaceCandidate.version,
+      preflight_fingerprint: replacePreflight.preflight_fingerprint,
+      expected_snapshot_hash: replacePreflight.snapshot_hash,
+    };
+    const replace = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}/import`, {
+      method: 'POST', token: importer, body: replaceBody,
+    });
+    expect(replace.status).toBe(200);
+    expect(await replace.json()).toMatchObject({
+      action: 'replaced', replaced_product_name: 'Eigenes Magnesium', replaced_user_product_retained: true,
+    });
+    expect(await db.prepare(`
+      SELECT catalog_product_id, user_product_id, category_id, sort_order, version,
+        quantity, intake_interval_days, dosage_text, timing
+      FROM stack_items WHERE id = 501
+    `).first()).toMatchObject({
+      catalog_product_id: source!.product_id,
+      user_product_id: null,
+      category_id: 101,
+      sort_order: 8,
+      version: 4,
+      quantity: 1,
+      intake_interval_days: 1,
+    });
+    expect(await db.prepare('SELECT name, notes FROM user_products WHERE id = 501').first()).toMatchObject({
+      name: 'Eigenes Magnesium', notes: 'Private Erinnerung',
+    });
+    expect((await db.prepare('SELECT COUNT(*) AS count FROM share_import_operations').first<{ count: number }>())?.count).toBe(1);
+    expect((await db.prepare('SELECT imports FROM share_links WHERE id = ?').bind(share.id).first<{ imports: number }>())?.imports).toBe(1);
+    const replay = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}/import`, {
+      method: 'POST', token: importer, body: replaceBody,
+    });
+    expect(replay.status).toBe(200);
+    expect((await replay.json() as { idempotent_replay: boolean }).idempotent_replay).toBe(true);
+    expect((await db.prepare('SELECT imports FROM share_links WHERE id = ?').bind(share.id).first<{ imports: number }>())?.imports).toBe(1);
+  });
+
+  it('creates the first target stack atomically, allows the same name and rejects stale preflight state', async () => {
+    const creator = await authToken(100, 'user', 'creator@test.invalid');
+    const importer = await authToken(101, 'user', 'importer@test.invalid');
+    const doseResponse = await jsonRequest(harness, '/api/creator-sharing/shares', {
+      method: 'POST', token: creator,
+      body: { party_id: 100, stack_id: 100, stack_item_id: 100, type: 'dose_recommendation', title: 'Erste Empfehlung' },
+    });
+    const dose = await doseResponse.json() as { id: number; token: string };
+    harness.run(`UPDATE share_links SET moderation_status = 'approved' WHERE id = ?`, dose.id);
+    const firstSave = await preflightAndSave(
+      harness,
+      dose.token,
+      importer,
+      { target_mode: 'new', stack_name: 'Mein erster Stack' },
+      { idempotency_key: 'first-stack-atomic-save-0001', decision: 'add' },
+    );
+    expect(firstSave.response.status).toBe(201);
+    const firstResult = await firstSave.response.json() as { stack_id: number; action: string; created_stack: boolean };
+    expect(firstResult).toMatchObject({ action: 'added', created_stack: true });
+    expect(await db.prepare(`
+      SELECT stack.name, category.is_default, item.source_share_link_id, binding.stack_item_id
+      FROM stacks stack
+      JOIN stack_categories category ON category.stack_id = stack.id
+      JOIN stack_items item ON item.stack_id = stack.id
+      JOIN stack_item_link_bindings binding ON binding.stack_item_id = item.id
+      WHERE stack.id = ?
+    `).bind(firstResult.stack_id).first()).toMatchObject({
+      name: 'Mein erster Stack', is_default: 1, source_share_link_id: dose.id,
+    });
+    expect((await db.prepare('SELECT imports FROM share_links WHERE id = ?').bind(dose.id).first<{ imports: number }>())?.imports).toBe(1);
+
+    const stackResponse = await jsonRequest(harness, '/api/creator-sharing/shares', {
+      method: 'POST', token: creator,
+      body: { party_id: 100, stack_id: 100, type: 'stack', title: 'Portfolio des Creators' },
+    });
+    const fullStack = await stackResponse.json() as { id: number; token: string };
+    harness.run(`UPDATE share_links SET moderation_status = 'approved' WHERE id = ?`, fullStack.id);
+    const sameNamePreflightResponse = await jsonRequest(harness, `/api/creator-sharing/shares/${fullStack.token}/preflight`, {
+      method: 'POST', token: importer, body: { stack_name: 'Mein erster Stack' },
+    });
+    const sameNamePreflight = await sameNamePreflightResponse.json() as {
+      preflight_fingerprint: string;
+      snapshot_hash: string;
+      target: { name_already_used: boolean; suggested_stack_name: string };
+    };
+    expect(sameNamePreflight.target).toMatchObject({
+      name_already_used: true,
+      suggested_stack_name: 'Mein erster Stack – von Test Creator',
+    });
+    const sameNameSave = await jsonRequest(harness, `/api/creator-sharing/shares/${fullStack.token}/import`, {
+      method: 'POST', token: importer,
+      body: {
+        idempotency_key: 'same-name-full-stack-0001',
+        stack_name: 'Mein erster Stack',
+        preflight_fingerprint: sameNamePreflight.preflight_fingerprint,
+        expected_snapshot_hash: sameNamePreflight.snapshot_hash,
+      },
+    });
+    expect(sameNameSave.status).toBe(201);
+    expect((await db.prepare(`SELECT COUNT(*) AS count FROM stacks WHERE user_id = 101 AND name = 'Mein erster Stack'`).first<{ count: number }>())?.count).toBe(2);
+
+    const stalePreflightResponse = await jsonRequest(harness, `/api/creator-sharing/shares/${dose.token}/preflight`, {
+      method: 'POST', token: importer,
+      body: { target_mode: 'existing', target_stack_id: firstResult.stack_id },
+    });
+    const stalePreflight = await stalePreflightResponse.json() as { preflight_fingerprint: string; snapshot_hash: string };
+    harness.run(`UPDATE stack_items SET version = version + 1 WHERE stack_id = ?`, firstResult.stack_id);
+    const beforeOperations = (await db.prepare('SELECT COUNT(*) AS count FROM share_import_operations').first<{ count: number }>())?.count;
+    const beforeImports = (await db.prepare('SELECT imports FROM share_links WHERE id = ?').bind(dose.id).first<{ imports: number }>())?.imports;
+    const staleSave = await jsonRequest(harness, `/api/creator-sharing/shares/${dose.token}/import`, {
+      method: 'POST', token: importer,
+      body: {
+        target_mode: 'existing',
+        target_stack_id: firstResult.stack_id,
+        idempotency_key: 'stale-preflight-no-write-0001',
+        decision: 'add',
+        preflight_fingerprint: stalePreflight.preflight_fingerprint,
+        expected_snapshot_hash: stalePreflight.snapshot_hash,
+      },
+    });
+    expect(staleSave.status).toBe(409);
+    expect(await staleSave.json()).toMatchObject({ code: 'PREFLIGHT_CHANGED' });
+    expect((await db.prepare('SELECT COUNT(*) AS count FROM share_import_operations').first<{ count: number }>())?.count).toBe(beforeOperations);
+    expect((await db.prepare('SELECT imports FROM share_links WHERE id = ?').bind(dose.id).first<{ imports: number }>())?.imports).toBe(beforeImports);
+  });
+
+  it('leaves id sequences and import data untouched when the share becomes stale at the batch boundary', async () => {
+    const creator = await authToken(100, 'user', 'creator@test.invalid');
+    const importer = await authToken(101, 'user', 'importer@test.invalid');
+    const created = await jsonRequest(harness, '/api/creator-sharing/shares', {
+      method: 'POST', token: creator,
+      body: { party_id: 100, stack_id: 100, type: 'stack', title: 'Atomarer Stack' },
+    });
+    const share = await created.json() as { id: number; token: string };
+    harness.run(`UPDATE share_links SET moderation_status = 'approved' WHERE id = ?`, share.id);
+    const selection = { stack_name: 'Darf nicht entstehen' };
+    const preflightResponse = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}/preflight`, {
+      method: 'POST', token: importer, body: selection,
+    });
+    expect(preflightResponse.status).toBe(200);
+    const preflight = await preflightResponse.json() as { preflight_fingerprint: string; snapshot_hash: string };
+    const sequenceBefore = await db.prepare(`
+      SELECT name, seq FROM sqlite_sequence
+      WHERE name IN ('stacks', 'stack_categories', 'stack_items') ORDER BY name
+    `).all<{ name: string; seq: number }>();
+    const stacksBefore = (await db.prepare('SELECT COUNT(*) AS count FROM stacks WHERE user_id = 101').first<{ count: number }>())?.count;
+
+    const hookedDb = harness.db as {
+      batch: (statements: unknown[]) => Promise<unknown[]>;
+    };
+    const originalBatch = hookedDb.batch.bind(hookedDb);
+    let intercepted = false;
+    hookedDb.batch = async (statements) => {
+      if (!intercepted) {
+        intercepted = true;
+        harness.run(`UPDATE share_links SET is_revoked = 1 WHERE id = ?`, share.id);
+      }
+      return originalBatch(statements);
+    };
+
+    const save = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}/import`, {
+      method: 'POST', token: importer,
+      body: {
+        ...selection,
+        idempotency_key: 'stale-at-batch-boundary-0001',
+        preflight_fingerprint: preflight.preflight_fingerprint,
+        expected_snapshot_hash: preflight.snapshot_hash,
+      },
+    });
+    hookedDb.batch = originalBatch;
+
+    expect(intercepted).toBe(true);
+    expect(save.status).toBe(409);
+    expect(await save.json()).toMatchObject({ code: 'PREFLIGHT_CHANGED' });
+    expect(await db.prepare(`
+      SELECT name, seq FROM sqlite_sequence
+      WHERE name IN ('stacks', 'stack_categories', 'stack_items') ORDER BY name
+    `).all<{ name: string; seq: number }>()).toEqual(sequenceBefore);
+    expect((await db.prepare('SELECT COUNT(*) AS count FROM stacks WHERE user_id = 101').first<{ count: number }>())?.count).toBe(stacksBefore);
+    expect((await db.prepare('SELECT COUNT(*) AS count FROM share_import_operations').first<{ count: number }>())?.count).toBe(0);
+    expect((await db.prepare('SELECT imports FROM share_links WHERE id = ?').bind(share.id).first<{ imports: number }>())?.imports).toBe(0);
+  });
+
+  it('claims a parallel same-key save exactly once without a second mutation or counter increment', async () => {
+    const creator = await authToken(100, 'user', 'creator@test.invalid');
+    const importer = await authToken(101, 'user', 'importer@test.invalid');
+    const created = await jsonRequest(harness, '/api/creator-sharing/shares', {
+      method: 'POST', token: creator,
+      body: { party_id: 100, stack_id: 100, stack_item_id: 100, type: 'dose_recommendation', title: 'Einmal speichern' },
+    });
+    const share = await created.json() as { id: number; token: string };
+    harness.run(`UPDATE share_links SET moderation_status = 'approved' WHERE id = ?`, share.id);
+    harness.run(`INSERT INTO stacks (id, user_id, name) VALUES (101, 101, 'Paralleles Ziel')`);
+    harness.run(`INSERT INTO stack_categories (id, stack_id, name, name_normalized, sort_order, is_default) VALUES (101, 101, 'Standard', 'standard', 0, 1)`);
+    const selection = { target_mode: 'existing', target_stack_id: 101 };
+    const preflightResponse = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}/preflight`, {
+      method: 'POST', token: importer, body: selection,
+    });
+    const preflight = await preflightResponse.json() as { preflight_fingerprint: string; snapshot_hash: string };
+    const body = {
+      ...selection,
+      idempotency_key: 'parallel-same-key-save-0001',
+      decision: 'add',
+      preflight_fingerprint: preflight.preflight_fingerprint,
+      expected_snapshot_hash: preflight.snapshot_hash,
+    };
+
+    const [first, second] = await Promise.all([
+      jsonRequest(harness, `/api/creator-sharing/shares/${share.token}/import`, { method: 'POST', token: importer, body }),
+      jsonRequest(harness, `/api/creator-sharing/shares/${share.token}/import`, { method: 'POST', token: importer, body }),
+    ]);
+    const responses = [first, second];
+    const payloads = await Promise.all(responses.map(async (response) => ({
+      status: response.status,
+      body: await response.json() as Record<string, unknown>,
+    })));
+
+    expect(payloads.every((entry) => entry.status === 200 || entry.status === 201)).toBe(true);
+    expect(payloads.filter((entry) => entry.body.idempotent_replay === true)).toHaveLength(1);
+    expect(payloads.map((entry) => entry.body.stack_item_id)).toEqual([expect.any(Number), expect.any(Number)]);
+    expect(payloads[0].body.stack_item_id).toBe(payloads[1].body.stack_item_id);
+    expect(JSON.stringify(payloads)).not.toContain('__attempt_nonce');
+    expect((await db.prepare('SELECT COUNT(*) AS count FROM share_import_operations WHERE idempotency_key = ?')
+      .bind(body.idempotency_key).first<{ count: number }>())?.count).toBe(1);
+    expect((await db.prepare('SELECT COUNT(*) AS count FROM stack_items WHERE stack_id = 101').first<{ count: number }>())?.count).toBe(1);
+    expect((await db.prepare(`
+      SELECT COUNT(*) AS count FROM stack_item_link_bindings binding
+      JOIN stack_items item ON item.id = binding.stack_item_id WHERE item.stack_id = 101
+    `).first<{ count: number }>())?.count).toBe(1);
+    expect((await db.prepare('SELECT imports FROM share_links WHERE id = ?').bind(share.id).first<{ imports: number }>())?.imports).toBe(1);
+  });
+
+  it('keeps v1 snapshot hashes and imports compatible while new previews can expose an honest missing unit', async () => {
+    const importer = await authToken(101, 'user', 'importer@test.invalid');
+    const source = await db.prepare(`
+      SELECT si.catalog_product_id AS product_id, psl.id AS shop_link_id
+      FROM stack_items si
+      JOIN product_shop_links psl ON psl.product_id = si.catalog_product_id
+      WHERE si.id = 100 AND psl.active = 1 AND psl.blocked_at IS NULL
+      ORDER BY psl.is_primary DESC, psl.id LIMIT 1
+    `).first<{ product_id: number; shop_link_id: number }>();
+    const ingredients = await db.prepare(`
+      SELECT ingredient_id FROM product_ingredients
+      WHERE product_id = ? AND is_main = 1 ORDER BY ingredient_id
+    `).bind(source!.product_id).all<{ ingredient_id: number }>();
+    const v1 = {
+      schema_version: 1 as const,
+      type: 'stack' as const,
+      creator_party_id: 100,
+      published_at: '2026-08-07T08:00:00.000Z',
+      title: 'Historische Empfehlung',
+      items: [{
+        catalog_product_id: source!.product_id,
+        shop_link_id: source!.shop_link_id,
+        link_binding: { resolution_kind: 'bare' as const, affiliate_version_id: null, resolved_party_id: null },
+        main_ingredient_ids: ingredients.results.map((item) => item.ingredient_id),
+        quantity: 1,
+        intake_interval_days: 1,
+        dosage_text: null,
+        timing: null,
+        creator_statement: null,
+        sort_order: 0,
+        category_name: null,
+      }],
+    };
+    const parsed = parseCreatorShareSnapshot(v1);
+    expect(parsed.error).toBeUndefined();
+    expect(canonicalJson(parsed.value)).toBe(canonicalJson(v1));
+    expect(Object.prototype.hasOwnProperty.call(parsed.value!.items[0], 'unit')).toBe(false);
+    const hash = await snapshotHash(parsed.value!);
+    const token = 'legacyv1snapshotabcdefghijklmn';
+    harness.run(`
+      INSERT INTO share_links (
+        token, entity_type, entity_id, snapshot_json, creator_user_id, creator_party_id,
+        snapshot_schema_version, snapshot_hash, moderation_status, is_revoked
+      ) VALUES (?, 'stack', 100, ?, 100, 100, 1, ?, 'approved', 0)
+    `, token, canonicalJson(v1), hash);
+
+    const publicPreview = await jsonRequest(harness, `/api/creator-sharing/shares/${token}`);
+    expect(publicPreview.status).toBe(200);
+    expect((await publicPreview.json() as { items: Array<{ unit: string | null }> }).items[0].unit).toBeNull();
+    const { response: imported } = await preflightAndSave(
+      harness,
+      token,
+      importer,
+      { stack_name: 'Historischer Stack' },
+      { idempotency_key: 'legacy-v1-import-operation-0001' },
+    );
+    expect(imported.status).toBe(201);
+  });
+
+  it('creates a new immutable link only while the guarded source recommendation is unchanged', async () => {
+    const creator = await authToken(100, 'user', 'creator@test.invalid');
+    const originalResponse = await jsonRequest(harness, '/api/creator-sharing/shares', {
+      method: 'POST', token: creator,
+      body: { party_id: 100, stack_id: 100, type: 'stack', title: 'Ursprüngliche Empfehlung' },
+    });
+    expect(originalResponse.status).toBe(201);
+    const original = await originalResponse.json() as { id: number; token: string; snapshot_hash: string };
+    harness.run(`UPDATE share_links SET moderation_status = 'blocked' WHERE id = ?`, original.id);
+    const oldBefore = await db.prepare(`
+      SELECT token, snapshot_json, snapshot_hash, moderation_status, is_revoked, expires_at
+      FROM share_links WHERE id = ?
+    `).bind(original.id).first<Record<string, unknown>>();
+    const guard = {
+      share_id: original.id,
+      expected_snapshot_hash: original.snapshot_hash,
+      expected_status: 'blocked',
+      expected_moderation_status: 'blocked',
+      expected_is_revoked: 0,
+      expected_expires_at: null,
+    };
+
+    const matching = await jsonRequest(harness, '/api/creator-sharing/shares', {
+      method: 'POST', token: creator,
+      body: {
+        party_id: 100,
+        stack_id: 100,
+        type: 'stack',
+        title: 'Überarbeitete Empfehlung',
+        source_share_guard: guard,
+      },
+    });
+    expect(matching.status).toBe(201);
+    const created = await matching.json() as { id: number; token: string };
+    expect(created.id).not.toBe(original.id);
+    expect(created.token).not.toBe(original.token);
+    expect(await db.prepare(`
+      SELECT token, snapshot_json, snapshot_hash, moderation_status, is_revoked, expires_at
+      FROM share_links WHERE id = ?
+    `).bind(original.id).first<Record<string, unknown>>()).toEqual(oldBefore);
+    expect(await db.prepare(`SELECT moderation_status, is_revoked FROM share_links WHERE id = ?`).bind(created.id).first()).toMatchObject({
+      moderation_status: 'pending',
+      is_revoked: 0,
+    });
+    expect((await db.prepare(`SELECT COUNT(*) AS count FROM share_links`).first<{ count: number }>())?.count).toBe(2);
+
+    harness.run(`UPDATE share_links SET moderation_status = 'approved' WHERE id = ?`, original.id);
+    const staleStatus = await jsonRequest(harness, '/api/creator-sharing/shares', {
+      method: 'POST', token: creator,
+      body: {
+        party_id: 100,
+        stack_id: 100,
+        type: 'stack',
+        title: 'Darf nicht entstehen',
+        source_share_guard: guard,
+      },
+    });
+    expect(staleStatus.status).toBe(409);
+    expect(await staleStatus.json()).toMatchObject({ code: 'SOURCE_SHARE_CHANGED' });
+    expect((await db.prepare(`SELECT COUNT(*) AS count FROM share_links`).first<{ count: number }>())?.count).toBe(2);
+
+    harness.run(`INSERT INTO parties (id, type, name, slug, status, auto_catalog_approval) VALUES (200, 'creator', 'Andere Partei', 'andere-partei', 'active', 0)`);
+    harness.run(`INSERT INTO party_memberships (party_id, user_id, role, status) VALUES (200, 100, 'owner', 'active')`);
+    harness.run(`UPDATE share_links SET moderation_status = 'blocked' WHERE id = ?`, original.id);
+    const foreignParty = await jsonRequest(harness, '/api/creator-sharing/shares', {
+      method: 'POST', token: creator,
+      body: {
+        party_id: 200,
+        stack_id: 100,
+        type: 'stack',
+        title: 'Falsche Partei',
+        source_share_guard: guard,
+      },
+    });
+    expect(foreignParty.status).toBe(409);
+    expect((await db.prepare(`SELECT COUNT(*) AS count FROM share_links`).first<{ count: number }>())?.count).toBe(2);
+  });
+
   it('freezes attribution, moderates, imports idempotently and tracks without user or stack ids', async () => {
     const creator = await authToken(100, 'user', 'creator@test.invalid');
     const importer = await authToken(101, 'user', 'importer@test.invalid');
     const admin = await authToken(102, 'admin', 'admin@test.invalid');
     const creatorProduct = await db.prepare(`SELECT catalog_product_id AS id FROM stack_items WHERE id = 100`).first<{ id: number }>();
+    harness.run(`UPDATE products SET serving_unit = 'Kapsel' WHERE id = ?`, creatorProduct!.id);
     harness.run(`UPDATE parties SET auto_catalog_approval = 1 WHERE id = 100`);
     harness.run(`UPDATE products SET owner_party_id = 100, visibility = 'auto' WHERE id = ?`, creatorProduct!.id);
     expect(await db.prepare(`SELECT product_id FROM globally_visible_products WHERE product_id = ?`).bind(creatorProduct!.id).first()).not.toBeNull();
@@ -119,7 +757,9 @@ describe('creator stack sharing runtime contract', () => {
     });
     expect(createResponse.status).toBe(201);
     const created = await createResponse.json() as { id: number; token: string; snapshot_hash: string };
-    expect((await jsonRequest(harness, `/api/creator-sharing/shares/${created.token}`)).status).toBe(404);
+    const pendingPublic = await jsonRequest(harness, `/api/creator-sharing/shares/${created.token}`);
+    expect(pendingPublic.status).toBe(409);
+    expect(await pendingPublic.json()).toMatchObject({ code: 'SHARE_PENDING' });
 
     const moderation = await jsonRequest(harness, `/api/admin/creator-sharing/shares/${created.id}`, {
       method: 'PATCH', token: admin,
@@ -128,20 +768,32 @@ describe('creator stack sharing runtime contract', () => {
     expect(moderation.status).toBe(200);
     const previewResponse = await jsonRequest(harness, `/api/creator-sharing/shares/${created.token}`);
     expect(previewResponse.status).toBe(200);
-    const preview = await previewResponse.json() as { creator: { name: string }; disclosure: string; items: Array<{ creator_statement: string }> };
+    const preview = await previewResponse.json() as { creator: { name: string }; disclosure: string; items: Array<{ creator_statement: string; unit: string | null }> };
     expect(preview.creator.name).toBe('Test Creator');
     expect(preview.disclosure).toContain('Affiliate');
     expect(preview.items[0].creator_statement).toContain('Sachlicher Kontext');
+    expect(preview.items[0].unit).toBe('Kapsel');
+    const storedV2 = await db.prepare(`SELECT snapshot_schema_version, snapshot_json FROM share_links WHERE id = ?`).bind(created.id).first<{ snapshot_schema_version: number; snapshot_json: string }>();
+    expect(storedV2?.snapshot_schema_version).toBe(2);
+    expect(JSON.parse(storedV2?.snapshot_json ?? '{}').items[0].unit).toBe('Kapsel');
 
     const target = await db.prepare(`SELECT shop_domain_id FROM party_shop_affiliate_versions WHERE id = 100`).first<{ shop_domain_id: number }>();
     harness.run(`UPDATE party_shop_affiliate_versions SET status = 'retired' WHERE id = 100`);
     harness.run(`INSERT INTO party_shop_affiliate_versions (party_id, shop_domain_id, version, code, link_template, status) VALUES (100, ?, 2, 'creator-v2', '{url}?creator={code}', 'current')`, target!.shop_domain_id);
 
     const importBody = { idempotency_key: 'creator-import-operation-0001', stack_name: 'Importierter Stack' };
-    const firstImport = await jsonRequest(harness, `/api/creator-sharing/shares/${created.token}/import`, { method: 'POST', token: importer, body: importBody });
+    const saved = await preflightAndSave(harness, created.token, importer, { stack_name: importBody.stack_name }, importBody);
+    const firstImport = saved.response;
     expect(firstImport.status).toBe(201);
     const imported = await firstImport.json() as { stack_id: number };
-    const replay = await jsonRequest(harness, `/api/creator-sharing/shares/${created.token}/import`, { method: 'POST', token: importer, body: importBody });
+    const replay = await jsonRequest(harness, `/api/creator-sharing/shares/${created.token}/import`, {
+      method: 'POST', token: importer,
+      body: {
+        ...importBody,
+        preflight_fingerprint: saved.preflight.preflight_fingerprint,
+        expected_snapshot_hash: saved.preflight.snapshot_hash,
+      },
+    });
     expect(replay.status).toBe(200);
     expect((await replay.json() as { idempotent_replay: boolean }).idempotent_replay).toBe(true);
 
@@ -216,7 +868,13 @@ describe('creator stack sharing runtime contract', () => {
     const createdResponse = await jsonRequest(harness, '/api/creator-sharing/shares', { method: 'POST', token: creator, body: { party_id: 100, stack_id: 100, stack_item_id: 100, type: 'dose_recommendation', title: 'D3' } });
     const created = await createdResponse.json() as { id: number; token: string; snapshot_hash: string };
     await jsonRequest(harness, `/api/admin/creator-sharing/shares/${created.id}`, { method: 'PATCH', token: admin, body: { expected_status: 'pending', expected_snapshot_hash: created.snapshot_hash, moderation_status: 'approved' } });
-    const imported = await jsonRequest(harness, `/api/creator-sharing/shares/${created.token}/import`, { method: 'POST', token: importer, body: { idempotency_key: 'exact-main-set-operation-0001', target_stack_id: 101 } });
+    const { response: imported } = await preflightAndSave(
+      harness,
+      created.token,
+      importer,
+      { target_mode: 'existing', target_stack_id: 101 },
+      { idempotency_key: 'exact-main-set-operation-0001', decision: 'add' },
+    );
     expect(imported.status).toBe(201);
     expect((await imported.json() as { action: string }).action).toBe('added');
   });
@@ -239,22 +897,111 @@ describe('creator stack sharing runtime contract', () => {
       method: 'PATCH', token: admin,
       body: { expected_status: 'pending', expected_snapshot_hash: share.snapshot_hash, moderation_status: 'approved' },
     });
-    const conflict = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}/import`, {
+    const preflightResponse = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}/preflight`, {
       method: 'POST', token: importer,
-      body: { idempotency_key: 'multiple-conflicts-0001', target_stack_id: 101 },
+      body: { target_mode: 'existing', target_stack_id: 101 },
     });
-    expect(conflict.status).toBe(409);
-    const payload = await conflict.json() as { conflicts: Array<{ stack_item_id: number; version: number }> };
-    expect(payload.conflicts.map((entry) => entry.stack_item_id)).toEqual([101, 102]);
+    expect(preflightResponse.status).toBe(200);
+    const payload = await preflightResponse.json() as {
+      preflight_fingerprint: string;
+      snapshot_hash: string;
+      similar_products: Array<{ stack_item_id: number; version: number }>;
+    };
+    expect(payload.similar_products.map((entry) => entry.stack_item_id)).toEqual([101, 102]);
+    const missingChoice = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}/import`, {
+      method: 'POST', token: importer,
+      body: {
+        idempotency_key: 'multiple-conflicts-0001', target_mode: 'existing', target_stack_id: 101,
+        preflight_fingerprint: payload.preflight_fingerprint, expected_snapshot_hash: payload.snapshot_hash,
+      },
+    });
+    expect(missingChoice.status).toBe(409);
+    expect(await missingChoice.json()).toMatchObject({ code: 'CHOICE_REQUIRED' });
     const replace = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}/import`, {
       method: 'POST', token: importer,
       body: {
-        idempotency_key: 'multiple-conflicts-0002', target_stack_id: 101, conflict_action: 'replace',
-        replace_stack_item_id: 102, expected_stack_item_version: payload.conflicts[1].version,
+        idempotency_key: 'multiple-conflicts-0002', target_mode: 'existing', target_stack_id: 101,
+        decision: 'replace', selected_stack_item_id: 102,
+        expected_stack_item_version: payload.similar_products[1].version,
+        preflight_fingerprint: payload.preflight_fingerprint, expected_snapshot_hash: payload.snapshot_hash,
       },
     });
     expect(replace.status).toBe(200);
     expect((await replace.json() as { stack_item_id: number }).stack_item_id).toBe(102);
+  });
+
+  it('exposes only party-owned creator recommendations and revokes them with exact guards', async () => {
+    const creator = await authToken(100, 'user', 'creator@test.invalid');
+    const importer = await authToken(101, 'user', 'importer@test.invalid');
+    const admin = await authToken(102, 'admin', 'admin@test.invalid');
+    const create = await jsonRequest(harness, '/api/creator-sharing/shares', {
+      method: 'POST', token: creator,
+      body: { party_id: 100, stack_id: 100, type: 'stack', title: 'Portfolio-Test' },
+    });
+    expect(create.status).toBe(201);
+    const share = await create.json() as { id: number; token: string; snapshot_hash: string };
+
+    const forbiddenList = await jsonRequest(harness, '/api/creator-sharing/creator-shares?party_id=100', { token: importer });
+    expect(forbiddenList.status).toBe(403);
+    const pendingList = await jsonRequest(harness, '/api/creator-sharing/creator-shares?party_id=100', { token: creator });
+    expect(pendingList.status).toBe(200);
+    const pendingPayload = await pendingList.json() as { shares: Array<{ id: number; status: string; source_stack_id: number }> };
+    expect(pendingPayload.shares).toContainEqual(expect.objectContaining({ id: share.id, status: 'pending', source_stack_id: 100 }));
+
+    const privatePreview = await jsonRequest(harness, `/api/creator-sharing/creator-shares/${share.id}/preview`, { token: creator });
+    expect(privatePreview.status).toBe(200);
+    expect((await privatePreview.json() as { title: string; creator_status: string })).toMatchObject({ title: 'Portfolio-Test', creator_status: 'pending' });
+    expect((await db.prepare('SELECT views FROM share_links WHERE id = ?').bind(share.id).first<{ views: number }>())?.views).toBe(0);
+
+    expect((await jsonRequest(harness, `/api/creator-sharing/creator-shares/${share.id}/preview`, { token: importer })).status).toBe(403);
+    harness.run(`UPDATE share_links SET moderation_status = 'blocked' WHERE id = ?`, share.id);
+    const blockedPreview = await jsonRequest(harness, `/api/creator-sharing/creator-shares/${share.id}/preview`, { token: creator });
+    expect(blockedPreview.status).toBe(200);
+    expect((await blockedPreview.json() as { creator_status: string }).creator_status).toBe('blocked');
+    harness.run(`UPDATE share_links SET moderation_status = 'pending', expires_at = strftime('%s', 'now') - 1 WHERE id = ?`, share.id);
+    const expiredPreview = await jsonRequest(harness, `/api/creator-sharing/creator-shares/${share.id}/preview`, { token: creator });
+    expect(expiredPreview.status).toBe(200);
+    expect((await expiredPreview.json() as { creator_status: string }).creator_status).toBe('expired');
+    harness.run(`UPDATE share_links SET expires_at = NULL WHERE id = ?`, share.id);
+
+    const moderation = await jsonRequest(harness, `/api/admin/creator-sharing/shares/${share.id}`, {
+      method: 'PATCH', token: admin,
+      body: { expected_status: 'pending', expected_snapshot_hash: share.snapshot_hash, moderation_status: 'approved', is_revoked: 0 },
+    });
+    expect(moderation.status).toBe(200);
+    const approvedList = await jsonRequest(harness, '/api/creator-sharing/creator-shares?party_id=100', { token: creator });
+    const approvedShare = ((await approvedList.json()) as {
+      shares: Array<{ id: number; status: string; snapshot_hash: string; moderation_status: string; is_revoked: number }>;
+    }).shares.find((entry) => entry.id === share.id);
+    expect(approvedShare).toMatchObject({ status: 'approved', moderation_status: 'approved', is_revoked: 0 });
+    harness.run(`UPDATE share_links SET expires_at = strftime('%s', 'now') - 1 WHERE id = ?`, share.id);
+    const expiredDashboard = await jsonRequest(harness, '/api/creator-sharing/dashboard?party_id=100', { token: creator });
+    expect((await expiredDashboard.json() as { active_shares: number }).active_shares).toBe(0);
+    harness.run(`UPDATE share_links SET expires_at = NULL WHERE id = ?`, share.id);
+
+    const staleRevoke = await jsonRequest(harness, `/api/creator-sharing/creator-shares/${share.id}/revoke`, {
+      method: 'PATCH', token: creator,
+      body: { expected_snapshot_hash: '0'.repeat(64), expected_moderation_status: 'approved', expected_is_revoked: 0 },
+    });
+    expect(staleRevoke.status).toBe(409);
+    harness.run(`INSERT INTO party_memberships (party_id, user_id, role, status) VALUES (100, 101, 'viewer', 'active')`);
+    expect((await jsonRequest(harness, `/api/creator-sharing/creator-shares/${share.id}/preview`, { token: importer })).status).toBe(200);
+    expect((await jsonRequest(harness, `/api/creator-sharing/creator-shares/${share.id}/revoke`, {
+      method: 'PATCH', token: importer,
+      body: { expected_snapshot_hash: share.snapshot_hash, expected_moderation_status: 'approved', expected_is_revoked: 0 },
+    })).status).toBe(403);
+
+    const revoke = await jsonRequest(harness, `/api/creator-sharing/creator-shares/${share.id}/revoke`, {
+      method: 'PATCH', token: creator,
+      body: { expected_snapshot_hash: share.snapshot_hash, expected_moderation_status: 'approved', expected_is_revoked: 0 },
+    });
+    expect(revoke.status).toBe(200);
+    const revokedList = await jsonRequest(harness, '/api/creator-sharing/creator-shares?party_id=100', { token: creator });
+    const revokedShare = ((await revokedList.json()) as { shares: Array<{ id: number; status: string }> }).shares.find((entry) => entry.id === share.id);
+    expect(revokedShare).toMatchObject({ status: 'revoked' });
+    const revokedPublic = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}`);
+    expect(revokedPublic.status).toBe(410);
+    expect(await revokedPublic.json()).toMatchObject({ code: 'SHARE_UNAVAILABLE' });
   });
 
   it('enforces admin write guards and exposes only aggregate creator metrics', async () => {

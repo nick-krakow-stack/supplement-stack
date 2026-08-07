@@ -25,6 +25,7 @@ import {
   validateBrowserOrigin,
 } from '../lib/helpers'
 import { sendEmailVerificationEmail, sendPasswordResetEmail } from '../lib/mail'
+import { validateReturnTo } from '../lib/return-to'
 
 const auth = new Hono<AppContext>()
 
@@ -219,6 +220,10 @@ auth.post('/register', async (c) => {
   if (!body.health_consent)
     return c.json({ error: 'Gesundheits-Einwilligung erforderlich (DSGVO Art. 9)' }, 400)
   const data = body as { email: string; password: string; age?: number; guideline_source?: string }
+  const returnTo = body.return_to === undefined ? null : validateReturnTo(body.return_to)
+  if (body.return_to !== undefined && !returnTo) {
+    return c.json({ error: 'Ungültiger Rückweg.' }, 400)
+  }
   const attribution = typeof body.attribution === 'object' && body.attribution !== null
     ? body.attribution as SignupAttributionInput
     : null
@@ -263,7 +268,7 @@ auth.post('/register', async (c) => {
     `INSERT INTO consent_log (user_id, consent_type, granted) VALUES (?, 'health_data', 1)`
   ).bind(userId).run()
 
-  const mailResult = await sendEmailVerificationEmail(c.env, frontendUrl(c.env), data.email, verificationToken)
+  const mailResult = await sendEmailVerificationEmail(c.env, frontendUrl(c.env), data.email, verificationToken, returnTo)
   const token = await sign(
     { userId, email: data.email, role: 'user', exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SECONDS },
     c.env.JWT_SECRET,
@@ -346,6 +351,11 @@ auth.post('/resend-verification', async (c) => {
   const authErr = await ensureAuth(c)
   if (authErr) return authErr
   const currentUser = c.get('user')
+  const body = await c.req.json().catch(() => ({})) as { return_to?: unknown }
+  const returnTo = body.return_to === undefined ? null : validateReturnTo(body.return_to)
+  if (body.return_to !== undefined && !returnTo) {
+    return c.json({ error: 'Ungültiger Rückweg.' }, 400)
+  }
 
   const allowed = await checkRateLimit(c.env.RATE_LIMITER, `resend-verification:${currentUser.userId}`, 3, 60 * 60)
   if (!allowed) return c.json({ error: 'Zu viele Versuche. Bitte warte vor dem erneuten Versand.' }, 429)
@@ -359,7 +369,7 @@ auth.post('/resend-verification', async (c) => {
   }
 
   const rawToken = await createEmailVerificationToken(c.env.DB, user.id)
-  const result = await sendEmailVerificationEmail(c.env, frontendUrl(c.env), user.email, rawToken)
+  const result = await sendEmailVerificationEmail(c.env, frontendUrl(c.env), user.email, rawToken, returnTo)
   if (!result.ok) {
     return c.json({ error: 'Bestätigungs-E-Mail konnte nicht gesendet werden.' }, 500)
   }

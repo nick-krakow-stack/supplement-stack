@@ -3,21 +3,16 @@ import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, Mail, RefreshCw, XCircle } from 'lucide-react';
 import { resendVerificationEmail, verifyEmail } from '../api/auth';
 import { useAuth } from '../contexts/AuthContext';
+import { authPath, authReturnTo } from '../lib/returnTo';
 
 type VerifyState = 'idle' | 'loading' | 'success' | 'error';
-
-function getRedirect(location: ReturnType<typeof useLocation>): string {
-  const state = location.state as { redirect?: string } | null;
-  const redirect = state?.redirect ?? '/stacks';
-  return redirect.startsWith('/') && !redirect.startsWith('//') ? redirect : '/stacks';
-}
 
 export default function VerifyEmailPage() {
   const { user, refreshUser } = useAuth();
   const [searchParams] = useSearchParams();
   const location = useLocation();
   const token = searchParams.get('token') ?? '';
-  const redirect = getRedirect(location);
+  const returnTo = authReturnTo(location);
   const locationState = location.state as {
     emailVerificationEmailSent?: boolean;
     message?: string;
@@ -54,7 +49,7 @@ export default function VerifyEmailPage() {
     setResendError(null);
     setResending(true);
     try {
-      const res = await resendVerificationEmail();
+      const res = await resendVerificationEmail(returnTo);
       setResendMessage(res.message);
       if (res.already_verified) {
         await refreshUser().catch(() => undefined);
@@ -150,14 +145,14 @@ export default function VerifyEmailPage() {
         <div className="mt-6 flex flex-wrap gap-3">
           {user ? (
             <Link
-              to={redirect}
+              to={returnTo}
               className="inline-flex min-h-11 items-center justify-center rounded-xl bg-blue-600 px-5 py-2 text-sm font-bold text-white hover:bg-blue-700"
             >
               Weiter zu Supplement Stack
             </Link>
           ) : (
             <Link
-              to="/login"
+              to={authPath('/login', returnTo)}
               className="inline-flex min-h-11 items-center justify-center rounded-xl bg-blue-600 px-5 py-2 text-sm font-bold text-white hover:bg-blue-700"
             >
               Anmelden
