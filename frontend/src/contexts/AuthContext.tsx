@@ -14,6 +14,7 @@ interface AuthContextValue {
       health_consent?: boolean;
       age?: number;
       guideline_source?: string;
+      return_to?: string;
     },
   ) => Promise<authApi.RegisterResponse>;
   logout: () => Promise<void>;
@@ -49,6 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       health_consent?: boolean;
       age?: number;
       guideline_source?: string;
+      return_to?: string;
     },
   ): Promise<authApi.RegisterResponse> => {
     const result = await authApi.register(email, password, extra);

@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import LegalDisclaimer from './LegalDisclaimer';
 import AppLogo from './AppLogo';
 import { resetAnalyticsConsentChoice } from '../lib/analytics';
-import { creatorSharingEnabled } from '../api/creatorSharing';
+import { creatorSharingEnabled, getCreatorParties } from '../api/creatorSharing';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -21,8 +21,26 @@ function navClass({ isActive }: { isActive: boolean }): string {
 
 export default function Layout({ children }: LayoutProps) {
   const { user, isAdmin, logout } = useAuth();
+  const userId = user?.id ?? null;
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [hasCreatorAccess, setHasCreatorAccess] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setHasCreatorAccess(false);
+    if (!userId || !creatorSharingEnabled) return () => { cancelled = true; };
+    getCreatorParties()
+      .then((parties) => {
+        if (!cancelled) {
+          setHasCreatorAccess(parties.some((party) => party.type === 'creator' || party.type === 'brand'));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setHasCreatorAccess(false);
+      });
+    return () => { cancelled = true; };
+  }, [userId]);
 
   const handleLogout = () => {
     logout();
@@ -47,9 +65,9 @@ export default function Layout({ children }: LayoutProps) {
           Eigene Produkte
         </NavLink>
       )}
-      {user && creatorSharingEnabled && (
+      {user && creatorSharingEnabled && hasCreatorAccess && (
         <NavLink to="/creator" className={navClass} onClick={closeMobile}>
-          Creator
+          Für Creator
         </NavLink>
       )}
       {!user && (

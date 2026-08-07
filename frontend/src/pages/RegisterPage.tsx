@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { authPath, authReturnTo } from '../lib/returnTo';
 
 const SS_DEMO_STACK_HANDOFF_KEY = 'ss_demo_stack_handoff_v1';
 const DEMO_STACK_HANDOFF_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -25,18 +26,11 @@ function hasDemoStackHandoff(): boolean {
   }
 }
 
-function getAuthRedirect(location: ReturnType<typeof useLocation>): string {
-  const state = location.state as { from?: { pathname?: string }; redirect?: string } | null;
-  const queryRedirect = new URLSearchParams(location.search).get('redirect');
-  const target = state?.redirect ?? state?.from?.pathname ?? queryRedirect ?? '/stacks';
-  return target.startsWith('/') && !target.startsWith('//') ? target : '/stacks';
-}
-
 export default function RegisterPage() {
   const { register } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const authRedirect = getAuthRedirect(location);
+  const returnTo = authReturnTo(location);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -63,16 +57,17 @@ export default function RegisterPage() {
     try {
       const ageTrimmed = age.trim();
       const ageNum = ageTrimmed === '' ? undefined : Number.parseInt(ageTrimmed, 10);
+      const redirect = demoStackHandoffAvailable && !returnTo.startsWith('/share/') ? '/stacks' : returnTo;
       const result = await register(email, password, {
         health_consent: healthConsent,
         age: Number.isFinite(ageNum) ? (ageNum as number) : undefined,
         guideline_source: guidelineSource === '' ? undefined : guidelineSource,
+        return_to: redirect,
       });
-      const redirect = demoStackHandoffAvailable ? '/stacks' : getAuthRedirect(location);
-      navigate('/verify-email', {
+      navigate(authPath('/verify-email', redirect), {
         replace: true,
         state: {
-          redirect,
+          returnTo: redirect,
           demoStackHandoffKey: demoStackHandoffAvailable ? SS_DEMO_STACK_HANDOFF_KEY : undefined,
           message: result.message,
           emailVerificationEmailSent: result.emailVerificationEmailSent,
@@ -196,7 +191,7 @@ export default function RegisterPage() {
 
         <p className="mt-4 text-sm text-center text-gray-600">
           Bereits registriert?{' '}
-          <Link to={`/login?redirect=${encodeURIComponent(authRedirect)}`} className="text-blue-600 hover:underline font-medium">
+          <Link to={authPath('/login', returnTo)} className="text-blue-600 hover:underline font-medium">
             Anmelden
           </Link>
         </p>

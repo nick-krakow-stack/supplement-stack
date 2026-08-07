@@ -1,6 +1,7 @@
 import { Hono, type Context } from 'hono'
 import type { AppContext } from '../lib/types'
 import { ensureAuth } from '../lib/helpers'
+import creatorSharingImport from './creator-sharing-import'
 import {
   CREATOR_SHARING_SNAPSHOT_VERSION,
   buildAffiliateUrl,
@@ -8,6 +9,7 @@ import {
   creatorSharingEnabled,
   dateWindowAllows,
   generateShareToken,
+  isSupportedCreatorShareSnapshotVersion,
   parseCreatorShareSnapshot,
   snapshotHash,
   validateProductTargetUrl,
@@ -22,15 +24,13 @@ import {
   hasPartyAccess,
   loadMainIngredientIds,
   parseStoredSnapshot,
-  reserveIds,
-  sameIntegerSet,
-  snapshotItemBindingStatements,
   validateSnapshotRelations,
   type AffiliateVersionRow,
   type ValidatedSnapshotRelations,
 } from '../lib/creator-sharing-service'
 
 const creatorSharing = new Hono<AppContext>()
+creatorSharing.route('/', creatorSharingImport)
 
 type ShareRow = {
   id: number
@@ -50,12 +50,26 @@ type ShareRow = {
   created_at: number
 }
 
+type CreatorShareStatus = 'pending' | 'approved' | 'blocked' | 'revoked' | 'expired'
+
+type PreviewProductRow = {
+  id: number
+  name: string
+  brand: string | null
+}
+
+type CreatorShareListRow = ShareRow & {
+  source_stack_id: number | null
+  source_stack_name: string | null
+}
+
 type StackShareSourceRow = {
   stack_item_id: number
   stack_name: string
   catalog_product_id: number
   quantity: number
-  intake_interval_days: number
+  serving_unit: string | null
+  intake_interval_days: number | null
   dosage_text: string | null
   timing: string | null
   sort_order: number
@@ -68,13 +82,6 @@ type StackShareSourceRow = {
   legacy_party_id: number | null
   active: number
   blocked_at: string | null
-}
-
-type ExistingStackIngredientRow = {
-  stack_item_id: number
-  version: number
-  ingredient_id: number
-  product_name: string
 }
 
 function ensureFeature(c: Context<AppContext>): Response | null {
@@ -92,9 +99,81 @@ function boundedText(value: unknown, maximum: number): string | null {
   return trimmed && trimmed.length <= maximum ? trimmed : null
 }
 
+function parseSourceShareGuard(value: unknown): { value?: SourceShareGuard; error?: string } {
+  if (value === undefined) return {}
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return { error: 'Die Angaben der ursprünglichen Empfehlung fehlen.' }
+  }
+  const input = value as Record<string, unknown>
+  const shareId = positiveInteger(input.share_id)
+  const expectedSnapshotHash = boundedText(input.expected_snapshot_hash, 64)
+  const expectedStatus = input.expected_status === 'blocked'
+    || input.expected_status === 'revoked'
+    || input.expected_status === 'expired'
+    ? input.expected_status
+    : null
+  const expectedModerationStatus = input.expected_moderation_status === 'pending'
+    || input.expected_moderation_status === 'approved'
+    || input.expected_moderation_status === 'blocked'
+    ? input.expected_moderation_status
+    : null
+  const expectedIsRevoked = input.expected_is_revoked === 0 || input.expected_is_revoked === 1
+    ? input.expected_is_revoked
+    : null
+  const expectedExpiresAt = input.expected_expires_at === null
+    ? null
+    : positiveInteger(input.expected_expires_at)
+  if (
+    !shareId
+    || !expectedSnapshotHash
+    || !/^[a-f0-9]{64}$/.test(expectedSnapshotHash)
+    || !expectedStatus
+    || !expectedModerationStatus
+    || expectedIsRevoked === null
+    || (input.expected_expires_at !== null && expectedExpiresAt === null)
+  ) {
+    return { error: 'Die Angaben der ursprünglichen Empfehlung sind unvollständig.' }
+  }
+  return {
+    value: {
+      shareId,
+      expectedSnapshotHash,
+      expectedStatus,
+      expectedModerationStatus,
+      expectedIsRevoked,
+      expectedExpiresAt,
+    },
+  }
+}
+
 function d1Changes(result: D1Result<unknown>): number {
   const value = Number((result.meta as { changes?: number } | undefined)?.changes ?? 0)
   return Number.isFinite(value) ? value : 0
+}
+
+type StackExpectedSourceRow = {
+  stack_item_id: number
+  product_name: string
+}
+
+type UnshareableProduct = {
+  stack_item_id: number
+  product_name: string
+}
+
+type SourceShareGuard = {
+  shareId: number
+  expectedSnapshotHash: string
+  expectedStatus: 'blocked' | 'revoked' | 'expired'
+  expectedModerationStatus: 'pending' | 'approved' | 'blocked'
+  expectedIsRevoked: 0 | 1
+  expectedExpiresAt: number | null
+}
+
+function creatorShareStatus(row: ShareRow, nowSeconds = Math.floor(Date.now() / 1000)): CreatorShareStatus {
+  if (row.is_revoked === 1) return 'revoked'
+  if (row.expires_at !== null && row.expires_at <= nowSeconds) return 'expired'
+  return row.moderation_status
 }
 
 function statementMap(value: unknown): Map<number, string | null> | null {
@@ -159,7 +238,7 @@ async function loadShare(
     LIMIT 1
   `).bind(token).first<ShareRow>()
   if (!row) return { error: 'Share nicht gefunden oder nicht mehr verfügbar.', status: 404 }
-  if (row.snapshot_schema_version !== CREATOR_SHARING_SNAPSHOT_VERSION || !row.snapshot_hash) {
+  if (!isSupportedCreatorShareSnapshotVersion(row.snapshot_schema_version) || !row.snapshot_hash) {
     return { error: 'Share besitzt keinen unterstützten Snapshot.', status: 409 }
   }
   const parsed = parseStoredSnapshot(row.snapshot_json)
@@ -172,6 +251,66 @@ async function loadShare(
   const relations = await validateSnapshotRelations(db, parsed.value)
   if (!relations.value) return { error: relations.error ?? 'Share-Relationen sind ungültig.', status: 409 }
   return { row, snapshot: parsed.value, relations: relations.value }
+}
+
+async function parseCreatorShareRow(
+  row: ShareRow,
+): Promise<{ snapshot?: CreatorShareSnapshot; error?: string }> {
+  if (!isSupportedCreatorShareSnapshotVersion(row.snapshot_schema_version) || !row.snapshot_hash) {
+    return { error: 'Empfehlung besitzt keinen unterstützten Stand.' }
+  }
+  const parsed = parseStoredSnapshot(row.snapshot_json)
+  if (!parsed.value) return { error: parsed.error ?? 'Gespeicherter Stand ist ungültig.' }
+  const computedHash = await snapshotHash(parsed.value)
+  if (computedHash !== row.snapshot_hash) return { error: 'Gespeicherter Stand konnte nicht geprüft werden.' }
+  if (parsed.value.creator_party_id !== row.creator_party_id || parsed.value.type !== row.entity_type) {
+    return { error: 'Empfehlung und gespeicherter Stand passen nicht zusammen.' }
+  }
+  return { snapshot: parsed.value }
+}
+
+async function creatorPreviewPayload(
+  db: D1Database,
+  row: ShareRow,
+  snapshot: CreatorShareSnapshot,
+): Promise<Record<string, unknown> | null> {
+  const party = await getParty(db, snapshot.creator_party_id)
+  if (!party) return null
+  const productIds = [...new Set(snapshot.items.map((item) => item.catalog_product_id))]
+  const productById = new Map<number, PreviewProductRow>()
+  if (productIds.length > 0) {
+    const placeholders = productIds.map(() => '?').join(',')
+    const { results } = await db.prepare(`
+      SELECT id, name, brand
+      FROM products
+      WHERE id IN (${placeholders})
+    `).bind(...productIds).all<PreviewProductRow>()
+    for (const product of results ?? []) productById.set(product.id, product)
+  }
+  return {
+    token: row.token,
+    type: snapshot.type,
+    title: snapshot.title,
+    creator: { id: party.id, name: party.name, type: party.type, slug: party.slug },
+    published_at: snapshot.published_at,
+    items: snapshot.items.map((item) => {
+      const product = productById.get(item.catalog_product_id)
+      return {
+        catalog_product_id: item.catalog_product_id,
+        product_name: product?.name ?? null,
+        brand: product?.brand ?? null,
+        quantity: item.quantity,
+        unit: item.unit ?? null,
+        intake_interval_days: item.intake_interval_days,
+        dosage_text: item.dosage_text,
+        timing: item.timing,
+        creator_statement: item.creator_statement,
+        category_name: item.category_name,
+        has_affiliate_attribution: item.link_binding.resolution_kind !== 'bare',
+      }
+    }),
+    disclosure: 'Einige Produktlinks sind Affiliate-Links. Die Plattform oder der Stack-Anbieter kann daran verdienen; für dich ändert sich der Preis nicht.',
+  }
 }
 
 async function currentAffiliateVersions(
@@ -262,20 +401,28 @@ async function loadShareSourceRows(
   creatorPartyId: number,
   stackId: number,
   stackItemId: number | null,
-): Promise<{ rows?: StackShareSourceRow[]; error?: string }> {
+): Promise<{
+  rows?: StackShareSourceRow[]
+  error?: string
+  errorCode?: 'STACK_NOT_FOUND' | 'STACK_NOT_FULLY_SHAREABLE'
+  unshareableProducts?: UnshareableProduct[]
+  shareableRows?: StackShareSourceRow[]
+}> {
   const stack = await db.prepare('SELECT id FROM stacks WHERE id = ? AND user_id = ?')
     .bind(stackId, userId).first<{ id: number }>()
-  if (!stack) return { error: 'Stack nicht gefunden.' }
-  const userProductCount = await db.prepare(`
-    SELECT COUNT(*) AS count
-    FROM stack_items
-    WHERE stack_id = ?
-      AND user_product_id IS NOT NULL
-      AND (? IS NULL OR id = ?)
-  `).bind(stackId, stackItemId, stackItemId).first<{ count: number }>()
-  if ((userProductCount?.count ?? 0) > 0) {
-    return { error: 'Geteilte Produkte müssen zuerst als moderierte Katalogprodukte veröffentlicht werden.' }
-  }
+  if (!stack) return { error: 'Stack nicht gefunden.', errorCode: 'STACK_NOT_FOUND' }
+  const expectedResult = await db.prepare(`
+    SELECT
+      si.id AS stack_item_id,
+      COALESCE(p.name, up.name, 'Nicht mehr verfügbares Produkt') AS product_name
+    FROM stack_items si
+    LEFT JOIN products p ON p.id = si.catalog_product_id
+    LEFT JOIN user_products up ON up.id = si.user_product_id
+    WHERE si.stack_id = ?
+      AND (? IS NULL OR si.id = ?)
+    ORDER BY si.sort_order ASC, si.id ASC
+  `).bind(stackId, stackItemId, stackItemId).all<StackExpectedSourceRow>()
+  const expected = expectedResult.results ?? []
 
   const { results } = await db.prepare(`
     SELECT
@@ -283,6 +430,7 @@ async function loadShareSourceRows(
       s.name AS stack_name,
       si.catalog_product_id,
       si.quantity,
+      p.serving_unit,
       si.intake_interval_days,
       si.dosage_text,
       si.timing,
@@ -332,10 +480,204 @@ async function loadShareSourceRows(
       AND (? IS NULL OR si.id = ?)
     ORDER BY si.sort_order ASC, si.id ASC
   `).bind(stackId, userId, creatorPartyId, stackItemId, stackItemId).all<StackShareSourceRow>()
-  if (!results || results.length === 0) return { error: 'Stack enthält keine teilbare Katalogposition.' }
-  if (stackItemId && results.length !== 1) return { error: 'Stack-Position ist nicht teilbar.' }
-  return { rows: results }
+  const eligibleRows = (results ?? []).filter((row) => (
+    Number.isSafeInteger(row.intake_interval_days)
+      && Number(row.intake_interval_days) > 0
+      && Boolean(row.shop_domain && validateProductTargetUrl(row.url, row.shop_domain).url)
+      && (row.link_kind !== 'legacy_resolved' || Boolean(row.legacy_party_id))
+  ))
+  const mainIds = await loadMainIngredientIds(db, eligibleRows.map((row) => row.catalog_product_id))
+  const shareableRows = eligibleRows.filter((row) => (mainIds.get(row.catalog_product_id) ?? []).length > 0)
+  const shareableIds = new Set(shareableRows.map((row) => row.stack_item_id))
+  const unshareableProducts = expected
+    .filter((item) => !shareableIds.has(item.stack_item_id))
+    .map((item) => ({ stack_item_id: item.stack_item_id, product_name: item.product_name }))
+  if (expected.length === 0 || unshareableProducts.length > 0 || shareableRows.length !== expected.length) {
+    return {
+      error: expected.length === 0
+        ? 'Dieser Stack enthält noch kein Produkt, das geteilt werden kann.'
+        : 'Mindestens ein Produkt aus diesem Stack kann noch nicht geteilt werden.',
+      errorCode: 'STACK_NOT_FULLY_SHAREABLE',
+      unshareableProducts,
+      shareableRows,
+    }
+  }
+  return { rows: shareableRows }
 }
+
+// GET /api/creator-sharing/stacks/:id/share-readiness?party_id=...
+creatorSharing.get('/stacks/:id/share-readiness', async (c) => {
+  const featureErr = ensureFeature(c)
+  if (featureErr) return featureErr
+  const authErr = await ensureAuth(c)
+  if (authErr) return authErr
+  const stackId = positiveInteger(c.req.param('id'))
+  const partyId = positiveInteger(c.req.query('party_id'))
+  if (!stackId || !partyId) return c.json({ error: 'Stack oder Creator fehlt.' }, 400)
+  const user = c.get('user')
+  if (!(await hasPartyAccess(c.env.DB, user.userId, partyId, ['owner', 'editor', 'viewer']))) {
+    return c.json({ error: 'Forbidden' }, 403)
+  }
+  const party = await getParty(c.env.DB, partyId)
+  if (!party || party.status !== 'active' || !['creator', 'brand'].includes(party.type)) {
+    return c.json({ error: 'Creator oder Marke wurde nicht gefunden.' }, 404)
+  }
+  const source = await loadShareSourceRows(c.env.DB, user.userId, partyId, stackId, null)
+  if (source.errorCode === 'STACK_NOT_FOUND') return c.json({ error: source.error }, 404)
+  if (!source.rows) {
+    return c.json({
+      ready: false,
+      shareable_stack_item_ids: (source.shareableRows ?? []).map((row) => row.stack_item_id),
+      unshareable_products: source.unshareableProducts ?? [],
+    })
+  }
+  return c.json({
+    ready: true,
+    shareable_stack_item_ids: source.rows.map((row) => row.stack_item_id),
+    unshareable_products: [],
+  })
+})
+
+// GET /api/creator-sharing/creator-shares?party_id=...
+creatorSharing.get('/creator-shares', async (c) => {
+  const featureErr = ensureFeature(c)
+  if (featureErr) return featureErr
+  const authErr = await ensureAuth(c)
+  if (authErr) return authErr
+  const partyId = positiveInteger(c.req.query('party_id'))
+  if (!partyId) return c.json({ error: 'Creator oder Marke fehlt.' }, 400)
+  const user = c.get('user')
+  if (!(await hasPartyAccess(c.env.DB, user.userId, partyId, ['owner', 'editor', 'viewer']))) {
+    return c.json({ error: 'Forbidden' }, 403)
+  }
+  const party = await getParty(c.env.DB, partyId)
+  if (!party || !['creator', 'brand'].includes(party.type)) {
+    return c.json({ error: 'Creator oder Marke wurde nicht gefunden.' }, 404)
+  }
+  const { results } = await c.env.DB.prepare(`
+    SELECT share.*,
+      CASE
+        WHEN share.entity_type = 'stack' THEN source_stack.id
+        ELSE source_item.stack_id
+      END AS source_stack_id,
+      CASE
+        WHEN share.entity_type = 'stack' THEN source_stack.name
+        ELSE item_stack.name
+      END AS source_stack_name
+    FROM share_links share
+    LEFT JOIN stacks source_stack
+      ON share.entity_type = 'stack' AND source_stack.id = share.entity_id
+    LEFT JOIN stack_items source_item
+      ON share.entity_type = 'dose_recommendation' AND source_item.id = share.entity_id
+    LEFT JOIN stacks item_stack ON item_stack.id = source_item.stack_id
+    WHERE share.creator_party_id = ?
+    ORDER BY share.created_at DESC, share.id DESC
+    LIMIT 200
+  `).bind(partyId).all<CreatorShareListRow>()
+  const shares: Array<Record<string, unknown>> = []
+  for (const row of results ?? []) {
+    const parsed = await parseCreatorShareRow(row)
+    if (!parsed.snapshot) return c.json({ error: parsed.error ?? 'Empfehlungen konnten nicht geladen werden.' }, 409)
+    shares.push({
+      id: row.id,
+      token: row.token,
+      type: row.entity_type,
+      entity_id: row.entity_id,
+      source_stack_id: row.source_stack_id,
+      source_stack_name: row.source_stack_name,
+      title: parsed.snapshot.title,
+      published_at: parsed.snapshot.published_at,
+      created_at: row.created_at,
+      expires_at: row.expires_at,
+      status: creatorShareStatus(row),
+      moderation_status: row.moderation_status,
+      is_revoked: row.is_revoked,
+      snapshot_hash: row.snapshot_hash,
+      views: row.views,
+      saves: row.imports,
+    })
+  }
+  return c.json({ party: { id: party.id, name: party.name, type: party.type }, shares })
+})
+
+// GET /api/creator-sharing/creator-shares/:id/preview
+creatorSharing.get('/creator-shares/:id/preview', async (c) => {
+  const featureErr = ensureFeature(c)
+  if (featureErr) return featureErr
+  const authErr = await ensureAuth(c)
+  if (authErr) return authErr
+  const shareId = positiveInteger(c.req.param('id'))
+  if (!shareId) return c.json({ error: 'Empfehlung wurde nicht gefunden.' }, 404)
+  const row = await c.env.DB.prepare('SELECT * FROM share_links WHERE id = ?')
+    .bind(shareId).first<ShareRow>()
+  if (!row || !row.creator_party_id) return c.json({ error: 'Empfehlung wurde nicht gefunden.' }, 404)
+  const user = c.get('user')
+  if (!(await hasPartyAccess(c.env.DB, user.userId, row.creator_party_id, ['owner', 'editor', 'viewer']))) {
+    return c.json({ error: 'Forbidden' }, 403)
+  }
+  const parsed = await parseCreatorShareRow(row)
+  if (!parsed.snapshot) return c.json({ error: parsed.error ?? 'Vorschau konnte nicht geladen werden.' }, 409)
+  const preview = await creatorPreviewPayload(c.env.DB, row, parsed.snapshot)
+  if (!preview) return c.json({ error: 'Creator oder Marke wurde nicht gefunden.' }, 409)
+  return c.json({
+    ...preview,
+    creator_status: creatorShareStatus(row),
+    share_id: row.id,
+    snapshot_hash: row.snapshot_hash,
+    moderation_status: row.moderation_status,
+    is_revoked: row.is_revoked,
+    expires_at: row.expires_at,
+  })
+})
+
+// PATCH /api/creator-sharing/creator-shares/:id/revoke
+creatorSharing.patch('/creator-shares/:id/revoke', async (c) => {
+  const featureErr = ensureFeature(c)
+  if (featureErr) return featureErr
+  const authErr = await ensureAuth(c)
+  if (authErr) return authErr
+  const shareId = positiveInteger(c.req.param('id'))
+  if (!shareId) return c.json({ error: 'Empfehlung wurde nicht gefunden.' }, 404)
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Ungültige Anfrage.' }, 400)
+  }
+  const expectedHash = boundedText(body.expected_snapshot_hash, 64)
+  const expectedStatus = body.expected_moderation_status === 'pending'
+    || body.expected_moderation_status === 'approved'
+    || body.expected_moderation_status === 'blocked'
+    ? body.expected_moderation_status
+    : null
+  if (!expectedHash || !/^[a-f0-9]{64}$/.test(expectedHash) || !expectedStatus || body.expected_is_revoked !== 0) {
+    return c.json({ error: 'Die aktuellen Angaben der Empfehlung fehlen.' }, 400)
+  }
+  const row = await c.env.DB.prepare('SELECT * FROM share_links WHERE id = ?')
+    .bind(shareId).first<ShareRow>()
+  if (!row || !row.creator_party_id) return c.json({ error: 'Empfehlung wurde nicht gefunden.' }, 404)
+  const user = c.get('user')
+  if (!(await hasPartyAccess(c.env.DB, user.userId, row.creator_party_id, ['owner', 'editor']))) {
+    return c.json({ error: 'Forbidden' }, 403)
+  }
+  if (creatorShareStatus(row) !== 'approved') {
+    return c.json({ error: 'Nur eine freigegebene Empfehlung kann beendet werden.' }, 409)
+  }
+  const result = await c.env.DB.prepare(`
+    UPDATE share_links
+    SET is_revoked = 1
+    WHERE id = ?
+      AND creator_party_id = ?
+      AND snapshot_hash = ?
+      AND moderation_status = ?
+      AND is_revoked = 0
+      AND (expires_at IS NULL OR expires_at > strftime('%s', 'now'))
+  `).bind(shareId, row.creator_party_id, expectedHash, expectedStatus).run()
+  if (d1Changes(result) !== 1) {
+    return c.json({ error: 'Die Empfehlung hat sich geändert. Bitte lade sie neu.' }, 409)
+  }
+  return c.json({ ok: true, status: 'revoked' })
+})
 
 // POST /api/creator-sharing/shares
 creatorSharing.post('/shares', async (c) => {
@@ -356,6 +698,8 @@ creatorSharing.post('/shares', async (c) => {
   const stackItemId = type === 'dose_recommendation' ? positiveInteger(body.stack_item_id) : null
   const title = boundedText(body.title, 120)
   const statements = statementMap(body.creator_statements)
+  const guard = parseSourceShareGuard(body.source_share_guard)
+  if (guard.error) return c.json({ error: guard.error }, 400)
   if (!partyId || !stackId || !type || !title || statements === null || (type === 'dose_recommendation' && !stackItemId)) {
     return c.json({ error: 'party_id, stack_id, type und title sind erforderlich.' }, 400)
   }
@@ -367,7 +711,11 @@ creatorSharing.post('/shares', async (c) => {
     return c.json({ error: 'Forbidden' }, 403)
   }
   const source = await loadShareSourceRows(c.env.DB, user.userId, partyId, stackId, stackItemId)
-  if (!source.rows) return c.json({ error: source.error ?? 'Stack ist nicht teilbar.' }, 409)
+  if (!source.rows) return c.json({
+    error: source.error ?? 'Stack ist nicht teilbar.',
+    code: source.errorCode,
+    products: source.unshareableProducts ?? [],
+  }, 409)
   const sourceItemIds = new Set(source.rows.map((row) => row.stack_item_id))
   if ([...statements.keys()].some((itemId) => !sourceItemIds.has(itemId))) {
     return c.json({ error: 'Creator-Aussagen dürfen nur Positionen dieses Shares referenzieren.' }, 400)
@@ -393,7 +741,8 @@ creatorSharing.post('/shares', async (c) => {
       link_binding: binding,
       main_ingredient_ids: mainIds.get(row.catalog_product_id) ?? [],
       quantity: row.quantity,
-      intake_interval_days: row.intake_interval_days,
+      unit: row.serving_unit,
+      intake_interval_days: Number(row.intake_interval_days),
       dosage_text: row.dosage_text,
       timing: row.timing,
       creator_statement: statement,
@@ -413,29 +762,85 @@ creatorSharing.post('/shares', async (c) => {
   if (!parsedSnapshot.value) return c.json({ error: parsedSnapshot.error ?? 'Snapshot ist ungültig.' }, 400)
   const hash = await snapshotHash(parsedSnapshot.value)
   const token = generateShareToken()
-  const result = await c.env.DB.prepare(`
-    INSERT INTO share_links (
-      token,
-      entity_type,
-      entity_id,
-      snapshot_json,
-      creator_user_id,
-      creator_party_id,
-      snapshot_schema_version,
-      snapshot_hash,
-      moderation_status,
-      is_revoked
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0)
-  `).bind(
-    token,
-    type,
-    type === 'stack' ? stackId : stackItemId,
-    canonicalJson(parsedSnapshot.value),
-    user.userId,
-    partyId,
-    CREATOR_SHARING_SNAPSHOT_VERSION,
-    hash,
-  ).run()
+  const entityId = type === 'stack' ? stackId : stackItemId
+  const snapshotJson = canonicalJson(parsedSnapshot.value)
+  const result = guard.value
+    ? await c.env.DB.prepare(`
+        INSERT INTO share_links (
+          token,
+          entity_type,
+          entity_id,
+          snapshot_json,
+          creator_user_id,
+          creator_party_id,
+          snapshot_schema_version,
+          snapshot_hash,
+          moderation_status,
+          is_revoked
+        )
+        SELECT ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0
+        FROM share_links source
+        WHERE source.id = ?
+          AND source.creator_party_id = ?
+          AND source.snapshot_hash = ?
+          AND source.moderation_status = ?
+          AND source.is_revoked = ?
+          AND (
+            (source.expires_at IS NULL AND ? IS NULL)
+            OR source.expires_at = ?
+          )
+          AND CASE
+            WHEN source.is_revoked = 1 THEN 'revoked'
+            WHEN source.expires_at IS NOT NULL AND source.expires_at <= strftime('%s', 'now') THEN 'expired'
+            ELSE source.moderation_status
+          END = ?
+      `).bind(
+        token,
+        type,
+        entityId,
+        snapshotJson,
+        user.userId,
+        partyId,
+        CREATOR_SHARING_SNAPSHOT_VERSION,
+        hash,
+        guard.value.shareId,
+        partyId,
+        guard.value.expectedSnapshotHash,
+        guard.value.expectedModerationStatus,
+        guard.value.expectedIsRevoked,
+        guard.value.expectedExpiresAt,
+        guard.value.expectedExpiresAt,
+        guard.value.expectedStatus,
+      ).run()
+    : await c.env.DB.prepare(`
+        INSERT INTO share_links (
+          token,
+          entity_type,
+          entity_id,
+          snapshot_json,
+          creator_user_id,
+          creator_party_id,
+          snapshot_schema_version,
+          snapshot_hash,
+          moderation_status,
+          is_revoked
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0)
+      `).bind(
+        token,
+        type,
+        entityId,
+        snapshotJson,
+        user.userId,
+        partyId,
+        CREATOR_SHARING_SNAPSHOT_VERSION,
+        hash,
+      ).run()
+  if (guard.value && d1Changes(result) !== 1) {
+    return c.json({
+      error: 'Die ursprüngliche Empfehlung hat sich geändert. Bitte lade deine Empfehlungen neu.',
+      code: 'SOURCE_SHARE_CHANGED',
+    }, 409)
+  }
   return c.json({
     id: result.meta.last_row_id,
     token,
@@ -444,13 +849,37 @@ creatorSharing.post('/shares', async (c) => {
   }, 201)
 })
 
+async function publicShareFailure(db: D1Database, token: string): Promise<{
+  code: 'SHARE_PENDING' | 'SHARE_EXPIRED' | 'SHARE_UNAVAILABLE' | 'SHARE_UNKNOWN' | 'SHARE_INVALID'
+  error: string
+  httpStatus: 404 | 409 | 410
+}> {
+  if (!/^[A-Za-z0-9_-]{24,80}$/.test(token)) {
+    return { code: 'SHARE_UNKNOWN', error: 'Diese Empfehlung wurde nicht gefunden.', httpStatus: 404 }
+  }
+  const row = await db.prepare('SELECT * FROM share_links WHERE token = ? LIMIT 1').bind(token).first<ShareRow>()
+  if (!row) return { code: 'SHARE_UNKNOWN', error: 'Diese Empfehlung wurde nicht gefunden.', httpStatus: 404 }
+  const status = creatorShareStatus(row)
+  if (status === 'pending') {
+    return { code: 'SHARE_PENDING', error: 'Diese Empfehlung wird noch geprüft.', httpStatus: 409 }
+  }
+  if (status === 'expired') {
+    return { code: 'SHARE_EXPIRED', error: 'Dieser Link ist abgelaufen.', httpStatus: 410 }
+  }
+  if (status === 'revoked' || status === 'blocked') {
+    return { code: 'SHARE_UNAVAILABLE', error: 'Diese Empfehlung ist nicht mehr verfügbar.', httpStatus: 410 }
+  }
+  return { code: 'SHARE_INVALID', error: 'Diese Empfehlung kann gerade nicht geladen werden.', httpStatus: 409 }
+}
+
 // GET /api/creator-sharing/shares/:token
 creatorSharing.get('/shares/:token', async (c) => {
   const featureErr = ensureFeature(c)
   if (featureErr) return featureErr
   const loaded = await loadShare(c.env.DB, c.req.param('token'), true)
   if (!loaded.row || !loaded.snapshot || !loaded.relations) {
-    return c.json({ error: loaded.error ?? 'Share nicht gefunden.' }, loaded.status === 409 ? 409 : 404)
+    const failure = await publicShareFailure(c.env.DB, c.req.param('token'))
+    return c.json({ error: failure.error, code: failure.code }, failure.httpStatus)
   }
   const party = await getParty(c.env.DB, loaded.snapshot.creator_party_id)
   if (!party) return c.json({ error: 'Creator-Partei fehlt.' }, 409)
@@ -474,6 +903,7 @@ creatorSharing.get('/shares/:token', async (c) => {
         product_name: product?.name ?? null,
         brand: product?.brand ?? null,
         quantity: item.quantity,
+        unit: item.unit ?? null,
         intake_interval_days: item.intake_interval_days,
         dosage_text: item.dosage_text,
         timing: item.timing,
@@ -484,408 +914,6 @@ creatorSharing.get('/shares/:token', async (c) => {
     }),
     disclosure: 'Einige Produktlinks sind Affiliate-Links. Die Plattform oder der Stack-Anbieter kann daran verdienen; für dich ändert sich der Preis nicht.',
   })
-})
-
-async function existingStackMainSets(
-  db: D1Database,
-  stackId: number,
-): Promise<Map<number, { ids: number[]; version: number; productName: string }>> {
-  const { results } = await db.prepare(`
-    SELECT stack_item_id, version, ingredient_id
-    FROM (
-      SELECT si.id AS stack_item_id, si.version, pi.ingredient_id, p.name AS product_name
-      FROM stack_items si
-      JOIN products p ON p.id = si.catalog_product_id
-      JOIN product_ingredients pi ON pi.product_id = si.catalog_product_id AND pi.is_main = 1
-      WHERE si.stack_id = ? AND si.catalog_product_id IS NOT NULL
-      UNION ALL
-      SELECT si.id AS stack_item_id, si.version, upi.ingredient_id, up.name AS product_name
-      FROM stack_items si
-      JOIN user_products up ON up.id = si.user_product_id
-      JOIN user_product_ingredients upi ON upi.user_product_id = si.user_product_id AND upi.is_main = 1
-      WHERE si.stack_id = ? AND si.user_product_id IS NOT NULL
-    )
-    ORDER BY stack_item_id ASC, ingredient_id ASC
-  `).bind(stackId, stackId).all<ExistingStackIngredientRow>()
-  const sets = new Map<number, { ids: number[]; version: number; productName: string }>()
-  for (const row of results ?? []) {
-    const existing = sets.get(row.stack_item_id) ?? { ids: [], version: row.version, productName: row.product_name }
-    if (!existing.ids.includes(row.ingredient_id)) existing.ids.push(row.ingredient_id)
-    sets.set(row.stack_item_id, existing)
-  }
-  return sets
-}
-
-async function defaultCategoryId(db: D1Database, stackId: number): Promise<number | null> {
-  const row = await db.prepare(`
-    SELECT id FROM stack_categories WHERE stack_id = ? AND is_default = 1 LIMIT 1
-  `).bind(stackId).first<{ id: number }>()
-  return row?.id ?? null
-}
-
-// POST /api/creator-sharing/shares/:token/import
-creatorSharing.post('/shares/:token/import', async (c) => {
-  const featureErr = ensureFeature(c)
-  if (featureErr) return featureErr
-  const authErr = await ensureAuth(c)
-  if (authErr) return authErr
-  const user = c.get('user')
-  let body: Record<string, unknown>
-  try {
-    body = await c.req.json()
-  } catch {
-    return c.json({ error: 'Invalid JSON' }, 400)
-  }
-  const idempotencyKey = boundedText(body.idempotency_key, 120)
-  if (!idempotencyKey || !/^[A-Za-z0-9._:-]{16,120}$/.test(idempotencyKey)) {
-    return c.json({ error: 'Ein gültiger Idempotency-Key ist erforderlich.' }, 400)
-  }
-  const loaded = await loadShare(c.env.DB, c.req.param('token'), true)
-  if (!loaded.row || !loaded.snapshot || !loaded.relations) {
-    return c.json({ error: loaded.error ?? 'Share nicht gefunden.' }, loaded.status === 409 ? 409 : 404)
-  }
-  const previous = await c.env.DB.prepare(`
-    SELECT result_json
-    FROM share_import_operations
-    WHERE idempotency_key = ? AND user_id = ? AND share_link_id = ?
-  `).bind(idempotencyKey, user.userId, loaded.row.id).first<{ result_json: string | null }>()
-  if (previous?.result_json) {
-    try {
-      return c.json({ ...JSON.parse(previous.result_json) as Record<string, unknown>, idempotent_replay: true })
-    } catch {
-      return c.json({ error: 'Gespeichertes Importergebnis ist ungültig.' }, 409)
-    }
-  }
-  const keyCollision = await c.env.DB.prepare(`
-    SELECT share_link_id, user_id FROM share_import_operations WHERE idempotency_key = ?
-  `).bind(idempotencyKey).first<{ share_link_id: number; user_id: number }>()
-  if (keyCollision) return c.json({ error: 'Idempotency-Key wurde bereits für einen anderen Import verwendet.' }, 409)
-
-  if (loaded.snapshot.type === 'stack') {
-    const requestedName = body.stack_name === undefined ? loaded.snapshot.title : boundedText(body.stack_name, 120)
-    if (!requestedName) return c.json({ error: 'Ungültiger Stack-Name.' }, 400)
-    const [stackId] = await reserveIds(c.env.DB, 'stacks', 1)
-    const itemIds = await reserveIds(c.env.DB, 'stack_items', loaded.snapshot.items.length)
-    const categories: Array<{ name: string; normalized: string }> = [normalizeCategoryName(null)]
-    for (const item of loaded.snapshot.items) {
-      const category = normalizeCategoryName(item.category_name)
-      if (!categories.some((entry) => entry.normalized === category.normalized)) categories.push(category)
-    }
-    categories.sort((left, right) => left.normalized === 'unkategorisiert' ? -1 : right.normalized === 'unkategorisiert' ? 1 : left.name.localeCompare(right.name, 'de'))
-    const categoryIds = await reserveIds(c.env.DB, 'stack_categories', categories.length)
-    const categoryIdByName = new Map(categories.map((entry, index) => [entry.normalized, categoryIds[index]]))
-    const resultPayload = { ok: true, type: 'stack', stack_id: stackId, imported_items: itemIds.length }
-    const statements: D1PreparedStatement[] = [c.env.DB.prepare(`
-      INSERT INTO share_import_operations (
-        idempotency_key, share_link_id, user_id, target_stack_id, result_json
-      )
-      SELECT ?, id, ?, NULL, ?
-      FROM share_links
-      WHERE id = ? AND snapshot_hash = ? AND moderation_status = 'approved'
-        AND is_revoked = 0
-        AND (expires_at IS NULL OR expires_at > strftime('%s', 'now'))
-    `).bind(idempotencyKey, user.userId, JSON.stringify(resultPayload), loaded.row.id, loaded.row.snapshot_hash), c.env.DB.prepare(`
-      INSERT INTO stacks (id, user_id, name, origin_party_id, last_opened_at)
-      SELECT ?, ?, ?, ?, CURRENT_TIMESTAMP
-      WHERE EXISTS (SELECT 1 FROM share_import_operations WHERE idempotency_key = ?)
-    `).bind(stackId, user.userId, requestedName, loaded.snapshot.creator_party_id, idempotencyKey)]
-    categories.forEach((category, index) => {
-      statements.push(c.env.DB.prepare(`
-        INSERT INTO stack_categories (
-          id, stack_id, name, name_normalized, sort_order, is_default, created_at, updated_at
-        )
-        SELECT ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-        WHERE EXISTS (SELECT 1 FROM share_import_operations WHERE idempotency_key = ?)
-      `).bind(
-        categoryIds[index],
-        stackId,
-        category.name,
-        category.normalized,
-        index,
-        category.normalized === 'unkategorisiert' ? 1 : 0,
-        idempotencyKey,
-      ))
-    })
-    loaded.snapshot.items.forEach((item, index) => {
-      const category = normalizeCategoryName(item.category_name)
-      statements.push(c.env.DB.prepare(`
-        INSERT INTO stack_items (
-          id, stack_id, catalog_product_id, user_product_id, quantity,
-          intake_interval_days, dosage_text, timing, sort_order, category_id,
-          source_share_link_id, creator_statement_snapshot, amount_source, version
-        )
-        SELECT ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, 'creator_snapshot', 1
-        WHERE EXISTS (SELECT 1 FROM share_import_operations WHERE idempotency_key = ?)
-      `).bind(
-        itemIds[index],
-        stackId,
-        item.catalog_product_id,
-        item.quantity,
-        item.intake_interval_days,
-        item.dosage_text,
-        item.timing,
-        item.sort_order,
-        categoryIdByName.get(category.normalized) ?? null,
-        loaded.row?.id,
-        item.creator_statement,
-        idempotencyKey,
-      ))
-      statements.push(...snapshotItemBindingStatements(c.env.DB, itemIds[index], item, idempotencyKey))
-    })
-    statements.push(c.env.DB.prepare(`
-      UPDATE share_import_operations
-      SET target_stack_id = ?
-      WHERE idempotency_key = ? AND share_link_id = ? AND user_id = ?
-    `).bind(stackId, idempotencyKey, loaded.row.id, user.userId))
-    statements.push(c.env.DB.prepare(`
-      UPDATE share_links
-      SET imports = imports + 1
-      WHERE id = ? AND snapshot_hash = ? AND moderation_status = 'approved'
-        AND is_revoked = 0
-        AND EXISTS (SELECT 1 FROM share_import_operations WHERE idempotency_key = ?)
-    `).bind(loaded.row.id, loaded.row.snapshot_hash, idempotencyKey))
-    try {
-      const batch = await c.env.DB.batch(statements)
-      if (d1Changes(batch[0]) !== 1) return c.json({ error: 'Share wurde zwischenzeitlich geändert.' }, 409)
-    } catch (error) {
-      const replay = await c.env.DB.prepare(`
-        SELECT result_json FROM share_import_operations
-        WHERE idempotency_key = ? AND user_id = ? AND share_link_id = ?
-      `).bind(idempotencyKey, user.userId, loaded.row.id).first<{ result_json: string | null }>()
-      if (replay?.result_json) return c.json({ ...JSON.parse(replay.result_json) as Record<string, unknown>, idempotent_replay: true })
-      throw error
-    }
-    return c.json(resultPayload, 201)
-  }
-
-  const item = loaded.snapshot.items[0]
-  const requestedStackId = positiveInteger(body.target_stack_id)
-  const targetStack = requestedStackId
-    ? await c.env.DB.prepare('SELECT id FROM stacks WHERE id = ? AND user_id = ?').bind(requestedStackId, user.userId).first<{ id: number }>()
-    : await c.env.DB.prepare(`
-        SELECT id FROM stacks WHERE user_id = ?
-          AND last_opened_at IS NOT NULL
-        ORDER BY CASE WHEN last_opened_at IS NULL THEN 1 ELSE 0 END,
-          last_opened_at DESC, id DESC
-        LIMIT 1
-      `).bind(user.userId).first<{ id: number }>()
-  if (!targetStack) return c.json({ error: 'Ziel-Stack nicht gefunden. Bitte wähle einen Stack.' }, 404)
-  const sets = await existingStackMainSets(c.env.DB, targetStack.id)
-  const conflicts = [...sets.entries()]
-    .filter(([, value]) => sameIntegerSet(value.ids, item.main_ingredient_ids))
-    .map(([stackItemId, value]) => ({ stack_item_id: stackItemId, version: value.version, product_name: value.productName }))
-  const action = body.conflict_action === 'keep' || body.conflict_action === 'replace' ? body.conflict_action : null
-  if (conflicts.length > 0 && !action) {
-    return c.json({
-      error: 'Ein identisches Hauptwirkstoff-Set ist bereits vorhanden.',
-      conflict_required: true,
-      conflicts,
-    }, 409)
-  }
-  if (action === 'keep') {
-    const resultPayload = { ok: true, type: 'dose_recommendation', stack_id: targetStack.id, action: 'kept_existing' }
-    try {
-      const batch = await c.env.DB.batch([
-        c.env.DB.prepare(`
-          INSERT INTO share_import_operations (
-            idempotency_key, share_link_id, user_id, target_stack_id, result_json
-          )
-          SELECT ?, id, ?, ?, ?
-          FROM share_links
-          WHERE id = ? AND snapshot_hash = ? AND moderation_status = 'approved'
-            AND is_revoked = 0
-            AND (expires_at IS NULL OR expires_at > strftime('%s', 'now'))
-        `).bind(idempotencyKey, user.userId, targetStack.id, JSON.stringify(resultPayload), loaded.row.id, loaded.row.snapshot_hash),
-        c.env.DB.prepare(`
-          UPDATE share_links SET imports = imports + 1
-          WHERE id = ? AND snapshot_hash = ? AND moderation_status = 'approved' AND is_revoked = 0
-            AND EXISTS (SELECT 1 FROM share_import_operations WHERE idempotency_key = ?)
-        `).bind(loaded.row.id, loaded.row.snapshot_hash, idempotencyKey),
-      ])
-      if (d1Changes(batch[0]) !== 1) return c.json({ error: 'Share wurde zwischenzeitlich geändert.' }, 409)
-    } catch (error) {
-      const replay = await c.env.DB.prepare('SELECT result_json FROM share_import_operations WHERE idempotency_key = ?')
-        .bind(idempotencyKey).first<{ result_json: string | null }>()
-      if (replay?.result_json) return c.json({ ...JSON.parse(replay.result_json) as Record<string, unknown>, idempotent_replay: true })
-      throw error
-    }
-    return c.json(resultPayload)
-  }
-
-  if (action === 'replace') {
-    const replacementId = positiveInteger(body.replace_stack_item_id)
-    const expectedVersion = positiveInteger(body.expected_stack_item_version)
-    const conflict = conflicts.find((candidate) => candidate.stack_item_id === replacementId)
-    if (!replacementId || !expectedVersion || !conflict || conflict.version !== expectedVersion) {
-      return c.json({ error: 'Die konkret zu ersetzende Position und ihre Version sind erforderlich.', conflicts }, 409)
-    }
-    const resultPayload = { ok: true, type: 'dose_recommendation', stack_id: targetStack.id, action: 'replaced', stack_item_id: replacementId }
-    let batch: D1Result<unknown>[]
-    try {
-      batch = await c.env.DB.batch([
-      c.env.DB.prepare(`
-        INSERT INTO share_import_operations (
-          idempotency_key, share_link_id, user_id, target_stack_id, result_json
-        )
-        SELECT ?, share.id, ?, ?, ?
-        FROM share_links share
-        WHERE share.id = ? AND share.snapshot_hash = ?
-          AND share.moderation_status = 'approved' AND share.is_revoked = 0
-          AND (share.expires_at IS NULL OR share.expires_at > strftime('%s', 'now'))
-          AND EXISTS (
-            SELECT 1 FROM stack_items si
-            WHERE si.id = ? AND si.stack_id = ? AND si.version = ?
-          )
-      `).bind(
-        idempotencyKey,
-        user.userId,
-        targetStack.id,
-        JSON.stringify(resultPayload),
-        loaded.row.id,
-        loaded.row.snapshot_hash,
-        replacementId,
-        targetStack.id,
-        expectedVersion,
-      ),
-      c.env.DB.prepare(`
-        UPDATE stack_items
-        SET catalog_product_id = ?,
-            user_product_id = NULL,
-            quantity = ?,
-            intake_interval_days = ?,
-            dosage_text = ?,
-            timing = ?,
-            source_share_link_id = ?,
-            creator_statement_snapshot = ?,
-            amount_source = 'creator_snapshot',
-            version = version + 1
-        WHERE id = ? AND stack_id = ? AND version = ?
-          AND EXISTS (SELECT 1 FROM share_import_operations WHERE idempotency_key = ?)
-      `).bind(
-        item.catalog_product_id,
-        item.quantity,
-        item.intake_interval_days,
-        item.dosage_text,
-        item.timing,
-        loaded.row.id,
-        item.creator_statement,
-        replacementId,
-        targetStack.id,
-        expectedVersion,
-        idempotencyKey,
-      ),
-      c.env.DB.prepare(`
-        DELETE FROM stack_item_link_bindings
-        WHERE stack_item_id = ?
-          AND EXISTS (SELECT 1 FROM stack_items WHERE id = ? AND version = ?)
-          AND EXISTS (SELECT 1 FROM share_import_operations WHERE idempotency_key = ?)
-      `).bind(replacementId, replacementId, expectedVersion + 1, idempotencyKey),
-      c.env.DB.prepare(`
-        INSERT INTO stack_item_link_bindings (
-          stack_item_id, shop_link_id, resolution_kind,
-          affiliate_version_id, resolved_party_id, bound_at
-        )
-        SELECT ?, ?, ?, ?, ?, CURRENT_TIMESTAMP
-        WHERE EXISTS (SELECT 1 FROM stack_items WHERE id = ? AND version = ?)
-          AND EXISTS (SELECT 1 FROM share_import_operations WHERE idempotency_key = ?)
-      `).bind(
-        replacementId,
-        item.shop_link_id,
-        item.link_binding.resolution_kind,
-        item.link_binding.affiliate_version_id,
-        item.link_binding.resolved_party_id,
-        replacementId,
-        expectedVersion + 1,
-        idempotencyKey,
-      ),
-      c.env.DB.prepare(`
-        UPDATE share_links
-        SET imports = imports + 1
-        WHERE id = ? AND snapshot_hash = ?
-          AND moderation_status = 'approved' AND is_revoked = 0
-          AND EXISTS (SELECT 1 FROM share_import_operations WHERE idempotency_key = ?)
-      `).bind(loaded.row.id, loaded.row.snapshot_hash, idempotencyKey),
-      ])
-    } catch (error) {
-      const replay = await c.env.DB.prepare(`
-        SELECT result_json FROM share_import_operations
-        WHERE idempotency_key = ? AND user_id = ? AND share_link_id = ?
-      `).bind(idempotencyKey, user.userId, loaded.row.id).first<{ result_json: string | null }>()
-      if (replay?.result_json) return c.json({ ...JSON.parse(replay.result_json) as Record<string, unknown>, idempotent_replay: true })
-      throw error
-    }
-    if (d1Changes(batch[0]) !== 1 || d1Changes(batch[1]) !== 1) {
-      return c.json({ error: 'Share oder Stack-Position wurde zwischenzeitlich geändert.' }, 409)
-    }
-    return c.json(resultPayload)
-  }
-
-  const [newItemId] = await reserveIds(c.env.DB, 'stack_items', 1)
-  let categoryId = await defaultCategoryId(c.env.DB, targetStack.id)
-  const statements: D1PreparedStatement[] = []
-  const resultPayload = { ok: true, type: 'dose_recommendation', stack_id: targetStack.id, action: 'added', stack_item_id: newItemId }
-  statements.push(c.env.DB.prepare(`
-    INSERT INTO share_import_operations (
-      idempotency_key, share_link_id, user_id, target_stack_id, result_json
-    )
-    SELECT ?, id, ?, ?, ?
-    FROM share_links
-    WHERE id = ? AND snapshot_hash = ? AND moderation_status = 'approved'
-      AND is_revoked = 0
-      AND (expires_at IS NULL OR expires_at > strftime('%s', 'now'))
-  `).bind(idempotencyKey, user.userId, targetStack.id, JSON.stringify(resultPayload), loaded.row.id, loaded.row.snapshot_hash))
-  if (!categoryId) {
-    [categoryId] = await reserveIds(c.env.DB, 'stack_categories', 1)
-    statements.push(c.env.DB.prepare(`
-      INSERT INTO stack_categories (
-        id, stack_id, name, name_normalized, sort_order, is_default, created_at, updated_at
-      )
-      SELECT ?, ?, 'Unkategorisiert', 'unkategorisiert', 0, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-      WHERE EXISTS (SELECT 1 FROM share_import_operations WHERE idempotency_key = ?)
-    `).bind(categoryId, targetStack.id, idempotencyKey))
-  }
-  const sortRow = await c.env.DB.prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_sort FROM stack_items WHERE stack_id = ?')
-    .bind(targetStack.id).first<{ next_sort: number }>()
-  statements.push(c.env.DB.prepare(`
-    INSERT INTO stack_items (
-      id, stack_id, catalog_product_id, user_product_id, quantity,
-      intake_interval_days, dosage_text, timing, sort_order, category_id,
-      source_share_link_id, creator_statement_snapshot, amount_source, version
-    )
-    SELECT ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, 'creator_snapshot', 1
-    WHERE EXISTS (SELECT 1 FROM share_import_operations WHERE idempotency_key = ?)
-  `).bind(
-    newItemId,
-    targetStack.id,
-    item.catalog_product_id,
-    item.quantity,
-    item.intake_interval_days,
-    item.dosage_text,
-    item.timing,
-    sortRow?.next_sort ?? 0,
-    categoryId,
-    loaded.row.id,
-    item.creator_statement,
-    idempotencyKey,
-  ))
-  statements.push(...snapshotItemBindingStatements(c.env.DB, newItemId, item, idempotencyKey))
-  statements.push(c.env.DB.prepare(`
-    UPDATE share_links SET imports = imports + 1
-    WHERE id = ? AND snapshot_hash = ? AND moderation_status = 'approved' AND is_revoked = 0
-      AND EXISTS (SELECT 1 FROM share_import_operations WHERE idempotency_key = ?)
-  `).bind(loaded.row.id, loaded.row.snapshot_hash, idempotencyKey))
-  try {
-    const batch = await c.env.DB.batch(statements)
-    if (d1Changes(batch[0]) !== 1) return c.json({ error: 'Share wurde zwischenzeitlich geändert.' }, 409)
-  } catch (error) {
-    const replay = await c.env.DB.prepare(`
-      SELECT result_json FROM share_import_operations
-      WHERE idempotency_key = ? AND user_id = ? AND share_link_id = ?
-    `).bind(idempotencyKey, user.userId, loaded.row.id).first<{ result_json: string | null }>()
-    if (replay?.result_json) return c.json({ ...JSON.parse(replay.result_json) as Record<string, unknown>, idempotent_replay: true })
-    throw error
-  }
-  return c.json(resultPayload, 201)
 })
 
 // POST /api/creator-sharing/stacks/:id/open
@@ -946,7 +974,10 @@ creatorSharing.get('/dashboard', async (c) => {
     c.env.DB.prepare(`
       SELECT COUNT(*) AS count, COALESCE(SUM(imports), 0) AS imports
       FROM share_links
-      WHERE creator_party_id = ? AND moderation_status = 'approved' AND is_revoked = 0
+      WHERE creator_party_id = ?
+        AND moderation_status = 'approved'
+        AND is_revoked = 0
+        AND (expires_at IS NULL OR expires_at > strftime('%s', 'now'))
     `).bind(partyId).first<{ count: number; imports: number }>(),
   ])
   return c.json({

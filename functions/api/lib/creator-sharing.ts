@@ -1,6 +1,7 @@
 import type { Env } from './types'
 
-export const CREATOR_SHARING_SNAPSHOT_VERSION = 1
+export const CREATOR_SHARING_SNAPSHOT_VERSION = 2
+export const CREATOR_SHARING_SUPPORTED_SNAPSHOT_VERSIONS = [1, 2] as const
 export const CREATOR_SHARING_MAX_ITEMS = 100
 export const CREATOR_STATEMENT_MAX_LENGTH = 500
 
@@ -19,6 +20,7 @@ export type CreatorShareSnapshotItem = {
   link_binding: CreatorLinkBindingSnapshot
   main_ingredient_ids: number[]
   quantity: number
+  unit?: string | null
   intake_interval_days: number
   dosage_text: string | null
   timing: string | null
@@ -28,12 +30,16 @@ export type CreatorShareSnapshotItem = {
 }
 
 export type CreatorShareSnapshot = {
-  schema_version: 1
+  schema_version: 1 | 2
   type: 'dose_recommendation' | 'stack'
   creator_party_id: number
   published_at: string
   title: string
   items: CreatorShareSnapshotItem[]
+}
+
+export function isSupportedCreatorShareSnapshotVersion(value: unknown): value is 1 | 2 {
+  return value === 1 || value === 2
 }
 
 type JsonPrimitive = string | number | boolean | null
@@ -273,7 +279,8 @@ function parseBinding(value: unknown): CreatorLinkBindingSnapshot | null {
 
 export function parseCreatorShareSnapshot(value: unknown): { value?: CreatorShareSnapshot; error?: string } {
   if (!isRecord(value)) return { error: 'Ungültiger Share-Snapshot.' }
-  if (value.schema_version !== CREATOR_SHARING_SNAPSHOT_VERSION) return { error: 'Nicht unterstützte Snapshot-Version.' }
+  if (!isSupportedCreatorShareSnapshotVersion(value.schema_version)) return { error: 'Nicht unterstützte Snapshot-Version.' }
+  const schemaVersion = value.schema_version
   if (value.type !== 'dose_recommendation' && value.type !== 'stack') return { error: 'Ungültiger Snapshot-Typ.' }
   const creatorPartyId = positiveInteger(value.creator_party_id)
   if (creatorPartyId === null) return { error: 'Creator-Partei fehlt.' }
@@ -296,6 +303,7 @@ export function parseCreatorShareSnapshot(value: unknown): { value?: CreatorShar
     const shopLinkId = positiveInteger(rawItem.shop_link_id)
     const binding = parseBinding(rawItem.link_binding)
     const quantity = boundedInteger(rawItem.quantity, 1, 100000)
+    const unit = schemaVersion === 2 ? optionalBoundedText(rawItem.unit, 40) : null
     const intakeIntervalDays = boundedInteger(rawItem.intake_interval_days, 1, 3650)
     const dosageText = optionalBoundedText(rawItem.dosage_text, 240)
     const timing = optionalBoundedText(rawItem.timing, 120)
@@ -305,6 +313,7 @@ export function parseCreatorShareSnapshot(value: unknown): { value?: CreatorShar
     if (
       catalogProductId === null || shopLinkId === null || !binding
       || quantity === null || intakeIntervalDays === null
+      || (schemaVersion === 2 && (unit === undefined || !Object.prototype.hasOwnProperty.call(rawItem, 'unit')))
       || dosageText === undefined || timing === undefined
       || statementResult.error || sortOrder === null || categoryName === undefined
     ) {
@@ -326,6 +335,7 @@ export function parseCreatorShareSnapshot(value: unknown): { value?: CreatorShar
       link_binding: binding,
       main_ingredient_ids: normalizedIds,
       quantity,
+      ...(schemaVersion === 2 ? { unit: unit ?? null } : {}),
       intake_interval_days: intakeIntervalDays,
       dosage_text: dosageText,
       timing,
@@ -337,7 +347,7 @@ export function parseCreatorShareSnapshot(value: unknown): { value?: CreatorShar
 
   return {
     value: {
-      schema_version: CREATOR_SHARING_SNAPSHOT_VERSION,
+      schema_version: schemaVersion,
       type: value.type,
       creator_party_id: creatorPartyId,
       published_at: value.published_at,

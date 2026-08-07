@@ -14,7 +14,7 @@ export interface RegisterResponse extends AuthResponse {
 export async function register(
   email: string,
   password: string,
-  extra?: { health_consent?: boolean } & Partial<Pick<User, 'age' | 'guideline_source'>>
+  extra?: { health_consent?: boolean; return_to?: string } & Partial<Pick<User, 'age' | 'guideline_source'>>
 ): Promise<RegisterResponse> {
   // Backend sets the session cookie and returns verification metadata on register.
   const res = await apiClient.post<{
@@ -96,13 +96,14 @@ export async function verifyEmail(token: string): Promise<{ message: string }> {
   }
 }
 
-export async function resendVerificationEmail(): Promise<{
+export async function resendVerificationEmail(returnTo?: string): Promise<{
   message: string;
   already_verified?: boolean;
 }> {
   try {
     const res = await apiClient.post<{ message: string; already_verified?: boolean }>(
       '/auth/resend-verification',
+      returnTo ? { return_to: returnTo } : {},
     );
     return res.data;
   } catch (err) {
