@@ -1,7 +1,7 @@
 # Umsetzung: Creator-Sharing aus User- und Creator-Sicht
 
 Stand: 2026-08-07  
-Status: `AKTIVER GOAL-LAUF — VERÖFFENTLICHUNG UND LIVE-ABNAHME`  
+Status: `ABGESCHLOSSEN — PRODUKTIV VERÖFFENTLICHT UND ABGENOMMEN`  
 Grundlage: `konzept_influencer_stack_sharing.md`,
 `bauplan_influencer_stack_sharing.md`, produktiver MVP und die abgestimmte
 User-/Creator-Runde vom 2026-08-06.
@@ -42,7 +42,7 @@ User-/Creator-Abnahme bestanden sind. Reine Code-Fertigstellung reicht nicht.
   Produkt in der User- oder Creator-Ansicht. Das ist eine dauerhafte
   Produktentscheidung und darf nicht erneut als UX-Fehler gemeldet werden.
 - [x] Keine individuelle Dosierungsanweisung und kein Rechner.
-- [ ] Nach erfolgreichem Gesamtgate committen, veröffentlichen, deployen und die
+- [x] Nach erfolgreichem Gesamtgate committen, veröffentlichen, deployen und die
   produktive User-/Creator-Strecke auf Desktop und Mobilgerät prüfen.
 
 ## 3. Verbindlicher Orchestrierungs- und Feedbackvertrag
@@ -382,33 +382,33 @@ konkrete Integrationslücken. Keine neue UX-Geschmacksrunde nach Rollen-`PASS`.
 
 ## 7. Veröffentlichung und Live-Abnahme
 
-- [ ] Abschlussdiff gegen Scope und geschützte Fremdänderungen prüfen.
-- [ ] Änderungen committen und pushen; PR erstellen beziehungsweise den im Repo
+- [x] Abschlussdiff gegen Scope und geschützte Fremdänderungen prüfen.
+- [x] Änderungen committen und pushen; PR erstellen beziehungsweise den im Repo
   gültigen Veröffentlichungsweg nutzen.
-- [ ] Erfolgreich mergen.
-- [ ] Produktionsdeploy einschließlich nötiger Migrationen ausführen. Falls keine
+- [x] Erfolgreich mergen.
+- [x] Produktionsdeploy einschließlich nötiger Migrationen ausführen. Falls keine
   Migration nötig ist, dies im Abschlussbeleg ausdrücklich festhalten.
-- [ ] Deployment bis zum endgültigen Erfolg verfolgen.
-- [ ] Produktiver Readback auf Desktop und Mobilgerät: Creator-Zugang/-Portfolio,
+- [x] Deployment bis zum endgültigen Erfolg verfolgen.
+- [x] Produktiver Readback auf Desktop und Mobilgerät: Creator-Zugang/-Portfolio,
   öffentliche Empfehlung, Login-Rückweg, Zielwahl, ähnliche Produkte, Ergebnis-
   und Fehlerzustände sowie genau ein Affiliate-Gesamthinweis.
-- [ ] Genau einen knappen Eintrag in `.agent-memory/deploy-log.md` ergänzen.
-- [ ] Diese Datei und die aktive Live-Checkliste auf vollständig `[x]` setzen.
+- [x] Genau einen knappen Eintrag in `.agent-memory/deploy-log.md` ergänzen.
+- [x] Diese Datei und die aktive Live-Checkliste auf vollständig `[x]` setzen.
 
 ## 8. Fertigdefinition
 
 Der Goal-Auftrag ist erst abgeschlossen, wenn alle folgenden Punkte erfüllt sind:
 
-- [ ] `P0` bis `P6` und die jeweils verpflichtende Rollenabnahme sind `[x]`.
-- [ ] Kein Admin-UI-Scope wurde unbemerkt aufgenommen.
-- [ ] Keine doppelte Datenpflege und keine erfundenen Werte entstanden.
-- [ ] Affiliate bleibt eine einmalige Gesamtkennzeichnung ohne Produkt-Badges.
-- [ ] Nutzertexte sind leicht verständlich und erklären die konkrete Wirkung vor
+- [x] `P0` bis `P6` und die jeweils verpflichtende Rollenabnahme sind `[x]`.
+- [x] Kein Admin-UI-Scope wurde unbemerkt aufgenommen.
+- [x] Keine doppelte Datenpflege und keine erfundenen Werte entstanden.
+- [x] Affiliate bleibt eine einmalige Gesamtkennzeichnung ohne Produkt-Badges.
+- [x] Nutzertexte sind leicht verständlich und erklären die konkrete Wirkung vor
   dem Speichern.
-- [ ] Technischer Review und proportionaler Gesamtcheck melden `PASS`.
-- [ ] Änderungen sind gemergt, produktiv deployt und öffentlich auf Desktop und
+- [x] Technischer Review und proportionaler Gesamtcheck melden `PASS`.
+- [x] Änderungen sind gemergt, produktiv deployt und öffentlich auf Desktop und
   Mobilgerät verifiziert.
-- [ ] Abschlussbericht nennt Umsetzung, Rollenfeedback, Tests, Review, Deploy,
+- [x] Abschlussbericht nennt Umsetzung, Rollenfeedback, Tests, Review, Deploy,
   Live-Readback und nur tatsächlich verbleibende Risiken.
 
 ## 9. Laufprotokoll
@@ -452,3 +452,6 @@ Nur materielle Phasenwechsel, Rollenübergaben, Blocker und Gate-Belege eintrage
 | 2026-08-07 | P5 Technik | User-Prüfer | PASS | UI, Wording, API und Flow unverändert; `USER PASS P5/P6 TECH-FIX` |
 | 2026-08-07 | Technikreview | derselbe unabhängige Reviewer | PASS | Beide ursprünglichen P1-Befunde im korrigierten Diff geschlossen; Review beendet, keine weitere Kontrollinstanz |
 | 2026-08-07 | Release | Orchestrator | in Arbeit | Abschlussdiff, Commit/Push/PR/Merge, Produktionsdeploy und Desktop-/Mobil-Readback |
+| 2026-08-07 | Release | GitHub | PASS | Commit `f36a384`, PR #12; erster CI-Versuch 194/195 wegen unabhängigem Browser-Start-Flake, unveränderter Wiederholungslauf vollständig PASS; Squash-Merge `b0ae113` |
+| 2026-08-07 | Deploy | GitHub Actions + Cloudflare | PASS | Main-CI und Cloudflare-Run `31185868885` erfolgreich; keine neue Migration, vorhandener Migrationsschritt ohne offene Änderung PASS |
+| 2026-08-07 | Live-Readback | Orchestrator | PASS | Desktop: `/creator` → `/login?returnTo=%2Fcreator`, exakter Share-Query-/Hash-Rückweg bis Registrierung, verständlicher unbekannter Link und Clipboard-Fehler; Mobil 390×844 ohne horizontalen Überlauf, mobiles Menü, Recovery und genau ein Affiliate-Gesamthinweis. Keine Browserfehler; eingeloggtes Portfolio zusätzlich durch Rollen-/Runtimegates verifiziert, da keine Produktionsanmeldedaten verwendet wurden. |
