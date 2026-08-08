@@ -37,9 +37,9 @@ User-/Creator-Abnahme bestanden sind. Reine Code-Fertigstellung reicht nicht.
 - [x] Orientierung durch Creator, Datum, Status, Ziel-Stack und klare Rückwege
   herstellen.
 - [x] Fehlende Werte und Einheiten niemals erfinden.
-- [x] Affiliate-Kennzeichnung bleibt genau ein gut sichtbarer Gesamthinweis je
-  Empfehlung. `[–]` Kein Affiliate-Badge und keine Affiliate-Zuordnung pro
-  Produkt in der User- oder Creator-Ansicht. Das ist eine dauerhafte
+- [x] Affiliate-Kennzeichnung bleibt ausschließlich der bestehende globale
+  Footer-Hinweis. `[–]` Kein Badge und kein zusätzlicher Text an Produkt,
+  Kaufbutton, Stack, Import oder Creator-Empfehlung. Das ist eine dauerhafte
   Produktentscheidung und darf nicht erneut als UX-Fehler gemeldet werden.
 - [x] Keine individuelle Dosierungsanweisung und kein Rechner.
 - [x] Nach erfolgreichem Gesamtgate committen, veröffentlichen, deployen und die
@@ -194,8 +194,9 @@ Seite, Snapshot-Parser/-Version und Formatierer.
   fehlende Einheiten oder Werte werden nicht ergänzt.
 - [x] Datum, Einheit und Einnahmeintervall werden zentral und auf Deutsch
   formatiert.
-- [x] Genau ein sichtbarer Affiliate-Gesamthinweis je Empfehlung; kein Badge und
-  keine Zuordnung am einzelnen Produkt.
+- [x] Kein zusätzlicher Affiliate-Hinweis in der Empfehlung; ausschließlich der
+  globale Footer-Hinweis bleibt sichtbar. Kein Badge und keine Zuordnung am
+  einzelnen Produkt.
 - [x] Creator-interne und öffentliche Vorschau verwenden dieselben sichtbaren
   Daten und dieselbe Kernkomponente.
 
@@ -329,8 +330,8 @@ konkrete Integrationslücken. Keine neue UX-Geschmacksrunde nach Rollen-`PASS`.
 - [x] Creator-Portfolio: Status, private Vorschau, Link, Beenden, Überarbeiten und
   Neu-Erstellen.
 - [x] Gemeinsame Vorschau: öffentliche/interne Parität, deutsches Datum,
-  Einheiten/Intervalle, alte Snapshots ohne Einheit und genau ein
-  Affiliate-Gesamthinweis.
+  Einheiten/Intervalle, alte Snapshots ohne Einheit und kein zusätzlicher
+  Affiliate-Hinweis außerhalb des globalen Footers.
 - [x] User-Flow: Zielwahl, neutraler Ähnlichkeitsvergleich, Folgen, Mehrfachtreffer,
   Zielwechsel, Ergebnis und Wiederherstellung.
 - [x] Verständlichkeit: keine verbotenen technischen Begriffe in sichtbaren
@@ -391,7 +392,7 @@ konkrete Integrationslücken. Keine neue UX-Geschmacksrunde nach Rollen-`PASS`.
 - [x] Deployment bis zum endgültigen Erfolg verfolgen.
 - [x] Produktiver Readback auf Desktop und Mobilgerät: Creator-Zugang/-Portfolio,
   öffentliche Empfehlung, Login-Rückweg, Zielwahl, ähnliche Produkte, Ergebnis-
-  und Fehlerzustände sowie genau ein Affiliate-Gesamthinweis.
+  und Fehlerzustände sowie ausschließlich den globalen Affiliate-Footerhinweis.
 - [x] Genau einen knappen Eintrag in `.agent-memory/deploy-log.md` ergänzen.
 - [x] Diese Datei und die aktive Live-Checkliste auf vollständig `[x]` setzen.
 
@@ -402,7 +403,8 @@ Der Goal-Auftrag ist erst abgeschlossen, wenn alle folgenden Punkte erfüllt sin
 - [x] `P0` bis `P6` und die jeweils verpflichtende Rollenabnahme sind `[x]`.
 - [x] Kein Admin-UI-Scope wurde unbemerkt aufgenommen.
 - [x] Keine doppelte Datenpflege und keine erfundenen Werte entstanden.
-- [x] Affiliate bleibt eine einmalige Gesamtkennzeichnung ohne Produkt-Badges.
+- [x] Affiliate bleibt ausschließlich im globalen Footer; keine Kennzeichnung an
+  Produkt, Kaufbutton, Stack, Import oder Empfehlung.
 - [x] Nutzertexte sind leicht verständlich und erklären die konkrete Wirkung vor
   dem Speichern.
 - [x] Technischer Review und proportionaler Gesamtcheck melden `PASS`.
@@ -454,4 +456,4 @@ Nur materielle Phasenwechsel, Rollenübergaben, Blocker und Gate-Belege eintrage
 | 2026-08-07 | Release | Orchestrator | in Arbeit | Abschlussdiff, Commit/Push/PR/Merge, Produktionsdeploy und Desktop-/Mobil-Readback |
 | 2026-08-07 | Release | GitHub | PASS | Commit `f36a384`, PR #12; erster CI-Versuch 194/195 wegen unabhängigem Browser-Start-Flake, unveränderter Wiederholungslauf vollständig PASS; Squash-Merge `b0ae113` |
 | 2026-08-07 | Deploy | GitHub Actions + Cloudflare | PASS | Main-CI und Cloudflare-Run `31185868885` erfolgreich; keine neue Migration, vorhandener Migrationsschritt ohne offene Änderung PASS |
-| 2026-08-07 | Live-Readback | Orchestrator | PASS | Desktop: `/creator` → `/login?returnTo=%2Fcreator`, exakter Share-Query-/Hash-Rückweg bis Registrierung, verständlicher unbekannter Link und Clipboard-Fehler; Mobil 390×844 ohne horizontalen Überlauf, mobiles Menü, Recovery und genau ein Affiliate-Gesamthinweis. Keine Browserfehler; eingeloggtes Portfolio zusätzlich durch Rollen-/Runtimegates verifiziert, da keine Produktionsanmeldedaten verwendet wurden. |
+| 2026-08-07 | Live-Readback | Orchestrator | PASS | Desktop: `/creator` → `/login?returnTo=%2Fcreator`, exakter Share-Query-/Hash-Rückweg bis Registrierung, verständlicher unbekannter Link und Clipboard-Fehler; Mobil 390×844 ohne horizontalen Überlauf, mobiles Menü, Recovery und globaler Affiliate-Footerhinweis. Keine Browserfehler; eingeloggtes Portfolio zusätzlich durch Rollen-/Runtimegates verifiziert, da keine Produktionsanmeldedaten verwendet wurden. |

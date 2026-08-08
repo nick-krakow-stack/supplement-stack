@@ -34,7 +34,7 @@ const preview: CreatorSharePreview = {
 describe('CreatorRecommendationPreview', () => {
   afterEach(cleanup);
 
-  it('shows one shared disclosure, frames usage as the creator’s routine and invents no unit', () => {
+  it('shows no additional affiliate notice, frames usage as the creator’s routine and invents no unit', () => {
     render(<CreatorRecommendationPreview preview={preview} />);
 
     expect(screen.getByText('Empfohlen von Alex Alltag')).toBeTruthy();
@@ -44,7 +44,8 @@ describe('CreatorRecommendationPreview', () => {
     expect(screen.getByText('Einnahme:').parentElement?.textContent).toBe('Einnahme: täglich');
     expect(screen.getByText(/keine Dosierungsanweisung für dich/)).toBeTruthy();
     expect(screen.getByText(/Passt gut in meinen Alltag/)).toBeTruthy();
-    expect(screen.getAllByText(/Affiliate-Hinweis:/)).toHaveLength(1);
+    expect(screen.queryByText(/Affiliate-Hinweis:/)).toBeNull();
+    expect(screen.queryByText(preview.disclosure)).toBeNull();
     expect(screen.queryByText(/^Affiliate$/)).toBeNull();
     expect(screen.queryByText(/Affiliate-Link$/, { selector: 'span' })).toBeNull();
   });
@@ -85,7 +86,8 @@ describe('CreatorRecommendationPreview', () => {
     expect(formatRecommendationAmount(1, 'Portionen')).toBe('1 Portion');
     expect(formatRecommendationAmount(2, 'PORTION')).toBe('2 Portionen');
     expect(formatRecommendationAmount(2, 'Messlöffel')).toBe('2 Messlöffel');
-    expect(screen.getAllByText(/Affiliate-Hinweis:/)).toHaveLength(1);
+    expect(screen.queryByText(/Affiliate-Hinweis:/)).toBeNull();
+    expect(screen.queryByText(preview.disclosure)).toBeNull();
     expect(screen.queryByText(/^Affiliate$/)).toBeNull();
   });
 });

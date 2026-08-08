@@ -465,21 +465,6 @@ function RegisterCtaSection({ isLoggedIn }: { isLoggedIn: boolean }) {
   );
 }
 
-function FundingFaqSection() {
-  return (
-    <section className="py-14 bg-white" aria-labelledby="funding-faq-title">
-      <div className="max-w-3xl mx-auto px-6">
-        <h2 id="funding-faq-title" className="text-2xl font-bold text-gray-900">Alles kostenlos — wie verdient ihr Geld?</h2>
-        <p className="mt-4 text-gray-600 leading-relaxed">
-          Supplement Stack kann bei eindeutig gekennzeichneten Produktlinks eine Affiliate-Provision erhalten.
-          Bei geteilten Creator-Stacks kann auch der jeweilige Stack-Anbieter beteiligt sein. Für dich ändert sich
-          der Preis dadurch nicht. Redaktionelle und wissenschaftliche Inhalte werden davon nicht abgeleitet.
-        </p>
-      </div>
-    </section>
-  );
-}
-
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
@@ -494,7 +479,6 @@ export default function LandingPage() {
       <FeaturesSection />
       <TrustSection />
       <DemoCtaSection isLoggedIn={isLoggedIn} />
-      <FundingFaqSection />
       <RegisterCtaSection isLoggedIn={isLoggedIn} />
     </div>
   );
