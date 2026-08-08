@@ -4478,7 +4478,6 @@ export function StackWorkspace({
         ) && (
           <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
             <strong>{activeStack.origin_party_name ? `Creator-Stack von ${activeStack.origin_party_name}. ` : 'Creator-Empfehlung. '}</strong>
-            Einige Produktlinks sind Affiliate-Links. Die Plattform oder der Stack-Anbieter kann daran verdienen; für dich ändert sich der Preis nicht.
           </div>
         )}
 

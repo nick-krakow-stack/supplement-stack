@@ -692,7 +692,6 @@ export default function ProductCard({
                 <span>{buttonText}</span>
               </a>
             )}
-            {shopHref && product.is_affiliate === 1 && <span className="text-[11px] text-slate-500">Affiliate-Link</span>}
             {!shopHref && onReportMissingLink && (
               <button
                 type="button"
@@ -1001,7 +1000,6 @@ export default function ProductCard({
             {buttonText}
           </a>
         )}
-        {shopHref && product.is_affiliate === 1 && <span className="self-center text-[10px] text-slate-500">Affiliate</span>}
         {!shopHref && onReportMissingLink && (
           <button
             onClick={(e) => { e.stopPropagation(); onReportMissingLink(product, reportReason); }}

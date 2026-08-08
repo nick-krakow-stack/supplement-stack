@@ -278,8 +278,10 @@ noch einmal vollständig rechtlich zu prüfen (v. a. Datenschutzbereich).
   und dass die Plattform oder die Stack-Anbieter damit Geld verdienen können. Kein
   Hinweis am einzelnen Produkt (sieht schlecht aus, ist nicht nötig, und ein
   wachsender Anteil der Shops bietet ohnehin gar kein Affiliate an — Amazon ja,
-  Nature Heart evtl., Forever nur als Partner). Zusätzlich eine FAQ-Frage „Hier ist
-  alles kostenlos — wie verdient ihr Geld?".
+  Nature Heart evtl., Forever nur als Partner).
+  Verbindliche UI-Grenze: Der vorhandene globale Footer-Hinweis ist die einzige
+  Kennzeichnung in normalen Nutzer- und Creator-Flows. Keine zusätzliche
+  Kennzeichnung an Produkt, Kaufbutton, Stack, Import oder Empfehlung.
 - **HWG / HCVO über das Creator-Statement-Feld.** Geteilte Aussagen laufen über das
   Feld „[Creator] sagt dazu:". Beim Ausfüllen wird der Creator ausdrücklich
   hingewiesen, dass Heilversprechen/Empfehlungen (außer bei Ärzten) unzulässig sind,

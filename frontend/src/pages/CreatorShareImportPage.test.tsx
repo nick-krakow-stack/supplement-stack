@@ -134,7 +134,7 @@ describe('CreatorShareImportPage', () => {
     expect(screen.getByText('Empfohlen von Alex Alltag')).toBeTruthy();
     expect(screen.getByText('So nutzt Alex Alltag das Produkt:')).toBeTruthy();
     expect(screen.getByText(/Menge laut Empfehlung:/).parentElement?.textContent).toContain('1 Kapsel');
-    expect(screen.getAllByText(/Affiliate-Hinweis:/)).toHaveLength(1);
+    expect(screen.queryByText(/Affiliate-Hinweis:/)).toBeNull();
     expect(screen.getByRole('heading', { name: 'Möchtest du die Empfehlung in deinen Stacks speichern?' })).toBeTruthy();
     expect(screen.getByText('Vor der Anmeldung wird nichts gespeichert.')).toBeTruthy();
     const login = screen.getByRole('link', { name: 'Anmelden und weitermachen' });

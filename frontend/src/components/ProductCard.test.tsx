@@ -26,4 +26,23 @@ describe('ProductCard sub-ingredients', () => {
     expect(screen.getByText('davon EPA: 300 mg')).toBeTruthy();
     expect(screen.queryByText(/DPA/)).toBeNull();
   });
+
+  it('shows no product-level affiliate label in card or list view', () => {
+    const affiliateProduct = {
+      id: 2,
+      name: 'Vitamin K2',
+      price: 22.9,
+      quantity: 180,
+      unit: 'µg',
+      shop_link: 'https://example.com/vitamin-k2',
+      is_affiliate: 1,
+      ingredients: [],
+    };
+
+    const { rerender } = render(<ProductCard product={affiliateProduct} />);
+    expect(screen.queryByText(/^Affiliate(?:-Link)?$/)).toBeNull();
+
+    rerender(<ProductCard product={affiliateProduct} display="list" />);
+    expect(screen.queryByText(/^Affiliate(?:-Link)?$/)).toBeNull();
+  });
 });

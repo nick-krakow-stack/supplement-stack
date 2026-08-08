@@ -74,9 +74,6 @@ export default function CreatorRecommendationPreview({
         })}
       </div>
 
-      <aside className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
-        <strong>Affiliate-Hinweis:</strong> {preview.disclosure}
-      </aside>
     </section>
   );
 }

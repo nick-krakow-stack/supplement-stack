@@ -576,10 +576,13 @@ ersetzt die entsprechende Hardcodierung, statt `unit`-Paralleltabellen aufzubaue
 
 ## 7. Kennzeichnung, Moderation und Sichtbarkeit
 
-- Affiliate-Kennzeichnung steht gut sichtbar im Stack-/Importkontext und nahe dem
-  Bereich mit ausgehenden Produktlinks; eine ausschließlich versteckte Footer-Notiz
-  genügt nicht, wenn der kommerzielle Zweck nicht unmittelbar erkennbar ist.
-- Zusätzlich gibt es den FAQ-Eintrag „Alles kostenlos — wie verdient ihr Geld?“.
+- Affiliate-Kennzeichnung steht ausschließlich im dauerhaft sichtbaren globalen
+  Footer-Hinweis. In Produktkarten, an Kaufbuttons, in Stacks, Importen und
+  Creator-Empfehlungen gibt es weder Badge noch zusätzlichen Text wie „Affiliate“,
+  „Affiliate-Link“ oder „Affiliate-Hinweis“. Diese feste Produktentscheidung darf
+  nicht erneut als fehlende Kennzeichnung oder UX-Fehler behandelt werden.
+- Auch ein zusätzlicher Affiliate-FAQ-Block in normalen Produktseiten ist nicht
+  erforderlich; der globale Footer ist die einzige sichtbare Kennzeichnung.
 - Creator-Shares und Creator-Produkte sind vor öffentlicher Nutzung moderiert.
 - `parties.status='blocked'` verhindert neue Shares, neue Bindungen und globale
   Sichtbarkeit. Bestehende ausgehende Links folgen der Sicherheitsausnahme aus

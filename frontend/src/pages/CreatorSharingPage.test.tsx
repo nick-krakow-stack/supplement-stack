@@ -170,7 +170,7 @@ describe('CreatorSharingPage', () => {
     expect(await screen.findByText('So sehen andere deine Empfehlung')).toBeTruthy();
     expect(screen.getByText('Empfohlen von Alex Alltag')).toBeTruthy();
     expect(screen.getByText(/Menge laut Empfehlung:/).parentElement?.textContent).toContain('1 Kapsel');
-    expect(screen.getAllByText(/Affiliate-Hinweis:/)).toHaveLength(1);
+    expect(screen.queryByText(/Affiliate-Hinweis:/)).toBeNull();
     expect(screen.queryByText(/unveränderlichen Share-Snapshot/)).toBeNull();
     expect(screen.queryByText(/Zur Moderation einreichen/)).toBeNull();
   });
