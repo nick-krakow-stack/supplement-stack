@@ -1,8 +1,9 @@
 PRAGMA foreign_keys = ON;
 
--- Additive preparation release: the new stack runtime can be deployed while
--- the previous runtime remains compatible during the migration/deploy window.
-ALTER TABLE stacks ADD COLUMN description TEXT CHECK (description IS NULL OR length(description) <= 1000);
+-- Additive preparation release: `stacks.description` has existed since the
+-- initial schema. Keep that column byte-identical and add only the fields that
+-- are still missing in production so the previous runtime remains compatible
+-- during the migration/deploy window.
 ALTER TABLE stacks ADD COLUMN deleted_at TEXT;
 ALTER TABLE stacks ADD COLUMN delete_purge_after TEXT;
 ALTER TABLE stacks ADD COLUMN version INTEGER NOT NULL DEFAULT 1;
