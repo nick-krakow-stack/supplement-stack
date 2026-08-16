@@ -383,6 +383,29 @@ describe.sequential('Sub-Wirkstoffe: echte Hono-Routen auf D1-Schema bis 0099', 
 
   afterAll(() => harness.close());
 
+  it('keeps the stack description exactly once in a fresh schema through migration 0103', async () => {
+    const migrationHarness = createProductionKnowledgeHonoHarness();
+    try {
+      const migrationFiles = readdirSync(migrationsDirectory)
+        .filter((name) => /^\d+.*\.sql$/.test(name) && name <= '0103_stack_trash_description.sql')
+        .sort((left, right) => left.localeCompare(right));
+      for (const migrationFile of migrationFiles) {
+        migrationHarness.exec(readFileSync(`${migrationsDirectory}/${migrationFile}`, 'utf8'));
+      }
+      const db = migrationHarness.db as TestDatabase;
+      const descriptionColumns = (await db.prepare('PRAGMA table_info(stacks)').all<{
+        name: string;
+        type: string;
+      }>()).results
+        .filter((column) => column.name === 'description')
+        .map(({ name, type }) => ({ name, type }));
+
+      expect(descriptionColumns).toEqual([{ name: 'description', type: 'TEXT' }]);
+    } finally {
+      migrationHarness.close();
+    }
+  });
+
   it('backfills version 1 and keeps the schema default for new user products', async () => {
     const migrationHarness = createProductionKnowledgeHonoHarness();
     try {
