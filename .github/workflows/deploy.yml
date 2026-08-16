@@ -107,9 +107,9 @@ jobs:
             if node -e "const value=JSON.parse(process.argv[1]); process.exit(value.complete === true ? 0 : 1)" "${DRAIN_RESPONSE}"; then
               exit 0
             fi
-        done
-        echo "Creator notification drain did not finish." >&2
-        exit 1
+          done
+          echo "Creator notification drain did not finish." >&2
+          exit 1
 
       - name: Deployment complete
         run: echo "✅ Deployment to Cloudflare Pages complete!"
