@@ -101,6 +101,40 @@ describe('MyProductsPage', () => {
     expect(screen.queryByText('Magnesium öffentlich')).toBeNull();
   });
 
+  it('explains the own-product publication wait and returns only to the exact internal creator draft', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ products }),
+    }));
+    render(
+      <MemoryRouter initialEntries={['/my-products?creatorReturn=%2Fcreator%3Fbereich%3Dstack%26party%3D7%26stack%3D10%26repair%3D90']}>
+        <MyProductsPage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Dein Creator-Entwurf bleibt gespeichert.')).toBeTruthy();
+    expect(screen.getByText(/Erst nach Freigabe und Veröffentlichung/)).toBeTruthy();
+    expect(screen.getByText(/musst du die Entscheidung abwarten/)).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Zur Empfehlung zurück' }).getAttribute('href'))
+      .toBe('/creator?bereich=stack&party=7&stack=10&repair=90');
+  });
+
+  it('fails closed for an external creator return target', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ products }),
+    }));
+    render(
+      <MemoryRouter initialEntries={['/my-products?creatorReturn=https%3A%2F%2Fevil.example%2Fcreator']}>
+        <MyProductsPage />
+      </MemoryRouter>,
+    );
+
+    await screen.findAllByText('Vitamin-B-Komplex');
+    expect(screen.queryByText('Dein Creator-Entwurf bleibt gespeichert.')).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Zur Empfehlung zurück' })).toBeNull();
+  });
+
   it('filtert Privat/Öffentlich und öffnet für öffentliche Produkte eine bearbeitbare Kopie', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
       ok: true,

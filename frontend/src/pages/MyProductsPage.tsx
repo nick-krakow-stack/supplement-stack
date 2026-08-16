@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { CopyPlus, ImageOff, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import UserProductForm, {
   type UserProduct,
@@ -24,6 +24,17 @@ function formatDate(value?: string | null): string {
   return Number.isNaN(parsed.getTime())
     ? 'Datum nicht verfügbar'
     : new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium' }).format(parsed);
+}
+
+function safeCreatorReturn(value: string | null): string | null {
+  if (!value || value.length > 1000 || !value.startsWith('/creator')) return null;
+  try {
+    const parsed = new URL(value, 'https://supplementstack.local');
+    if (parsed.origin !== 'https://supplementstack.local' || parsed.pathname !== '/creator') return null;
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return null;
+  }
 }
 
 function monthlyCost(product: UserProduct, usage: UserProductStackUsage): number | null {
@@ -223,7 +234,9 @@ function ProductRow({
 
 export default function MyProductsPage() {
   const { user } = useAuth();
+  const location = useLocation();
   const userId = user?.id;
+  const creatorReturn = safeCreatorReturn(new URLSearchParams(location.search).get('creatorReturn'));
   const [products, setProducts] = useState<UserProduct[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -350,6 +363,14 @@ export default function MyProductsPage() {
             <Plus size={18} /> Produkt anlegen
           </button>
         </header>
+
+        {creatorReturn && (
+          <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-4 text-sm leading-6 text-indigo-950" role="status">
+            <p className="font-black">Dein Creator-Entwurf bleibt gespeichert.</p>
+            <p>Prüfe hier den Status deines eigenen Produkts. Erst nach Freigabe und Veröffentlichung kann es in einer öffentlichen Empfehlung erscheinen. Wenn die Prüfung noch läuft, musst du die Entscheidung abwarten.</p>
+            <Link className="mt-3 inline-flex min-h-11 items-center rounded-xl border border-indigo-200 bg-white px-4 font-bold text-indigo-700" to={creatorReturn}>Zur Empfehlung zurück</Link>
+          </div>
+        )}
 
         {error && <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">{error}</div>}
         {message && <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900" role="status">{message}</div>}

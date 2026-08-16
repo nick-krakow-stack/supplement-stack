@@ -1,14 +1,20 @@
 import { Hono } from 'hono'
 import type { AppContext } from '../lib/types'
 import { ensureAdmin, logAdminAction } from '../lib/helpers'
-import { normalizeDomain, validateAffiliateTemplate } from '../lib/creator-sharing'
-import { getPlatformParty } from '../lib/creator-sharing-service'
+import { normalizeDomain, snapshotHash, validateAffiliateTemplate } from '../lib/creator-sharing'
+import { getPlatformParty, parseStoredSnapshot } from '../lib/creator-sharing-service'
+import { deliverCreatorShareNotification } from '../lib/creator-share-notifications'
 
 const creatorSharingAdmin = new Hono<AppContext>()
 
 function positiveInteger(value: unknown): number | null {
   const parsed = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null
+}
+
+function nonNegativeInteger(value: unknown): number | null {
+  const parsed = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN
+  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null
 }
 
 function boundedText(value: unknown, maximum: number): string | null {
@@ -268,9 +274,21 @@ creatorSharingAdmin.get('/shares', async (c) => {
   const { results } = await c.env.DB.prepare(`
     SELECT share.id, share.token, share.entity_type, share.creator_party_id,
       share.snapshot_hash, share.snapshot_schema_version, share.moderation_status,
-      share.is_revoked, share.views, share.imports, share.created_at, share.expires_at,
-      party.name AS creator_name
+      share.moderation_reason, share.moderation_target, share.moderation_item_index,
+      share.is_revoked, share.created_at, share.expires_at, share.paused_at,
+      share.archived_at, share.supersedes_share_link_id, share.version,
+      CAST(json_extract(share.snapshot_json, '$.title') AS TEXT) AS title,
+      party.name AS creator_name,
+      notification.status AS notification_status,
+      notification.attempts AS notification_attempts
     FROM share_links share JOIN parties party ON party.id = share.creator_party_id
+    LEFT JOIN creator_share_notification_events notification ON notification.id = (
+      SELECT event.id
+      FROM creator_share_notification_events event
+      WHERE event.share_link_id = share.id AND event.share_version = share.version
+      ORDER BY event.id DESC
+      LIMIT 1
+    )
     WHERE (? IS NULL OR share.moderation_status = ?)
     ORDER BY CASE share.moderation_status WHEN 'pending' THEN 0 ELSE 1 END, share.created_at DESC
     LIMIT 250
@@ -282,22 +300,238 @@ creatorSharingAdmin.patch('/shares/:id', async (c) => {
   const shareId = positiveInteger(c.req.param('id'))
   let body: Record<string, unknown>
   try { body = await c.req.json() } catch { return c.json({ error: 'Invalid JSON' }, 400) }
-  const moderationStatus = ['pending', 'approved', 'blocked'].includes(String(body.moderation_status)) ? String(body.moderation_status) : null
-  const expectedStatus = ['pending', 'approved', 'blocked'].includes(String(body.expected_status)) ? String(body.expected_status) : null
+  if (hasOwnKey(body, 'is_revoked')) {
+    return c.json({ error: 'Moderation darf eine Empfehlung nicht im Namen des Creators beenden.' }, 400)
+  }
+  const moderationStatus = body.moderation_status === 'approved' || body.moderation_status === 'blocked'
+    ? body.moderation_status
+    : null
+  const expectedStatus = ['pending', 'approved', 'blocked'].includes(String(body.expected_moderation_status))
+    ? String(body.expected_moderation_status) as 'pending' | 'approved' | 'blocked'
+    : null
+  const expectedVersion = positiveInteger(body.expected_version)
   const expectedHash = boundedText(body.expected_snapshot_hash, 64)
-  const revoked = body.is_revoked === undefined ? null : body.is_revoked === true || body.is_revoked === 1 ? 1 : body.is_revoked === false || body.is_revoked === 0 ? 0 : null
-  if (!shareId || !moderationStatus || !expectedStatus || !expectedHash || (body.is_revoked !== undefined && revoked === null)) return c.json({ error: 'Invalid share moderation request' }, 400)
+  const expectedIsRevoked = body.expected_is_revoked === 0 || body.expected_is_revoked === 1
+    ? body.expected_is_revoked
+    : null
+  const expectedPausedAt = body.expected_paused_at === null ? null : positiveInteger(body.expected_paused_at)
+  const expectedExpiresAt = body.expected_expires_at === null ? null : positiveInteger(body.expected_expires_at)
+  const expectedArchivedAt = body.expected_archived_at === null ? null : positiveInteger(body.expected_archived_at)
+  const reason = moderationStatus === 'blocked' ? boundedText(body.moderation_reason, 1000) : null
+  const target = moderationStatus === 'blocked' && ['general', 'title', 'creator_statement', 'product'].includes(String(body.moderation_target))
+    ? String(body.moderation_target) as 'general' | 'title' | 'creator_statement' | 'product'
+    : null
+  const itemIndex = moderationStatus === 'blocked' && (target === 'creator_statement' || target === 'product')
+    ? nonNegativeInteger(body.moderation_item_index)
+    : null
+  if (
+    !shareId
+    || !moderationStatus
+    || !expectedStatus
+    || !expectedVersion
+    || !expectedHash
+    || !/^[a-f0-9]{64}$/.test(expectedHash)
+    || expectedIsRevoked === null
+    || !hasOwnKey(body, 'expected_paused_at')
+    || (body.expected_paused_at !== null && expectedPausedAt === null)
+    || !hasOwnKey(body, 'expected_expires_at')
+    || (body.expected_expires_at !== null && expectedExpiresAt === null)
+    || !hasOwnKey(body, 'expected_archived_at')
+    || (body.expected_archived_at !== null && expectedArchivedAt === null)
+    || (moderationStatus === 'blocked' && (!reason || !target))
+    || (moderationStatus === 'blocked' && (target === 'creator_statement' || target === 'product') && itemIndex === null)
+    || (moderationStatus === 'blocked' && (target === 'general' || target === 'title') && body.moderation_item_index !== null)
+    || (moderationStatus === 'approved' && (
+      (body.moderation_reason !== undefined && body.moderation_reason !== null)
+      || (body.moderation_target !== undefined && body.moderation_target !== null)
+      || (body.moderation_item_index !== undefined && body.moderation_item_index !== null)
+    ))
+  ) {
+    return c.json({ error: 'Die aktuellen Angaben und eine verständliche Moderationsentscheidung sind erforderlich.' }, 400)
+  }
+  const current = await c.env.DB.prepare(`
+    SELECT *
+    FROM share_links
+    WHERE id = ?
+  `).bind(shareId).first<{
+    id: number
+    snapshot_json: string
+    snapshot_hash: string | null
+    creator_user_id: number | null
+    moderation_status: 'pending' | 'approved' | 'blocked'
+    moderation_reason: string | null
+    moderation_target: 'general' | 'title' | 'creator_statement' | 'product' | null
+    moderation_item_index: number | null
+    is_revoked: number
+    paused_at: number | null
+    expires_at: number | null
+    archived_at: number | null
+    legacy_provenance_status: 'ambiguous' | null
+    version: number
+  }>()
+  if (!current) return c.json({ error: 'Empfehlung wurde nicht gefunden.' }, 404)
+  if (
+    current.version !== expectedVersion
+    || current.snapshot_hash !== expectedHash
+    || current.moderation_status !== expectedStatus
+    || current.is_revoked !== expectedIsRevoked
+    || current.paused_at !== expectedPausedAt
+    || current.expires_at !== expectedExpiresAt
+    || current.archived_at !== expectedArchivedAt
+  ) {
+    return c.json({ error: 'Die Empfehlung hat sich geändert. Bitte lade sie neu.' }, 409)
+  }
+  if (current.legacy_provenance_status === 'ambiguous') {
+    return c.json({ error: 'Diese ältere Empfehlung kann nicht sicher zugeordnet werden. Bitte erstelle eine Neuauflage.' }, 409)
+  }
+  if (current.is_revoked === 1) {
+    return c.json({ error: 'Eine vom Creator beendete Empfehlung kann nicht mehr moderiert werden.' }, 409)
+  }
+  const parsed = parseStoredSnapshot(current.snapshot_json)
+  if (!parsed.value || await snapshotHash(parsed.value) !== current.snapshot_hash) {
+    return c.json({ error: 'Der gespeicherte Stand der Empfehlung konnte nicht sicher geprüft werden.' }, 409)
+  }
+  if (itemIndex !== null && itemIndex >= parsed.value.items.length) {
+    return c.json({ error: 'Das ausgewählte Produkt ist in dieser Empfehlung nicht vorhanden.' }, 400)
+  }
+  if (
+    current.moderation_status === moderationStatus
+    && current.moderation_reason === reason
+    && current.moderation_target === target
+    && current.moderation_item_index === itemIndex
+  ) {
+    return c.json({ share: current, notification_status: null })
+  }
   const user = c.get('user')
-  const result = await c.env.DB.prepare(`
-    UPDATE share_links
-    SET moderation_status = ?, is_revoked = COALESCE(?, is_revoked),
-      moderated_by_user_id = ?, moderated_at = CURRENT_TIMESTAMP
-    WHERE id = ? AND moderation_status = ? AND snapshot_hash = ?
-  `).bind(moderationStatus, revoked, user.userId, shareId, expectedStatus, expectedHash).run()
-  if (d1Changes(result) !== 1) return c.json({ error: 'Share state conflict' }, 409)
-  const share = await c.env.DB.prepare('SELECT * FROM share_links WHERE id = ?').bind(shareId).first()
-  await logAdminAction(c, { action: 'moderate_creator_share', entity_type: 'share_link', entity_id: shareId, changes: { expected_status: expectedStatus, moderation_status: moderationStatus, is_revoked: revoked } })
-  return c.json({ share })
+  const eventType = moderationStatus === 'approved' ? 'moderation_approved' : 'moderation_blocked'
+  let moderationBatch: D1Result<unknown>[]
+  try {
+    moderationBatch = await c.env.DB.batch([
+      c.env.DB.prepare(`
+        UPDATE share_links
+        SET moderation_status = ?, moderation_reason = ?, moderation_target = ?,
+          moderation_item_index = ?, moderated_by_user_id = ?,
+          moderated_at = CURRENT_TIMESTAMP, version = version + 1
+        WHERE id = ?
+          AND version = ?
+          AND snapshot_hash = ?
+          AND moderation_status = ?
+          AND is_revoked = ?
+          AND paused_at IS ?
+          AND expires_at IS ?
+          AND archived_at IS ?
+          AND legacy_provenance_status IS NULL
+      `).bind(
+        moderationStatus,
+        reason,
+        target,
+        itemIndex,
+        user.userId,
+        shareId,
+        expectedVersion,
+        expectedHash,
+        expectedStatus,
+        expectedIsRevoked,
+        expectedPausedAt,
+        expectedExpiresAt,
+        expectedArchivedAt,
+      ),
+      c.env.DB.prepare(`
+        INSERT INTO creator_share_notification_events (
+          share_link_id,
+          share_version,
+          event_type,
+          status,
+          attempts
+        ) VALUES (
+          (
+            SELECT id
+            FROM share_links
+            WHERE id = ?
+              AND version = ?
+              AND snapshot_hash = ?
+              AND moderation_status = ?
+              AND moderation_reason IS ?
+              AND moderation_target IS ?
+              AND moderation_item_index IS ?
+              AND is_revoked = ?
+              AND paused_at IS ?
+              AND expires_at IS ?
+              AND archived_at IS ?
+              AND legacy_provenance_status IS NULL
+          ),
+          ?,
+          ?,
+          'pending',
+          0
+        )
+      `).bind(
+        shareId,
+        expectedVersion + 1,
+        expectedHash,
+        moderationStatus,
+        reason,
+        target,
+        itemIndex,
+        expectedIsRevoked,
+        expectedPausedAt,
+        expectedExpiresAt,
+        expectedArchivedAt,
+        expectedVersion + 1,
+        eventType,
+      ),
+    ])
+  } catch {
+    return c.json({ error: 'Die Empfehlung hat sich geändert. Bitte lade sie neu.' }, 409)
+  }
+  if (d1Changes(moderationBatch[0]) !== 1 || d1Changes(moderationBatch[1]) !== 1) {
+    return c.json({ error: 'Die Empfehlung hat sich geändert. Bitte lade sie neu.' }, 409)
+  }
+  const share = await c.env.DB.prepare('SELECT * FROM share_links WHERE id = ?').bind(shareId).first<{
+    id: number
+    version: number
+  }>()
+  const event = await c.env.DB.prepare(`
+    SELECT id, status
+    FROM creator_share_notification_events
+    WHERE share_link_id = ? AND share_version = ? AND event_type = ?
+  `).bind(shareId, expectedVersion + 1, eventType).first<{ id: number; status: string }>()
+  let notificationStatus = event?.status ?? 'failed'
+  if (event?.status === 'pending') {
+    try {
+      notificationStatus = (await deliverCreatorShareNotification(c.env, event.id)).status
+    } catch {
+      const latestEvent = await c.env.DB.prepare(`
+        SELECT status
+        FROM creator_share_notification_events
+        WHERE id = ?
+      `).bind(event.id).first<{ status: string }>()
+      notificationStatus = latestEvent?.status ?? 'failed'
+    }
+  }
+  await logAdminAction(c, {
+    action: 'moderate_creator_share',
+    entity_type: 'share_link',
+    entity_id: shareId,
+    reason,
+    changes: {
+      before: {
+        version: current.version,
+        moderation_status: current.moderation_status,
+        moderation_reason: current.moderation_reason,
+        moderation_target: current.moderation_target,
+        moderation_item_index: current.moderation_item_index,
+      },
+      after: {
+        version: expectedVersion + 1,
+        moderation_status: moderationStatus,
+        moderation_reason: reason,
+        moderation_target: target,
+        moderation_item_index: itemIndex,
+      },
+    },
+  })
+  return c.json({ share, notification_status: notificationStatus })
 })
 
 creatorSharingAdmin.get('/missing-platform-codes', async (c) => {

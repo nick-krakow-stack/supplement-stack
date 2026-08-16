@@ -415,6 +415,17 @@ function getUserDisplayName(user: User | null | undefined): string | null {
   return candidate || user.email || null;
 }
 
+function safeCreatorReturn(value: string | null): string | null {
+  if (!value || value.length > 1000 || !value.startsWith('/creator')) return null;
+  try {
+    const parsed = new URL(value, 'https://supplementstack.local');
+    if (parsed.origin !== 'https://supplementstack.local' || parsed.pathname !== '/creator') return null;
+    return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  } catch {
+    return null;
+  }
+}
+
 function loadViewMode(): ProductViewMode {
   return typeof window !== 'undefined' && window.localStorage.getItem(STACK_VIEW_KEY) === 'list' ? 'list' : 'grid';
 }
@@ -1039,6 +1050,9 @@ export function StackWorkspace({ mode = 'demo', standaloneHeader, view = 'worksp
   const totalOnce = selectedProducts.reduce((sum, product) => sum + Number(product.price ?? product.product_price ?? 0), 0);
   const totalMonthly = selectedProducts.reduce((sum, product) => sum + productMonthlyPrice(product), 0);
   const ingredientTotals = aggregateStackIngredientTotals(activeStack?.products ?? []);
+  const creatorReturn = mode === 'authenticated'
+    ? safeCreatorReturn(new URLSearchParams(location.search).get('creatorReturn'))
+    : null;
 
   const replaceSearch = useCallback((mutate: (params: URLSearchParams) => void) => {
     const params = new URLSearchParams(location.search);
@@ -1437,6 +1451,18 @@ export function StackWorkspace({ mode = 'demo', standaloneHeader, view = 'worksp
       {header && <StacksHeader variant={HEADER_VARIANT} title={title} subtitle={subtitle} rightSlot={rightSlot} />}
       <div className={header ? 'ss-page' : 'ss-page ss-page-embedded'}>
         {!header && <div className="ss-inline-page-heading"><h1>{title}</h1><p>{subtitle}</p></div>}
+        {creatorReturn && (
+          <div className="info-banner" role="status">
+            <Undo2 size={18} />
+            <div>
+              <strong>Dein Creator-Entwurf bleibt gespeichert.</strong>{' '}
+              <span>Prüfe oder ändere den Stack. Danach kannst du genau diese Empfehlung weiterbearbeiten.</span>
+            </div>
+            <button type="button" className="ss-btn ss-btn-outline" onClick={() => navigate(creatorReturn)}>
+              Zur Empfehlung zurück
+            </button>
+          </div>
+        )}
         {isDemo && <div className="info-banner info-banner-demo"><Info size={18} /><div><strong>Alle Stack-Funktionen nutzbar.</strong> <span>{user ? 'Du kannst alles ausprobieren. Für deine gespeicherten Daten öffnest du anschließend „Meine Stacks“.' : 'Speichern, E-Mail, PDF und eigene Produkte sind nach einer kostenlosen Anmeldung verfügbar. Der Hinweis erscheint immer vorab.'}</span></div></div>}
         {error && <p className="ss-live-status ss-live-status-error" role="alert">{error}</p>}
         {status && <p className="ss-live-status" role="status">{status}</p>}

@@ -1,7 +1,7 @@
 import {
   buildAffiliateUrl,
+  canonicalCreatorTiming,
   dateWindowAllows,
-  hostMatchesDomain,
   parseCreatorShareSnapshot,
   type CreatorLinkBindingSnapshot,
   type CreatorShareSnapshot,
@@ -46,17 +46,21 @@ export type AffiliateVersionRow = {
   valid_from: string | null
   valid_until: string | null
   party_status?: 'active' | 'blocked'
+  party_version?: number
 }
 
 export type SnapshotRelationProduct = {
   id: number
   name: string
   brand: string | null
+  version: number
   moderation_status: string
   visibility: string
   owner_party_id: number | null
   owner_status: string | null
   owner_auto_catalog_approval: number | null
+  owner_type: string | null
+  owner_version: number | null
 }
 
 export type ValidatedSnapshotRelations = {
@@ -65,6 +69,120 @@ export type ValidatedSnapshotRelations = {
   versions: Map<number, AffiliateVersionRow>
   mainIngredientIds: Map<number, number[]>
 }
+
+type SnapshotRelationSignatureItem = {
+  item_index: number
+  resolution_kind: CreatorLinkBindingSnapshot['resolution_kind']
+  resolved_party_id: number | null
+  product: SnapshotRelationProduct
+  target: ProductShopTargetRow
+  affiliate: (AffiliateVersionRow & { party_status: 'active' | 'blocked'; party_version: number }) | null
+  main_ingredient_ids: number[]
+}
+
+/** Exact typed values validated for every persisted snapshot relation. */
+export function snapshotRelationSignatureJson(
+  snapshot: CreatorShareSnapshot,
+  relations: ValidatedSnapshotRelations,
+): string {
+  const signature: SnapshotRelationSignatureItem[] = snapshot.items.map((item, itemIndex) => {
+    const product = relations.products.get(item.catalog_product_id)
+    const target = relations.targets.get(item.shop_link_id)
+    const affiliate = item.link_binding.affiliate_version_id === null
+      ? null
+      : relations.versions.get(item.link_binding.affiliate_version_id)
+    if (!product || !target || (item.link_binding.affiliate_version_id !== null && !affiliate)) {
+      throw new Error('Cannot sign incomplete creator snapshot relations')
+    }
+    return {
+      item_index: itemIndex,
+      resolution_kind: item.link_binding.resolution_kind,
+      resolved_party_id: item.link_binding.resolved_party_id,
+      product,
+      target,
+      affiliate: affiliate
+        ? {
+            ...affiliate,
+            party_status: affiliate.party_status ?? 'blocked',
+            party_version: affiliate.party_version ?? 0,
+          }
+        : null,
+      main_ingredient_ids: relations.mainIngredientIds.get(item.catalog_product_id) ?? [],
+    }
+  })
+  return JSON.stringify(signature)
+}
+
+/**
+ * Expects one binding: snapshotRelationSignatureJson(). `IS NOT` preserves
+ * SQLite's typed NULL semantics. Main ingredients are an ordered distinct set.
+ */
+export const SNAPSHOT_RELATION_SIGNATURE_SQL_GUARD = `
+  NOT EXISTS (
+    SELECT 1
+    FROM json_each(?) expected
+    LEFT JOIN products product
+      ON product.id = json_extract(expected.value, '$.product.id')
+    LEFT JOIN parties owner ON owner.id = product.owner_party_id
+    LEFT JOIN product_shop_links target
+      ON target.id = json_extract(expected.value, '$.target.id')
+    LEFT JOIN shop_domains domain ON domain.id = target.shop_domain_id
+    LEFT JOIN party_shop_affiliate_versions affiliate
+      ON affiliate.id = CASE
+        WHEN json_type(expected.value, '$.affiliate') = 'object'
+          THEN json_extract(expected.value, '$.affiliate.id')
+        ELSE NULL
+      END
+    LEFT JOIN parties affiliate_party ON affiliate_party.id = affiliate.party_id
+    WHERE product.id IS NOT json_extract(expected.value, '$.product.id')
+      OR product.name IS NOT json_extract(expected.value, '$.product.name')
+      OR product.brand IS NOT json_extract(expected.value, '$.product.brand')
+      OR product.version IS NOT json_extract(expected.value, '$.product.version')
+      OR product.moderation_status IS NOT json_extract(expected.value, '$.product.moderation_status')
+      OR product.visibility IS NOT json_extract(expected.value, '$.product.visibility')
+      OR product.owner_party_id IS NOT json_extract(expected.value, '$.product.owner_party_id')
+      OR owner.status IS NOT json_extract(expected.value, '$.product.owner_status')
+      OR owner.auto_catalog_approval IS NOT json_extract(expected.value, '$.product.owner_auto_catalog_approval')
+      OR owner.type IS NOT json_extract(expected.value, '$.product.owner_type')
+      OR owner.version IS NOT json_extract(expected.value, '$.product.owner_version')
+      OR target.id IS NOT json_extract(expected.value, '$.target.id')
+      OR target.product_id IS NOT json_extract(expected.value, '$.target.product_id')
+      OR target.shop_domain_id IS NOT json_extract(expected.value, '$.target.shop_domain_id')
+      OR target.url IS NOT json_extract(expected.value, '$.target.url')
+      OR target.normalized_host IS NOT json_extract(expected.value, '$.target.normalized_host')
+      OR target.link_kind IS NOT json_extract(expected.value, '$.target.link_kind')
+      OR target.legacy_party_id IS NOT json_extract(expected.value, '$.target.legacy_party_id')
+      OR target.active IS NOT json_extract(expected.value, '$.target.active')
+      OR target.blocked_at IS NOT json_extract(expected.value, '$.target.blocked_at')
+      OR domain.domain IS NOT json_extract(expected.value, '$.target.shop_domain')
+      OR (
+        SELECT json_group_array(ingredient_id)
+        FROM (
+          SELECT DISTINCT relation.ingredient_id
+          FROM product_ingredients relation
+          WHERE relation.product_id = product.id AND relation.is_main = 1
+          ORDER BY relation.ingredient_id
+        ) current_main_ingredients
+      ) IS NOT json_extract(expected.value, '$.main_ingredient_ids')
+      OR (
+        json_type(expected.value, '$.affiliate') = 'object'
+        AND (
+          affiliate.id IS NOT json_extract(expected.value, '$.affiliate.id')
+          OR affiliate.party_id IS NOT json_extract(expected.value, '$.affiliate.party_id')
+          OR affiliate.shop_domain_id IS NOT json_extract(expected.value, '$.affiliate.shop_domain_id')
+          OR affiliate.version IS NOT json_extract(expected.value, '$.affiliate.version')
+          OR affiliate.code IS NOT json_extract(expected.value, '$.affiliate.code')
+          OR affiliate.link_template IS NOT json_extract(expected.value, '$.affiliate.link_template')
+          OR affiliate.tracking_domain IS NOT json_extract(expected.value, '$.affiliate.tracking_domain')
+          OR affiliate.status IS NOT json_extract(expected.value, '$.affiliate.status')
+          OR affiliate.valid_from IS NOT json_extract(expected.value, '$.affiliate.valid_from')
+          OR affiliate.valid_until IS NOT json_extract(expected.value, '$.affiliate.valid_until')
+          OR affiliate_party.status IS NOT json_extract(expected.value, '$.affiliate.party_status')
+          OR affiliate_party.version IS NOT json_extract(expected.value, '$.affiliate.party_version')
+        )
+      )
+  )
+`
 
 export type OutboundResolution = {
   url: string
@@ -109,6 +227,20 @@ export async function getParty(db: D1Database, partyId: number): Promise<PartyRo
     FROM parties
     WHERE id = ?
   `).bind(partyId).first<PartyRow>()
+}
+
+export async function loadCreatorTimingLabels(db: D1Database): Promise<Map<string, string>> {
+  const labels = new Map<string, string>()
+  const { results } = await db.prepare(`
+    SELECT value, label
+    FROM managed_list_items
+    WHERE list_key = 'intake_timing' AND active = 1
+  `).all<{ value: string; label: string }>()
+  for (const item of results ?? []) {
+    const canonical = canonicalCreatorTiming(item.value)
+    if (canonical && item.label.trim()) labels.set(canonical, item.label.trim())
+  }
+  return labels
 }
 
 export async function ensureUserParty(db: D1Database, userId: number): Promise<PartyRow> {
@@ -304,11 +436,14 @@ export async function validateSnapshotRelations(
         p.id,
         p.name,
         p.brand,
+        p.version,
         p.moderation_status,
         p.visibility,
         p.owner_party_id,
         owner.status AS owner_status,
-        owner.auto_catalog_approval AS owner_auto_catalog_approval
+        owner.auto_catalog_approval AS owner_auto_catalog_approval,
+        owner.type AS owner_type,
+        owner.version AS owner_version
       FROM products p
       LEFT JOIN parties owner ON owner.id = p.owner_party_id
       WHERE p.id IN (${placeholders(productIds)})
@@ -343,7 +478,8 @@ export async function validateSnapshotRelations(
             av.status,
             av.valid_from,
             av.valid_until,
-            party.status AS party_status
+            party.status AS party_status,
+            party.version AS party_version
           FROM party_shop_affiliate_versions av
           JOIN parties party ON party.id = av.party_id
           WHERE av.id IN (${placeholders(versionIds)})

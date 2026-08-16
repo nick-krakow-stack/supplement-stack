@@ -19,7 +19,7 @@ import { clearCreatorShareDraft, readCreatorShareDraft, writeCreatorShareDraft }
 import { formatRecommendationAmount, formatRecommendationInterval } from '../lib/creatorRecommendationFormat';
 import { authPath, currentLocationReturnTo } from '../lib/returnTo';
 
-type UnavailableKind = 'pending' | 'expired' | 'unavailable' | 'unknown';
+type UnavailableKind = 'pending' | 'paused' | 'expired' | 'unavailable' | 'unknown';
 type Decision = 'keep' | 'replace';
 
 function errorData(caught: unknown): { code?: string; error?: string } {
@@ -28,6 +28,7 @@ function errorData(caught: unknown): { code?: string; error?: string } {
 
 function unavailableKind(code: string | undefined): UnavailableKind | null {
   if (code === 'SHARE_PENDING') return 'pending';
+  if (code === 'SHARE_PAUSED') return 'paused';
   if (code === 'SHARE_EXPIRED') return 'expired';
   if (code === 'SHARE_UNAVAILABLE') return 'unavailable';
   if (code === 'SHARE_UNKNOWN') return 'unknown';
@@ -48,6 +49,7 @@ function selectionFor(
 
 function Comparison({ title, value }: { title: string; value: CreatorShareComparison }) {
   const interval = formatRecommendationInterval(value.intake_interval_days);
+  const timingLabel = value.timing_label?.trim() || null;
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4">
       <h4 className="font-semibold text-slate-900">{title}</h4>
@@ -56,7 +58,7 @@ function Comparison({ title, value }: { title: string; value: CreatorShareCompar
         <div><dt className="inline font-medium">Menge: </dt><dd className="inline">{formatRecommendationAmount(value.quantity, value.unit)}</dd></div>
         {value.dosage_text && <div><dt className="inline font-medium">Einnahme: </dt><dd className="inline">{value.dosage_text}</dd></div>}
         {interval && <div><dt className="inline font-medium">Wie oft: </dt><dd className="inline">{interval}</dd></div>}
-        {value.timing && <div><dt className="inline font-medium">Wann: </dt><dd className="inline">{value.timing}</dd></div>}
+        <div><dt className="inline font-medium">Wann: </dt><dd className="inline">{timingLabel ?? 'Keine Angabe'}</dd></div>
       </dl>
     </div>
   );
@@ -70,6 +72,11 @@ function RecoveryCard({ kind, user }: { kind: UnavailableKind; user: boolean }) 
       title: 'Diese Empfehlung wird noch geprüft.',
       text: 'Bitte versuche es später noch einmal.',
       message: 'Hallo, ich wollte deine Empfehlung öffnen. Sie wird noch geprüft. Kannst du mir Bescheid geben, sobald sie verfügbar ist?',
+    },
+    paused: {
+      title: 'Diese Empfehlung ist vorübergehend pausiert.',
+      text: 'Bitte versuche es später noch einmal oder frage den Creator, wann der Link wieder verfügbar ist.',
+      message: 'Hallo, deine Empfehlung ist gerade pausiert. Kannst du mir bitte Bescheid geben, sobald der Link wieder verfügbar ist?',
     },
     expired: {
       title: 'Dieser Link ist abgelaufen.',

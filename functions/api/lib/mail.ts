@@ -246,3 +246,52 @@ export async function sendEmailVerificationEmail(
     html: message.html,
   })
 }
+
+export type CreatorModerationMessageInput = {
+  shareId: number
+  title: string
+  status: 'approved' | 'blocked'
+  reason?: string | null
+  targetLabel?: string | null
+}
+
+export function buildCreatorModerationMessage(
+  frontendUrl: string,
+  input: CreatorModerationMessageInput,
+): { actionUrl: string; subject: string; html: string } {
+  const actionUrl = new URL('/creator', `${frontendUrl.replace(/\/$/, '')}/`)
+  actionUrl.searchParams.set('bereich', 'portfolio')
+  actionUrl.searchParams.set('editShare', String(input.shareId))
+
+  const escapedUrl = escapeEmailHtml(actionUrl.toString())
+  const title = escapeEmailHtml(input.title)
+  if (input.status === 'approved') {
+    return {
+      actionUrl: actionUrl.toString(),
+      subject: 'Deine Empfehlung wurde freigegeben',
+      html: `
+        <p>Hallo,</p>
+        <p>deine Empfehlung <strong>${title}</strong> wurde freigegeben.</p>
+        <p><a href="${escapedUrl}" style="background:#2563eb;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;">Empfehlung ansehen</a></p>
+        <p>Oder kopiere diesen Link: ${escapedUrl}</p>
+      `,
+    }
+  }
+
+  const reason = escapeEmailHtml(input.reason?.trim() || 'Bitte öffne die Empfehlung und lies die Rückmeldung.')
+  const target = input.targetLabel?.trim()
+    ? `<p><strong>Betroffene Stelle:</strong> ${escapeEmailHtml(input.targetLabel.trim())}</p>`
+    : ''
+  return {
+    actionUrl: actionUrl.toString(),
+    subject: 'Bitte überarbeite deine Empfehlung',
+    html: `
+      <p>Hallo,</p>
+      <p>deine Empfehlung <strong>${title}</strong> konnte noch nicht freigegeben werden.</p>
+      ${target}
+      <p><strong>Rückmeldung:</strong> ${reason}</p>
+      <p><a href="${escapedUrl}" style="background:#2563eb;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;">Empfehlung überarbeiten</a></p>
+      <p>Oder kopiere diesen Link: ${escapedUrl}</p>
+    `,
+  }
+}

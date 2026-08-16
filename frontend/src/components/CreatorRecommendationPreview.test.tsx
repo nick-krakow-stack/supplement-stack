@@ -6,6 +6,7 @@ import type { CreatorSharePreview } from '../api/creatorSharing';
 import CreatorRecommendationPreview, {
   formatRecommendationDate,
   formatRecommendationInterval,
+  formatRecommendationTiming,
 } from './CreatorRecommendationPreview';
 import { formatRecommendationAmount, formatRecommendationUnit } from '../lib/creatorRecommendationFormat';
 
@@ -15,18 +16,19 @@ const preview: CreatorSharePreview = {
   title: 'Meine Magnesium-Empfehlung',
   creator: { id: 1, name: 'Alex Alltag', type: 'creator' },
   published_at: '2026-08-07T08:00:00.000Z',
-  disclosure: 'Einige Links können vergütet sein.',
   items: [{
     catalog_product_id: 9,
     product_name: 'Magnesium Pur',
     brand: 'Beispiel',
+    image_url: '/api/r2/products/magnesium.webp',
+    effect_summary: 'Unterstützt die normale Muskelfunktion.',
     quantity: 1,
     unit: null,
     intake_interval_days: 1,
     dosage_text: null,
     timing: 'abends',
+    timing_label: 'Abends',
     creator_statement: 'Passt gut in meinen Alltag.',
-    has_affiliate_attribution: true,
   }],
 };
 
@@ -43,10 +45,25 @@ describe('CreatorRecommendationPreview', () => {
     expect(screen.getByText('Einnahme:').parentElement?.textContent).toBe('Einnahme: täglich');
     expect(screen.getByText(/keine Dosierungsanweisung für dich/)).toBeTruthy();
     expect(screen.getByText(/Passt gut in meinen Alltag/)).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Produktbild: Magnesium Pur' }).getAttribute('src')).toBe('/api/r2/products/magnesium.webp');
+    expect(screen.getByText('Wofür es genutzt wird:').parentElement?.textContent).toContain('Unterstützt die normale Muskelfunktion.');
+    expect(screen.getByText('Zeitpunkt:').parentElement?.textContent).toBe('Zeitpunkt: Abends');
     expect(screen.queryByText(/Affiliate-Hinweis:/)).toBeNull();
-    expect(screen.queryByText(preview.disclosure)).toBeNull();
     expect(screen.queryByText(/^Affiliate$/)).toBeNull();
     expect(screen.queryByText(/Affiliate-Link$/, { selector: 'span' })).toBeNull();
+  });
+
+  it('formats known raw timing keys but never exposes an unknown internal key', () => {
+    expect(formatRecommendationTiming(null, 'before_breakfast')).toBe('Vor dem Frühstück');
+    expect(formatRecommendationTiming(null, 'internal_future_key')).toBe('Keine Angabe');
+
+    render(<CreatorRecommendationPreview preview={{
+      ...preview,
+      items: [{ ...preview.items[0], timing_label: null, timing: 'internal_future_key' }],
+    }} />);
+
+    expect(screen.getByText('Zeitpunkt:').parentElement?.textContent).toBe('Zeitpunkt: Keine Angabe');
+    expect(screen.queryByText(/internal_future_key/)).toBeNull();
   });
 
   it('formats valid German dates and intervals without fallback inventions', () => {
@@ -86,7 +103,6 @@ describe('CreatorRecommendationPreview', () => {
     expect(formatRecommendationAmount(2, 'PORTION')).toBe('2 Portionen');
     expect(formatRecommendationAmount(2, 'Messlöffel')).toBe('2 Messlöffel');
     expect(screen.queryByText(/Affiliate-Hinweis:/)).toBeNull();
-    expect(screen.queryByText(preview.disclosure)).toBeNull();
     expect(screen.queryByText(/^Affiliate$/)).toBeNull();
   });
 });

@@ -3,6 +3,7 @@ import creatorSharingAdmin from '../../../functions/api/modules/creator-sharing-
 import admin from '../../../functions/api/modules/admin.ts';
 import products from '../../../functions/api/modules/products.ts';
 import stacks from '../../../functions/api/modules/stacks.ts';
+import analytics from '../../../functions/api/modules/analytics.ts';
 
 const HonoConstructor = creatorSharing.constructor;
 const app = new HonoConstructor();
@@ -11,6 +12,7 @@ app.route('/api/admin/creator-sharing', creatorSharingAdmin);
 app.route('/api/admin', admin);
 app.route('/api/products', products);
 app.route('/api/stacks', stacks);
+app.route('/api/analytics', analytics);
 
 export function fetchCreatorSharingHono(request, env, executionContext) {
   return app.fetch(request, env, executionContext);

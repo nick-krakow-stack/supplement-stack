@@ -2,34 +2,44 @@ import { apiClient } from './client';
 
 export const creatorSharingEnabled = import.meta.env.VITE_CREATOR_STACK_SHARING_ENABLED === 'true';
 
+export type CreatorAccessState = 'active' | 'not_invited' | 'blocked';
+export type CreatorPartyRole = 'owner' | 'editor' | 'viewer';
+
 export type CreatorParty = {
   id: number;
-  type: 'creator' | 'brand' | 'user';
+  type: 'creator' | 'brand';
   name: string;
   slug: string;
-  role: 'owner' | 'editor' | 'viewer';
+  role: CreatorPartyRole;
+  status: 'active' | 'blocked';
+};
+
+export type CreatorAccess = {
+  access_state: CreatorAccessState;
+  parties: CreatorParty[];
 };
 
 export type CreatorShareItem = {
   catalog_product_id: number;
   product_name: string | null;
   brand: string | null;
+  image_url?: string | null;
+  effect_summary?: string | null;
   quantity: number;
   unit: string | null;
   intake_interval_days: number | null;
   dosage_text: string | null;
   timing: string | null;
+  timing_label?: string | null;
   creator_statement: string | null;
-  has_affiliate_attribution: boolean;
 };
 
 export type CreatorSharePreview = {
   token: string;
   type: 'dose_recommendation' | 'stack';
   title: string;
-  creator: { id: number; name: string; type: string };
+  creator: { id: number; name: string; type: string; slug?: string };
   published_at: string;
-  disclosure: string;
   items: CreatorShareItem[];
 };
 
@@ -39,7 +49,7 @@ export type CreatorShareComparison = {
   unit: string | null;
   intake_interval_days: number | null;
   dosage_text: string | null;
-  timing: string | null;
+  timing_label: string | null;
 };
 
 export type CreatorShareSimilarProduct = {
@@ -92,7 +102,15 @@ export type CreatorShareSaveResult = {
   idempotent_replay?: boolean;
 };
 
-export type CreatorShareStatus = 'pending' | 'approved' | 'blocked' | 'revoked' | 'expired';
+export type CreatorShareStatus = 'pending' | 'approved' | 'blocked' | 'paused' | 'revoked' | 'expired';
+export type CreatorModerationStatus = 'pending' | 'approved' | 'blocked';
+
+export type CreatorShareMetrics = {
+  unique_visitors: number;
+  saves: number;
+  previous_unique_visitors: number;
+  previous_saves: number;
+};
 
 export type CreatorOwnedShare = {
   id: number;
@@ -105,54 +123,139 @@ export type CreatorOwnedShare = {
   published_at: string;
   created_at: number;
   expires_at: number | null;
+  paused_at: number | null;
+  archived_at: number | null;
+  supersedes_share_link_id: number | null;
   status: CreatorShareStatus;
-  moderation_status: 'pending' | 'approved' | 'blocked';
+  moderation_status: CreatorModerationStatus;
+  moderation_reason: string | null;
+  moderation_target: string | null;
+  moderation_item_index: number | null;
+  moderation_item_name: string | null;
   is_revoked: number;
   snapshot_hash: string;
-  views: number;
-  saves: number;
+  version: number;
+  metrics: CreatorShareMetrics;
 };
 
 export type CreatorOwnedSharePreview = CreatorSharePreview & {
   share_id: number;
+  entity_id: number;
+  source_stack_id: number | null;
+  source_stack_name: string | null;
   creator_status: CreatorShareStatus;
   snapshot_hash: string;
-  moderation_status: 'pending' | 'approved' | 'blocked';
+  version: number;
+  moderation_status: CreatorModerationStatus;
+  moderation_reason: string | null;
+  moderation_target: string | null;
+  moderation_item_index: number | null;
+  moderation_item_name: string | null;
   is_revoked: number;
+  paused_at: number | null;
+  archived_at: number | null;
   expires_at: number | null;
 };
 
 export type CreatorSourceShareGuard = {
   share_id: number;
+  expected_version: number;
   expected_snapshot_hash: string;
   expected_status: 'blocked' | 'revoked' | 'expired';
-  expected_moderation_status: 'pending' | 'approved' | 'blocked';
+  expected_moderation_status: CreatorModerationStatus;
   expected_is_revoked: number;
   expected_expires_at: number | null;
+};
+
+export type CreatorReadinessReasonCode =
+  | 'product_missing'
+  | 'own_product_not_published'
+  | 'not_approved'
+  | 'not_visible'
+  | 'owner_inactive'
+  | 'shop_link_missing'
+  | 'shop_link_unsafe'
+  | 'intake_missing'
+  | 'main_ingredient_missing';
+
+export type CreatorReadinessRepairKind = 'own_product' | 'stack_product' | 'contact_owner';
+
+export type CreatorReadinessProduct = {
+  stack_item_id: number;
+  product_name: string;
+  shareable: boolean;
+  reason_code: CreatorReadinessReasonCode | null;
+  repair_kind: CreatorReadinessRepairKind | null;
 };
 
 export type CreatorShareReadiness = {
   ready: boolean;
   shareable_stack_item_ids: number[];
   unshareable_products: Array<{ stack_item_id: number; product_name: string }>;
+  products: CreatorReadinessProduct[];
+};
+
+export type CreatorPortfolioArchiveFilter = 'active' | 'archived' | 'all';
+export type CreatorPortfolioSort = 'newest' | 'oldest';
+
+export type CreatorMetricsPeriod = {
+  days: number;
+  from: string;
+  to: string;
+  previous_from: string;
+  previous_to: string;
+  unique_visitors_definition: string;
+  saves_definition: string;
+};
+
+export type CreatorPortfolioQuery = {
+  party_id: number;
+  q?: string;
+  status?: CreatorShareStatus;
+  archive?: CreatorPortfolioArchiveFilter;
+  sort?: CreatorPortfolioSort;
+  cursor?: string;
+  limit?: number;
+};
+
+export type CreatorPortfolioPage = {
+  party: { id: number; name: string; type: string };
+  items: CreatorOwnedShare[];
+  next_cursor: string | null;
+  has_more: boolean;
+  metrics_period: CreatorMetricsPeriod;
+};
+
+export type CreatorDashboardMetricSet = {
+  unique_visitors: number;
+  clicks: number;
+  saves: number;
+  imported_stacks: number;
+  clicked_products: number;
+  clicked_shops: number;
 };
 
 export type CreatorDashboard = {
   party: { id: number; name: string; type: string };
-  period_days: number;
-  clicks_total: number;
-  clicks: number;
-  previous_clicks: number;
-  imported_stacks: number;
-  clicked_products: number;
-  clicked_shops: number;
+  period: {
+    days: number;
+    from: string;
+    to: string;
+    previous_from: string;
+    previous_to: string;
+    definitions: Record<keyof CreatorDashboardMetricSet, string>;
+  };
+  current: CreatorDashboardMetricSet;
+  previous: CreatorDashboardMetricSet;
   active_shares: number;
-  imports: number;
+  trend: Array<{ date: string; unique_visitors: number; clicks: number; saves: number }>;
 };
 
-export async function getCreatorParties(): Promise<CreatorParty[]> {
-  const response = await apiClient.get<{ parties: CreatorParty[] }>('/creator-sharing/parties');
-  return response.data.parties;
+export type CreatorLifecycleAction = 'pause' | 'resume' | 'set_expiry' | 'clear_expiry' | 'end';
+
+export async function getCreatorAccess(): Promise<CreatorAccess> {
+  const response = await apiClient.get<CreatorAccess>('/creator-sharing/parties');
+  return response.data;
 }
 
 export async function createCreatorShare(input: {
@@ -163,16 +266,35 @@ export async function createCreatorShare(input: {
   stack_item_id?: number;
   creator_statements?: Record<string, string>;
   source_share_guard?: CreatorSourceShareGuard;
-}): Promise<{ id: number; token: string; moderation_status: 'pending' }> {
+}): Promise<{ id: number; token: string; moderation_status: 'pending'; snapshot_hash: string; version: number }> {
   const response = await apiClient.post('/creator-sharing/shares', input);
   return response.data;
 }
 
-export async function getCreatorOwnedShares(partyId: number): Promise<CreatorOwnedShare[]> {
-  const response = await apiClient.get<{ shares: CreatorOwnedShare[] }>(
-    `/creator-sharing/creator-shares?party_id=${partyId}`,
-  );
-  return response.data.shares;
+export async function getCreatorPortfolio(query: CreatorPortfolioQuery): Promise<CreatorPortfolioPage> {
+  const params = new URLSearchParams({
+    party_id: String(query.party_id),
+    archive: query.archive ?? 'active',
+    sort: query.sort ?? 'newest',
+    limit: String(query.limit ?? 20),
+  });
+  if (query.q?.trim()) params.set('q', query.q.trim());
+  if (query.status) params.set('status', query.status);
+  if (query.cursor) params.set('cursor', query.cursor);
+  const response = await apiClient.get<{
+    party: CreatorPortfolioPage['party'];
+    shares: CreatorOwnedShare[];
+    next_cursor: string | null;
+    has_more: boolean;
+    metrics_period: CreatorMetricsPeriod;
+  }>(`/creator-sharing/creator-shares?${params.toString()}`);
+  return {
+    party: response.data.party,
+    items: response.data.shares,
+    next_cursor: response.data.next_cursor,
+    has_more: response.data.has_more,
+    metrics_period: response.data.metrics_period,
+  };
 }
 
 export async function getCreatorOwnedSharePreview(shareId: number): Promise<CreatorOwnedSharePreview> {
@@ -189,12 +311,36 @@ export async function getCreatorShareReadiness(stackId: number, partyId: number)
   return response.data;
 }
 
-export async function revokeCreatorShare(share: Pick<CreatorOwnedShare, 'id' | 'snapshot_hash' | 'moderation_status' | 'is_revoked'>): Promise<void> {
-  await apiClient.patch(`/creator-sharing/creator-shares/${share.id}/revoke`, {
+export async function updateCreatorShareLifecycle(
+  share: Pick<CreatorOwnedShare, 'id' | 'version' | 'snapshot_hash' | 'status' | 'moderation_status' | 'is_revoked' | 'paused_at' | 'expires_at'>,
+  action: CreatorLifecycleAction,
+  expiresAt?: number,
+): Promise<{ ok: true; status: CreatorShareStatus; version: number; paused_at: number | null; expires_at: number | null; is_revoked: number }> {
+  const response = await apiClient.patch(`/creator-sharing/creator-shares/${share.id}/lifecycle`, {
+    action,
+    expires_at: action === 'set_expiry' ? expiresAt : undefined,
+    expected_version: share.version,
     expected_snapshot_hash: share.snapshot_hash,
+    expected_status: share.status,
     expected_moderation_status: share.moderation_status,
     expected_is_revoked: share.is_revoked,
+    expected_paused_at: share.paused_at,
+    expected_expires_at: share.expires_at,
   });
+  return response.data;
+}
+
+export async function setCreatorShareArchived(
+  share: Pick<CreatorOwnedShare, 'id' | 'version' | 'snapshot_hash' | 'archived_at'>,
+  archived: boolean,
+): Promise<{ ok: true; version: number; archived_at: number | null }> {
+  const response = await apiClient.patch(`/creator-sharing/creator-shares/${share.id}/archive`, {
+    archived,
+    expected_version: share.version,
+    expected_snapshot_hash: share.snapshot_hash,
+    expected_archived_at: share.archived_at,
+  });
+  return response.data;
 }
 
 export async function getCreatorShare(token: string): Promise<CreatorSharePreview> {
@@ -225,8 +371,10 @@ export async function importCreatorShare(token: string, input: CreatorShareTarge
   return response.data;
 }
 
-export async function getCreatorDashboard(partyId: number): Promise<CreatorDashboard> {
-  const response = await apiClient.get<CreatorDashboard>(`/creator-sharing/dashboard?party_id=${partyId}`);
+export async function getCreatorDashboard(partyId: number, periodDays = 30): Promise<CreatorDashboard> {
+  const response = await apiClient.get<CreatorDashboard>(
+    `/creator-sharing/dashboard?party_id=${partyId}&period_days=${periodDays}`,
+  );
   return response.data;
 }
 

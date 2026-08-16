@@ -486,6 +486,45 @@ describe('StackWorkspace dosage guideline helpers', () => {
     expect(screen.getByText(/Dieser Stack ist nicht verfügbar/)).toBeTruthy();
   });
 
+  it('offers a safe return to the exact saved creator draft after a stack repair', async () => {
+    mockAuthenticatedStacksFetch([
+      { id: 1, name: 'Stack A', description: '', version: 1, products: [] },
+    ]);
+    const creatorReturn = '/creator?bereich=stack&party=7&stack=1&editShare=4';
+    render(
+      <MemoryRouter initialEntries={[`/stacks?stack=1&creatorReturn=${encodeURIComponent(creatorReturn)}`]}>
+        <Routes>
+          <Route path="/stacks" element={<StackWorkspace mode="authenticated" />} />
+          <Route path="/creator" element={<LocationProbe />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Dein Creator-Entwurf bleibt gespeichert.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Zur Empfehlung zurück' }));
+    await waitFor(() => {
+      const params = new URLSearchParams(screen.getByTestId('location-search').textContent ?? '');
+      expect(params.get('bereich')).toBe('stack');
+      expect(params.get('party')).toBe('7');
+      expect(params.get('stack')).toBe('1');
+      expect(params.get('editShare')).toBe('4');
+    });
+  });
+
+  it('never renders a creator return action for an external target', async () => {
+    mockAuthenticatedStacksFetch([
+      { id: 1, name: 'Stack A', description: '', version: 1, products: [] },
+    ]);
+    render(
+      <MemoryRouter initialEntries={['/stacks?stack=1&creatorReturn=https%3A%2F%2Fexample.test%2Fcreator']}>
+        <StackWorkspace mode="authenticated" />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Stack A', level: 2 })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Zur Empfehlung zurück' })).toBeNull();
+  });
+
   it('replaces an old target dose with the edited portions and recalculates interval, reach and cost', async () => {
     const { fetchMock, getStacks } = mockAuthenticatedStacksFetch([{
       id: 1,

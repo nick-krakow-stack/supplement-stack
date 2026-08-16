@@ -5,6 +5,17 @@ export const CREATOR_SHARING_SUPPORTED_SNAPSHOT_VERSIONS = [1, 2, 3] as const
 export const CREATOR_SHARING_MAX_ITEMS = 100
 export const CREATOR_STATEMENT_MAX_LENGTH = 500
 
+export const CREATOR_TIMING_LABELS: Readonly<Record<string, string>> = {
+  anytime: 'Zeit flexibel',
+  before_breakfast: 'Vor dem Frühstück',
+  after_breakfast: 'Nach dem Frühstück',
+  with_meal: 'Zum Essen',
+  morning: 'Morgens',
+  evening: 'Abends',
+  noon: 'Mittags',
+  morning_evening: 'Morgens und abends',
+}
+
 export type CreatorPartyType = 'platform' | 'creator' | 'brand' | 'user'
 export type CreatorResolutionKind = 'creator_version' | 'platform_version' | 'legacy_resolved' | 'bare'
 
@@ -37,6 +48,33 @@ export type CreatorShareSnapshot = {
   published_at: string
   title: string
   items: CreatorShareSnapshotItem[]
+}
+
+export function canonicalCreatorTiming(value: string | null): string | null {
+  if (!value?.trim()) return null
+  const normalized = value.trim().toLocaleLowerCase('de-DE').replace(/[\s-]+/g, '_')
+  if (['anytime', 'flexible', 'jederzeit'].includes(normalized)) return 'anytime'
+  if (normalized.includes('morning_evening') || (normalized.includes('morgen') && normalized.includes('abend'))) {
+    return 'morning_evening'
+  }
+  if (normalized.includes('before_breakfast') || normalized.includes('vor_dem_fr') || normalized.includes('zum_fr')) {
+    return 'before_breakfast'
+  }
+  if (normalized.includes('after_breakfast') || normalized.includes('nach_dem_fr')) return 'after_breakfast'
+  if (normalized.includes('with_meal') || normalized.includes('mahlzeit') || normalized.includes('essen')) return 'with_meal'
+  if (normalized.includes('morning') || normalized.includes('morgen')) return 'morning'
+  if (normalized.includes('evening') || normalized.includes('abend') || normalized.includes('nacht')) return 'evening'
+  if (normalized.includes('noon') || normalized.includes('mittag')) return 'noon'
+  return normalized
+}
+
+export function creatorTimingLabel(value: string | null, managedLabels: ReadonlyMap<string, string>): string {
+  const canonical = canonicalCreatorTiming(value)
+  if (!canonical) return 'Keine Angabe'
+  // `anytime` must be explicit and stays plain-language stable even when the
+  // generic managed-list label is worded differently.
+  if (canonical === 'anytime') return CREATOR_TIMING_LABELS.anytime
+  return managedLabels.get(canonical) ?? CREATOR_TIMING_LABELS[canonical] ?? 'Keine Angabe'
 }
 
 export function isSupportedCreatorShareSnapshotVersion(value: unknown): value is 1 | 2 | 3 {

@@ -229,31 +229,36 @@ saubere Browserdarstellung – nicht öffentliche Indexierung.
 
 | Erledigt | ID | Funktion/Text | ★ | Befund | Zielbild 10/10 |
 |---|---|---|---:|---|---|
-| [ ] | CRE-01 | Navigation „Für Creator“ | 7 | Nur für berechtigte Konten sichtbar; bei Lade-/API-Fehler verschwindet sie. | Stabiler Einstieg mit Lade-/Fehlerzustand oder verständlicher Zugangsseite. |
-| [ ] | CRE-02 | Nicht freigeschalteter Zugang | 8 | Keine Sackgasse mehr; Rückweg zu Stacks vorhanden. | Einladungs-/Prüfstatus, Kontaktweg und erwarteten nächsten Schritt nennen. |
-| [ ] | CRE-03 | Ladefehler | 9 | Berechtigungsfehler und Ladefehler sind sauber getrennt; Retry vorhanden. | Status zugänglich ansagen. |
-| [ ] | CRE-04 | Seiteneinstieg „Empfehlungen teilen“ | 8 | Stack, Produkt und Prüfung werden verständlich erklärt. | Erwartete Prüfdauer, Benachrichtigung und direkten Portfolio-Link ergänzen. |
-| [ ] | CRE-05 | Creator-/Markenwechsel | 7 | Auswahl ist sicher gebunden. Rolle und zuletzt gewählte Partei fehlen. | Rolle anzeigen, Auswahl merken, Wechselwirkung vor dem Umschalten nennen. |
-| [ ] | CRE-06 | Nur-Lese-Rolle/„Schreibzugriff“ | 6 | Technischer Begriff, kein konkreter Hilfsweg. | „Du kannst nur ansehen. Bitte bitte den Inhaber um Bearbeitungsrechte.“ plus Kontaktweg. |
-| [ ] | CRE-07 | Drei Aufgaben-Karten | 8 | Bereiche sind klar. Semantischer aktiver Zustand fehlt teilweise. | Echte Tabs oder `aria-pressed`, Auswahl in URL/Session merken. |
-| [ ] | CRE-08 | Stack-Auswahl | 8 | Klare Lade-/Retry-Zustände. | Auswahl merken und direkten Link zum Stack anbieten. |
-| [ ] | CRE-09 | Nicht teilbarer Stack | 5 | Fail-closed ist korrekt, „Freigabe und Shop-Link“ aber abstrakt. | Je Produkt exakten Grund, Reparatur-CTA und automatisch fortgesetzten Creator-Entwurf. |
-| [ ] | CRE-10 | Fehlendes Originalprodukt | 9 | Kein stiller Ersatz; Senden bleibt sicher gesperrt. | Ersetzungs-/Reparaturweg direkt anbieten. |
-| [ ] | CRE-11 | Name der Empfehlung | 7 | Verständlich, aber ohne Beispiel, Zeichenzähler oder sichtbaren Zielort. | Beispiel, Zeichenzähler und Vorschauplatz nennen. |
-| [ ] | CRE-12 | „Dein Hinweis (optional)“ | 8 | Gute Alltagssprache und klare inhaltliche Grenze. | Beispiele, Zeichenzähler und automatische Entwurfssicherung. |
-| [ ] | CRE-13 | Vorschau | 8 | Entspricht dem Snapshot und vermeidet Technikbegriffe. | Bilder, zentrale Nutzungstexte und echte Kategoriegruppen ergänzen. |
-| [ ] | CRE-14 | „Zur Prüfung senden“ | 8 | Handlung klar, danach fehlen Ablaufdetails. | Prüfdauer, Benachrichtigung und Überarbeitungsweg direkt bestätigen. |
-| [ ] | CRE-15 | Moderationsrückmeldung | 5 | Keine aktive Benachrichtigung oder Ablehnungsbegründung. | E-Mail/In-App-Hinweis, Grund, markierte Stelle und direkter „Überarbeiten“-Link. |
-| [ ] | CRE-16 | Statusbezeichnungen | 9 | „Wird geprüft“, „Freigegeben“, „Nicht freigegeben“, beendet und abgelaufen sind klar. | Ablaufdatum und bei Ablehnung Grund ergänzen. |
-| [ ] | CRE-17 | Portfolio | 7 | Vorschau und Aktionen auffindbar; Filter, Suche, Archiv und Pagination fehlen. | Suche, Statusfilter, Datumssortierung, Archiv und serverseitige Pagination. |
-| [ ] | CRE-18 | Kennzahlen | 5 | Ansichten/Speicherungen sind verständlich, zählen aber Refresh/Bots mit. | Eindeutige Besucher, Zeitraum, Definition und Vergleich anzeigen. |
-| [ ] | CRE-19 | Dashboard | 4 | API besitzt mehr Kennzahlen, UI nutzt hauptsächlich aktive Links und Importe. | Verständliche Karten für letzte 30 Tage, Klicks, Speicherungen, Produkte/Shops und Trend. |
-| [ ] | CRE-20 | Link kopieren/öffnen | 7 | Bestätigung und neues Tab sind vorhanden. | Sichtbares URL-Feld, manueller Fallback, native Teilen-Funktion und „öffnet in neuem Tab“. |
-| [ ] | CRE-21 | Link beenden | 8 | Folge wird erklärt und Empfehlung bleibt erhalten. | Einheitlicher Dialog; optional pausieren oder Ablaufdatum setzen. |
-| [ ] | CRE-22 | Überarbeiten/neu erstellen | 8 | Vorbefüllung und Guard gegen veralteten Stand sind stark. | Ablehnungsgrund und gezielter Reparatur-/Rückweg. |
-| [ ] | CRE-23 | Vorschau-Race | 6 | Schnelle parallele Vorschauen können sich durch verspätete Antworten überschreiben. | Vorherige Anfrage abbrechen oder Request-ID binden. |
-| [ ] | CRE-24 | Entwurf bei Reparatur | 4 | Beim Wechsel zu Stacks gehen Titel und Hinweis verloren. | Token-/Stackgebundenen Entwurf sichern und nach Reparatur automatisch öffnen. |
-| [ ] | CRE-25 | Verteilung | 4 | Nur Kopieren und Öffnen. | Native Share Sheet, WhatsApp, E-Mail und optional QR – ohne zusätzlichen Affiliate-Hinweis. |
+| [x] | CRE-01 | Navigation „Für Creator“ | 10 | Stabiler Einstieg mit getrenntem Lade-, Fehler- und Zugangszustand; berechtigte Nutzer behalten den Menüpunkt. | Erfüllt. |
+| [x] | CRE-02 | Nicht freigeschalteter Zugang | 10 | Verständliche Zugangsseite mit Status, Kontaktweg und Rückweg zu den Stacks; kein erfundener Prüfstatus. | Erfüllt. |
+| [x] | CRE-03 | Ladefehler | 10 | Berechtigungs- und Ladefehler sind getrennt, zugänglich angesagt und erneut ladbar. | Erfüllt. |
+| [x] | CRE-04 | Seiteneinstieg „Empfehlungen teilen“ | 10 | Stack, Einzelprodukt, Prüfung, Portfolio und nächster Schritt werden klar erklärt; keine erfundene Prüfdauer. | Erfüllt. |
+| [x] | CRE-05 | Creator-/Markenwechsel | 10 | Rolle ist sichtbar; Partei wird sicher in URL/Session gemerkt und Entwürfe bleiben getrennt. | Erfüllt. |
+| [x] | CRE-06 | Nur-Lese-Rolle/„Schreibzugriff“ | 10 | Viewer landen automatisch im Nur-Lese-Portfolio; Bearbeitungsformular und Senden bleiben verborgen. | Erfüllt. |
+| [x] | CRE-07 | Drei Aufgaben-Karten | 10 | Zugängliche Tabs besitzen einen eindeutigen aktiven Zustand; URL, Tastatur und Browser-Zurück bleiben synchron. | Erfüllt. |
+| [x] | CRE-08 | Stack-Auswahl | 10 | Auswahl, Direktlink, Lade-/Retry-Zustand und exakter Entwurf bleiben bei Navigation und Rückkehr erhalten. | Erfüllt. |
+| [x] | CRE-09 | Nicht teilbarer Stack | 10 | Pro betroffenem Produkt erscheint ein verständlicher Grund mit passendem Reparaturweg; Einzelprodukte werden getrennt bewertet. | Erfüllt. |
+| [x] | CRE-10 | Fehlendes Originalprodukt | 10 | Fehlend und momentan nicht teilbar werden korrekt unterschieden; kein stiller Ersatz, gezielter Reparaturweg. | Erfüllt. |
+| [x] | CRE-11 | Name der Empfehlung | 10 | Beispiel, Zeichenzähler, Zielort und Vorschau sind sichtbar. | Erfüllt. |
+| [x] | CRE-12 | „Dein Hinweis (optional)“ | 10 | Alltagssprache, Beispiele, Zeichenzähler und automatisch isolierte Entwurfssicherung sind vorhanden. | Erfüllt. |
+| [x] | CRE-13 | Vorschau | 10 | Snapshot-Reihenfolge, Bilder, zentrale Wirkung und verständlicher Einnahmezeitpunkt werden kategoriefrei gezeigt. | Erfüllt gemäß Owner-Entscheidung: keine Rückkehr von Kategorien. |
+| [x] | CRE-14 | „Zur Prüfung senden“ | 10 | Bestätigung erklärt Prüfung, Portfolio und Überarbeitungsweg; In-App-Status ist verbindlich, Mail nur ergänzend. | Erfüllt ohne erfundene Prüfdauer oder Zustellgarantie. |
+| [x] | CRE-15 | Moderationsrückmeldung | 10 | Grund, betroffene Stelle beziehungsweise Produkt und direkter Deep-Link zum Ansehen oder Überarbeiten sind vorhanden. | Erfüllt; E-Mail-Versuch ist idempotent protokolliert. |
+| [x] | CRE-16 | Statusbezeichnungen | 10 | Prüfung, Freigabe, Ablehnung, Pause, Ende und Ablauf samt Folgen und Ablaufdatum sind verständlich getrennt. | Erfüllt. |
+| [x] | CRE-17 | Portfolio | 10 | Serverseitige Suche, Statusfilter, Sortierung, Archiv und Cursor-Pagination sind integriert. | Erfüllt. |
+| [x] | CRE-18 | Kennzahlen | 10 | Erfasste eindeutige Besuche werden zustimmungsgebunden, dedupliziert, zeitlich definiert und mit Vorperiode erklärt. | Erfüllt; Untererfassung wird transparent benannt. |
+| [x] | CRE-19 | Dashboard | 10 | 30-Tage-Karten und Trend zeigen Besuche, Klicks, Speicherungen sowie Produkte und zuordenbare Shops mit festen Definitionen. | Erfüllt. |
+| [x] | CRE-20 | Link kopieren/öffnen | 10 | Sichtbare URL, Kopierstatus, manueller Fallback, neues Tab und natives Teilen sind vorhanden. | Erfüllt. |
+| [x] | CRE-21 | Link beenden | 10 | Ein Dialog erklärt Pause, Fortsetzen, Ablauf und endgültiges Beenden; abgelaufene Links bleiben terminal. | Erfüllt. |
+| [x] | CRE-22 | Überarbeiten/neu erstellen | 10 | Moderationsgrund, Vorbefüllung, veralteter-Stand-Guard sowie exakter Reparatur- und Rückweg sind vorhanden. | Erfüllt. |
+| [x] | CRE-23 | Vorschau-Race | 10 | Verspätete Antworten werden durch Request-Identität verworfen und können keine neuere Vorschau überschreiben. | Erfüllt. |
+| [x] | CRE-24 | Entwurf bei Reparatur | 10 | Entwürfe sind je Nutzer, Partei, Aufgabe, Stack, Produkt und Ausgangsempfehlung isoliert und werden exakt wieder geöffnet. | Erfüllt. |
+| [x] | CRE-25 | Verteilung | 10 | Kopieren, Öffnen, natives Teilen, WhatsApp und E-Mail sind verfügbar. | Erfüllt; bewusst keine zusätzliche produktbezogene Affiliate-Kennzeichnung. |
+
+Abnahme 16.08.2026: User-/Creator-Review `PASS`; technischer Delta-Review
+nach den Migrations- und Write-Guard-Korrekturen `PASS`. Kategorien und
+produktbezogene Affiliate-Kennzeichnungen bleiben gemäß Owner-Entscheidung
+entfernt; die einzige sichtbare Affiliate-Erklärung ist der globale Hinweis.
 
 ## 11. Öffentlicher Share und Import `/share/:token`
 
