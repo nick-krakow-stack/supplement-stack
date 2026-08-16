@@ -17,7 +17,10 @@ const { sendMailMock } = vi.hoisted(() => ({
   sendMailMock: vi.fn(),
 }));
 
-vi.mock('../../../functions/api/lib/mail', () => ({
+vi.mock('cloudflare:sockets', () => ({ connect: vi.fn() }));
+
+vi.mock('../../../functions/api/lib/mail', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../../../functions/api/lib/mail')>(),
   sendMail: sendMailMock,
 }));
 
@@ -49,12 +52,14 @@ async function authToken(userId: number, role: 'user' | 'admin', email: string):
 async function jsonRequest(
   harness: ProductionKnowledgeHonoHarness,
   path: string,
-  options: { method?: string; token?: string; cookie?: string; body?: unknown; feature?: boolean } = {},
+  options: { method?: string; token?: string; cookie?: string; body?: unknown; feature?: boolean; userAgent?: string; drainRun?: string } = {},
 ): Promise<Response> {
   const headers = new Headers();
   if (options.token) headers.set('Authorization', `Bearer ${options.token}`);
   if (options.cookie) headers.set('Cookie', `session=${options.cookie}`);
   if (options.body !== undefined) headers.set('Content-Type', 'application/json');
+  if (options.userAgent) headers.set('User-Agent', options.userAgent);
+  if (options.drainRun) headers.set('X-Creator-Drain-Run', options.drainRun);
   const request = new Request(`https://supplementstack.de${path}`, {
     method: options.method ?? 'GET',
     headers,
@@ -63,6 +68,7 @@ async function jsonRequest(
   return fetchCreatorSharingHono(request, {
     DB: harness.db,
     JWT_SECRET,
+    FRONTEND_URL: 'https://supplementstack.de',
     CREATOR_STACK_SHARING_ENABLED: options.feature === false ? 'false' : 'true',
   }, { waitUntil() {}, passThroughOnException() {}, props: {} });
 }
@@ -97,6 +103,105 @@ function applyAllMigrations(harness: ProductionKnowledgeHonoHarness): void {
     harness.exec(readFileSync(resolve(directory, file), 'utf8'));
   }
 }
+
+function applyPostdeployMigrations(harness: ProductionKnowledgeHonoHarness): void {
+  const directory = resolve(process.cwd(), '..', 'd1-postdeploy-migrations');
+  for (const file of readdirSync(directory).filter((name) => /^\d+.*\.sql$/.test(name)).sort()) {
+    harness.exec(readFileSync(resolve(directory, file), 'utf8'));
+  }
+}
+
+const importSourceBoundaryMutations: Array<[
+  string,
+  (harness: ProductionKnowledgeHonoHarness, shareId: number) => void,
+]> = [
+  ['Share-Version', (testHarness, shareId) => {
+    testHarness.run(`UPDATE share_links SET version = version + 1 WHERE id = ?`, shareId);
+  }],
+  ['Produktlink', (testHarness, shareId) => {
+    testHarness.run(`
+      UPDATE product_shop_links
+      SET normalized_host = normalized_host || '.changed'
+      WHERE id = CAST(json_extract(
+        (SELECT snapshot_json FROM share_links WHERE id = ?),
+        '$.items[0].shop_link_id'
+      ) AS INTEGER)
+    `, shareId);
+  }],
+  ['Produkteigentümer', (testHarness, shareId) => {
+    testHarness.run(`
+      UPDATE parties
+      SET version = version + 1
+      WHERE id = (
+        SELECT product.owner_party_id
+        FROM products product
+        WHERE product.id = CAST(json_extract(
+          (SELECT snapshot_json FROM share_links WHERE id = ?),
+          '$.items[0].catalog_product_id'
+        ) AS INTEGER)
+      )
+    `, shareId);
+  }],
+  ['Hauptwirkstoffrelation', (testHarness, shareId) => {
+    testHarness.run(`
+      UPDATE product_ingredients
+      SET is_main = 0
+      WHERE product_id = CAST(json_extract(
+        (SELECT snapshot_json FROM share_links WHERE id = ?),
+        '$.items[0].catalog_product_id'
+      ) AS INTEGER)
+        AND is_main = 1
+    `, shareId);
+  }],
+];
+
+const shareSourceBoundaryMutations: Array<[
+  string,
+  (harness: ProductionKnowledgeHonoHarness) => void,
+]> = [
+  ['Stack-Version', (testHarness) => {
+    testHarness.run(`UPDATE stacks SET version = version + 1 WHERE id = 100`);
+  }],
+  ['Positions-Version', (testHarness) => {
+    testHarness.run(`UPDATE stack_items SET version = version + 1 WHERE id = 100`);
+  }],
+  ['Positions-Feld ohne Versionssprung', (testHarness) => {
+    testHarness.run(`UPDATE stack_items SET dosage_text = 'Am Schreibrand geändert' WHERE id = 100`);
+  }],
+  ['Positions-Anzahl', (testHarness) => {
+    testHarness.run(`
+      INSERT INTO stack_items (
+        id, stack_id, catalog_product_id, quantity, intake_interval_days,
+        dosage_text, timing, sort_order, version
+      )
+      SELECT 199, stack_id, catalog_product_id, 1, 1, NULL, NULL, 1, 1
+      FROM stack_items WHERE id = 100
+    `);
+  }],
+  ['Snapshot-Einheit', (testHarness) => {
+    testHarness.run(`
+      UPDATE products
+      SET serving_unit = serving_unit || '-changed'
+      WHERE id = (SELECT catalog_product_id FROM stack_items WHERE id = 100)
+    `);
+  }],
+  ['Produktlink-Relation', (testHarness) => {
+    testHarness.run(`
+      UPDATE product_shop_links
+      SET url = url || CASE WHEN instr(url, '?') = 0 THEN '?race=1' ELSE '&race=1' END
+      WHERE id = (
+        SELECT psl.id
+        FROM stack_items item
+        JOIN product_shop_links psl ON psl.product_id = item.catalog_product_id
+        WHERE item.id = 100 AND psl.active = 1 AND psl.blocked_at IS NULL
+        ORDER BY psl.is_primary DESC,
+          CASE WHEN psl.link_kind = 'base_target' THEN 0 ELSE 1 END,
+          psl.sort_order, psl.id
+        LIMIT 1
+      )
+    `);
+  }],
+];
 
 describe('creator stack sharing runtime contract', () => {
   let harness: ProductionKnowledgeHonoHarness;
@@ -136,6 +241,363 @@ describe('creator stack sharing runtime contract', () => {
       body: { party_id: 100, stack_id: 100, type: 'stack', title: 'Disabled' },
     });
     expect(response.status).toBe(404);
+  });
+
+  it('writes moderation and its outbox atomically in both expand and active schemas', async () => {
+    const creator = await authToken(100, 'user', 'creator@test.invalid');
+    const admin = await authToken(102, 'admin', 'admin@test.invalid');
+    const moderate = async (
+      share: { id: number; snapshot_hash: string; version: number },
+      status: 'approved' | 'blocked',
+    ): Promise<Response> => jsonRequest(harness, `/api/admin/creator-sharing/shares/${share.id}`, {
+      method: 'PATCH',
+      token: admin,
+      body: {
+        expected_version: share.version,
+        expected_snapshot_hash: share.snapshot_hash,
+        expected_moderation_status: 'pending',
+        expected_is_revoked: 0,
+        expected_paused_at: null,
+        expected_expires_at: null,
+        expected_archived_at: null,
+        moderation_status: status,
+        moderation_reason: status === 'blocked' ? 'Bitte einfacher erklären.' : null,
+        moderation_target: status === 'blocked' ? 'general' : null,
+        moderation_item_index: null,
+      },
+    });
+    const create = async (title: string): Promise<{ id: number; snapshot_hash: string; version: number }> => {
+      const response = await jsonRequest(harness, '/api/creator-sharing/shares', {
+        method: 'POST', token: creator,
+        body: { party_id: 100, stack_id: 100, type: 'stack', title },
+      });
+      expect(response.status).toBe(201);
+      return response.json() as Promise<{ id: number; snapshot_hash: string; version: number }>;
+    };
+
+    const expandShare = await create('Moderation im Expand-Schema');
+    expect((await moderate(expandShare, 'approved')).status).toBe(200);
+    expect(await db.prepare(`
+      SELECT version, moderation_status,
+        (SELECT COUNT(*) FROM creator_share_notification_events event
+          WHERE event.share_link_id = share_links.id) AS events
+      FROM share_links WHERE id = ?
+    `).bind(expandShare.id).first()).toEqual({ version: 2, moderation_status: 'approved', events: 1 });
+
+    applyPostdeployMigrations(harness);
+    expect(await db.prepare(`
+      SELECT phase FROM creator_share_workflow_rollouts
+      WHERE rollout_key = 'creator_portfolio_v1'
+    `).first()).toEqual({ phase: 'active' });
+
+    const activeShare = await create('Moderation im Aktiv-Schema');
+    expect((await moderate(activeShare, 'blocked')).status).toBe(200);
+    expect(await db.prepare(`
+      SELECT version, moderation_status, is_revoked,
+        (SELECT COUNT(*) FROM creator_share_notification_events event
+          WHERE event.share_link_id = share_links.id) AS events
+      FROM share_links WHERE id = ?
+    `).bind(activeShare.id).first()).toEqual({
+      version: 2,
+      moderation_status: 'blocked',
+      is_revoked: 0,
+      events: 1,
+    });
+  });
+
+  it('drains postdeploy legacy events once and keeps a failed SMTP attempt terminal across an explicit retry', async () => {
+    const creator = await authToken(100, 'user', 'creator@test.invalid');
+    const createdResponse = await jsonRequest(harness, '/api/creator-sharing/shares', {
+      method: 'POST', token: creator,
+      body: { party_id: 100, stack_id: 100, type: 'stack', title: 'Legacy Zustellung' },
+    });
+    const legacyShare = await createdResponse.json() as { id: number; snapshot_hash: string };
+    harness.run(`
+      UPDATE share_links
+      SET moderation_status = 'approved', is_revoked = 0,
+        moderated_by_user_id = 102, moderated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND moderation_status = 'pending' AND snapshot_hash = ?
+    `, legacyShare.id, legacyShare.snapshot_hash);
+    harness.run(`
+      INSERT INTO admin_audit_log (
+        user_id, action, entity_type, entity_id, changes, created_at
+      )
+      SELECT 102, 'moderate_creator_share', 'share_link', id, ?,
+        CAST(strftime('%s', moderated_at) AS INTEGER)
+      FROM share_links WHERE id = ?
+    `, JSON.stringify({ expected_status: 'pending', moderation_status: 'approved', is_revoked: 0 }), legacyShare.id);
+    applyPostdeployMigrations(harness);
+
+    const nonce = 'ab'.repeat(32);
+    const capabilityHash = Buffer.from(await crypto.subtle.digest(
+      'SHA-256',
+      new TextEncoder().encode(nonce),
+    )).toString('hex');
+    harness.run(`
+      INSERT INTO creator_share_notification_drain_runs (run_key, capability_hash, status)
+      VALUES ('legacy-drain-success', ?, 'ready')
+    `, capabilityHash);
+    const firstDrain = await jsonRequest(harness, '/api/creator-sharing/internal/notification-drain', {
+      method: 'POST', token: nonce, drainRun: 'legacy-drain-success',
+    });
+    expect(firstDrain.status).toBe(200);
+    expect(await firstDrain.json()).toMatchObject({ complete: true, claimed: 1, failed: 0 });
+    expect(sendMailMock).toHaveBeenCalledTimes(1);
+    expect(await db.prepare(`
+      SELECT origin, status, attempts, last_error
+      FROM creator_share_notification_events WHERE share_link_id = ?
+    `).bind(legacyShare.id).first()).toEqual({
+      origin: 'legacy_activation', status: 'sent', attempts: 1, last_error: null,
+    });
+
+    const repeatedDrain = await jsonRequest(harness, '/api/creator-sharing/internal/notification-drain', {
+      method: 'POST', token: nonce, drainRun: 'legacy-drain-success',
+    });
+    expect(repeatedDrain.status).toBe(200);
+    expect(await repeatedDrain.json()).toMatchObject({ complete: true, claimed: 0 });
+    expect(sendMailMock).toHaveBeenCalledTimes(1);
+
+    const failedShareResponse = await jsonRequest(harness, '/api/creator-sharing/shares', {
+      method: 'POST', token: creator,
+      body: { party_id: 100, stack_id: 100, type: 'stack', title: 'Terminaler Mailfehler' },
+    });
+    const failedShare = await failedShareResponse.json() as { id: number };
+    harness.run(`
+      UPDATE share_links
+      SET moderation_status = 'approved', version = version + 1
+      WHERE id = ? AND moderation_status = 'pending'
+    `, failedShare.id);
+    harness.run(`
+      INSERT INTO creator_share_notification_events (
+        share_link_id, share_version, event_type, origin, status, attempts
+      ) VALUES (?, 2, 'moderation_approved', 'legacy_activation', 'pending', 0)
+    `, failedShare.id);
+    const failedNonce = 'cd'.repeat(32);
+    const failedCapabilityHash = Buffer.from(await crypto.subtle.digest(
+      'SHA-256',
+      new TextEncoder().encode(failedNonce),
+    )).toString('hex');
+    harness.run(`
+      INSERT INTO creator_share_notification_drain_runs (run_key, capability_hash, status)
+      VALUES ('legacy-drain-failed', ?, 'ready')
+    `, failedCapabilityHash);
+    sendMailMock.mockReset();
+    sendMailMock.mockResolvedValue({ ok: false, error: 'transient' });
+
+    const failedDrain = await jsonRequest(harness, '/api/creator-sharing/internal/notification-drain', {
+      method: 'POST', token: failedNonce, drainRun: 'legacy-drain-failed',
+    });
+    expect(failedDrain.status).toBe(503);
+    expect(await failedDrain.json()).toMatchObject({ complete: false, claimed: 1, failed: 1 });
+    expect(sendMailMock).toHaveBeenCalledTimes(1);
+    expect(await db.prepare(`
+      SELECT status, attempts, last_error
+      FROM creator_share_notification_events WHERE share_link_id = ?
+    `).bind(failedShare.id).first()).toEqual({
+      status: 'failed', attempts: 1, last_error: 'mail_delivery_failed',
+    });
+
+    const failedRetry = await jsonRequest(harness, '/api/creator-sharing/internal/notification-drain', {
+      method: 'POST', token: failedNonce, drainRun: 'legacy-drain-failed',
+    });
+    expect(failedRetry.status).toBe(200);
+    expect(await failedRetry.json()).toMatchObject({ complete: true, claimed: 0, failed: 0 });
+    expect(sendMailMock).toHaveBeenCalledTimes(1);
+    expect(await db.prepare(`
+      SELECT status, attempts FROM creator_share_notification_events WHERE share_link_id = ?
+    `).bind(failedShare.id).first()).toEqual({ status: 'failed', attempts: 1 });
+
+    const uncertainShareResponse = await jsonRequest(harness, '/api/creator-sharing/shares', {
+      method: 'POST', token: creator,
+      body: { party_id: 100, stack_id: 100, type: 'stack', title: 'Unbestätigter Altversuch' },
+    });
+    const uncertainShare = await uncertainShareResponse.json() as { id: number };
+    harness.run(`
+      UPDATE share_links
+      SET moderation_status = 'approved', version = version + 1
+      WHERE id = ? AND moderation_status = 'pending'
+    `, uncertainShare.id);
+    harness.run(`
+      INSERT INTO creator_share_notification_events (
+        share_link_id, share_version, event_type, origin, status, attempts, claim_run_key
+      ) VALUES (?, 2, 'moderation_approved', 'legacy_activation', 'sending', 1, 'older-deploy-run')
+    `, uncertainShare.id);
+    const recoveryNonce = 'ef'.repeat(32);
+    const recoveryCapabilityHash = Buffer.from(await crypto.subtle.digest(
+      'SHA-256',
+      new TextEncoder().encode(recoveryNonce),
+    )).toString('hex');
+    harness.run(`
+      INSERT INTO creator_share_notification_drain_runs (run_key, capability_hash, status)
+      VALUES ('legacy-drain-recovery', ?, 'ready')
+    `, recoveryCapabilityHash);
+    const recoveredDrain = await jsonRequest(harness, '/api/creator-sharing/internal/notification-drain', {
+      method: 'POST', token: recoveryNonce, drainRun: 'legacy-drain-recovery',
+    });
+    expect(recoveredDrain.status).toBe(200);
+    expect(await recoveredDrain.json()).toMatchObject({ complete: true, claimed: 0, failed: 0 });
+    expect(sendMailMock).toHaveBeenCalledTimes(1);
+    expect(await db.prepare(`
+      SELECT status, attempts, last_error
+      FROM creator_share_notification_events WHERE share_link_id = ?
+    `).bind(uncertainShare.id).first()).toEqual({
+      status: 'failed', attempts: 1, last_error: 'delivery_unconfirmed',
+    });
+  });
+
+  it('projects image, central effect and plain timing equally while keeping private source data private', async () => {
+    const creator = await authToken(100, 'user', 'creator@test.invalid');
+    const source = await db.prepare(`
+      SELECT item.catalog_product_id AS product_id, ingredient.ingredient_id
+      FROM stack_items item
+      JOIN product_ingredients ingredient
+        ON ingredient.product_id = item.catalog_product_id AND ingredient.is_main = 1
+      WHERE item.id = 100
+    `).first<{ product_id: number; ingredient_id: number }>();
+    harness.run(`UPDATE products SET image_url = '/images/creator-preview.webp' WHERE id = ?`, source!.product_id);
+    harness.run(`UPDATE ingredient_display_profiles SET effect_summary = 'Zentral gepflegte Wirkung' WHERE ingredient_id = ?`, source!.ingredient_id);
+    harness.run(`UPDATE stack_items SET timing = 'RAW_INTERNAL_CODE' WHERE id = 100`);
+
+    const createResponse = await jsonRequest(harness, '/api/creator-sharing/shares', {
+      method: 'POST', token: creator,
+      body: { party_id: 100, stack_id: 100, type: 'stack', title: 'Gemeinsame Projektion' },
+    });
+    const share = await createResponse.json() as { id: number; token: string };
+    const privateResponse = await jsonRequest(harness, `/api/creator-sharing/creator-shares/${share.id}/preview`, { token: creator });
+    expect(privateResponse.status).toBe(200);
+    const privatePayload = await privateResponse.json() as { items: Array<Record<string, unknown>> } & Record<string, unknown>;
+    expect(privatePayload.items[0]).toMatchObject({
+      image_url: '/images/creator-preview.webp',
+      effect_summary: 'Zentral gepflegte Wirkung',
+      timing: null,
+      timing_label: 'Keine Angabe',
+    });
+    expect(privatePayload).toMatchObject({ entity_id: 100, source_stack_id: 100, source_stack_name: 'Creator Stack' });
+
+    harness.run(`UPDATE share_links SET moderation_status = 'approved' WHERE id = ?`, share.id);
+    const publicResponse = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}`);
+    expect(publicResponse.status).toBe(200);
+    const publicPayload = await publicResponse.json() as { items: Array<Record<string, unknown>> } & Record<string, unknown>;
+    expect(publicPayload.items[0]).toMatchObject(privatePayload.items[0]);
+    expect(JSON.stringify(publicPayload)).not.toContain('RAW_INTERNAL_CODE');
+    for (const privateKey of [
+      'entity_id', 'source_stack_id', 'source_stack_name', 'share_id', 'version',
+      'snapshot_hash', 'moderation_reason', 'moderation_target', 'moderation_item_index',
+      'moderation_item_name', 'is_revoked', 'paused_at', 'archived_at', 'supersedes_share_link_id',
+    ]) {
+      expect(publicPayload).not.toHaveProperty(privateKey);
+    }
+    expect(JSON.stringify(publicPayload).toLocaleLowerCase('de-DE')).not.toContain('affiliate');
+  });
+
+  it('distinguishes missing timing from an explicitly flexible timing in private and public projections', async () => {
+    const creator = await authToken(100, 'user', 'creator@test.invalid');
+    const product = await db.prepare(`SELECT catalog_product_id AS id FROM stack_items WHERE id = 100`).first<{ id: number }>();
+    harness.run(`UPDATE stack_items SET timing = NULL WHERE id = 100`);
+    harness.run(`UPDATE products SET timing = NULL WHERE id = ?`, product!.id);
+    harness.run(`
+      UPDATE ingredient_display_profiles SET timing = NULL
+      WHERE ingredient_id IN (SELECT ingredient_id FROM product_ingredients WHERE product_id = ?)
+    `, product!.id);
+
+    for (const scenario of [
+      { raw: null, title: 'Ohne Zeitangabe', timing: null, label: 'Keine Angabe' },
+      { raw: 'anytime', title: 'Explizit flexibel', timing: 'anytime', label: 'Zeit flexibel' },
+    ]) {
+      harness.run(`UPDATE stack_items SET timing = ? WHERE id = 100`, scenario.raw);
+      const created = await jsonRequest(harness, '/api/creator-sharing/shares', {
+        method: 'POST', token: creator,
+        body: { party_id: 100, stack_id: 100, type: 'stack', title: scenario.title },
+      });
+      expect(created.status).toBe(201);
+      const share = await created.json() as { id: number; token: string };
+      const privatePayload = await (await jsonRequest(
+        harness,
+        `/api/creator-sharing/creator-shares/${share.id}/preview`,
+        { token: creator },
+      )).json() as { items: Array<{ timing: string | null; timing_label: string }> };
+      expect(privatePayload.items[0]).toMatchObject({ timing: scenario.timing, timing_label: scenario.label });
+      harness.run(`UPDATE share_links SET moderation_status = 'approved' WHERE id = ?`, share.id);
+      const publicPayload = await (await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}`)).json() as {
+        items: Array<{ timing: string | null; timing_label: string }>;
+      };
+      expect(publicPayload.items[0]).toMatchObject({ timing: scenario.timing, timing_label: scenario.label });
+      expect(publicPayload.items[0].timing_label).not.toMatch(/[\u00c3\u00c2]/u);
+    }
+  });
+
+  it('freezes the effective stack timing and rejects a profile race at the final share insert', async () => {
+    const creator = await authToken(100, 'user', 'creator@test.invalid');
+    const source = await db.prepare(`
+      SELECT item.catalog_product_id AS product_id, relation.ingredient_id, relation.form_id
+      FROM stack_items item
+      JOIN product_ingredients relation ON relation.id = (
+        SELECT candidate.id FROM product_ingredients candidate
+        WHERE candidate.product_id = item.catalog_product_id
+        ORDER BY candidate.is_main DESC, candidate.search_relevant DESC, candidate.id ASC
+        LIMIT 1
+      )
+      WHERE item.id = 100
+    `).first<{ product_id: number; ingredient_id: number; form_id: number | null }>();
+    harness.run(`UPDATE stack_items SET timing = NULL WHERE id = 100`);
+    harness.run(`UPDATE products SET timing = NULL WHERE id = ?`, source!.product_id);
+    harness.run(`
+      INSERT OR IGNORE INTO ingredient_display_profiles (ingredient_id, form_id, timing)
+      VALUES (?, ?, 'evening')
+    `, source!.ingredient_id, source!.form_id);
+    harness.run(`
+      UPDATE ingredient_display_profiles
+      SET timing = 'evening', version = version + 1
+      WHERE ingredient_id = ? AND form_id IS ?
+        AND part_id IS NULL AND sub_ingredient_id IS NULL
+    `, source!.ingredient_id, source!.form_id);
+    const profile = await db.prepare(`
+      SELECT id FROM ingredient_display_profiles
+      WHERE ingredient_id = ? AND form_id IS ?
+        AND part_id IS NULL AND sub_ingredient_id IS NULL
+    `).bind(source!.ingredient_id, source!.form_id).first<{ id: number }>();
+
+    const stackPayload = await (await jsonRequest(harness, '/api/stacks/100', { token: creator })).json() as {
+      items: Array<{ stack_item_id: number; timing: string | null }>;
+    };
+    expect(stackPayload.items.find((item) => item.stack_item_id === 100)?.timing).toBe('evening');
+    const created = await jsonRequest(harness, '/api/creator-sharing/shares', {
+      method: 'POST', token: creator,
+      body: { party_id: 100, stack_id: 100, type: 'stack', title: 'Profilzeit' },
+    });
+    expect(created.status).toBe(201);
+    const share = await created.json() as { id: number; token: string };
+    const privatePayload = await (await jsonRequest(
+      harness,
+      `/api/creator-sharing/creator-shares/${share.id}/preview`,
+      { token: creator },
+    )).json() as { items: Array<{ timing: string | null; timing_label: string }> };
+    expect(privatePayload.items[0]).toMatchObject({ timing: 'evening', timing_label: 'Abends' });
+    harness.run(`UPDATE share_links SET moderation_status = 'approved' WHERE id = ?`, share.id);
+    const publicPayload = await (await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}`)).json() as {
+      items: Array<{ timing: string | null; timing_label: string }>;
+    };
+    expect(publicPayload.items[0]).toMatchObject({ timing: 'evening', timing_label: 'Abends' });
+
+    const sharesBefore = (await db.prepare(`SELECT COUNT(*) AS count FROM share_links`).first<{ count: number }>())?.count;
+    const hookedDb = harness.db as { batch: (statements: unknown[]) => Promise<unknown[]> };
+    const originalBatch = hookedDb.batch.bind(hookedDb);
+    let intercepted = false;
+    hookedDb.batch = async (statements) => {
+      if (!intercepted) {
+        intercepted = true;
+        harness.run(`UPDATE ingredient_display_profiles SET timing = 'morning', version = version + 1 WHERE id = ?`, profile!.id);
+      }
+      return originalBatch(statements);
+    };
+    const raced = await jsonRequest(harness, '/api/creator-sharing/shares', {
+      method: 'POST', token: creator,
+      body: { party_id: 100, stack_id: 100, type: 'stack', title: 'Veraltete Profilzeit' },
+    });
+    hookedDb.batch = originalBatch;
+    expect(intercepted).toBe(true);
+    expect(raced.status).toBe(409);
+    expect((await db.prepare(`SELECT COUNT(*) AS count FROM share_links`).first<{ count: number }>())?.count).toBe(sharesBefore);
   });
 
   it('copies dosage defaults once and keeps a deliberate clear through PUT, GET, calculation and mail', async () => {
@@ -277,12 +739,12 @@ describe('creator stack sharing runtime contract', () => {
     expect(expired.status).toBe(410);
     expect(await expired.json()).toMatchObject({ code: 'SHARE_EXPIRED' });
 
-    harness.run(`UPDATE share_links SET moderation_status = 'blocked', expires_at = NULL WHERE id = ?`, share.id);
+    harness.run(`UPDATE share_links SET moderation_status = 'blocked', moderation_reason = 'Bitte überarbeiten.', moderation_target = 'general', expires_at = NULL WHERE id = ?`, share.id);
     const blocked = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}`);
     expect(blocked.status).toBe(410);
     expect(await blocked.json()).toEqual(expect.objectContaining({ code: 'SHARE_UNAVAILABLE' }));
 
-    harness.run(`UPDATE share_links SET moderation_status = 'approved', is_revoked = 1 WHERE id = ?`, share.id);
+    harness.run(`UPDATE share_links SET moderation_status = 'approved', moderation_reason = NULL, moderation_target = NULL, moderation_item_index = NULL, is_revoked = 1 WHERE id = ?`, share.id);
     const revoked = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}`);
     expect(revoked.status).toBe(410);
     expect(await revoked.json()).toEqual(expect.objectContaining({ code: 'SHARE_UNAVAILABLE' }));
@@ -291,16 +753,21 @@ describe('creator stack sharing runtime contract', () => {
     expect(unknown.status).toBe(404);
     expect(await unknown.json()).toMatchObject({ code: 'SHARE_UNKNOWN' });
 
-    harness.run(`UPDATE share_links SET moderation_status = 'approved', is_revoked = 0, expires_at = NULL WHERE id = ?`, share.id);
+    const raceShareResponse = await jsonRequest(harness, '/api/creator-sharing/shares', {
+      method: 'POST', token: creator,
+      body: { party_id: 100, stack_id: 100, stack_item_id: 100, type: 'dose_recommendation', title: 'Speicher-Rennen' },
+    });
+    const raceShare = await raceShareResponse.json() as { id: number; token: string };
+    harness.run(`UPDATE share_links SET moderation_status = 'approved' WHERE id = ?`, raceShare.id);
     const selection = { target_mode: 'new', stack_name: 'Nicht mehr speichern' };
-    const preflightResponse = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}/preflight`, {
+    const preflightResponse = await jsonRequest(harness, `/api/creator-sharing/shares/${raceShare.token}/preflight`, {
       method: 'POST', token: importer, body: selection,
     });
     expect(preflightResponse.status).toBe(200);
     const preflight = await preflightResponse.json() as { preflight_fingerprint: string; snapshot_hash: string };
-    harness.run(`UPDATE share_links SET is_revoked = 1 WHERE id = ?`, share.id);
+    harness.run(`UPDATE share_links SET is_revoked = 1 WHERE id = ?`, raceShare.id);
     const beforeOperations = (await db.prepare('SELECT COUNT(*) AS count FROM share_import_operations').first<{ count: number }>())?.count;
-    const save = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}/import`, {
+    const save = await jsonRequest(harness, `/api/creator-sharing/shares/${raceShare.token}/import`, {
       method: 'POST', token: importer,
       body: {
         ...selection,
@@ -313,7 +780,7 @@ describe('creator stack sharing runtime contract', () => {
     expect(save.status).toBe(410);
     expect(await save.json()).toMatchObject({ code: 'SHARE_UNAVAILABLE' });
     expect((await db.prepare('SELECT COUNT(*) AS count FROM share_import_operations').first<{ count: number }>())?.count).toBe(beforeOperations);
-    expect((await db.prepare('SELECT imports FROM share_links WHERE id = ?').bind(share.id).first<{ imports: number }>())?.imports).toBe(0);
+    expect((await db.prepare('SELECT imports FROM share_links WHERE id = ?').bind(raceShare.id).first<{ imports: number }>())?.imports).toBe(0);
   });
 
   it('fails closed instead of saving a partial stack and identifies products that need attention', async () => {
@@ -368,6 +835,7 @@ describe('creator stack sharing runtime contract', () => {
       WHERE si.id = 100 LIMIT 1
     `).first<{ product_id: number; ingredient_id: number }>();
     expect(source).not.toBeNull();
+    harness.run(`UPDATE stack_items SET timing = 'evening' WHERE id = 100`);
 
     const created = await jsonRequest(harness, '/api/creator-sharing/shares', {
       method: 'POST', token: creator,
@@ -385,7 +853,7 @@ describe('creator stack sharing runtime contract', () => {
       INSERT INTO stack_items (
         id, stack_id, catalog_product_id, user_product_id, quantity,
         intake_interval_days, dosage_text, timing, sort_order, version
-      ) VALUES (501, 101, NULL, 501, 2, 2, 'Zwei Tabletten', 'morgens', 8, 3)
+      ) VALUES (501, 101, NULL, 501, 2, 2, 'Zwei Tabletten', NULL, 8, 3)
     `);
 
     const publicPreview = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}`);
@@ -407,15 +875,24 @@ describe('creator stack sharing runtime contract', () => {
     const preflight = await preflightResponse.json() as {
       main_ingredient_names: string[];
       preflight_fingerprint: string;
-      similar_products: Array<{ stack_item_id: number; version: number; private_note: string | null; main_ingredient_names: string[] }>;
+      recommendation: { timing: string | null; timing_label: string };
+      similar_products: Array<{
+        stack_item_id: number;
+        version: number;
+        private_note: string | null;
+        main_ingredient_names: string[];
+        comparison: { timing: string | null; timing_label: string };
+      }>;
     };
     expect(preflight.preflight_fingerprint).toMatch(/^[a-f0-9]{64}$/);
     expect(preflight.main_ingredient_names.length).toBeGreaterThan(0);
+    expect(preflight.recommendation).toMatchObject({ timing: 'evening', timing_label: 'Abends' });
     expect(preflight.similar_products).toEqual([expect.objectContaining({
       stack_item_id: 501,
       version: 3,
       private_note: 'Nur für mich sichtbar',
       main_ingredient_names: preflight.main_ingredient_names,
+      comparison: expect.objectContaining({ timing: null, timing_label: 'Keine Angabe' }),
     })]);
     const after = await db.prepare(`
       SELECT
@@ -676,6 +1153,65 @@ describe('creator stack sharing runtime contract', () => {
     expect((await db.prepare('SELECT imports FROM share_links WHERE id = ?').bind(share.id).first<{ imports: number }>())?.imports).toBe(0);
   });
 
+  it.each(importSourceBoundaryMutations)(
+    'rejects a %s mutation at the import batch boundary without writes or sequence movement',
+    async (_label, mutateSource) => {
+      const creator = await authToken(100, 'user', 'creator@test.invalid');
+      const importer = await authToken(101, 'user', 'importer@test.invalid');
+      const created = await jsonRequest(harness, '/api/creator-sharing/shares', {
+        method: 'POST', token: creator,
+        body: { party_id: 100, stack_id: 100, type: 'stack', title: 'Relationsgebundener Import' },
+      });
+      const share = await created.json() as { id: number; token: string };
+      harness.run(`UPDATE share_links SET moderation_status = 'approved' WHERE id = ?`, share.id);
+      const selection = { stack_name: 'Darf bei Quellenkonflikt nicht entstehen' };
+      const preflightResponse = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}/preflight`, {
+        method: 'POST', token: importer, body: selection,
+      });
+      expect(preflightResponse.status).toBe(200);
+      const preflight = await preflightResponse.json() as { preflight_fingerprint: string; snapshot_hash: string };
+      const sequenceBefore = await db.prepare(`
+        SELECT name, seq FROM sqlite_sequence
+        WHERE name IN ('stacks', 'stack_items', 'share_import_operations')
+        ORDER BY name
+      `).all<{ name: string; seq: number }>();
+
+      const hookedDb = harness.db as { batch: (statements: unknown[]) => Promise<unknown[]> };
+      const originalBatch = hookedDb.batch.bind(hookedDb);
+      let intercepted = false;
+      hookedDb.batch = async (statements) => {
+        if (!intercepted) {
+          intercepted = true;
+          mutateSource(harness, share.id);
+        }
+        return originalBatch(statements);
+      };
+      const save = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}/import`, {
+        method: 'POST', token: importer,
+        body: {
+          ...selection,
+          idempotency_key: 'relation-boundary-import-0001',
+          preflight_fingerprint: preflight.preflight_fingerprint,
+          expected_snapshot_hash: preflight.snapshot_hash,
+        },
+      });
+      hookedDb.batch = originalBatch;
+
+      expect(intercepted).toBe(true);
+      expect(save.status).toBe(409);
+      expect(await save.json()).toMatchObject({ code: 'PREFLIGHT_CHANGED' });
+      expect(await db.prepare(`
+        SELECT name, seq FROM sqlite_sequence
+        WHERE name IN ('stacks', 'stack_items', 'share_import_operations')
+        ORDER BY name
+      `).all<{ name: string; seq: number }>()).toEqual(sequenceBefore);
+      expect((await db.prepare(`SELECT COUNT(*) AS count FROM share_import_operations`).first<{ count: number }>())?.count).toBe(0);
+      expect((await db.prepare(`SELECT COUNT(*) AS count FROM stacks WHERE user_id = 101`).first<{ count: number }>())?.count).toBe(0);
+      expect((await db.prepare(`SELECT COUNT(*) AS count FROM stack_items WHERE stack_id IN (SELECT id FROM stacks WHERE user_id = 101)`).first<{ count: number }>())?.count).toBe(0);
+      expect((await db.prepare(`SELECT imports FROM share_links WHERE id = ?`).bind(share.id).first<{ imports: number }>())?.imports).toBe(0);
+    },
+  );
+
   it('claims a parallel same-key save exactly once without a second mutation or counter increment', async () => {
     const creator = await authToken(100, 'user', 'creator@test.invalid');
     const importer = await authToken(101, 'user', 'importer@test.invalid');
@@ -793,13 +1329,14 @@ describe('creator stack sharing runtime contract', () => {
     });
     expect(originalResponse.status).toBe(201);
     const original = await originalResponse.json() as { id: number; token: string; snapshot_hash: string };
-    harness.run(`UPDATE share_links SET moderation_status = 'blocked' WHERE id = ?`, original.id);
+    harness.run(`UPDATE share_links SET moderation_status = 'blocked', moderation_reason = 'Bitte überarbeiten.', moderation_target = 'general' WHERE id = ?`, original.id);
     const oldBefore = await db.prepare(`
       SELECT token, snapshot_json, snapshot_hash, moderation_status, is_revoked, expires_at
       FROM share_links WHERE id = ?
     `).bind(original.id).first<Record<string, unknown>>();
     const guard = {
       share_id: original.id,
+      expected_version: 1,
       expected_snapshot_hash: original.snapshot_hash,
       expected_status: 'blocked',
       expected_moderation_status: 'blocked',
@@ -831,7 +1368,7 @@ describe('creator stack sharing runtime contract', () => {
     });
     expect((await db.prepare(`SELECT COUNT(*) AS count FROM share_links`).first<{ count: number }>())?.count).toBe(2);
 
-    harness.run(`UPDATE share_links SET moderation_status = 'approved' WHERE id = ?`, original.id);
+    harness.run(`UPDATE share_links SET moderation_status = 'approved', moderation_reason = NULL, moderation_target = NULL, moderation_item_index = NULL WHERE id = ?`, original.id);
     const staleStatus = await jsonRequest(harness, '/api/creator-sharing/shares', {
       method: 'POST', token: creator,
       body: {
@@ -848,7 +1385,7 @@ describe('creator stack sharing runtime contract', () => {
 
     harness.run(`INSERT INTO parties (id, type, name, slug, status, auto_catalog_approval) VALUES (200, 'creator', 'Andere Partei', 'andere-partei', 'active', 0)`);
     harness.run(`INSERT INTO party_memberships (party_id, user_id, role, status) VALUES (200, 100, 'owner', 'active')`);
-    harness.run(`UPDATE share_links SET moderation_status = 'blocked' WHERE id = ?`, original.id);
+    harness.run(`UPDATE share_links SET moderation_status = 'blocked', moderation_reason = 'Bitte überarbeiten.', moderation_target = 'general' WHERE id = ?`, original.id);
     const foreignParty = await jsonRequest(harness, '/api/creator-sharing/shares', {
       method: 'POST', token: creator,
       body: {
@@ -862,6 +1399,37 @@ describe('creator stack sharing runtime contract', () => {
     expect(foreignParty.status).toBe(409);
     expect((await db.prepare(`SELECT COUNT(*) AS count FROM share_links`).first<{ count: number }>())?.count).toBe(2);
   });
+
+  it.each(shareSourceBoundaryMutations)(
+    'rejects a %s mutation at the final share insert without creating a partial link',
+    async (_label, mutateSource) => {
+      const creator = await authToken(100, 'user', 'creator@test.invalid');
+      const sharesBefore = (await db.prepare(`SELECT COUNT(*) AS count FROM share_links`).first<{ count: number }>())?.count;
+      const shareSequenceBefore = await db.prepare(`SELECT seq FROM sqlite_sequence WHERE name = 'share_links'`).first<{ seq: number }>();
+      const hookedDb = harness.db as { batch: (statements: unknown[]) => Promise<unknown[]> };
+      const originalBatch = hookedDb.batch.bind(hookedDb);
+      let intercepted = false;
+      hookedDb.batch = async (statements) => {
+        if (!intercepted) {
+          intercepted = true;
+          mutateSource(harness);
+        }
+        return originalBatch(statements);
+      };
+
+      const response = await jsonRequest(harness, '/api/creator-sharing/shares', {
+        method: 'POST', token: creator,
+        body: { party_id: 100, stack_id: 100, type: 'stack', title: 'Darf nicht entstehen' },
+      });
+      hookedDb.batch = originalBatch;
+
+      expect(intercepted).toBe(true);
+      expect(response.status).toBe(409);
+      expect(await response.json()).toMatchObject({ code: 'SOURCE_STACK_CHANGED' });
+      expect((await db.prepare(`SELECT COUNT(*) AS count FROM share_links`).first<{ count: number }>())?.count).toBe(sharesBefore);
+      expect(await db.prepare(`SELECT seq FROM sqlite_sequence WHERE name = 'share_links'`).first<{ seq: number }>()).toEqual(shareSequenceBefore);
+    },
+  );
 
   it('freezes attribution, imports idempotently, exports the canonical creator mail and tracks without user or stack ids', async () => {
     const creator = await authToken(100, 'user', 'creator@test.invalid');
@@ -891,14 +1459,27 @@ describe('creator stack sharing runtime contract', () => {
 
     const moderation = await jsonRequest(harness, `/api/admin/creator-sharing/shares/${created.id}`, {
       method: 'PATCH', token: admin,
-      body: { expected_status: 'pending', expected_snapshot_hash: created.snapshot_hash, moderation_status: 'approved', is_revoked: 0 },
+      body: {
+        expected_version: 1,
+        expected_snapshot_hash: created.snapshot_hash,
+        expected_moderation_status: 'pending',
+        expected_is_revoked: 0,
+        expected_paused_at: null,
+        expected_expires_at: null,
+        expected_archived_at: null,
+        moderation_status: 'approved',
+        moderation_reason: null,
+        moderation_target: null,
+        moderation_item_index: null,
+      },
     });
     expect(moderation.status).toBe(200);
     const previewResponse = await jsonRequest(harness, `/api/creator-sharing/shares/${created.token}`);
     expect(previewResponse.status).toBe(200);
-    const preview = await previewResponse.json() as { creator: { name: string }; disclosure: string; items: Array<{ creator_statement: string; unit: string | null }> };
+    const preview = await previewResponse.json() as { creator: { name: string }; items: Array<{ creator_statement: string; unit: string | null }> };
     expect(preview.creator.name).toBe('Test Creator');
-    expect(preview.disclosure).toContain('Affiliate');
+    expect(Object.prototype.hasOwnProperty.call(preview, 'disclosure')).toBe(false);
+    expect(Object.prototype.hasOwnProperty.call(preview.items[0], 'has_affiliate_attribution')).toBe(false);
     expect(preview.items[0].creator_statement).toContain('Sachlicher Kontext');
     expect(preview.items[0].unit).toBe('Kapsel');
     const storedV3 = await db.prepare(`SELECT snapshot_schema_version, snapshot_json FROM share_links WHERE id = ?`).bind(created.id).first<{ snapshot_schema_version: number; snapshot_json: string }>();
@@ -909,6 +1490,9 @@ describe('creator stack sharing runtime contract', () => {
     };
     expect(storedSnapshot.items[0].unit).toBe('Kapsel');
     expect(Object.prototype.hasOwnProperty.call(storedSnapshot.items[0], 'category_name')).toBe(false);
+    expect(sendMailMock).toHaveBeenCalledTimes(1);
+    expect((sendMailMock.mock.calls[0][1] as { html: string }).html).toContain('/creator?bereich=portfolio&amp;editShare=');
+    sendMailMock.mockClear();
 
     const target = await db.prepare(`SELECT shop_domain_id FROM party_shop_affiliate_versions WHERE id = 100`).first<{ shop_domain_id: number }>();
     harness.run(`UPDATE party_shop_affiliate_versions SET status = 'retired' WHERE id = 100`);
@@ -1024,8 +1608,13 @@ describe('creator stack sharing runtime contract', () => {
     const admin = await authToken(102, 'admin', 'admin@test.invalid');
     const importer = await authToken(101, 'user', 'importer@test.invalid');
     const createdResponse = await jsonRequest(harness, '/api/creator-sharing/shares', { method: 'POST', token: creator, body: { party_id: 100, stack_id: 100, stack_item_id: 100, type: 'dose_recommendation', title: 'D3' } });
-    const created = await createdResponse.json() as { id: number; token: string; snapshot_hash: string };
-    await jsonRequest(harness, `/api/admin/creator-sharing/shares/${created.id}`, { method: 'PATCH', token: admin, body: { expected_status: 'pending', expected_snapshot_hash: created.snapshot_hash, moderation_status: 'approved' } });
+    const created = await createdResponse.json() as { id: number; token: string; snapshot_hash: string; version: number };
+    await jsonRequest(harness, `/api/admin/creator-sharing/shares/${created.id}`, { method: 'PATCH', token: admin, body: {
+      expected_version: created.version, expected_snapshot_hash: created.snapshot_hash,
+      expected_moderation_status: 'pending', expected_is_revoked: 0,
+      expected_paused_at: null, expected_expires_at: null, expected_archived_at: null,
+      moderation_status: 'approved', moderation_reason: null, moderation_target: null, moderation_item_index: null,
+    } });
     const { response: imported } = await preflightAndSave(
       harness,
       created.token,
@@ -1049,10 +1638,15 @@ describe('creator stack sharing runtime contract', () => {
       method: 'POST', token: creator,
       body: { party_id: 100, stack_id: 100, stack_item_id: 100, type: 'dose_recommendation', title: 'Einzel' },
     });
-    const share = await create.json() as { id: number; token: string; snapshot_hash: string };
+    const share = await create.json() as { id: number; token: string; snapshot_hash: string; version: number };
     await jsonRequest(harness, `/api/admin/creator-sharing/shares/${share.id}`, {
       method: 'PATCH', token: admin,
-      body: { expected_status: 'pending', expected_snapshot_hash: share.snapshot_hash, moderation_status: 'approved' },
+      body: {
+        expected_version: share.version, expected_snapshot_hash: share.snapshot_hash,
+        expected_moderation_status: 'pending', expected_is_revoked: 0,
+        expected_paused_at: null, expected_expires_at: null, expected_archived_at: null,
+        moderation_status: 'approved', moderation_reason: null, moderation_target: null, moderation_item_index: null,
+      },
     });
     const preflightResponse = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}/preflight`, {
       method: 'POST', token: importer,
@@ -1111,11 +1705,11 @@ describe('creator stack sharing runtime contract', () => {
     expect((await db.prepare('SELECT views FROM share_links WHERE id = ?').bind(share.id).first<{ views: number }>())?.views).toBe(0);
 
     expect((await jsonRequest(harness, `/api/creator-sharing/creator-shares/${share.id}/preview`, { token: importer })).status).toBe(403);
-    harness.run(`UPDATE share_links SET moderation_status = 'blocked' WHERE id = ?`, share.id);
+    harness.run(`UPDATE share_links SET moderation_status = 'blocked', moderation_reason = 'Bitte überarbeiten.', moderation_target = 'general' WHERE id = ?`, share.id);
     const blockedPreview = await jsonRequest(harness, `/api/creator-sharing/creator-shares/${share.id}/preview`, { token: creator });
     expect(blockedPreview.status).toBe(200);
     expect((await blockedPreview.json() as { creator_status: string }).creator_status).toBe('blocked');
-    harness.run(`UPDATE share_links SET moderation_status = 'pending', expires_at = strftime('%s', 'now') - 1 WHERE id = ?`, share.id);
+    harness.run(`UPDATE share_links SET moderation_status = 'pending', moderation_reason = NULL, moderation_target = NULL, moderation_item_index = NULL, expires_at = strftime('%s', 'now') - 1 WHERE id = ?`, share.id);
     const expiredPreview = await jsonRequest(harness, `/api/creator-sharing/creator-shares/${share.id}/preview`, { token: creator });
     expect(expiredPreview.status).toBe(200);
     expect((await expiredPreview.json() as { creator_status: string }).creator_status).toBe('expired');
@@ -1123,7 +1717,12 @@ describe('creator stack sharing runtime contract', () => {
 
     const moderation = await jsonRequest(harness, `/api/admin/creator-sharing/shares/${share.id}`, {
       method: 'PATCH', token: admin,
-      body: { expected_status: 'pending', expected_snapshot_hash: share.snapshot_hash, moderation_status: 'approved', is_revoked: 0 },
+      body: {
+        expected_version: 1, expected_snapshot_hash: share.snapshot_hash,
+        expected_moderation_status: 'pending', expected_is_revoked: 0,
+        expected_paused_at: null, expected_expires_at: null, expected_archived_at: null,
+        moderation_status: 'approved', moderation_reason: null, moderation_target: null, moderation_item_index: null,
+      },
     });
     expect(moderation.status).toBe(200);
     const approvedList = await jsonRequest(harness, '/api/creator-sharing/creator-shares?party_id=100', { token: creator });
@@ -1138,19 +1737,19 @@ describe('creator stack sharing runtime contract', () => {
 
     const staleRevoke = await jsonRequest(harness, `/api/creator-sharing/creator-shares/${share.id}/revoke`, {
       method: 'PATCH', token: creator,
-      body: { expected_snapshot_hash: '0'.repeat(64), expected_moderation_status: 'approved', expected_is_revoked: 0 },
+      body: { expected_version: 2, expected_snapshot_hash: '0'.repeat(64), expected_moderation_status: 'approved', expected_is_revoked: 0, expected_paused_at: null, expected_expires_at: null },
     });
     expect(staleRevoke.status).toBe(409);
     harness.run(`INSERT INTO party_memberships (party_id, user_id, role, status) VALUES (100, 101, 'viewer', 'active')`);
     expect((await jsonRequest(harness, `/api/creator-sharing/creator-shares/${share.id}/preview`, { token: importer })).status).toBe(200);
     expect((await jsonRequest(harness, `/api/creator-sharing/creator-shares/${share.id}/revoke`, {
       method: 'PATCH', token: importer,
-      body: { expected_snapshot_hash: share.snapshot_hash, expected_moderation_status: 'approved', expected_is_revoked: 0 },
+      body: { expected_version: 2, expected_snapshot_hash: share.snapshot_hash, expected_moderation_status: 'approved', expected_is_revoked: 0, expected_paused_at: null, expected_expires_at: null },
     })).status).toBe(403);
 
     const revoke = await jsonRequest(harness, `/api/creator-sharing/creator-shares/${share.id}/revoke`, {
       method: 'PATCH', token: creator,
-      body: { expected_snapshot_hash: share.snapshot_hash, expected_moderation_status: 'approved', expected_is_revoked: 0 },
+      body: { expected_version: 2, expected_snapshot_hash: share.snapshot_hash, expected_moderation_status: 'approved', expected_is_revoked: 0, expected_paused_at: null, expected_expires_at: null },
     });
     expect(revoke.status).toBe(200);
     const revokedList = await jsonRequest(harness, '/api/creator-sharing/creator-shares?party_id=100', { token: creator });
@@ -1267,6 +1866,486 @@ describe('creator stack sharing runtime contract', () => {
     expect(dashboardPayload).not.toHaveProperty('users');
     expect(dashboardPayload).not.toHaveProperty('stack_ids');
     expect(dashboardPayload).not.toHaveProperty('referrers');
+  });
+
+  it('ignores recognizable bots and fails closed across creator APIs when the party is blocked', async () => {
+    const creator = await authToken(100, 'user', 'creator@test.invalid');
+    const importer = await authToken(101, 'user', 'importer@test.invalid');
+    const createdResponse = await jsonRequest(harness, '/api/creator-sharing/shares', {
+      method: 'POST', token: creator,
+      body: { party_id: 100, stack_id: 100, type: 'stack', title: 'Sicherheitsprüfung' },
+    });
+    const share = await createdResponse.json() as { id: number; token: string };
+    harness.run(`UPDATE share_links SET moderation_status = 'approved' WHERE id = ?`, share.id);
+
+    const viewsBefore = await db.prepare(`SELECT views FROM share_links WHERE id = ?`).bind(share.id).first<{ views: number }>();
+    expect((await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}`)).status).toBe(200);
+    expect((await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}`)).status).toBe(200);
+    expect((await db.prepare(`SELECT views FROM share_links WHERE id = ?`).bind(share.id).first<{ views: number }>())?.views).toBe(viewsBefore?.views);
+
+    const eventCountBefore = (await db.prepare(`SELECT COUNT(*) AS count FROM page_view_events`).first<{ count: number }>())?.count ?? 0;
+    const bot = await jsonRequest(harness, '/api/analytics/pageview', {
+      method: 'POST',
+      userAgent: 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+      body: { path: `/share/${share.token}`, visitor_id: 'bot-visitor' },
+    });
+    expect(bot.status).toBe(200);
+    expect((await db.prepare(`SELECT COUNT(*) AS count FROM page_view_events`).first<{ count: number }>())?.count).toBe(eventCountBefore);
+    const browser = await jsonRequest(harness, '/api/analytics/pageview', {
+      method: 'POST',
+      userAgent: 'Mozilla/5.0 Chrome/140.0 Safari/537.36',
+      body: { path: `/share/${share.token}?quelle=test#abschnitt`, visitor_id: 'browser-visitor' },
+    });
+    expect(browser.status).toBe(200);
+    expect((await db.prepare(`SELECT COUNT(*) AS count FROM page_view_events`).first<{ count: number }>())?.count).toBe(eventCountBefore + 1);
+
+    harness.run(`UPDATE parties SET status = 'blocked' WHERE id = 100`);
+    const access = await jsonRequest(harness, '/api/creator-sharing/parties', { token: creator });
+    expect(await access.json()).toMatchObject({ access_state: 'blocked', parties: [] });
+    expect((await jsonRequest(harness, '/api/creator-sharing/creator-shares?party_id=100', { token: creator })).status).toBe(404);
+    expect((await jsonRequest(harness, '/api/creator-sharing/dashboard?party_id=100', { token: creator })).status).toBe(404);
+    expect((await jsonRequest(harness, `/api/creator-sharing/creator-shares/${share.id}/preview`, { token: creator })).status).toBe(403);
+    const publicResponse = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}`);
+    expect(publicResponse.status).toBe(410);
+    expect(await publicResponse.json()).toMatchObject({ code: 'SHARE_UNAVAILABLE' });
+    const importResponse = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}/preflight`, {
+      method: 'POST', token: importer, body: { target_mode: 'new', stack_name: 'Gesperrt' },
+    });
+    expect(importResponse.status).toBe(410);
+    expect(await importResponse.json()).toMatchObject({ code: 'SHARE_UNAVAILABLE' });
+  });
+
+  it('keeps moderation feedback private, never revokes on admin block and sends one escaped post-commit mail', async () => {
+    const creator = await authToken(100, 'user', 'creator@test.invalid');
+    const admin = await authToken(102, 'admin', 'admin@test.invalid');
+    const createdResponse = await jsonRequest(harness, '/api/creator-sharing/shares', {
+      method: 'POST', token: creator,
+      body: {
+        party_id: 100,
+        stack_id: 100,
+        type: 'stack',
+        title: 'Titel <script>alert(1)</script>',
+        creator_statements: { 100: 'Hinweis' },
+      },
+    });
+    const share = await createdResponse.json() as { id: number; token: string; snapshot_hash: string; version: number };
+
+    const missingReason = await jsonRequest(harness, `/api/admin/creator-sharing/shares/${share.id}`, {
+      method: 'PATCH', token: admin,
+      body: {
+        expected_version: share.version, expected_snapshot_hash: share.snapshot_hash,
+        expected_moderation_status: 'pending', expected_is_revoked: 0,
+        expected_paused_at: null, expected_expires_at: null, expected_archived_at: null,
+        moderation_status: 'blocked', moderation_reason: '', moderation_target: 'general', moderation_item_index: null,
+      },
+    });
+    expect(missingReason.status).toBe(400);
+
+    const blocked = await jsonRequest(harness, `/api/admin/creator-sharing/shares/${share.id}`, {
+      method: 'PATCH', token: admin,
+      body: {
+        expected_version: share.version, expected_snapshot_hash: share.snapshot_hash,
+        expected_moderation_status: 'pending', expected_is_revoked: 0,
+        expected_paused_at: null, expected_expires_at: null, expected_archived_at: null,
+        moderation_status: 'blocked',
+        moderation_reason: 'Bitte <img src=x onerror=alert(2)> einfacher erklären.',
+        moderation_target: 'creator_statement', moderation_item_index: 0,
+      },
+    });
+    expect(blocked.status).toBe(200);
+    expect(await blocked.json()).toMatchObject({ notification_status: 'sent' });
+    const stored = await db.prepare(`
+      SELECT moderation_status, moderation_reason, moderation_target,
+        moderation_item_index, is_revoked, version
+      FROM share_links WHERE id = ?
+    `).bind(share.id).first<Record<string, unknown>>();
+    expect(stored).toMatchObject({
+      moderation_status: 'blocked',
+      moderation_target: 'creator_statement',
+      moderation_item_index: 0,
+      is_revoked: 0,
+      version: 2,
+    });
+    expect(sendMailMock).toHaveBeenCalledTimes(1);
+    const moderationMail = sendMailMock.mock.calls[0][1] as { to: string; html: string };
+    expect(moderationMail.to).toBe('creator@test.invalid');
+    expect(moderationMail.html).toContain('/creator?bereich=portfolio&amp;editShare=');
+    expect(moderationMail.html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+    expect(moderationMail.html).toContain('&lt;img src=x onerror=alert(2)&gt;');
+    expect(moderationMail.html).not.toContain('<script>');
+    expect(moderationMail.html).not.toContain('<img src=x');
+
+    const notification = await db.prepare(`
+      SELECT status, attempts, last_error
+      FROM creator_share_notification_events
+      WHERE share_link_id = ? AND share_version = 2
+    `).bind(share.id).first<Record<string, unknown>>();
+    expect(notification).toMatchObject({ status: 'sent', attempts: 1, last_error: null });
+
+    const creatorList = await jsonRequest(harness, '/api/creator-sharing/creator-shares?party_id=100', { token: creator });
+    const listShare = ((await creatorList.json()) as { shares: Array<Record<string, unknown>> }).shares[0];
+    expect(listShare).toMatchObject({
+      moderation_reason: 'Bitte <img src=x onerror=alert(2)> einfacher erklären.',
+      moderation_target: 'creator_statement', moderation_item_index: 0,
+    });
+    expect(typeof listShare.moderation_item_name).toBe('string');
+    expect(listShare).not.toHaveProperty('views');
+    const privatePreview = await jsonRequest(harness, `/api/creator-sharing/creator-shares/${share.id}/preview`, { token: creator });
+    const privatePreviewPayload = await privatePreview.json() as Record<string, unknown>;
+    expect(privatePreviewPayload).toMatchObject({
+      entity_id: 100,
+      source_stack_id: 100,
+      moderation_reason: 'Bitte <img src=x onerror=alert(2)> einfacher erklären.',
+      moderation_target: 'creator_statement', moderation_item_index: 0,
+    });
+    expect(privatePreviewPayload.moderation_item_name).toBe(listShare.moderation_item_name);
+    const publicResponse = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}`);
+    expect(publicResponse.status).toBe(410);
+    const publicPayload = await publicResponse.json() as Record<string, unknown>;
+    expect(publicPayload).not.toHaveProperty('moderation_reason');
+    expect(publicPayload).not.toHaveProperty('entity_id');
+    expect(publicPayload).not.toHaveProperty('source_stack_id');
+    expect(publicPayload).not.toHaveProperty('source_stack_name');
+    expect(publicPayload).not.toHaveProperty('version');
+    expect(publicPayload).not.toHaveProperty('snapshot_hash');
+    expect(publicPayload).not.toHaveProperty('archived_at');
+    expect(JSON.stringify(publicPayload)).not.toContain('einfacher erklären');
+
+    const stale = await jsonRequest(harness, `/api/admin/creator-sharing/shares/${share.id}`, {
+      method: 'PATCH', token: admin,
+      body: {
+        expected_version: 1, expected_snapshot_hash: share.snapshot_hash,
+        expected_moderation_status: 'pending', expected_is_revoked: 0,
+        expected_paused_at: null, expected_expires_at: null, expected_archived_at: null,
+        moderation_status: 'approved', moderation_reason: null, moderation_target: null, moderation_item_index: null,
+      },
+    });
+    expect(stale.status).toBe(409);
+    expect(sendMailMock).toHaveBeenCalledTimes(1);
+    expect((await db.prepare(`SELECT COUNT(*) AS count FROM creator_share_notification_events WHERE share_link_id = ?`).bind(share.id).first<{ count: number }>())?.count).toBe(1);
+
+    harness.run(`UPDATE share_links SET is_revoked = 1 WHERE id = ?`, share.id);
+    const endedByCreator = await jsonRequest(harness, `/api/admin/creator-sharing/shares/${share.id}`, {
+      method: 'PATCH', token: admin,
+      body: {
+        expected_version: 2, expected_snapshot_hash: share.snapshot_hash,
+        expected_moderation_status: 'blocked', expected_is_revoked: 1,
+        expected_paused_at: null, expected_expires_at: null, expected_archived_at: null,
+        moderation_status: 'approved', moderation_reason: null, moderation_target: null, moderation_item_index: null,
+      },
+    });
+    expect(endedByCreator.status).toBe(409);
+    expect(sendMailMock).toHaveBeenCalledTimes(1);
+    expect((await db.prepare(`SELECT COUNT(*) AS count FROM creator_share_notification_events WHERE share_link_id = ?`).bind(share.id).first<{ count: number }>())?.count).toBe(1);
+
+    const adminList = await jsonRequest(harness, '/api/admin/creator-sharing/shares', { token: admin });
+    const adminShare = ((await adminList.json()) as { shares: Array<Record<string, unknown>> }).shares.find((entry) => entry.id === share.id)!;
+    expect(adminShare).not.toHaveProperty('views');
+    expect(adminShare).not.toHaveProperty('imports');
+  });
+
+  it('records failed and skipped moderation mail once and claims a parallel delivery once', async () => {
+    const creator = await authToken(100, 'user', 'creator@test.invalid');
+    const admin = await authToken(102, 'admin', 'admin@test.invalid');
+    const createShare = async (title: string) => {
+      const response = await jsonRequest(harness, '/api/creator-sharing/shares', {
+        method: 'POST', token: creator,
+        body: { party_id: 100, stack_id: 100, type: 'stack', title },
+      });
+      expect(response.status).toBe(201);
+      return response.json() as Promise<{ id: number; snapshot_hash: string; version: number }>;
+    };
+    const approvalBody = (share: { snapshot_hash: string; version: number }) => ({
+      expected_version: share.version,
+      expected_snapshot_hash: share.snapshot_hash,
+      expected_moderation_status: 'pending',
+      expected_is_revoked: 0,
+      expected_paused_at: null,
+      expected_expires_at: null,
+      expected_archived_at: null,
+      moderation_status: 'approved',
+      moderation_reason: null,
+      moderation_target: null,
+      moderation_item_index: null,
+    });
+
+    const failedShare = await createShare('Mail schlägt fehl');
+    sendMailMock.mockResolvedValueOnce({ ok: false, error: 'provider detail must not persist' });
+    const failed = await jsonRequest(harness, `/api/admin/creator-sharing/shares/${failedShare.id}`, {
+      method: 'PATCH', token: admin, body: approvalBody(failedShare),
+    });
+    expect(failed.status).toBe(200);
+    expect(await failed.json()).toMatchObject({ notification_status: 'failed' });
+    expect(await db.prepare(`
+      SELECT status, attempts, last_error
+      FROM creator_share_notification_events WHERE share_link_id = ?
+    `).bind(failedShare.id).first()).toEqual({
+      status: 'failed', attempts: 1, last_error: 'mail_delivery_failed',
+    });
+
+    const skippedShare = await createShare('Kein Empfänger');
+    harness.run(`UPDATE share_links SET creator_user_id = NULL WHERE id = ?`, skippedShare.id);
+    const skipped = await jsonRequest(harness, `/api/admin/creator-sharing/shares/${skippedShare.id}`, {
+      method: 'PATCH', token: admin, body: approvalBody(skippedShare),
+    });
+    expect(skipped.status).toBe(200);
+    expect(await skipped.json()).toMatchObject({ notification_status: 'skipped' });
+    expect(await db.prepare(`
+      SELECT status, attempts, last_error
+      FROM creator_share_notification_events WHERE share_link_id = ?
+    `).bind(skippedShare.id).first()).toEqual({
+      status: 'skipped', attempts: 1, last_error: 'recipient_unavailable',
+    });
+    expect(sendMailMock).toHaveBeenCalledTimes(1);
+
+    const parallelShare = await createShare('Parallel nur einmal');
+    const parallelBody = approvalBody(parallelShare);
+    const parallel = await Promise.all([
+      jsonRequest(harness, `/api/admin/creator-sharing/shares/${parallelShare.id}`, {
+        method: 'PATCH', token: admin, body: parallelBody,
+      }),
+      jsonRequest(harness, `/api/admin/creator-sharing/shares/${parallelShare.id}`, {
+        method: 'PATCH', token: admin, body: parallelBody,
+      }),
+    ]);
+    expect(parallel.map((response) => response.status).sort()).toEqual([200, 409]);
+    expect(sendMailMock).toHaveBeenCalledTimes(2);
+    expect((await db.prepare(`
+      SELECT COUNT(*) AS count
+      FROM creator_share_notification_events WHERE share_link_id = ?
+    `).bind(parallelShare.id).first<{ count: number }>())?.count).toBe(1);
+    expect(await db.prepare(`
+      SELECT status, attempts
+      FROM creator_share_notification_events WHERE share_link_id = ?
+    `).bind(parallelShare.id).first()).toEqual({ status: 'sent', attempts: 1 });
+  });
+
+  it('binds pause and archive races and keeps paused links unavailable for preview and import', async () => {
+    const creator = await authToken(100, 'user', 'creator@test.invalid');
+    const admin = await authToken(102, 'admin', 'admin@test.invalid');
+    const importer = await authToken(101, 'user', 'importer@test.invalid');
+    const createdResponse = await jsonRequest(harness, '/api/creator-sharing/shares', {
+      method: 'POST', token: creator,
+      body: { party_id: 100, stack_id: 100, type: 'stack', title: 'Lebenszyklus' },
+    });
+    const share = await createdResponse.json() as { id: number; token: string; snapshot_hash: string; version: number };
+    const approval = await jsonRequest(harness, `/api/admin/creator-sharing/shares/${share.id}`, {
+      method: 'PATCH', token: admin,
+      body: {
+        expected_version: 1, expected_snapshot_hash: share.snapshot_hash,
+        expected_moderation_status: 'pending', expected_is_revoked: 0,
+        expected_paused_at: null, expected_expires_at: null, expected_archived_at: null,
+        moderation_status: 'approved', moderation_reason: null, moderation_target: null, moderation_item_index: null,
+      },
+    });
+    expect(approval.status).toBe(200);
+
+    const pause = await jsonRequest(harness, `/api/creator-sharing/creator-shares/${share.id}/lifecycle`, {
+      method: 'PATCH', token: creator,
+      body: {
+        action: 'pause', expected_version: 2, expected_snapshot_hash: share.snapshot_hash,
+        expected_status: 'approved', expected_moderation_status: 'approved', expected_is_revoked: 0,
+        expected_paused_at: null, expected_expires_at: null,
+      },
+    });
+    expect(pause.status).toBe(200);
+    const paused = await pause.json() as { version: number; paused_at: number; status: string };
+    expect(paused).toMatchObject({ version: 3, status: 'paused' });
+    const stalePause = await jsonRequest(harness, `/api/creator-sharing/creator-shares/${share.id}/lifecycle`, {
+      method: 'PATCH', token: creator,
+      body: {
+        action: 'pause', expected_version: 2, expected_snapshot_hash: share.snapshot_hash,
+        expected_status: 'approved', expected_moderation_status: 'approved', expected_is_revoked: 0,
+        expected_paused_at: null, expected_expires_at: null,
+      },
+    });
+    expect(stalePause.status).toBe(409);
+    const pausedPublic = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}`);
+    expect(pausedPublic.status).toBe(409);
+    expect(await pausedPublic.json()).toMatchObject({ code: 'SHARE_PAUSED' });
+    const pausedImport = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}/preflight`, {
+      method: 'POST', token: importer, body: { target_mode: 'new', stack_name: 'Pausiert' },
+    });
+    expect(pausedImport.status).toBe(409);
+    expect(await pausedImport.json()).toMatchObject({ code: 'SHARE_PAUSED' });
+
+    const archived = await jsonRequest(harness, `/api/creator-sharing/creator-shares/${share.id}/archive`, {
+      method: 'PATCH', token: creator,
+      body: { archived: true, expected_version: 3, expected_snapshot_hash: share.snapshot_hash, expected_archived_at: null },
+    });
+    expect(archived.status).toBe(200);
+    const archivedPayload = await archived.json() as { version: number; archived_at: number };
+    expect(archivedPayload.version).toBe(4);
+    expect((await jsonRequest(harness, '/api/creator-sharing/creator-shares?party_id=100&archive=active', { token: creator }).then((response) => response.json()) as { shares: unknown[] }).shares).toHaveLength(0);
+    expect((await jsonRequest(harness, '/api/creator-sharing/creator-shares?party_id=100&archive=archived', { token: creator }).then((response) => response.json()) as { shares: unknown[] }).shares).toHaveLength(1);
+    const archivedDeepLink = await jsonRequest(harness, `/api/creator-sharing/creator-shares/${share.id}/preview`, { token: creator });
+    expect(archivedDeepLink.status).toBe(200);
+    expect(await archivedDeepLink.json()).toMatchObject({
+      share_id: share.id,
+      entity_id: 100,
+      source_stack_id: 100,
+      archived_at: archivedPayload.archived_at,
+      version: 4,
+    });
+    const staleArchive = await jsonRequest(harness, `/api/creator-sharing/creator-shares/${share.id}/archive`, {
+      method: 'PATCH', token: creator,
+      body: { archived: false, expected_version: 3, expected_snapshot_hash: share.snapshot_hash, expected_archived_at: null },
+    });
+    expect(staleArchive.status).toBe(409);
+
+    const boundaryResponse = await jsonRequest(harness, '/api/creator-sharing/shares', {
+      method: 'POST', token: creator,
+      body: { party_id: 100, stack_id: 100, type: 'stack', title: 'Bereits abgelaufen' },
+    });
+    const boundary = await boundaryResponse.json() as { id: number; token: string; snapshot_hash: string; version: number };
+    const expiredAt = Math.floor(Date.now() / 1000) - 1;
+    harness.run(`UPDATE share_links SET moderation_status = 'approved', expires_at = ? WHERE id = ?`, expiredAt, boundary.id);
+    const staleStatus = await jsonRequest(harness, `/api/creator-sharing/creator-shares/${boundary.id}/lifecycle`, {
+      method: 'PATCH', token: creator,
+      body: {
+        action: 'pause', expected_version: boundary.version, expected_snapshot_hash: boundary.snapshot_hash,
+        expected_status: 'approved', expected_moderation_status: 'approved', expected_is_revoked: 0,
+        expected_paused_at: null, expected_expires_at: expiredAt,
+      },
+    });
+    expect(staleStatus.status).toBe(409);
+    expect(await db.prepare(`SELECT version, paused_at FROM share_links WHERE id = ?`).bind(boundary.id).first())
+      .toEqual({ version: boundary.version, paused_at: null });
+
+    for (const expiryAction of ['clear_expiry', 'set_expiry'] as const) {
+      const expiredMutation = await jsonRequest(harness, `/api/creator-sharing/creator-shares/${boundary.id}/lifecycle`, {
+        method: 'PATCH', token: creator,
+        body: {
+          action: expiryAction,
+          ...(expiryAction === 'set_expiry' ? { expires_at: Math.floor(Date.now() / 1000) + 86_400 } : {}),
+          expected_version: boundary.version,
+          expected_snapshot_hash: boundary.snapshot_hash,
+          expected_status: 'expired',
+          expected_moderation_status: 'approved',
+          expected_is_revoked: 0,
+          expected_paused_at: null,
+          expected_expires_at: expiredAt,
+        },
+      });
+      expect(expiredMutation.status).toBe(409);
+      expect(await expiredMutation.json()).toMatchObject({
+        error: expect.stringContaining('Neuauflage'),
+      });
+      expect(await db.prepare(`
+        SELECT version, expires_at, paused_at, is_revoked
+        FROM share_links WHERE id = ?
+      `).bind(boundary.id).first()).toEqual({
+        version: boundary.version,
+        expires_at: expiredAt,
+        paused_at: null,
+        is_revoked: 0,
+      });
+      const expiredPublic = await jsonRequest(harness, `/api/creator-sharing/shares/${boundary.token}`);
+      expect(expiredPublic.status).toBe(410);
+      expect(await expiredPublic.json()).toMatchObject({ code: 'SHARE_EXPIRED' });
+    }
+  });
+
+  it('counts exact consented token routes in two equal visible 30-day windows and groups clicks by shop', async () => {
+    const creator = await authToken(100, 'user', 'creator@test.invalid');
+    const firstResponse = await jsonRequest(harness, '/api/creator-sharing/shares', {
+      method: 'POST', token: creator,
+      body: { party_id: 100, stack_id: 100, type: 'stack', title: 'Metrik Alpha' },
+    });
+    const secondResponse = await jsonRequest(harness, '/api/creator-sharing/shares', {
+      method: 'POST', token: creator,
+      body: { party_id: 100, stack_id: 100, type: 'stack', title: 'Metrik Beta' },
+    });
+    const first = await firstResponse.json() as { id: number; snapshot_hash: string };
+    const second = await secondResponse.json() as { id: number };
+    const firstToken = 'metric_token_abcdefghijkl';
+    const secondToken = 'metricXtoken_abcdefghijkl';
+    harness.run(`UPDATE share_links SET token = ?, moderation_status = 'approved', views = 777, created_at = 200 WHERE id = ?`, firstToken, first.id);
+    harness.run(`UPDATE share_links SET token = ?, moderation_status = 'approved', views = 888, created_at = 100 WHERE id = ?`, secondToken, second.id);
+
+    harness.run(`INSERT INTO page_view_events (path, visitor_id, created_at) VALUES (?, 'same-browser', datetime('now', '-2 days'))`, `/share/${firstToken}`);
+    harness.run(`INSERT INTO page_view_events (path, visitor_id, created_at) VALUES (?, 'same-browser', datetime('now', '-1 day'))`, `/share/${firstToken}?quelle=mail`);
+    harness.run(`INSERT INTO page_view_events (path, visitor_id, created_at) VALUES (?, 'hash-browser', datetime('now'))`, `/share/${firstToken}#produkt`);
+    harness.run(`INSERT INTO page_view_events (path, visitor_id, created_at) VALUES (?, 'current-boundary', date('now', '-29 days'))`, `/share/${firstToken}`);
+    harness.run(`INSERT INTO page_view_events (path, visitor_id, created_at) VALUES (?, 'other-token', datetime('now'))`, `/share/${secondToken}`);
+    harness.run(`INSERT INTO page_view_events (path, visitor_id, created_at) VALUES (?, 'prefix-collision', datetime('now'))`, `/share/${firstToken}suffix?x=1`);
+    harness.run(`INSERT INTO page_view_events (path, visitor_id, created_at) VALUES (?, NULL, datetime('now'))`, `/share/${firstToken}`);
+    harness.run(`INSERT INTO page_view_events (path, visitor_id, created_at) VALUES (?, 'previous-last', date('now', '-30 days'))`, `/share/${firstToken}`);
+    harness.run(`INSERT INTO page_view_events (path, visitor_id, created_at) VALUES (?, 'previous-first', date('now', '-59 days'))`, `/share/${firstToken}`);
+    harness.run(`INSERT INTO page_view_events (path, visitor_id, created_at) VALUES (?, 'too-old', date('now', '-60 days'))`, `/share/${firstToken}`);
+    harness.run(`INSERT INTO page_view_events (path, visitor_id, created_at) VALUES (?, 'too-new', date('now', '+1 day'))`, `/share/${firstToken}`);
+
+    harness.run(`INSERT INTO share_import_operations (idempotency_key, share_link_id, user_id, result_json, created_at) VALUES ('metric-save-current-0001', ?, 101, '{}', datetime('now'))`, first.id);
+    harness.run(`INSERT INTO share_import_operations (idempotency_key, share_link_id, user_id, result_json, created_at) VALUES ('metric-save-current-0002', ?, 101, '{}', datetime('now', '-1 day'))`, first.id);
+    harness.run(`INSERT INTO share_import_operations (idempotency_key, share_link_id, user_id, result_json, created_at) VALUES ('metric-save-previous-001', ?, 101, '{}', date('now', '-30 days'))`, first.id);
+
+    const target = await db.prepare(`
+      SELECT id, product_id, shop_domain_id, url
+      FROM product_shop_links
+      WHERE shop_domain_id IS NOT NULL AND active = 1
+      ORDER BY id LIMIT 1
+    `).first<{ id: number; product_id: number; shop_domain_id: number; url: string }>();
+    harness.run(`
+      INSERT INTO product_shop_links (
+        product_id, shop_domain_id, url, is_affiliate, affiliate_owner_type,
+        source_type, is_primary, active, sort_order, link_kind
+      ) VALUES (?, ?, ?, 0, 'none', 'admin', 0, 1, 99, 'base_target')
+    `, target!.product_id, target!.shop_domain_id, `${target!.url}${target!.url.includes('?') ? '&' : '?'}variant=2`);
+    const secondLink = await db.prepare(`SELECT MAX(id) AS id FROM product_shop_links`).first<{ id: number }>();
+    harness.run(`
+      INSERT INTO product_link_clicks (
+        product_type, product_id, shop_link_id, is_affiliate, url_snapshot,
+        creator_context_party_id, clicked_at
+      ) VALUES ('catalog', ?, ?, 0, ?, 100, datetime('now'))
+    `, target!.product_id, target!.id, target!.url);
+    harness.run(`
+      INSERT INTO product_link_clicks (
+        product_type, product_id, shop_link_id, is_affiliate, url_snapshot,
+        creator_context_party_id, clicked_at
+      ) VALUES ('catalog', ?, ?, 0, ?, 100, datetime('now'))
+    `, target!.product_id, secondLink!.id, target!.url);
+
+    const portfolioResponse = await jsonRequest(harness, '/api/creator-sharing/creator-shares?party_id=100&q=alpha&status=approved&sort=newest&limit=1', { token: creator });
+    expect(portfolioResponse.status).toBe(200);
+    const portfolio = await portfolioResponse.json() as {
+      shares: Array<{ id: number; metrics: Record<string, number> }>;
+      metrics_period: { days: number; from: string; to: string; previous_from: string; previous_to: string; unique_visitors_definition: string };
+    };
+    expect(portfolio.shares).toHaveLength(1);
+    expect(portfolio.shares[0]).toMatchObject({
+      id: first.id,
+      metrics: { unique_visitors: 3, previous_unique_visitors: 2, saves: 2, previous_saves: 1 },
+    });
+    expect(portfolio.shares[0]).not.toHaveProperty('views');
+    expect(portfolio.metrics_period.days).toBe(30);
+    expect((new Date(portfolio.metrics_period.to).getTime() - new Date(portfolio.metrics_period.from).getTime()) / 86_400_000).toBe(29);
+    expect((new Date(portfolio.metrics_period.previous_to).getTime() - new Date(portfolio.metrics_period.previous_from).getTime()) / 86_400_000).toBe(29);
+    expect(portfolio.metrics_period.unique_visitors_definition).toContain('soweit sie erkennbar sind');
+
+    const firstPage = await jsonRequest(harness, '/api/creator-sharing/creator-shares?party_id=100&archive=active&sort=newest&limit=1', { token: creator });
+    const firstPagePayload = await firstPage.json() as { shares: Array<{ id: number }>; has_more: boolean; next_cursor: string };
+    expect(firstPagePayload).toMatchObject({ shares: [{ id: first.id }], has_more: true });
+    const nextPage = await jsonRequest(harness, `/api/creator-sharing/creator-shares?party_id=100&archive=active&sort=newest&limit=1&cursor=${encodeURIComponent(firstPagePayload.next_cursor)}`, { token: creator });
+    expect(await nextPage.json()).toMatchObject({ shares: [{ id: second.id }], has_more: false });
+
+    const dashboardResponse = await jsonRequest(harness, '/api/creator-sharing/dashboard?party_id=100&period_days=30', { token: creator });
+    expect(dashboardResponse.status).toBe(200);
+    const dashboard = await dashboardResponse.json() as {
+      current: Record<string, number>;
+      previous: Record<string, number>;
+      period: { from: string; to: string; previous_from: string; previous_to: string; definitions: Record<string, string> };
+      trend: Array<{ date: string; unique_visitors: number }>;
+    };
+    expect(dashboard.current).toMatchObject({ unique_visitors: 4, clicks: 2, saves: 2, clicked_shops: 1 });
+    expect(dashboard.previous).toMatchObject({ unique_visitors: 2, saves: 1 });
+    expect(dashboard.trend).toHaveLength(30);
+    expect(dashboard.trend[0].date).toBe(dashboard.period.from.slice(0, 10));
+    expect(dashboard.trend[dashboard.trend.length - 1]?.date).toBe(dashboard.period.to.slice(0, 10));
+    expect(dashboard.period.definitions.clicked_shops).toContain('Shop-Domain');
+
+    const publicBefore = (await db.prepare(`SELECT views FROM share_links WHERE id = ?`).bind(first.id).first<{ views: number }>())?.views;
+    expect((await jsonRequest(harness, `/api/creator-sharing/shares/${firstToken}`)).status).toBe(200);
+    expect((await db.prepare(`SELECT views FROM share_links WHERE id = ?`).bind(first.id).first<{ views: number }>())?.views).toBe(publicBefore);
   });
 
   it('refuses redirects through an inactive frozen product target', async () => {

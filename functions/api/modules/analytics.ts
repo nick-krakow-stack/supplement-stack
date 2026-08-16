@@ -36,12 +36,22 @@ function cleanVisitorId(value: unknown): string | null {
   return /^[a-zA-Z0-9._:-]+$/.test(trimmed) ? trimmed : null
 }
 
+export function isRecognizableAutomatedUserAgent(value: string | null | undefined): boolean {
+  const userAgent = value?.trim()
+  if (!userAgent) return false
+  return /(?:bot(?:[\/\s;)]|$)|crawler|spider|slurp|facebookexternalhit|facebot|bingpreview|linkedinbot|twitterbot|pinterestbot|applebot|telegrambot|slackbot|discordbot|whatsapp|link[-_ ]?preview|previewbot)/i.test(userAgent)
+}
+
 analytics.post('/pageview', async (c) => {
   let body: Record<string, unknown>
   try {
     body = await c.req.json()
   } catch {
     return c.json({ error: 'Invalid JSON' }, 400)
+  }
+
+  if (isRecognizableAutomatedUserAgent(c.req.header('User-Agent'))) {
+    return c.json({ ok: true })
   }
 
   const path = cleanPath(body.path)

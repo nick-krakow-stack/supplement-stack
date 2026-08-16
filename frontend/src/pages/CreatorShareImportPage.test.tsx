@@ -40,7 +40,6 @@ function previewFor(token: string, title: string, type: CreatorSharePreview['typ
     title,
     creator: { id: 7, name: creatorName, type: 'creator' },
     published_at: '2026-08-07T08:00:00.000Z',
-    disclosure: 'Einige Produktlinks sind Affiliate-Links.',
     items: [{
       catalog_product_id: 9,
       product_name: `${title} Produkt`,
@@ -51,7 +50,6 @@ function previewFor(token: string, title: string, type: CreatorSharePreview['typ
       dosage_text: '1 Kapsel',
       timing: 'abends',
       creator_statement: 'Passt in meinen Alltag.',
-      has_affiliate_attribution: false,
     }],
   };
 }
@@ -76,7 +74,8 @@ function checkedSelection(overrides: Partial<CreatorSharePreflight> = {}): Creat
       unit: 'Kapseln',
       intake_interval_days: 1,
       dosage_text: '2 Kapseln',
-      timing: 'abends',
+      timing_label: 'Abends',
+      ...{ timing: 'evening' },
     },
     similar_products: [],
     stack_item_count: 1,
@@ -233,7 +232,8 @@ describe('CreatorShareImportPage', () => {
             unit: 'Kapsel',
             intake_interval_days: 2,
             dosage_text: '1 Kapsel',
-            timing: 'morgens',
+            timing_label: 'Morgens',
+            ...{ timing: 'morning' },
           },
           private_note: null,
         },
@@ -248,7 +248,8 @@ describe('CreatorShareImportPage', () => {
             unit: 'Portion',
             intake_interval_days: 1,
             dosage_text: '1 Portion',
-            timing: 'mittags',
+            timing_label: null,
+            ...{ timing: 'unknown_internal_key' },
           },
           private_note: 'Nur nach dem Essen',
         },
@@ -288,6 +289,10 @@ describe('CreatorShareImportPage', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'Mein Magnesium' }));
     expect(screen.getByText('Deine private Notiz: Nur nach dem Essen')).toBeTruthy();
     expect(screen.getAllByText('Wie oft:', { exact: false })).toHaveLength(2);
+    expect(screen.getByText('Abends')).toBeTruthy();
+    expect(screen.getAllByText('Keine Angabe').length).toBeGreaterThan(0);
+    expect(document.body.textContent).not.toContain('evening');
+    expect(document.body.textContent).not.toContain('unknown_internal_key');
     fireEvent.click(screen.getByRole('button', { name: 'Mein Produkt behalten' }));
     expect(screen.getByText(/Mein Magnesium bleibt in „Mein Alltag“ unverändert/)).toBeTruthy();
     expect(screen.getByText(/Creator Magnesium wird nicht hinzugefügt/)).toBeTruthy();
@@ -444,6 +449,7 @@ describe('CreatorShareImportPage', () => {
 
   it.each([
     ['SHARE_PENDING', 'Diese Empfehlung wird noch geprüft.'],
+    ['SHARE_PAUSED', 'Diese Empfehlung ist vorübergehend pausiert.'],
     ['SHARE_EXPIRED', 'Dieser Link ist abgelaufen.'],
     ['SHARE_UNAVAILABLE', 'Diese Empfehlung ist nicht mehr verfügbar.'],
     ['SHARE_UNKNOWN', 'Diese Empfehlung wurde nicht gefunden.'],

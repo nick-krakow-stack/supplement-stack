@@ -8,14 +8,48 @@ type Party = {
 };
 type Share = {
   id: number; token: string; entity_type: string; creator_name: string; snapshot_hash: string;
-  moderation_status: 'pending' | 'approved' | 'blocked'; is_revoked: number; views: number; imports: number;
+  title?: string | null;
+  moderation_status: 'pending' | 'approved' | 'blocked';
+  moderation_reason: string | null;
+  moderation_target: ModerationTarget | null;
+  moderation_item_index: number | null;
+  is_revoked: number;
+  version: number;
+  paused_at: number | null;
+  expires_at: number | null;
+  archived_at: number | null;
+  supersedes_share_link_id: number | null;
 };
+type ModerationTarget = 'general' | 'title' | 'creator_statement' | 'product';
+type ModerationDraft = { reason: string; target: ModerationTarget; itemNumber: string };
 type MissingCode = { shop_domain_id: number; shop_name: string; domain: string; products_count: number; product_names: string };
 type Shop = { id: number; display_name: string; domain: string };
 type AffiliateVersion = { id: number; shop_domain_id: number; shop_name: string; version: number; status: string; code: string; link_template: string };
 type DefaultShop = { shop_domain_id: number; version: number } | null;
 type ProductPick = { ingredient_id: number; ingredient_name: string; product_id: number; product_name: string; version: number };
 type ProductOwner = { id: number; name: string; brand: string | null; owner_party_id: number; owner_party_name: string };
+
+const moderationTargetLabels: Record<ModerationTarget, string> = {
+  general: 'Gesamte Empfehlung',
+  title: 'Titel',
+  creator_statement: 'Persönlicher Text',
+  product: 'Produkt',
+};
+
+function moderationStatusLabel(share: Share) {
+  if (share.moderation_status === 'blocked') return 'Abgelehnt';
+  if (share.is_revoked) return 'Beendet';
+  if (share.moderation_status === 'pending') return 'Wartet auf Prüfung';
+  if (share.paused_at !== null) return 'Pausiert';
+  return 'Freigegeben';
+}
+
+function moderationStatusTone(share: Share): 'neutral' | 'ok' | 'warn' | 'danger' {
+  if (share.moderation_status === 'blocked' || share.is_revoked) return 'danger';
+  if (share.moderation_status === 'pending') return 'warn';
+  if (share.paused_at !== null) return 'neutral';
+  return 'ok';
+}
 
 export default function AdministratorCreatorSharingPage() {
   const [parties, setParties] = useState<Party[]>([]);
@@ -35,6 +69,8 @@ export default function AdministratorCreatorSharingPage() {
   const [ownerProductId, setOwnerProductId] = useState('');
   const [ownerProduct, setOwnerProduct] = useState<ProductOwner | null>(null);
   const [newOwnerPartyId, setNewOwnerPartyId] = useState('');
+  const [moderationDrafts, setModerationDrafts] = useState<Record<number, ModerationDraft>>({});
+  const [moderatingShareId, setModeratingShareId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -95,16 +131,75 @@ export default function AdministratorCreatorSharingPage() {
     } catch (caught) { showError(caught, 'Status konnte nicht geändert werden.'); }
   };
 
-  const moderate = async (share: Share, status: Share['moderation_status'], isRevoked = share.is_revoked) => {
+  const moderationDraft = (share: Share): ModerationDraft => moderationDrafts[share.id] ?? {
+    reason: share.moderation_reason ?? '',
+    target: share.moderation_target ?? 'general',
+    itemNumber: share.moderation_item_index === null ? '' : String(share.moderation_item_index + 1),
+  };
+
+  const updateModerationDraft = (share: Share, change: Partial<ModerationDraft>) => {
+    setModerationDrafts((current) => {
+      const currentDraft = current[share.id] ?? {
+        reason: share.moderation_reason ?? '',
+        target: share.moderation_target ?? 'general',
+        itemNumber: share.moderation_item_index === null ? '' : String(share.moderation_item_index + 1),
+      };
+      return { ...current, [share.id]: { ...currentDraft, ...change } };
+    });
+  };
+
+  const moderate = async (share: Share, status: Extract<Share['moderation_status'], 'approved' | 'blocked'>) => {
+    const draft = moderationDraft(share);
+    const reason = draft.reason.trim();
+    const needsItemNumber = draft.target === 'creator_statement' || draft.target === 'product';
+    const itemNumber = Number(draft.itemNumber);
+
+    if (status === 'blocked' && !reason) {
+      setError('Bitte erkläre kurz und verständlich, was der Creator ändern soll.');
+      return;
+    }
+    if (status === 'blocked' && needsItemNumber && (!Number.isInteger(itemNumber) || itemNumber < 1)) {
+      setError('Bitte gib an, welcher Eintrag geändert werden soll. Die Zählung beginnt bei 1.');
+      return;
+    }
+
+    setError(null);
+    setNotice(null);
+    setModeratingShareId(share.id);
     try {
       await apiClient.patch(`/admin/creator-sharing/shares/${share.id}`, {
-        expected_status: share.moderation_status,
+        expected_version: share.version,
         expected_snapshot_hash: share.snapshot_hash,
+        expected_moderation_status: share.moderation_status,
+        expected_is_revoked: share.is_revoked,
+        expected_paused_at: share.paused_at,
+        expected_expires_at: share.expires_at,
+        expected_archived_at: share.archived_at,
         moderation_status: status,
-        is_revoked: isRevoked,
+        moderation_reason: status === 'blocked' ? reason : null,
+        moderation_target: status === 'blocked' ? draft.target : null,
+        moderation_item_index: status === 'blocked' && needsItemNumber ? itemNumber - 1 : null,
       });
+      setModerationDrafts((current) => {
+        const next = { ...current };
+        delete next[share.id];
+        return next;
+      });
+      setNotice(status === 'approved'
+        ? 'Die Empfehlung wurde freigegeben.'
+        : 'Die Empfehlung wurde abgelehnt. Der Creator erhält die Rückmeldung.');
       await load();
-    } catch (caught) { showError(caught, 'Share konnte nicht moderiert werden.'); }
+    } catch (caught) {
+      const responseStatus = (caught as { response?: { status?: number } })?.response?.status;
+      if (responseStatus === 409) {
+        await load();
+        setError('Diese Empfehlung wurde zwischenzeitlich geändert. Die Liste wurde neu geladen. Bitte prüfe den aktuellen Stand.');
+      } else {
+        setError('Die Empfehlung konnte nicht geprüft werden. Bitte versuche es erneut.');
+      }
+    } finally {
+      setModeratingShareId(null);
+    }
   };
 
   const createAffiliateVersion = async () => {
@@ -231,8 +326,85 @@ export default function AdministratorCreatorSharingPage() {
         {ownerProduct && <AdminButton onClick={saveProductOwner} disabled={!newOwnerPartyId || Number(newOwnerPartyId) === ownerProduct.owner_party_id}>Eigentümer ändern</AdminButton>}
       </AdminCard>
 
-      <AdminCard title="Share-Moderation" subtitle="Freigabe bindet Status und Snapshot-Hash; veränderte Datensätze führen zu einem Konflikt." padded>
-        {shares.length === 0 ? <AdminEmpty>Keine Creator-Shares vorhanden.</AdminEmpty> : <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Creator</th><th>Typ</th><th>Status</th><th>Aufrufe / Importe</th><th>Aktionen</th></tr></thead><tbody>{shares.map((share) => <tr key={share.id}><td>{share.creator_name}</td><td>{share.entity_type === 'stack' ? 'Stack' : 'Einzelempfehlung'}</td><td><AdminBadge tone={share.moderation_status === 'approved' && !share.is_revoked ? 'ok' : share.moderation_status === 'blocked' || share.is_revoked ? 'danger' : 'warn'}>{share.is_revoked ? 'widerrufen' : share.moderation_status}</AdminBadge></td><td>{share.views} / {share.imports}</td><td><div className="flex gap-2"><AdminButton size="sm" onClick={() => moderate(share, 'approved', 0)}>Freigeben</AdminButton><AdminButton size="sm" variant="danger" onClick={() => moderate(share, 'blocked', 1)}>Sperren</AdminButton></div></td></tr>)}</tbody></table></div>}
+      <AdminCard title="Empfehlungen prüfen" subtitle="Freigeben oder mit einer klaren Rückmeldung ablehnen. Eine Ablehnung macht den Link vorläufig nicht öffentlich; der Creator kann die Empfehlung korrigieren." padded>
+        {shares.length === 0 ? <AdminEmpty>Keine Creator-Empfehlungen vorhanden.</AdminEmpty> : <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Creator</th><th>Empfehlung</th><th>Status</th><th>Rückmeldung</th><th>Prüfung</th></tr></thead><tbody>{shares.map((share) => {
+          const draft = moderationDraft(share);
+          const needsItemNumber = draft.target === 'creator_statement' || draft.target === 'product';
+          const isBusy = moderatingShareId === share.id;
+          const cannotBlock = !draft.reason.trim()
+            || (needsItemNumber && (!Number.isInteger(Number(draft.itemNumber)) || Number(draft.itemNumber) < 1));
+
+          return <tr key={share.id}>
+            <td>
+              <strong>{share.creator_name}</strong>
+              <div className="admin-muted">Empfehlung #{share.id} · Stand {share.version}</div>
+              {share.supersedes_share_link_id !== null && <div className="admin-muted">Korrektur von #{share.supersedes_share_link_id}</div>}
+            </td>
+            <td>
+              <strong>{share.title || (share.entity_type === 'stack' ? 'Stack' : 'Einzelempfehlung')}</strong>
+              <div className="admin-muted">{share.entity_type === 'stack' ? 'Ganzer Stack' : 'Ein einzelner Eintrag'}</div>
+            </td>
+            <td>
+              <AdminBadge tone={moderationStatusTone(share)}>{moderationStatusLabel(share)}</AdminBadge>
+              {share.archived_at !== null && <div className="mt-1"><AdminBadge tone="neutral">Archiviert</AdminBadge></div>}
+            </td>
+            <td className="min-w-[220px]">
+              {share.moderation_reason ? <>
+                <div>{share.moderation_reason}</div>
+                <div className="admin-muted mt-1">
+                  Betrifft: {moderationTargetLabels[share.moderation_target ?? 'general']}
+                  {share.moderation_item_index !== null ? `, Eintrag ${share.moderation_item_index + 1}` : ''}
+                </div>
+              </> : <span className="admin-muted">Noch keine Rückmeldung</span>}
+            </td>
+            <td className="min-w-[360px]">
+              <div className="grid gap-2">
+                <label className="grid gap-1 text-xs font-medium text-[color:var(--admin-ink-2)]">
+                  Was muss geändert werden? (Pflicht bei Ablehnung)
+                  <textarea
+                    aria-label={`Grund für die Ablehnung von ${share.creator_name}`}
+                    className="admin-input min-h-[72px]"
+                    maxLength={1000}
+                    placeholder="Zum Beispiel: Bitte formuliere den persönlichen Text sachlicher."
+                    value={draft.reason}
+                    onChange={(event) => updateModerationDraft(share, { reason: event.target.value })}
+                  />
+                </label>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <label className="grid gap-1 text-xs font-medium text-[color:var(--admin-ink-2)]">
+                    Welcher Bereich?
+                    <select
+                      aria-label={`Betroffener Bereich von ${share.creator_name}`}
+                      className="admin-select"
+                      value={draft.target}
+                      onChange={(event) => updateModerationDraft(share, { target: event.target.value as ModerationTarget, itemNumber: '' })}
+                    >
+                      {Object.entries(moderationTargetLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                    </select>
+                  </label>
+                  {needsItemNumber && <label className="grid gap-1 text-xs font-medium text-[color:var(--admin-ink-2)]">
+                    Welcher Eintrag?
+                    <input
+                      aria-label={`Nummer des betroffenen Eintrags von ${share.creator_name}`}
+                      className="admin-input"
+                      type="number"
+                      min="1"
+                      step="1"
+                      placeholder="Nummer ab 1"
+                      value={draft.itemNumber}
+                      onChange={(event) => updateModerationDraft(share, { itemNumber: event.target.value })}
+                    />
+                  </label>}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <AdminButton size="sm" onClick={() => void moderate(share, 'approved')} disabled={isBusy || share.is_revoked === 1 || share.moderation_status === 'approved'}>Freigeben</AdminButton>
+                  <AdminButton size="sm" variant="danger" onClick={() => void moderate(share, 'blocked')} disabled={isBusy || share.is_revoked === 1 || cannotBlock}>Mit Rückmeldung ablehnen</AdminButton>
+                </div>
+                {share.is_revoked === 1 && <div className="admin-muted">Vom Creator beendet – keine weitere Prüfung möglich.</div>}
+              </div>
+            </td>
+          </tr>;
+        })}</tbody></table></div>}
       </AdminCard>
 
       <AdminCard title="Plattform-Code fehlt" subtitle="Aktive sichere Basisziele ohne aktuell gültige Plattform-Affiliate-Version." padded>

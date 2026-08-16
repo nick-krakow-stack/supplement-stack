@@ -3,6 +3,7 @@ import type { AppContext } from '../lib/types'
 import { ensureAuth } from '../lib/helpers'
 import {
   canonicalJson,
+  creatorTimingLabel,
   creatorSharingEnabled,
   isSupportedCreatorShareSnapshotVersion,
   snapshotHash,
@@ -11,8 +12,11 @@ import {
 } from '../lib/creator-sharing'
 import {
   getParty,
+  loadCreatorTimingLabels,
   parseStoredSnapshot,
   sameIntegerSet,
+  SNAPSHOT_RELATION_SIGNATURE_SQL_GUARD,
+  snapshotRelationSignatureJson,
   validateSnapshotRelations,
   type ValidatedSnapshotRelations,
 } from '../lib/creator-sharing-service'
@@ -29,8 +33,11 @@ type ShareRow = {
   snapshot_schema_version: number | null
   snapshot_hash: string | null
   expires_at: number | null
+  paused_at: number | null
   is_revoked: number
   moderation_status: 'pending' | 'approved' | 'blocked'
+  legacy_provenance_status: 'ambiguous' | null
+  version: number
 }
 
 type ImportComparison = {
@@ -40,6 +47,7 @@ type ImportComparison = {
   intake_interval_days: number | null
   dosage_text: string | null
   timing: string | null
+  timing_label: string
 }
 
 type SimilarProduct = {
@@ -80,6 +88,7 @@ type ImportPreflight = {
   plan: ImportPlan
   targetState: TargetState | null
   similarProducts: SimilarProduct[]
+  relationSignature: string
   response: {
     type: 'dose_recommendation' | 'stack'
     snapshot_hash: string
@@ -151,10 +160,21 @@ async function shareFailure(db: D1Database, token: string): Promise<PreflightFai
   if (!/^[A-Za-z0-9_-]{24,80}$/.test(token)) {
     return { code: 'SHARE_UNKNOWN', error: 'Diese Empfehlung wurde nicht gefunden.', httpStatus: 404 }
   }
-  const row = await db.prepare('SELECT * FROM share_links WHERE token = ? LIMIT 1').bind(token).first<ShareRow>()
+  const row = await db.prepare(`
+    SELECT share.*, party.status AS creator_party_status
+    FROM share_links share
+    LEFT JOIN parties party ON party.id = share.creator_party_id
+    WHERE share.token = ?
+    LIMIT 1
+  `).bind(token).first<ShareRow & { creator_party_status: string | null }>()
   if (!row) return { code: 'SHARE_UNKNOWN', error: 'Diese Empfehlung wurde nicht gefunden.', httpStatus: 404 }
   const now = Math.floor(Date.now() / 1000)
-  if (row.is_revoked === 1 || row.moderation_status === 'blocked') {
+  if (
+    row.creator_party_status !== 'active'
+    || row.is_revoked === 1
+    || row.moderation_status === 'blocked'
+    || row.legacy_provenance_status === 'ambiguous'
+  ) {
     return { code: 'SHARE_UNAVAILABLE', error: 'Diese Empfehlung ist nicht mehr verfügbar.', httpStatus: 410 }
   }
   if (row.expires_at !== null && row.expires_at <= now) {
@@ -162,6 +182,9 @@ async function shareFailure(db: D1Database, token: string): Promise<PreflightFai
   }
   if (row.moderation_status === 'pending') {
     return { code: 'SHARE_PENDING', error: 'Diese Empfehlung wird noch geprüft.', httpStatus: 409 }
+  }
+  if (row.paused_at !== null) {
+    return { code: 'SHARE_PAUSED', error: 'Diese Empfehlung ist vorübergehend pausiert.', httpStatus: 409 }
   }
   return { code: 'SHARE_INVALID', error: 'Diese Empfehlung kann gerade nicht geladen werden.', httpStatus: 409 }
 }
@@ -171,7 +194,13 @@ async function loadShare(db: D1Database, token: string): Promise<{ value?: Loade
   const row = await db.prepare(`
     SELECT * FROM share_links
     WHERE token = ? AND moderation_status = 'approved' AND is_revoked = 0
+      AND legacy_provenance_status IS NULL
+      AND paused_at IS NULL
       AND (expires_at IS NULL OR expires_at > strftime('%s', 'now'))
+      AND EXISTS (
+        SELECT 1 FROM parties party
+        WHERE party.id = share_links.creator_party_id AND party.status = 'active'
+      )
     LIMIT 1
   `).bind(token).first<ShareRow>()
   if (!row) return { failure: await shareFailure(db, token) }
@@ -200,7 +229,12 @@ async function ingredientNames(db: D1Database, ids: number[]): Promise<string[]>
   return ids.map((id) => names.get(id)).filter((name): name is string => typeof name === 'string')
 }
 
-async function stackItemDetails(db: D1Database, stackId: number, userId: number): Promise<Map<number, {
+async function stackItemDetails(
+  db: D1Database,
+  stackId: number,
+  userId: number,
+  timingLabels: ReadonlyMap<string, string>,
+): Promise<Map<number, {
   ids: number[]
   names: string[]
   item: SimilarProduct
@@ -246,6 +280,7 @@ async function stackItemDetails(db: D1Database, stackId: number, userId: number)
           intake_interval_days: row.intake_interval_days,
           dosage_text: row.dosage_text,
           timing: row.timing,
+          timing_label: creatorTimingLabel(row.timing, timingLabels),
         },
         private_note: row.private_note,
       },
@@ -334,8 +369,13 @@ async function buildPreflight(
   }
 
   const snapshotItem = loaded.snapshot.items[0]
-  const targetState = plan.stackId ? await loadTargetState(db, plan.stackId) : null
-  const details = plan.stackId ? await stackItemDetails(db, plan.stackId, userId) : new Map<number, { ids: number[]; names: string[]; item: SimilarProduct }>()
+  const [targetState, timingLabels] = await Promise.all([
+    plan.stackId ? loadTargetState(db, plan.stackId) : Promise.resolve(null),
+    loadCreatorTimingLabels(db),
+  ])
+  const details = plan.stackId
+    ? await stackItemDetails(db, plan.stackId, userId, timingLabels)
+    : new Map<number, { ids: number[]; names: string[]; item: SimilarProduct }>()
   const similarProducts = loaded.snapshot.type === 'dose_recommendation'
     ? [...details.values()].filter((entry) => sameIntegerSet(entry.ids, snapshotItem.main_ingredient_ids)).map((entry) => entry.item)
     : []
@@ -353,11 +393,21 @@ async function buildPreflight(
     intake_interval_days: snapshotItem.intake_interval_days,
     dosage_text: snapshotItem.dosage_text,
     timing: snapshotItem.timing,
+    timing_label: creatorTimingLabel(snapshotItem.timing, timingLabels),
   } : null
+  const relationSignature = snapshotRelationSignatureJson(loaded.snapshot, loaded.relations)
   const fingerprint = await hashCanonicalValue({
     version: 1,
     share_id: loaded.row.id,
+    share_version: loaded.row.version,
     snapshot_hash: loaded.row.snapshot_hash,
+    share_lifecycle: {
+      moderation_status: loaded.row.moderation_status,
+      is_revoked: loaded.row.is_revoked,
+      paused_at: loaded.row.paused_at,
+      expires_at: loaded.row.expires_at,
+    },
+    relation_signature: relationSignature,
     user_id: userId,
     plan,
     target_state: targetState,
@@ -368,6 +418,7 @@ async function buildPreflight(
       plan,
       targetState,
       similarProducts,
+      relationSignature,
       response: {
         type: loaded.snapshot.type,
         snapshot_hash: loaded.row.snapshot_hash as string,
@@ -488,6 +539,7 @@ function operationGuard(
     targetStackId: number | null
     share: ShareRow
     claim: ImportWriteClaim
+    relationSignature: string
     targetState?: TargetState | null
   },
 ): D1PreparedStatement {
@@ -501,6 +553,17 @@ function operationGuard(
     input.claim.storedResultJson,
     input.claim.shareId,
     input.share.snapshot_hash,
+    input.share.snapshot_schema_version,
+    input.share.entity_type,
+    input.share.entity_id,
+    input.share.creator_party_id,
+    input.share.version,
+    input.share.legacy_provenance_status,
+    input.share.moderation_status,
+    input.share.is_revoked,
+    input.share.paused_at,
+    input.share.expires_at,
+    input.relationSignature,
   ]
   if (input.targetStackId && input.targetState) {
     bindings.push(input.targetStackId, input.claim.userId, ...targetStateBindings(input.targetStackId, input.targetState))
@@ -510,9 +573,18 @@ function operationGuard(
       idempotency_key, share_link_id, user_id, target_stack_id, result_json
     )
     SELECT ?, id, ?, ?, ? FROM share_links
-    WHERE id = ? AND snapshot_hash = ? AND moderation_status = 'approved'
-      AND is_revoked = 0
+    WHERE id = ? AND snapshot_hash = ? AND snapshot_schema_version IS ?
+      AND entity_type = ? AND entity_id = ? AND creator_party_id IS ?
+      AND version = ? AND legacy_provenance_status IS ? AND moderation_status = ?
+      AND is_revoked = ? AND paused_at IS ? AND expires_at IS ?
+      AND moderation_status = 'approved' AND is_revoked = 0 AND paused_at IS NULL
+      AND legacy_provenance_status IS NULL
       AND (expires_at IS NULL OR expires_at > strftime('%s', 'now'))
+      AND EXISTS (
+        SELECT 1 FROM parties party
+        WHERE party.id = share_links.creator_party_id AND party.status = 'active'
+      )
+      AND ${SNAPSHOT_RELATION_SIGNATURE_SQL_GUARD}
       ${targetGuard}
   `).bind(...bindings)
 }
@@ -521,7 +593,13 @@ function counterStatement(db: D1Database, share: ShareRow, claim: ImportWriteCla
   return db.prepare(`
     UPDATE share_links SET imports = imports + 1
     WHERE id = ? AND snapshot_hash = ? AND moderation_status = 'approved' AND is_revoked = 0
+      AND legacy_provenance_status IS NULL
+      AND paused_at IS NULL
       AND (expires_at IS NULL OR expires_at > strftime('%s', 'now'))
+      AND EXISTS (
+        SELECT 1 FROM parties party
+        WHERE party.id = share_links.creator_party_id AND party.status = 'active'
+      )
       AND ${WRITE_CLAIM_SQL}
   `).bind(share.id, share.snapshot_hash, ...claimBindings(claim))
 }
@@ -688,7 +766,12 @@ async function saveCompleteStack(
   }
   const claim = createWriteClaim(idempotencyKey, loaded.row.id, user.userId, result, attemptNonce)
   const statements: D1PreparedStatement[] = [
-    operationGuard(c.env.DB, { targetStackId: null, share: loaded.row, claim }),
+    operationGuard(c.env.DB, {
+      targetStackId: null,
+      share: loaded.row,
+      claim,
+      relationSignature: preflight.relationSignature,
+    }),
     c.env.DB.prepare(`
       INSERT INTO stacks (id, user_id, name, origin_party_id, last_opened_at)
       SELECT ?, ?, ?, ?, CURRENT_TIMESTAMP
@@ -794,7 +877,12 @@ async function addToNewStack(
   }
   const claim = createWriteClaim(idempotencyKey, loaded.row.id, user.userId, result, attemptNonce)
   const statements: D1PreparedStatement[] = [
-    operationGuard(c.env.DB, { targetStackId: null, share: loaded.row, claim }),
+    operationGuard(c.env.DB, {
+      targetStackId: null,
+      share: loaded.row,
+      claim,
+      relationSignature: preflight.relationSignature,
+    }),
     c.env.DB.prepare(`
       INSERT INTO stacks (id, user_id, name, origin_party_id, last_opened_at)
       SELECT ?, ?, ?, ?, CURRENT_TIMESTAMP
@@ -855,6 +943,7 @@ async function replaceInExistingStack(
       targetStackId: plan.stackId,
       share: loaded.row,
       claim,
+      relationSignature: preflight.relationSignature,
       targetState,
     }),
     c.env.DB.prepare(`
@@ -942,6 +1031,7 @@ async function addToExistingStack(
     targetStackId: plan.stackId,
     share: loaded.row,
     claim,
+    relationSignature: preflight.relationSignature,
     targetState,
   })]
   statements.push(addSnapshotItem(c.env.DB, {
