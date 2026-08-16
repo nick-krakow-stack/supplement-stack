@@ -26,7 +26,6 @@ const preview: CreatorSharePreview = {
     dosage_text: null,
     timing: 'abends',
     creator_statement: 'Passt gut in meinen Alltag.',
-    category_name: 'Abend',
     has_affiliate_attribution: true,
   }],
 };

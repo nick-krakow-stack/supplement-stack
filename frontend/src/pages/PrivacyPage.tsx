@@ -27,7 +27,7 @@ export default function PrivacyPage() {
         <p>
           Supplement Stack folgt dem Grundsatz der Datenminimierung. Je nach Nutzung verarbeiten wir
           Account-Daten wie E-Mail-Adresse, Login-Informationen, Passwort-Hash und E-Mail-Bestätigung,
-          außerdem optionales Alter, die gewählte Leitlinienquelle, Health-Consent-Status,
+          außerdem optionales Alter, die gewählte Quellenpräferenz, der Status deiner Einwilligung zur Speicherung,
           gespeicherte Stacks und Produkte, Dosierungs-, Einnahmeintervall- und Kostendaten sowie
           von dir eingereichte Produktdaten.
         </p>

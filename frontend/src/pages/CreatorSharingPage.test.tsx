@@ -56,7 +56,6 @@ const stackDetails = {
     intake_interval_days: 1,
     dosage_text: '1 Kapsel',
     timing: 'abends',
-    category_name: 'Abend',
   }],
 };
 
@@ -83,7 +82,6 @@ const preview: CreatorOwnedSharePreview = {
     dosage_text: '1 Kapsel',
     timing: 'abends',
     creator_statement: 'Passt in meinen Alltag.',
-    category_name: 'Abend',
     has_affiliate_attribution: false,
   }],
 };

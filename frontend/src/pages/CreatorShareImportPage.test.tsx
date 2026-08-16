@@ -51,7 +51,6 @@ function previewFor(token: string, title: string, type: CreatorSharePreview['typ
       dosage_text: '1 Kapsel',
       timing: 'abends',
       creator_statement: 'Passt in meinen Alltag.',
-      category_name: 'Abend',
       has_affiliate_attribution: false,
     }],
   };
@@ -294,7 +293,8 @@ describe('CreatorShareImportPage', () => {
     expect(screen.getByText(/Creator Magnesium wird nicht hinzugefügt/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Empfehlung des Creators übernehmen' }));
     expect(screen.getByText(/Nur Mein Magnesium wird in „Mein Alltag“ durch Creator Magnesium ersetzt/)).toBeTruthy();
-    expect(screen.getByText(/Kategorie und Reihenfolge bleiben gleich/)).toBeTruthy();
+    expect(screen.getByText(/Die Reihenfolge bleibt gleich/)).toBeTruthy();
+    expect(screen.queryByText(/Kategorie/)).toBeNull();
     expect(screen.getByText(/Dein eigenes Produkt und seine private Notiz bleiben gespeichert/)).toBeTruthy();
     expect((screen.getByRole('button', { name: 'Jetzt bestätigen' }) as HTMLButtonElement).disabled).toBe(false);
 

@@ -1,7 +1,7 @@
 import type { Env } from './types'
 
-export const CREATOR_SHARING_SNAPSHOT_VERSION = 2
-export const CREATOR_SHARING_SUPPORTED_SNAPSHOT_VERSIONS = [1, 2] as const
+export const CREATOR_SHARING_SNAPSHOT_VERSION = 3
+export const CREATOR_SHARING_SUPPORTED_SNAPSHOT_VERSIONS = [1, 2, 3] as const
 export const CREATOR_SHARING_MAX_ITEMS = 100
 export const CREATOR_STATEMENT_MAX_LENGTH = 500
 
@@ -26,11 +26,12 @@ export type CreatorShareSnapshotItem = {
   timing: string | null
   creator_statement: string | null
   sort_order: number
-  category_name: string | null
+  /** Only present in legacy v1/v2 snapshots. Categories were retired in v3. */
+  category_name?: string | null
 }
 
 export type CreatorShareSnapshot = {
-  schema_version: 1 | 2
+  schema_version: 1 | 2 | 3
   type: 'dose_recommendation' | 'stack'
   creator_party_id: number
   published_at: string
@@ -38,8 +39,8 @@ export type CreatorShareSnapshot = {
   items: CreatorShareSnapshotItem[]
 }
 
-export function isSupportedCreatorShareSnapshotVersion(value: unknown): value is 1 | 2 {
-  return value === 1 || value === 2
+export function isSupportedCreatorShareSnapshotVersion(value: unknown): value is 1 | 2 | 3 {
+  return value === 1 || value === 2 || value === 3
 }
 
 type JsonPrimitive = string | number | boolean | null
@@ -303,19 +304,22 @@ export function parseCreatorShareSnapshot(value: unknown): { value?: CreatorShar
     const shopLinkId = positiveInteger(rawItem.shop_link_id)
     const binding = parseBinding(rawItem.link_binding)
     const quantity = boundedInteger(rawItem.quantity, 1, 100000)
-    const unit = schemaVersion === 2 ? optionalBoundedText(rawItem.unit, 40) : null
+    const unit = schemaVersion >= 2 ? optionalBoundedText(rawItem.unit, 40) : null
     const intakeIntervalDays = boundedInteger(rawItem.intake_interval_days, 1, 3650)
     const dosageText = optionalBoundedText(rawItem.dosage_text, 240)
     const timing = optionalBoundedText(rawItem.timing, 120)
     const statementResult = validateCreatorStatement(rawItem.creator_statement)
     const sortOrder = boundedInteger(rawItem.sort_order, 0, 1000000)
-    const categoryName = optionalBoundedText(rawItem.category_name, 80)
+    const categoryName = schemaVersion <= 2
+      ? optionalBoundedText(rawItem.category_name, 80)
+      : null
     if (
       catalogProductId === null || shopLinkId === null || !binding
       || quantity === null || intakeIntervalDays === null
-      || (schemaVersion === 2 && (unit === undefined || !Object.prototype.hasOwnProperty.call(rawItem, 'unit')))
+      || (schemaVersion >= 2 && (unit === undefined || !Object.prototype.hasOwnProperty.call(rawItem, 'unit')))
       || dosageText === undefined || timing === undefined
       || statementResult.error || sortOrder === null || categoryName === undefined
+      || (schemaVersion === 3 && Object.prototype.hasOwnProperty.call(rawItem, 'category_name'))
     ) {
       return { error: statementResult.error ?? 'Ungültige Snapshot-Position.' }
     }
@@ -335,13 +339,13 @@ export function parseCreatorShareSnapshot(value: unknown): { value?: CreatorShar
       link_binding: binding,
       main_ingredient_ids: normalizedIds,
       quantity,
-      ...(schemaVersion === 2 ? { unit: unit ?? null } : {}),
+      ...(schemaVersion >= 2 ? { unit: unit ?? null } : {}),
       intake_interval_days: intakeIntervalDays,
       dosage_text: dosageText,
       timing,
       creator_statement: statementResult.value ?? null,
       sort_order: sortOrder,
-      category_name: categoryName,
+      ...(schemaVersion <= 2 ? { category_name: categoryName } : {}),
     })
   }
 

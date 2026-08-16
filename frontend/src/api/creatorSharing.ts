@@ -20,7 +20,6 @@ export type CreatorShareItem = {
   dosage_text: string | null;
   timing: string | null;
   creator_statement: string | null;
-  category_name: string | null;
   has_affiliate_attribution: boolean;
 };
 

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fetchCreatorSharingHono } from './creatorSharingHonoHandlers.mjs';
@@ -11,6 +11,15 @@ import {
   validateProductTargetUrl,
 } from '../../../functions/api/lib/creator-sharing';
 import { convertAmount } from '../../../functions/api/lib/units';
+import { calculateProductUsage } from '../lib/stackCalculations';
+
+const { sendMailMock } = vi.hoisted(() => ({
+  sendMailMock: vi.fn(),
+}));
+
+vi.mock('../../../functions/api/lib/mail', () => ({
+  sendMail: sendMailMock,
+}));
 
 type TestStatement = {
   bind: (...values: unknown[]) => TestStatement;
@@ -94,6 +103,8 @@ describe('creator stack sharing runtime contract', () => {
   let db: TestDatabase;
 
   beforeEach(async () => {
+    sendMailMock.mockReset();
+    sendMailMock.mockResolvedValue({ ok: true });
     harness = createProductionKnowledgeHonoHarness();
     applyAllMigrations(harness);
     db = harness.db as TestDatabase;
@@ -103,7 +114,6 @@ describe('creator stack sharing runtime contract', () => {
     harness.run(`INSERT INTO parties (id, type, name, slug, status, auto_catalog_approval) VALUES (100, 'creator', 'Test Creator', 'test-creator', 'active', 0)`);
     harness.run(`INSERT INTO party_memberships (party_id, user_id, role, status) VALUES (100, 100, 'owner', 'active')`);
     harness.run(`INSERT INTO stacks (id, user_id, name) VALUES (100, 100, 'Creator Stack')`);
-    harness.run(`INSERT INTO stack_categories (id, stack_id, name, name_normalized, sort_order, is_default) VALUES (100, 100, 'Unkategorisiert', 'unkategorisiert', 0, 1)`);
 
     const target = await db.prepare(`
       SELECT psl.id AS shop_link_id, psl.product_id, psl.shop_domain_id
@@ -113,7 +123,7 @@ describe('creator stack sharing runtime contract', () => {
       ORDER BY psl.id LIMIT 1
     `).first<{ shop_link_id: number; product_id: number; shop_domain_id: number }>();
     expect(target).not.toBeNull();
-    harness.run(`INSERT INTO stack_items (id, stack_id, catalog_product_id, quantity, intake_interval_days, sort_order, category_id) VALUES (100, 100, ?, 1, 1, 0, 100)`, target!.product_id);
+    harness.run(`INSERT INTO stack_items (id, stack_id, catalog_product_id, quantity, intake_interval_days, sort_order) VALUES (100, 100, ?, 1, 1, 0)`, target!.product_id);
     harness.run(`INSERT INTO party_shop_affiliate_versions (id, party_id, shop_domain_id, version, code, link_template, status) VALUES (100, 100, ?, 1, 'creator-v1', '{url}?creator={code}', 'current')`, target!.shop_domain_id);
   });
 
@@ -126,6 +136,127 @@ describe('creator stack sharing runtime contract', () => {
       body: { party_id: 100, stack_id: 100, type: 'stack', title: 'Disabled' },
     });
     expect(response.status).toBe(404);
+  });
+
+  it('copies dosage defaults once and keeps a deliberate clear through PUT, GET, calculation and mail', async () => {
+    const importer = await authToken(101, 'user', 'importer@test.invalid');
+    const source = await db.prepare(`
+      SELECT si.catalog_product_id AS product_id, pi.id AS product_ingredient_id, pi.ingredient_id
+      FROM stack_items si
+      JOIN product_ingredients pi ON pi.product_id = si.catalog_product_id AND pi.is_main = 1
+      WHERE si.id = 100
+    `).first<{ product_id: number; product_ingredient_id: number; ingredient_id: number }>();
+    expect(source).not.toBeNull();
+
+    harness.run(`
+      UPDATE products
+      SET dosage_text = '400 mg täglich', price = 30,
+          serving_size = 1, serving_unit = 'Portion',
+          servings_per_container = 30, container_count = 1
+      WHERE id = ?
+    `, source!.product_id);
+    harness.run(`
+      UPDATE product_ingredients
+      SET quantity = 300, unit = 'mg', basis_quantity = 1, basis_unit = 'Portion'
+      WHERE id = ?
+    `, source!.product_ingredient_id);
+    harness.run(`
+      INSERT INTO user_products (
+        id, user_id, name, price, serving_size, serving_unit,
+        servings_per_container, container_count, dosage_text, status
+      ) VALUES
+        (901, 101, 'Eigenes Produkt mit Standard', 20, 1, 'Portion', 30, 1, '200 mg täglich', 'pending'),
+        (902, 101, 'Eigenes Produkt bewusst ohne Zieltext', 10, 1, 'Portion', 30, 1, '100 mg täglich', 'pending')
+    `);
+    harness.run(`
+      INSERT INTO user_product_ingredients (user_product_id, ingredient_id, is_main, search_relevant, quantity, unit, basis_quantity, basis_unit)
+      VALUES
+        (901, ?, 1, 1, 200, 'mg', 1, 'Portion'),
+        (902, ?, 1, 1, 100, 'mg', 1, 'Portion')
+    `, source!.ingredient_id, source!.ingredient_id);
+
+    const createResponse = await jsonRequest(harness, '/api/stacks', {
+      method: 'POST',
+      token: importer,
+      body: {
+        name: 'Manueller Plan',
+        product_ids: [
+          { id: source!.product_id, product_type: 'catalog', quantity: 2 },
+          { id: 901, product_type: 'user_product', quantity: 1 },
+          { id: 902, product_type: 'user_product', quantity: 1, dosage_text: null },
+        ],
+      },
+    });
+    expect(createResponse.status).toBe(200);
+    const created = await createResponse.json() as { id: number };
+    const initialResponse = await jsonRequest(harness, `/api/stacks/${created.id}`, { token: importer });
+    expect(initialResponse.status).toBe(200);
+    const initial = await initialResponse.json() as {
+      stack: { version: number };
+      items: Array<{ stack_item_id: number; id: number; product_type: 'catalog' | 'user_product'; version: number; dosage_text: string | null }>;
+    };
+    const initialCatalog = initial.items.find((item) => item.product_type === 'catalog')!;
+    expect(initialCatalog.dosage_text).toBe('400 mg täglich');
+    expect(initial.items.find((item) => item.product_type === 'user_product' && item.id === 901)?.dosage_text).toBe('200 mg täglich');
+    expect(initial.items.find((item) => item.product_type === 'user_product' && item.id === 902)?.dosage_text).toBeNull();
+
+    const updateResponse = await jsonRequest(harness, `/api/stacks/${created.id}`, {
+      method: 'PUT',
+      token: importer,
+      body: {
+        expected_stack_version: initial.stack.version,
+        expected_items: initial.items.map((item) => ({ stack_item_id: item.stack_item_id, expected_version: item.version })),
+        product_ids: [
+          {
+            id: source!.product_id,
+            product_type: 'catalog',
+            quantity: 1,
+            intake_interval_days: 2,
+            dosage_text: null,
+            timing: 'anytime',
+            sort_order: 0,
+          },
+          { id: 901, product_type: 'user_product', quantity: 1, intake_interval_days: 1, sort_order: 1 },
+          { id: 902, product_type: 'user_product', quantity: 1, intake_interval_days: 1, sort_order: 2 },
+        ],
+      },
+    });
+    expect(updateResponse.status).toBe(200);
+    const updated = await updateResponse.json() as { items: Array<{
+      stack_item_id: number;
+      id: number;
+      dosage_text: string | null;
+      quantity: number;
+      intake_interval_days: number;
+      product_price: number;
+      serving_size: number;
+      serving_unit: string;
+      servings_per_container: number;
+      container_count: number;
+      ingredients: Array<Record<string, unknown>>;
+    }> };
+    const updatedItem = updated.items.find((item) => item.stack_item_id === initialCatalog.stack_item_id)!;
+    expect(updatedItem).toMatchObject({ dosage_text: null, quantity: 1, intake_interval_days: 2 });
+    expect(updated.items.find((item) => item.id === 901)?.dosage_text).toBe('200 mg täglich');
+    expect(updated.items.find((item) => item.id === 902)?.dosage_text).toBeNull();
+    expect(calculateProductUsage(updatedItem, updatedItem.product_price)).toMatchObject({
+      servingsPerIntake: 1,
+      effectiveDailyUsage: 0.5,
+      daysSupply: 60,
+      monthlyCost: 15,
+      calculationSource: 'manual_quantity',
+    });
+
+    const getResponse = await jsonRequest(harness, `/api/stacks/${created.id}`, { token: importer });
+    expect(getResponse.status).toBe(200);
+    const loaded = await getResponse.json() as { items: Array<{ stack_item_id: number; dosage_text: string | null }> };
+    expect(loaded.items.find((item) => item.stack_item_id === initialCatalog.stack_item_id)?.dosage_text).toBeNull();
+    expect(await db.prepare('SELECT dosage_text FROM stack_items WHERE id = ?').bind(initialCatalog.stack_item_id).first()).toEqual({ dosage_text: null });
+
+    const mailResponse = await jsonRequest(harness, `/api/stacks/${created.id}/email`, { method: 'POST', token: importer });
+    expect(mailResponse.status).toBe(200);
+    const html = (sendMailMock.mock.calls[0][1] as { html: string }).html;
+    expect(html).not.toContain('400 mg täglich');
   });
 
   it('returns exact public recovery states and prevents a save after the share becomes unavailable', async () => {
@@ -196,7 +327,7 @@ describe('creator stack sharing runtime contract', () => {
     const platform = await db.prepare(`SELECT id FROM parties WHERE slug = 'platform'`).first<{ id: number }>();
     harness.run(`INSERT INTO products (id, name, price, moderation_status, visibility, owner_party_id) VALUES (998, 'Produkt ohne Shop-Link', 1, 'approved', 'public', ?)`, platform!.id);
     harness.run(`INSERT INTO product_ingredients (product_id, ingredient_id, is_main, quantity, unit) VALUES (998, ?, 1, 1, 'mg')`, source!.ingredient_id);
-    harness.run(`INSERT INTO stack_items (id, stack_id, catalog_product_id, quantity, intake_interval_days, sort_order, category_id) VALUES (101, 100, 998, 1, 1, 1, 100)`);
+    harness.run(`INSERT INTO stack_items (id, stack_id, catalog_product_id, quantity, intake_interval_days, sort_order) VALUES (101, 100, 998, 1, 1, 1)`);
 
     const readiness = await jsonRequest(harness, '/api/creator-sharing/stacks/100/share-readiness?party_id=100', { token: creator });
     expect(readiness.status).toBe(200);
@@ -245,7 +376,6 @@ describe('creator stack sharing runtime contract', () => {
     const share = await created.json() as { id: number; token: string };
     harness.run(`UPDATE share_links SET moderation_status = 'approved' WHERE id = ?`, share.id);
     harness.run(`INSERT INTO stacks (id, user_id, name) VALUES (101, 101, 'Mein Ziel')`);
-    harness.run(`INSERT INTO stack_categories (id, stack_id, name, name_normalized, sort_order, is_default) VALUES (101, 101, 'Morgens', 'morgens', 4, 1)`);
     harness.run(`
       INSERT INTO user_products (id, user_id, name, serving_unit, notes)
       VALUES (501, 101, 'Mein eigenes Produkt', 'Tablette', 'Nur für mich sichtbar')
@@ -254,8 +384,8 @@ describe('creator stack sharing runtime contract', () => {
     harness.run(`
       INSERT INTO stack_items (
         id, stack_id, catalog_product_id, user_product_id, quantity,
-        intake_interval_days, dosage_text, timing, sort_order, category_id, version
-      ) VALUES (501, 101, NULL, 501, 2, 2, 'Zwei Tabletten', 'morgens', 8, 101, 3)
+        intake_interval_days, dosage_text, timing, sort_order, version
+      ) VALUES (501, 101, NULL, 501, 2, 2, 'Zwei Tabletten', 'morgens', 8, 3)
     `);
 
     const publicPreview = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}`);
@@ -319,14 +449,13 @@ describe('creator stack sharing runtime contract', () => {
     const share = await created.json() as { id: number; token: string };
     harness.run(`UPDATE share_links SET moderation_status = 'approved' WHERE id = ?`, share.id);
     harness.run(`INSERT INTO stacks (id, user_id, name) VALUES (101, 101, 'Zielstack')`);
-    harness.run(`INSERT INTO stack_categories (id, stack_id, name, name_normalized, sort_order, is_default) VALUES (101, 101, 'Abends', 'abends', 4, 1)`);
     harness.run(`INSERT INTO user_products (id, user_id, name, serving_unit, notes) VALUES (501, 101, 'Eigenes Magnesium', 'Tablette', 'Private Erinnerung')`);
     harness.run(`INSERT INTO user_product_ingredients (id, user_product_id, ingredient_id, is_main) VALUES (501, 501, ?, 1)`, source!.ingredient_id);
     harness.run(`
       INSERT INTO stack_items (
         id, stack_id, catalog_product_id, user_product_id, quantity,
-        intake_interval_days, dosage_text, timing, sort_order, category_id, version
-      ) VALUES (501, 101, NULL, 501, 2, 2, 'Zwei Tabletten', 'abends', 8, 101, 3)
+        intake_interval_days, dosage_text, timing, sort_order, version
+      ) VALUES (501, 101, NULL, 501, 2, 2, 'Zwei Tabletten', 'abends', 8, 3)
     `);
 
     const selection = { target_mode: 'existing', target_stack_id: 101 };
@@ -355,8 +484,8 @@ describe('creator stack sharing runtime contract', () => {
     expect(await keep.json()).toMatchObject({ action: 'kept_existing', existing_product_name: 'Eigenes Magnesium' });
     expect((await db.prepare('SELECT COUNT(*) AS count FROM share_import_operations').first<{ count: number }>())?.count).toBe(0);
     expect((await db.prepare('SELECT imports FROM share_links WHERE id = ?').bind(share.id).first<{ imports: number }>())?.imports).toBe(0);
-    expect(await db.prepare('SELECT user_product_id, category_id, sort_order, version FROM stack_items WHERE id = 501').first()).toMatchObject({
-      user_product_id: 501, category_id: 101, sort_order: 8, version: 3,
+    expect(await db.prepare('SELECT user_product_id, sort_order, version FROM stack_items WHERE id = 501').first()).toMatchObject({
+      user_product_id: 501, sort_order: 8, version: 3,
     });
 
     const replacePreflightResponse = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}/preflight`, {
@@ -381,13 +510,12 @@ describe('creator stack sharing runtime contract', () => {
       action: 'replaced', replaced_product_name: 'Eigenes Magnesium', replaced_user_product_retained: true,
     });
     expect(await db.prepare(`
-      SELECT catalog_product_id, user_product_id, category_id, sort_order, version,
+      SELECT catalog_product_id, user_product_id, sort_order, version,
         quantity, intake_interval_days, dosage_text, timing
       FROM stack_items WHERE id = 501
     `).first()).toMatchObject({
       catalog_product_id: source!.product_id,
       user_product_id: null,
-      category_id: 101,
       sort_order: 8,
       version: 4,
       quantity: 1,
@@ -426,14 +554,13 @@ describe('creator stack sharing runtime contract', () => {
     const firstResult = await firstSave.response.json() as { stack_id: number; action: string; created_stack: boolean };
     expect(firstResult).toMatchObject({ action: 'added', created_stack: true });
     expect(await db.prepare(`
-      SELECT stack.name, category.is_default, item.source_share_link_id, binding.stack_item_id
+      SELECT stack.name, item.source_share_link_id, binding.stack_item_id
       FROM stacks stack
-      JOIN stack_categories category ON category.stack_id = stack.id
       JOIN stack_items item ON item.stack_id = stack.id
       JOIN stack_item_link_bindings binding ON binding.stack_item_id = item.id
       WHERE stack.id = ?
     `).bind(firstResult.stack_id).first()).toMatchObject({
-      name: 'Mein erster Stack', is_default: 1, source_share_link_id: dose.id,
+      name: 'Mein erster Stack', source_share_link_id: dose.id,
     });
     expect((await db.prepare('SELECT imports FROM share_links WHERE id = ?').bind(dose.id).first<{ imports: number }>())?.imports).toBe(1);
 
@@ -509,7 +636,7 @@ describe('creator stack sharing runtime contract', () => {
     const preflight = await preflightResponse.json() as { preflight_fingerprint: string; snapshot_hash: string };
     const sequenceBefore = await db.prepare(`
       SELECT name, seq FROM sqlite_sequence
-      WHERE name IN ('stacks', 'stack_categories', 'stack_items') ORDER BY name
+      WHERE name IN ('stacks', 'stack_items') ORDER BY name
     `).all<{ name: string; seq: number }>();
     const stacksBefore = (await db.prepare('SELECT COUNT(*) AS count FROM stacks WHERE user_id = 101').first<{ count: number }>())?.count;
 
@@ -542,7 +669,7 @@ describe('creator stack sharing runtime contract', () => {
     expect(await save.json()).toMatchObject({ code: 'PREFLIGHT_CHANGED' });
     expect(await db.prepare(`
       SELECT name, seq FROM sqlite_sequence
-      WHERE name IN ('stacks', 'stack_categories', 'stack_items') ORDER BY name
+      WHERE name IN ('stacks', 'stack_items') ORDER BY name
     `).all<{ name: string; seq: number }>()).toEqual(sequenceBefore);
     expect((await db.prepare('SELECT COUNT(*) AS count FROM stacks WHERE user_id = 101').first<{ count: number }>())?.count).toBe(stacksBefore);
     expect((await db.prepare('SELECT COUNT(*) AS count FROM share_import_operations').first<{ count: number }>())?.count).toBe(0);
@@ -559,7 +686,6 @@ describe('creator stack sharing runtime contract', () => {
     const share = await created.json() as { id: number; token: string };
     harness.run(`UPDATE share_links SET moderation_status = 'approved' WHERE id = ?`, share.id);
     harness.run(`INSERT INTO stacks (id, user_id, name) VALUES (101, 101, 'Paralleles Ziel')`);
-    harness.run(`INSERT INTO stack_categories (id, stack_id, name, name_normalized, sort_order, is_default) VALUES (101, 101, 'Standard', 'standard', 0, 1)`);
     const selection = { target_mode: 'existing', target_stack_id: 101 };
     const preflightResponse = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}/preflight`, {
       method: 'POST', token: importer, body: selection,
@@ -628,7 +754,7 @@ describe('creator stack sharing runtime contract', () => {
         timing: null,
         creator_statement: null,
         sort_order: 0,
-        category_name: null,
+        category_name: 'Historische Kategorie',
       }],
     };
     const parsed = parseCreatorShareSnapshot(v1);
@@ -646,7 +772,9 @@ describe('creator stack sharing runtime contract', () => {
 
     const publicPreview = await jsonRequest(harness, `/api/creator-sharing/shares/${token}`);
     expect(publicPreview.status).toBe(200);
-    expect((await publicPreview.json() as { items: Array<{ unit: string | null }> }).items[0].unit).toBeNull();
+    const publicPayload = await publicPreview.json() as { items: Array<Record<string, unknown>> };
+    expect(publicPayload.items[0].unit).toBeNull();
+    expect(Object.prototype.hasOwnProperty.call(publicPayload.items[0], 'category_name')).toBe(false);
     const { response: imported } = await preflightAndSave(
       harness,
       token,
@@ -735,7 +863,7 @@ describe('creator stack sharing runtime contract', () => {
     expect((await db.prepare(`SELECT COUNT(*) AS count FROM share_links`).first<{ count: number }>())?.count).toBe(2);
   });
 
-  it('freezes attribution, moderates, imports idempotently and tracks without user or stack ids', async () => {
+  it('freezes attribution, imports idempotently, exports the canonical creator mail and tracks without user or stack ids', async () => {
     const creator = await authToken(100, 'user', 'creator@test.invalid');
     const importer = await authToken(101, 'user', 'importer@test.invalid');
     const admin = await authToken(102, 'admin', 'admin@test.invalid');
@@ -773,9 +901,14 @@ describe('creator stack sharing runtime contract', () => {
     expect(preview.disclosure).toContain('Affiliate');
     expect(preview.items[0].creator_statement).toContain('Sachlicher Kontext');
     expect(preview.items[0].unit).toBe('Kapsel');
-    const storedV2 = await db.prepare(`SELECT snapshot_schema_version, snapshot_json FROM share_links WHERE id = ?`).bind(created.id).first<{ snapshot_schema_version: number; snapshot_json: string }>();
-    expect(storedV2?.snapshot_schema_version).toBe(2);
-    expect(JSON.parse(storedV2?.snapshot_json ?? '{}').items[0].unit).toBe('Kapsel');
+    const storedV3 = await db.prepare(`SELECT snapshot_schema_version, snapshot_json FROM share_links WHERE id = ?`).bind(created.id).first<{ snapshot_schema_version: number; snapshot_json: string }>();
+    expect(storedV3?.snapshot_schema_version).toBe(3);
+    const storedSnapshot = JSON.parse(storedV3?.snapshot_json ?? '{}') as {
+      published_at: string;
+      items: Array<Record<string, unknown>>;
+    };
+    expect(storedSnapshot.items[0].unit).toBe('Kapsel');
+    expect(Object.prototype.hasOwnProperty.call(storedSnapshot.items[0], 'category_name')).toBe(false);
 
     const target = await db.prepare(`SELECT shop_domain_id FROM party_shop_affiliate_versions WHERE id = 100`).first<{ shop_domain_id: number }>();
     harness.run(`UPDATE party_shop_affiliate_versions SET status = 'retired' WHERE id = 100`);
@@ -807,6 +940,32 @@ describe('creator stack sharing runtime contract', () => {
     expect(importedRow).toMatchObject({ origin_party_id: 100, source_share_link_id: created.id, affiliate_version_id: 100, resolved_party_id: 100 });
     const shareCounters = await db.prepare(`SELECT imports FROM share_links WHERE id = ?`).bind(created.id).first<{ imports: number }>();
     expect(shareCounters?.imports).toBe(1);
+
+    const description = await jsonRequest(harness, `/api/stacks/${imported.stack_id}`, {
+      method: 'PUT',
+      token: importer,
+      body: { description: 'Meine persönliche Notiz zum importierten Stack.' },
+    });
+    expect(description.status).toBe(200);
+    const mailResponse = await jsonRequest(harness, `/api/stacks/${imported.stack_id}/email`, {
+      method: 'POST',
+      token: importer,
+    });
+    expect(mailResponse.status).toBe(200);
+    expect(sendMailMock).toHaveBeenCalledTimes(1);
+    const mailOptions = sendMailMock.mock.calls[0][1] as { to: string; subject: string; html: string };
+    const snapshotDate = new Intl.DateTimeFormat('de-DE', {
+      day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Berlin',
+    }).format(new Date(storedSnapshot.published_at));
+    expect(mailOptions.to).toBe('importer@test.invalid');
+    expect(mailOptions.html).toContain('Test Creator');
+    expect(mailOptions.html).toContain(`Stand der Creator-Empfehlung:</strong> ${snapshotDate}`);
+    expect(mailOptions.html).toContain('Meine persönliche Notiz zum importierten Stack.');
+    expect(mailOptions.html).toContain('Sachlicher Kontext ohne individuelle Dosierung.');
+    expect(mailOptions.html).toContain(
+      `href="https://supplementstack.de/api/products/${creatorProduct!.id}/out?stack_item_id=${importedRow!.stack_item_id}&amp;context=creator_stack"`,
+    );
+    expect(mailOptions.html.toLowerCase()).not.toContain('affiliate');
 
     const clickResponse = await jsonRequest(harness, `/api/products/${preview.items.length ? (await db.prepare('SELECT catalog_product_id AS id FROM stack_items WHERE id = ?').bind(importedRow!.stack_item_id).first<{ id: number }>())!.id : 0}/out?stack_item_id=${importedRow!.stack_item_id}`, { cookie: importer });
     expect(clickResponse.status).toBe(302);
@@ -859,8 +1018,7 @@ describe('creator stack sharing runtime contract', () => {
     harness.run(`INSERT INTO product_ingredients (product_id, ingredient_id, is_main, quantity, unit) VALUES (999, ?, 1, 1, 'mg')`, other!.id);
     harness.run(`INSERT INTO product_shop_links (product_id, shop_domain_id, url, active, is_primary, sort_order, link_kind) SELECT 999, shop_domain_id, url, 1, 1, 0, 'base_target' FROM product_shop_links WHERE id = ?`, source!.shop_link_id);
     harness.run(`INSERT INTO stacks (id, user_id, name, last_opened_at) VALUES (101, 101, 'Ziel', CURRENT_TIMESTAMP)`);
-    harness.run(`INSERT INTO stack_categories (id, stack_id, name, name_normalized, sort_order, is_default) VALUES (101, 101, 'Unkategorisiert', 'unkategorisiert', 0, 1)`);
-    harness.run(`INSERT INTO stack_items (id, stack_id, catalog_product_id, quantity, intake_interval_days, sort_order, category_id) VALUES (101, 101, 999, 1, 1, 0, 101)`);
+    harness.run(`INSERT INTO stack_items (id, stack_id, catalog_product_id, quantity, intake_interval_days, sort_order) VALUES (101, 101, 999, 1, 1, 0)`);
 
     const creator = await authToken(100, 'user', 'creator@test.invalid');
     const admin = await authToken(102, 'admin', 'admin@test.invalid');
@@ -881,10 +1039,9 @@ describe('creator stack sharing runtime contract', () => {
 
   it('requires a concrete choice when several exact conflicts exist', async () => {
     harness.run(`INSERT INTO stacks (id, user_id, name, last_opened_at) VALUES (101, 101, 'Ziel', CURRENT_TIMESTAMP)`);
-    harness.run(`INSERT INTO stack_categories (id, stack_id, name, name_normalized, sort_order, is_default) VALUES (101, 101, 'Unkategorisiert', 'unkategorisiert', 0, 1)`);
     const source = await db.prepare(`SELECT catalog_product_id AS product_id FROM stack_items WHERE id = 100`).first<{ product_id: number }>();
-    harness.run(`INSERT INTO stack_items (id, stack_id, catalog_product_id, quantity, intake_interval_days, sort_order, category_id) VALUES (101, 101, ?, 1, 1, 0, 101)`, source!.product_id);
-    harness.run(`INSERT INTO stack_items (id, stack_id, catalog_product_id, quantity, intake_interval_days, sort_order, category_id) VALUES (102, 101, ?, 1, 1, 1, 101)`, source!.product_id);
+    harness.run(`INSERT INTO stack_items (id, stack_id, catalog_product_id, quantity, intake_interval_days, sort_order) VALUES (101, 101, ?, 1, 1, 0)`, source!.product_id);
+    harness.run(`INSERT INTO stack_items (id, stack_id, catalog_product_id, quantity, intake_interval_days, sort_order) VALUES (102, 101, ?, 1, 1, 1)`, source!.product_id);
     const creator = await authToken(100, 'user', 'creator@test.invalid');
     const admin = await authToken(102, 'admin', 'admin@test.invalid');
     const importer = await authToken(101, 'user', 'importer@test.invalid');

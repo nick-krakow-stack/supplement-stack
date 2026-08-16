@@ -19,7 +19,6 @@ import { loadIngredientPartsByParentRows, type IngredientPartRead } from '../lib
 import { loadCatalogProductSafetyWarnings, loadUserProductSafetyWarnings } from './knowledge'
 import {
   getProductShopTarget,
-  reserveIds,
   resolveBindingForNewItem,
 } from '../lib/creator-sharing-service'
 
@@ -32,15 +31,32 @@ type StackProductInput = {
   product_type: StackProductType
   quantity: number
   intake_interval_days: number
-  dosage_text: string | null
+  dosage_text?: string | null
   timing: string | null
   sort_order?: number
-  category_id?: number | null
 }
 
 type StackProductValidation = {
   items?: StackProductInput[]
   error?: string
+}
+
+type StackItemDosageInsert = {
+  sql: string
+  bindings: Array<string | number | null>
+}
+
+function stackItemDosageInsert(item: StackProductInput, ownerUserId: number): StackItemDosageInsert {
+  if (item.dosage_text !== undefined) {
+    return { sql: '?', bindings: [item.dosage_text] }
+  }
+  if (item.product_type === 'catalog') {
+    return { sql: '(SELECT dosage_text FROM products WHERE id = ?)', bindings: [item.id] }
+  }
+  return {
+    sql: '(SELECT dosage_text FROM user_products WHERE id = ? AND user_id = ?)',
+    bindings: [item.id, ownerUserId],
+  }
 }
 
 type StackLinkReportProduct = {
@@ -49,27 +65,11 @@ type StackLinkReportProduct = {
   shop_link: string | null
 }
 
-type StackCategoryRow = {
-  id: number
-  stack_id: number
-  name: string
-  name_normalized?: string
-  sort_order: number
-  is_default: number
-}
-
-type StackCategoryValidation = {
-  name: string
-  name_normalized: string
-}
-
 type StackLayoutInput = {
   stack_item_id: number
   sort_order: number
-  category_id?: number | null
+  expected_version: number
 }
-
-const DEFAULT_STACK_CATEGORY_NAME = 'Unkategorisiert'
 
 type StackMailItem = {
   stack_item_id: number
@@ -80,6 +80,7 @@ type StackMailItem = {
   product_price: number
   image_url: string | null
   shop_link: string | null
+  click_url: string | null
   is_affiliate: number | null
   quantity: number
   intake_interval_days: number
@@ -91,6 +92,8 @@ type StackMailItem = {
   timing_label: string | null
   ingredient_timing_label: string | null
   dosage_text: string | null
+  creator_statement_snapshot: string | null
+  creator_snapshot_at: string | null
 }
 
 type StackMailIngredient = {
@@ -206,25 +209,6 @@ function normalizeComparableUnit(unit?: string | null): string {
   return normalized
 }
 
-function parseGermanNumber(value: string): number | null {
-  const trimmed = value.trim()
-  const normalized = trimmed.includes(',')
-    ? trimmed.replace(/\./g, '').replace(',', '.')
-    : /^\d{1,3}(?:\.\d{3})+$/.test(trimmed)
-      ? trimmed.replace(/\./g, '')
-      : trimmed
-  const parsed = Number(normalized)
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null
-}
-
-function parseDoseFromText(text?: string | null): { value: number; unit: string } | null {
-  if (!text) return null
-  const match = /(\d+(?:[.,]\d{1,3})?(?:\.\d{3})*)\s*(IE|IU|µg|μg|ug|mcg|mg|g|Kapseln?|Tabletten?|Tropfen|Softgels?|Portionen?)/i.exec(text)
-  if (!match) return null
-  const value = parseGermanNumber(match[1])
-  return value ? { value, unit: match[2] } : null
-}
-
 function formatNumber(value: number): string {
   return new Intl.NumberFormat('de-DE', { maximumFractionDigits: 2 }).format(value)
 }
@@ -264,13 +248,6 @@ function normalizeIntakeIntervalDays(value: unknown): number | null {
   const parsed = Number(value)
   if (!Number.isInteger(parsed) || parsed < 1) return null
   return parsed
-}
-
-function normalizeFamilyMemberId(value: unknown): number | null | undefined {
-  if (value === undefined) return undefined
-  if (value === null || value === '') return null
-  const parsed = Number(value)
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined
 }
 
 function amountForStackAggregation(
@@ -373,34 +350,12 @@ function aggregateStackIngredientTotals(items: StackIngredientAggregationItem[])
     .filter((ingredient) => ingredient.totals.length > 0 || ingredient.parts.length > 0)
 }
 
-function normalizeStackCategoryName(value: unknown): StackCategoryValidation | null {
-  if (typeof value !== 'string') return null
-  const normalizedSpacing = value.trim().replace(/\s+/g, ' ')
-  if (normalizedSpacing.length < 1 || normalizedSpacing.length > 80) return null
-  return {
-    name: normalizedSpacing,
-    name_normalized: normalizedSpacing.toLowerCase(),
-  }
-}
-
 function normalizeOptionalSortOrder(value: unknown): number | undefined {
   if (value === undefined) return undefined
   if (value === null || value === '') return undefined
   const parsed = Number(value)
   if (!Number.isInteger(parsed) || parsed < 0) return undefined
   return parsed
-}
-
-function normalizeOptionalCategoryId(value: unknown): number | null | undefined {
-  if (value === undefined) return undefined
-  if (value === null || value === '') return null
-  const parsed = Number(value)
-  if (!Number.isInteger(parsed) || parsed <= 0) return undefined
-  return parsed
-}
-
-function isUniqueConstraintError(error: unknown): boolean {
-  return error instanceof Error && /unique|constraint/i.test(error.message)
 }
 
 function formatIntakeInterval(days: number): string {
@@ -514,19 +469,47 @@ function formatStackTotalAmounts(amounts: StackIngredientTotalAmount[]): string 
     : 'Menge nicht angegeben'
 }
 
+function stackMailPurchaseUrl(item: StackMailPreparedItem, requestOrigin: string): string | null {
+  if (item.product_type === 'catalog') {
+    if (!item.click_url) return null
+    try {
+      return new URL(item.click_url, `${requestOrigin}/`).toString()
+    } catch {
+      return null
+    }
+  }
+  return item.shop_link
+}
+
+function formatCreatorSnapshotDate(value: string): string | null {
+  const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value)
+    ? `${value.replace(' ', 'T')}Z`
+    : value
+  const timestamp = Date.parse(normalized)
+  if (!Number.isFinite(timestamp)) return null
+  return new Intl.DateTimeFormat('de-DE', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    timeZone: 'Europe/Berlin',
+  }).format(new Date(timestamp))
+}
+
 function buildStackEmailHtml(
   stack: StackRow,
   items: StackMailPreparedItem[],
   totalOnce: number,
   totalMonthly: number,
   ingredientTotals: StackIngredientTotal[],
+  requestOrigin: string,
 ): string {
   const rows = items.map((item) => {
     const productImage = item.image_url
       ? `<img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.name)}" width="56" height="56" style="width:56px;height:56px;object-fit:cover;border-radius:10px;border:1px solid #e5e7eb;background:#f8fafc;">`
       : `<div style="width:56px;height:56px;border-radius:10px;border:1px solid #e5e7eb;background:#f8fafc;text-align:center;line-height:56px;color:#94a3b8;font-size:18px;font-weight:800;">SS</div>`
-    const buyButton = item.shop_link
-      ? `<a href="${escapeHtml(item.shop_link)}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;font-weight:700;border-radius:8px;padding:9px 12px;white-space:nowrap;">Jetzt kaufen</a>`
+    const purchaseUrl = stackMailPurchaseUrl(item, requestOrigin)
+    const buyButton = purchaseUrl
+      ? `<a href="${escapeHtml(purchaseUrl)}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;font-weight:700;border-radius:8px;padding:9px 12px;white-space:nowrap;">Jetzt kaufen</a>`
       : '<span style="display:inline-block;color:#9a3412;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:8px 10px;font-weight:700;">Kauf-Link fehlt - bitte Produkt melden</span>'
     const ingredientText = item.dailyIngredientLabels.length > 0
       ? item.dailyIngredientLabels.map(escapeHtml).join('<br>')
@@ -540,6 +523,7 @@ function buildStackEmailHtml(
         <td style="padding:14px 8px;border-bottom:1px solid #e5e7eb;">
           <strong style="font-size:15px;">${escapeHtml(item.name)}</strong>
           ${item.brand ? `<br><span style="color:#64748b;">${escapeHtml(item.brand)}</span>` : ''}
+          ${item.creator_statement_snapshot ? `<br><span style="display:inline-block;margin-top:6px;color:#475569;"><strong>Persönliche Creator-Notiz:</strong> ${escapeHtml(item.creator_statement_snapshot)}</span>` : ''}
         </td>
         <td style="padding:14px 8px;border-bottom:1px solid #e5e7eb;">${ingredientText}</td>
         <td style="padding:14px 8px;border-bottom:1px solid #e5e7eb;">
@@ -571,10 +555,29 @@ function buildStackEmailHtml(
       </div>`
     : ''
 
+  const creatorSnapshotDates = Array.from(new Set(
+    items
+      .map((item) => item.creator_snapshot_at ? formatCreatorSnapshotDate(item.creator_snapshot_at) : null)
+      .filter((value): value is string => value !== null),
+  ))
+  const creatorContext = stack.origin_party_name
+    ? `<div style="margin:0 0 18px;padding:14px 16px;border-radius:12px;background:#eef2ff;border:1px solid #c7d2fe;">
+        <strong>Creator:</strong> ${escapeHtml(stack.origin_party_name)}
+        ${creatorSnapshotDates.length > 0 ? `<br><strong>Stand der Creator-Empfehlung:</strong> ${creatorSnapshotDates.map(escapeHtml).join(', ')}` : ''}
+      </div>`
+    : ''
+  const stackNote = stack.description?.trim()
+    ? `<div style="margin:0 0 18px;padding:14px 16px;border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0;">
+        <strong>Deine Notiz zum Stack:</strong> ${escapeHtml(stack.description.trim())}
+      </div>`
+    : ''
+
   return `
     <div style="font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#0f172a;line-height:1.5;">
       <h1 style="font-size:22px;margin:0 0 8px;">${escapeHtml(stack.name)}</h1>
       <p style="margin:0 0 18px;color:#64748b;">Dein Supplement-Stack aus Supplement Stack.</p>
+      ${creatorContext}
+      ${stackNote}
       <div style="margin:0 0 18px;padding:14px 16px;border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0;">
         <strong>Einmaliger Kaufpreis:</strong> ${formatEuro(totalOnce)}
         <br><strong>Geschätzte Monatskosten:</strong> ${formatEuro(totalMonthly)}
@@ -623,36 +626,38 @@ function normalizeStackProductItems(value: unknown): StackProductValidation {
       ? 1
       : Number(item.quantity)
     const intakeIntervalDays = normalizeIntakeIntervalDays(item.intake_interval_days ?? item.intakeIntervalDays)
-    const dosageText = typeof item.dosage_text === 'string' && item.dosage_text.trim() !== ''
-      ? item.dosage_text.trim()
-      : null
+    const hasDosageText = Object.prototype.hasOwnProperty.call(item, 'dosage_text')
+    if (hasDosageText && item.dosage_text !== null && typeof item.dosage_text !== 'string') {
+      return { error: 'Die Angabe zur Einnahmemenge ist ungültig.' }
+    }
+    const dosageText = !hasDosageText
+      ? undefined
+      : typeof item.dosage_text === 'string' && item.dosage_text.trim() !== ''
+        ? item.dosage_text.trim()
+        : null
     const timing = typeof item.timing === 'string' && item.timing.trim() !== ''
       ? item.timing.trim()
       : null
     const sortOrder = normalizeOptionalSortOrder(item.sort_order ?? item.sortOrder)
-    const categoryId = normalizeOptionalCategoryId(item.category_id ?? item.categoryId)
 
     if (!Number.isInteger(id) || id <= 0) {
-      return { error: 'product_ids must reference valid products' }
+      return { error: 'Mindestens ein ausgewähltes Produkt ist ungültig.' }
     }
     if (productType === null) {
-      return { error: 'product_type must be catalog or user_product' }
+      return { error: 'Die Produktart ist ungültig.' }
     }
     if (!Number.isFinite(quantity) || quantity <= 0) {
-      return { error: 'quantity must be greater than 0' }
+      return { error: 'Die Menge muss größer als 0 sein.' }
     }
     if (intakeIntervalDays === null) {
-      return { error: 'intake_interval_days must be an integer greater than or equal to 1' }
+      return { error: 'Der Einnahmeabstand muss mindestens einen Tag betragen.' }
     }
     if ((item.sort_order !== undefined || item.sortOrder !== undefined) && sortOrder === undefined) {
-      return { error: 'sort_order must be an integer greater than or equal to 0' }
-    }
-    if ((item.category_id !== undefined || item.categoryId !== undefined) && categoryId === undefined) {
-      return { error: 'category_id must be null or a valid category id' }
+      return { error: 'Die Reihenfolge ist ungültig.' }
     }
     const productKey = `${productType}:${id}`
     if (seenProducts.has(productKey)) {
-      return { error: 'product_ids must not contain duplicate products' }
+      return { error: 'Dasselbe Produkt kann nicht doppelt übermittelt werden.' }
     }
     seenProducts.add(productKey)
 
@@ -664,7 +669,6 @@ function normalizeStackProductItems(value: unknown): StackProductValidation {
       dosage_text: dosageText,
       timing,
       sort_order: sortOrder,
-      category_id: categoryId,
     })
   }
 
@@ -705,114 +709,61 @@ async function validateStackProductReferences(
   return true
 }
 
-async function familyMemberBelongsToUser(db: D1Database, userId: number, familyMemberId: number | null): Promise<boolean> {
-  if (familyMemberId === null) return true
-  const row = await db.prepare(
-    'SELECT id FROM family_profiles WHERE id = ? AND user_id = ?'
-  ).bind(familyMemberId, userId).first<{ id: number }>()
-  return Boolean(row)
-}
-
-async function loadStackCategories(
-  db: D1Database,
-  stackId: number | string,
-): Promise<StackCategoryRow[]> {
-  const { results } = await db.prepare(`
-    SELECT id, stack_id, name, sort_order, is_default
-    FROM stack_categories
-    WHERE stack_id = ?
-    ORDER BY sort_order ASC, id ASC
-  `).bind(stackId).all<StackCategoryRow>()
-  return results
-}
-
-async function ensureDefaultStackCategory(
-  db: D1Database,
-  stackId: number | string,
-): Promise<StackCategoryRow> {
-  const existing = await db.prepare(`
-    SELECT id, stack_id, name, sort_order, is_default
-    FROM stack_categories
-    WHERE stack_id = ?
-      AND is_default = 1
-    LIMIT 1
-  `).bind(stackId).first<StackCategoryRow>()
-  if (existing) return existing
-
-  const normalizedDefault = normalizeStackCategoryName(DEFAULT_STACK_CATEGORY_NAME)
-  if (!normalizedDefault) {
-    throw new Error('Default stack category name is invalid')
-  }
-
-  try {
-    await db.prepare(`
-      INSERT INTO stack_categories (
-        stack_id,
-        name,
-        name_normalized,
-        sort_order,
-        is_default,
-        created_at,
-        updated_at
-      )
-      VALUES (?, ?, ?, 0, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-    `).bind(stackId, normalizedDefault.name, normalizedDefault.name_normalized).run()
-  } catch (error) {
-    if (!isUniqueConstraintError(error)) throw error
-  }
-
-  const inserted = await db.prepare(`
-    SELECT id, stack_id, name, sort_order, is_default
-    FROM stack_categories
-    WHERE stack_id = ?
-      AND is_default = 1
-    LIMIT 1
-  `).bind(stackId).first<StackCategoryRow>()
-  if (!inserted) {
-    throw new Error('Failed to ensure default stack category')
-  }
-  return inserted
-}
-
-async function validateStackCategoryIds(
-  db: D1Database,
-  stackId: number | string,
-  categoryIds: number[],
-): Promise<boolean> {
-  const uniqueIds = [...new Set(categoryIds)]
-  if (uniqueIds.length === 0) return true
-  const placeholders = uniqueIds.map(() => '?').join(',')
-  const row = await db.prepare(`
-    SELECT COUNT(*) AS count
-    FROM stack_categories
-    WHERE stack_id = ?
-      AND id IN (${placeholders})
-  `).bind(stackId, ...uniqueIds).first<{ count: number }>()
-  return (row?.count ?? 0) === uniqueIds.length
-}
-
 async function stackItemBindingStatement(
   db: D1Database,
   stackItemId: number,
   catalogProductId: number,
   contextPartyId: number | null,
+  claim?: { stackId: number | string; userId: number; version: number; token: string },
 ): Promise<D1PreparedStatement | null> {
   const target = await getProductShopTarget(db, catalogProductId)
   if (!target) return null
   const binding = await resolveBindingForNewItem(db, target, contextPartyId)
   if (!binding) return null
-  return db.prepare(`
-    INSERT INTO stack_item_link_bindings (
-      stack_item_id, shop_link_id, resolution_kind,
-      affiliate_version_id, resolved_party_id, bound_at
-    ) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-  `).bind(
+  const claimSql = claim
+    ? `WHERE EXISTS (
+        SELECT 1 FROM stacks
+        WHERE id = ? AND user_id = ? AND version = ?
+          AND write_claim_token = ? AND deleted_at IS NULL
+      )`
+    : ''
+  const bindings: Array<string | number | null> = [
     stackItemId,
     target.id,
     binding.resolution_kind,
     binding.affiliate_version_id,
     binding.resolved_party_id,
-  )
+  ]
+  if (claim) bindings.push(claim.stackId, claim.userId, claim.version, claim.token)
+  return db.prepare(`
+    INSERT INTO stack_item_link_bindings (
+      stack_item_id, shop_link_id, resolution_kind,
+      affiliate_version_id, resolved_party_id, bound_at
+    )
+    SELECT ?, ?, ?, ?, ?, CURRENT_TIMESTAMP
+    ${claimSql}
+  `).bind(...bindings)
+}
+
+async function candidateIds(
+  db: D1Database,
+  table: 'stacks' | 'stack_items',
+  count: number,
+): Promise<number[]> {
+  if (!Number.isInteger(count) || count < 0) throw new Error('Invalid id candidate count')
+  if (count === 0) return []
+  const row = await db.prepare(`
+    SELECT MAX(
+      COALESCE((SELECT seq FROM sqlite_sequence WHERE name = ?), 0),
+      COALESCE((SELECT MAX(id) FROM ${table}), 0)
+    ) + 1 AS first_id
+  `).bind(table).first<{ first_id: number }>()
+  const first = Number(row?.first_id)
+  const last = first + count - 1
+  if (!Number.isSafeInteger(first) || first <= 0 || !Number.isSafeInteger(last)) {
+    throw new Error(`Could not generate ids for ${table}`)
+  }
+  return Array.from({ length: count }, (_, index) => first + index)
 }
 
 async function loadStackItems(
@@ -823,8 +774,6 @@ async function loadStackItems(
   const { results } = await db.prepare(`
     SELECT
       base.*,
-      category.name AS category_name,
-      category.is_default AS category_is_default,
       timing_item.label AS timing_label,
       ingredient_timing_item.label AS ingredient_timing_label
     FROM (
@@ -845,7 +794,7 @@ async function loadStackItems(
         p.servings_per_container,
         p.container_count,
         COALESCE(si.timing, idp_form.timing, idp_base.timing, p.timing) AS timing,
-        COALESCE(si.dosage_text, p.dosage_text) AS dosage_text,
+        si.dosage_text AS dosage_text,
         COALESCE(idp_form.effect_summary, idp_base.effect_summary) AS effect_summary,
         COALESCE(idp_form.effect_summary, idp_base.effect_summary) AS ingredient_effect_summary,
         COALESCE(idp_form.timing, idp_base.timing) AS ingredient_timing,
@@ -857,6 +806,11 @@ async function loadStackItems(
         p.alternative_note,
         si.source_share_link_id,
         si.creator_statement_snapshot,
+        COALESCE(
+          json_extract(source_share.snapshot_json, '$.published_at'),
+          datetime(source_share.created_at, 'unixepoch'),
+          binding.bound_at
+        ) AS creator_snapshot_at,
         si.amount_source,
         si.version,
         CASE
@@ -866,12 +820,12 @@ async function loadStackItems(
         END AS click_url,
         CASE WHEN si.source_share_link_id IS NOT NULL OR binding.resolved_party_id IS NOT NULL THEN 1 ELSE 0 END AS has_attribution,
         si.sort_order,
-        si.category_id,
         si.quantity,
         si.intake_interval_days
       FROM stack_items si
       JOIN products p ON p.id = si.catalog_product_id
       LEFT JOIN stack_item_link_bindings binding ON binding.stack_item_id = si.id
+      LEFT JOIN share_links source_share ON source_share.id = si.source_share_link_id
       LEFT JOIN product_ingredients pi_main ON pi_main.id = (
         SELECT pi2.id
         FROM product_ingredients pi2
@@ -911,7 +865,7 @@ async function loadStackItems(
         up.servings_per_container,
         up.container_count,
         COALESCE(si.timing, idp_form.timing, idp_base.timing, up.timing) AS timing,
-        COALESCE(si.dosage_text, up.dosage_text) AS dosage_text,
+        si.dosage_text AS dosage_text,
         COALESCE(idp_form.effect_summary, idp_base.effect_summary) AS effect_summary,
         COALESCE(idp_form.effect_summary, idp_base.effect_summary) AS ingredient_effect_summary,
         COALESCE(idp_form.timing, idp_base.timing) AS ingredient_timing,
@@ -923,16 +877,20 @@ async function loadStackItems(
         up.alternative_note,
         si.source_share_link_id,
         si.creator_statement_snapshot,
+        COALESCE(
+          json_extract(source_share.snapshot_json, '$.published_at'),
+          datetime(source_share.created_at, 'unixepoch')
+        ) AS creator_snapshot_at,
         si.amount_source,
         si.version,
         NULL AS click_url,
         0 AS has_attribution,
         si.sort_order,
-        si.category_id,
         si.quantity,
         si.intake_interval_days
       FROM stack_items si
       JOIN user_products up ON up.id = si.user_product_id AND up.user_id = ?
+      LEFT JOIN share_links source_share ON source_share.id = si.source_share_link_id
       LEFT JOIN user_product_ingredients upi_main ON upi_main.id = (
         SELECT upi2.id
         FROM user_product_ingredients upi2
@@ -953,8 +911,6 @@ async function loadStackItems(
       WHERE si.stack_id = ?
         AND si.user_product_id IS NOT NULL
     ) base
-    LEFT JOIN stack_categories category
-      ON category.id = base.category_id
     LEFT JOIN managed_list_items timing_item
       ON timing_item.list_key = 'intake_timing'
      AND timing_item.active = 1
@@ -1168,28 +1124,57 @@ async function loadStackMailWarnings(
   return warningsByItem
 }
 
+async function purgeExpiredStackTrash(db: D1Database, userId: number): Promise<void> {
+  await db.prepare(`
+    DELETE FROM stacks
+    WHERE user_id = ?
+      AND deleted_at IS NOT NULL
+      AND delete_purge_after IS NOT NULL
+      AND delete_purge_after <= CURRENT_TIMESTAMP
+  `).bind(userId).run()
+}
+
 // GET /api/stacks
 stacks.get('/', async (c) => {
   const authErr = await ensureAuth(c)
   if (authErr) return authErr
   const user = c.get('user')
+  await purgeExpiredStackTrash(c.env.DB, user.userId)
   const { results } = await c.env.DB.prepare(`
     SELECT
       s.*,
       origin.name AS origin_party_name,
       origin.type AS origin_party_type,
-      fp.first_name AS family_member_first_name,
       COUNT(si.id) as items_count
     FROM stacks s
     LEFT JOIN stack_items si ON si.stack_id = s.id
-    LEFT JOIN family_profiles fp ON fp.id = s.family_member_id AND fp.user_id = s.user_id
     LEFT JOIN parties origin ON origin.id = s.origin_party_id
     WHERE s.user_id = ?
+      AND s.deleted_at IS NULL
     GROUP BY s.id
     ORDER BY
       CASE WHEN s.last_opened_at IS NULL THEN 1 ELSE 0 END,
       s.last_opened_at DESC,
       s.created_at DESC
+  `).bind(user.userId).all()
+  return c.json({ stacks: results })
+})
+
+// GET /api/stacks/trash
+stacks.get('/trash', async (c) => {
+  const authErr = await ensureAuth(c)
+  if (authErr) return authErr
+  const user = c.get('user')
+  await purgeExpiredStackTrash(c.env.DB, user.userId)
+  const { results } = await c.env.DB.prepare(`
+    SELECT s.*, COUNT(si.id) AS items_count
+    FROM stacks s
+    LEFT JOIN stack_items si ON si.stack_id = s.id
+    WHERE s.user_id = ?
+      AND s.deleted_at IS NOT NULL
+      AND s.delete_purge_after > CURRENT_TIMESTAMP
+    GROUP BY s.id
+    ORDER BY s.delete_purge_after ASC, s.id DESC
   `).bind(user.userId).all()
   return c.json({ stacks: results })
 })
@@ -1203,42 +1188,36 @@ stacks.post('/', async (c) => {
   try {
     data = await c.req.json()
   } catch {
-    return c.json({ error: 'Invalid JSON' }, 400)
+    return c.json({ error: 'Die gesendeten Angaben sind ungültig. Bitte versuche es erneut.' }, 400)
   }
-  if (!data.name) return c.json({ error: 'Stack-Name ist erforderlich' }, 400)
-  const hasFamilyMemberInput = data.family_member_id !== undefined || data.familyMemberId !== undefined
-  const familyMemberId = hasFamilyMemberInput
-    ? normalizeFamilyMemberId(data.family_member_id ?? data.familyMemberId)
-    : null
-  if (familyMemberId === undefined) return c.json({ error: 'family_member_id must be null or a valid family profile id' }, 400)
-  if (!(await familyMemberBelongsToUser(c.env.DB, user.userId, familyMemberId))) {
-    return c.json({ error: 'Family profile not found' }, 404)
-  }
+  const name = typeof data.name === 'string' ? data.name.trim() : ''
+  if (!name || name.length > 120) return c.json({ error: 'Stack-Name muss zwischen 1 und 120 Zeichen lang sein.' }, 400)
+  const description = typeof data.description === 'string' ? data.description.trim() : ''
+  if (description.length > 1000) return c.json({ error: 'Die Beschreibung darf höchstens 1000 Zeichen lang sein.' }, 400)
   const rawItems = Array.isArray(data.product_ids) ? data.product_ids : data.products
   const normalized = normalizeStackProductItems(rawItems)
   if (normalized.error || !normalized.items) {
-    return c.json({ error: normalized.error ?? 'Invalid product_ids' }, 400)
+    return c.json({ error: normalized.error ?? 'Die Produktauswahl ist ungültig.' }, 400)
   }
   if (!(await validateStackProductReferences(c.env.DB, user.userId, normalized.items))) {
-    return c.json({ error: 'Stacks can only use public catalog products or your own pending/approved/blocked products' }, 400)
+    return c.json({ error: 'Mindestens ein Produkt ist nicht mehr verfügbar oder gehört nicht zu deinem Konto.' }, 400)
   }
 
-  const stackResult = await c.env.DB.prepare(
-    'INSERT INTO stacks (user_id, name, family_member_id) VALUES (?, ?, ?)'
-  ).bind(user.userId, data.name, familyMemberId).run()
-  const stackId = stackResult.meta.last_row_id
-  const defaultCategory = await ensureDefaultStackCategory(c.env.DB, stackId)
-
-  const itemIds = await reserveIds(c.env.DB, 'stack_items', normalized.items.length)
-  const itemStatements: D1PreparedStatement[] = []
+  const [stackId] = await candidateIds(c.env.DB, 'stacks', 1)
+  const itemIds = await candidateIds(c.env.DB, 'stack_items', normalized.items.length)
+  const itemStatements: D1PreparedStatement[] = [c.env.DB.prepare(`
+    INSERT INTO stacks (id, user_id, name, description, version)
+    VALUES (?, ?, ?, ?, 1)
+  `).bind(stackId, user.userId, name, description || null)]
   for (const [index, item] of normalized.items.entries()) {
     const stackItemId = itemIds[index]
+    const dosageInsert = stackItemDosageInsert(item, user.userId)
     itemStatements.push(c.env.DB.prepare(`
       INSERT INTO stack_items (
         id, stack_id, catalog_product_id, user_product_id, quantity,
-        intake_interval_days, dosage_text, timing, sort_order, category_id,
+        intake_interval_days, dosage_text, timing, sort_order,
         amount_source, version
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'user', 1)
+      ) VALUES (?, ?, ?, ?, ?, ?, ${dosageInsert.sql}, ?, ?, 'user', 1)
     `).bind(
       stackItemId,
       stackId,
@@ -1246,18 +1225,21 @@ stacks.post('/', async (c) => {
       item.product_type === 'user_product' ? item.id : null,
       item.quantity,
       item.intake_interval_days,
-      item.dosage_text,
+      ...dosageInsert.bindings,
       item.timing,
       index,
-      defaultCategory.id,
     ))
     if (item.product_type === 'catalog') {
       const binding = await stackItemBindingStatement(c.env.DB, stackItemId, item.id, null)
       if (binding) itemStatements.push(binding)
     }
   }
-  if (itemStatements.length > 0) await c.env.DB.batch(itemStatements)
-  return c.json({ id: stackId, name: data.name, family_member_id: familyMemberId })
+  try {
+    await c.env.DB.batch(itemStatements)
+  } catch {
+    return c.json({ error: 'Der Stack konnte nicht vollständig angelegt werden. Bitte versuche es erneut.' }, 409)
+  }
+  return c.json({ id: stackId, name, description: description || null, version: 1 })
 })
 
 // POST /api/stacks/link-report
@@ -1273,7 +1255,7 @@ stacks.post('/link-report', async (c) => {
     const parsed = await c.req.json()
     data = parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : {}
   } catch {
-    return c.json({ error: 'Invalid JSON' }, 400)
+    return c.json({ error: 'Die gesendeten Angaben sind ungültig. Bitte versuche es erneut.' }, 400)
   }
 
   const productId = Number(data.product_id ?? data.productId)
@@ -1284,16 +1266,16 @@ stacks.post('/link-report', async (c) => {
   const reason = reasonRaw === 'invalid_link' ? 'invalid_link' : 'missing_link'
 
   if (!Number.isInteger(productId) || productId <= 0 || !productType) {
-    return c.json({ error: 'product_id and product_type are required' }, 400)
+    return c.json({ error: 'Das zu meldende Produkt konnte nicht eindeutig erkannt werden.' }, 400)
   }
   if (stackId !== null && (!Number.isInteger(stackId) || stackId <= 0)) {
-    return c.json({ error: 'stack_id must be a valid stack id' }, 400)
+    return c.json({ error: 'Der ausgewählte Stack ist ungültig.' }, 400)
   }
   if (stackId !== null) {
     const stack = await c.env.DB.prepare(
-      'SELECT id FROM stacks WHERE id = ? AND user_id = ?'
+      'SELECT id FROM stacks WHERE id = ? AND user_id = ? AND deleted_at IS NULL'
     ).bind(stackId, user.userId).first<{ id: number }>()
-    if (!stack) return c.json({ error: 'Stack not found' }, 404)
+    if (!stack) return c.json({ error: 'Der Stack wurde nicht gefunden.' }, 404)
   }
 
   const product = productType === 'user_product'
@@ -1310,7 +1292,7 @@ stacks.post('/link-report', async (c) => {
           AND visibility = 'public'
       `).bind(productId).first<StackLinkReportProduct>()
 
-  if (!product) return c.json({ error: 'Product not found' }, 404)
+  if (!product) return c.json({ error: 'Das Produkt wurde nicht gefunden.' }, 404)
 
   await c.env.DB.prepare(`
     INSERT INTO product_link_reports (
@@ -1330,314 +1312,112 @@ stacks.post('/link-report', async (c) => {
   return c.json({ ok: true })
 })
 
-// POST /api/stacks/:id/categories
-stacks.post('/:id/categories', async (c) => {
-  const authErr = await ensureAuth(c)
-  if (authErr) return authErr
-  const user = c.get('user')
-  const stackId = c.req.param('id')
-  const stack = await c.env.DB.prepare('SELECT * FROM stacks WHERE id = ?').bind(stackId).first<StackRow>()
-  if (!stack) return c.json({ error: 'Not found' }, 404)
-  if (stack.user_id !== user.userId && user.role !== 'admin') return c.json({ error: 'Forbidden' }, 403)
-
-  let data: Record<string, unknown>
-  try {
-    data = await c.req.json()
-  } catch {
-    return c.json({ error: 'Invalid JSON' }, 400)
-  }
-
-  const normalizedName = normalizeStackCategoryName(data.name)
-  if (!normalizedName) {
-    return c.json({ error: 'name must be a string between 1 and 80 characters' }, 400)
-  }
-  const requestedSortOrder = normalizeOptionalSortOrder(data.sort_order ?? data.sortOrder)
-  if ((data.sort_order !== undefined || data.sortOrder !== undefined) && requestedSortOrder === undefined) {
-    return c.json({ error: 'sort_order must be an integer greater than or equal to 0' }, 400)
-  }
-
-  const existing = await c.env.DB.prepare(`
-    SELECT id
-    FROM stack_categories
-    WHERE stack_id = ?
-      AND name_normalized = ?
-    LIMIT 1
-  `).bind(stack.id, normalizedName.name_normalized).first<{ id: number }>()
-  if (existing) return c.json({ error: 'Category name already exists in this stack' }, 409)
-
-  let sortOrder = requestedSortOrder
-  if (sortOrder === undefined) {
-    const maxSortOrder = await c.env.DB.prepare(`
-      SELECT COALESCE(MAX(sort_order), -1) AS value
-      FROM stack_categories
-      WHERE stack_id = ?
-    `).bind(stack.id).first<{ value: number }>()
-    sortOrder = (maxSortOrder?.value ?? -1) + 1
-  }
-
-  try {
-    await c.env.DB.prepare(`
-      INSERT INTO stack_categories (
-        stack_id,
-        name,
-        name_normalized,
-        sort_order,
-        is_default,
-        created_at,
-        updated_at
-      )
-      VALUES (?, ?, ?, ?, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-    `).bind(stack.id, normalizedName.name, normalizedName.name_normalized, sortOrder).run()
-  } catch (error) {
-    if (isUniqueConstraintError(error)) {
-      return c.json({ error: 'Category name already exists in this stack' }, 409)
-    }
-    throw error
-  }
-
-  const created = await c.env.DB.prepare(`
-    SELECT id, stack_id, name, sort_order, is_default
-    FROM stack_categories
-    WHERE stack_id = ?
-      AND name_normalized = ?
-    LIMIT 1
-  `).bind(stack.id, normalizedName.name_normalized).first<StackCategoryRow>()
-  return c.json({ category: created }, 201)
-})
-
-// PATCH /api/stacks/:id/categories/:categoryId
-stacks.patch('/:id/categories/:categoryId', async (c) => {
-  const authErr = await ensureAuth(c)
-  if (authErr) return authErr
-  const user = c.get('user')
-  const stackId = c.req.param('id')
-  const categoryId = Number(c.req.param('categoryId'))
-  if (!Number.isInteger(categoryId) || categoryId <= 0) {
-    return c.json({ error: 'Invalid category id' }, 400)
-  }
-  const stack = await c.env.DB.prepare('SELECT * FROM stacks WHERE id = ?').bind(stackId).first<StackRow>()
-  if (!stack) return c.json({ error: 'Not found' }, 404)
-  if (stack.user_id !== user.userId && user.role !== 'admin') return c.json({ error: 'Forbidden' }, 403)
-
-  let data: Record<string, unknown>
-  try {
-    data = await c.req.json()
-  } catch {
-    return c.json({ error: 'Invalid JSON' }, 400)
-  }
-
-  const existing = await c.env.DB.prepare(`
-    SELECT id, stack_id, name, name_normalized, sort_order, is_default
-    FROM stack_categories
-    WHERE id = ?
-      AND stack_id = ?
-    LIMIT 1
-  `).bind(categoryId, stack.id).first<StackCategoryRow>()
-  if (!existing) return c.json({ error: 'Category not found' }, 404)
-
-  const hasName = data.name !== undefined
-  const hasSortOrder = data.sort_order !== undefined || data.sortOrder !== undefined
-  if (!hasName && !hasSortOrder) {
-    return c.json({ error: 'No category changes requested' }, 400)
-  }
-
-  let normalizedName: StackCategoryValidation | null = null
-  if (hasName) {
-    normalizedName = normalizeStackCategoryName(data.name)
-    if (!normalizedName) {
-      return c.json({ error: 'name must be a string between 1 and 80 characters' }, 400)
-    }
-  }
-
-  const sortOrder = normalizeOptionalSortOrder(data.sort_order ?? data.sortOrder)
-  if (hasSortOrder && sortOrder === undefined) {
-    return c.json({ error: 'sort_order must be an integer greater than or equal to 0' }, 400)
-  }
-
-  const nextName = normalizedName?.name ?? existing.name
-  const nextNameNormalized = normalizedName?.name_normalized ?? existing.name_normalized ?? existing.name.toLowerCase()
-  if (normalizedName) {
-    const duplicate = await c.env.DB.prepare(`
-      SELECT id
-      FROM stack_categories
-      WHERE stack_id = ?
-        AND name_normalized = ?
-        AND id <> ?
-      LIMIT 1
-    `).bind(stack.id, normalizedName.name_normalized, existing.id).first<{ id: number }>()
-    if (duplicate) return c.json({ error: 'Category name already exists in this stack' }, 409)
-  }
-
-  try {
-    await c.env.DB.prepare(`
-      UPDATE stack_categories
-      SET name = ?,
-          name_normalized = ?,
-          sort_order = ?,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-        AND stack_id = ?
-    `).bind(nextName, nextNameNormalized, sortOrder ?? existing.sort_order, existing.id, stack.id).run()
-  } catch (error) {
-    if (isUniqueConstraintError(error)) {
-      return c.json({ error: 'Category name already exists in this stack' }, 409)
-    }
-    throw error
-  }
-
-  const updated = await c.env.DB.prepare(`
-    SELECT id, stack_id, name, sort_order, is_default
-    FROM stack_categories
-    WHERE id = ?
-      AND stack_id = ?
-    LIMIT 1
-  `).bind(existing.id, stack.id).first<StackCategoryRow>()
-  return c.json({ category: updated })
-})
-
-// DELETE /api/stacks/:id/categories/:categoryId
-stacks.delete('/:id/categories/:categoryId', async (c) => {
-  const authErr = await ensureAuth(c)
-  if (authErr) return authErr
-  const user = c.get('user')
-  const stackId = c.req.param('id')
-  const categoryId = Number(c.req.param('categoryId'))
-  if (!Number.isInteger(categoryId) || categoryId <= 0) {
-    return c.json({ error: 'Invalid category id' }, 400)
-  }
-  const stack = await c.env.DB.prepare('SELECT * FROM stacks WHERE id = ?').bind(stackId).first<StackRow>()
-  if (!stack) return c.json({ error: 'Not found' }, 404)
-  if (stack.user_id !== user.userId && user.role !== 'admin') return c.json({ error: 'Forbidden' }, 403)
-
-  const category = await c.env.DB.prepare(`
-    SELECT id, stack_id, name, sort_order, is_default
-    FROM stack_categories
-    WHERE id = ?
-      AND stack_id = ?
-    LIMIT 1
-  `).bind(categoryId, stack.id).first<StackCategoryRow>()
-  if (!category) return c.json({ error: 'Category not found' }, 404)
-  if (category.is_default === 1) return c.json({ error: 'Default category cannot be deleted' }, 400)
-
-  const defaultCategory = await ensureDefaultStackCategory(c.env.DB, stack.id)
-  await c.env.DB.batch([
-    c.env.DB.prepare(`
-      UPDATE stack_items
-      SET category_id = ?
-      WHERE stack_id = ?
-        AND category_id = ?
-    `).bind(defaultCategory.id, stack.id, category.id),
-    c.env.DB.prepare(`
-      DELETE FROM stack_categories
-      WHERE id = ?
-        AND stack_id = ?
-    `).bind(category.id, stack.id),
-  ])
-
-  return c.json({ ok: true, moved_to_category_id: defaultCategory.id })
-})
-
 // PUT /api/stacks/:id/items/layout
 stacks.put('/:id/items/layout', async (c) => {
   const authErr = await ensureAuth(c)
   if (authErr) return authErr
   const user = c.get('user')
   const stackId = c.req.param('id')
-  const stack = await c.env.DB.prepare('SELECT * FROM stacks WHERE id = ?').bind(stackId).first<StackRow>()
-  if (!stack) return c.json({ error: 'Not found' }, 404)
-  if (stack.user_id !== user.userId && user.role !== 'admin') return c.json({ error: 'Forbidden' }, 403)
+  const stack = await c.env.DB.prepare('SELECT * FROM stacks WHERE id = ? AND deleted_at IS NULL').bind(stackId).first<StackRow>()
+  if (!stack) return c.json({ error: 'Der Stack wurde nicht gefunden.' }, 404)
+  if (stack.user_id !== user.userId && user.role !== 'admin') return c.json({ error: 'Du kannst diesen Stack nicht bearbeiten.' }, 403)
 
   let data: Record<string, unknown>
   try {
     data = await c.req.json()
   } catch {
-    return c.json({ error: 'Invalid JSON' }, 400)
+    return c.json({ error: 'Die gesendeten Angaben sind ungültig. Bitte versuche es erneut.' }, 400)
   }
 
   if (!Array.isArray(data.items)) {
-    return c.json({ error: 'items must be an array' }, 400)
+    return c.json({ error: 'Die neue Reihenfolge ist unvollständig.' }, 400)
   }
 
   const layoutItems: StackLayoutInput[] = []
   const seenStackItemIds = new Set<number>()
   for (const rawItem of data.items) {
     if (!rawItem || typeof rawItem !== 'object') {
-      return c.json({ error: 'items must contain objects' }, 400)
+      return c.json({ error: 'Mindestens ein Eintrag der Reihenfolge ist ungültig.' }, 400)
     }
     const item = rawItem as Record<string, unknown>
     const stackItemId = Number(item.stack_item_id ?? item.stackItemId)
     const sortOrder = normalizeOptionalSortOrder(item.sort_order ?? item.sortOrder)
-    const categoryId = normalizeOptionalCategoryId(item.category_id ?? item.categoryId)
-    const hasCategory = item.category_id !== undefined || item.categoryId !== undefined
+    const expectedVersion = Number(item.expected_version ?? item.expectedVersion)
 
     if (!Number.isInteger(stackItemId) || stackItemId <= 0) {
-      return c.json({ error: 'stack_item_id must be a valid stack item id' }, 400)
+      return c.json({ error: 'Mindestens ein Produkt im Stack konnte nicht eindeutig erkannt werden.' }, 400)
     }
     if (sortOrder === undefined) {
-      return c.json({ error: 'sort_order must be an integer greater than or equal to 0' }, 400)
+      return c.json({ error: 'Mindestens eine Position in der Reihenfolge ist ungültig.' }, 400)
     }
-    if (hasCategory && categoryId === undefined) {
-      return c.json({ error: 'category_id must be null or a valid category id' }, 400)
+    if (!Number.isInteger(expectedVersion) || expectedVersion < 1) {
+      return c.json({ error: 'Die gespeicherte Produktversion ist ungültig. Bitte lade den Stack neu.' }, 400)
     }
     if (seenStackItemIds.has(stackItemId)) {
-      return c.json({ error: 'items must not contain duplicate stack_item_id values' }, 400)
+      return c.json({ error: 'Ein Produkt ist in der neuen Reihenfolge doppelt enthalten.' }, 400)
     }
     seenStackItemIds.add(stackItemId)
     layoutItems.push({
       stack_item_id: stackItemId,
       sort_order: sortOrder,
-      ...(hasCategory ? { category_id: categoryId } : {}),
+      expected_version: expectedVersion,
     })
   }
 
   const { results: stackItems } = await c.env.DB.prepare(`
-    SELECT id, category_id
+    SELECT id, version
     FROM stack_items
     WHERE stack_id = ?
     ORDER BY id ASC
-  `).bind(stack.id).all<{ id: number; category_id: number | null }>()
+  `).bind(stack.id).all<{ id: number; version: number }>()
 
   if (stackItems.length !== layoutItems.length) {
-    return c.json({ error: 'items must include all stack items exactly once' }, 400)
+    return c.json({ error: 'Die Reihenfolge muss jedes Produkt genau einmal enthalten.' }, 400)
   }
 
   const stackItemIdSet = new Set(stackItems.map((item) => item.id))
   for (const item of layoutItems) {
     if (!stackItemIdSet.has(item.stack_item_id)) {
-      return c.json({ error: 'All layout items must belong to the stack' }, 400)
+      return c.json({ error: 'Mindestens ein Produkt gehört nicht zu diesem Stack.' }, 400)
+    }
+  }
+  const versionsById = new Map(stackItems.map((item) => [item.id, item.version]))
+  if (layoutItems.some((item) => versionsById.get(item.stack_item_id) !== item.expected_version)) {
+    return c.json({ error: 'Die Reihenfolge wurde zwischenzeitlich geändert. Bitte lade den Stack neu.' }, 409)
+  }
+
+  if (layoutItems.length > 0) {
+    const sortCases = layoutItems.map(() => 'WHEN ? THEN ?').join(' ')
+    const versionPairs = layoutItems.map(() => '(id = ? AND version = ?)').join(' OR ')
+    const itemIds = layoutItems.map(() => '?').join(', ')
+    const sortBindings = layoutItems.flatMap((item) => [item.stack_item_id, item.sort_order])
+    const versionBindings = layoutItems.flatMap((item) => [item.stack_item_id, item.expected_version])
+    const result = await c.env.DB.prepare(`
+      UPDATE stack_items
+      SET sort_order = CASE id ${sortCases} ELSE sort_order END,
+          version = version + 1
+      WHERE stack_id = ?
+        AND (SELECT COUNT(*) FROM stack_items WHERE stack_id = ?) = ?
+        AND (SELECT COUNT(*) FROM stack_items WHERE stack_id = ? AND (${versionPairs})) = ?
+        AND id IN (${itemIds})
+    `).bind(
+      ...sortBindings,
+      stack.id,
+      stack.id,
+      layoutItems.length,
+      stack.id,
+      ...versionBindings,
+      layoutItems.length,
+      ...layoutItems.map((item) => item.stack_item_id),
+    ).run()
+    if ((result.meta.changes ?? 0) !== layoutItems.length) {
+      return c.json({ error: 'Die Reihenfolge wurde zwischenzeitlich geändert. Bitte lade den Stack neu.' }, 409)
     }
   }
 
-  const providedCategoryIds = layoutItems
-    .map((item) => item.category_id)
-    .filter((categoryId): categoryId is number => typeof categoryId === 'number')
-  if (!(await validateStackCategoryIds(c.env.DB, stack.id, providedCategoryIds))) {
-    return c.json({ error: 'category_id must belong to this stack' }, 400)
-  }
-
-  const defaultCategory = await ensureDefaultStackCategory(c.env.DB, stack.id)
-  const existingCategoryByItemId = new Map(stackItems.map((item) => [item.id, item.category_id]))
-  const statements = layoutItems.map((item) => {
-    const currentCategoryId = existingCategoryByItemId.get(item.stack_item_id)
-    const nextCategoryId = item.category_id === undefined
-      ? (currentCategoryId ?? defaultCategory.id)
-      : (item.category_id ?? defaultCategory.id)
-    return c.env.DB.prepare(`
-      UPDATE stack_items
-      SET sort_order = ?,
-          category_id = ?
-      WHERE id = ?
-        AND stack_id = ?
-    `).bind(item.sort_order, nextCategoryId, item.stack_item_id, stack.id)
-  })
-  if (statements.length > 0) {
-    await c.env.DB.batch(statements)
-  }
-
   const items = await loadStackItemsWithIngredients(c.env.DB, stack.id, stack.user_id)
-  const categories = await loadStackCategories(c.env.DB, stack.id)
   const ingredientTotals = aggregateStackIngredientTotals(items)
-  return c.json({ items, categories, ingredient_totals: ingredientTotals })
+  return c.json({ items, ingredient_totals: ingredientTotals })
 })
 
 // GET /api/stacks/:id
@@ -1646,21 +1426,18 @@ stacks.get('/:id', async (c) => {
   if (authErr) return authErr
   const user = c.get('user')
   const stack = await c.env.DB.prepare(`
-    SELECT s.*, fp.first_name AS family_member_first_name,
-      origin.name AS origin_party_name, origin.type AS origin_party_type
+    SELECT s.*, origin.name AS origin_party_name, origin.type AS origin_party_type
     FROM stacks s
-    LEFT JOIN family_profiles fp ON fp.id = s.family_member_id AND fp.user_id = s.user_id
     LEFT JOIN parties origin ON origin.id = s.origin_party_id
     WHERE s.id = ?
+      AND s.deleted_at IS NULL
   `).bind(c.req.param('id')).first<StackRow>()
-  if (!stack) return c.json({ error: 'Not found' }, 404)
-  if (stack.user_id !== user.userId && user.role !== 'admin') return c.json({ error: 'Forbidden' }, 403)
-  await ensureDefaultStackCategory(c.env.DB, stack.id)
+  if (!stack) return c.json({ error: 'Der Stack wurde nicht gefunden.' }, 404)
+  if (stack.user_id !== user.userId && user.role !== 'admin') return c.json({ error: 'Du kannst diesen Stack nicht öffnen.' }, 403)
   const items = await loadStackItemsWithIngredients(c.env.DB, stack.id, stack.user_id)
-  const categories = await loadStackCategories(c.env.DB, stack.id)
   const total = items.reduce((sum, i) => sum + i.product_price, 0)
   const ingredientTotals = aggregateStackIngredientTotals(items)
-  return c.json({ stack, items, categories, total, ingredient_totals: ingredientTotals })
+  return c.json({ stack, items, total, ingredient_totals: ingredientTotals })
 })
 
 // POST /api/stacks/:id/email
@@ -1672,9 +1449,14 @@ stacks.post('/:id/email', async (c) => {
   if (!allowed) return c.json({ error: 'Bitte warte kurz, bevor du weitere Stack-Mails versendest.' }, 429)
 
   const id = c.req.param('id')
-  const stack = await c.env.DB.prepare('SELECT * FROM stacks WHERE id = ?').bind(id).first<StackRow>()
-  if (!stack) return c.json({ error: 'Not found' }, 404)
-  if (stack.user_id !== user.userId && user.role !== 'admin') return c.json({ error: 'Forbidden' }, 403)
+  const stack = await c.env.DB.prepare(`
+    SELECT s.*, origin.name AS origin_party_name
+    FROM stacks s
+    LEFT JOIN parties origin ON origin.id = s.origin_party_id
+    WHERE s.id = ? AND s.deleted_at IS NULL
+  `).bind(id).first<StackRow>()
+  if (!stack) return c.json({ error: 'Der Stack wurde nicht gefunden.' }, 404)
+  if (stack.user_id !== user.userId && user.role !== 'admin') return c.json({ error: 'Du kannst diesen Stack nicht öffnen.' }, 403)
 
   const items = await loadStackItems(c.env.DB, stack.id, stack.user_id) as unknown as StackMailItem[]
   const ingredients = await loadStackMailIngredients(c.env.DB, stack.id, stack.user_id)
@@ -1691,7 +1473,14 @@ stacks.post('/:id/email', async (c) => {
   const result = await sendMail(c.env, {
     to: user.email,
     subject: `Dein Supplement Stack: ${stack.name}`,
-    html: buildStackEmailHtml(stack, preparedItems, totalOnce, totalMonthly, ingredientTotals),
+    html: buildStackEmailHtml(
+      stack,
+      preparedItems,
+      totalOnce,
+      totalMonthly,
+      ingredientTotals,
+      new URL(c.req.url).origin,
+    ),
   })
 
   if (!result.ok) {
@@ -1702,17 +1491,97 @@ stacks.post('/:id/email', async (c) => {
   return c.json({ ok: true })
 })
 
-// DELETE /api/stacks/:id
+// POST /api/stacks/:id/restore
+stacks.post('/:id/restore', async (c) => {
+  const authErr = await ensureAuth(c)
+  if (authErr) return authErr
+  const user = c.get('user')
+  const id = c.req.param('id')
+  const stack = await c.env.DB.prepare(`
+    SELECT * FROM stacks
+    WHERE id = ? AND deleted_at IS NOT NULL
+  `).bind(id).first<StackRow>()
+  if (!stack) return c.json({ error: 'Stack wurde im Papierkorb nicht gefunden.' }, 404)
+  if (stack.user_id !== user.userId) {
+    return c.json({ error: 'Du kannst diesen Stack nicht wiederherstellen.' }, 403)
+  }
+
+  if (!stack.delete_purge_after || Date.parse(`${stack.delete_purge_after.replace(' ', 'T')}Z`) <= Date.now()) {
+    const purged = await c.env.DB.prepare(`
+      DELETE FROM stacks
+      WHERE id = ? AND user_id = ? AND version = ?
+        AND deleted_at = ? AND delete_purge_after = ?
+        AND delete_purge_after <= CURRENT_TIMESTAMP
+    `).bind(
+      id,
+      user.userId,
+      stack.version,
+      stack.deleted_at,
+      stack.delete_purge_after,
+    ).run()
+    if ((purged.meta.changes ?? 0) !== 1) {
+      const remaining = await c.env.DB.prepare(`
+        SELECT id FROM stacks WHERE id = ? AND user_id = ?
+      `).bind(id, user.userId).first<{ id: number }>()
+      if (remaining) {
+        return c.json({ error: 'Der Papierkorb wurde zwischenzeitlich geändert. Bitte lade ihn neu.' }, 409)
+      }
+    }
+    return c.json({ error: 'Die Wiederherstellungsfrist ist abgelaufen.' }, 410)
+  }
+
+  const restored = await c.env.DB.prepare(`
+    UPDATE stacks
+    SET deleted_at = NULL,
+        delete_purge_after = NULL,
+        version = version + 1
+    WHERE id = ?
+      AND user_id = ?
+      AND version = ?
+      AND deleted_at = ?
+      AND delete_purge_after = ?
+  `).bind(
+    id,
+    user.userId,
+    stack.version,
+    stack.deleted_at,
+    stack.delete_purge_after,
+  ).run()
+  if ((restored.meta.changes ?? 0) !== 1) {
+    return c.json({ error: 'Der Stack wurde zwischenzeitlich geändert. Bitte lade den Papierkorb neu.' }, 409)
+  }
+  return c.json({ ok: true, restored: true })
+})
+
+// DELETE /api/stacks/:id — move to the seven-day trash, never purge directly.
 stacks.delete('/:id', async (c) => {
   const authErr = await ensureAuth(c)
   if (authErr) return authErr
   const user = c.get('user')
   const id = c.req.param('id')
   const stack = await c.env.DB.prepare('SELECT * FROM stacks WHERE id = ?').bind(id).first<StackRow>()
-  if (!stack) return c.json({ error: 'Not found' }, 404)
-  if (stack.user_id !== user.userId && user.role !== 'admin') return c.json({ error: 'Forbidden' }, 403)
-  await c.env.DB.prepare('DELETE FROM stacks WHERE id = ?').bind(id).run()
-  return c.json({ ok: true })
+  if (!stack) return c.json({ error: 'Der Stack wurde nicht gefunden.' }, 404)
+  if (stack.user_id !== user.userId && user.role !== 'admin') return c.json({ error: 'Du kannst diesen Stack nicht bearbeiten.' }, 403)
+  if (stack.deleted_at) {
+    return c.json({ ok: true, trashed: true, purge_after: stack.delete_purge_after })
+  }
+  const trashed = await c.env.DB.prepare(`
+    UPDATE stacks
+    SET deleted_at = CURRENT_TIMESTAMP,
+        delete_purge_after = datetime(CURRENT_TIMESTAMP, '+7 days'),
+        version = version + 1
+    WHERE id = ?
+      AND user_id = ?
+      AND version = ?
+      AND deleted_at IS NULL
+  `).bind(id, user.userId, stack.version).run()
+  if ((trashed.meta.changes ?? 0) !== 1) {
+    return c.json({ error: 'Der Stack wurde zwischenzeitlich geändert. Bitte lade die Seite neu.' }, 409)
+  }
+  const current = await c.env.DB.prepare(`
+    SELECT delete_purge_after FROM stacks WHERE id = ? AND user_id = ?
+  `).bind(id, user.userId).first<{ delete_purge_after: string }>()
+  return c.json({ ok: true, trashed: true, purge_after: current?.delete_purge_after ?? null })
 })
 
 // PUT /api/stacks/:id
@@ -1721,37 +1590,39 @@ stacks.put('/:id', async (c) => {
   if (authErr) return authErr
   const user = c.get('user')
   const id = c.req.param('id')
-  const stack = await c.env.DB.prepare('SELECT * FROM stacks WHERE id = ?').bind(id).first<StackRow>()
-  if (!stack) return c.json({ error: 'Not found' }, 404)
-  if (stack.user_id !== user.userId && user.role !== 'admin') return c.json({ error: 'Forbidden' }, 403)
+  const stack = await c.env.DB.prepare('SELECT * FROM stacks WHERE id = ? AND deleted_at IS NULL').bind(id).first<StackRow>()
+  if (!stack) return c.json({ error: 'Der Stack wurde nicht gefunden.' }, 404)
+  if (stack.user_id !== user.userId && user.role !== 'admin') return c.json({ error: 'Du kannst diesen Stack nicht öffnen.' }, 403)
   let data: Record<string, unknown>
   try {
     data = await c.req.json()
   } catch {
-    return c.json({ error: 'Invalid JSON' }, 400)
+    return c.json({ error: 'Die gesendeten Angaben sind ungültig. Bitte versuche es erneut.' }, 400)
   }
 
   const name = typeof data.name === 'string' && data.name.trim() !== '' ? data.name.trim() : null
-  if (data.name !== undefined && name === null) {
-    return c.json({ error: 'Stack-Name darf nicht leer sein' }, 400)
+  if (data.name !== undefined && (name === null || name.length > 120)) {
+    return c.json({ error: 'Stack-Name muss zwischen 1 und 120 Zeichen lang sein.' }, 400)
   }
-  const hasFamilyMemberUpdate = data.family_member_id !== undefined || data.familyMemberId !== undefined
-  const familyMemberId = hasFamilyMemberUpdate
-    ? normalizeFamilyMemberId(data.family_member_id ?? data.familyMemberId)
-    : undefined
-  if (hasFamilyMemberUpdate && familyMemberId === undefined) {
-    return c.json({ error: 'family_member_id must be null or a valid family profile id' }, 400)
+  const hasDescription = data.description !== undefined
+  const description = typeof data.description === 'string' ? data.description.trim() : ''
+  if (hasDescription && description.length > 1000) {
+    return c.json({ error: 'Die Beschreibung darf höchstens 1000 Zeichen lang sein.' }, 400)
   }
-  if (familyMemberId !== undefined && !(await familyMemberBelongsToUser(c.env.DB, stack.user_id, familyMemberId))) {
-    return c.json({ error: 'Family profile not found' }, 404)
+  const expectedStackVersion = data.expected_stack_version === undefined
+    ? null
+    : Number(data.expected_stack_version)
+  if (expectedStackVersion !== null && (!Number.isInteger(expectedStackVersion) || expectedStackVersion < 1)) {
+    return c.json({ error: 'Die gespeicherte Stack-Version ist ungültig. Bitte lade den Stack neu.' }, 400)
   }
-  const defaultCategory = await ensureDefaultStackCategory(c.env.DB, stack.id)
+  if (expectedStackVersion !== null && expectedStackVersion !== stack.version) {
+    return c.json({ error: 'Der Stack wurde zwischenzeitlich geändert. Bitte lade ihn neu.' }, 409)
+  }
 
   let normalizedItems: StackProductInput[] | null = null
-  let existingLayoutByProductKey = new Map<string, {
+  const existingLayoutByProductKey = new Map<string, {
     stack_item_id: number
     sort_order: number
-    category_id: number | null
     version: number
     has_binding: number
     quantity: number
@@ -1763,7 +1634,6 @@ stacks.put('/:id', async (c) => {
   let existingItemRows: Array<{
     stack_item_id: number
     sort_order: number
-    category_id: number | null
     version: number
     has_binding: number
     quantity: number
@@ -1778,22 +1648,15 @@ stacks.put('/:id', async (c) => {
   if (data.product_ids !== undefined) {
     const normalized = normalizeStackProductItems(data.product_ids)
     if (normalized.error || !normalized.items) {
-      return c.json({ error: normalized.error ?? 'Invalid product_ids' }, 400)
+      return c.json({ error: normalized.error ?? 'Die Produktauswahl ist ungültig.' }, 400)
     }
     if (!(await validateStackProductReferences(c.env.DB, stack.user_id, normalized.items))) {
-      return c.json({ error: 'Stacks can only use public catalog products or your own pending/approved/blocked products' }, 400)
-    }
-    const categoryIds = normalized.items
-      .map((item) => item.category_id)
-      .filter((categoryId): categoryId is number => typeof categoryId === 'number')
-    if (!(await validateStackCategoryIds(c.env.DB, stack.id, categoryIds))) {
-      return c.json({ error: 'category_id must belong to this stack' }, 400)
+      return c.json({ error: 'Mindestens ein Produkt ist nicht mehr verfügbar oder gehört nicht zu deinem Konto.' }, 400)
     }
     const { results: existingLayoutRows } = await c.env.DB.prepare(`
       SELECT
         stack_items.id AS stack_item_id,
         stack_items.sort_order,
-        stack_items.category_id,
         stack_items.version,
         stack_items.quantity,
         stack_items.intake_interval_days,
@@ -1812,13 +1675,33 @@ stacks.put('/:id', async (c) => {
       ORDER BY stack_items.sort_order ASC, stack_items.id ASC
     `).bind(id).all<typeof existingItemRows[number]>()
     existingItemRows = existingLayoutRows
+    if (data.expected_items !== undefined) {
+      if (!Array.isArray(data.expected_items) || data.expected_items.length !== existingItemRows.length) {
+        return c.json({ error: 'Der Stack wurde zwischenzeitlich geändert. Bitte lade ihn neu.' }, 409)
+      }
+      const expectedVersions = new Map<number, number>()
+      for (const rawExpected of data.expected_items) {
+        if (!rawExpected || typeof rawExpected !== 'object') {
+          return c.json({ error: 'Die gespeicherten Produktangaben sind ungültig. Bitte lade den Stack neu.' }, 400)
+        }
+        const expected = rawExpected as Record<string, unknown>
+        const stackItemId = Number(expected.stack_item_id ?? expected.stackItemId)
+        const version = Number(expected.expected_version ?? expected.expectedVersion)
+        if (!Number.isInteger(stackItemId) || stackItemId <= 0 || !Number.isInteger(version) || version < 1 || expectedVersions.has(stackItemId)) {
+          return c.json({ error: 'Die gespeicherten Produktversionen sind ungültig. Bitte lade den Stack neu.' }, 400)
+        }
+        expectedVersions.set(stackItemId, version)
+      }
+      if (existingItemRows.some((item) => expectedVersions.get(item.stack_item_id) !== item.version)) {
+        return c.json({ error: 'Der Stack wurde zwischenzeitlich geändert. Bitte lade ihn neu.' }, 409)
+      }
+    }
     for (const existing of existingLayoutRows) {
       const productKey = `${existing.product_type}:${existing.product_id}`
       if (!existingLayoutByProductKey.has(productKey)) {
         existingLayoutByProductKey.set(productKey, {
           stack_item_id: existing.stack_item_id,
           sort_order: existing.sort_order,
-          category_id: existing.category_id,
           version: existing.version,
           has_binding: existing.has_binding,
           quantity: existing.quantity,
@@ -1836,47 +1719,90 @@ stacks.put('/:id', async (c) => {
     normalizedItems = normalized.items
   }
 
+  const mutationRequested = name !== null || hasDescription || normalizedItems !== null
   const statements: D1PreparedStatement[] = []
-  if (name !== null) {
-    statements.push(c.env.DB.prepare('UPDATE stacks SET name = ? WHERE id = ?').bind(name, id))
-  }
-  if (familyMemberId !== undefined) {
-    statements.push(c.env.DB.prepare('UPDATE stacks SET family_member_id = ? WHERE id = ?').bind(familyMemberId, id))
+  const claimedVersion = stack.version + 1
+  const claimToken = crypto.randomUUID()
+  const claim = { stackId: id, userId: stack.user_id, version: claimedVersion, token: claimToken }
+  if (mutationRequested) {
+    let itemGuardSql = ''
+    const itemGuardBindings: Array<string | number> = []
+    if (normalizedItems !== null) {
+      if (existingItemRows.length === 0) {
+        itemGuardSql = 'AND NOT EXISTS (SELECT 1 FROM stack_items WHERE stack_id = stacks.id)'
+      } else {
+        const itemVersions = existingItemRows.map(() => '(id = ? AND version = ?)').join(' OR ')
+        itemGuardSql = `
+          AND (SELECT COUNT(*) FROM stack_items WHERE stack_id = stacks.id) = ?
+          AND (
+            SELECT COUNT(*) FROM stack_items
+            WHERE stack_id = stacks.id AND (${itemVersions})
+          ) = ?
+        `
+        itemGuardBindings.push(
+          existingItemRows.length,
+          ...existingItemRows.flatMap((item) => [item.stack_item_id, item.version]),
+          existingItemRows.length,
+        )
+      }
+    }
+    statements.push(c.env.DB.prepare(`
+      UPDATE stacks
+      SET name = ?, description = ?, version = version + 1, write_claim_token = ?
+      WHERE id = ? AND user_id = ? AND version = ? AND deleted_at IS NULL
+      ${itemGuardSql}
+    `).bind(
+      name ?? stack.name,
+      hasDescription ? (description || null) : (stack.description ?? null),
+      claimToken,
+      id,
+      stack.user_id,
+      stack.version,
+      ...itemGuardBindings,
+    ))
   }
   if (normalizedItems !== null) {
     const retainedIds = new Set<number>()
     const newItems = normalizedItems.filter((item) => !existingLayoutByProductKey.has(`${item.product_type}:${item.id}`))
-    const newItemIds = await reserveIds(c.env.DB, 'stack_items', newItems.length)
+    const newItemIds = await candidateIds(c.env.DB, 'stack_items', newItems.length)
     let newItemIndex = 0
     for (const item of normalizedItems) {
       const productKey = `${item.product_type}:${item.id}`
       const existingLayout = existingLayoutByProductKey.get(productKey)
       const sortOrder = item.sort_order ?? existingLayout?.sort_order ?? nextFallbackSortOrder++
-      const categoryId = item.category_id === undefined
-        ? (typeof existingLayout?.category_id === 'number' ? existingLayout.category_id : defaultCategory.id)
-        : (item.category_id ?? defaultCategory.id)
       if (existingLayout) {
         retainedIds.add(existingLayout.stack_item_id)
+        const dosageText = item.dosage_text === undefined
+          ? existingLayout.dosage_text
+          : item.dosage_text
         const amountChanged = existingLayout.quantity !== item.quantity
           || existingLayout.intake_interval_days !== item.intake_interval_days
-          || existingLayout.dosage_text !== item.dosage_text
+          || existingLayout.dosage_text !== dosageText
           || existingLayout.timing !== item.timing
         statements.push(c.env.DB.prepare(`
           UPDATE stack_items
           SET quantity = ?, intake_interval_days = ?, dosage_text = ?, timing = ?,
-              sort_order = ?, category_id = ?, amount_source = ?, version = version + 1
+              sort_order = ?, amount_source = ?, version = version + 1
           WHERE id = ? AND stack_id = ? AND version = ?
+            AND EXISTS (
+              SELECT 1 FROM stacks
+              WHERE id = ? AND user_id = ? AND version = ?
+                AND write_claim_token = ? AND deleted_at IS NULL
+            )
         `).bind(
           item.quantity,
           item.intake_interval_days,
-          item.dosage_text,
+          dosageText,
           item.timing,
           sortOrder,
-          categoryId,
           amountChanged ? 'user' : existingLayout.amount_source,
           existingLayout.stack_item_id,
           id,
           existingLayout.version,
+          id,
+          stack.user_id,
+          claimedVersion,
+          claimToken,
         ))
         if (item.product_type === 'catalog' && existingLayout.has_binding === 0) {
           const binding = await stackItemBindingStatement(
@@ -1884,6 +1810,7 @@ stacks.put('/:id', async (c) => {
             existingLayout.stack_item_id,
             item.id,
             stack.origin_party_id ?? null,
+            claim,
           )
           if (binding) statements.push(binding)
         }
@@ -1891,12 +1818,19 @@ stacks.put('/:id', async (c) => {
       }
 
       const stackItemId = newItemIds[newItemIndex++]
+      const dosageInsert = stackItemDosageInsert(item, stack.user_id)
       statements.push(c.env.DB.prepare(`
         INSERT INTO stack_items (
           id, stack_id, catalog_product_id, user_product_id, quantity,
-          intake_interval_days, dosage_text, timing, sort_order, category_id,
+          intake_interval_days, dosage_text, timing, sort_order,
           amount_source, version
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'user', 1)
+        )
+        SELECT ?, ?, ?, ?, ?, ?, ${dosageInsert.sql}, ?, ?, 'user', 1
+        WHERE EXISTS (
+          SELECT 1 FROM stacks
+          WHERE id = ? AND user_id = ? AND version = ?
+            AND write_claim_token = ? AND deleted_at IS NULL
+        )
       `).bind(
         stackItemId,
         id,
@@ -1904,10 +1838,13 @@ stacks.put('/:id', async (c) => {
         item.product_type === 'user_product' ? item.id : null,
         item.quantity,
         item.intake_interval_days,
-        item.dosage_text,
+        ...dosageInsert.bindings,
         item.timing,
         sortOrder,
-        categoryId,
+        id,
+        stack.user_id,
+        claimedVersion,
+        claimToken,
       ))
       if (item.product_type === 'catalog') {
         const binding = await stackItemBindingStatement(
@@ -1915,6 +1852,7 @@ stacks.put('/:id', async (c) => {
           stackItemId,
           item.id,
           stack.origin_party_id ?? null,
+          claim,
         )
         if (binding) statements.push(binding)
       }
@@ -1922,26 +1860,45 @@ stacks.put('/:id', async (c) => {
     for (const existing of existingItemRows) {
       if (!retainedIds.has(existing.stack_item_id)) {
         statements.push(c.env.DB.prepare(`
-          DELETE FROM stack_items WHERE id = ? AND stack_id = ? AND version = ?
-        `).bind(existing.stack_item_id, id, existing.version))
+          DELETE FROM stack_items
+          WHERE id = ? AND stack_id = ? AND version = ?
+            AND EXISTS (
+              SELECT 1 FROM stacks
+              WHERE id = ? AND user_id = ? AND version = ?
+                AND write_claim_token = ? AND deleted_at IS NULL
+            )
+        `).bind(
+          existing.stack_item_id,
+          id,
+          existing.version,
+          id,
+          stack.user_id,
+          claimedVersion,
+          claimToken,
+        ))
       }
     }
   }
   if (statements.length > 0) {
-    await c.env.DB.batch(statements)
+    let results: D1Result[]
+    try {
+      results = await c.env.DB.batch(statements)
+    } catch {
+      return c.json({ error: 'Der Stack wurde zwischenzeitlich geändert. Bitte lade ihn neu.' }, 409)
+    }
+    if ((results[0]?.meta.changes ?? 0) !== 1) {
+      return c.json({ error: 'Der Stack wurde zwischenzeitlich geändert. Bitte lade ihn neu.' }, 409)
+    }
   }
   const updated = await c.env.DB.prepare(`
-    SELECT s.*, fp.first_name AS family_member_first_name,
-      origin.name AS origin_party_name, origin.type AS origin_party_type
+    SELECT s.*, origin.name AS origin_party_name, origin.type AS origin_party_type
     FROM stacks s
-    LEFT JOIN family_profiles fp ON fp.id = s.family_member_id AND fp.user_id = s.user_id
     LEFT JOIN parties origin ON origin.id = s.origin_party_id
-    WHERE s.id = ?
+    WHERE s.id = ? AND s.deleted_at IS NULL
   `).bind(id).first()
   const items = await loadStackItemsWithIngredients(c.env.DB, id, stack.user_id)
-  const categories = await loadStackCategories(c.env.DB, id)
   const ingredientTotals = aggregateStackIngredientTotals(items)
-  return c.json({ stack: updated, items, categories, ingredient_totals: ingredientTotals })
+  return c.json({ stack: updated, items, ingredient_totals: ingredientTotals })
 })
 
 export default stacks
@@ -1958,9 +1915,9 @@ stackWarningsApp.get('/:id', async (c) => {
   if (authErr) return authErr
   const user = c.get('user')
   const id = c.req.param('id')
-  const stack = await c.env.DB.prepare('SELECT * FROM stacks WHERE id = ?').bind(id).first<StackRow>()
-  if (!stack) return c.json({ error: 'Not found' }, 404)
-  if (stack.user_id !== user.userId && user.role !== 'admin') return c.json({ error: 'Forbidden' }, 403)
+  const stack = await c.env.DB.prepare('SELECT * FROM stacks WHERE id = ? AND deleted_at IS NULL').bind(id).first<StackRow>()
+  if (!stack) return c.json({ error: 'Der Stack wurde nicht gefunden.' }, 404)
+  if (stack.user_id !== user.userId && user.role !== 'admin') return c.json({ error: 'Du kannst diesen Stack nicht öffnen.' }, 403)
   const { results: items } = await c.env.DB.prepare(
     `SELECT *
      FROM (

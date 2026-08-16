@@ -3,7 +3,7 @@ import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, Mail, RefreshCw, XCircle } from 'lucide-react';
 import { resendVerificationEmail, verifyEmail } from '../api/auth';
 import { useAuth } from '../contexts/AuthContext';
-import { authPath, authReturnTo } from '../lib/returnTo';
+import { authPath, authReturnTo, returnToLabel } from '../lib/returnTo';
 
 type VerifyState = 'idle' | 'loading' | 'success' | 'error';
 
@@ -84,13 +84,15 @@ export default function VerifyEmailPage() {
         </div>
 
         {status === 'loading' && (
-          <p className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-800">
-            Bestätigungslink wird geprüft...
+          <p className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-medium text-blue-800" role="status" aria-live="polite">
+            Bestätigungslink wird geprüft …
           </p>
         )}
 
         {message && status !== 'loading' && (
           <p
+            role={messageTone === 'error' ? 'alert' : 'status'}
+            aria-live={messageTone === 'error' ? 'assertive' : 'polite'}
             className={`rounded-xl border px-4 py-3 text-sm font-medium ${
               messageTone === 'error'
                 ? 'border-red-200 bg-red-50 text-red-700'
@@ -111,6 +113,9 @@ export default function VerifyEmailPage() {
             <p className="text-sm text-slate-500">
               Du kannst Supplement Stack weiter nutzen. Die Bestätigung hilft uns, dein Konto und
               wichtige Konto-Mails sauber zuzuordnen.
+            </p>
+            <p className="text-sm text-slate-500">
+              Der Link ist 48 Stunden gültig. Prüfe bitte auch deinen Spam-Ordner. Danach geht es weiter zu {returnToLabel(returnTo)}.
             </p>
           </div>
         )}
@@ -134,10 +139,10 @@ export default function VerifyEmailPage() {
               {resending ? 'Wird gesendet...' : 'E-Mail erneut senden'}
             </button>
             {resendMessage && (
-              <p className="mt-3 text-sm font-medium text-emerald-700">{resendMessage}</p>
+              <p className="mt-3 text-sm font-medium text-emerald-700" role="status" aria-live="polite">{resendMessage}</p>
             )}
             {resendError && (
-              <p className="mt-3 text-sm font-medium text-red-700">{resendError}</p>
+              <p className="mt-3 text-sm font-medium text-red-700" role="alert">{resendError}</p>
             )}
           </div>
         )}

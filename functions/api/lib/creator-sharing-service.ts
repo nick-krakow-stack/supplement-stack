@@ -478,6 +478,7 @@ export async function resolveBoundOutbound(
     LEFT JOIN parties earning_party ON earning_party.id = binding.resolved_party_id
     WHERE si.id = ?
       AND s.user_id = ?
+      AND s.deleted_at IS NULL
       AND si.catalog_product_id IS NOT NULL
       AND psl.product_id = si.catalog_product_id
     LIMIT 1
@@ -707,7 +708,7 @@ export function snapshotItemBindingStatements(
 
 export async function reserveIds(
   db: D1Database,
-  table: 'stacks' | 'stack_categories' | 'stack_items',
+  table: 'stacks' | 'stack_items',
   count: number,
 ): Promise<number[]> {
   if (!Number.isInteger(count) || count < 0) throw new Error('Invalid id reservation count')

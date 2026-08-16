@@ -35,7 +35,7 @@ interface ProductCardProduct {
   product_brand?: string | null;
   timing?: string;
   timing_label?: string | null;
-  dosage_text?: string;
+  dosage_text?: string | null;
   intake_interval_days?: number;
   ingredient_effect_summary?: string | null;
   ingredient_timing?: string | null;
@@ -237,6 +237,11 @@ function getDaysSupply(product: ProductCardProduct): number | null {
 
 function getDose(product: ProductCardProduct): string {
   if (product.dosage_text) return product.dosage_text;
+  const usage = calculateProductUsage(product);
+  if (usage.calculationSource === 'manual_quantity') {
+    const servingUnit = reliableServingUnit(product) ?? 'Portionen';
+    return `${formatAmount(usage.servingsPerIntake)} ${unitLabel(servingUnit, usage.servingsPerIntake)}`;
+  }
   if (product.quantity && product.unit) return `${formatAmount(product.quantity)} ${unitLabel(product.unit, product.quantity)}`;
   if (product.serving_size && product.serving_unit) return `${formatAmount(product.serving_size)} ${unitLabel(product.serving_unit, product.serving_size)}`;
   return '\u2014';
@@ -293,8 +298,7 @@ function reliableServingUnit(product: ProductCardProduct): string | null {
 
 function hasManualCountQuantity(product: ProductCardProduct): boolean {
   if (typeof product.quantity !== 'number' || !Number.isFinite(product.quantity) || product.quantity <= 0) return false;
-  const productUnit = product.unit?.trim();
-  return !productUnit || isCountUnit(productUnit);
+  return reliableServingUnit(product) !== null || !product.unit?.trim();
 }
 
 function getListDoseFallback(product: ProductCardProduct): string {
@@ -335,11 +339,12 @@ function getListDose(product: ProductCardProduct): string {
   if (!hasReliableDailyAmount) return getListDoseFallback(product);
 
   const interval = getIntakeIntervalDays(product);
-  const servingsPerDay = interval > 1 ? usage.effectiveDailyUsage : usage.servingsPerIntake;
-  const servingUnit = reliableServingUnit(product);
+  const servingsPerIntake = usage.servingsPerIntake;
+  const servingUnit = reliableServingUnit(product) ?? (usage.calculationSource === 'manual_quantity' ? 'Portionen' : null);
 
-  if (servingsPerDay > 0 && servingUnit) {
-    return `${formatCompactAmount(servingsPerDay)} ${unitLabel(servingUnit, servingsPerDay)} pro Tag`;
+  if (servingsPerIntake > 0 && servingUnit) {
+    const rhythm = interval > 1 ? `alle ${interval} Tage` : 'pro Tag';
+    return `${formatCompactAmount(servingsPerIntake)} ${unitLabel(servingUnit, servingsPerIntake)} ${rhythm}`;
   }
 
   return getListDoseFallback(product);
@@ -528,6 +533,7 @@ export default function ProductCard({
   shopDomains, selected = false, warning, display = 'card',
 }: ProductCardProps) {
   const [openWarningIndex, setOpenWarningIndex] = useState<number | null>(null);
+  const [imageFailed, setImageFailed] = useState(false);
   const price = product.product_price ?? product.price;
   const brand = product.product_brand ?? product.brand;
   const name = product.product_name ?? product.name;
@@ -557,7 +563,9 @@ export default function ProductCard({
     : undefined;
   const shopName = matchedShop?.display_name ?? null;
   const buttonText = shopName ? `Bei ${shopName} kaufen` : 'Jetzt kaufen';
-  const reportReason: 'missing_link' | 'invalid_link' = product.shop_link ? 'invalid_link' : 'missing_link';
+  const reportReason: 'missing_link' | 'invalid_link' = (shopHref || product.shop_link)
+    ? 'invalid_link'
+    : 'missing_link';
 
   const monthlyPrice = calcMonthlyPrice(product, price);
   const daysSupply = getDaysSupply(product);
@@ -588,16 +596,15 @@ export default function ProductCard({
     const timingPanelKey = getListTimingPanelKey(effectiveTiming);
     return (
       <article
-        onClick={onToggleSelected}
         className={`ss-product-card ss-product-list-row ${selected ? 'ss-product-list-row-selected' : ''}`}
       >
         <div className={`ss-product-list-media-panel ss-product-list-media-${timingPanelKey}`}>
           <div className="ss-product-list-media">
-            {product.image_url ? (
+            {product.image_url && !imageFailed ? (
               <img
                 src={product.image_url}
                 alt={name}
-                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                onError={() => setImageFailed(true)}
               />
             ) : (
               <span>{emoji}</span>
@@ -610,13 +617,20 @@ export default function ProductCard({
           <div className="ss-product-list-main">
             <div className="ss-product-list-top">
               {(onToggleSelected ?? onSelect) && (
-                <span className={`ss-product-list-check ${selected ? 'selected' : ''}`} aria-hidden="true">
+                <button
+                  type="button"
+                  className={`ss-product-list-check ${selected ? 'selected' : ''}`}
+                  aria-label={`${name} ${selected ? 'aus der Kostenübersicht entfernen' : 'in die Kostenübersicht aufnehmen'}`}
+                  aria-pressed={selected}
+                  onClick={(event) => { event.stopPropagation(); (onToggleSelected ?? onSelect)?.(); }}
+                >
                   {selected && (
                     <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
                       <polyline points="1.5,5.5 4.5,8.5 9.5,2.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
                     </svg>
                   )}
-                </span>
+                  <span>{selected ? 'In Kostenübersicht' : 'Nicht in Kostenübersicht'}</span>
+                </button>
               )}
               {brand && <div className="ss-product-list-brand">{brand}</div>}
             </div>
@@ -630,11 +644,11 @@ export default function ProductCard({
             <span className="ss-product-list-meta-item">
               <span>Dosierung</span>
               {listDose}
-              {partBreakdown.map((part) => <small key={part} className="block text-[11px] font-medium text-slate-500">{part}</small>)}
+              {partBreakdown.map((part) => <small key={part} className="block text-xs font-medium text-slate-500">{part}</small>)}
             </span>
             <span className="ss-product-list-meta-item">
               <span>Reicht f&uuml;r</span>
-              {daysSupply ? `${daysSupply} Tage` : 'unbekannt'}
+              {daysSupply ? `${daysSupply} Tage` : 'Nicht berechenbar – Produktangaben fehlen'}
             </span>
             {showInterval && (
               <span className="ss-product-list-meta-item">
@@ -691,14 +705,14 @@ export default function ProductCard({
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}
-                aria-label={`${buttonText}: ${name}`}
+                aria-label={`${buttonText}: ${name}. Öffnet den Shop in einem neuen Tab.`}
                 className="ss-product-list-buy"
               >
                 <ExternalLink size={14} />
                 <span>{buttonText}</span>
               </a>
             )}
-            {!shopHref && onReportMissingLink && (
+            {onReportMissingLink && (
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); onReportMissingLink(product, reportReason); }}
@@ -715,9 +729,10 @@ export default function ProductCard({
                 onClick={(e) => { e.stopPropagation(); onEdit(); }}
                 aria-label="Produkt bearbeiten"
                 title="Produkt bearbeiten"
-                className="ss-product-list-icon-btn ss-product-list-edit"
+                className="ss-product-list-action-btn ss-product-list-edit"
               >
                 <Pencil size={15} />
+                <span>Bearbeiten</span>
               </button>
             )}
             {onDelete && (
@@ -726,9 +741,10 @@ export default function ProductCard({
                 onClick={(e) => { e.stopPropagation(); onDelete(); }}
                 aria-label="Produkt entfernen"
                 title="Produkt entfernen"
-                className="ss-product-list-icon-btn ss-product-list-delete"
+                className="ss-product-list-action-btn ss-product-list-delete"
               >
                 <Trash2 size={15} />
+                <span>Entfernen</span>
               </button>
             )}
               {showSelectButton && onSelect && (
@@ -744,10 +760,10 @@ export default function ProductCard({
           </div>
           {openWarning && (
             <div onClick={(event) => event.stopPropagation()}>
-              <ModalWrapper onClose={closeWarningModal} title={openWarning.title ?? 'Warnung'} size="md">
+              <ModalWrapper onClose={closeWarningModal} title={openWarning.title ?? warningLeadLabel(openWarning.severity)} size="md">
                 <div className="space-y-3">
                   <div>
-                    <p className="text-[10px] font-extrabold uppercase tracking-[0.4px] text-slate-400">
+                    <p className="text-xs font-extrabold uppercase tracking-[0.4px] text-slate-500">
                       {warningLeadLabel(openWarning.severity)}
                     </p>
                     <p className="mt-1 font-bold text-slate-900">
@@ -755,12 +771,12 @@ export default function ProductCard({
                     </p>
                   </div>
                   <div>
-                    <p className="text-[10px] font-extrabold uppercase tracking-[0.4px] text-slate-400">Kurzbeschreibung</p>
+                    <p className="text-xs font-extrabold text-slate-500">Was bedeutet das?</p>
                     <p className="mt-1 text-sm text-slate-700">{openWarning.label}</p>
                   </div>
                   {openWarning.detail && (
                     <div>
-                      <p className="text-[10px] font-extrabold uppercase tracking-[0.4px] text-slate-400">Details</p>
+                      <p className="text-xs font-extrabold text-slate-500">Was kannst du jetzt tun?</p>
                       <p className="mt-1 text-sm text-slate-600">{openWarning.detail}</p>
                     </div>
                   )}
@@ -788,7 +804,6 @@ export default function ProductCard({
 
   return (
     <article
-      onClick={onToggleSelected}
       style={{
         borderRadius: '14px',
         padding: '14px',
@@ -797,30 +812,37 @@ export default function ProductCard({
           ? '0 4px 20px rgba(99,102,241,0.2)'
           : '0 2px 12px rgba(99,102,241,0.08), 0 1px 3px rgba(0,0,0,0.04)',
       }}
-      className="ss-product-card relative flex flex-col bg-white cursor-pointer transition-all duration-150 hover:-translate-y-px"
+      className="ss-product-card relative flex flex-col bg-white transition-all duration-150 hover:-translate-y-px"
     >
       {/* Checkbox */}
       {(onToggleSelected ?? onSelect) && (
-        <div className={`absolute top-3 right-3 z-10 flex h-5 w-5 items-center justify-center rounded-md border-2 transition-colors ${
+        <button
+          type="button"
+          aria-label={`${name} ${selected ? 'aus der Kostenübersicht entfernen' : 'in die Kostenübersicht aufnehmen'}`}
+          aria-pressed={selected}
+          onClick={(event) => { event.stopPropagation(); (onToggleSelected ?? onSelect)?.(); }}
+          className={`mb-2 ml-auto flex min-h-11 items-center justify-center gap-1.5 rounded-md border-2 px-3 text-xs font-bold transition-colors ${
           selected ? 'bg-indigo-500 border-indigo-500 text-white' : 'bg-white border-slate-300'
-        }`}>
+        }`}
+        >
           {selected && (
             <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
               <polyline points="1.5,5.5 4.5,8.5 9.5,2.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
           )}
-        </div>
+          <span>{selected ? 'In Kostenübersicht' : 'Nicht in Kostenübersicht'}</span>
+        </button>
       )}
 
       {/* Card top */}
       <div className="ss-product-card-top flex items-start gap-[11px] mb-3">
         {/* Image / emoji */}
-        {product.image_url ? (
+        {product.image_url && !imageFailed ? (
           <img
             src={product.image_url}
             alt={name}
             className="w-[52px] h-[52px] shrink-0 rounded-[10px] border border-[#e5e7eb] bg-[#f3f4f6] object-cover"
-            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+            onError={() => setImageFailed(true)}
           />
         ) : (
           <div
@@ -832,9 +854,9 @@ export default function ProductCard({
         )}
 
         {/* Name + brand + timing */}
-        <div className="flex-1 min-w-0 pr-6">
+        <div className="flex-1 min-w-0">
           {brand && (
-            <div className="text-[10px] font-bold tracking-[0.8px] text-slate-400 uppercase mb-0.5">
+            <div className="text-xs font-bold tracking-[0.8px] text-slate-500 uppercase mb-0.5">
               {brand}
             </div>
           )}
@@ -842,12 +864,12 @@ export default function ProductCard({
             {name}
           </div>
           <span
-            className={`ss-product-timing-label inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-extrabold ${timing.cls}`}
+            className={`ss-product-timing-label inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-extrabold ${timing.cls}`}
           >
             {timingLabel}
           </span>
           {recommendationType && (
-            <span className={`ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-extrabold ${
+            <span className={`ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-extrabold ${
               recommendationType === 'recommended' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
             }`}>
               {recommendationType === 'recommended' ? 'Passend' : 'Alternative'}
@@ -859,17 +881,17 @@ export default function ProductCard({
       {/* Meta grid */}
       <div className="ss-product-card-meta grid grid-cols-2 gap-2 mb-2.5">
         <div>
-          <div className="text-[10px] font-bold uppercase tracking-[0.4px] text-slate-400 mb-0.5">Dosierung</div>
+          <div className="text-xs font-bold uppercase tracking-[0.4px] text-slate-500 mb-0.5">Dosierung</div>
           <div className="text-[12.5px] font-bold text-slate-700">{dose}</div>
           {partBreakdown.map((part) => (
-            <div key={part} className="mt-0.5 text-[11px] font-semibold text-slate-500">{part}</div>
+            <div key={part} className="mt-0.5 text-xs font-semibold text-slate-500">{part}</div>
           ))}
-          {showInterval && <div className="mt-0.5 text-[11px] font-semibold text-slate-500">{intervalLabel}</div>}
+          {showInterval && <div className="mt-0.5 text-xs font-semibold text-slate-500">{intervalLabel}</div>}
         </div>
         <div>
-          <div className="text-[10px] font-bold uppercase tracking-[0.4px] text-slate-400 mb-0.5">Reicht f&uuml;r</div>
+          <div className="text-xs font-bold uppercase tracking-[0.4px] text-slate-500 mb-0.5">Reicht f&uuml;r</div>
           <div className="text-[12.5px] font-bold text-slate-700">
-            {daysSupply ? `${daysSupply} Tage` : '\u2014'}
+            {daysSupply ? `${daysSupply} Tage` : 'Nicht berechenbar – Angaben fehlen'}
           </div>
         </div>
       </div>
@@ -877,7 +899,7 @@ export default function ProductCard({
       {/* Effect */}
       {effectText && (
         <div className="ss-product-card-effect mb-2.5">
-          <div className="text-[10px] font-bold uppercase tracking-[0.4px] text-slate-400 mb-1">Wofür es genutzt wird</div>
+          <div className="text-xs font-bold uppercase tracking-[0.4px] text-slate-500 mb-1">Wirkung</div>
           {effects.length > 1 ? (
             <div className="ss-effect-points">
               {effects.map((effect) => (
@@ -944,10 +966,10 @@ export default function ProductCard({
 
       {openWarning && (
         <div onClick={(event) => event.stopPropagation()}>
-          <ModalWrapper onClose={closeWarningModal} title={openWarning.title ?? 'Warnung'} size="md">
+          <ModalWrapper onClose={closeWarningModal} title={openWarning.title ?? warningLeadLabel(openWarning.severity)} size="md">
             <div className="space-y-3">
               <div>
-                <p className="text-[10px] font-extrabold uppercase tracking-[0.4px] text-slate-400">
+                <p className="text-xs font-extrabold uppercase tracking-[0.4px] text-slate-500">
                   {warningLeadLabel(openWarning.severity)}
                 </p>
                 <p className="mt-1 font-bold text-slate-900">
@@ -955,12 +977,12 @@ export default function ProductCard({
                 </p>
               </div>
               <div>
-                <p className="text-[10px] font-extrabold uppercase tracking-[0.4px] text-slate-400">Kurzbeschreibung</p>
+                <p className="text-xs font-extrabold text-slate-500">Was bedeutet das?</p>
                 <p className="mt-1 text-sm text-slate-700">{openWarning.label}</p>
               </div>
               {openWarning.detail && (
                 <div>
-                  <p className="text-[10px] font-extrabold uppercase tracking-[0.4px] text-slate-400">Details</p>
+                  <p className="text-xs font-extrabold text-slate-500">Was kannst du jetzt tun?</p>
                   <p className="mt-1 text-sm text-slate-600">{openWarning.detail}</p>
                 </div>
               )}
@@ -994,12 +1016,13 @@ export default function ProductCard({
       </div>
 
       {/* Actions */}
-      <div className="ss-product-card-actions flex gap-[7px]">
+      <div className="ss-product-card-actions flex flex-wrap gap-[7px]" aria-label="Produktaktionen">
         {shopHref && (
           <a
             href={shopHref}
             target="_blank"
             rel="noopener noreferrer"
+            aria-label={`${buttonText}: ${name}. Öffnet den Shop in einem neuen Tab.`}
             onClick={(e) => e.stopPropagation()}
             className="flex-1 inline-flex min-h-11 items-center justify-center gap-1.5 rounded-[10px] py-[9px] text-[12.5px] font-bold text-white transition-colors"
             style={{ background: '#3b82f6' }}
@@ -1010,9 +1033,11 @@ export default function ProductCard({
             {buttonText}
           </a>
         )}
-        {!shopHref && onReportMissingLink && (
+        {onReportMissingLink && (
           <button
+            type="button"
             onClick={(e) => { e.stopPropagation(); onReportMissingLink(product, reportReason); }}
+            aria-label={`Fehlenden oder defekten Link melden: ${name}`}
             className="flex-1 inline-flex min-h-11 items-center justify-center gap-1.5 rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2 text-[12.5px] font-bold text-amber-700 transition-colors hover:bg-amber-100"
           >
             <Flag size={13} />
@@ -1023,12 +1048,13 @@ export default function ProductCard({
           <button
             onClick={(e) => { e.stopPropagation(); onEdit(); }}
             aria-label="Produkt bearbeiten"
-            className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] transition-colors"
+            className="inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-[10px] px-3 text-xs font-bold transition-colors"
             style={{ background: '#fef3c7', border: '1.5px solid #fbbf24', color: '#b45309' }}
             onMouseEnter={(e) => { e.currentTarget.style.background = '#fde68a'; e.currentTarget.style.borderColor = '#f59e0b'; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = '#fef3c7'; e.currentTarget.style.borderColor = '#fbbf24'; }}
           >
             <Pencil size={15} />
+            <span>Bearbeiten</span>
           </button>
         )}
         {onDelete && (
@@ -1036,12 +1062,13 @@ export default function ProductCard({
             onClick={(e) => { e.stopPropagation(); onDelete(); }}
             aria-label="Produkt entfernen"
             title="Produkt entfernen"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] transition-colors"
+            className="flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-[10px] px-3 text-xs font-bold transition-colors"
             style={{ background: '#fee2e2', border: '1.5px solid #fca5a5', color: '#dc2626' }}
             onMouseEnter={(e) => { e.currentTarget.style.background = '#fecaca'; e.currentTarget.style.borderColor = '#f87171'; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.borderColor = '#fca5a5'; }}
           >
             <Trash2 size={15} />
+            <span>Entfernen</span>
           </button>
         )}
         {showSelectButton && onSelect && (

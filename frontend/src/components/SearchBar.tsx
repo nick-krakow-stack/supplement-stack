@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useId } from 'react';
 import { Search, X } from 'lucide-react';
 import { apiPath } from '../api/base';
 import type { Ingredient } from '../types/local';
@@ -31,6 +31,8 @@ export default function SearchBar({ onSelect, placeholder = 'Wirkstoff suchen…
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const listboxId = useId();
+  const statusId = useId();
 
   // Fetch results when debounced query changes
   useEffect(() => {
@@ -157,9 +159,13 @@ export default function SearchBar({ onSelect, placeholder = 'Wirkstoff suchen…
           onFocus={() => results.length > 0 && setOpen(true)}
           placeholder={placeholder}
           aria-label="Wirkstoff suchen"
+          role="combobox"
           aria-autocomplete="list"
           aria-expanded={open}
-          aria-activedescendant={activeIndex >= 0 ? `suggestion-${activeIndex}` : undefined}
+          aria-controls={listboxId}
+          aria-haspopup="listbox"
+          aria-describedby={statusId}
+          aria-activedescendant={activeIndex >= 0 ? `${listboxId}-option-${activeIndex}` : undefined}
           autoFocus={autoFocus}
           className="w-full rounded-2xl border border-slate-200 bg-white py-4 pl-12 pr-10 text-lg font-semibold text-slate-900 shadow-[0_14px_32px_rgba(15,23,42,0.07)] placeholder:text-slate-400 focus:border-blue-300 focus:outline-none focus:ring-4 focus:ring-blue-100"
         />
@@ -170,6 +176,7 @@ export default function SearchBar({ onSelect, placeholder = 'Wirkstoff suchen…
         )}
         {query && !loading && (
           <button
+            type="button"
             onClick={clearInput}
             className="absolute right-3 bg-transparent p-1 text-slate-400 transition-colors hover:text-slate-600"
             aria-label="Eingabe löschen"
@@ -179,6 +186,16 @@ export default function SearchBar({ onSelect, placeholder = 'Wirkstoff suchen…
         )}
       </div>
 
+      <p id={statusId} className="sr-only" aria-live="polite">
+        {loading
+          ? 'Suche läuft.'
+          : error
+            ? error
+            : searchCompleted
+              ? `${results.length} Treffer gefunden.`
+              : 'Tippe einen Wirkstoffnamen ein.'}
+      </p>
+
       {/* Error state */}
       {error && (
         <p className="mt-1 text-sm text-red-600 pl-1">{error}</p>
@@ -187,7 +204,9 @@ export default function SearchBar({ onSelect, placeholder = 'Wirkstoff suchen…
       {/* Dropdown */}
       {open && (results.length > 0 || showNoResults) && (
         <ul
+          id={listboxId}
           role="listbox"
+          aria-label="Gefundene Wirkstoffe"
           className="absolute z-40 mt-2 w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
         >
           {showNoResults && (
@@ -198,7 +217,7 @@ export default function SearchBar({ onSelect, placeholder = 'Wirkstoff suchen…
           {results.map((ingredient, index) => (
             <li
               key={`${ingredient.id}-${ingredient.matched_part_id ?? 'base'}-${ingredient.matched_form_id ?? 'base'}`}
-              id={`suggestion-${index}`}
+              id={`${listboxId}-option-${index}`}
               role="option"
               aria-selected={index === activeIndex}
               onMouseDown={(e) => {
@@ -216,12 +235,12 @@ export default function SearchBar({ onSelect, placeholder = 'Wirkstoff suchen…
               <span className="font-medium text-sm">{ingredient.name}</span>
               {ingredient.matched_form_name && (
                 <span className="text-xs font-semibold text-blue-500 mt-0.5 truncate">
-                  Form: {ingredient.matched_form_name}
+                  Gefundene Form: {ingredient.matched_form_name}
                 </span>
               )}
               {ingredient.matched_part_name && (
                 <span className="text-xs font-semibold text-indigo-600 mt-0.5 truncate">
-                  Enthält: {ingredient.matched_part_name}
+                  Treffer über Bestandteil: {ingredient.matched_part_name}
                 </span>
               )}
               {ingredient.synonyms && ingredient.synonyms.length > 0 && (

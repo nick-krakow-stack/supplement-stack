@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { authPath, authReturnTo } from '../lib/returnTo';
+import { authPath, authReturnTo, returnToLabel } from '../lib/returnTo';
+import PasswordField from '../components/PasswordField';
+import StatusMessage from '../components/StatusMessage';
 
 const SS_DEMO_STACK_HANDOFF_KEY = 'ss_demo_stack_handoff_v1';
 const DEMO_STACK_HANDOFF_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -26,16 +28,20 @@ function hasDemoStackHandoff(): boolean {
   }
 }
 
+function registrationErrorMessage(error: unknown): string {
+  const status = (error as { response?: { status?: number } })?.response?.status;
+  if (status === 409) return 'Für diese E-Mail-Adresse besteht bereits ein Konto. Du kannst dich direkt anmelden.';
+  if (status === 429) return 'Zu viele Versuche. Bitte warte kurz und versuche es dann erneut.';
+  return 'Das Konto konnte gerade nicht erstellt werden. Prüfe deine Eingaben und versuche es erneut.';
+}
+
 export default function RegisterPage() {
-  const { register } = useAuth();
+  const { user, loading, register } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const returnTo = authReturnTo(location);
-
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [age, setAge] = useState('');
-  const [guidelineSource, setGuidelineSource] = useState('');
   const [healthConsent, setHealthConsent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -46,22 +52,34 @@ export default function RegisterPage() {
     try {
       window.sessionStorage.setItem(SS_DEMO_STACK_HANDOFF_KEY, JSON.stringify({ pending: true }));
     } catch {
-      // Keep registration usable when storage is unavailable.
+      // Registrierung bleibt auch ohne Web-Speicher nutzbar.
     }
   }, [demoStackHandoffAvailable]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  if (loading) return <div className="py-16 text-center text-sm font-semibold text-slate-600" role="status">Dein Konto wird geprüft …</div>;
+  if (user) return <Navigate to={returnTo} replace />;
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     setError(null);
+    const normalizedEmail = email.trim();
+    if (!normalizedEmail || !normalizedEmail.includes('@')) {
+      setError('Bitte trage eine gültige E-Mail-Adresse ein.');
+      return;
+    }
+    if (password.length < 8) {
+      setError('Dein Passwort muss mindestens 8 Zeichen lang sein.');
+      return;
+    }
+    if (!healthConsent) {
+      setError('Bitte stimme der Speicherung deiner Stack- und Produktdaten zu, um ein Konto anzulegen.');
+      return;
+    }
     setSubmitting(true);
     try {
-      const ageTrimmed = age.trim();
-      const ageNum = ageTrimmed === '' ? undefined : Number.parseInt(ageTrimmed, 10);
       const redirect = demoStackHandoffAvailable && !returnTo.startsWith('/share/') ? '/stacks' : returnTo;
-      const result = await register(email, password, {
-        health_consent: healthConsent,
-        age: Number.isFinite(ageNum) ? (ageNum as number) : undefined,
-        guideline_source: guidelineSource === '' ? undefined : guidelineSource,
+      const result = await register(normalizedEmail, password, {
+        health_consent: true,
         return_to: redirect,
       });
       navigate(authPath('/verify-email', redirect), {
@@ -73,127 +91,89 @@ export default function RegisterPage() {
           emailVerificationEmailSent: result.emailVerificationEmailSent,
         },
       });
-    } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
-        'Registrierung fehlgeschlagen. Bitte versuche es erneut.';
-      setError(msg);
+    } catch (nextError) {
+      setError(registrationErrorMessage(nextError));
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <div className="flex items-center justify-center min-h-[70vh]">
-      <div className="card max-w-sm w-full">
-        <h1 className="mb-6">Registrieren</h1>
+    <div className="flex min-h-[70vh] items-center justify-center">
+      <div className="card w-full max-w-md">
+        <h1 className="mb-2">Kostenlos registrieren</h1>
+        <p className="mb-6 text-sm leading-6 text-slate-600">
+          E-Mail, Passwort, fertig. Optionale Angaben kannst du später im Profil ergänzen. Danach kommst du zu {returnToLabel(returnTo)}.
+        </p>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-              E-Mail-Adresse <span className="text-red-500">*</span>
-            </label>
+            <label htmlFor="email" className="mb-1 block text-sm font-semibold text-slate-700">E-Mail-Adresse</label>
             <input
               id="email"
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(event) => {
+                setEmail(event.target.value);
+                setError(null);
+              }}
               required
               autoComplete="email"
+              inputMode="email"
               placeholder="deine@email.de"
             />
           </div>
 
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-              Passwort <span className="text-red-500">*</span>
-            </label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              autoComplete="new-password"
-              placeholder="Mindestens 8 Zeichen"
-            />
-          </div>
+          <PasswordField
+            id="password"
+            label="Passwort"
+            value={password}
+            onChange={(event) => {
+              setPassword(event.target.value);
+              setError(null);
+            }}
+            required
+            minLength={8}
+            autoComplete="new-password"
+            placeholder="Mindestens 8 Zeichen"
+            hint="Nutze mindestens 8 Zeichen und ein Passwort, das du nicht woanders verwendest."
+          />
 
           <div className="border-t border-gray-100 pt-4">
-            <p className="text-xs text-gray-500 mb-3">
-              Optional: Alter und bevorzugte Quellenpraeferenz koennen spaeter geaendert werden.
-            </p>
-
-            <div className="flex flex-col gap-4">
-              <div>
-                <label htmlFor="age" className="block text-sm font-medium text-gray-700 mb-1">
-                  Alter
-                </label>
-                <input
-                  id="age"
-                  type="number"
-                  min={1}
-                  max={120}
-                  value={age}
-                  onChange={(e) => setAge(e.target.value)}
-                  placeholder="z. B. 30"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="guideline_source" className="block text-sm font-medium text-gray-700 mb-1">
-                  Leitlinienquelle
-                </label>
-                <select
-                  id="guideline_source"
-                  value={guidelineSource}
-                  onChange={(e) => setGuidelineSource(e.target.value)}
-                  className="input"
-                >
-                  <option value="">Keine Angabe</option>
-                  <option value="DGE">DGE</option>
-                  <option value="studien">Studien</option>
-                  <option value="influencer">Influencer</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          <div className="border-t border-gray-100 pt-4">
-            <label className="flex items-start gap-3 cursor-pointer">
+            <label className="flex cursor-pointer items-start gap-3">
               <input
                 type="checkbox"
                 checked={healthConsent}
-                onChange={(e) => setHealthConsent(e.target.checked)}
-                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                onChange={(event) => {
+                  setHealthConsent(event.target.checked);
+                  setError(null);
+                }}
+                className="mt-1 h-5 w-5 shrink-0 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
               />
-              <span className="text-sm text-gray-700">
-                Ich stimme der Verarbeitung von Accountdaten, optionalem Alter, optionaler
-                Leitlinienquelle sowie gespeicherten Stack-, Produkt-, Dosierungs-, Einnahmeintervall-
-                und Kostendaten zu. Diese Angaben koennen gesundheitsnah sein, enthalten aber keine
-                Diagnose-, Krankheits-, Medikamenten-, Geschlechts-, Ernaehrungs-, Ziel- oder
-                Raucherstatus-Felder.
-                <span className="text-xs text-gray-500"> (DSGVO Art. 9 erforderlich)</span>
+              <span className="text-sm font-semibold leading-6 text-gray-800">
+                Ich stimme zu, dass meine Stack- und Produktdaten gespeichert werden.
               </span>
             </label>
+            <details className="ml-8 mt-2 text-sm leading-6 text-slate-600">
+              <summary className="min-h-11 cursor-pointer py-2 font-bold text-blue-800">Welche Daten sind gemeint?</summary>
+              <p>
+                Dazu gehören dein Konto, deine Stacks, Produkte, Mengen, Einnahmezeiten und berechnete Kosten.
+                Diese Angaben können etwas über deine Gesundheit aussagen. Die Zustimmung ist für das Speichern erforderlich.
+                Mehr dazu steht in der <Link to="/datenschutz" className="font-bold text-blue-700 underline">Datenschutzerklärung</Link>.
+              </p>
+            </details>
           </div>
 
-          {error && (
-            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-              {error}
-            </p>
-          )}
+          {error && <StatusMessage tone="error">{error}</StatusMessage>}
 
-          <button type="submit" disabled={!healthConsent || submitting} className="w-full mt-2">
-            {submitting ? 'Registrieren...' : 'Konto erstellen'}
+          <button type="submit" disabled={!healthConsent || submitting} className="mt-2 min-h-11 w-full">
+            {submitting ? 'Konto wird erstellt …' : 'Konto erstellen'}
           </button>
         </form>
 
-        <p className="mt-4 text-sm text-center text-gray-600">
+        <p className="mt-4 text-center text-sm text-gray-600">
           Bereits registriert?{' '}
-          <Link to={authPath('/login', returnTo)} className="text-blue-600 hover:underline font-medium">
-            Anmelden
-          </Link>
+          <Link to={authPath('/login', returnTo)} className="font-medium text-blue-700 hover:underline">Anmelden</Link>
         </p>
       </div>
     </div>

@@ -5,6 +5,8 @@ const CANVAS_SIZE = 272; // viewport circle diameter (px)
 const OUTPUT_SIZE = 512; // stored product image size (px)
 const WEBP_QUALITY = 0.84;
 const JPEG_FALLBACK_QUALITY = 0.88;
+const SOURCE_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
+const SOURCE_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 type EncodedImage = {
   blob: Blob;
@@ -85,6 +87,8 @@ export default function ImageCropModal({
   onError,
 }: ImageCropModalProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -98,7 +102,15 @@ export default function ImageCropModal({
 
   // ── load image from File ──
   const loadFile = useCallback((file: File) => {
-    if (!file.type.startsWith('image/')) return;
+    if (!SOURCE_IMAGE_TYPES.has(file.type.toLowerCase())) {
+      setUploadError('Bitte wähle ein Bild im Format JPEG, PNG oder WebP.');
+      return;
+    }
+    if (file.size > SOURCE_IMAGE_MAX_BYTES) {
+      setUploadError('Das Bild ist größer als 10 MB. Bitte wähle eine kleinere Datei.');
+      return;
+    }
+    setUploadError(null);
     const reader = new FileReader();
     reader.onload = (e) => {
       const img = new Image();
@@ -112,6 +124,15 @@ export default function ImageCropModal({
     };
     reader.readAsDataURL(file);
   }, []);
+
+  useEffect(() => {
+    closeButtonRef.current?.focus();
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !uploading) onClose();
+    };
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [onClose, uploading]);
 
   // ── draw frame ──
   useEffect(() => {
@@ -264,14 +285,19 @@ export default function ImageCropModal({
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="product-photo-dialog-title"
     >
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xs mx-4 p-5 flex flex-col gap-4">
         {/* Header */}
         <div className="flex items-center justify-between">
-          <h3 className="font-bold text-gray-900 text-sm">Produktfoto zuschneiden</h3>
+          <h3 id="product-photo-dialog-title" className="font-bold text-gray-900 text-sm">Produktfoto zuschneiden</h3>
           <button
+            ref={closeButtonRef}
             onClick={onClose}
             className="p-1.5 rounded-xl text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+            aria-label="Foto-Dialog schließen"
           >
             <X size={17} />
           </button>
@@ -288,7 +314,15 @@ export default function ImageCropModal({
                 ? 'border-indigo-400 bg-indigo-50'
                 : 'border-gray-200 bg-gray-50 hover:border-indigo-300 hover:bg-indigo-50/50'
             }`}
-            onClick={() => document.getElementById('img-crop-file-input')?.click()}
+            onClick={() => fileInputRef.current?.click()}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                fileInputRef.current?.click();
+              }
+            }}
           >
             {currentImageUrl ? (
               <img
@@ -309,10 +343,11 @@ export default function ImageCropModal({
               <p className="text-xs text-gray-400 mt-0.5">Hierher ziehen oder klicken</p>
             </div>
             <input
-              id="img-crop-file-input"
+              ref={fileInputRef}
               type="file"
-              accept="image/*"
+              accept="image/jpeg,image/png,image/webp"
               className="hidden"
+              aria-label="Produktfoto auswählen"
               onChange={(e) => { const f = e.target.files?.[0]; if (f) loadFile(f); }}
             />
           </div>
@@ -388,7 +423,7 @@ export default function ImageCropModal({
 
         {/* ── Upload error ── */}
         {uploadError && (
-          <p className="text-xs text-red-600 text-center">{uploadError}</p>
+          <p className="text-xs text-red-600 text-center" role="alert">{uploadError}</p>
         )}
 
         {/* ── Actions ── */}

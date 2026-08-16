@@ -252,6 +252,7 @@ type UserProductBulkModerationRow = {
   id: number
   status: string | null
   approved_at: string | null
+  version: number
 }
 
 type UserProductBulkApproveResult = {
@@ -16037,7 +16038,7 @@ admin.put('/user-products/bulk-approve', async (c) => {
 
   const placeholders = ids.map(() => '?').join(', ')
   const { results: existingRows } = await c.env.DB.prepare(`
-    SELECT id, status, approved_at
+    SELECT id, status, approved_at, version
     FROM user_products
     WHERE id IN (${placeholders})
   `).bind(...ids).all<UserProductBulkModerationRow>()
@@ -16076,14 +16077,17 @@ admin.put('/user-products/bulk-approve', async (c) => {
       const updateResult = await c.env.DB.prepare(`
         UPDATE user_products
         SET status = 'approved',
-            approved_at = datetime('now')
+            approved_at = datetime('now'),
+            review_note = NULL,
+            version = version + 1
         WHERE id = ?
           AND status = 'pending'
-      `).bind(id).run()
+          AND version = ?
+      `).bind(id, existing.version).run()
 
       if (updateResult.meta.changes === 0) {
         const current = await c.env.DB.prepare(`
-          SELECT id, status, approved_at
+          SELECT id, status, approved_at, version
           FROM user_products
           WHERE id = ?
         `).bind(id).first<UserProductBulkModerationRow>()
@@ -16148,7 +16152,12 @@ admin.put('/user-products/:id/approve', async (c) => {
   if (authErr) return authErr
   const id = c.req.param('id')
   const result = await c.env.DB.prepare(`
-    UPDATE user_products SET status = 'approved', approved_at = datetime('now') WHERE id = ?
+    UPDATE user_products
+    SET status = 'approved',
+        approved_at = datetime('now'),
+        review_note = NULL,
+        version = version + 1
+    WHERE id = ?
   `).bind(id).run()
   if (result.meta.changes === 0) return c.json({ error: 'User product not found' }, 404)
   await logAdminAction(c, {
@@ -16223,7 +16232,9 @@ admin.put('/user-products/:id/publish', async (c) => {
       SET status = 'approved',
           approved_at = COALESCE(approved_at, datetime('now')),
           published_product_id = ?,
-          published_at = COALESCE(published_at, datetime('now'))
+          published_at = COALESCE(published_at, datetime('now')),
+          review_note = NULL,
+          version = version + 1
       WHERE id = ?
     `).bind(existingSourcePayload.product.id, id).run()
     return c.json({ ok: true, product: existingSourcePayload.product, ingredients: existingSourcePayload.ingredients, idempotent: true })
@@ -16345,7 +16356,9 @@ admin.put('/user-products/:id/publish', async (c) => {
     SET status = 'approved',
         approved_at = COALESCE(approved_at, datetime('now')),
         published_product_id = ?,
-        published_at = datetime('now')
+        published_at = datetime('now'),
+        review_note = NULL,
+        version = version + 1
     WHERE id = ?
   `).bind(productId, id))
 
@@ -16360,7 +16373,9 @@ admin.put('/user-products/:id/publish', async (c) => {
           SET status = 'approved',
               approved_at = COALESCE(approved_at, datetime('now')),
               published_product_id = ?,
-              published_at = COALESCE(published_at, datetime('now'))
+              published_at = COALESCE(published_at, datetime('now')),
+              review_note = NULL,
+              version = version + 1
           WHERE id = ?
         `).bind(payload.product.id, id).run()
         return c.json({ ok: true, product: payload.product, ingredients: payload.ingredients, idempotent: true })
@@ -16386,14 +16401,47 @@ admin.put('/user-products/:id/reject', async (c) => {
   const authErr = await ensureAdmin(c)
   if (authErr) return authErr
   const id = c.req.param('id')
+  let body: Record<string, unknown> = {}
+  try {
+    const text = await c.req.text()
+    body = text.trim().length > 0 ? JSON.parse(text) as Record<string, unknown> : {}
+  } catch {
+    return c.json({ error: 'Invalid JSON' }, 400)
+  }
+  const reviewNote = optionalText(body.review_note)
+  if (reviewNote && reviewNote.length > 500) {
+    return c.json({ error: 'review_note must not exceed 500 characters' }, 400)
+  }
+  const existing = await c.env.DB.prepare(`
+    SELECT id, status, published_product_id, version
+    FROM user_products
+    WHERE id = ?
+  `).bind(id).first<{
+    id: number
+    status: string
+    published_product_id: number | null
+    version: number
+  }>()
+  if (!existing) return c.json({ error: 'User product not found' }, 404)
+  if (existing.published_product_id !== null) {
+    return c.json({ error: 'Published user products cannot be rejected without an explicit unpublish flow' }, 409)
+  }
   const result = await c.env.DB.prepare(`
-    UPDATE user_products SET status = 'rejected', approved_at = NULL WHERE id = ?
-  `).bind(id).run()
-  if (result.meta.changes === 0) return c.json({ error: 'User product not found' }, 404)
+    UPDATE user_products
+    SET status = 'rejected',
+        approved_at = NULL,
+        review_note = ?,
+        version = version + 1
+    WHERE id = ? AND status = ? AND version = ? AND published_product_id IS NULL
+  `).bind(reviewNote, id, existing.status, existing.version).run()
+  if (result.meta.changes === 0) {
+    return c.json({ error: 'User product status changed; reload before retrying' }, 409)
+  }
   await logAdminAction(c, {
     action: 'reject_user_product',
     entity_type: 'user_product',
     entity_id: Number(id),
+    changes: { review_note: reviewNote },
   })
   return c.json({ ok: true })
 })

@@ -68,7 +68,21 @@ export function authReturnTo(location: LocationLike, fallback = '/stacks'): stri
   return fallback;
 }
 
-export function authPath(route: '/login' | '/register' | '/verify-email', returnTo: string): string {
+export function authPath(
+  route: '/login' | '/register' | '/verify-email' | '/forgot-password' | '/reset-password',
+  returnTo: string,
+): string {
   const params = new URLSearchParams({ returnTo: safeInternalReturnTo(returnTo) });
   return `${route}?${params.toString()}`;
+}
+
+export function returnToLabel(returnTo: string): string {
+  const safe = safeInternalReturnTo(returnTo);
+  if (safe.startsWith('/share/')) return 'dieser geteilten Empfehlung';
+  if (safe.startsWith('/my-products')) return 'deinen eigenen Produkten';
+  if (safe.startsWith('/einnahmeplan')) return 'deinem Einnahmeplan';
+  if (safe.startsWith('/profile')) return 'deinem Profil';
+  if (safe.startsWith('/wissen')) return 'dem Wissensbereich';
+  if (safe.startsWith('/demo')) return 'deiner Demo';
+  return 'deinen Stacks';
 }

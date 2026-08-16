@@ -462,7 +462,7 @@ function CreatorShareImportPageForToken({ token }: { token: string }) {
                 ) : decision === 'replace' && selectedProduct ? (
                   <div className="mt-2 space-y-2 text-sm text-slate-700">
                     <p>Nur {selectedProduct.comparison.product_name} wird in „{preflight.target.stack_name}“ durch {preflight.recommendation?.product_name} ersetzt. Menge, Einnahme, Häufigkeit und Zeitpunkt wechseln zu den Angaben der Creator-Empfehlung.</p>
-                    <p>Kategorie und Reihenfolge bleiben gleich. Andere Stacks und Produkte bleiben unverändert.</p>
+                    <p>Die Reihenfolge bleibt gleich. Andere Stacks und Produkte bleiben unverändert.</p>
                     {selectedProduct.product_type === 'user_product' && <p>Dein eigenes Produkt und seine private Notiz bleiben gespeichert. Nur die Anzeige in diesem Stack wechselt.</p>}
                   </div>
                 ) : (

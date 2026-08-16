@@ -13,6 +13,18 @@ import {
 
 type JsonRecord = Record<string, unknown>;
 
+type TestStatement = {
+  bind: (...values: unknown[]) => TestStatement;
+  first: <T>() => Promise<T | null>;
+  all: <T>() => Promise<{ results: T[] }>;
+  run: () => Promise<{ meta: { changes: number } }>;
+};
+
+type TestDatabase = {
+  prepare: (sql: string) => TestStatement;
+  batch: (statements: TestStatement[]) => Promise<Array<{ meta: { changes: number } }>>;
+};
+
 type TestExecutionContext = {
   passThroughOnException: () => void;
   props: Record<string, unknown>;
@@ -45,7 +57,32 @@ type ProductIngredientRow = {
 type ProductRow = {
   id: number;
   name: string;
+  version: number;
   ingredients: ProductIngredientRow[];
+  notes?: string | null;
+  review_note?: string | null;
+  shop_link?: string | null;
+  visibility?: 'private' | 'public';
+  status_history?: Array<{
+    moderation_status: string;
+    visibility: 'private' | 'public';
+    note: string | null;
+  }>;
+  stack_usage?: Array<{
+    stack_item_id: number;
+    stack_id: number;
+    stack_name: string;
+    quantity: number;
+    dosage_text: string | null;
+    intake_interval_days: number | null;
+  }>;
+};
+
+type UserProductMutationSnapshot = {
+  product: JsonRecord | null;
+  ingredients: JsonRecord[];
+  parts: JsonRecord[];
+  history: JsonRecord[];
 };
 
 const repositoryRoot = fileURLToPath(new URL('../../../', import.meta.url));
@@ -54,6 +91,7 @@ const apiOrigin = 'https://supplementstack.test';
 const jwtSecret = 'subparts-integration-secret';
 const testUserId = 910001;
 const adminUserId = 910002;
+const otherUserId = 910003;
 const catalogOmegaProductId = 920001;
 const hiddenOmegaProductId = 920002;
 const catalogCarnitineProductId = 920003;
@@ -61,6 +99,7 @@ const catalogCarnitineProductId = 920003;
 let harness: ProductionKnowledgeHonoHarness;
 let userToken: string;
 let adminToken: string;
+let otherUserToken: string;
 let omegaId: number;
 let carnitineId: number;
 let epaId: number;
@@ -96,6 +135,7 @@ function applyAllMigrations(target: ProductionKnowledgeHonoHarness): void {
 
   expect(migrationFiles).toContain('0098_normalize_subpart_id_sequences.sql');
   expect(migrationFiles).toContain('0099_creator_stack_sharing.sql');
+  expect(migrationFiles).toContain('0102_user_product_visibility_history.sql');
   for (const migrationFile of migrationFiles) {
     target.exec(readFileSync(`${migrationsDirectory}/${migrationFile}`, 'utf8'));
   }
@@ -113,13 +153,17 @@ async function api(
   path: string,
   options: {
     body?: unknown;
+    db?: unknown;
     method?: string;
-    role?: 'admin' | 'user';
+    role?: 'admin' | 'other' | 'user';
   } = {},
 ): Promise<Response> {
   const headers = new Headers();
   if (options.body !== undefined) headers.set('Content-Type', 'application/json');
-  if (options.role) headers.set('Authorization', `Bearer ${options.role === 'admin' ? adminToken : userToken}`);
+  if (options.role) {
+    const token = options.role === 'admin' ? adminToken : options.role === 'other' ? otherUserToken : userToken;
+    headers.set('Authorization', `Bearer ${token}`);
+  }
   return fetchSubpartsHono(
     new Request(`${apiOrigin}${path}`, {
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
@@ -127,7 +171,7 @@ async function api(
       method: options.method ?? 'GET',
     }),
     {
-      DB: harness.db,
+      DB: options.db ?? harness.db,
       FRONTEND_URL: apiOrigin,
       JWT_SECRET: jwtSecret,
     },
@@ -186,6 +230,34 @@ function userProductPayload(name: string, ingredients: JsonRecord[]): JsonRecord
   };
 }
 
+async function userProductMutationSnapshot(
+  db: TestDatabase,
+  productId: number,
+): Promise<UserProductMutationSnapshot> {
+  const product = await db.prepare(`
+    SELECT * FROM user_products WHERE id = ?
+  `).bind(productId).first<JsonRecord>();
+  const ingredients = (await db.prepare(`
+    SELECT * FROM user_product_ingredients
+    WHERE user_product_id = ?
+    ORDER BY id ASC
+  `).bind(productId).all<JsonRecord>()).results;
+  const parts = (await db.prepare(`
+    SELECT part.*
+    FROM user_product_ingredient_parts part
+    JOIN user_product_ingredients ingredient
+      ON ingredient.id = part.user_product_ingredient_id
+    WHERE ingredient.user_product_id = ?
+    ORDER BY part.id ASC
+  `).bind(productId).all<JsonRecord>()).results;
+  const history = (await db.prepare(`
+    SELECT * FROM user_product_status_history
+    WHERE user_product_id = ?
+    ORDER BY id ASC
+  `).bind(productId).all<JsonRecord>()).results;
+  return { product, ingredients, parts, history };
+}
+
 async function findIngredientByPart(query: string): Promise<IngredientSearchRow> {
   const response = await api(`/api/ingredients/search?q=${encodeURIComponent(query)}`);
   expect(response.status).toBe(200);
@@ -208,6 +280,12 @@ function seedUsersAndCatalog(): void {
      VALUES (?, ?, 'not-used', 'admin', 0, 0)`,
     adminUserId,
     'subparts-admin@example.test',
+  );
+  harness.run(
+    `INSERT INTO users (id, email, password_hash, role, is_trusted_product_submitter, is_blocked_product_submitter)
+     VALUES (?, ?, 'not-used', 'user', 0, 0)`,
+    otherUserId,
+    'subparts-other@example.test',
   );
 
   harness.run(
@@ -289,6 +367,7 @@ describe.sequential('Sub-Wirkstoffe: echte Hono-Routen auf D1-Schema bis 0099', 
     applyAllMigrations(harness);
     userToken = await signTestToken({ email: 'subparts-user@example.test', role: 'user', userId: testUserId });
     adminToken = await signTestToken({ email: 'subparts-admin@example.test', role: 'admin', userId: adminUserId });
+    otherUserToken = await signTestToken({ email: 'subparts-other@example.test', role: 'user', userId: otherUserId });
 
     const epa = await findIngredientByPart('EPA');
     const dha = await findIngredientByPart('DHA');
@@ -303,6 +382,52 @@ describe.sequential('Sub-Wirkstoffe: echte Hono-Routen auf D1-Schema bis 0099', 
   });
 
   afterAll(() => harness.close());
+
+  it('backfills version 1 and keeps the schema default for new user products', async () => {
+    const migrationHarness = createProductionKnowledgeHonoHarness();
+    try {
+      const migrationFiles = readdirSync(migrationsDirectory)
+        .filter((name) => /^\d+.*\.sql$/.test(name) && name < '0102_user_product_visibility_history.sql')
+        .sort((left, right) => left.localeCompare(right));
+      for (const migrationFile of migrationFiles) {
+        migrationHarness.exec(readFileSync(`${migrationsDirectory}/${migrationFile}`, 'utf8'));
+      }
+      migrationHarness.run(
+        `INSERT INTO users (id, email, password_hash, role)
+         VALUES (919901, 'version-backfill@example.test', 'not-used', 'user')`,
+      );
+      migrationHarness.run(
+        `INSERT INTO user_products (id, user_id, name, brand, form, price, status)
+         VALUES (919901, 919901, 'Vor Migration', 'Test', 'Kapseln', 10, 'pending')`,
+      );
+
+      migrationHarness.exec(readFileSync(
+        `${migrationsDirectory}/0102_user_product_visibility_history.sql`,
+        'utf8',
+      ));
+      const db = migrationHarness.db as TestDatabase;
+      const columns = (await db.prepare('PRAGMA table_info(user_products)').all<{
+        dflt_value: string | null;
+        name: string;
+        notnull: number;
+      }>()).results;
+      expect(columns.find((column) => column.name === 'version')).toMatchObject({
+        dflt_value: '1',
+        notnull: 1,
+      });
+      expect(await db.prepare('SELECT version FROM user_products WHERE id = 919901')
+        .first<{ version: number }>()).toEqual({ version: 1 });
+
+      migrationHarness.run(
+        `INSERT INTO user_products (id, user_id, name, brand, form, price, status)
+         VALUES (919902, 919901, 'Nach Migration', 'Test', 'Kapseln', 10, 'pending')`,
+      );
+      expect(await db.prepare('SELECT version FROM user_products WHERE id = 919902')
+        .first<{ version: number }>()).toEqual({ version: 1 });
+    } finally {
+      migrationHarness.close();
+    }
+  });
 
   it('liest ein Katalogprodukt verschachtelt und blendet nicht freigegebene Produkte aus', async () => {
     const response = await api(`/api/products/${catalogOmegaProductId}`);
@@ -402,10 +527,13 @@ describe.sequential('Sub-Wirkstoffe: echte Hono-Routen auf D1-Schema bis 0099', 
     expect(readProduct?.ingredients[0].parts).toHaveLength(2);
 
     const updateResponse = await api(`/api/user-products/${createdId}`, {
-      body: userProductPayload('Parts Roundtrip aktualisiert', [ingredientPayload(omegaId, 1000, 'mg', [
-        { part_id: epaId, quantity: 250, unit: 'mg' },
-        { part_id: dhaId, quantity: 150, unit: 'mg' },
-      ])]),
+      body: {
+        ...userProductPayload('Parts Roundtrip aktualisiert', [ingredientPayload(omegaId, 1000, 'mg', [
+          { part_id: epaId, quantity: 250, unit: 'mg' },
+          { part_id: dhaId, quantity: 150, unit: 'mg' },
+        ])]),
+        expected_version: created.version,
+      },
       method: 'PUT',
       role: 'user',
     });
@@ -424,6 +552,393 @@ describe.sequential('Sub-Wirkstoffe: echte Hono-Routen auf D1-Schema bis 0099', 
       ['EPA', 250],
       ['DHA', 150],
     ]);
+  });
+
+  it('löscht optionale Shop-Links und Notizen per Presence-Guard dauerhaft', async () => {
+    const createResponse = await api('/api/user-products', {
+      body: {
+        ...userProductPayload('Optionale Felder', [ingredientPayload(omegaId, 1000, 'mg', [])]),
+        notes: 'Nur morgens',
+        shop_link: 'https://shop.example/product',
+      },
+      method: 'POST',
+      role: 'user',
+    });
+    expect(createResponse.status).toBe(201);
+    const createdBody = await json(createResponse);
+    const productId = createdBody.id as number;
+    const created = createdBody.product as ProductRow;
+
+    const clearResponse = await api(`/api/user-products/${productId}`, {
+      body: { expected_version: created.version, notes: null, shop_link: null },
+      method: 'PUT',
+      role: 'user',
+    });
+    expect(clearResponse.status).toBe(200);
+    const cleared = (await json(clearResponse)).product as ProductRow;
+    expect(cleared.notes).toBeNull();
+    expect(cleared.shop_link).toBeNull();
+
+    const readBody = await json(await api('/api/user-products', { role: 'user' }));
+    const reread = (readBody.products as ProductRow[]).find((product) => product.id === productId)!;
+    expect(reread.notes).toBeNull();
+    expect(reread.shop_link).toBeNull();
+  });
+
+  it('keeps the winning PUT and every child/history row unchanged when a stale PUT loses the race', async () => {
+    const db = harness.db as TestDatabase;
+    const createResponse = await api('/api/user-products', {
+      body: userProductPayload('PUT Race Start', [ingredientPayload(omegaId, 1000, 'mg', [
+        { part_id: epaId, quantity: 300, unit: 'mg' },
+      ])]),
+      method: 'POST',
+      role: 'user',
+    });
+    expect(createResponse.status).toBe(201);
+    const createdBody = await json(createResponse);
+    const productId = createdBody.id as number;
+    const created = createdBody.product as ProductRow;
+    expect(created.version).toBe(1);
+
+    const winnerBody = {
+      ...userProductPayload('PUT Race Winner', [ingredientPayload(omegaId, 900, 'mg', [
+        { part_id: epaId, quantity: 250, unit: 'mg' },
+        { part_id: dhaId, quantity: 150, unit: 'mg' },
+      ])]),
+      expected_version: created.version,
+    };
+    let winnerSnapshot: UserProductMutationSnapshot | undefined;
+    let winnerVersion: number | undefined;
+    let winnerInjected = false;
+    const raceDatabase: TestDatabase = {
+      prepare: db.prepare.bind(db),
+      async batch(statements) {
+        expect(winnerInjected).toBe(false);
+        winnerInjected = true;
+        const winnerResponse = await api(`/api/user-products/${productId}`, {
+          body: winnerBody,
+          method: 'PUT',
+          role: 'user',
+        });
+        expect(winnerResponse.status).toBe(200);
+        winnerVersion = ((await json(winnerResponse)).product as ProductRow).version;
+        winnerSnapshot = await userProductMutationSnapshot(db, productId);
+        return db.batch(statements);
+      },
+    };
+
+    const losingResponse = await api(`/api/user-products/${productId}`, {
+      body: {
+        ...userProductPayload('PUT Race Loser', [ingredientPayload(omegaId, 700, 'mg', [
+          { part_id: epaId, quantity: 100, unit: 'mg' },
+        ])]),
+        expected_version: created.version,
+      },
+      db: raceDatabase,
+      method: 'PUT',
+      role: 'user',
+    });
+    expect(winnerInjected).toBe(true);
+    expect(winnerVersion).toBe(2);
+    expect(losingResponse.status).toBe(409);
+    expect((await json(losingResponse)).current_version).toBe(2);
+
+    const afterLoser = await userProductMutationSnapshot(db, productId);
+    expect(afterLoser).toEqual(winnerSnapshot);
+    expect(afterLoser.ingredients).toHaveLength(winnerSnapshot!.ingredients.length);
+    expect(afterLoser.parts).toHaveLength(winnerSnapshot!.parts.length);
+    expect(afterLoser.history).toHaveLength(winnerSnapshot!.history.length);
+  });
+
+  it('keeps the winning PUT and every child/history row unchanged when a stale DELETE loses the race', async () => {
+    const db = harness.db as TestDatabase;
+    const createResponse = await api('/api/user-products', {
+      body: userProductPayload('DELETE Race Start', [ingredientPayload(omegaId, 1000, 'mg', [
+        { part_id: epaId, quantity: 300, unit: 'mg' },
+      ])]),
+      method: 'POST',
+      role: 'user',
+    });
+    expect(createResponse.status).toBe(201);
+    const createdBody = await json(createResponse);
+    const productId = createdBody.id as number;
+    const created = createdBody.product as ProductRow;
+    expect(created.version).toBe(1);
+
+    let winnerSnapshot: UserProductMutationSnapshot | undefined;
+    let winnerVersion: number | undefined;
+    let winnerInjected = false;
+    const wrapStatement = (sql: string, statement: TestStatement): TestStatement => ({
+      bind: (...values) => wrapStatement(sql, statement.bind(...values)),
+      first: <T>() => statement.first<T>(),
+      all: <T>() => statement.all<T>(),
+      run: async () => {
+        if (!winnerInjected && /DELETE\s+FROM\s+user_products/i.test(sql)) {
+          winnerInjected = true;
+          const winnerResponse = await api(`/api/user-products/${productId}`, {
+            body: {
+              ...userProductPayload('DELETE Race Winner', [ingredientPayload(omegaId, 850, 'mg', [
+                { part_id: epaId, quantity: 225, unit: 'mg' },
+                { part_id: dhaId, quantity: 125, unit: 'mg' },
+              ])]),
+              expected_version: created.version,
+            },
+            method: 'PUT',
+            role: 'user',
+          });
+          expect(winnerResponse.status).toBe(200);
+          winnerVersion = ((await json(winnerResponse)).product as ProductRow).version;
+          winnerSnapshot = await userProductMutationSnapshot(db, productId);
+        }
+        return statement.run();
+      },
+    });
+    const raceDatabase: TestDatabase = {
+      prepare: (sql) => wrapStatement(sql, db.prepare(sql)),
+      batch: db.batch.bind(db),
+    };
+
+    const losingResponse = await api(`/api/user-products/${productId}`, {
+      body: { expected_version: created.version },
+      db: raceDatabase,
+      method: 'DELETE',
+      role: 'user',
+    });
+    expect(winnerInjected).toBe(true);
+    expect(winnerVersion).toBe(2);
+    expect(losingResponse.status).toBe(409);
+    expect((await json(losingResponse)).current_version).toBe(2);
+
+    const afterLoser = await userProductMutationSnapshot(db, productId);
+    expect(afterLoser).toEqual(winnerSnapshot);
+    expect(afterLoser.ingredients).toHaveLength(winnerSnapshot!.ingredients.length);
+    expect(afterLoser.parts).toHaveLength(winnerSnapshot!.parts.length);
+    expect(afterLoser.history).toHaveLength(winnerSnapshot!.history.length);
+  });
+
+  it('bindet Sichtbarkeit, Verlauf und Stack-Nutzung an Produkt und Nutzer', async () => {
+    const db = harness.db as TestDatabase;
+    const payload = userProductPayload('Privater Kontext', [ingredientPayload(omegaId, 1000, 'mg', [
+      { part_id: epaId, quantity: 300, unit: 'mg' },
+    ])]);
+    const createResponse = await api('/api/user-products', {
+      body: payload,
+      method: 'POST',
+      role: 'user',
+    });
+    expect(createResponse.status).toBe(201);
+    const createdBody = await json(createResponse);
+    const productId = createdBody.id as number;
+    const created = createdBody.product as ProductRow;
+    expect(created.visibility).toBe('private');
+    expect(created.status_history).toEqual([
+      expect.objectContaining({ moderation_status: 'pending', visibility: 'private', note: null }),
+    ]);
+
+    const foreignUpdate = await api(`/api/user-products/${productId}`, {
+      body: payload,
+      method: 'PUT',
+      role: 'other',
+    });
+    expect(foreignUpdate.status).toBe(404);
+
+    const stackResponse = await api('/api/stacks', {
+      body: {
+        name: 'Monatskosten-Stack',
+        products: [{
+          id: productId,
+          intake_interval_days: 2,
+          product_type: 'user_product',
+          quantity: 2,
+        }],
+      },
+      method: 'POST',
+      role: 'user',
+    });
+    expect(stackResponse.status).toBe(200);
+    const stackId = (await json(stackResponse)).id as number;
+
+    harness.run(`INSERT INTO stacks (id, user_id, name) VALUES (950001, ?, 'Fremder Stack')`, otherUserId);
+    harness.run(
+      `INSERT INTO stack_items (id, stack_id, user_product_id, quantity, intake_interval_days, sort_order)
+       VALUES (950001, 950001, ?, 9, 1, 0)`,
+      productId,
+    );
+
+    const withUsageBody = await json(await api('/api/user-products', { role: 'user' }));
+    const withUsage = (withUsageBody.products as ProductRow[]).find((product) => product.id === productId)!;
+    expect(withUsage.stack_usage).toEqual([
+      expect.objectContaining({
+        stack_id: stackId,
+        stack_name: 'Monatskosten-Stack',
+        quantity: 2,
+        intake_interval_days: 2,
+      }),
+    ]);
+    expect(withUsage.stack_usage?.[0].stack_item_id).toBeTypeOf('number');
+
+    const trashResponse = await api(`/api/stacks/${stackId}`, { method: 'DELETE', role: 'user' });
+    expect(trashResponse.status).toBe(200);
+    const trashedBody = await json(await api('/api/user-products', { role: 'user' }));
+    const trashed = (trashedBody.products as ProductRow[]).find((product) => product.id === productId)!;
+    expect(trashed.stack_usage).toEqual([]);
+
+    const tooLongReview = await api(`/api/admin/user-products/${productId}/reject`, {
+      body: { review_note: 'x'.repeat(501) },
+      method: 'PUT',
+      role: 'admin',
+    });
+    expect(tooLongReview.status).toBe(400);
+    expect(() => harness.run(
+      'UPDATE user_products SET review_note = ? WHERE id = ?',
+      'x'.repeat(501),
+      productId,
+    )).toThrow();
+
+    const rejectResponse = await api(`/api/admin/user-products/${productId}/reject`, {
+      body: { review_note: 'Bitte prüfe die Packungsangabe.' },
+      method: 'PUT',
+      role: 'admin',
+    });
+    expect(rejectResponse.status).toBe(200);
+    const rejectedBody = await json(await api('/api/user-products', { role: 'user' }));
+    const rejected = (rejectedBody.products as ProductRow[]).find((product) => product.id === productId)!;
+    expect(rejected.review_note).toBe('Bitte prüfe die Packungsangabe.');
+    expect(rejected.status_history?.[0]).toMatchObject({
+      moderation_status: 'rejected',
+      visibility: 'private',
+      note: 'Bitte prüfe die Packungsangabe.',
+    });
+
+    const history = await db.prepare(`
+      SELECT id FROM user_product_status_history
+      WHERE user_product_id = ?
+      ORDER BY id DESC LIMIT 1
+    `).bind(productId).first<{ id: number }>();
+    expect(history).not.toBeNull();
+    expect(() => harness.run(
+      'UPDATE user_product_status_history SET note = ? WHERE id = ?',
+      'Manipuliert',
+      history!.id,
+    )).toThrow();
+    expect(() => harness.run(
+      'DELETE FROM user_product_status_history WHERE id = ?',
+      history!.id,
+    )).toThrow();
+
+    const deleteResponse = await api(`/api/user-products/${productId}`, {
+      body: { expected_version: rejected.version },
+      method: 'DELETE',
+      role: 'user',
+    });
+    expect(deleteResponse.status).toBe(200);
+    const remainingHistory = await db.prepare(`
+      SELECT COUNT(*) AS count FROM user_product_status_history WHERE user_product_id = ?
+    `).bind(productId).first<{ count: number }>();
+    expect(remainingHistory?.count).toBe(0);
+  });
+
+  it('invalidates a stale user PUT when an admin changes the note of an already rejected product', async () => {
+    const db = harness.db as TestDatabase;
+    const createResponse = await api('/api/user-products', {
+      body: userProductPayload('Admin Note PUT Guard', [ingredientPayload(omegaId, 1000, 'mg', [
+        { part_id: epaId, quantity: 300, unit: 'mg' },
+        { part_id: dhaId, quantity: 200, unit: 'mg' },
+      ])]),
+      method: 'POST',
+      role: 'user',
+    });
+    expect(createResponse.status).toBe(201);
+    const productId = (await json(createResponse)).id as number;
+
+    expect((await api(`/api/admin/user-products/${productId}/reject`, {
+      body: { review_note: 'Erster Hinweis' },
+      method: 'PUT',
+      role: 'admin',
+    })).status).toBe(200);
+    const firstRead = await json(await api('/api/user-products', { role: 'user' }));
+    const staleProduct = (firstRead.products as ProductRow[]).find((product) => product.id === productId)!;
+    expect(staleProduct.version).toBe(2);
+
+    expect((await api(`/api/admin/user-products/${productId}/reject`, {
+      body: { review_note: 'Aktualisierter Hinweis' },
+      method: 'PUT',
+      role: 'admin',
+    })).status).toBe(200);
+    const winnerSnapshot = await userProductMutationSnapshot(db, productId);
+    expect(winnerSnapshot.product).toMatchObject({
+      review_note: 'Aktualisierter Hinweis',
+      status: 'rejected',
+      version: 3,
+    });
+
+    const stalePut = await api(`/api/user-products/${productId}`, {
+      body: {
+        ...userProductPayload('Darf Admin-Hinweis nicht überschreiben', [ingredientPayload(omegaId, 700, 'mg', [
+          { part_id: epaId, quantity: 100, unit: 'mg' },
+        ])]),
+        expected_version: staleProduct.version,
+      },
+      method: 'PUT',
+      role: 'user',
+    });
+    expect(stalePut.status).toBe(409);
+    expect((await json(stalePut)).current_version).toBe(3);
+
+    const afterStalePut = await userProductMutationSnapshot(db, productId);
+    expect(afterStalePut).toEqual(winnerSnapshot);
+    expect(afterStalePut.ingredients).toHaveLength(winnerSnapshot.ingredients.length);
+    expect(afterStalePut.parts).toHaveLength(winnerSnapshot.parts.length);
+    expect(afterStalePut.history).toHaveLength(winnerSnapshot.history.length);
+  });
+
+  it('invalidates a stale user DELETE when an admin changes the note of an already rejected product', async () => {
+    const db = harness.db as TestDatabase;
+    const createResponse = await api('/api/user-products', {
+      body: userProductPayload('Admin Note DELETE Guard', [ingredientPayload(omegaId, 1000, 'mg', [
+        { part_id: epaId, quantity: 300, unit: 'mg' },
+        { part_id: dhaId, quantity: 200, unit: 'mg' },
+      ])]),
+      method: 'POST',
+      role: 'user',
+    });
+    expect(createResponse.status).toBe(201);
+    const productId = (await json(createResponse)).id as number;
+
+    expect((await api(`/api/admin/user-products/${productId}/reject`, {
+      body: { review_note: 'Erster Löschhinweis' },
+      method: 'PUT',
+      role: 'admin',
+    })).status).toBe(200);
+    const firstRead = await json(await api('/api/user-products', { role: 'user' }));
+    const staleProduct = (firstRead.products as ProductRow[]).find((product) => product.id === productId)!;
+    expect(staleProduct.version).toBe(2);
+
+    expect((await api(`/api/admin/user-products/${productId}/reject`, {
+      body: { review_note: 'Aktualisierter Löschhinweis' },
+      method: 'PUT',
+      role: 'admin',
+    })).status).toBe(200);
+    const winnerSnapshot = await userProductMutationSnapshot(db, productId);
+    expect(winnerSnapshot.product).toMatchObject({
+      review_note: 'Aktualisierter Löschhinweis',
+      status: 'rejected',
+      version: 3,
+    });
+
+    const staleDelete = await api(`/api/user-products/${productId}`, {
+      body: { expected_version: staleProduct.version },
+      method: 'DELETE',
+      role: 'user',
+    });
+    expect(staleDelete.status).toBe(409);
+    expect((await json(staleDelete)).current_version).toBe(3);
+
+    const afterStaleDelete = await userProductMutationSnapshot(db, productId);
+    expect(afterStaleDelete).toEqual(winnerSnapshot);
+    expect(afterStaleDelete.ingredients).toHaveLength(winnerSnapshot.ingredients.length);
+    expect(afterStaleDelete.parts).toHaveLength(winnerSnapshot.parts.length);
+    expect(afterStaleDelete.history).toHaveLength(winnerSnapshot.history.length);
   });
 
   it('rollt fehlgeschlagene Katalog- und Nutzerprodukt-Replacements vollständig zurück', async () => {
@@ -464,7 +979,9 @@ describe.sequential('Sub-Wirkstoffe: echte Hono-Routen auf D1-Schema bis 0099', 
       role: 'user',
     });
     expect(createResponse.status).toBe(201);
-    const createdId = (await json(createResponse)).id as number;
+    const createdBody = await json(createResponse);
+    const createdId = createdBody.id as number;
+    const created = createdBody.product as ProductRow;
     harness.exec(`
       CREATE TRIGGER subparts_test_reject_user_part
       BEFORE INSERT ON user_product_ingredient_parts
@@ -474,10 +991,13 @@ describe.sequential('Sub-Wirkstoffe: echte Hono-Routen auf D1-Schema bis 0099', 
       END;
     `);
     const userFailure = await api(`/api/user-products/${createdId}`, {
-      body: userProductPayload('Darf nicht gespeichert werden', [ingredientPayload(omegaId, 800, 'mg', [
-        { part_id: epaId, quantity: 200, unit: 'mg' },
-        { part_id: dhaId, quantity: 100, unit: 'mg' },
-      ])]),
+      body: {
+        ...userProductPayload('Darf nicht gespeichert werden', [ingredientPayload(omegaId, 800, 'mg', [
+          { part_id: epaId, quantity: 200, unit: 'mg' },
+          { part_id: dhaId, quantity: 100, unit: 'mg' },
+        ])]),
+        expected_version: created.version,
+      },
       method: 'PUT',
       role: 'user',
     });
@@ -624,6 +1144,19 @@ describe.sequential('Sub-Wirkstoffe: echte Hono-Routen auf D1-Schema bis 0099', 
       expect(product).toMatchObject({ matched_part_id: testCase.partId });
       expect(product.matched_part_quantity).toBeTypeOf('number');
     }
+
+    const aliasResponse = await api('/api/ingredients/search?q=ALCAR');
+    expect(aliasResponse.status).toBe(200);
+    const aliasBody = await json(aliasResponse);
+    const aliasRows = aliasBody.ingredients as IngredientSearchRow[];
+    expect(aliasRows).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: carnitineId,
+        matched_part_id: acetylId,
+        matched_part_name: 'Acetyl-L-Carnitin',
+        name: 'L-Carnitin',
+      }),
+    ]));
   });
 
   it('aggregiert im Stack Parent und Parts separat über Produkte, Portionen und Intervalle', async () => {
@@ -721,6 +1254,30 @@ describe.sequential('Sub-Wirkstoffe: echte Hono-Routen auf D1-Schema bis 0099', 
       quantity: 250,
       unit: 'mg',
     });
+
+    const userRead = await json(await api('/api/user-products', { role: 'user' }));
+    const publishedUserProduct = (userRead.products as ProductRow[])
+      .find((product) => product.id === userProductId)!;
+    expect(publishedUserProduct.visibility).toBe('public');
+    expect(publishedUserProduct.status_history?.[0]).toMatchObject({
+      moderation_status: 'approved',
+      visibility: 'public',
+    });
+
+    const lateReject = await api(`/api/admin/user-products/${userProductId}/reject`, {
+      body: { review_note: 'Darf ein öffentliches Original nicht still zurückstufen.' },
+      method: 'PUT',
+      role: 'admin',
+    });
+    expect(lateReject.status).toBe(409);
+    const afterLateReject = await json(await api('/api/user-products', { role: 'user' }));
+    const stillPublic = (afterLateReject.products as ProductRow[])
+      .find((product) => product.id === userProductId)!;
+    expect(stillPublic.visibility).toBe('public');
+    expect(stillPublic.status_history?.[0]).toMatchObject({
+      moderation_status: 'approved',
+      visibility: 'public',
+    });
   });
 
   it('hinterlässt bei einem fehlgeschlagenen Publish kein Teilprodukt', async () => {
@@ -752,5 +1309,302 @@ describe.sequential('Sub-Wirkstoffe: echte Hono-Routen auf D1-Schema bis 0099', 
     });
     expect(retry.status).toBe(201);
     expect((await json(retry)).idempotent).toBe(false);
+  });
+
+  it('bindet bei einem verlorenen Gleichversions-Rennen weder Produkt noch Shop-Link', async () => {
+    const db = harness.db as TestDatabase;
+    const createResponse = await api('/api/stacks', {
+      body: {
+        name: 'Stack-Claim-Rennen',
+        products: [{ id: catalogOmegaProductId, product_type: 'catalog', quantity: 1 }],
+      },
+      method: 'POST',
+      role: 'user',
+    });
+    expect(createResponse.status).toBe(200);
+    const stackId = (await json(createResponse)).id as number;
+    const item = await db.prepare(`
+      SELECT id, version, sort_order, quantity
+      FROM stack_items WHERE stack_id = ?
+    `).bind(stackId).first<{ id: number; version: number; sort_order: number; quantity: number }>();
+    expect(item).not.toBeNull();
+    expect(await db.prepare(`
+      SELECT COUNT(*) AS count FROM stack_item_link_bindings WHERE stack_item_id = ?
+    `).bind(item!.id).first<{ count: number }>()).toEqual({ count: 0 });
+
+    harness.run(`
+      INSERT INTO product_shop_links (
+        id, product_id, shop_domain_id, shop_name, url, normalized_host,
+        is_affiliate, affiliate_owner_type, source_type, is_primary,
+        active, sort_order, version, link_kind
+      ) VALUES (
+        990001, ?, (SELECT id FROM shop_domains WHERE domain = 'amazon.de'), 'Amazon',
+        'https://amazon.de/dp/stack-claim-fixture', 'amazon.de',
+        0, 'none', 'admin', 1, 1, 0, 1, 'base_target'
+      )
+    `, catalogOmegaProductId);
+
+    let winnerInjected = false;
+    const raceDatabase: TestDatabase = {
+      prepare: db.prepare.bind(db),
+      async batch(statements) {
+        winnerInjected = true;
+        await db.prepare(`
+          UPDATE stacks
+          SET version = version + 1, write_claim_token = 'winner-token'
+          WHERE id = ? AND version = 1
+        `).bind(stackId).run();
+        return db.batch(statements);
+      },
+    };
+    const losingResponse = await api(`/api/stacks/${stackId}`, {
+      body: {
+        expected_stack_version: 1,
+        expected_items: [{ stack_item_id: item!.id, expected_version: item!.version }],
+        product_ids: [{
+          id: catalogOmegaProductId,
+          product_type: 'catalog',
+          quantity: 2,
+          sort_order: item!.sort_order,
+        }],
+      },
+      db: raceDatabase,
+      method: 'PUT',
+      role: 'user',
+    });
+    expect(winnerInjected).toBe(true);
+    expect(losingResponse.status).toBe(409);
+
+    expect(await db.prepare(`
+      SELECT version, write_claim_token FROM stacks WHERE id = ?
+    `).bind(stackId).first<{ version: number; write_claim_token: string }>()).toEqual({
+      version: 2,
+      write_claim_token: 'winner-token',
+    });
+    expect(await db.prepare(`
+      SELECT version, sort_order, quantity FROM stack_items WHERE id = ?
+    `).bind(item!.id).first<{ version: number; sort_order: number; quantity: number }>()).toEqual({
+      version: item!.version,
+      sort_order: item!.sort_order,
+      quantity: item!.quantity,
+    });
+    expect(await db.prepare(`
+      SELECT COUNT(*) AS count FROM stack_item_link_bindings WHERE stack_item_id = ?
+    `).bind(item!.id).first<{ count: number }>()).toEqual({ count: 0 });
+  });
+
+  it('ändert bei einem Reihenfolge-Rennen keine zweite Produktposition oder Version', async () => {
+    const db = harness.db as TestDatabase;
+    const createResponse = await api('/api/stacks', {
+      body: {
+        name: 'Layout-Claim-Rennen',
+        products: [
+          { id: catalogOmegaProductId, product_type: 'catalog', quantity: 1 },
+          { id: catalogCarnitineProductId, product_type: 'catalog', quantity: 1 },
+        ],
+      },
+      method: 'POST',
+      role: 'user',
+    });
+    expect(createResponse.status).toBe(200);
+    const stackId = (await json(createResponse)).id as number;
+    const before = (await db.prepare(`
+      SELECT id, version, sort_order FROM stack_items WHERE stack_id = ? ORDER BY id
+    `).bind(stackId).all<{ id: number; version: number; sort_order: number }>()).results;
+    expect(before).toHaveLength(2);
+
+    let winnerInjected = false;
+    const wrapStatement = (sql: string, statement: TestStatement): TestStatement => ({
+      bind: (...values) => wrapStatement(sql, statement.bind(...values)),
+      first: <T>() => statement.first<T>(),
+      all: <T>() => statement.all<T>(),
+      run: async () => {
+        if (!winnerInjected && /UPDATE\s+stack_items\s+SET\s+sort_order/i.test(sql)) {
+          winnerInjected = true;
+          await db.prepare('UPDATE stack_items SET version = version + 1 WHERE id = ?')
+            .bind(before[0].id)
+            .run();
+        }
+        return statement.run();
+      },
+    });
+    const raceDatabase: TestDatabase = {
+      prepare: (sql) => wrapStatement(sql, db.prepare(sql)),
+      batch: db.batch.bind(db),
+    };
+    const losingResponse = await api(`/api/stacks/${stackId}/items/layout`, {
+      body: {
+        items: [
+          { stack_item_id: before[0].id, expected_version: before[0].version, sort_order: 1 },
+          { stack_item_id: before[1].id, expected_version: before[1].version, sort_order: 0 },
+        ],
+      },
+      db: raceDatabase,
+      method: 'PUT',
+      role: 'user',
+    });
+    expect(winnerInjected).toBe(true);
+    expect(losingResponse.status).toBe(409);
+
+    const after = (await db.prepare(`
+      SELECT id, version, sort_order FROM stack_items WHERE stack_id = ? ORDER BY id
+    `).bind(stackId).all<{ id: number; version: number; sort_order: number }>()).results;
+    expect(after).toEqual([
+      { ...before[0], version: before[0].version + 1 },
+      before[1],
+    ]);
+  });
+
+  it('rollt eine fehlgeschlagene Stack-Erstellung einschließlich leerem Stack zurück', async () => {
+    const db = harness.db as TestDatabase;
+    const before = await db.prepare(`
+      SELECT COUNT(*) AS count FROM stacks WHERE user_id = ?
+    `).bind(testUserId).first<{ count: number }>();
+    harness.exec(`
+      CREATE TRIGGER stack_test_reject_link_binding
+      BEFORE INSERT ON stack_item_link_bindings
+      WHEN NEW.shop_link_id = 990001
+      BEGIN
+        SELECT RAISE(ABORT, 'forced stack binding failure');
+      END;
+    `);
+    const failed = await api('/api/stacks', {
+      body: {
+        name: 'Darf nicht teilweise bleiben',
+        products: [{ id: catalogOmegaProductId, product_type: 'catalog', quantity: 1 }],
+      },
+      method: 'POST',
+      role: 'user',
+    });
+    harness.exec('DROP TRIGGER stack_test_reject_link_binding;');
+
+    expect(failed.status).toBe(409);
+    expect(await db.prepare(`
+      SELECT COUNT(*) AS count FROM stacks WHERE user_id = ?
+    `).bind(testUserId).first<{ count: number }>()).toEqual(before);
+    expect(await db.prepare(`
+      SELECT COUNT(*) AS count
+      FROM stack_items item
+      JOIN stacks stack ON stack.id = item.stack_id
+      WHERE stack.user_id = ? AND stack.name = 'Darf nicht teilweise bleiben'
+    `).bind(testUserId).first<{ count: number }>()).toEqual({ count: 0 });
+  });
+
+  it('führt den 7-Tage-Papierkorb vollständig, geschützt und nutzerbezogen aus', async () => {
+    const db = harness.db as TestDatabase;
+    const createResponse = await api('/api/stacks', {
+      body: {
+        name: 'Papierkorb-Matrix',
+        products: [{ id: catalogCarnitineProductId, product_type: 'catalog', quantity: 1 }],
+      },
+      method: 'POST',
+      role: 'user',
+    });
+    expect(createResponse.status).toBe(200);
+    const stackId = (await json(createResponse)).id as number;
+    const item = await db.prepare(`
+      SELECT id, version FROM stack_items WHERE stack_id = ?
+    `).bind(stackId).first<{ id: number; version: number }>();
+    expect(item).not.toBeNull();
+
+    const foreignDelete = await api(`/api/stacks/${stackId}`, { method: 'DELETE', role: 'other' });
+    expect(foreignDelete.status).toBe(403);
+    const deleteResponse = await api(`/api/stacks/${stackId}`, { method: 'DELETE', role: 'user' });
+    expect(deleteResponse.status).toBe(200);
+    const deleted = await db.prepare(`
+      SELECT deleted_at, delete_purge_after, version,
+             delete_purge_after = datetime(deleted_at, '+7 days') AS exact_window
+      FROM stacks WHERE id = ?
+    `).bind(stackId).first<{
+      deleted_at: string;
+      delete_purge_after: string;
+      exact_window: number;
+      version: number;
+    }>();
+    expect(deleted).toMatchObject({ exact_window: 1, version: 2 });
+    expect(await db.prepare('SELECT COUNT(*) AS count FROM stack_items WHERE stack_id = ?')
+      .bind(stackId).first<{ count: number }>()).toEqual({ count: 1 });
+
+    const activeBody = await json(await api('/api/stacks', { role: 'user' }));
+    expect((activeBody.stacks as JsonRecord[]).map((stack) => stack.id)).not.toContain(stackId);
+    const trashBody = await json(await api('/api/stacks/trash', { role: 'user' }));
+    expect(trashBody.stacks).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: stackId, items_count: 1 }),
+    ]));
+    const foreignRestore = await api(`/api/stacks/${stackId}/restore`, { method: 'POST', role: 'other' });
+    expect(foreignRestore.status).toBe(403);
+
+    let restoreRaceInjected = false;
+    const wrapRestoreStatement = (sql: string, statement: TestStatement): TestStatement => ({
+      bind: (...values) => wrapRestoreStatement(sql, statement.bind(...values)),
+      first: <T>() => statement.first<T>(),
+      all: <T>() => statement.all<T>(),
+      run: async () => {
+        if (!restoreRaceInjected && /UPDATE\s+stacks\s+SET\s+deleted_at\s*=\s*NULL/i.test(sql)) {
+          restoreRaceInjected = true;
+          await db.prepare('UPDATE stacks SET version = version + 1 WHERE id = ?')
+            .bind(stackId)
+            .run();
+        }
+        return statement.run();
+      },
+    });
+    const restoreRaceDatabase: TestDatabase = {
+      prepare: (sql) => wrapRestoreStatement(sql, db.prepare(sql)),
+      batch: db.batch.bind(db),
+    };
+    const staleRestore = await api(`/api/stacks/${stackId}/restore`, {
+      db: restoreRaceDatabase,
+      method: 'POST',
+      role: 'user',
+    });
+    expect(restoreRaceInjected).toBe(true);
+    expect(staleRestore.status).toBe(409);
+    expect(await db.prepare(`
+      SELECT deleted_at IS NOT NULL AS still_trashed, version FROM stacks WHERE id = ?
+    `).bind(stackId).first<{ still_trashed: number; version: number }>()).toEqual({
+      still_trashed: 1,
+      version: 3,
+    });
+
+    const restoreResponse = await api(`/api/stacks/${stackId}/restore`, { method: 'POST', role: 'user' });
+    expect(restoreResponse.status).toBe(200);
+    expect(await db.prepare(`
+      SELECT deleted_at, delete_purge_after, version FROM stacks WHERE id = ?
+    `).bind(stackId).first<{ deleted_at: null; delete_purge_after: null; version: number }>()).toEqual({
+      deleted_at: null,
+      delete_purge_after: null,
+      version: 4,
+    });
+    expect(await db.prepare('SELECT COUNT(*) AS count FROM stack_items WHERE stack_id = ?')
+      .bind(stackId).first<{ count: number }>()).toEqual({ count: 1 });
+
+    expect((await api(`/api/stacks/${stackId}`, { method: 'DELETE', role: 'user' })).status).toBe(200);
+    harness.run(`
+      UPDATE stacks SET delete_purge_after = datetime(CURRENT_TIMESTAMP, '-1 second') WHERE id = ?
+    `, stackId);
+    const expiredRestore = await api(`/api/stacks/${stackId}/restore`, { method: 'POST', role: 'user' });
+    expect(expiredRestore.status).toBe(410);
+    expect(await db.prepare('SELECT id FROM stacks WHERE id = ?').bind(stackId).first()).toBeNull();
+    expect(await db.prepare('SELECT id FROM stack_items WHERE id = ?').bind(item!.id).first()).toBeNull();
+
+    harness.run(`
+      INSERT INTO stacks (id, user_id, name, deleted_at, delete_purge_after, version)
+      VALUES
+        (999010, ?, 'Eigener abgelaufener Papierkorb', datetime(CURRENT_TIMESTAMP, '-8 days'), datetime(CURRENT_TIMESTAMP, '-1 day'), 1),
+        (999011, ?, 'Fremder abgelaufener Papierkorb', datetime(CURRENT_TIMESTAMP, '-8 days'), datetime(CURRENT_TIMESTAMP, '-1 day'), 1)
+    `, testUserId, otherUserId);
+    harness.run(`
+      INSERT INTO stack_items (id, stack_id, catalog_product_id, quantity, intake_interval_days, sort_order, version)
+      VALUES
+        (999010, 999010, ?, 1, 1, 0, 1),
+        (999011, 999011, ?, 1, 1, 0, 1)
+    `, catalogCarnitineProductId, catalogCarnitineProductId);
+
+    expect((await api('/api/stacks', { role: 'user' })).status).toBe(200);
+    expect(await db.prepare('SELECT id FROM stacks WHERE id = 999010').first()).toBeNull();
+    expect(await db.prepare('SELECT id FROM stack_items WHERE id = 999010').first()).toBeNull();
+    expect(await db.prepare('SELECT id FROM stacks WHERE id = 999011').first()).toEqual({ id: 999011 });
+    expect(await db.prepare('SELECT id FROM stack_items WHERE id = 999011').first()).toEqual({ id: 999011 });
   });
 });

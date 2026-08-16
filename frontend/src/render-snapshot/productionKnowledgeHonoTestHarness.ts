@@ -230,6 +230,7 @@ export function createProductionKnowledgeSchema(harness: ProductionKnowledgeHono
       id INTEGER PRIMARY KEY,
       name TEXT NOT NULL,
       unit TEXT,
+      category TEXT,
       description TEXT,
       is_active INTEGER NOT NULL DEFAULT 1
     );

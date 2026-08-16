@@ -40,7 +40,6 @@ function normalizeGuidelineSource(value: unknown): string | null | undefined {
   if (trimmed === '') return null
   if (trimmed === 'DGE') return 'DGE'
   if (trimmed === 'Studien' || trimmed === 'studien') return 'studien'
-  if (trimmed === 'Influencer' || trimmed === 'influencer') return 'influencer'
   return undefined
 }
 
@@ -53,11 +52,26 @@ function publicProfile(user: UserRow) {
     id: user.id,
     email: user.email,
     age: user.age,
-    guideline_source: user.guideline_source,
+    guideline_source: user.guideline_source === 'influencer' ? null : user.guideline_source,
     health_consent: user.health_consent,
     health_consent_at: user.health_consent_at,
     email_verified_at: user.email_verified_at,
+    created_at: user.created_at,
     role: user.role ?? 'user',
+  }
+}
+
+async function selectExportRows(
+  db: D1Database,
+  sql: string,
+  userId: number,
+): Promise<Record<string, unknown>[]> {
+  try {
+    const result = await db.prepare(sql).bind(userId).all<Record<string, unknown>>()
+    return result.results ?? []
+  } catch (error) {
+    console.error('[auth] optional account export query failed:', error)
+    return []
   }
 }
 
@@ -211,14 +225,14 @@ auth.post('/register', async (c) => {
   try {
     body = await c.req.json()
   } catch {
-    return c.json({ error: 'Invalid JSON' }, 400)
+    return c.json({ error: 'Die Anfrage konnte nicht gelesen werden.' }, 400)
   }
   if (!body.email || typeof body.email !== 'string' || !body.email.includes('@'))
-    return c.json({ error: 'Valid email required' }, 400)
+    return c.json({ error: 'Bitte gib eine gültige E-Mail-Adresse ein.' }, 400)
   if (!body.password || typeof body.password !== 'string' || body.password.length < 8)
-    return c.json({ error: 'Password must be at least 8 characters' }, 400)
+    return c.json({ error: 'Das Passwort muss mindestens 8 Zeichen lang sein.' }, 400)
   if (!body.health_consent)
-    return c.json({ error: 'Gesundheits-Einwilligung erforderlich (DSGVO Art. 9)' }, 400)
+    return c.json({ error: 'Bitte stimme der Speicherung deiner Stack- und Produktdaten zu.' }, 400)
   const data = body as { email: string; password: string; age?: number; guideline_source?: string }
   const returnTo = body.return_to === undefined ? null : validateReturnTo(body.return_to)
   if (body.return_to !== undefined && !returnTo) {
@@ -241,11 +255,11 @@ auth.post('/register', async (c) => {
   }
 
   if (data.guideline_source !== undefined && guidelineValue === undefined) {
-    return c.json({ error: 'Leitlinienquelle muss "DGE", "Studien" oder "Influencer" sein.' }, 400)
+    return c.json({ error: 'Quellenpräferenz muss „Offizielle Referenzwerte“ oder „Studien“ sein.' }, 400)
   }
 
   const existing = await c.env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(data.email).first<{ id: number }>()
-  if (existing) return c.json({ error: 'E-Mail already exists' }, 409)
+  if (existing) return c.json({ error: 'Für diese E-Mail-Adresse besteht bereits ein Konto.' }, 409)
 
   const password_hash = await hashPassword(data.password)
   const result = await c.env.DB.prepare(
@@ -363,7 +377,7 @@ auth.post('/resend-verification', async (c) => {
   const user = await c.env.DB.prepare('SELECT * FROM users WHERE id = ?')
     .bind(currentUser.userId)
     .first<UserRow>()
-  if (!user) return c.json({ error: 'User not found' }, 404)
+  if (!user) return c.json({ error: 'Konto nicht gefunden.' }, 404)
   if (user.email_verified_at) {
     return c.json({ message: 'Deine E-Mail-Adresse ist bereits bestätigt.', already_verified: true })
   }
@@ -383,9 +397,13 @@ auth.post('/forgot-password', async (c) => {
   try {
     body = await c.req.json()
   } catch {
-    return c.json({ error: 'Invalid JSON' }, 400)
+    return c.json({ error: 'Die Anfrage konnte nicht gelesen werden.' }, 400)
   }
   const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
+  const returnTo = body.return_to === undefined ? null : validateReturnTo(body.return_to)
+  if (body.return_to !== undefined && !returnTo) {
+    return c.json({ error: 'Ungültiger Rückweg.' }, 400)
+  }
   const ok = () => c.json({ message: 'Falls ein Account mit dieser E-Mail existiert, wurde ein Link verschickt.' })
 
   if (!email || !email.includes('@')) return ok()
@@ -403,7 +421,7 @@ auth.post('/forgot-password', async (c) => {
     'UPDATE users SET reset_token = ?, reset_token_expires_at = ? WHERE id = ?'
   ).bind(tokenHash, expiresAt, user.id).run()
 
-  const result = await sendPasswordResetEmail(c.env, frontendUrl(c.env), user.email, rawToken)
+  const result = await sendPasswordResetEmail(c.env, frontendUrl(c.env), user.email, rawToken, returnTo)
   if (!result.ok) {
     console.error('[auth] password reset mail failed:', result.error)
     return c.json({ error: 'E-Mail konnte nicht gesendet werden.' }, 500)
@@ -418,7 +436,7 @@ auth.post('/reset-password', async (c) => {
   try {
     body = await c.req.json()
   } catch {
-    return c.json({ error: 'Invalid JSON' }, 400)
+    return c.json({ error: 'Die Anfrage konnte nicht gelesen werden.' }, 400)
   }
   const rawToken = typeof body.token === 'string' ? body.token.trim() : ''
   const password = typeof body.password === 'string' ? body.password : ''
@@ -433,8 +451,9 @@ auth.post('/reset-password', async (c) => {
     'SELECT id, reset_token_expires_at FROM users WHERE reset_token = ?'
   ).bind(tokenHash).first<{ id: number; reset_token_expires_at: number | null }>()
 
-  if (!user || !user.reset_token_expires_at || user.reset_token_expires_at < Date.now()) {
-    return c.json({ error: 'Ungültiger oder abgelaufener Link.' }, 400)
+  if (!user) return c.json({ error: 'Dieser Link ist ungültig. Bitte fordere einen neuen an.' }, 400)
+  if (!user.reset_token_expires_at || user.reset_token_expires_at < Date.now()) {
+    return c.json({ error: 'Dieser Link ist abgelaufen. Bitte fordere einen neuen an.' }, 410)
   }
 
   const password_hash = await hashPassword(password)
@@ -458,17 +477,17 @@ auth.post('/login', async (c) => {
   try {
     body = await c.req.json()
   } catch {
-    return c.json({ error: 'Invalid JSON' }, 400)
+    return c.json({ error: 'Die Anfrage konnte nicht gelesen werden.' }, 400)
   }
-  if (!body.email || typeof body.email !== 'string') return c.json({ error: 'Email required' }, 400)
-  if (!body.password || typeof body.password !== 'string') return c.json({ error: 'Password required' }, 400)
+  if (!body.email || typeof body.email !== 'string') return c.json({ error: 'Bitte gib deine E-Mail-Adresse ein.' }, 400)
+  if (!body.password || typeof body.password !== 'string') return c.json({ error: 'Bitte gib dein Passwort ein.' }, 400)
   const data = body as { email: string; password: string }
 
   const user = await c.env.DB.prepare('SELECT * FROM users WHERE email = ?').bind(data.email).first<UserRow>()
-  if (!user) return c.json({ error: 'Invalid credentials' }, 401)
+  if (!user) return c.json({ error: 'E-Mail-Adresse oder Passwort stimmen nicht.' }, 401)
 
   const valid = await verifyPassword(data.password, user.password_hash)
-  if (!valid) return c.json({ error: 'Invalid credentials' }, 401)
+  if (!valid) return c.json({ error: 'E-Mail-Adresse oder Passwort stimmen nicht.' }, 401)
 
   await markUserSeen(c.env.DB, user.id)
 
@@ -496,15 +515,136 @@ meApp.get('/', async (c) => {
   const user = c.get('user')
   await markUserSeen(c.env.DB, user.userId)
   const row = await c.env.DB.prepare(
-    'SELECT id, email, age, guideline_source, health_consent, health_consent_at, email_verified_at, role FROM users WHERE id = ?'
+    'SELECT id, email, age, guideline_source, health_consent, health_consent_at, email_verified_at, created_at, role FROM users WHERE id = ?'
   ).bind(user.userId).first<UserRow>()
-  if (!row) return c.json({ error: 'User not found' }, 404)
+  if (!row) return c.json({ error: 'Konto nicht gefunden.' }, 404)
   const profile = publicProfile(row)
   return c.json({ profile })
 })
 
+// GET /api/me/export — portable, machine-readable account export (DSGVO Art. 15/20)
+meApp.get('/export', async (c) => {
+  const authErr = await ensureAuth(c)
+  if (authErr) return authErr
+  const user = c.get('user')
+
+  const allowed = await checkRateLimit(c.env.RATE_LIMITER, `data-export:${user.userId}`, 10, 60 * 60)
+  if (!allowed) return c.json({ error: 'Zu viele Exporte. Bitte warte kurz.' }, 429)
+
+  const userId = user.userId
+  const [
+    accountRows,
+    consentHistory,
+    stacks,
+    stackItems,
+    stackItemLinkBindings,
+    userProducts,
+    userProductIngredients,
+    userProductIngredientParts,
+    userProductStatusHistory,
+    wishlist,
+    productLinkReports,
+    shareImports,
+    signupAttribution,
+    partyMemberships,
+    creatorShares,
+    stackEmailEvents,
+    productLinkClicks,
+  ] = await Promise.all([
+    selectExportRows(c.env.DB, `
+      SELECT id, email, age, guideline_source, health_consent, health_consent_at,
+             email_verified_at, created_at, last_seen_at
+      FROM users WHERE id = ?
+    `, userId),
+    selectExportRows(c.env.DB, `
+      SELECT id, consent_type, granted, created_at
+      FROM consent_log WHERE user_id = ? ORDER BY created_at, id
+    `, userId),
+    selectExportRows(c.env.DB, 'SELECT * FROM stacks WHERE user_id = ? ORDER BY created_at, id', userId),
+    selectExportRows(c.env.DB, `
+      SELECT item.* FROM stack_items item
+      JOIN stacks stack ON stack.id = item.stack_id
+      WHERE stack.user_id = ? ORDER BY item.stack_id, item.id
+    `, userId),
+    selectExportRows(c.env.DB, `
+      SELECT binding.* FROM stack_item_link_bindings binding
+      JOIN stack_items item ON item.id = binding.stack_item_id
+      JOIN stacks stack ON stack.id = item.stack_id
+      WHERE stack.user_id = ? ORDER BY binding.stack_item_id
+    `, userId),
+    selectExportRows(c.env.DB, 'SELECT * FROM user_products WHERE user_id = ? ORDER BY created_at, id', userId),
+    selectExportRows(c.env.DB, `
+      SELECT ingredient.* FROM user_product_ingredients ingredient
+      JOIN user_products product ON product.id = ingredient.user_product_id
+      WHERE product.user_id = ? ORDER BY ingredient.user_product_id, ingredient.id
+    `, userId),
+    selectExportRows(c.env.DB, `
+      SELECT part.* FROM user_product_ingredient_parts part
+      JOIN user_product_ingredients ingredient ON ingredient.id = part.user_product_ingredient_id
+      JOIN user_products product ON product.id = ingredient.user_product_id
+      WHERE product.user_id = ? ORDER BY part.user_product_ingredient_id, part.id
+    `, userId),
+    selectExportRows(c.env.DB, `
+      SELECT history.* FROM user_product_status_history history
+      JOIN user_products product ON product.id = history.user_product_id
+      WHERE product.user_id = ? ORDER BY history.user_product_id, history.created_at, history.id
+    `, userId),
+    selectExportRows(c.env.DB, 'SELECT * FROM wishlist WHERE user_id = ? ORDER BY created_at, id', userId),
+    selectExportRows(c.env.DB, 'SELECT * FROM product_link_reports WHERE user_id = ? ORDER BY created_at, id', userId),
+    selectExportRows(c.env.DB, 'SELECT * FROM share_import_operations WHERE user_id = ? ORDER BY created_at, id', userId),
+    selectExportRows(c.env.DB, 'SELECT * FROM signup_attribution WHERE user_id = ?', userId),
+    selectExportRows(c.env.DB, `
+      SELECT membership.party_id, party.type AS party_type, party.name AS party_name,
+             membership.role, membership.status, membership.created_at
+      FROM party_memberships membership
+      JOIN parties party ON party.id = membership.party_id
+      WHERE membership.user_id = ? ORDER BY membership.created_at, membership.party_id
+    `, userId),
+    selectExportRows(c.env.DB, `
+      SELECT DISTINCT share.* FROM share_links share
+      JOIN party_memberships membership ON membership.party_id = share.creator_party_id
+      WHERE membership.user_id = ? ORDER BY share.created_at, share.id
+    `, userId),
+    selectExportRows(c.env.DB, 'SELECT * FROM stack_email_events WHERE user_id = ? ORDER BY created_at, id', userId),
+    selectExportRows(c.env.DB, 'SELECT * FROM product_link_clicks WHERE user_id = ? ORDER BY clicked_at, id', userId),
+  ])
+
+  if (accountRows.length !== 1) return c.json({ error: 'Konto nicht gefunden.' }, 404)
+
+  const exportedAt = new Date().toISOString()
+  const exportPayload = {
+    format: 'supplement_stack_user_data.v1',
+    exported_at: exportedAt,
+    account: accountRows[0],
+    consent_history: consentHistory,
+    stacks,
+    stack_items: stackItems,
+    stack_item_link_bindings: stackItemLinkBindings,
+    user_products: userProducts,
+    user_product_ingredients: userProductIngredients,
+    user_product_ingredient_parts: userProductIngredientParts,
+    user_product_status_history: userProductStatusHistory,
+    wishlist,
+    product_link_reports: productLinkReports,
+    share_import_operations: shareImports,
+    signup_attribution: signupAttribution,
+    party_memberships: partyMemberships,
+    creator_shares: creatorShares,
+    stack_email_events: stackEmailEvents,
+    product_link_clicks: productLinkClicks,
+  }
+  const date = exportedAt.slice(0, 10)
+  return c.body(JSON.stringify(exportPayload, null, 2), 200, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Content-Disposition': `attachment; filename="supplement-stack-daten-${date}.json"`,
+    'Cache-Control': 'private, no-store',
+  })
+})
+
 // PATCH /api/me/password — Self-Service Passwortwechsel (DSGVO Art. 16)
 meApp.patch('/password', async (c) => {
+  const originErr = validateBrowserOrigin(c, { requireWhenCookiePresent: true })
+  if (originErr) return originErr
   const authErr = await ensureAuth(c)
   if (authErr) return authErr
   const user = c.get('user')
@@ -523,7 +663,7 @@ meApp.patch('/password', async (c) => {
   const row = await c.env.DB.prepare('SELECT id, email, password_hash, email_verified_at FROM users WHERE id = ?')
     .bind(user.userId)
     .first<{ id: number; email: string; password_hash: string; email_verified_at: string | null }>()
-  if (!row) return c.json({ error: 'User not found' }, 404)
+  if (!row) return c.json({ error: 'Konto nicht gefunden.' }, 404)
 
   const valid = await verifyPassword(currentPassword, row.password_hash)
   if (!valid) return c.json({ error: 'Aktuelles Passwort ist falsch.' }, 401)
@@ -538,6 +678,8 @@ meApp.patch('/password', async (c) => {
 
 // DELETE /api/me — Account-Löschung (DSGVO Art. 17, Recht auf Löschung)
 meApp.delete('/', async (c) => {
+  const originErr = validateBrowserOrigin(c, { requireWhenCookiePresent: true })
+  if (originErr) return originErr
   const authErr = await ensureAuth(c)
   if (authErr) return authErr
   const user = c.get('user')
@@ -552,7 +694,7 @@ meApp.delete('/', async (c) => {
   const row = await c.env.DB.prepare('SELECT id, email, password_hash, email_verified_at FROM users WHERE id = ?')
     .bind(user.userId)
     .first<{ id: number; email: string; password_hash: string; email_verified_at: string | null }>()
-  if (!row) return c.json({ error: 'User not found' }, 404)
+  if (!row) return c.json({ error: 'Konto nicht gefunden.' }, 404)
 
   const valid = await verifyPassword(password, row.password_hash)
   if (!valid) return c.json({ error: 'Passwort ist falsch.' }, 401)
@@ -585,11 +727,21 @@ meApp.delete('/', async (c) => {
     // Dashboard tracking table may not be migrated yet; deletion must still work.
   }
   const coreStmts = [
+    c.env.DB.prepare('DELETE FROM share_import_operations WHERE user_id = ?').bind(userId),
+    c.env.DB.prepare('DELETE FROM product_link_reports WHERE user_id = ?').bind(userId),
+    c.env.DB.prepare('DELETE FROM stack_item_link_bindings WHERE stack_item_id IN (SELECT item.id FROM stack_items item JOIN stacks stack ON stack.id = item.stack_id WHERE stack.user_id = ?)').bind(userId),
     c.env.DB.prepare('DELETE FROM stack_items WHERE stack_id IN (SELECT id FROM stacks WHERE user_id = ?)').bind(userId),
     c.env.DB.prepare('DELETE FROM stacks WHERE user_id = ?').bind(userId),
     c.env.DB.prepare('DELETE FROM wishlist WHERE user_id = ?').bind(userId),
+    c.env.DB.prepare('DELETE FROM user_product_ingredient_parts WHERE user_product_ingredient_id IN (SELECT ingredient.id FROM user_product_ingredients ingredient JOIN user_products product ON product.id = ingredient.user_product_id WHERE product.user_id = ?)').bind(userId),
+    c.env.DB.prepare('DELETE FROM user_product_ingredients WHERE user_product_id IN (SELECT id FROM user_products WHERE user_id = ?)').bind(userId),
     c.env.DB.prepare('DELETE FROM user_products WHERE user_id = ?').bind(userId),
+    c.env.DB.prepare('DELETE FROM signup_attribution WHERE user_id = ?').bind(userId),
+    c.env.DB.prepare('DELETE FROM party_memberships WHERE user_id = ?').bind(userId),
+    c.env.DB.prepare('DELETE FROM email_verification_tokens WHERE user_id = ?').bind(userId),
     c.env.DB.prepare('DELETE FROM consent_log WHERE user_id = ?').bind(userId),
+    c.env.DB.prepare('UPDATE stack_email_events SET user_id = NULL WHERE user_id = ?').bind(userId),
+    c.env.DB.prepare('UPDATE product_link_clicks SET user_id = NULL WHERE user_id = ?').bind(userId),
     c.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(userId),
   ]
   await c.env.DB.batch(coreStmts)
@@ -617,6 +769,8 @@ meApp.delete('/', async (c) => {
 
 // PUT /api/me
 meApp.put('/', async (c) => {
+  const originErr = validateBrowserOrigin(c, { requireWhenCookiePresent: true })
+  if (originErr) return originErr
   const authErr = await ensureAuth(c)
   if (authErr) return authErr
   const user = c.get('user')
@@ -624,7 +778,7 @@ meApp.put('/', async (c) => {
   try {
     body = await c.req.json()
   } catch {
-    return c.json({ error: 'Invalid JSON' }, 400)
+    return c.json({ error: 'Die Anfrage konnte nicht gelesen werden.' }, 400)
   }
 
   const hasKey = (key: string): boolean => Object.prototype.hasOwnProperty.call(body, key)
@@ -637,16 +791,16 @@ meApp.put('/', async (c) => {
   const guidelineSource = hasKey('guideline_source') ? normalizeGuidelineSource(body.guideline_source) : undefined
 
   if (hasKey('age') && age !== null && (!Number.isInteger(age) || age < 1 || age > 120)) {
-    return c.json({ error: 'age must be an integer between 1 and 120' }, 400)
+    return c.json({ error: 'Das Alter muss eine ganze Zahl zwischen 1 und 120 sein.' }, 400)
   }
   if (hasKey('guideline_source') && guidelineSource === undefined) {
-    return c.json({ error: 'guideline_source must be DGE, studien, or influencer' }, 400)
+    return c.json({ error: 'Quellenpräferenz muss „Offizielle Referenzwerte“ oder „Studien“ sein.' }, 400)
   }
 
   const existing = await c.env.DB.prepare(
-    'SELECT id, email, age, guideline_source, health_consent, health_consent_at, email_verified_at, role FROM users WHERE id = ?'
+    'SELECT id, email, age, guideline_source, health_consent, health_consent_at, email_verified_at, created_at, role FROM users WHERE id = ?'
   ).bind(user.userId).first<UserRow>()
-  if (!existing) return c.json({ error: 'User not found' }, 404)
+  if (!existing) return c.json({ error: 'Konto nicht gefunden.' }, 404)
 
   const target = {
     age: hasKey('age') ? age : existing.age,

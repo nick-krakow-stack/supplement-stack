@@ -4,8 +4,11 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { resendVerificationEmail, verifyEmail } from '../api/auth';
+import { apiClient } from '../api/client';
+import ForgotPasswordPage from './ForgotPasswordPage';
 import LoginPage from './LoginPage';
 import RegisterPage from './RegisterPage';
+import ResetPasswordPage from './ResetPasswordPage';
 import VerifyEmailPage from './VerifyEmailPage';
 
 const authState = vi.hoisted(() => ({
@@ -27,6 +30,9 @@ vi.mock('../api/auth', () => ({
   verifyEmail: vi.fn(),
   resendVerificationEmail: vi.fn(),
 }));
+vi.mock('../api/client', () => ({
+  apiClient: { post: vi.fn() },
+}));
 
 function LocationProbe() {
   const location = useLocation();
@@ -43,6 +49,7 @@ describe('authentication return flow', () => {
     authState.refreshUser.mockReset().mockResolvedValue(undefined);
     vi.mocked(verifyEmail).mockReset();
     vi.mocked(resendVerificationEmail).mockReset();
+    vi.mocked(apiClient.post).mockReset();
     window.localStorage.clear();
     window.sessionStorage.clear();
   });
@@ -84,7 +91,7 @@ describe('authentication return flow', () => {
 
     expect(screen.getByRole('link', { name: 'Anmelden' }).getAttribute('href')).toContain(encodeURIComponent(returnTo));
     fireEvent.change(screen.getByLabelText(/E-Mail-Adresse/), { target: { value: 'new@test.invalid' } });
-    fireEvent.change(screen.getByLabelText(/Passwort/), { target: { value: 'password123' } });
+    fireEvent.change(screen.getByLabelText(/^Passwort$/), { target: { value: 'password123' } });
     fireEvent.click(screen.getByRole('checkbox'));
     fireEvent.click(screen.getByRole('button', { name: 'Konto erstellen' }));
 
@@ -137,5 +144,63 @@ describe('authentication return flow', () => {
     fireEvent.click(screen.getByRole('button', { name: 'E-Mail erneut senden' }));
     await waitFor(() => expect(resendVerificationEmail).toHaveBeenCalledWith(returnTo));
     expect(screen.getByRole('link', { name: 'Weiter zu Supplement Stack' }).getAttribute('href')).toBe(returnTo);
+  });
+
+  it('preserves the exact return target through forgot-password and the reset email request', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({ data: { message: 'ok' } });
+    const encoded = encodeURIComponent(returnTo);
+    render(
+      <MemoryRouter initialEntries={[`/forgot-password?returnTo=${encoded}`]}>
+        <Routes><Route path="/forgot-password" element={<ForgotPasswordPage />} /></Routes>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText(/zurück zu dieser geteilten Empfehlung/i)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('E-Mail-Adresse'), { target: { value: 'user@test.invalid' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Link anfordern' }));
+
+    await waitFor(() => expect(apiClient.post).toHaveBeenCalledWith('/auth/forgot-password', {
+      email: 'user@test.invalid',
+      return_to: returnTo,
+    }));
+    expect(screen.getByRole('link', { name: 'Zurück zur Anmeldung' }).getAttribute('href')).toContain(encoded);
+  });
+
+  it('keeps the return target after a successful password reset', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({ data: { message: 'ok' } });
+    const encoded = encodeURIComponent(returnTo);
+    render(
+      <MemoryRouter initialEntries={[`/reset-password?token=reset-token&returnTo=${encoded}`]}>
+        <Routes><Route path="/reset-password" element={<ResetPasswordPage />} /></Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.change(screen.getByLabelText('Neues Passwort'), { target: { value: 'new-password-123' } });
+    fireEvent.change(screen.getByLabelText('Passwort wiederholen'), { target: { value: 'new-password-123' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Passwort speichern' }));
+
+    await waitFor(() => expect(apiClient.post).toHaveBeenCalledWith('/auth/reset-password', {
+      token: 'reset-token',
+      password: 'new-password-123',
+    }));
+    expect(await screen.findByRole('heading', { name: 'Passwort gespeichert' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Zur Anmeldung' }).getAttribute('href')).toContain(encoded);
+  });
+
+  it('explains an expired reset link and preserves the target on the replacement request', async () => {
+    vi.mocked(apiClient.post).mockRejectedValue({ response: { status: 410 } });
+    const encoded = encodeURIComponent(returnTo);
+    render(
+      <MemoryRouter initialEntries={[`/reset-password?token=expired-token&returnTo=${encoded}`]}>
+        <Routes><Route path="/reset-password" element={<ResetPasswordPage />} /></Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.change(screen.getByLabelText('Neues Passwort'), { target: { value: 'new-password-123' } });
+    fireEvent.change(screen.getByLabelText('Passwort wiederholen'), { target: { value: 'new-password-123' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Passwort speichern' }));
+
+    expect(await screen.findByText(/Dieser Link ist abgelaufen/i)).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Neuen Link anfordern' }).getAttribute('href')).toContain(encoded);
   });
 });

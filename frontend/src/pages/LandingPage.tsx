@@ -35,28 +35,34 @@ function HeroSection({ isLoggedIn }: { isLoggedIn: boolean }) {
         {!isLoggedIn && (
           <div className="inline-flex items-center gap-2 bg-white border border-indigo-100 rounded-full px-4 py-1.5 mb-8 shadow-sm">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="text-sm font-medium text-indigo-700">Demo verfügbar – keine Registrierung nötig</span>
+            <span className="text-sm font-medium text-indigo-700">Demo verfügbar – kostenlos und ohne Registrierung</span>
           </div>
         )}
 
         {/* Headline */}
         <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 leading-tight tracking-tight mb-6">
-          Dein personalisierter{' '}
+          Dein übersichtlicher{' '}
           <span className="bg-gradient-to-r from-indigo-500 to-purple-600 bg-clip-text text-transparent">
             Supplement-Stack.
           </span>
           <br />
           <span className="text-3xl md:text-4xl lg:text-5xl font-semibold text-gray-700">
-            Wissenschaftlich. Einfach. Kostenlos.
+            Quellenbasiert planen. Einfach vergleichen. Kostenlos starten.
           </span>
         </h1>
 
         {/* Subheadline */}
         <p className="text-lg md:text-xl text-gray-600 max-w-2xl mx-auto mb-10 leading-relaxed">
-          Recherchiere Wirkstoffe, vergleiche Produktinformationen und nutze
-          wissenschaftlich orientierte Ausgangswerte aus anerkannten Quellen mit
-          transparentem Preisvergleich.
+          Ordne allgemeine Referenzwerte und Studienmengen ein, vergleiche Produktangaben
+          und plane deinen eigenen Stack. Die Inhalte sind keine persönliche Empfehlung und
+          ersetzen keine medizinische Beratung.
         </p>
+
+        {!isLoggedIn && (
+          <p className="mx-auto -mt-5 mb-8 max-w-2xl text-sm font-medium leading-6 text-slate-600">
+            In der Demo kannst du alle Schritte ausprobieren. Mit einem kostenlosen Konto bleiben deine Stacks und eigenen Produkte dauerhaft gespeichert.
+          </p>
+        )}
 
         {/* CTAs */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-14">
@@ -80,7 +86,7 @@ function HeroSection({ isLoggedIn }: { isLoggedIn: boolean }) {
           )}
           {isLoggedIn && (
             <Link
-              to="/stacks"
+              to="/stacks?openSearch=1"
               className="inline-flex items-center gap-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold rounded-2xl px-8 py-4 text-base shadow-lg hover:shadow-xl transition-all duration-200 w-full sm:w-auto justify-center"
             >
               <Zap size={18} />
@@ -92,9 +98,9 @@ function HeroSection({ isLoggedIn }: { isLoggedIn: boolean }) {
         {/* Feature chips */}
         <div className="flex flex-wrap justify-center gap-3">
           {[
-            { icon: <FlaskConical size={14} />, label: 'DGE · EFSA · NIH Quellen' },
-            { icon: <TrendingDown size={14} />, label: 'Preis-pro-Portion Vergleich' },
-            { icon: <Shield size={14} />, label: 'Kostenlos & ohne Konto nutzbar' },
+            { icon: <FlaskConical size={14} />, label: 'Quellen: DGE, EFSA und NIH' },
+            { icon: <TrendingDown size={14} />, label: 'Preis-pro-Portion-Vergleich' },
+            { icon: <Shield size={14} />, label: 'Demo ohne Konto · dauerhaft speichern mit kostenlosem Konto' },
             { icon: <BarChart3 size={14} />, label: 'Monatliche Kostenübersicht' },
           ].map(({ icon, label }) => (
             <span
@@ -120,21 +126,21 @@ const steps = [
     step: '01',
     title: 'Wirkstoff suchen',
     description:
-      'Gib einen Wirkstoff ein – zum Beispiel Magnesium, Vitamin D oder Omega-3. Unsere Datenbank liefert dir quellenbasierte Grundlagenwerte.',
+      'Gib einen Wirkstoff ein – zum Beispiel Magnesium, Vitamin D oder Omega-3. Du siehst dazu vorhandene offizielle Referenzwerte und Studienangaben.',
   },
   {
     icon: <Star size={28} className="text-purple-500" />,
     step: '02',
-    title: 'Richtwert einordnen',
+    title: 'Angaben einordnen',
     description:
-      'Sieh auf einen Blick berechnete Richtwerte, wie viele Kapseln oder Tropfen das in der Regel entspricht – und welche Produkte nach Preis-Leistung dazu passen.',
+      'Vergleiche Gesamtzufuhr, offizielle Referenzwerte und Mengen aus Studien getrennt. So bleibt sichtbar, welche Zahl aus welcher Quelle stammt.',
   },
   {
     icon: <Layers size={28} className="text-emerald-500" />,
     step: '03',
     title: 'Stack aufbauen',
     description:
-      'Erstelle einen persönlichen Stack, beobachte monatliche Gesamtkosten und passe deinen Stack in Ruhe iterativ an.',
+      'Stelle Produkte selbst zusammen, beobachte die berechneten Kosten und passe deine Planung jederzeit an.',
   },
 ];
 
@@ -148,7 +154,7 @@ function HowItWorksSection() {
             In drei Schritten zu deinem Stack
           </h2>
           <p className="text-gray-500 max-w-xl mx-auto">
-            Keine Vorkenntnisse nötig. Supplement Stack führt dich Schritt für Schritt zu einer transparenten Orientierung.
+            Keine Vorkenntnisse nötig. Du entscheidest selbst; die App macht Herkunft, Mengen und Kosten verständlich sichtbar.
           </p>
         </div>
 
@@ -194,23 +200,23 @@ const features = [
   },
   {
     icon: <ShoppingBag size={24} className="text-purple-500" />,
-    title: 'Passende Produktauswahl',
+    title: 'Produktangaben vergleichen',
     description:
-      'Filtere Produkte nach Wirkstoff, Gehalt und Kontext. Die Sortierung nach Preis-Leistung hilft dir, Produktdaten vergleichbar einzuordnen.',
-    tag: 'Automatisch gefiltert',
+      'Filtere selbst nach Wirkstoff, Gehalt und weiteren Angaben. Vergleiche die angezeigten Daten und entscheide selbst, welches Produkt du für deine Planung auswählst.',
+    tag: 'Nach Angaben filterbar',
     tagColor: 'bg-purple-50 text-purple-600',
   },
   {
     icon: <PlusCircle size={24} className="text-orange-500" />,
     title: 'Eigene Produkte hinzufügen',
     description:
-      'Du verwendest ein Produkt, das nicht in unserer Datenbank ist? Du kannst es hinzufügen und transparent im eigenen Stack weiterverwenden.',
+      'Du verwendest ein Produkt, das nicht in unserer Datenbank ist? Du kannst es privat anlegen und sofort im eigenen Stack nutzen. Erst wenn du es öffentlich teilen möchtest, wird es geprüft.',
     tag: 'Vollständig anpassbar',
     tagColor: 'bg-orange-50 text-orange-600',
   },
 ];
 
-function FeaturesSection() {
+export function FeaturesSection() {
   return (
     <section className="py-20 md:py-28 bg-gradient-to-br from-slate-50 to-indigo-50/30">
       <div className="max-w-4xl mx-auto px-6">
@@ -272,30 +278,32 @@ function formatStatValue(value: number): string {
 export function buildTrustStats(stats: PublicStatsResponse | null): TrustStat[] {
   if (!stats) {
     return [
-      { value: '–', label: 'Aktive Nährstoffe in unserer Datenbank' },
-      { value: '–', label: 'Wissensartikel mit den neuesten Erkenntnissen und Richtlinien' },
+      { value: '–', label: 'Aktive Wirkstoffe in unserer Datenbank' },
+      { value: '–', label: 'Wissensartikel mit Quellen und Prüfdatum' },
       { value: '–', label: 'Durchsuchte und zum Lesen aufbereitete Studien' },
-      { value: '–', label: 'Verknüpfte Produkte mit geprüften Inhaltsstoffen' },
+      { value: '–', label: 'Verknüpfte Produkte mit erfassten Inhaltsstoffen' },
     ];
   }
 
   return [
-    { value: formatStatValue(stats.active_nutrients), label: 'Aktive Nährstoffe in unserer Datenbank' },
-    { value: formatStatValue(stats.published_knowledge_articles), label: 'Wissensartikel mit den neuesten Erkenntnissen und Richtlinien' },
+    { value: formatStatValue(stats.active_nutrients), label: 'Aktive Wirkstoffe in unserer Datenbank' },
+    { value: formatStatValue(stats.published_knowledge_articles), label: 'Wissensartikel mit Quellen und Prüfdatum' },
     { value: formatStatValue(stats.prepared_studies), label: 'Durchsuchte und zum Lesen aufbereitete Studien' },
-    { value: formatStatValue(stats.public_approved_products), label: 'Verknüpfte Produkte mit geprüften Inhaltsstoffen' },
+    { value: formatStatValue(stats.public_approved_products), label: 'Verknüpfte Produkte mit erfassten Inhaltsstoffen' },
   ];
 }
 
 const trustPoints = [
-  'Keine Heilversprechen: Inhalte sind als Orientierung und Entscheidungshilfe gedacht.',
-  'Transparente Preisvergleiche ohne versteckte Kosten',
-  'Produktvergleichslogik und Preisangaben sind klar abgegrenzt.',
-  'Datenschutzbezug ist transparent geregelt (siehe Datenschutzerklärung); personenbezogene Daten werden nur wie beschrieben verarbeitet.',
+  { text: 'Allgemeine Orientierung statt Heilversprechen.', link: '/wissen', linkLabel: 'So entstehen Inhalte' },
+  { text: 'Kosten und Produktangaben werden nachvollziehbar gegenübergestellt.', link: '/nutzungsbedingungen', linkLabel: 'So vergleichen wir' },
+  { text: 'Quellen stehen direkt an den jeweiligen Wissensinhalten.', link: '/wissen', linkLabel: 'Quellen ansehen' },
+  { text: 'Du behältst die Kontrolle über deine gespeicherten Daten.', link: '/datenschutz', linkLabel: 'Datenschutz' },
 ];
 
 export function TrustSection() {
   const [stats, setStats] = useState<PublicStatsResponse | null>(null);
+  const [statsError, setStatsError] = useState(false);
+  const [retry, setRetry] = useState(0);
   const trustStats = useMemo(() => buildTrustStats(stats), [stats]);
 
   useEffect(() => {
@@ -303,6 +311,7 @@ export function TrustSection() {
     let active = true;
 
     const loadStats = () => {
+      setStatsError(false);
       fetch(apiPath('/public-stats'), {
         signal: controller.signal,
         headers: { Accept: 'application/json' },
@@ -317,6 +326,7 @@ export function TrustSection() {
         })
         .catch((error) => {
           if (!active || (error instanceof DOMException && error.name === 'AbortError')) return;
+          setStatsError(true);
         });
     };
 
@@ -328,7 +338,7 @@ export function TrustSection() {
       window.clearInterval(refreshInterval);
       controller.abort();
     };
-  }, []);
+  }, [retry]);
 
   return (
     <section className="py-20 md:py-28 bg-white">
@@ -343,6 +353,19 @@ export function TrustSection() {
             allgemeine Orientierung ausgelegt und ersetzen keine ärztliche Beratung.
           </p>
         </div>
+
+        {statsError && (
+          <div className="-mt-7 mb-10 text-center" role="alert">
+            <p className="text-sm font-semibold text-slate-700">Die aktuellen Zahlen sind zurzeit nicht verfügbar.</p>
+            <button
+              type="button"
+              onClick={() => setRetry((value) => value + 1)}
+              className="mt-2 min-h-11 bg-white px-4 py-2 text-sm font-bold text-blue-700 ring-1 ring-blue-200 hover:bg-blue-50"
+            >
+              Erneut laden
+            </button>
+          </div>
+        )}
 
         {/* Stats */}
         <div
@@ -367,9 +390,12 @@ export function TrustSection() {
         <div className="bg-gradient-to-br from-slate-50 to-indigo-50/30 rounded-2xl border border-gray-100 p-8 shadow-sm">
           <div className="grid md:grid-cols-2 gap-4">
             {trustPoints.map((point) => (
-              <div key={point} className="flex items-start gap-3">
+              <div key={point.text} className="flex items-start gap-3">
                 <CheckCircle size={18} className="text-emerald-500 shrink-0 mt-0.5" />
-                <span className="text-sm text-gray-700 leading-relaxed">{point}</span>
+                <span className="text-sm text-gray-700 leading-relaxed">
+                  {point.text}{' '}
+                  <a href={point.link} className="font-bold text-blue-700 underline-offset-4 hover:underline">{point.linkLabel}</a>
+                </span>
               </div>
             ))}
           </div>
@@ -402,8 +428,8 @@ function DemoCtaSection({ isLoggedIn }: { isLoggedIn: boolean }) {
               Starte jetzt mit deinem persönlichen Stack
             </h2>
             <p className="text-indigo-100 text-base md:text-lg mb-8 max-w-xl mx-auto">
-              Im Demo-Modus kannst du Supplement Stack vollständig ausprobieren –
-              ohne Anmeldung, ohne Kreditkarte, ohne Risiko.
+              Im Demo-Modus kannst du die wichtigsten Stack-Schritte ausprobieren –
+              ohne Anmeldung oder Kreditkarte. Speichern, E-Mail und weitere Kontofunktionen sind nach kostenloser Registrierung verfügbar.
             </p>
             <Link
               to="/demo"
@@ -424,42 +450,40 @@ function DemoCtaSection({ isLoggedIn }: { isLoggedIn: boolean }) {
 // Final Register CTA
 // ---------------------------------------------------------------------------
 function RegisterCtaSection({ isLoggedIn }: { isLoggedIn: boolean }) {
-  if (isLoggedIn) return null;
-
   return (
     <section className="py-16 md:py-20 bg-gradient-to-br from-slate-50 to-indigo-50/30">
       <div className="max-w-4xl mx-auto px-6 text-center">
         <div className="inline-flex items-center gap-2 bg-white border border-indigo-100 rounded-full px-4 py-1.5 mb-8 shadow-sm">
           <Users size={14} className="text-indigo-500" />
-          <span className="text-sm font-medium text-indigo-700">Kostenloser Account – jetzt verfügbar</span>
+          <span className="text-sm font-medium text-indigo-700">{isLoggedIn ? 'Deine Planung ist bereit' : 'Kostenloser Account – jetzt verfügbar'}</span>
         </div>
 
         <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4 leading-tight">
-          Bereit für deinen übersichtlichen Stack?
+          {isLoggedIn ? 'Weiter mit deinem Stack' : 'Bereit für deinen übersichtlichen Stack?'}
         </h2>
         <p className="text-gray-500 text-base md:text-lg max-w-xl mx-auto mb-10">
-          Registriere dich kostenlos, um deinen Stack zu speichern, Produkte zu verwalten und jederzeit auf deine Daten zuzugreifen.
+          {isLoggedIn
+            ? 'Öffne deine gespeicherten Stacks oder suche direkt nach einem weiteren Wirkstoff.'
+            : 'Registriere dich kostenlos, um deine Stacks zu speichern, Produkte zu verwalten und jederzeit auf deine Daten zuzugreifen.'}
         </p>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
           <Link
-            to="/register"
+            to={isLoggedIn ? '/stacks' : '/register'}
             className="inline-flex items-center gap-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold rounded-2xl px-8 py-4 text-base shadow-lg hover:shadow-xl transition-all duration-200 w-full sm:w-auto justify-center"
           >
-            Kostenlos registrieren
+            {isLoggedIn ? 'Zu meinen Stacks' : 'Kostenlos registrieren'}
             <ArrowRight size={18} />
           </Link>
           <Link
-            to="/demo"
+            to={isLoggedIn ? '/stacks?openSearch=1' : '/demo'}
             className="inline-flex items-center gap-2 border-2 border-gray-200 bg-white hover:bg-gray-50 text-gray-600 font-semibold rounded-2xl px-8 py-4 text-base transition-all duration-200 w-full sm:w-auto justify-center"
           >
-            Erst Demo ausprobieren
+            {isLoggedIn ? 'Wirkstoff suchen' : 'Erst Demo ausprobieren'}
           </Link>
         </div>
 
-        <p className="mt-6 text-xs text-gray-400">
-          Keine Kreditkarte · Kein Abo · Jederzeit löschbar
-        </p>
+        {!isLoggedIn && <p className="mt-6 text-sm text-gray-500">Keine Kreditkarte · Kein Abo · Jederzeit löschbar</p>}
       </div>
     </section>
   );

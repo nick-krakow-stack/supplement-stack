@@ -5,12 +5,16 @@ interface Props {
 export default function LegalDisclaimer({ variant }: Props) {
   if (variant === 'health') {
     return (
-      <p className="text-xs text-gray-400 leading-relaxed">
-        * Die hier angezeigten Inhalte sind allgemeine Orientierungsinformationen und ersetzen
-        keine medizinische Beratung, Diagnose oder Behandlung. Nahrungserg&auml;nzungsmittel sind
-        kein Ersatz f&uuml;r eine ausgewogene Ern&auml;hrung oder medizinische Betreuung.
-        Bei gesundheitlichen Fragen oder Unsicherheiten konsultiere bitte medizinisches Fachpersonal.
-      </p>
+      <details className="text-sm leading-relaxed text-slate-500">
+        <summary className="min-h-11 cursor-pointer py-2 font-semibold text-slate-600">
+          Die Inhalte dienen nur der allgemeinen Orientierung und ersetzen keine medizinische Beratung. Warum dieser Hinweis?
+        </summary>
+        <p className="pb-1 pl-1">
+          Nahrungserg&auml;nzungsmittel ersetzen weder eine ausgewogene Ern&auml;hrung noch eine Diagnose
+          oder Behandlung. Bitte wende dich bei gesundheitlichen Fragen oder Unsicherheiten an
+          medizinisches Fachpersonal.
+        </p>
+      </details>
     );
   }
   return (

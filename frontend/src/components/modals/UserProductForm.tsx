@@ -1,8 +1,9 @@
-import { type FormEvent, useEffect, useMemo, useState } from 'react';
+import { type FormEvent, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { UNSAFE_NavigationContext } from 'react-router-dom';
 import ModalWrapper from './ModalWrapper';
 import ImageCropModal from '../ImageCropModal';
 import SearchBar from '../SearchBar';
-import { Camera, ChevronDown, ChevronUp, Plus, X } from 'lucide-react';
+import { Camera, ChevronDown, ChevronUp, Info, Plus, X } from 'lucide-react';
 import { getIngredient, getIngredientParts } from '../../api/ingredients';
 import type {
   Ingredient,
@@ -13,30 +14,54 @@ import type {
 
 export interface UserProduct {
   id: number;
+  version: number;
   user_id?: number;
   name: string;
   brand?: string;
   form?: string;
   price: number;
-  shop_link?: string;
-  image_url?: string;
+  shop_link?: string | null;
+  image_url?: string | null;
   serving_size?: number;
   serving_unit?: string;
   servings_per_container?: number;
   container_count?: number;
   is_affiliate?: number | boolean;
-  notes?: string;
+  notes?: string | null;
   status?: 'pending' | 'approved' | 'rejected' | 'blocked';
   approved_at?: string | null;
   created_at?: string;
   published_product_id?: number | null;
+  published_at?: string | null;
+  review_note?: string | null;
+  visibility?: 'private' | 'public';
+  status_history?: UserProductStatusHistory[];
+  stack_usage?: UserProductStackUsage[];
   ingredients?: UserProductIngredientType[];
+}
+
+export interface UserProductStatusHistory {
+  moderation_status: string;
+  visibility: 'private' | 'public';
+  note?: string | null;
+  created_at: string;
+}
+
+export interface UserProductStackUsage {
+  stack_item_id: number;
+  stack_id: number;
+  stack_name: string;
+  quantity: number;
+  dosage_text?: string | null;
+  intake_interval_days?: number | null;
 }
 
 interface UserProductFormProps {
   onClose: () => void;
   onSaved: (product: UserProduct) => void;
   initialProduct?: UserProduct;
+  copyProduct?: UserProduct;
+  draftOwnerId?: number;
 }
 
 interface IngredientPartState {
@@ -60,7 +85,7 @@ export interface IngredientFormRow {
   ingredientId: number | null;
   ingredientName: string;
   formId: number | null;
-  availableForms: Ingredient['forms'];
+  availableForms: NonNullable<Ingredient['forms']>;
   quantity: string;
   unit: string;
   basisQuantity: string;
@@ -73,24 +98,26 @@ const JSON_HEADERS: Record<string, string> = {
   'Content-Type': 'application/json',
 };
 
-const FORM_OPTIONS = ['Kapsel', 'Tablette', 'Pulver', 'Tropfen', 'Gel', 'Sonstige'];
+const FORM_OPTIONS = ['Kapsel', 'Tablette', 'Softgel', 'Pulver', 'Tropfen', 'Flüssigkeit', 'Öl', 'Spray', 'Gel', 'Gummibärchen', 'Beutel', 'Sonstige'];
 const SERVING_UNIT_OPTIONS = [
-  'Kapsel',
   'Kapseln',
-  'Tablette',
   'Tabletten',
   'Tropfen',
-  'Portion',
-  'Portionen',
   'Messlöffel',
   'Esslöffel',
   'Teelöffel',
-  'Softgel',
   'Softgels',
+  'Gummies',
+  'Beutel',
   'ml',
   'g',
   'Sonstige',
 ];
+
+const LEGACY_PRODUCT_DRAFT_KEY = 'supplement-stack:user-product-draft:v1';
+const PRODUCT_DRAFT_KEY_PREFIX = 'supplement-stack:user-product-draft:v2';
+const DISCARD_CHANGES_MESSAGE =
+  'Du hast noch nicht gespeicherte Änderungen. Möchtest du sie wirklich verwerfen? Produktfotos werden nicht im Entwurf gespeichert.';
 
 const MAX_INGREDIENT_ROWS = 50;
 const ROW_LIMIT_MESSAGE = 'Maximal 50 Wirkstoffe sind erlaubt.';
@@ -101,7 +128,49 @@ const inputClass =
 const fieldHintClass = 'text-xs text-gray-500 mt-1';
 
 const makeClientId = () => `ingredient_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-const formatInputNumber = (value: number) => String(value).replace('.', ',');
+const formatInputNumber = (value: number) => String(value);
+const formatDisplayNumber = (value: number) => String(value).replace('.', ',');
+const normalizeDraftNumber = (value: unknown) => typeof value === 'string' ? value.replace(',', '.') : '';
+
+function parseDecimal(value: string): number | null {
+  const normalized = value.trim().replace(',', '.');
+  if (!normalized) return null;
+  const parsed = Number.parseFloat(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function draftIngredientRows(rows: IngredientFormRow[]) {
+  return rows.map((row) => ({
+    basisQuantity: row.basisQuantity,
+    basisUnit: row.basisUnit,
+    formId: row.formId,
+    ingredientId: row.ingredientId,
+    ingredientName: row.ingredientName,
+    parts: row.parts,
+    quantity: row.quantity,
+    searchRelevant: row.searchRelevant,
+    unit: row.unit,
+  }));
+}
+
+function restoreDraftParts(value: unknown): IngredientPartFormRow[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry): IngredientPartFormRow[] => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return [];
+    const part = entry as Partial<IngredientPartFormRow>;
+    if (typeof part.partId !== 'number' || !Number.isSafeInteger(part.partId) || part.partId <= 0) return [];
+    return [{
+      basisQuantity: normalizeDraftNumber(part.basisQuantity),
+      basisUnit: typeof part.basisUnit === 'string' ? part.basisUnit : '',
+      partId: part.partId,
+      partName: typeof part.partName === 'string' ? part.partName : 'Wirkstoffteil',
+      partStatus: typeof part.partStatus === 'string' ? part.partStatus : null,
+      quantity: normalizeDraftNumber(part.quantity),
+      searchRelevant: part.searchRelevant !== false,
+      unit: typeof part.unit === 'string' ? part.unit : '',
+    }];
+  });
+}
 
 function massInMilligrams(value: number, unit: string): number | null {
   const normalized = unit.trim().toLowerCase().replace('μ', 'µ');
@@ -115,30 +184,35 @@ function normalizedBasisUnit(value: string): string {
   return value.trim().toLocaleLowerCase('de').replace(/\s+/g, ' ');
 }
 
-export default function UserProductForm({ onClose, onSaved, initialProduct }: UserProductFormProps) {
+export default function UserProductForm({ onClose, onSaved, initialProduct, copyProduct, draftOwnerId }: UserProductFormProps) {
   const isEdit = initialProduct !== undefined;
+  const sourceProduct = initialProduct ?? copyProduct;
+  const navigationContext = useContext(UNSAFE_NavigationContext);
+  const draftKey = draftOwnerId == null ? null : `${PRODUCT_DRAFT_KEY_PREFIX}:${draftOwnerId}`;
 
-  const [name, setName] = useState(initialProduct?.name ?? '');
-  const [brand, setBrand] = useState(initialProduct?.brand ?? '');
-  const [form, setForm] = useState(initialProduct?.form ?? '');
-  const [price, setPrice] = useState(initialProduct?.price != null ? formatInputNumber(initialProduct.price) : '');
-  const [imageUrl, setImageUrl] = useState(initialProduct?.image_url ?? '');
+  const [name, setName] = useState(sourceProduct?.name ? `${sourceProduct.name}${copyProduct ? ' – Kopie' : ''}` : '');
+  const [brand, setBrand] = useState(sourceProduct?.brand ?? '');
+  const [form, setForm] = useState(sourceProduct?.form ?? '');
+  const [price, setPrice] = useState(sourceProduct?.price != null ? formatInputNumber(sourceProduct.price) : '');
+  const [imageUrl, setImageUrl] = useState(sourceProduct?.image_url ?? '');
   const [servingSize, setServingSize] = useState(
-    initialProduct?.serving_size != null ? formatInputNumber(initialProduct.serving_size) : ''
+    sourceProduct?.serving_size != null ? formatInputNumber(sourceProduct.serving_size) : ''
   );
-  const [servingUnit, setServingUnit] = useState(initialProduct?.serving_unit ?? '');
-  const [servingsPerContainer, setServingsPerContainer] = useState(
-    initialProduct?.servings_per_container != null ? formatInputNumber(initialProduct.servings_per_container) : ''
+  const [servingUnit, setServingUnit] = useState(sourceProduct?.serving_unit ?? '');
+  const [packageInputMode, setPackageInputMode] = useState<'units' | 'portions'>('portions');
+  const [packageAmount, setPackageAmount] = useState(
+    sourceProduct?.servings_per_container != null ? formatInputNumber(sourceProduct.servings_per_container) : ''
   );
   const [containerCount, setContainerCount] = useState(
-    initialProduct?.container_count != null ? formatInputNumber(initialProduct.container_count) : '1'
+    sourceProduct?.container_count != null ? formatInputNumber(sourceProduct.container_count) : '1'
   );
-  const [shopLink, setShopLink] = useState(initialProduct?.shop_link ?? '');
-  const isAffiliate = Boolean(initialProduct?.is_affiliate);
-  const [notes, setNotes] = useState(initialProduct?.notes ?? '');
+  const [shopLink, setShopLink] = useState(sourceProduct?.shop_link ?? '');
+  const isAffiliate = Boolean(sourceProduct?.is_affiliate);
+  const [notes, setNotes] = useState(sourceProduct?.notes ?? '');
   const [showIngredientSection, setShowIngredientSection] = useState(true);
+  const [showExpertDetails, setShowExpertDetails] = useState(false);
   const [ingredientRows, setIngredientRows] = useState<IngredientFormRow[]>(() => {
-    const mapped: IngredientFormRow[] = (initialProduct?.ingredients ?? []).map((ingredient): IngredientFormRow => ({
+    const mapped: IngredientFormRow[] = (sourceProduct?.ingredients ?? []).map((ingredient): IngredientFormRow => ({
       clientId: makeClientId(),
       ingredientId: ingredient.ingredient_id,
       ingredientName: ingredient.ingredient_name ?? `ID ${ingredient.ingredient_id}`,
@@ -172,19 +246,28 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
         quantity: '',
         unit: '',
         basisQuantity: '',
-        basisUnit: initialProduct?.serving_unit ?? '',
+        basisUnit: sourceProduct?.serving_unit ?? '',
         searchRelevant: true,
         parts: [],
       },
     ];
   });
   const [rowIngredientParts, setRowIngredientParts] = useState<Record<string, IngredientPartState>>({});
+  const hydratedFormRowsRef = useRef(new Set<string>());
 
   const [showCrop, setShowCrop] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [draftRestored, setDraftRestored] = useState(false);
+  const [draftHydrated, setDraftHydrated] = useState(false);
+  const restoringPopRef = useRef(false);
 
   const isIngredientLimitReached = ingredientRows.length >= MAX_INGREDIENT_ROWS;
+  const productFormOptions = useMemo(() => {
+    const current = form.trim();
+    return current && !FORM_OPTIONS.includes(current) ? [...FORM_OPTIONS, current] : FORM_OPTIONS;
+  }, [form]);
   const servingUnitOptions = useMemo(() => {
     const normalized = servingUnit.trim();
     if (!normalized || SERVING_UNIT_OPTIONS.includes(normalized)) {
@@ -192,6 +275,220 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
     }
     return [...SERVING_UNIT_OPTIONS, normalized];
   }, [servingUnit]);
+
+  const formSnapshot = useMemo(() => JSON.stringify({
+    brand,
+    containerCount,
+    form,
+    imageUrl,
+    ingredientRows: draftIngredientRows(ingredientRows),
+    name,
+    notes,
+    packageAmount,
+    packageInputMode,
+    price,
+    servingSize,
+    servingUnit,
+    shopLink,
+  }), [
+    brand,
+    containerCount,
+    form,
+    imageUrl,
+    ingredientRows,
+    name,
+    notes,
+    packageAmount,
+    packageInputMode,
+    price,
+    servingSize,
+    servingUnit,
+    shopLink,
+  ]);
+  const initialSnapshotRef = useRef(formSnapshot);
+  const isDirty = formSnapshot !== initialSnapshotRef.current;
+
+  useEffect(() => {
+    if (isEdit || copyProduct) {
+      setDraftHydrated(true);
+      return;
+    }
+    try {
+      window.localStorage.removeItem(LEGACY_PRODUCT_DRAFT_KEY);
+      if (!draftKey) {
+        setDraftHydrated(true);
+        return;
+      }
+      const raw = window.localStorage.getItem(draftKey);
+      if (!raw) {
+        setDraftHydrated(true);
+        return;
+      }
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      const readText = (key: string) => typeof parsed[key] === 'string' ? String(parsed[key]) : '';
+      setName(readText('name'));
+      setBrand(readText('brand'));
+      setForm(readText('form'));
+      setPrice(normalizeDraftNumber(parsed.price));
+      setImageUrl(readText('imageUrl'));
+      setServingSize(normalizeDraftNumber(parsed.servingSize));
+      setServingUnit(readText('servingUnit'));
+      setPackageAmount(normalizeDraftNumber(parsed.packageAmount));
+      setContainerCount(normalizeDraftNumber(parsed.containerCount) || '1');
+      setShopLink(readText('shopLink'));
+      setNotes(readText('notes'));
+      setPackageInputMode(parsed.packageInputMode === 'units' ? 'units' : 'portions');
+      if (Array.isArray(parsed.ingredientRows)) {
+        const restoredRows = parsed.ingredientRows.flatMap((entry): IngredientFormRow[] => {
+          if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return [];
+          const row = entry as Partial<IngredientFormRow>;
+          return [{
+            clientId: makeClientId(),
+            ingredientId: typeof row.ingredientId === 'number' ? row.ingredientId : null,
+            ingredientName: typeof row.ingredientName === 'string' ? row.ingredientName : '',
+            formId: typeof row.formId === 'number' ? row.formId : null,
+            availableForms: [],
+            quantity: normalizeDraftNumber(row.quantity),
+            unit: typeof row.unit === 'string' ? row.unit : '',
+            basisQuantity: normalizeDraftNumber(row.basisQuantity),
+            basisUnit: typeof row.basisUnit === 'string' ? row.basisUnit : '',
+            searchRelevant: row.searchRelevant !== false,
+            parts: restoreDraftParts(row.parts),
+          }];
+        });
+        if (restoredRows.length > 0) setIngredientRows(restoredRows);
+      }
+      setDraftRestored(true);
+    } catch {
+      if (draftKey) window.localStorage.removeItem(draftKey);
+    } finally {
+      setDraftHydrated(true);
+    }
+  }, [copyProduct, draftKey, isEdit]);
+
+  useEffect(() => {
+    if (!draftHydrated || !draftKey || isEdit || !isDirty) return;
+    const timer = window.setTimeout(() => {
+      const snapshot = JSON.parse(formSnapshot) as Record<string, unknown>;
+      if (typeof snapshot.imageUrl === 'string' && snapshot.imageUrl.startsWith('data:')) {
+        snapshot.imageUrl = '';
+      }
+      window.localStorage.setItem(draftKey, JSON.stringify(snapshot));
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [draftHydrated, draftKey, formSnapshot, isDirty, isEdit]);
+
+  useEffect(() => {
+    if (!isDirty) return;
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warnBeforeUnload);
+    return () => window.removeEventListener('beforeunload', warnBeforeUnload);
+  }, [isDirty]);
+
+  useEffect(() => {
+    if (!isDirty) {
+      restoringPopRef.current = false;
+      return;
+    }
+    const guardBrowserBack = (event: PopStateEvent) => {
+      if (restoringPopRef.current) {
+        restoringPopRef.current = false;
+        return;
+      }
+      if (window.confirm(DISCARD_CHANGES_MESSAGE)) return;
+      event.stopImmediatePropagation();
+      restoringPopRef.current = true;
+      window.history.go(1);
+    };
+    window.addEventListener('popstate', guardBrowserBack, true);
+    return () => {
+      window.removeEventListener('popstate', guardBrowserBack, true);
+      restoringPopRef.current = false;
+    };
+  }, [isDirty]);
+
+  useEffect(() => {
+    if (!isDirty || !navigationContext?.navigator) return;
+    const navigator = navigationContext.navigator;
+    const originalPush = navigator.push;
+    const originalReplace = navigator.replace;
+    const confirmNavigation = () => window.confirm(DISCARD_CHANGES_MESSAGE);
+    const guardedPush: typeof navigator.push = (...args) => {
+      if (confirmNavigation()) originalPush.apply(navigator, args);
+    };
+    const guardedReplace: typeof navigator.replace = (...args) => {
+      if (confirmNavigation()) originalReplace.apply(navigator, args);
+    };
+    navigator.push = guardedPush;
+    navigator.replace = guardedReplace;
+    return () => {
+      if (navigator.push === guardedPush) navigator.push = originalPush;
+      if (navigator.replace === guardedReplace) navigator.replace = originalReplace;
+    };
+  }, [isDirty, navigationContext?.navigator]);
+
+  const requestClose = () => {
+    if (!isDirty) {
+      onClose();
+      return;
+    }
+    const discard = window.confirm(DISCARD_CHANGES_MESSAGE);
+    if (!discard) return;
+    if (!isEdit && draftKey) window.localStorage.removeItem(draftKey);
+    onClose();
+  };
+
+  const requestFormClose = () => {
+    if (showCrop) {
+      setShowCrop(false);
+      return;
+    }
+    requestClose();
+  };
+
+  const clearFieldError = (key: string) => {
+    setFieldErrors((current) => {
+      if (!current[key]) return current;
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+  };
+
+  const failField = (key: string, message: string, elementId = key) => {
+    setFieldErrors({ [key]: message });
+    setError('');
+    window.setTimeout(() => document.getElementById(elementId)?.focus(), 0);
+  };
+
+  const packageEquivalence = useMemo(() => {
+    const amount = parseDecimal(packageAmount);
+    const unitsPerPortion = parseDecimal(servingSize);
+    if (amount == null || amount <= 0 || unitsPerPortion == null || unitsPerPortion <= 0 || !servingUnit) return null;
+    const units = packageInputMode === 'units' ? amount : amount * unitsPerPortion;
+    const portions = packageInputMode === 'portions' ? amount : amount / unitsPerPortion;
+    if (!Number.isFinite(units) || !Number.isFinite(portions)) return null;
+    return {
+      portions,
+      text: packageInputMode === 'units'
+        ? `${formatDisplayNumber(amount)} ${servingUnit} entsprechen ${formatDisplayNumber(portions)} Portionen.`
+        : `${formatDisplayNumber(amount)} Portionen entsprechen ${formatDisplayNumber(units)} ${servingUnit}.`,
+    };
+  }, [packageAmount, packageInputMode, servingSize, servingUnit]);
+
+  const changePackageInputMode = (nextMode: 'units' | 'portions') => {
+    if (nextMode === packageInputMode) return;
+    const amount = parseDecimal(packageAmount);
+    const unitsPerPortion = parseDecimal(servingSize);
+    if (amount != null && amount > 0 && unitsPerPortion != null && unitsPerPortion > 0) {
+      setPackageAmount(formatInputNumber(nextMode === 'units' ? amount * unitsPerPortion : amount / unitsPerPortion));
+    }
+    setPackageInputMode(nextMode);
+    clearFieldError('packageAmount');
+  };
 
   const defaultBasisUnit = () => servingUnit.trim();
 
@@ -256,10 +553,20 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
       if (row.ingredientId != null && !rowIngredientParts[row.clientId]) {
         void loadIngredientParts(row.clientId, row.ingredientId);
       }
+      if (
+        row.ingredientId != null
+        && row.availableForms.length === 0
+        && !hydratedFormRowsRef.current.has(row.clientId)
+      ) {
+        hydratedFormRowsRef.current.add(row.clientId);
+        void Promise.resolve(getIngredient(row.ingredientId))
+          .then((detail) => updateIngredientRow(row.clientId, { availableForms: detail.forms ?? [] }))
+          .catch(() => undefined);
+      }
     });
-  // Initial/edit hydration only; selections call the loader directly.
+  // The loaders are guarded per row; including their state would only repeat completed work.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [ingredientRows]);
 
   const addIngredientRow = () => {
     if (isIngredientLimitReached) {
@@ -293,10 +600,14 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
     updateIngredientRow(clientId, {
       ingredientId: ingredient.id,
       ingredientName: ingredient.name,
-      formId: null,
+      formId: ingredient.matched_form_id ?? null,
       availableForms: forms,
+      basisQuantity: servingSize.trim(),
+      basisUnit: servingUnit.trim(),
+      searchRelevant: true,
       parts: [],
     });
+    clearFieldError(`ingredient-${clientId}`);
     await loadIngredientParts(clientId, ingredient.id);
   };
 
@@ -314,13 +625,6 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
       parts: [],
     });
     clearIngredientPartState(clientId);
-  };
-
-  const parseDecimal = (value: string): number | null => {
-    const normalized = value.trim().replace(',', '.');
-    if (!normalized) return null;
-    const parsed = Number.parseFloat(normalized);
-    return Number.isFinite(parsed) ? parsed : null;
   };
 
   const getIngredientPartState = (clientId: string) => rowIngredientParts[clientId];
@@ -546,63 +850,75 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError('');
+    setFieldErrors({});
 
     const trimmedName = name.trim();
     if (!trimmedName) {
-      setError('Bitte einen Produktnamen eingeben.');
+      failField('name', 'Bitte gib einen Produktnamen ein.');
       return;
     }
 
     const trimmedBrand = brand.trim();
     if (!trimmedBrand) {
-      setError('Bitte Marke oder Hersteller eingeben.');
+      failField('brand', 'Bitte gib die Marke oder den Hersteller ein.');
       return;
     }
 
     if (!form) {
-      setError('Bitte eine Produktform wählen.');
+      failField('form', 'Bitte wähle die Produktform aus.');
       return;
     }
 
     const parsedPrice = parseDecimal(price);
     if (parsedPrice === null || parsedPrice <= 0) {
-      setError('Bitte einen gültigen Preis pro Packung eingeben.');
+      failField('price', 'Bitte gib den Preis für eine Packung ein.');
       return;
     }
 
     const parsedServingSize = parseDecimal(servingSize);
     if (parsedServingSize === null || parsedServingSize <= 0) {
-      setError('Bitte eine gültige Portionsgröße eingeben.');
+      failField('servingSize', 'Bitte gib an, aus wie vielen Einheiten eine Portion besteht.');
       return;
     }
 
     const trimmedServingUnit = servingUnit.trim();
     if (!trimmedServingUnit) {
-      setError('Bitte eine Einheit pro Portion eingeben.');
+      failField('servingUnit', 'Bitte wähle die Einheit der Portion aus.');
       return;
     }
 
-    const parsedServingsPerContainer = Number.parseInt(servingsPerContainer, 10);
-    if (Number.isNaN(parsedServingsPerContainer) || parsedServingsPerContainer <= 0) {
-      setError('Bitte die Portionen pro Behälter eingeben.');
+    const parsedPackageAmount = parseDecimal(packageAmount);
+    if (parsedPackageAmount === null || parsedPackageAmount <= 0) {
+      failField('packageAmount', 'Bitte gib den Inhalt eines Behälters ein.');
       return;
     }
+    const calculatedPortions = packageInputMode === 'portions'
+      ? parsedPackageAmount
+      : parsedPackageAmount / parsedServingSize;
+    if (!Number.isInteger(calculatedPortions) || calculatedPortions <= 0) {
+      failField(
+        'packageAmount',
+        `Der Packungsinhalt muss mit ${formatDisplayNumber(parsedServingSize)} ${trimmedServingUnit} pro Portion eine ganze Anzahl Portionen ergeben.`,
+      );
+      return;
+    }
+    const parsedServingsPerContainer = calculatedPortions;
 
     const parsedContainerCount = Number.parseInt(containerCount, 10);
     if (Number.isNaN(parsedContainerCount) || parsedContainerCount <= 0) {
-      setError('Bitte die Anzahl der Behälter eingeben.');
+      failField('containerCount', 'Bitte gib die Anzahl der Behälter in der Packung ein.');
       return;
     }
 
     if (ingredientRows.length > MAX_INGREDIENT_ROWS) {
-      setError(`${ROW_LIMIT_MESSAGE} Bitte entferne zuerst überzählige Einträge.`);
+      failField('ingredients', `${ROW_LIMIT_MESSAGE} Bitte entferne zuerst überzählige Einträge.`, 'ingredients-section');
       setShowIngredientSection(true);
       return;
     }
 
     const ingredientBuild = buildIngredientRows();
     if (ingredientBuild.error) {
-      setError(ingredientBuild.error);
+      failField('ingredients', ingredientBuild.error, 'ingredients-section');
       setShowIngredientSection(true);
       return;
     }
@@ -620,8 +936,9 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
       container_count: number;
       is_affiliate: number;
       image_url?: string | null;
-      shop_link?: string;
-      notes?: string;
+      shop_link: string | null;
+      notes: string | null;
+      expected_version?: number;
       ingredients: UserProductIngredientType[];
     } = {
       name: trimmedName,
@@ -633,12 +950,13 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
       servings_per_container: parsedServingsPerContainer,
       container_count: parsedContainerCount,
       is_affiliate: isAffiliate ? 1 : 0,
+      shop_link: shopLink.trim() || null,
+      notes: notes.trim() || null,
       ingredients: normalizedIngredients,
     };
+    if (isEdit) body.expected_version = initialProduct.version;
     if (imageUrl.trim()) body.image_url = imageUrl.trim();
     else if (isEdit && initialProduct?.image_url) body.image_url = null;
-    if (shopLink.trim()) body.shop_link = shopLink.trim();
-    if (notes.trim()) body.notes = notes.trim();
 
     setSubmitting(true);
     try {
@@ -659,13 +977,12 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
 
       const data = await res.json();
       const responseProduct = data.product as UserProduct | undefined;
-      const ingredientsForSave = responseProduct?.ingredients ?? normalizedIngredients;
-      const saved: UserProduct = {
-        ...(isEdit ? initialProduct! : { id: data.id, status: 'pending' }),
-        ...(responseProduct ?? (body as UserProduct)),
-        ingredients: ingredientsForSave,
-      };
+      if (!responseProduct || !Number.isSafeInteger(responseProduct.version) || responseProduct.version < 1) {
+        throw new Error('Die gespeicherte Produktversion fehlt. Bitte lade die Seite neu.');
+      }
+      const saved: UserProduct = responseProduct;
 
+      if (!isEdit && draftKey) window.localStorage.removeItem(draftKey);
       onSaved(saved);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Unbekannter Fehler.';
@@ -690,8 +1007,10 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
 
     return (
       <div className="rounded-lg border border-indigo-100 bg-indigo-50/60 p-2 text-sm">
-        <p className="text-xs font-semibold text-gray-700">Enthaltene Sub-Wirkstoffe</p>
-        <p className="mt-0.5 text-xs text-gray-500">Teilmengen sind in der Hauptmenge enthalten und werden nicht addiert.</p>
+        <p className="text-xs font-semibold text-gray-700">Enthaltene Wirkstoffteile</p>
+        <p className="mt-0.5 text-xs text-gray-500">
+          Diese Teile werden nur dem gewählten Hauptwirkstoff zugeordnet. Sie erscheinen nie als eigener auswählbarer Wirkstoff.
+        </p>
         <div className="mt-2 flex flex-wrap gap-2">
           {availableParts.filter((part) => !row.parts.some((entry) => entry.partId === part.part_id)).map((part) => (
             <button
@@ -765,7 +1084,7 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
                     onChange={(event) => updateIngredientPart(row.clientId, part.partId, { searchRelevant: event.target.checked })}
                     className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                   />
-                  Für Suche und Produktvergleich berücksichtigen
+                  Produkt auch über diesen enthaltenen Wirkstoffteil finden
                 </label>
               </fieldset>
             ))}
@@ -776,13 +1095,13 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
   };
 
   const renderIngredientSection = () => (
-    <div className="border border-indigo-100 rounded-2xl overflow-hidden">
+    <div id="ingredients-section" className="border border-indigo-100 rounded-2xl overflow-hidden" tabIndex={-1}>
       <button
         type="button"
         onClick={() => setShowIngredientSection((prev) => !prev)}
         className="w-full px-4 py-3 bg-indigo-50 flex items-center justify-between gap-2 text-sm font-medium text-indigo-700"
       >
-        <span>Wirkstoffe</span>
+        <span>3. Wirkstoffe</span>
         <span className="flex items-center gap-2 text-xs">
           {ingredientRows.length} Eintrag{ingredientRows.length === 1 ? '' : 'e'}
           {showIngredientSection ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -791,9 +1110,25 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
 
       {showIngredientSection && (
         <div className="p-3 space-y-3">
-          <p className="text-xs text-gray-500">
-            Tipp: Markiere den Haken nur bei Wirkstoffen, die für Suche und Produktvergleich genutzt werden sollen.
+          <p className="text-sm text-gray-600">
+            Suche den Wirkstoff, der auf dem Etikett steht. Die Suche berücksichtigt auch enthaltene Wirkstoffteile:
+            Suchst du zum Beispiel nach EPA, findest du den zugehörigen Omega-3-Hauptwirkstoff.
           </p>
+          <button
+            type="button"
+            onClick={() => setShowExpertDetails((current) => !current)}
+            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            aria-expanded={showExpertDetails}
+          >
+            {showExpertDetails ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            Weitere Angaben für Experten
+          </button>
+
+          {fieldErrors.ingredients && (
+            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">
+              {fieldErrors.ingredients}
+            </p>
+          )}
 
           {ingredientRows.map((row, index) => (
             <div
@@ -810,9 +1145,9 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
                     onSelect={(ingredient) => handleSelectIngredient(row.clientId, ingredient)}
                     placeholder={row.ingredientId ? 'Anderen Wirkstoff suchen' : 'Wirkstoff suchen'}
                   />
-                  {row.ingredientId && row.availableForms && row.availableForms.length > 0 && (
+                  {showExpertDetails && row.ingredientId && row.availableForms && row.availableForms.length > 0 && (
                     <label className="mt-2 flex flex-col gap-1 text-sm font-medium text-gray-700">
-                      Wirkstoffform
+                      Darreichungsform dieses Wirkstoffs
                       <select
                         value={row.formId ?? ''}
                         onChange={(e) =>
@@ -822,7 +1157,7 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
                         }
                         className={inputClass}
                       >
-                        <option value="">Basis-Wirkstoff / keine spezielle Form</option>
+                        <option value="">Keine besondere Form angegeben</option>
                         {row.availableForms.map((ingredientForm) => (
                           <option key={ingredientForm.id ?? ingredientForm.name} value={ingredientForm.id ?? ''}>
                             {ingredientForm.name}
@@ -854,64 +1189,78 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
 
               <div>
                 <label className={labelClass}>
-                  Wirkstoffmenge pro Einheit
+                  Wirkstoffmenge pro Portion
                   {row.searchRelevant && <span className="text-red-500 ml-1">*</span>}
                 </label>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <input
                     type="number"
                     value={row.quantity}
                     onChange={(e) => updateIngredientRow(row.clientId, { quantity: e.target.value })}
                     className={inputClass}
-                    placeholder="z.B. 1000"
+                    placeholder="z. B. 1000"
                     step="any"
                     min="0.000001"
+                    aria-label={`Wirkstoffmenge ${row.ingredientName || index + 1}`}
                   />
                   <input
                     type="text"
                     value={row.unit}
                     onChange={(e) => updateIngredientRow(row.clientId, { unit: e.target.value })}
                     className={inputClass}
-                    placeholder="z.B. mg"
+                    placeholder="z. B. mg"
+                    aria-label={`Einheit der Wirkstoffmenge ${row.ingredientName || index + 1}`}
                   />
-                  <label className="text-xs text-gray-500 self-end">pro</label>
-                  <input
-                    type="number"
-                    value={row.basisQuantity}
-                    onChange={(e) => updateIngredientRow(row.clientId, { basisQuantity: e.target.value })}
-                    className={inputClass}
-                    placeholder="z.B. 4"
-                    step="any"
-                    min="0.000001"
-                  />
-                  <input
-                    type="text"
-                    value={row.basisUnit}
-                    onChange={(e) => updateIngredientRow(row.clientId, { basisUnit: e.target.value })}
-                    className={inputClass}
-                    placeholder={`z.B. ${defaultBasisUnit() || 'Stück'}`}
-                  />
-                  <div />
                 </div>
-                <p className={fieldHintClass}>Beispiel: 2000 IE pro 3 Tropfen oder 300 mg pro 2 Kapseln.</p>
-                {row.searchRelevant && (
-                  <p className={fieldHintClass}>
-                    Für Such- und Vergleichsauswertung bitte Menge, Einheit und Bezugsgröße ausfüllen.
-                  </p>
-                )}
+                <p className={fieldHintClass}>
+                  Gemeint ist die gesamte Wirkstoffmenge in einer Portion – nicht die Anzahl der Kapseln, Tropfen oder Löffel.
+                </p>
               </div>
 
-              <label className="inline-flex items-center gap-2 text-sm text-gray-700">
-                <input
-                  type="checkbox"
-                  checked={row.searchRelevant}
-                  onChange={(e) => updateIngredientRow(row.clientId, { searchRelevant: e.target.checked })}
-                  className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                />
-                Für Suche und Produktvergleich berücksichtigen
-              </label>
-
-              {renderIngredientParts(row)}
+              {showExpertDetails && (
+                <div className="space-y-3 rounded-xl bg-slate-50 p-3">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">Bezugsangabe vom Etikett</p>
+                    <p className="mb-2 text-xs text-slate-500">
+                      Nur ändern, wenn die Wirkstoffmenge auf dem Etikett nicht für genau eine Portion angegeben ist.
+                    </p>
+                    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                      <input
+                        type="number"
+                        value={row.basisQuantity}
+                        onChange={(e) => updateIngredientRow(row.clientId, { basisQuantity: e.target.value })}
+                        className={inputClass}
+                        placeholder={servingSize || 'z. B. 2'}
+                        step="any"
+                        min="0.000001"
+                        aria-label={`Bezugsmenge ${row.ingredientName || index + 1}`}
+                      />
+                      <span className="text-xs text-slate-500">×</span>
+                      <input
+                        type="text"
+                        value={row.basisUnit}
+                        onChange={(e) => updateIngredientRow(row.clientId, { basisUnit: e.target.value })}
+                        className={inputClass}
+                        placeholder={defaultBasisUnit() || 'Einheit'}
+                        aria-label={`Bezugseinheit ${row.ingredientName || index + 1}`}
+                      />
+                    </div>
+                  </div>
+                  <label className="flex items-start gap-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={row.searchRelevant}
+                      onChange={(e) => updateIngredientRow(row.clientId, { searchRelevant: e.target.checked })}
+                      className="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span>
+                      Dieses Produkt finden, wenn jemand nach {row.ingredientName || 'diesem Wirkstoff'} sucht.
+                      <span className="mt-0.5 block text-xs text-gray-500">Empfohlen und deshalb bereits ausgewählt.</span>
+                    </span>
+                  </label>
+                  {renderIngredientParts(row)}
+                </div>
+              )}
             </div>
           ))}
 
@@ -934,207 +1283,262 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
 
   return (
     <>
-      <ModalWrapper onClose={onClose} title={isEdit ? 'Produkt bearbeiten' : 'Neues Produkt erstellen'}>
+      <ModalWrapper
+        onClose={requestFormClose}
+        size="lg"
+        title={isEdit ? 'Produkt bearbeiten' : copyProduct ? 'Bearbeitbare Kopie anlegen' : 'Neues Produkt erstellen'}
+      >
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div>
-            <label className={labelClass}>Produktfoto</label>
-            <div className="flex items-start gap-4 max-[430px]:flex-col">
-              <div className="relative flex-shrink-0">
-                {imageUrl ? (
-                  <img
-                    src={imageUrl}
-                    alt="Vorschau"
-                    className="w-16 h-16 rounded-full object-cover border-2 border-indigo-100"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = '';
-                    }}
-                  />
-                ) : (
-                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-indigo-100 to-purple-100 flex items-center justify-center text-xs text-slate-500 select-none">
-                    IMG
-                  </div>
-                )}
-                {imageUrl && (
+          {copyProduct && (
+            <p className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+              {copyProduct.visibility === 'public' || copyProduct.published_product_id != null
+                ? 'Das öffentliche Original bleibt unverändert. Du erstellst eine private Kopie, die du bearbeiten kannst.'
+                : 'Das geprüfte private Original bleibt unverändert. Du erstellst eine private Kopie, die du bearbeiten kannst.'}
+            </p>
+          )}
+          {draftRestored && (
+            <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="status">
+              Dein Entwurf aus diesem Browser wurde wiederhergestellt. Produktfotos werden nicht im Entwurf gespeichert.
+            </p>
+          )}
+
+          <section className="space-y-4 rounded-2xl border border-slate-200 p-4" aria-labelledby="product-basics-heading">
+            <div>
+              <h3 id="product-basics-heading" className="font-bold text-slate-900">1. Produkt</h3>
+              <p className="mt-1 text-sm text-slate-600">Übernimm Name, Marke und Produktform direkt von der Packung.</p>
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <label htmlFor="name" className={labelClass}>Produktname <span className="text-red-500">*</span></label>
+                <input
+                  id="name"
+                  type="text"
+                  value={name}
+                  onChange={(e) => { setName(e.target.value); clearFieldError('name'); }}
+                  className={inputClass}
+                  placeholder="z. B. Omega-3 Fischöl"
+                  aria-invalid={Boolean(fieldErrors.name)}
+                  aria-describedby={fieldErrors.name ? 'name-error' : undefined}
+                  autoFocus={!isEdit}
+                />
+                {fieldErrors.name && <p id="name-error" className="mt-1 text-sm text-red-700">{fieldErrors.name}</p>}
+              </div>
+              <div>
+                <label htmlFor="brand" className={labelClass}>Marke / Hersteller <span className="text-red-500">*</span></label>
+                <input
+                  id="brand"
+                  type="text"
+                  value={brand}
+                  onChange={(e) => { setBrand(e.target.value); clearFieldError('brand'); }}
+                  className={inputClass}
+                  placeholder="z. B. Sunday Natural"
+                  aria-invalid={Boolean(fieldErrors.brand)}
+                />
+                {fieldErrors.brand && <p className="mt-1 text-sm text-red-700">{fieldErrors.brand}</p>}
+              </div>
+              <div>
+                <label htmlFor="form" className={labelClass}>Produktform <span className="text-red-500">*</span></label>
+                <select
+                  id="form"
+                  value={form}
+                  onChange={(e) => { setForm(e.target.value); clearFieldError('form'); }}
+                  className={inputClass}
+                  aria-invalid={Boolean(fieldErrors.form)}
+                >
+                  <option value="">Bitte auswählen</option>
+                  {productFormOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+                </select>
+                {fieldErrors.form && <p className="mt-1 text-sm text-red-700">{fieldErrors.form}</p>}
+              </div>
+              <div>
+                <label htmlFor="price" className={labelClass}>Packungspreis <span className="text-red-500">*</span></label>
+                <input
+                  id="price"
+                  type="number"
+                  inputMode="decimal"
+                  value={price}
+                  onChange={(e) => { setPrice(e.target.value); clearFieldError('price'); }}
+                  className={inputClass}
+                  placeholder="z. B. 29,99"
+                  step="0.01"
+                  min="0.01"
+                  aria-invalid={Boolean(fieldErrors.price)}
+                />
+                <p className={fieldHintClass}>Preis für die gesamte Packung, nicht die Monatskosten.</p>
+                {fieldErrors.price && <p className="mt-1 text-sm text-red-700">{fieldErrors.price}</p>}
+              </div>
+            </div>
+
+            <div className="rounded-xl bg-slate-50 p-3">
+              <label className={labelClass}>Produktfoto (optional)</label>
+              <div className="flex items-start gap-4 max-[430px]:flex-col">
+                <div className="relative flex-shrink-0">
+                  {imageUrl ? (
+                    <img
+                      src={imageUrl}
+                      alt="Vorschau des Produktfotos"
+                      className="h-20 w-20 rounded-xl border-2 border-indigo-100 object-cover"
+                      onError={(event) => { (event.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                    />
+                  ) : (
+                    <div className="flex h-20 w-20 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-100 to-purple-100 text-xs text-slate-500">Kein Foto</div>
+                  )}
+                  {imageUrl && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm('Möchtest du das Produktfoto wirklich entfernen?')) setImageUrl('');
+                      }}
+                      className="absolute -right-2 -top-2 flex h-9 w-9 items-center justify-center rounded-full bg-red-600 text-white hover:bg-red-700"
+                      aria-label="Produktfoto entfernen"
+                    ><X size={14} /></button>
+                  )}
+                </div>
+                <div className="flex flex-1 flex-col gap-2 max-[430px]:w-full">
                   <button
                     type="button"
-                    onClick={() => setImageUrl('')}
-                    className="absolute -right-2 -top-2 flex h-8 w-8 items-center justify-center rounded-full bg-red-500 text-white transition-colors hover:bg-red-600"
-                    aria-label="Foto entfernen"
+                    onClick={() => setShowCrop(true)}
+                    className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-white px-3 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-50"
                   >
-                    <X size={10} />
+                    <Camera size={16} /> {imageUrl ? 'Foto ändern' : 'Foto hochladen'}
                   </button>
-                )}
+                  <p className="text-xs leading-relaxed text-slate-500">
+                    JPEG, PNG oder WebP, höchstens 10 MB. Lade nur ein Foto hoch, das du verwenden darfst. Das Bild wird als Teil deiner Produktangaben gespeichert.
+                  </p>
+                  <details className="text-sm text-slate-600">
+                    <summary className="cursor-pointer font-medium">Stattdessen Bildadresse verwenden</summary>
+                    <input
+                      type="url"
+                      value={imageUrl.startsWith('data:') ? '' : imageUrl}
+                      onChange={(e) => setImageUrl(e.target.value)}
+                      className={`${inputClass} mt-2`}
+                      placeholder="https://…"
+                    />
+                    <p className={fieldHintClass}>Die fremde Website kann beim Laden des Bildes technische Zugriffsdaten erhalten.</p>
+                  </details>
+                </div>
               </div>
+            </div>
+          </section>
 
-              <div className="flex flex-1 flex-col gap-2 max-[430px]:w-full">
-                <button
-                  type="button"
-                  onClick={() => setShowCrop(true)}
-                  className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-indigo-200 px-3 py-2 text-xs font-medium text-indigo-600 transition-colors hover:bg-indigo-50"
-                >
-                  <Camera size={14} />
-                  {imageUrl ? 'Foto ändern' : 'Foto hochladen'}
-                </button>
+          <section className="space-y-4 rounded-2xl border border-slate-200 p-4" aria-labelledby="packaging-heading">
+            <div>
+              <h3 id="packaging-heading" className="font-bold text-slate-900">2. Packung und Portion</h3>
+              <p className="mt-1 text-sm text-slate-600">Damit Reichweite und Monatskosten später korrekt berechnet werden.</p>
+            </div>
+            <div>
+              <label className={labelClass}>Eine Portion besteht aus <span className="text-red-500">*</span></label>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <input
-                  type="text"
-                  value={imageUrl.startsWith('data:') ? '' : imageUrl}
-                  onChange={(e) => setImageUrl(e.target.value)}
+                  id="servingSize"
+                  type="number"
+                  inputMode="decimal"
+                  value={servingSize}
+                  onChange={(e) => { setServingSize(e.target.value); clearFieldError('servingSize'); }}
                   className={inputClass}
-                  placeholder="oder Bild-URL einfügen"
+                  placeholder="z. B. 2"
+                  step="any"
+                  min="0.000001"
+                  aria-label="Anzahl Einheiten pro Portion"
+                  aria-invalid={Boolean(fieldErrors.servingSize)}
                 />
+                <select
+                  id="servingUnit"
+                  value={servingUnit}
+                  onChange={(e) => { setServingUnit(e.target.value); clearFieldError('servingUnit'); }}
+                  className={inputClass}
+                  aria-label="Einheit der Portion"
+                  aria-invalid={Boolean(fieldErrors.servingUnit)}
+                >
+                  <option value="">Einheit auswählen</option>
+                  {servingUnitOptions.map((option) => <option key={option} value={option}>{option}</option>)}
+                </select>
+              </div>
+              {(fieldErrors.servingSize || fieldErrors.servingUnit) && (
+                <p className="mt-1 text-sm text-red-700">{fieldErrors.servingSize ?? fieldErrors.servingUnit}</p>
+              )}
+            </div>
+
+            <fieldset>
+              <legend className={labelClass}>Packungsinhalt angeben als</legend>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <label className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-sm ${packageInputMode === 'units' ? 'border-indigo-400 bg-indigo-50 text-indigo-900' : 'border-slate-200'}`}>
+                  <input type="radio" name="package-mode" checked={packageInputMode === 'units'} onChange={() => changePackageInputMode('units')} />
+                  {servingUnit || 'Einheiten'}
+                </label>
+                <label className={`flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-sm ${packageInputMode === 'portions' ? 'border-indigo-400 bg-indigo-50 text-indigo-900' : 'border-slate-200'}`}>
+                  <input type="radio" name="package-mode" checked={packageInputMode === 'portions'} onChange={() => changePackageInputMode('portions')} />
+                  Portionen
+                </label>
+              </div>
+            </fieldset>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label htmlFor="packageAmount" className={labelClass}>
+                  {packageInputMode === 'units' ? `${servingUnit || 'Einheiten'} pro Behälter` : 'Portionen pro Behälter'} <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="packageAmount"
+                  type="number"
+                  inputMode="decimal"
+                  value={packageAmount}
+                  onChange={(e) => { setPackageAmount(e.target.value); clearFieldError('packageAmount'); }}
+                  className={inputClass}
+                  placeholder={packageInputMode === 'units' ? 'z. B. 360' : 'z. B. 180'}
+                  step="any"
+                  min="0.000001"
+                  aria-invalid={Boolean(fieldErrors.packageAmount)}
+                />
+                {fieldErrors.packageAmount && <p className="mt-1 text-sm text-red-700">{fieldErrors.packageAmount}</p>}
+              </div>
+              <div>
+                <label htmlFor="containerCount" className={labelClass}>Behälter in dieser Packung <span className="text-red-500">*</span></label>
+                <input
+                  id="containerCount"
+                  type="number"
+                  inputMode="numeric"
+                  value={containerCount}
+                  onChange={(e) => { setContainerCount(e.target.value); clearFieldError('containerCount'); }}
+                  className={inputClass}
+                  placeholder="z. B. 1"
+                  step="1"
+                  min="1"
+                  aria-invalid={Boolean(fieldErrors.containerCount)}
+                />
+                {fieldErrors.containerCount && <p className="mt-1 text-sm text-red-700">{fieldErrors.containerCount}</p>}
               </div>
             </div>
-          </div>
-
-          <div>
-            <label className={labelClass}>
-              Produktname <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className={inputClass}
-              placeholder="z.B. Omega-3 Fischöl"
-              required
-              autoFocus={!isEdit}
-            />
-          </div>
-
-          <div>
-            <label className={labelClass}>
-              Marke / Hersteller <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={brand}
-              onChange={(e) => setBrand(e.target.value)}
-              className={inputClass}
-              placeholder="z.B. Now Foods"
-              required
-            />
-          </div>
-
-          <div>
-            <label className={labelClass}>
-              Form <span className="text-red-500">*</span>
-            </label>
-            <select value={form} onChange={(e) => setForm(e.target.value)} className={inputClass} required>
-              <option value="">-- bitte wählen --</option>
-              {FORM_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className={labelClass}>
-              Preis pro Packung <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="number"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              className={inputClass}
-              placeholder="z.B. 29.99 €"
-              step="0.01"
-              min="0.01"
-              required
-            />
-          </div>
-
-          <div>
-            <label className={labelClass}>
-              Dosierung pro Portion <span className="text-red-500">*</span>
-            </label>
-            <div className="flex gap-3 max-[430px]:flex-col">
-              <input
-                type="number"
-                value={servingSize}
-                onChange={(e) => setServingSize(e.target.value)}
-                className={inputClass}
-                placeholder="z.B. 1"
-                step="any"
-                min="0.01"
-                required
-              />
-              <select
-                value={servingUnit}
-                onChange={(e) => setServingUnit(e.target.value)}
-                className={inputClass}
-                required
-              >
-                <option value="">-- bitte auswählen --</option>
-                {servingUnitOptions.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <p className="mt-1 text-xs text-gray-500">Beispiel: 400 mg pro 1 Kapsel</p>
-          </div>
-
-          <div>
-            <label className={labelClass}>
-              Packungsinhalt / Portionen <span className="text-red-500">*</span>
-            </label>
-            <div className="flex gap-3 max-[430px]:flex-col">
-              <input
-                type="number"
-                value={servingsPerContainer}
-                onChange={(e) => setServingsPerContainer(e.target.value)}
-                className={inputClass}
-                placeholder="Portionen pro Behälter, z.B. 60"
-                step="1"
-                min="1"
-                required
-              />
-              <input
-                type="number"
-                value={containerCount}
-                onChange={(e) => setContainerCount(e.target.value)}
-                className={inputClass}
-                placeholder="Anzahl Behälter, z.B. 1"
-                step="1"
-                min="1"
-                required
-              />
-            </div>
-          </div>
+            {packageEquivalence && (
+              <p className="flex items-start gap-2 rounded-xl bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900" aria-live="polite">
+                <Info className="mt-0.5 shrink-0" size={16} /> {packageEquivalence.text}
+              </p>
+            )}
+          </section>
 
           {renderIngredientSection()}
 
-          <div>
-            <label className={labelClass}>Shop-Link</label>
-            <input
-              type="text"
-              value={shopLink}
-              onChange={(e) => setShopLink(e.target.value)}
-              className={inputClass}
-              placeholder="https://..."
-            />
-          </div>
+          <details className="rounded-2xl border border-slate-200 p-4">
+            <summary className="cursor-pointer font-bold text-slate-900">4. Weitere freiwillige Angaben</summary>
+            <div className="mt-4 space-y-4">
+              <div>
+                <label htmlFor="shopLink" className={labelClass}>Shop-Link</label>
+                <input id="shopLink" type="url" value={shopLink} onChange={(e) => setShopLink(e.target.value)} className={inputClass} placeholder="https://…" />
+              </div>
+              <div>
+                <label htmlFor="notes" className={labelClass}>Persönliche Notizen</label>
+                <textarea id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} rows={3} placeholder="Was möchtest du zu diesem Produkt festhalten?" />
+                <p className={fieldHintClass}>Diese Notiz ist nur in deinem Konto sichtbar.</p>
+              </div>
+            </div>
+          </details>
 
-          <div>
-            <label className={labelClass}>Notizen</label>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              className={inputClass}
-              rows={3}
-              placeholder="Persönliche Notizen zum Produkt."
-            />
-          </div>
-
-          {error && <p className="text-sm text-red-600 bg-red-50 rounded-xl px-3 py-2">{error}</p>}
+          {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700" role="alert">{error}</p>}
 
           <div className="flex justify-end gap-3 pt-1 max-[430px]:flex-col">
             <button
               type="button"
-              onClick={onClose}
+              onClick={requestClose}
               className="min-h-11 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
             >
               Abbrechen
@@ -1144,7 +1548,7 @@ export default function UserProductForm({ onClose, onSaved, initialProduct }: Us
               disabled={submitting}
               className="min-h-11 rounded-xl bg-gradient-to-r from-indigo-500 to-purple-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition-all hover:from-indigo-600 hover:to-purple-700 disabled:opacity-60"
             >
-              {submitting ? 'Speichere…' : isEdit ? 'Speichern' : 'Erstellen'}
+              {submitting ? 'Speichere…' : isEdit ? 'Änderungen speichern' : copyProduct ? 'Private Kopie erstellen' : 'Produkt erstellen'}
             </button>
           </div>
         </form>

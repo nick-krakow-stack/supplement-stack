@@ -17,6 +17,8 @@ import {
 type NutrientStatus = {
   ingredient_id: number;
   name: string;
+  category: string | null;
+  description: string | null;
   has_dge: boolean;
   has_studies: boolean;
 };
@@ -34,6 +36,18 @@ type IngredientSearchRow = {
 
 type IngredientSearchPayload = {
   ingredients: IngredientSearchRow[];
+};
+
+type ProjectionRow = {
+  row_kind: 'article' | 'status';
+  row_key: string;
+  payload_json: string;
+};
+
+type ProjectionTestDatabase = {
+  prepare: (sql: string) => {
+    all: <T>() => Promise<{ results: T[] }>;
+  };
 };
 
 const harnesses: ProductionKnowledgeHonoHarness[] = [];
@@ -97,6 +111,74 @@ function statusByIngredient(payload: KnowledgeOverviewPayload, ingredientId: num
 }
 
 describe.sequential('production Knowledge/R2 Hono integration', () => {
+  it('returns every active ingredient and deterministically repairs the legacy status shape', async () => {
+    const harness = createHarness();
+    createProductionKnowledgeSchema(harness);
+    for (let id = 1; id <= 92; id += 1) {
+      harness.run(
+        'INSERT INTO ingredients (id, name, category, description, is_active) VALUES (?, ?, ?, ?, 1)',
+        id,
+        `Aktiver Wirkstoff ${id}`,
+        id % 2 === 0 ? 'mineral' : 'other',
+        `Zentraler Kurztext ${id}`,
+      );
+    }
+    harness.run(
+      "INSERT INTO ingredients (id, name, category, description, is_active) VALUES (999, 'Inaktiv', 'other', 'Nicht sichtbar', 0)",
+    );
+
+    const firstResponse = await harness.fetch(new Request(
+      `https://test.local/api/knowledge?cfcheck=sha256:${'1'.repeat(64)}`,
+    ));
+    expect(firstResponse.headers.get('x-knowledge-overview-source')).toBe('live');
+    const firstPayload = await firstResponse.json() as KnowledgeOverviewPayload;
+    expect(firstPayload.nutrient_statuses).toHaveLength(92);
+    expect(firstPayload.nutrient_statuses.map((status) => status.ingredient_id)).toEqual(
+      Array.from({ length: 92 }, (_, index) => index + 1),
+    );
+    expect(firstPayload.nutrient_statuses).not.toContainEqual(expect.objectContaining({ ingredient_id: 999 }));
+    expect(firstPayload.nutrient_statuses[0]).toMatchObject({
+      category: 'other',
+      description: 'Zentraler Kurztext 1',
+    });
+
+    // Simulate the validly hashed 0095 payload shape that predates category
+    // and description. Its versions and hash look current, so only the
+    // explicit schema guard may reject and repair it.
+    harness.run(`
+      UPDATE knowledge_overview_projection_rows
+      SET payload_json = json_remove(payload_json, '$.category', '$.description')
+      WHERE row_kind = 'status'
+    `);
+    const db = harness.db as ProjectionTestDatabase;
+    const oldRows = (await db.prepare(`
+      SELECT row_kind, row_key, payload_json
+      FROM knowledge_overview_projection_rows rows
+      JOIN knowledge_overview_projection_meta meta ON meta.active_generation = rows.generation
+      ORDER BY row_kind, row_key
+    `).all<ProjectionRow>()).results;
+    const oldHash = await hashProductionKnowledgeOverviewRows(oldRows);
+    harness.run('UPDATE knowledge_overview_projection_meta SET content_hash = ?', oldHash);
+
+    const legacyResponse = await harness.fetch(new Request(
+      `https://test.local/api/knowledge?cfcheck=sha256:${'2'.repeat(64)}`,
+    ));
+    expect(legacyResponse.headers.get('x-knowledge-overview-source')).toBe('live');
+    expect((await legacyResponse.json() as KnowledgeOverviewPayload).nutrient_statuses).toHaveLength(92);
+
+    const repairedResponse = await harness.fetch(new Request(
+      `https://test.local/api/knowledge?cfcheck=sha256:${'3'.repeat(64)}`,
+    ));
+    expect(repairedResponse.headers.get('x-knowledge-overview-source')).toBe('projection');
+    const repairedPayload = await repairedResponse.json() as KnowledgeOverviewPayload;
+    expect(repairedPayload.nutrient_statuses).toHaveLength(92);
+    expect(repairedPayload.nutrient_statuses[91]).toMatchObject({
+      ingredient_id: 92,
+      category: 'mineral',
+      description: 'Zentraler Kurztext 92',
+    });
+  });
+
   it('guards append-only projection refreshes and keeps the previous generation on conflicts', async () => {
     const harness = createHarness();
     createProductionKnowledgeSchema(harness);

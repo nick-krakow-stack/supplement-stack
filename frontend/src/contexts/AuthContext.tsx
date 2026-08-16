@@ -13,7 +13,7 @@ interface AuthContextValue {
     extra?: {
       health_consent?: boolean;
       age?: number;
-      guideline_source?: string;
+      guideline_source?: 'DGE' | 'studien';
       return_to?: string;
     },
   ) => Promise<authApi.RegisterResponse>;
@@ -49,7 +49,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     extra?: {
       health_consent?: boolean;
       age?: number;
-      guideline_source?: string;
+      guideline_source?: 'DGE' | 'studien';
       return_to?: string;
     },
   ): Promise<authApi.RegisterResponse> => {

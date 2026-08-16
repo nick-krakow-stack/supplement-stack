@@ -29,14 +29,17 @@ export interface AdminStatsReferralSource {
   last_signup_at?: string | null;
 }
 
+export type GuidelineSource = 'DGE' | 'studien';
+
 export interface User {
   id: number;
   email: string;
-  age?: number;
-  guideline_source?: string;
+  age?: number | null;
+  guideline_source?: GuidelineSource | null;
   health_consent?: number;   // 0 or 1
   health_consent_at?: string;
   email_verified_at?: string | null;
+  created_at?: string;
   role: 'user' | 'admin';
 }
 
@@ -228,9 +231,6 @@ export interface StackItem {
   timing_label?: string | null;
   ingredient_timing_label?: string | null;
   sort_order?: number;
-  category_id?: number | null;
-  category_name?: string | null;
-  category_is_default?: boolean | null;
   click_url?: string | null;
   source_share_link_id?: number | null;
   creator_statement_snapshot?: string | null;
@@ -240,27 +240,16 @@ export interface StackItem {
   product?: Product;
 }
 
-export interface StackCategory {
-  id: number | string;
-  stack_id: number | string;
-  name: string;
-  sort_order: number;
-  is_default: boolean;
-}
-
 export interface Stack {
   id: number;
   user_id?: number;
   name: string;
-  family_member_id?: number | null;
-  family_member_first_name?: string | null;
   origin_party_id?: number | null;
   origin_party_name?: string | null;
   origin_party_type?: string | null;
   last_opened_at?: string | null;
   created_at: string;
   items?: StackItem[];
-  categories?: StackCategory[];
 }
 
 export interface Recommendation {
@@ -357,6 +346,8 @@ export interface KnowledgeArticleOverviewItem {
 export interface KnowledgeNutrientStatus {
   ingredient_id: number | string;
   name?: string | null;
+  category?: string | null;
+  description?: string | null;
   has_dge?: boolean;
   has_studies?: boolean;
 }
