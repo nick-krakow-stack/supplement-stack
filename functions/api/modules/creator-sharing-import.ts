@@ -54,7 +54,6 @@ type SimilarProduct = {
 type TargetState = {
   itemSignature: string
   ingredientSignature: string
-  categorySignature: string
 }
 
 type ImportWriteClaim = {
@@ -262,9 +261,9 @@ async function stackItemDetails(db: D1Database, stackId: number, userId: number)
 }
 
 async function loadTargetState(db: D1Database, stackId: number): Promise<TargetState> {
-  const [items, ingredients, categories] = await Promise.all([
-    db.prepare('SELECT id, version, category_id, sort_order FROM stack_items WHERE stack_id = ? ORDER BY id')
-      .bind(stackId).all<{ id: number; version: number; category_id: number | null; sort_order: number }>(),
+  const [items, ingredients] = await Promise.all([
+    db.prepare('SELECT id, version, sort_order FROM stack_items WHERE stack_id = ? ORDER BY id')
+      .bind(stackId).all<{ id: number; version: number; sort_order: number }>(),
     db.prepare(`
       SELECT stack_item_id, ingredient_id FROM (
         SELECT si.id AS stack_item_id, pi.ingredient_id
@@ -276,13 +275,10 @@ async function loadTargetState(db: D1Database, stackId: number): Promise<TargetS
         WHERE si.stack_id = ?
       ) ORDER BY stack_item_id, ingredient_id
     `).bind(stackId, stackId).all<{ stack_item_id: number; ingredient_id: number }>(),
-    db.prepare('SELECT id, sort_order, is_default, updated_at FROM stack_categories WHERE stack_id = ? ORDER BY id')
-      .bind(stackId).all<{ id: number; sort_order: number; is_default: number; updated_at: string }>(),
   ])
   return {
-    itemSignature: (items.results ?? []).map((row) => `${row.id}:${row.version}:${row.category_id ?? ''}:${row.sort_order}`).join('|'),
+    itemSignature: (items.results ?? []).map((row) => `${row.id}:${row.version}:${row.sort_order}`).join('|'),
     ingredientSignature: (ingredients.results ?? []).map((row) => `${row.stack_item_id}:${row.ingredient_id}`).join('|'),
-    categorySignature: (categories.results ?? []).map((row) => `${row.id}:${row.sort_order}:${row.is_default}:${row.updated_at}`).join('|'),
   }
 }
 
@@ -329,7 +325,7 @@ async function buildPreflight(
   } else if (body.target_mode === 'existing') {
     const stackId = positiveInteger(body.target_stack_id)
     if (!stackId) return { failure: { code: 'INVALID_TARGET', error: 'Bitte wähle einen deiner Stacks aus.', httpStatus: 400 } }
-    const stack = await db.prepare('SELECT id, name FROM stacks WHERE id = ? AND user_id = ?')
+    const stack = await db.prepare('SELECT id, name FROM stacks WHERE id = ? AND user_id = ? AND deleted_at IS NULL')
       .bind(stackId, userId).first<{ id: number; name: string }>()
     if (!stack) return { failure: { code: 'TARGET_CHANGED', error: 'Der gewählte Stack ist nicht mehr verfügbar.', httpStatus: 409 } }
     plan = { mode: 'existing', stackId: stack.id, stackName: stack.name }
@@ -347,7 +343,7 @@ async function buildPreflight(
   const mainIngredientNames = await ingredientNames(db, allIngredientIds)
   const creatorProduct = loaded.relations.products.get(snapshotItem.catalog_product_id)
   if (!creatorProduct) return { failure: { code: 'SHARE_INVALID', error: 'Diese Empfehlung kann gerade nicht geladen werden.', httpStatus: 409 } }
-  const namesResult = await db.prepare('SELECT name FROM stacks WHERE user_id = ? ORDER BY id').bind(userId).all<{ name: string }>()
+  const namesResult = await db.prepare('SELECT name FROM stacks WHERE user_id = ? AND deleted_at IS NULL ORDER BY id').bind(userId).all<{ name: string }>()
   const existingNames = (namesResult.results ?? []).map((row) => row.name)
   const sameName = plan.mode === 'new' && existingNames.some((name) => normalizedStackName(name) === normalizedStackName(plan.stackName))
   const recommendation: ImportComparison | null = loaded.snapshot.type === 'dose_recommendation' ? {
@@ -415,9 +411,9 @@ creatorSharingImport.post('/shares/:token/preflight', async (c) => {
 
 const TARGET_STATE_SQL_GUARD = `
   AND (
-    SELECT COALESCE(group_concat(signature, '|'), '') FROM (
+      SELECT COALESCE(group_concat(signature, '|'), '') FROM (
       SELECT CAST(id AS TEXT) || ':' || CAST(version AS TEXT) || ':' ||
-        COALESCE(CAST(category_id AS TEXT), '') || ':' || CAST(sort_order AS TEXT) AS signature
+        CAST(sort_order AS TEXT) AS signature
       FROM stack_items WHERE stack_id = ? ORDER BY id
     )
   ) = ?
@@ -434,17 +430,10 @@ const TARGET_STATE_SQL_GUARD = `
       ) ORDER BY stack_item_id, ingredient_id
     )
   ) = ?
-  AND (
-    SELECT COALESCE(group_concat(signature, '|'), '') FROM (
-      SELECT CAST(id AS TEXT) || ':' || CAST(sort_order AS TEXT) || ':' ||
-        CAST(is_default AS TEXT) || ':' || updated_at AS signature
-      FROM stack_categories WHERE stack_id = ? ORDER BY id
-    )
-  ) = ?
 `
 
 function targetStateBindings(stackId: number, state: TargetState): unknown[] {
-  return [stackId, state.itemSignature, stackId, stackId, state.ingredientSignature, stackId, state.categorySignature]
+  return [stackId, state.itemSignature, stackId, stackId, state.ingredientSignature]
 }
 
 const WRITE_CLAIM_SQL = `EXISTS (
@@ -474,7 +463,7 @@ function claimBindings(claim: ImportWriteClaim): unknown[] {
 
 async function candidateIds(
   db: D1Database,
-  table: 'stacks' | 'stack_categories' | 'stack_items',
+  table: 'stacks' | 'stack_items',
   count: number,
 ): Promise<number[]> {
   if (!Number.isInteger(count) || count < 0) throw new Error('Invalid id candidate count')
@@ -503,7 +492,7 @@ function operationGuard(
   },
 ): D1PreparedStatement {
   const targetGuard = input.targetStackId && input.targetState
-    ? `AND EXISTS (SELECT 1 FROM stacks WHERE id = ? AND user_id = ?) ${TARGET_STATE_SQL_GUARD}`
+    ? `AND EXISTS (SELECT 1 FROM stacks WHERE id = ? AND user_id = ? AND deleted_at IS NULL) ${TARGET_STATE_SQL_GUARD}`
     : ''
   const bindings: unknown[] = [
     input.claim.idempotencyKey,
@@ -573,26 +562,11 @@ async function executeBatch(
   }
 }
 
-async function defaultCategoryId(db: D1Database, stackId: number): Promise<number | null> {
-  const row = await db.prepare('SELECT id FROM stack_categories WHERE stack_id = ? AND is_default = 1 LIMIT 1')
-    .bind(stackId).first<{ id: number }>()
-  return row?.id ?? null
-}
-
-function normalizeCategoryName(value: string | null): { name: string; normalized: string } {
-  const name = value?.trim() || 'Unkategorisiert'
-  return {
-    name: name.slice(0, 80),
-    normalized: name.trim().toLocaleLowerCase('de-DE').replace(/\s+/g, ' '),
-  }
-}
-
 function addSnapshotItem(
   db: D1Database,
   input: {
     itemId: number
     stackId: number
-    categoryId: number
     sortOrder: number
     shareId: number
     item: CreatorShareSnapshotItem
@@ -602,10 +576,10 @@ function addSnapshotItem(
   return db.prepare(`
     INSERT INTO stack_items (
       id, stack_id, catalog_product_id, user_product_id, quantity,
-      intake_interval_days, dosage_text, timing, sort_order, category_id,
+      intake_interval_days, dosage_text, timing, sort_order,
       source_share_link_id, creator_statement_snapshot, amount_source, version
     )
-    SELECT ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, 'creator_snapshot', 1
+    SELECT ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, 'creator_snapshot', 1
     WHERE ${WRITE_CLAIM_SQL}
   `).bind(
     input.itemId,
@@ -616,7 +590,6 @@ function addSnapshotItem(
     input.item.dosage_text,
     input.item.timing,
     input.sortOrder,
-    input.categoryId,
     input.shareId,
     input.item.creator_statement,
     ...claimBindings(input.claim),
@@ -705,14 +678,6 @@ async function saveCompleteStack(
   const { loaded, plan } = preflight
   const [stackId] = await candidateIds(c.env.DB, 'stacks', 1)
   const itemIds = await candidateIds(c.env.DB, 'stack_items', loaded.snapshot.items.length)
-  const categories: Array<{ name: string; normalized: string }> = [normalizeCategoryName(null)]
-  for (const item of loaded.snapshot.items) {
-    const category = normalizeCategoryName(item.category_name)
-    if (!categories.some((entry) => entry.normalized === category.normalized)) categories.push(category)
-  }
-  categories.sort((left, right) => left.normalized === 'unkategorisiert' ? -1 : right.normalized === 'unkategorisiert' ? 1 : left.name.localeCompare(right.name, 'de'))
-  const categoryIds = await candidateIds(c.env.DB, 'stack_categories', categories.length)
-  const categoryByName = new Map(categories.map((entry, index) => [entry.normalized, categoryIds[index]]))
   const result = {
     ok: true,
     type: 'stack',
@@ -730,20 +695,10 @@ async function saveCompleteStack(
       WHERE ${WRITE_CLAIM_SQL}
     `).bind(stackId, user.userId, plan.stackName, loaded.snapshot.creator_party_id, ...claimBindings(claim)),
   ]
-  categories.forEach((category, index) => {
-    statements.push(c.env.DB.prepare(`
-      INSERT INTO stack_categories (
-        id, stack_id, name, name_normalized, sort_order, is_default, created_at, updated_at
-      )
-      SELECT ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-      WHERE ${WRITE_CLAIM_SQL}
-    `).bind(categoryIds[index], stackId, category.name, category.normalized, index, category.normalized === 'unkategorisiert' ? 1 : 0, ...claimBindings(claim)))
-  })
   loaded.snapshot.items.forEach((item, index) => {
     statements.push(addSnapshotItem(c.env.DB, {
       itemId: itemIds[index],
       stackId,
-      categoryId: categoryByName.get(normalizeCategoryName(item.category_name).normalized) as number,
       sortOrder: item.sort_order,
       shareId: loaded.row.id,
       item,
@@ -826,7 +781,6 @@ async function addToNewStack(
   const { loaded, plan } = preflight
   const item = loaded.snapshot.items[0]
   const [stackId] = await candidateIds(c.env.DB, 'stacks', 1)
-  const [categoryId] = await candidateIds(c.env.DB, 'stack_categories', 1)
   const [itemId] = await candidateIds(c.env.DB, 'stack_items', 1)
   const result = {
     ok: true,
@@ -846,17 +800,9 @@ async function addToNewStack(
       SELECT ?, ?, ?, ?, CURRENT_TIMESTAMP
       WHERE ${WRITE_CLAIM_SQL}
     `).bind(stackId, user.userId, plan.stackName, loaded.snapshot.creator_party_id, ...claimBindings(claim)),
-    c.env.DB.prepare(`
-      INSERT INTO stack_categories (
-        id, stack_id, name, name_normalized, sort_order, is_default, created_at, updated_at
-      )
-      SELECT ?, ?, 'Unkategorisiert', 'unkategorisiert', 0, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-      WHERE ${WRITE_CLAIM_SQL}
-    `).bind(categoryId, stackId, ...claimBindings(claim)),
     addSnapshotItem(c.env.DB, {
       itemId,
       stackId,
-      categoryId,
       sortOrder: 0,
       shareId: loaded.row.id,
       item,
@@ -980,9 +926,6 @@ async function addToExistingStack(
     return c.json({ error: 'Bitte prüfe das Ziel noch einmal.', code: 'PREFLIGHT_CHANGED' }, 409)
   }
   const [itemId] = await candidateIds(c.env.DB, 'stack_items', 1)
-  let categoryId = await defaultCategoryId(c.env.DB, plan.stackId)
-  const categoryIsNew = categoryId === null
-  if (categoryId === null) [categoryId] = await candidateIds(c.env.DB, 'stack_categories', 1)
   const sort = await c.env.DB.prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_sort FROM stack_items WHERE stack_id = ?')
     .bind(plan.stackId).first<{ next_sort: number }>()
   const result = {
@@ -1001,19 +944,9 @@ async function addToExistingStack(
     claim,
     targetState,
   })]
-  if (categoryIsNew) {
-    statements.push(c.env.DB.prepare(`
-      INSERT INTO stack_categories (
-        id, stack_id, name, name_normalized, sort_order, is_default, created_at, updated_at
-      )
-      SELECT ?, ?, 'Unkategorisiert', 'unkategorisiert', 0, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-      WHERE ${WRITE_CLAIM_SQL}
-    `).bind(categoryId, plan.stackId, ...claimBindings(claim)))
-  }
   statements.push(addSnapshotItem(c.env.DB, {
     itemId,
     stackId: plan.stackId,
-    categoryId,
     sortOrder: sort?.next_sort ?? 0,
     shareId: loaded.row.id,
     item,

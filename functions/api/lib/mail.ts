@@ -165,23 +165,39 @@ export async function sendMail(env: Env, options: SendMailOptions): Promise<Mail
   }
 }
 
+export function buildPasswordResetMessage(
+  frontendUrl: string,
+  resetToken: string,
+  returnTo: string | null = null,
+): { resetUrl: string; html: string } {
+  const resetUrl = new URL('/reset-password', `${frontendUrl.replace(/\/$/, '')}/`)
+  resetUrl.searchParams.set('token', resetToken)
+  if (returnTo) resetUrl.searchParams.set('returnTo', returnTo)
+  const escapedResetUrl = escapeEmailHtml(resetUrl.toString())
+  return {
+    resetUrl: resetUrl.toString(),
+    html: `
+      <p>Hallo,</p>
+      <p>du hast eine Passwort-Zurücksetzen-Anfrage gestellt.</p>
+      <p><a href="${escapedResetUrl}" style="background:#2563eb;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;">Passwort zurücksetzen</a></p>
+      <p>Oder kopiere diesen Link: ${escapedResetUrl}</p>
+      <p>Der Link ist 1 Stunde gültig. Falls du keine Anfrage gestellt hast, ignoriere diese Mail.</p>
+    `,
+  }
+}
+
 export async function sendPasswordResetEmail(
   env: Env,
   frontendUrl: string,
   toEmail: string,
   resetToken: string,
+  returnTo: string | null = null,
 ): Promise<MailResult> {
-  const resetUrl = `${frontendUrl.replace(/\/$/, '')}/reset-password?token=${encodeURIComponent(resetToken)}`
+  const message = buildPasswordResetMessage(frontendUrl, resetToken, returnTo)
   return sendMail(env, {
     to: toEmail,
     subject: 'Passwort zurücksetzen',
-    html: `
-      <p>Hallo,</p>
-      <p>du hast eine Passwort-Zurücksetzen-Anfrage gestellt.</p>
-      <p><a href="${resetUrl}" style="background:#2563eb;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;display:inline-block;">Passwort zurücksetzen</a></p>
-      <p>Oder kopiere diesen Link: ${resetUrl}</p>
-      <p>Der Link ist 1 Stunde gültig. Falls du keine Anfrage gestellt hast, ignoriere diese Mail.</p>
-    `,
+    html: message.html,
   })
 }
 

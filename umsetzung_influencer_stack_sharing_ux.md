@@ -271,7 +271,9 @@ Voraussichtlicher Scope: read-only Import-Vorprüfung, Importseite,
   Notizmodell anlegen.
 - [x] Private Notiz wird nur dem angemeldeten Eigentümer geliefert, niemals
   öffentlich, im Snapshot, Tracking oder an fremde Nutzer.
-- [x] Kategorie und Reihenfolge bleiben beim Ersetzen erhalten.
+- [x] Die Reihenfolge bleibt beim Ersetzen erhalten. Die damalige
+  Kategorieanforderung ist durch die Owner-Entscheidung vom 16.08.2026
+  aufgehoben; Kategorien gehören nicht mehr zum aktiven Stackmodell.
 - [x] Bei mehreren ähnlichen Treffern muss der Nutzer genau einen auswählen;
   stilles Ersetzen des ersten Treffers ist verboten.
 - [x] Änderung von Ziel oder Vorprüfung verwirft eine veraltete Auswahl.
@@ -355,8 +357,9 @@ konkrete Integrationslücken. Keine neue UX-Geschmacksrunde nach Rollen-`PASS`.
 - [x] Read-only Vorprüfung ist write-frei; private Notiz bleibt privat.
 - [x] Ganzer Stack immer neu; einzelnes Produkt atomar in bestehenden oder neuen
   Stack; gleicher Name, Behalten, Hinzufügen, Ersetzen und Mehrfachtreffer.
-- [x] Eigenes Produkt und private Notiz bleiben gespeichert; Kategorie und
-  Reihenfolge bleiben im Ziel-Stack erhalten.
+- [x] Eigenes Produkt und private Notiz bleiben gespeichert; die Reihenfolge
+  bleibt im Ziel-Stack erhalten. Historische Kategorien werden nicht mehr
+  angezeigt oder in neue Datensätze übernommen.
 - [x] Alle Share-, Hash-, Status-, Ablauf-, Versions-, Eigentümer- und
   Idempotenz-Guards greifen auch beim finalen Write.
 - [x] Speicherstatistik zählt nur tatsächliches Hinzufügen, Ersetzen oder einen

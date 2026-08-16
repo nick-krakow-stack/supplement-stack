@@ -17,6 +17,8 @@ export type KnowledgeOverviewArticle = {
 export type KnowledgeOverviewNutrientStatus = {
   ingredient_id: number
   name: string | null
+  category: string | null
+  description: string | null
   has_dge: boolean
   has_studies: boolean
 }
@@ -175,6 +177,8 @@ const OVERVIEW_CTE = `
       json_object(
         'ingredient_id', i.id,
         'name', i.name,
+        'category', i.category,
+        'description', i.description,
         'has_dge', CASE WHEN ds.has_dge = 1 THEN json('true') ELSE json('false') END,
         'has_studies', CASE WHEN ss.has_studies = 1 THEN json('true') ELSE json('false') END
       ) AS payload_json
@@ -295,6 +299,8 @@ function parseOverviewStatus(value: unknown): KnowledgeOverviewNutrientStatus | 
   return {
     ingredient_id: ingredientId,
     name: typeof row.name === 'string' ? row.name : null,
+    category: typeof row.category === 'string' ? row.category : null,
+    description: typeof row.description === 'string' ? row.description : null,
     has_dge: row.has_dge === true || row.has_dge === 1,
     has_studies: row.has_studies === true || row.has_studies === 1,
   }
@@ -389,6 +395,16 @@ async function projectionIsCurrent(state: KnowledgeOverviewProjectionState): Pro
     || state.record_count !== state.rows.length
     || !state.content_hash
     || !/^sha256:[a-f0-9]{64}$/.test(state.content_hash)
+    || !state.rows.every((row) => {
+      if (row.row_kind !== 'status') return true
+      try {
+        const payload = JSON.parse(row.payload_json) as Record<string, unknown>
+        return Object.prototype.hasOwnProperty.call(payload, 'category')
+          && Object.prototype.hasOwnProperty.call(payload, 'description')
+      } catch {
+        return false
+      }
+    })
     || buildKnowledgeOverviewPayload(state.rows) === null
   ) return false
 

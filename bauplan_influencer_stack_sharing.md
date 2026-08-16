@@ -539,8 +539,10 @@ Templates werden ausschließlich in dieser zentralen Funktion angewendet.
 
 - Es entsteht immer ein neuer Stack des Nutzers.
 - `origin_party_id` wird aus dem freigegebenen Share übernommen.
-- Kategorien, Reihenfolge und Positionen werden aus dem validierten Snapshot
-  übernommen.
+- Reihenfolge und Positionen werden aus dem validierten Snapshot übernommen.
+  Stack-Kategorien sind seit Snapshot v3 vollständig aus dem aktiven Modell
+  entfernt. Historische v1/v2-Snapshots bleiben lesbar; ein dort vorhandener
+  Kategoriename wird weder angezeigt noch beim Import neu angelegt.
 - Für jede Position wird die Share-Attribution separat gebunden. Ein partieller
   Import ist nicht erlaubt: Der D1-Batch ist vollständig oder wirkungslos.
 - Der neue Stack wird nach Erfolg als zuletzt geöffnet markiert.

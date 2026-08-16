@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { buildEmailVerificationMessage } from '../../../functions/api/lib/mail';
+import { buildEmailVerificationMessage, buildPasswordResetMessage } from '../../../functions/api/lib/mail';
+import { hashResetToken } from '../../../functions/api/lib/helpers';
 import { validateReturnTo } from '../../../functions/api/lib/return-to';
 import { fetchAuthReturnToHono } from './authReturnToHonoHandlers.mjs';
 import { createProductionKnowledgeHonoHarness, type ProductionKnowledgeHonoHarness } from './productionKnowledgeHonoTestHarness';
@@ -63,6 +64,13 @@ describe('auth returnTo backend contract', () => {
     expect(message.html).toContain('&amp;returnTo=');
     expect(message.html).not.toContain(`href="${message.verifyUrl}"`);
     expect(message.html).not.toContain('token<&"');
+
+    const passwordMessage = buildPasswordResetMessage('https://supplementstack.de', 'reset<&"', returnTo);
+    const passwordUrl = new URL(passwordMessage.resetUrl);
+    expect(passwordUrl.searchParams.get('token')).toBe('reset<&"');
+    expect(passwordUrl.searchParams.get('returnTo')).toBe(returnTo);
+    expect(passwordMessage.html).toContain('&amp;returnTo=');
+    expect(passwordMessage.html).not.toContain('reset<&"');
   });
 
   it('validates registration and resend return_to independently', async () => {
@@ -99,5 +107,106 @@ describe('auth returnTo backend contract', () => {
     const resendRejected = await request('/api/auth/resend-verification', { return_to: 'https://evil.example' }, token);
     expect(resendRejected.status).toBe(400);
     expect((await db.prepare(`SELECT COUNT(*) AS count FROM email_verification_tokens WHERE user_id = ?`).bind(userId).first<{ count: number }>())?.count).toBe(1);
+  });
+
+  it('exports the signed-in account data without secrets or retired family-profile fields', async () => {
+    const userId = 501;
+    const email = 'export@test.invalid';
+    harness.run(`
+      INSERT INTO users (
+        id, email, password_hash, age, guideline_source, health_consent,
+        health_consent_at, email_verified_at
+      ) VALUES (?, ?, ?, ?, ?, 1, datetime('now'), datetime('now'))
+    `, userId, email, 'not-exported-password-hash', 37, null);
+    harness.run(
+      `INSERT INTO consent_log (user_id, consent_type, granted) VALUES (?, 'health_data', 1)`,
+      userId,
+    );
+    harness.run(`INSERT INTO stacks (id, user_id, name) VALUES (?, ?, ?)`, 601, userId, 'Mein Export-Stack');
+
+    const token = await authToken(userId, email);
+    const response = await fetchAuthReturnToHono(new Request('https://supplementstack.de/api/me/export', {
+      headers: { Authorization: `Bearer ${token}` },
+    }), {
+      DB: harness.db,
+      JWT_SECRET,
+      FRONTEND_URL: 'https://supplementstack.de',
+    }, { waitUntil() {}, passThroughOnException() {}, props: {} });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(response.headers.get('content-disposition')).toMatch(/^attachment; filename="supplement-stack-daten-\d{4}-\d{2}-\d{2}\.json"$/);
+    const payload = await response.json() as Record<string, unknown>;
+    expect(payload.format).toBe('supplement_stack_user_data.v1');
+    expect(payload.account).toMatchObject({ id: userId, email, age: 37, guideline_source: null });
+    expect(payload.consent_history).toEqual(expect.arrayContaining([
+      expect.objectContaining({ consent_type: 'health_data', granted: 1 }),
+    ]));
+    expect(payload.stacks).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 601, name: 'Mein Export-Stack' }),
+    ]));
+    expect(payload).not.toHaveProperty('family_profiles');
+    expect(JSON.stringify(payload)).not.toContain('not-exported-password-hash');
+    expect(JSON.stringify(payload)).not.toContain('reset_token');
+  });
+
+  it('allows only the two source preferences and keeps an explicit empty choice', async () => {
+    const userId = 502;
+    const email = 'preference@test.invalid';
+    harness.run(`
+      INSERT INTO users (id, email, password_hash, guideline_source, health_consent, health_consent_at)
+      VALUES (?, ?, ?, NULL, 1, datetime('now'))
+    `, userId, email, 'password-hash');
+    const token = await authToken(userId, email);
+    const request = (guidelineSource: unknown) => fetchAuthReturnToHono(new Request('https://supplementstack.de/api/me', {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ guideline_source: guidelineSource }),
+    }), {
+      DB: harness.db,
+      JWT_SECRET,
+      FRONTEND_URL: 'https://supplementstack.de',
+    }, { waitUntil() {}, passThroughOnException() {}, props: {} });
+
+    expect((await request('influencer')).status).toBe(400);
+    const official = await request('DGE');
+    expect(official.status).toBe(200);
+    expect(await official.json()).toMatchObject({ profile: { guideline_source: 'DGE' } });
+    const studies = await request('studien');
+    expect(studies.status).toBe(200);
+    expect(await studies.json()).toMatchObject({ profile: { guideline_source: 'studien' } });
+    const empty = await request(null);
+    expect(empty.status).toBe(200);
+    expect(await empty.json()).toMatchObject({ profile: { guideline_source: null } });
+  });
+
+  it('distinguishes invalid and expired password-reset links', async () => {
+    const userId = 503;
+    const email = 'reset@test.invalid';
+    const expiredRawToken = 'expired-reset-token';
+    const expiredHash = await hashResetToken(expiredRawToken);
+    harness.run(`
+      INSERT INTO users (
+        id, email, password_hash, reset_token, reset_token_expires_at,
+        health_consent, health_consent_at
+      ) VALUES (?, ?, ?, ?, ?, 1, datetime('now'))
+    `, userId, email, 'password-hash', expiredHash, Date.now() - 1_000);
+
+    const resetRequest = (token: string) => fetchAuthReturnToHono(new Request('https://supplementstack.de/api/auth/reset-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, password: 'new-password-123' }),
+    }), {
+      DB: harness.db,
+      JWT_SECRET,
+      FRONTEND_URL: 'https://supplementstack.de',
+    }, { waitUntil() {}, passThroughOnException() {}, props: {} });
+
+    const invalid = await resetRequest('unknown-reset-token');
+    expect(invalid.status).toBe(400);
+    expect(await invalid.json()).toMatchObject({ error: expect.stringContaining('ungültig') });
+    const expired = await resetRequest(expiredRawToken);
+    expect(expired.status).toBe(410);
+    expect(await expired.json()).toMatchObject({ error: expect.stringContaining('abgelaufen') });
   });
 });

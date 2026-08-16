@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import SearchBar from './SearchBar';
 
 describe('SearchBar sub-ingredient matches', () => {
   afterEach(() => {
+    cleanup();
     vi.useRealTimers();
     vi.restoreAllMocks();
   });
@@ -29,6 +30,23 @@ describe('SearchBar sub-ingredient matches', () => {
     });
 
     expect(screen.getByText('Omega-3')).toBeTruthy();
-    expect(screen.getByText('Enthält: EPA')).toBeTruthy();
+    expect(screen.getByText('Treffer über Bestandteil: EPA')).toBeTruthy();
+  });
+
+  it('löscht die Eingabe, ohne ein umgebendes Formular abzusenden', () => {
+    const onSubmit = vi.fn();
+    render(
+      <form onSubmit={(event) => { event.preventDefault(); onSubmit(); }}>
+        <SearchBar onSelect={() => undefined} />
+      </form>,
+    );
+
+    fireEvent.change(screen.getByLabelText('Wirkstoff suchen'), { target: { value: 'Magnesium' } });
+    const clearButton = screen.getByRole('button', { name: 'Eingabe löschen' });
+    expect((clearButton as HTMLButtonElement).type).toBe('button');
+    fireEvent.click(clearButton);
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect((screen.getByLabelText('Wirkstoff suchen') as HTMLInputElement).value).toBe('');
   });
 });

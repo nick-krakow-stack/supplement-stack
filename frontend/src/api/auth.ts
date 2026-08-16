@@ -53,11 +53,16 @@ export async function logout(): Promise<{ ok: true }> {
 }
 
 export async function updateMe(
-  data: Partial<Pick<User, 'age' | 'guideline_source'>>
+  data: { age?: number | null; guideline_source?: User['guideline_source'] }
 ): Promise<User> {
   // Backend returns { profile: {...} }
   const res = await apiClient.put<{ profile: User }>('/me', data);
   return res.data.profile;
+}
+
+export async function downloadMyData(): Promise<Blob> {
+  const res = await apiClient.get<Blob>('/me/export', { responseType: 'blob' });
+  return res.data;
 }
 
 function extractError(err: unknown, fallback: string): Error {

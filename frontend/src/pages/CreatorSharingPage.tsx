@@ -330,7 +330,6 @@ export default function CreatorSharingPage() {
         dosage_text: item.dosage_text ?? null,
         timing: item.timing ?? null,
         creator_statement: statements[String(stackItemId(item))]?.trim() || null,
-        category_name: item.category_name ?? null,
         has_affiliate_attribution: false,
       })),
     };

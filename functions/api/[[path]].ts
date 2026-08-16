@@ -7,7 +7,6 @@ import admin, { interactionsApp, shopDomainsPublicApp } from './modules/admin'
 import auth, { meApp } from './modules/auth'
 import client from './modules/client'
 import demo from './modules/demo'
-import family from './modules/family'
 import ingredients, { recommendationsApp } from './modules/ingredients'
 import knowledge from './modules/knowledge'
 import legal from './modules/legal'
@@ -47,7 +46,6 @@ app.route('/api/interactions', interactionsApp)
 app.route('/api/user-products', userProducts)
 app.route('/api/creator-sharing', creatorSharing)
 app.route('/api/demo', demo)
-app.route('/api/family', family)
 app.route('/api/knowledge', knowledge)
 app.route('/api/legal-documents', legal)
 

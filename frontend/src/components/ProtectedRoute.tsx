@@ -14,7 +14,7 @@ export default function ProtectedRoute({ children, adminOnly = false }: Protecte
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[40vh]">
-        <p className="text-gray-500">Laden...</p>
+        <p className="text-sm font-semibold text-gray-600" role="status" aria-live="polite">Dein Konto wird geprüft …</p>
       </div>
     );
   }

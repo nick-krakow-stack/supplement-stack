@@ -16,7 +16,7 @@ const imageClasses: Record<AppLogoVariant, string> = {
 };
 
 const shellClasses: Record<AppLogoVariant, string> = {
-  nav: 'inline-flex min-w-0 items-center',
+  nav: 'inline-flex min-w-0 items-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2',
   stack:
     'inline-flex min-w-0 items-center rounded-2xl bg-white/95 px-2.5 py-1.5 shadow-sm ring-1 ring-white/70',
   admin:

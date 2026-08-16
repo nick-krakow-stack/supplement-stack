@@ -1,5 +1,5 @@
 import { Navigate, Route, Routes, Link, useLocation } from 'react-router-dom';
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -76,9 +76,46 @@ function RouteLoadingFallback() {
   if (location.pathname === '/wissen') return null;
   return (
     <div className="min-h-[40vh] flex items-center justify-center px-6">
-      <div className="text-sm text-slate-500">Laden...</div>
+      <div className="text-sm font-semibold text-slate-600" role="status" aria-live="polite">
+        Die Seite wird geladen …
+      </div>
     </div>
   );
+}
+
+const routeTitles: Record<string, string> = {
+  '/': 'Supplement Stack – quellenbasiert planen und vergleichen',
+  '/login': 'Anmelden | Supplement Stack',
+  '/register': 'Kostenlos registrieren | Supplement Stack',
+  '/profile': 'Mein Profil | Supplement Stack',
+  '/stacks': 'Meine Stacks | Supplement Stack',
+  '/demo': 'Kostenlose Demo | Supplement Stack',
+  '/creator': 'Creator-Bereich | Supplement Stack',
+  '/einnahmeplan': 'Einnahmeplan | Supplement Stack',
+  '/my-products': 'Eigene Produkte | Supplement Stack',
+  '/forgot-password': 'Passwort zurücksetzen | Supplement Stack',
+  '/reset-password': 'Neues Passwort | Supplement Stack',
+  '/verify-email': 'E-Mail bestätigen | Supplement Stack',
+  '/impressum': 'Impressum | Supplement Stack',
+  '/datenschutz': 'Datenschutz | Supplement Stack',
+  '/nutzungsbedingungen': 'Nutzungsbedingungen | Supplement Stack',
+  '/agb': 'Nutzungsbedingungen | Supplement Stack',
+  '/wissen': 'Wissen zu Nahrungsergänzung | Supplement Stack',
+};
+
+function RouteMetadata() {
+  const location = useLocation();
+
+  useEffect(() => {
+    if (location.pathname.startsWith('/administrator')) return;
+    const title = routeTitles[location.pathname]
+      ?? (location.pathname.startsWith('/wissen/') ? 'Wissensartikel | Supplement Stack' : null)
+      ?? (location.pathname.startsWith('/share/') ? 'Geteilte Empfehlung | Supplement Stack' : null)
+      ?? 'Seite nicht gefunden | Supplement Stack';
+    document.title = title;
+  }, [location.pathname]);
+
+  return null;
 }
 
 function RoutinePageRoute() {
@@ -92,6 +129,7 @@ export default function App() {
 
   return (
     <AuthProvider>
+      <RouteMetadata />
       {!hideCookieBanner && <CookieConsentBanner />}
       <Suspense fallback={<RouteLoadingFallback />}>
         <Routes>

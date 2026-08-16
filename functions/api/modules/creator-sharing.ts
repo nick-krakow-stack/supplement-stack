@@ -73,7 +73,6 @@ type StackShareSourceRow = {
   dosage_text: string | null
   timing: string | null
   sort_order: number
-  category_name: string | null
   shop_link_id: number
   url: string
   shop_domain_id: number | null
@@ -189,14 +188,6 @@ function statementMap(value: unknown): Map<number, string | null> | null {
   return result
 }
 
-function normalizeCategoryName(value: string | null): { name: string; normalized: string } {
-  const name = value?.trim() || 'Unkategorisiert'
-  return {
-    name: name.slice(0, 80),
-    normalized: name.trim().toLocaleLowerCase('de-DE').replace(/\s+/g, ' '),
-  }
-}
-
 // GET /api/creator-sharing/parties
 creatorSharing.get('/parties', async (c) => {
   const featureErr = ensureFeature(c)
@@ -305,7 +296,6 @@ async function creatorPreviewPayload(
         dosage_text: item.dosage_text,
         timing: item.timing,
         creator_statement: item.creator_statement,
-        category_name: item.category_name,
         has_affiliate_attribution: item.link_binding.resolution_kind !== 'bare',
       }
     }),
@@ -408,7 +398,7 @@ async function loadShareSourceRows(
   unshareableProducts?: UnshareableProduct[]
   shareableRows?: StackShareSourceRow[]
 }> {
-  const stack = await db.prepare('SELECT id FROM stacks WHERE id = ? AND user_id = ?')
+  const stack = await db.prepare('SELECT id FROM stacks WHERE id = ? AND user_id = ? AND deleted_at IS NULL')
     .bind(stackId, userId).first<{ id: number }>()
   if (!stack) return { error: 'Stack nicht gefunden.', errorCode: 'STACK_NOT_FOUND' }
   const expectedResult = await db.prepare(`
@@ -435,7 +425,6 @@ async function loadShareSourceRows(
       si.dosage_text,
       si.timing,
       si.sort_order,
-      category.name AS category_name,
       psl.id AS shop_link_id,
       psl.url,
       psl.shop_domain_id,
@@ -447,7 +436,6 @@ async function loadShareSourceRows(
     FROM stacks s
     JOIN stack_items si ON si.stack_id = s.id
     JOIN products p ON p.id = si.catalog_product_id
-    LEFT JOIN stack_categories category ON category.id = si.category_id
     JOIN product_shop_links psl ON psl.id = COALESCE(
       (SELECT binding.shop_link_id FROM stack_item_link_bindings binding WHERE binding.stack_item_id = si.id),
       (
@@ -469,6 +457,7 @@ async function loadShareSourceRows(
     LEFT JOIN parties owner ON owner.id = p.owner_party_id
     WHERE s.id = ?
       AND s.user_id = ?
+      AND s.deleted_at IS NULL
       AND si.catalog_product_id IS NOT NULL
       AND p.moderation_status = 'approved'
       AND owner.status = 'active'
@@ -747,7 +736,6 @@ creatorSharing.post('/shares', async (c) => {
       timing: row.timing,
       creator_statement: statement,
       sort_order: row.sort_order,
-      category_name: row.category_name,
     })
   }
   const snapshot: CreatorShareSnapshot = {
@@ -908,7 +896,6 @@ creatorSharing.get('/shares/:token', async (c) => {
         dosage_text: item.dosage_text,
         timing: item.timing,
         creator_statement: item.creator_statement,
-        category_name: item.category_name,
         has_affiliate_attribution: item.link_binding.resolution_kind !== 'bare',
       }
     }),
@@ -926,7 +913,7 @@ creatorSharing.post('/stacks/:id/open', async (c) => {
   if (!stackId) return c.json({ error: 'Invalid stack id' }, 400)
   const user = c.get('user')
   const result = await c.env.DB.prepare(`
-    UPDATE stacks SET last_opened_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?
+    UPDATE stacks SET last_opened_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ? AND deleted_at IS NULL
   `).bind(stackId, user.userId).run()
   if (d1Changes(result) !== 1) return c.json({ error: 'Stack not found' }, 404)
   return c.json({ ok: true })
@@ -959,7 +946,7 @@ creatorSharing.get('/dashboard', async (c) => {
         AND clicked_at >= datetime('now', '-60 days')
         AND clicked_at < datetime('now', '-30 days')
     `).bind(partyId).first<{ count: number }>(),
-    c.env.DB.prepare(`SELECT COUNT(*) AS count FROM stacks WHERE origin_party_id = ?`).bind(partyId).first<{ count: number }>(),
+    c.env.DB.prepare(`SELECT COUNT(*) AS count FROM stacks WHERE origin_party_id = ? AND deleted_at IS NULL`).bind(partyId).first<{ count: number }>(),
     c.env.DB.prepare(`
       SELECT COUNT(DISTINCT product_id) AS count
       FROM product_link_clicks
@@ -1009,7 +996,7 @@ creatorSharing.get('/stacks/:stackId/default-product/:ingredientId', async (c) =
       CASE WHEN origin.status = 'active' THEN s.origin_party_id ELSE NULL END AS origin_party_id
     FROM stacks s
     LEFT JOIN parties origin ON origin.id = s.origin_party_id
-    WHERE s.id = ? AND s.user_id = ?
+    WHERE s.id = ? AND s.user_id = ? AND s.deleted_at IS NULL
   `).bind(stackId, user.userId).first<{ id: number; origin_party_id: number | null }>()
   if (!stack) return c.json({ error: 'Stack not found' }, 404)
 

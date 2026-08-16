@@ -447,16 +447,72 @@ function mergeNutrientStatuses(statuses: KnowledgeNutrientStatus[]): KnowledgeNu
     (merged, status) => ({
       ingredient_id: merged.ingredient_id,
       name: merged.name ?? status.name ?? null,
+      category: merged.category ?? status.category ?? null,
+      description: merged.description ?? status.description ?? null,
       has_dge: Boolean(merged.has_dge || status.has_dge),
       has_studies: Boolean(merged.has_studies || status.has_studies),
     }),
     {
       ingredient_id: statuses[0].ingredient_id,
       name: statuses[0].name ?? null,
+      category: statuses[0].category ?? null,
+      description: statuses[0].description ?? null,
       has_dge: false,
       has_studies: false,
     },
   );
+}
+
+const databaseCategoryMap: Record<string, CategoryKey> = {
+  vitamin: 'vitamine',
+  vitamin_fat_soluble: 'vitamine',
+  vitamin_water_soluble: 'vitamine',
+  mineral: 'mineralstoffe',
+  trace_element: 'spurenelemente',
+  amino_acid_protein: 'aminosaeuren_proteine',
+  fatty_acid: 'fettsaeuren',
+  plant_extract: 'pflanzenstoffe_extrakte',
+  medicinal_mushroom: 'heilpilze',
+  enzyme: 'enzyme',
+  probiotic: 'probiotika',
+  other: 'sonstige',
+};
+
+function fallbackCategory(status: KnowledgeNutrientStatus): CategoryKey {
+  const mapped = status.category ? databaseCategoryMap[status.category] : undefined;
+  if (mapped) return mapped;
+  const name = normalizeSearchText(status.name ?? '');
+  if (['natrium', 'phosphor'].includes(name)) return 'mineralstoffe';
+  if (name === 'molybdan') return 'spurenelemente';
+  return 'sonstige';
+}
+
+function templateFromStatus(status: KnowledgeNutrientStatus): NutrientTemplate {
+  const existing = NUTRIENTS.find((nutrient) => statusMatchesNutrient(status, nutrient));
+  const name = status.name?.trim() || existing?.name || `Wirkstoff ${status.ingredient_id}`;
+  const category = status.category ? fallbackCategory(status) : existing?.category ?? fallbackCategory(status);
+  const description = status.description?.trim()
+    || existing?.description
+    || 'Zu diesem Wirkstoff werden vorhandene Referenzwerte und Wissensinhalte gebündelt.';
+  if (existing) {
+    return {
+      ...existing,
+      name,
+      category,
+      description,
+    };
+  }
+  const words = name.split(/[\s-]+/).filter(Boolean);
+  const abbr = words.length > 1
+    ? words.map((word) => word[0]).join('').slice(0, 4)
+    : name.slice(0, 4);
+  return {
+    category,
+    name,
+    abbr,
+    icon: 'atom',
+    description,
+  };
 }
 
 function cardIngredientIds(card: NutrientCard): number[] {
@@ -500,7 +556,11 @@ function buildNutrientCards(
 ): NutrientCard[] {
   const usedSlugs = new Set<string>();
 
-  return NUTRIENTS.map((nutrient) => {
+  const nutrients = nutrientStatuses.length > 0
+    ? nutrientStatuses.map(templateFromStatus)
+    : NUTRIENTS;
+
+  return nutrients.map((nutrient) => {
     const article = articles.find((candidate) => {
       if (usedSlugs.has(candidate.slug)) return false;
       return articleMatchesNutrient(candidate, nutrient);
@@ -620,6 +680,7 @@ export default function KnowledgeOverviewPage() {
     cacheCheck === null ? readCachedKnowledgeOverview() ?? { articles: [] } : { articles: [] }
   ));
   const [error, setError] = useState('');
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -651,14 +712,14 @@ export default function KnowledgeOverviewPage() {
       .catch((err) => {
         if (!active) return;
         if (err instanceof DOMException && err.name === 'AbortError') return;
-        setError(err instanceof Error ? err.message : 'Die Wissensdatenbank konnte nicht geladen werden.');
+        setError('Die Wissensdatenbank konnte gerade nicht geladen werden. Bitte versuche es erneut.');
       });
 
     return () => {
       active = false;
       controller.abort();
     };
-  }, [cacheCheck]);
+  }, [cacheCheck, loadAttempt]);
 
   const cards = useMemo(
     () => buildNutrientCards(overview.articles, overview.nutrient_statuses ?? []),
@@ -695,7 +756,7 @@ export default function KnowledgeOverviewPage() {
           <span className="eyebrow">Wissensdatenbank</span>
           <h1>Alles über Vitamine, Mineralstoffe &amp; Co. - einfach erklärt</h1>
           <p className="dek">
-            Schlag nach, was ein Nährstoff im Körper macht, wo er drinsteckt und worauf du achten solltest.
+            Schlag nach, was ein Wirkstoff im Körper macht, wo er drinsteckt und worauf du achten solltest.
             Verständlich erklärt, mit Quellen.
           </p>
 
@@ -705,9 +766,9 @@ export default function KnowledgeOverviewPage() {
               type="text"
               value={query}
               onChange={(event) => updateOverviewSearch(activeCategory, event.target.value)}
-              placeholder="Nährstoff suchen - z. B. Vitamin D, Magnesium, Eisen ..."
+              placeholder="Wirkstoff suchen – z. B. Vitamin D, Magnesium oder Eisen …"
               autoComplete="off"
-              aria-label="Nährstoff suchen"
+              aria-label="Wirkstoff suchen"
             />
             <button type="button" className="clear" onClick={() => updateOverviewSearch(activeCategory, '')} aria-label="Suche löschen">
               <SvgIcon icon="x" />
@@ -716,22 +777,22 @@ export default function KnowledgeOverviewPage() {
 
           <div className="db-stats">
             <div className="db-stat">
-              <b>{NUTRIENTS.length}</b>
-              <span>Nährstoffe</span>
+              <b>{error ? '–' : cards.length}</b>
+              <span>{error ? 'Wirkstoffe zurzeit nicht verfügbar' : 'Wirkstoffe'}</span>
             </div>
             <div className="db-stat">
               <b>{CATEGORIES.length}</b>
               <span>Kategorien</span>
             </div>
             <div className="db-stat">
-              <b>{readyCount}</b>
-              <span>{readyArticleLabel(readyCount)}</span>
+              <b>{error ? '–' : readyCount}</b>
+              <span>{error ? 'Artikel zurzeit nicht verfügbar' : readyArticleLabel(readyCount)}</span>
             </div>
           </div>
         </div>
       </section>
 
-      <div className="filter-bar" aria-label="Wissensdatenbank filtern">
+      {!error && <div className="filter-bar" aria-label="Wissensdatenbank filtern">
         <div className="filter-bar__in">
           <button
             type="button"
@@ -739,10 +800,10 @@ export default function KnowledgeOverviewPage() {
             onClick={() => updateOverviewSearch('all', query)}
           >
             Alle
-            <span className="ct">{NUTRIENTS.length}</span>
+            <span className="ct">{cards.length}</span>
           </button>
           {CATEGORIES.map((category) => {
-            const count = NUTRIENTS.filter((nutrient) => nutrient.category === category.key).length;
+            const count = cards.filter((nutrient) => nutrient.category === category.key).length;
             return (
               <button
                 key={category.key}
@@ -757,18 +818,21 @@ export default function KnowledgeOverviewPage() {
             );
           })}
         </div>
-      </div>
+      </div>}
 
       <main className="db-body">
         {error && (
-          <div className="db-state db-state--error">
+          <div className="db-state db-state--error" role="alert">
             <SvgIcon icon="search" />
             <h2>Laden fehlgeschlagen</h2>
             <p>{error}</p>
+            <button type="button" className="btn btn--primary" onClick={() => setLoadAttempt((attempt) => attempt + 1)}>
+              Erneut versuchen
+            </button>
           </div>
         )}
 
-        {visibleCount === 0 && (
+        {!error && visibleCount === 0 && (
           <div className="db-empty show">
             <SvgIcon icon="search" />
             <h2>Nichts gefunden</h2>
@@ -776,7 +840,7 @@ export default function KnowledgeOverviewPage() {
           </div>
         )}
 
-        {groupedCards.map(({ category, cards: categoryCards }) => {
+        {!error && groupedCards.map(({ category, cards: categoryCards }) => {
           if (categoryCards.length === 0) return null;
 
           return (

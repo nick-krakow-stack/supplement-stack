@@ -2,7 +2,7 @@
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { buildTrustStats, TrustSection } from './LandingPage';
+import { buildTrustStats, FeaturesSection, TrustSection } from './LandingPage';
 
 describe('LandingPage trust statistics', () => {
   afterEach(() => {
@@ -30,10 +30,10 @@ describe('LandingPage trust statistics', () => {
     expect(within(stats).getByText('92')).toBeTruthy();
     expect(within(stats).getByText('44')).toBeTruthy();
     expect(within(stats).getByText('33')).toBeTruthy();
-    expect(within(stats).getByText('Aktive Nährstoffe in unserer Datenbank')).toBeTruthy();
-    expect(within(stats).getByText('Wissensartikel mit den neuesten Erkenntnissen und Richtlinien')).toBeTruthy();
+    expect(within(stats).getByText('Aktive Wirkstoffe in unserer Datenbank')).toBeTruthy();
+    expect(within(stats).getByText('Wissensartikel mit Quellen und Prüfdatum')).toBeTruthy();
     expect(within(stats).getByText('Durchsuchte und zum Lesen aufbereitete Studien')).toBeTruthy();
-    expect(within(stats).getByText('Verknüpfte Produkte mit geprüften Inhaltsstoffen')).toBeTruthy();
+    expect(within(stats).getByText('Verknüpfte Produkte mit erfassten Inhaltsstoffen')).toBeTruthy();
     expect(within(stats).queryByText('Quellenverknüpfungen in Wissensartikeln')).toBeNull();
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringMatching(/\/api\/public-stats$/),
@@ -64,5 +64,15 @@ describe('LandingPage trust statistics', () => {
     });
 
     expect(stats[2].value).toBe('–');
+  });
+
+  it('describes product filtering as the user’s own comparison and decision', () => {
+    render(<FeaturesSection />);
+
+    expect(screen.getByRole('heading', { name: 'Produktangaben vergleichen' })).toBeTruthy();
+    expect(screen.getByText('Nach Angaben filterbar')).toBeTruthy();
+    expect(screen.getByText(/Filtere selbst.*Vergleiche.*entscheide selbst/i)).toBeTruthy();
+    expect(screen.queryByText('Passende Produktauswahl')).toBeNull();
+    expect(screen.queryByText('Automatisch gefiltert')).toBeNull();
   });
 });

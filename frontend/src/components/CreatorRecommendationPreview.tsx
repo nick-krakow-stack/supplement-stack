@@ -40,11 +40,6 @@ export default function CreatorRecommendationPreview({
                   <h3 className="text-lg font-black text-slate-950">{item.product_name || 'Produkt nicht mehr verfügbar'}</h3>
                   {item.brand && <p className="mt-1 text-sm font-semibold text-slate-500">{item.brand}</p>}
                 </div>
-                {item.category_name && (
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
-                    {item.category_name}
-                  </span>
-                )}
               </div>
 
               <div className="mt-4 rounded-xl bg-slate-50 p-4 text-sm text-slate-700">

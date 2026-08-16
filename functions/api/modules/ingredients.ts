@@ -548,7 +548,7 @@ ingredients.get('/search', async (c) => {
 // GET /api/ingredients/:id/sub-ingredients
 ingredients.get('/:id/sub-ingredients', async (c) => {
   const ingredientId = parsePositiveInteger(c.req.param('id'))
-  if (ingredientId === null) return c.json({ error: 'id must be a positive integer' }, 400)
+  if (ingredientId === null) return c.json({ error: 'Der Wirkstoff konnte nicht eindeutig erkannt werden.' }, 400)
 
   const parent = await c.env.DB.prepare(
     'SELECT id, name, unit, description FROM ingredients WHERE id = ?'
@@ -558,7 +558,7 @@ ingredients.get('/:id/sub-ingredients', async (c) => {
     unit: string | null
     description: string | null
   }>()
-  if (!parent) return c.json({ error: 'Not found' }, 404)
+  if (!parent) return c.json({ error: 'Der Wirkstoff wurde nicht gefunden.' }, 404)
 
   const subIngredients = await getSubIngredientsForParent(c.env.DB, ingredientId)
   const parts = await getPartLinksForIngredient(c.env.DB, ingredientId)
@@ -568,30 +568,63 @@ ingredients.get('/:id/sub-ingredients', async (c) => {
 // GET /api/ingredients/:id
 ingredients.get('/:id', async (c) => {
   const id = parsePositiveInteger(c.req.param('id'))
-  if (id === null) return c.json({ error: 'id must be a positive integer' }, 400)
+  if (id === null) return c.json({ error: 'Der Wirkstoff konnte nicht eindeutig erkannt werden.' }, 400)
   const ingredient = await c.env.DB.prepare('SELECT * FROM ingredients WHERE id = ?').bind(id).first<IngredientRow>()
-  if (!ingredient) return c.json({ error: 'Not found' }, 404)
+  if (!ingredient) return c.json({ error: 'Der Wirkstoff wurde nicht gefunden.' }, 404)
   const { results: synonyms } = await c.env.DB.prepare(
     'SELECT * FROM ingredient_synonyms WHERE ingredient_id = ? ORDER BY synonym ASC'
   ).bind(id).all()
   const { results: forms } = await c.env.DB.prepare(
     'SELECT * FROM ingredient_forms WHERE ingredient_id = ? ORDER BY score DESC, name ASC, id ASC'
   ).bind(id).all()
+  const { results: displayProfiles } = await c.env.DB.prepare(`
+    SELECT
+      profile.id,
+      profile.form_id,
+      profile.part_id,
+      COALESCE(translation.effect_summary, profile.effect_summary) AS effect_summary
+    FROM ingredient_display_profiles profile
+    LEFT JOIN display_profile_translations translation
+      ON translation.display_profile_id = profile.id
+     AND translation.language = 'de'
+    WHERE profile.ingredient_id = ?
+      AND profile.sub_ingredient_id IS NULL
+    ORDER BY
+      CASE
+        WHEN profile.part_id IS NOT NULL THEN 0
+        WHEN profile.form_id IS NOT NULL THEN 1
+        ELSE 2
+      END,
+      profile.id ASC
+  `).bind(id).all<{
+    id: number
+    form_id: number | null
+    part_id: number | null
+    effect_summary: string | null
+  }>()
   const subIngredients = await getSubIngredientsForParent(c.env.DB, id)
   const parts = await getPartLinksForIngredient(c.env.DB, id)
   const precursors = parts.map((link) => partLinkToLegacyPrecursor(link))
-  return c.json({ ingredient, synonyms, forms, parts, sub_ingredients: subIngredients, precursors })
+  return c.json({
+    ingredient,
+    synonyms,
+    forms,
+    display_profiles: displayProfiles,
+    parts,
+    sub_ingredients: subIngredients,
+    precursors,
+  })
 })
 
 // GET /api/ingredients/:id/recommendations
 ingredients.get('/:id/recommendations', async (c) => {
   const ingredientId = parsePositiveInteger(c.req.param('id'))
-  if (ingredientId === null) return c.json({ error: 'id must be a positive integer' }, 400)
+  if (ingredientId === null) return c.json({ error: 'Der Wirkstoff konnte nicht eindeutig erkannt werden.' }, 400)
 
   const language = (c.req.query('language') || 'de').trim().toLowerCase()
   const rawPartId = c.req.query('part_id')?.trim()
   const requestedPartId = rawPartId ? parsePositiveInteger(rawPartId) : null
-  if (rawPartId && requestedPartId === null) return c.json({ error: 'part_id must be a positive integer' }, 400)
+  if (rawPartId && requestedPartId === null) return c.json({ error: 'Der ausgewählte Bestandteil ist ungültig.' }, 400)
   if (requestedPartId !== null) {
     const linkedPart = await c.env.DB.prepare(`
       SELECT p.id
@@ -599,14 +632,14 @@ ingredients.get('/:id/recommendations', async (c) => {
       JOIN ingredient_parts p ON p.id = l.part_id
       WHERE l.ingredient_id = ? AND l.part_id = ? AND p.status = 'active'
     `).bind(ingredientId, requestedPartId).first<{ id: number }>()
-    if (!linkedPart) return c.json({ error: 'part_id does not belong to this ingredient or is not active' }, 400)
+    if (!linkedPart) return c.json({ error: 'Der ausgewählte Bestandteil gehört nicht zu diesem Wirkstoff oder ist nicht verfügbar.' }, 400)
   }
 
   try {
     const ingredient = await c.env.DB.prepare(
       'SELECT id, name, upper_limit, upper_limit_unit FROM ingredients WHERE id = ?'
     ).bind(ingredientId).first<IngredientRow>()
-    if (!ingredient) return c.json({ error: 'Not found' }, 404)
+    if (!ingredient) return c.json({ error: 'Der Wirkstoff wurde nicht gefunden.' }, 404)
 
     const recommendationColumns = await getTableColumns(c.env.DB, 'dose_recommendations')
     const stage4VisibilityPredicate = doseRecommendationOperationalVisibilityPredicate(recommendationColumns, 'dr')
@@ -793,10 +826,10 @@ ingredients.get('/:id/recommendations', async (c) => {
 // GET /api/ingredients/:id/dosage-guidelines
 ingredients.get('/:id/dosage-guidelines', async (c) => {
   const id = parsePositiveInteger(c.req.param('id'))
-  if (id === null) return c.json({ error: 'id must be a positive integer' }, 400)
+  if (id === null) return c.json({ error: 'Der Wirkstoff konnte nicht eindeutig erkannt werden.' }, 400)
   const rawPartId = c.req.query('part_id')?.trim()
   const partId = rawPartId ? parsePositiveInteger(rawPartId) : null
-  if (rawPartId && partId === null) return c.json({ error: 'part_id must be a positive integer' }, 400)
+  if (rawPartId && partId === null) return c.json({ error: 'Der ausgewählte Bestandteil ist ungültig.' }, 400)
   if (partId !== null) {
     const linkedPart = await c.env.DB.prepare(`
       SELECT p.id
@@ -804,7 +837,7 @@ ingredients.get('/:id/dosage-guidelines', async (c) => {
       JOIN ingredient_parts p ON p.id = l.part_id
       WHERE l.ingredient_id = ? AND l.part_id = ? AND p.status = 'active'
     `).bind(id, partId).first<{ id: number }>()
-    if (!linkedPart) return c.json({ error: 'part_id does not belong to this ingredient or is not active' }, 400)
+    if (!linkedPart) return c.json({ error: 'Der ausgewählte Bestandteil gehört nicht zu diesem Wirkstoff oder ist nicht verfügbar.' }, 400)
   }
   const recommendationColumns = await getTableColumns(c.env.DB, 'dose_recommendations')
   const stage4VisibilityPredicate = doseRecommendationGuidelineVisibilityPredicate(recommendationColumns, null)
@@ -865,18 +898,18 @@ ingredients.get('/:id/dosage-guidelines', async (c) => {
 ingredients.get('/:id/products', async (c) => {
   const productVisibility = await globalProductVisibilitySql(c.env.DB, 'p')
   const id = parsePositiveInteger(c.req.param('id'))
-  if (id === null) return c.json({ error: 'id must be a positive integer' }, 400)
+  if (id === null) return c.json({ error: 'Der Wirkstoff konnte nicht eindeutig erkannt werden.' }, 400)
   const rawFormId = c.req.query('form_id')?.trim()
   const formId = rawFormId ? parsePositiveInteger(rawFormId) : null
-  if (rawFormId && formId === null) return c.json({ error: 'form_id must be a positive integer' }, 400)
+  if (rawFormId && formId === null) return c.json({ error: 'Die ausgewählte Darreichungsform ist ungültig.' }, 400)
   const rawPartId = c.req.query('part_id')?.trim()
   const partId = rawPartId ? parsePositiveInteger(rawPartId) : null
-  if (rawPartId && partId === null) return c.json({ error: 'part_id must be a positive integer' }, 400)
+  if (rawPartId && partId === null) return c.json({ error: 'Der ausgewählte Bestandteil ist ungültig.' }, 400)
   if (formId !== null) {
     const form = await c.env.DB.prepare(
       'SELECT id FROM ingredient_forms WHERE id = ? AND ingredient_id = ?'
     ).bind(formId, id).first<{ id: number }>()
-    if (!form) return c.json({ error: 'form_id does not belong to this ingredient' }, 400)
+    if (!form) return c.json({ error: 'Die ausgewählte Darreichungsform gehört nicht zu diesem Wirkstoff.' }, 400)
   }
   if (partId !== null) {
     const part = await c.env.DB.prepare(`
@@ -885,7 +918,7 @@ ingredients.get('/:id/products', async (c) => {
       JOIN ingredient_parts p ON p.id = l.part_id
       WHERE l.ingredient_id = ? AND l.part_id = ? AND p.status = 'active'
     `).bind(id, partId).first<{ id: number }>()
-    if (!part) return c.json({ error: 'part_id does not belong to this ingredient or is not active' }, 400)
+    if (!part) return c.json({ error: 'Der ausgewählte Bestandteil gehört nicht zu diesem Wirkstoff oder ist nicht verfügbar.' }, 400)
   }
   const recommendationColumns = await getTableColumns(c.env.DB, 'product_recommendations')
   const hasRecommendationSlots = recommendationColumns.has('recommendation_slot') && recommendationColumns.has('shop_link_id')

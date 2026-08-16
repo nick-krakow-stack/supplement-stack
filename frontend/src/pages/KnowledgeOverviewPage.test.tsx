@@ -103,7 +103,7 @@ describe("KnowledgeOverviewPage", () => {
     const stats = Array.from(document.querySelectorAll(".knowledge-overview .db-stat")).map((stat) =>
       stat.textContent?.replace(/\s+/g, ""),
     );
-    expect(stats).toEqual(["89Nährstoffe", "10Kategorien", "5ausführlicheArtikel"]);
+    expect(stats).toEqual(["89Wirkstoffe", "10Kategorien", "5ausführlicheArtikel"]);
     expect(screen.getByRole("button", { name: /Alle\s*89/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: /Vitamine\s*15/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: /Spurenelemente\s*7/ })).toBeTruthy();
@@ -417,12 +417,12 @@ describe("KnowledgeOverviewPage", () => {
     );
 
     await screen.findByText("Vitamin A");
-    fireEvent.change(screen.getByLabelText("Nährstoff suchen"), { target: { value: "Polysaccharide" } });
+    fireEvent.change(screen.getByLabelText("Wirkstoff suchen"), { target: { value: "Polysaccharide" } });
     expect(screen.getByText("Beta-Glucane")).toBeTruthy();
     expect(screen.queryByText("Vitamin D")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: /Suche löschen/ }));
-    fireEvent.change(screen.getByLabelText("Nährstoff suchen"), { target: { value: "Creatin" } });
+    fireEvent.change(screen.getByLabelText("Wirkstoff suchen"), { target: { value: "Creatin" } });
     expect(screen.getByText("Kreatin")).toBeTruthy();
     expect(screen.queryByText("Kollagen")).toBeNull();
   });
@@ -476,6 +476,82 @@ describe("KnowledgeOverviewPage", () => {
     expect(screen.queryByText("Wissensdatenbank wird geladen")).toBeNull();
     expect(screen.getByText("Vitamin A")).toBeTruthy();
     expect(screen.getByText("Vitamin B1")).toBeTruthy();
+  });
+
+  it("renders exactly every active ingredient supplied by the central overview", async () => {
+    const nutrientStatuses = Array.from({ length: 92 }, (_, index) => ({
+      ingredient_id: index + 1,
+      name: `Zentraler Wirkstoff ${index + 1}`,
+      category: index % 2 === 0 ? "other" : "mineral",
+      description: `Zentraler Kurztext ${index + 1}`,
+      has_dge: false,
+      has_studies: false,
+    }));
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ articles: [], nutrient_statuses: nutrientStatuses, total: 0 }),
+    }));
+
+    render(
+      <MemoryRouter>
+        <KnowledgeOverviewPage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Zentraler Wirkstoff 92")).toBeTruthy();
+    expect(document.querySelectorAll(".knowledge-overview .nutri")).toHaveLength(92);
+    expect(Array.from(document.querySelectorAll(".knowledge-overview .db-stat"))[0].textContent?.replace(/\s+/g, ""))
+      .toBe("92Wirkstoffe");
+    expect(screen.getByText("Zentraler Kurztext 1")).toBeTruthy();
+  });
+
+  it("shows one understandable error with retry and does not add a false empty state", async () => {
+    const fetchMock = vi.fn()
+      .mockRejectedValueOnce(new Error("interne technische Nachricht"))
+      .mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          articles: [],
+          nutrient_statuses: [{
+            ingredient_id: 1,
+            name: "Wieder geladen",
+            category: "other",
+            description: "Zentrale Beschreibung",
+            has_dge: false,
+            has_studies: false,
+          }],
+          total: 0,
+        }),
+      });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <MemoryRouter>
+        <KnowledgeOverviewPage />
+      </MemoryRouter>,
+    );
+
+    const error = await screen.findByRole("alert");
+    expect(error.textContent).toContain("Die Wissensdatenbank konnte gerade nicht geladen werden");
+    expect(error.textContent).not.toContain("interne technische Nachricht");
+    expect(screen.queryByRole("heading", { name: "Nichts gefunden" })).toBeNull();
+    expect(document.querySelectorAll(".knowledge-overview .nutri")).toHaveLength(0);
+    expect(screen.queryByRole("button", { name: /Alle\s*89/ })).toBeNull();
+    const errorStats = Array.from(document.querySelectorAll(".knowledge-overview .db-stat")).map((stat) =>
+      stat.textContent?.replace(/\s+/g, ""),
+    );
+    expect(errorStats).toEqual([
+      "–Wirkstoffezurzeitnichtverfügbar",
+      "10Kategorien",
+      "–Artikelzurzeitnichtverfügbar",
+    ]);
+    fireEvent.click(screen.getByRole("button", { name: "Erneut versuchen" }));
+    expect(await screen.findByText("Wieder geladen")).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(document.querySelectorAll(".knowledge-overview .nutri")).toHaveLength(1);
+    expect(Array.from(document.querySelectorAll(".knowledge-overview .db-stat"))[0].textContent?.replace(/\s+/g, ""))
+      .toBe("1Wirkstoffe");
   });
 
   it("reuses the HTML-started overview request instead of starting a second fetch", async () => {

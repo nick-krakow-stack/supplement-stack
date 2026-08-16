@@ -1,37 +1,40 @@
-import { useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useMemo, useState } from 'react';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { apiClient } from '../api/client';
+import { authPath, authReturnTo, returnToLabel } from '../lib/returnTo';
+import PasswordField from '../components/PasswordField';
+import StatusMessage from '../components/StatusMessage';
+
+function passwordQuality(password: string): { label: string; color: string } {
+  if (!password) return { label: 'Noch nicht eingegeben', color: 'bg-slate-200' };
+  let points = password.length >= 8 ? 1 : 0;
+  if (password.length >= 12) points += 1;
+  if (/[a-z]/.test(password) && /[A-Z]/.test(password)) points += 1;
+  if (/\d/.test(password) && /[^\da-z]/i.test(password)) points += 1;
+  if (points >= 4) return { label: 'Stark', color: 'bg-emerald-500' };
+  if (points >= 2) return { label: 'Mittel', color: 'bg-amber-500' };
+  return { label: 'Zu kurz oder leicht zu erraten', color: 'bg-red-500' };
+}
 
 export default function ResetPasswordPage() {
   const [searchParams] = useSearchParams();
+  const location = useLocation();
   const token = searchParams.get('token') ?? '';
-
+  const returnTo = authReturnTo(location);
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [validationError, setValidationError] = useState<string | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [linkExpired, setLinkExpired] = useState(false);
   const [success, setSuccess] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const quality = useMemo(() => passwordQuality(password), [password]);
 
-  if (!token) {
-    return (
-      <div className="flex items-center justify-center min-h-[70vh]">
-        <div className="card max-w-sm w-full text-center">
-          <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-3 mb-4">
-            Ungültiger Link. Bitte fordere einen neuen an.
-          </p>
-          <Link to="/forgot-password" className="text-sm text-indigo-600 hover:underline">
-            Neuen Link anfordern
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     setValidationError(null);
     setServerError(null);
+    setLinkExpired(false);
 
     if (password.length < 8) {
       setValidationError('Das Passwort muss mindestens 8 Zeichen lang sein.');
@@ -46,91 +49,92 @@ export default function ResetPasswordPage() {
     try {
       await apiClient.post('/auth/reset-password', { token, password });
       setSuccess(true);
-    } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { error?: string } } })?.response?.data?.error ??
-        'Ein Fehler ist aufgetreten. Bitte versuche es erneut.';
-      setServerError(msg);
+    } catch (error) {
+      const status = (error as { response?: { status?: number } })?.response?.status;
+      setLinkExpired(status === 410);
+      setServerError(status === 410
+        ? 'Dieser Link ist abgelaufen. Bitte fordere einen neuen an.'
+        : status === 400
+          ? 'Dieser Link ist ungültig oder wurde bereits verwendet. Bitte fordere einen neuen an.'
+          : 'Das Passwort konnte gerade nicht gespeichert werden. Bitte versuche es erneut.');
     } finally {
       setSubmitting(false);
     }
   };
 
+  if (!token) {
+    return (
+      <div className="flex min-h-[70vh] items-center justify-center">
+        <div className="card w-full max-w-sm">
+          <h1 className="mb-4">Link fehlt</h1>
+          <StatusMessage tone="error">In diesem Aufruf fehlt der persönliche Rücksetz-Link.</StatusMessage>
+          <Link to={authPath('/forgot-password', returnTo)} className="mt-4 inline-flex min-h-11 items-center font-bold text-indigo-700 hover:underline">Neuen Link anfordern</Link>
+        </div>
+      </div>
+    );
+  }
+
   if (success) {
     return (
-      <div className="flex items-center justify-center min-h-[70vh]">
-        <div className="card max-w-sm w-full text-center flex flex-col gap-4">
-          <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-3">
-            Passwort geändert! Du kannst dich jetzt anmelden.
-          </p>
-          <Link to="/login" className="text-sm text-indigo-600 hover:underline">
-            Zur Anmeldung
-          </Link>
+      <div className="flex min-h-[70vh] items-center justify-center">
+        <div className="card flex w-full max-w-sm flex-col gap-4">
+          <h1>Passwort gespeichert</h1>
+          <StatusMessage tone="success">Dein Passwort wurde geändert. Melde dich jetzt an; danach kommst du zurück zu {returnToLabel(returnTo)}.</StatusMessage>
+          <Link to={authPath('/login', returnTo)} className="inline-flex min-h-11 items-center justify-center rounded-xl bg-blue-600 px-4 py-2 font-bold text-white hover:bg-blue-700">Zur Anmeldung</Link>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex items-center justify-center min-h-[70vh]">
-      <div className="card max-w-sm w-full">
-        <h1 className="mb-2">Neues Passwort setzen</h1>
-        <p className="text-sm text-gray-500 mb-6">
-          Wähle ein neues Passwort mit mindestens 8 Zeichen.
-        </p>
+    <div className="flex min-h-[70vh] items-center justify-center">
+      <div className="card w-full max-w-sm">
+        <h1 className="mb-2">Neues Passwort festlegen</h1>
+        <p className="mb-6 text-sm leading-6 text-gray-600">Nutze mindestens 8 Zeichen und möglichst ein nur hier verwendetes Passwort.</p>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-              Neues Passwort
-            </label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              autoComplete="new-password"
-              placeholder="Mindestens 8 Zeichen"
-            />
+          <PasswordField
+            id="password"
+            label="Neues Passwort"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            required
+            minLength={8}
+            autoComplete="new-password"
+          />
+
+          <div aria-live="polite">
+            <div className="h-2 overflow-hidden rounded-full bg-slate-200" aria-hidden="true">
+              <div className={`h-full ${quality.color}`} style={{ width: password ? (quality.label === 'Stark' ? '100%' : quality.label === 'Mittel' ? '66%' : '33%') : '0%' }} />
+            </div>
+            <p className="mt-1 text-sm font-semibold text-slate-600">Passwortqualität: {quality.label}</p>
           </div>
 
-          <div>
-            <label htmlFor="password-confirm" className="block text-sm font-medium text-gray-700 mb-1">
-              Passwort bestätigen
-            </label>
-            <input
-              id="password-confirm"
-              type="password"
-              value={passwordConfirm}
-              onChange={(e) => setPasswordConfirm(e.target.value)}
-              required
-              autoComplete="new-password"
-              placeholder="Passwort wiederholen"
-            />
-          </div>
+          <PasswordField
+            id="password-confirm"
+            label="Passwort wiederholen"
+            value={passwordConfirm}
+            onChange={(event) => setPasswordConfirm(event.target.value)}
+            required
+            minLength={8}
+            autoComplete="new-password"
+          />
 
-          {validationError && (
-            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-              {validationError}
-            </p>
-          )}
-
+          {validationError && <StatusMessage tone="error">{validationError}</StatusMessage>}
           {serverError && (
-            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            <StatusMessage tone="error">
               {serverError}
-            </p>
+              {(linkExpired || serverError.includes('ungültig')) && (
+                <> <Link to={authPath('/forgot-password', returnTo)} className="font-bold underline">Neuen Link anfordern</Link></>
+              )}
+            </StatusMessage>
           )}
 
-          <button type="submit" disabled={submitting} className="w-full mt-2">
-            {submitting ? 'Wird gespeichert...' : 'Passwort speichern'}
+          <button type="submit" disabled={submitting} className="mt-2 min-h-11 w-full">
+            {submitting ? 'Passwort wird gespeichert …' : 'Passwort speichern'}
           </button>
 
-          <p className="text-sm text-center text-gray-500">
-            <Link to="/login" className="text-indigo-600 hover:underline">
-              Zurück zur Anmeldung
-            </Link>
-          </p>
+          <Link to={authPath('/login', returnTo)} className="min-h-11 py-3 text-center text-sm font-bold text-indigo-700 hover:underline">Zurück zur Anmeldung</Link>
         </form>
       </div>
     </div>
