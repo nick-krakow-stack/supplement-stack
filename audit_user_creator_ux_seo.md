@@ -177,8 +177,8 @@ saubere Browserdarstellung – nicht öffentliche Indexierung.
 | [x] | STACK-10 | Stackbeschreibung | 8 | Sichtbar und verständlich. | Im Bearbeitungsdialog verbleibende Zeichen und Beispiel ohne englischen Stacknamen. |
 | [x] | STACK-10A | Speicherung der Stackbeschreibung | 5 | Auch angemeldete Nutzer speichern Beschreibungen nur in `localStorage`; sie fehlen auf anderen Geräten und bilden eine zweite Wahrheit neben dem Backend-Stack. | Beschreibung zentral am Stack persistieren, lokale Werte einmalig und guard-basiert migrieren, danach lokalen Schattenbestand entfernen. |
 | [x] | STACK-11 | Sortierung | 7 | A–Z, Tageszeiten und eigene Reihenfolge sind vorhanden. „Eigene“ bleibt ohne Kontext; Drag-and-drop ist nicht tastaturgeeignet. | „Manuell“, kurze Anleitung, Auf/Ab-Tasten als Tastaturalternative und Speichermeldung. |
-| [ ] | STACK-12 | Kategorien | 7 | Keine/Tageszeiten/eigene Kategorien sind mächtig, aber zusammen mit Sortierung und Ansicht kognitiv dicht. | Bereich „Ansicht anpassen“ zusammenfassen; Kategorien und Reihenfolge mit Vorschau erklären. |
-| [ ] | STACK-13 | Eigene Kategorien | 7 | Erstellen, Umbenennen, Löschen und Zuweisen vorhanden. | Fokusführung, Status-Live-Region, Produktfolge beim Löschen und Undo ergänzen. |
+| [x] | STACK-12 | Kategorien | 7 | Keine/Tageszeiten/eigene Kategorien sind mächtig, aber zusammen mit Sortierung und Ansicht kognitiv dicht. | Bereich „Ansicht anpassen“ zusammenfassen; Kategorien und Reihenfolge mit Vorschau erklären. |
+| [x] | STACK-13 | Eigene Kategorien | 7 | Erstellen, Umbenennen, Löschen und Zuweisen vorhanden. | Fokusführung, Status-Live-Region, Produktfolge beim Löschen und Undo ergänzen. |
 | [x] | STACK-14 | Kachel-/Listenansicht | 8 | Nutzer kann Dichte wählen. | Auswahl merken und Unterschiede zugänglich benennen. |
 | [x] | STACK-15 | Leerzustand | 9 | Sagt klar, wie der erste Schritt funktioniert, und bietet den CTA direkt an. | Bei mehreren Stacks Stackname im Text nennen. |
 | [x] | STACK-16 | Auswahl und Kostenleiste | 7 | Einmal- und Monatskosten sind nützlich. Warum Karten ausgewählt/abgewählt werden, ist nicht erklärt. | „In Kostenübersicht enthalten“ direkt an Auswahl erklären und Screenreaderstatus ergänzen. |
@@ -212,7 +212,7 @@ saubere Browserdarstellung – nicht öffentliche Indexierung.
 | [x] | ADD-11 | Produktauswahl | 7 | Packungs- und Monatskosten, Inhalt und Dosierung sind sichtbar. Vergleich, Sortierung und Unterschiede fehlen. | Vergleichsansicht, Filter/Form, transparente Standardreihenfolge und Button „X zu Stack Y hinzufügen“. |
 | [x] | ADD-12 | Eigenes Produkt | 7 | Direkter Weg vorhanden; in Demo verständlicher Registrierungsdialog. | Entwurf des aktuellen Wirkstoffs/Stacks beim Wechsel erhalten und nach Produkterstellung fortsetzen. |
 | [x] | ADD-13 | Produkt bearbeiten | 4 | „Fallback“, „Timing“ und „Einnahmeintervall in Tagen“ sind technische Sprache. | „Menge pro Einnahme“, „Wann nimmst du es?“ und Auswahl „täglich / alle X Tage / eigener Rhythmus“; automatische Berechnung verständlich zeigen. |
-| [ ] | ADD-14 | Stack bearbeiten | 5 | Name/Beschreibung klar; „Familienprofil“ zeigt teilweise nur „Eigener Stack“ und wirkt wie eine tote Funktion. | Feld ausblenden, wenn keine echte Auswahl besteht; sonst Zweck und Auswirkung erklären. |
+| [x] | ADD-14 | Stack bearbeiten | 5 | Name/Beschreibung klar; „Familienprofil“ zeigt teilweise nur „Eigener Stack“ und wirkt wie eine tote Funktion. | Feld ausblenden, wenn keine echte Auswahl besteht; sonst Zweck und Auswirkung erklären. |
 
 ## 9. Einnahmeplan `/einnahmeplan`
 
