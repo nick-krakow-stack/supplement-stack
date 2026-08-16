@@ -72,6 +72,7 @@ CREATE TABLE IF NOT EXISTS stacks (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER,
   name TEXT NOT NULL,
+  description TEXT CHECK (description IS NULL OR length(description) <= 1000),
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
