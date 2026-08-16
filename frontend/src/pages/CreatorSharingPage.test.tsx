@@ -636,9 +636,11 @@ describe('CreatorSharingPage', () => {
     }));
     renderCreator('/creator?bereich=portfolio&party=7&editShare=3');
 
-    const heading = await screen.findByRole('heading', { name: 'Ein Produkt empfehlen', level: 2 });
+    await screen.findByRole('heading', { name: 'Ein Produkt empfehlen', level: 2 });
     await waitFor(() => expect(screen.getAllByRole('alert').some((entry) => entry.textContent?.includes('Bitte prüfe den betroffenen Inhalt'))).toBe(true));
-    await waitFor(() => expect(document.activeElement).toBe(heading));
+    await waitFor(() => expect(document.activeElement).toBe(
+      screen.getByRole('heading', { name: 'Ein Produkt empfehlen', level: 2 }),
+    ));
     expect(screen.queryByText(/Produkt 100/)).toBeNull();
   });
 
