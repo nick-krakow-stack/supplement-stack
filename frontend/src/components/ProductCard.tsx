@@ -427,13 +427,19 @@ const CATEGORY_EMOJI: Record<CategoryKey, string> = {
 
 function getFallbackWarning(product: ProductCardProduct): ProductWarning | null {
   const t = product.name.toLowerCase();
-  if (t.includes('b12')) return { type: 'caution', title: 'Einnahmeabstand pr\u00fcfen', shortLabel: '20-30min Abstand zu Kaffee/Tee', message: 'Kaffee oder Tee werden in Quellen im Zusammenhang mit m\u00f6glicher geringerer Aufnahme einzelner N\u00e4hrstoffe diskutiert. Ein zeitlicher Abstand kann sinnvoll sein.' };
+  if (t.includes('b12')) return { type: 'info', title: 'Einnahmehinweis', shortLabel: 'Kaffee und Tee zeitversetzt trinken', message: 'Kaffee oder Tee können die Aufnahme einzelner Nährstoffe beeinflussen. Ein zeitlicher Abstand kann deshalb sinnvoll sein.' };
   if (t.includes('jod')) return { type: 'danger', title: 'Schilddr\u00fcsenkontext beachten', message: 'Bei Schilddr\u00fcsenerkrankungen, Jodmedikation oder unklarer Versorgung sollte Jod nur nach \u00e4rztlicher R\u00fccksprache erg\u00e4nzt werden.' };
   return null;
 }
 
 function normalizeWarningSeverity(value?: string | null): WarningSeverity {
   return value === 'danger' || value === 'info' ? value : 'caution';
+}
+
+function warningLeadLabel(severity: WarningSeverity): string {
+  if (severity === 'danger') return 'Wichtig';
+  if (severity === 'info') return 'Hinweis';
+  return 'Achtung';
 }
 
 function compactTextLabel(value: string): string | null {
@@ -649,8 +655,8 @@ export default function ProductCard({
                     data-warning-severity={compactWarning.severity}
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <AlertTriangle size={13} />
-                    <strong>Achtung</strong>
+                    {compactWarning.severity !== 'info' && <AlertTriangle size={13} />}
+                    <strong>{warningLeadLabel(compactWarning.severity)}</strong>
                     <span>{compactWarning.label}</span>
                     {hasDetails && (
                       <button
@@ -741,7 +747,9 @@ export default function ProductCard({
               <ModalWrapper onClose={closeWarningModal} title={openWarning.title ?? 'Warnung'} size="md">
                 <div className="space-y-3">
                   <div>
-                    <p className="text-[10px] font-extrabold uppercase tracking-[0.4px] text-slate-400">Warnung</p>
+                    <p className="text-[10px] font-extrabold uppercase tracking-[0.4px] text-slate-400">
+                      {warningLeadLabel(openWarning.severity)}
+                    </p>
                     <p className="mt-1 font-bold text-slate-900">
                       {openWarning.title ?? 'Hinweis'}
                     </p>
@@ -869,7 +877,7 @@ export default function ProductCard({
       {/* Effect */}
       {effectText && (
         <div className="ss-product-card-effect mb-2.5">
-          <div className="text-[10px] font-bold uppercase tracking-[0.4px] text-slate-400 mb-1">Wirkung</div>
+          <div className="text-[10px] font-bold uppercase tracking-[0.4px] text-slate-400 mb-1">Wofür es genutzt wird</div>
           {effects.length > 1 ? (
             <div className="ss-effect-points">
               {effects.map((effect) => (
@@ -911,8 +919,8 @@ export default function ProductCard({
                 data-warning-severity={compactWarning.severity}
                 onClick={(e) => e.stopPropagation()}
               >
-                <AlertTriangle size={13} className="shrink-0" />
-                <strong>Achtung</strong>
+                {compactWarning.severity !== 'info' && <AlertTriangle size={13} className="shrink-0" />}
+                <strong>{warningLeadLabel(compactWarning.severity)}</strong>
                 <span>{compactWarning.label}</span>
                 {hasDetails && (
                   <button
@@ -939,7 +947,9 @@ export default function ProductCard({
           <ModalWrapper onClose={closeWarningModal} title={openWarning.title ?? 'Warnung'} size="md">
             <div className="space-y-3">
               <div>
-                <p className="text-[10px] font-extrabold uppercase tracking-[0.4px] text-slate-400">Warnung</p>
+                <p className="text-[10px] font-extrabold uppercase tracking-[0.4px] text-slate-400">
+                  {warningLeadLabel(openWarning.severity)}
+                </p>
                 <p className="mt-1 font-bold text-slate-900">
                   {openWarning.title ?? 'Hinweis'}
                 </p>

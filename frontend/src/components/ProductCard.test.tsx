@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import ProductCard from './ProductCard';
 
@@ -44,5 +44,37 @@ describe('ProductCard sub-ingredients', () => {
 
     rerender(<ProductCard product={affiliateProduct} display="list" />);
     expect(screen.queryByText(/^Affiliate(?:-Link)?$/)).toBeNull();
+  });
+
+  it('shows the B12 fallback as a calm intake note instead of an alarm', () => {
+    render(<ProductCard product={{
+      id: 3,
+      name: 'Vitamin B12 500µg',
+      price: 11.9,
+      ingredients: [],
+    }} />);
+
+    expect(screen.getByText('Hinweis')).toBeTruthy();
+    expect(screen.getByText('Kaffee und Tee zeitversetzt trinken')).toBeTruthy();
+    expect(screen.queryByText('Achtung')).toBeNull();
+    expect(screen.queryByText(/20-30min/)).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mehr Informationen: Kaffee und Tee zeitversetzt trinken' }));
+    expect(screen.getByRole('heading', { name: 'Einnahmehinweis' })).toBeTruthy();
+    expect(screen.queryByText('Warnung')).toBeNull();
+  });
+
+  it('renders a centrally supplied ingredient effect summary', () => {
+    render(<ProductCard product={{
+      id: 4,
+      name: 'Vitamin K2 MK-7 200µg',
+      price: 22.9,
+      ingredient_effect_summary: 'Blutgerinnung, Knochenstoffwechsel',
+      ingredients: [],
+    }} />);
+
+    expect(screen.getByText('Wofür es genutzt wird')).toBeTruthy();
+    expect(screen.getByText('Blutgerinnung')).toBeTruthy();
+    expect(screen.getByText('Knochenstoffwechsel')).toBeTruthy();
   });
 });
