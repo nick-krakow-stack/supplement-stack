@@ -4317,22 +4317,27 @@ export function StackWorkspace({
         {activeIngredientTotals.length > 0 && (
           <section
             aria-label="Tägliche Wirkstoffmengen im Stack"
-            className="mb-6 rounded-2xl border border-slate-200 bg-slate-50 p-5"
+            className="mb-5 border-y border-slate-200 py-3"
           >
-            <h2 className="text-lg font-black text-slate-950">Wirkstoffe pro Tag</h2>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {activeIngredientTotals.map((ingredient) => (
-                <div key={ingredient.ingredient_id} className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-                  <p className="font-black text-slate-900">
-                    {ingredient.ingredient_name}: {formatStackSummaryAmounts(ingredient.totals)}
-                  </p>
-                  {ingredient.parts.map((part) => (
-                    <p key={part.part_id} className="mt-1 pl-3 text-sm font-semibold text-slate-600">
-                      davon {part.part_name}: {formatStackSummaryAmounts(part.totals)}
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-5">
+              <h2 className="shrink-0 pt-0.5 text-[11px] font-extrabold uppercase tracking-[0.4px] text-slate-500">
+                Wirkstoffe pro Tag
+              </h2>
+              <div className="flex flex-wrap gap-x-5 gap-y-2">
+                {activeIngredientTotals.map((ingredient) => (
+                  <div key={ingredient.ingredient_id} className="min-w-0">
+                    <p className="text-sm text-slate-700">
+                      <span className="font-extrabold text-slate-900">{ingredient.ingredient_name}</span>{' '}
+                      {formatStackSummaryAmounts(ingredient.totals)}
                     </p>
-                  ))}
-                </div>
-              ))}
+                    {ingredient.parts.map((part) => (
+                      <p key={part.part_id} className="mt-0.5 text-xs font-semibold text-slate-500">
+                        davon {part.part_name}: {formatStackSummaryAmounts(part.totals)}
+                      </p>
+                    ))}
+                  </div>
+                ))}
+              </div>
             </div>
           </section>
         )}
