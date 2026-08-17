@@ -14,6 +14,7 @@ import type { AppContext } from '../lib/types'
 import { globalProductVisibilitySql } from '../lib/creator-sharing-service'
 import { attachWarningsToProducts, loadCatalogProductSafetyWarnings } from './knowledge'
 import { loadIngredientPartsByParentRows } from '../lib/ingredient-parts'
+import { publicProductSelect } from '../lib/public-product-projection'
 
 const demo = new Hono<AppContext>()
 const DEMO_SESSION_RATE_LIMIT = 10
@@ -37,7 +38,7 @@ demo.get('/products', async (c) => {
   const productVisibility = await globalProductVisibilitySql(c.env.DB, 'p')
   const { results: products } = await c.env.DB.prepare(`
     SELECT
-      p.*,
+      ${publicProductSelect()},
       pi.id AS product_ingredient_id,
       pi.ingredient_id,
       i.name AS ingredient_name,
@@ -49,8 +50,6 @@ demo.get('/products', async (c) => {
       pi.search_relevant,
       pi.is_main,
       pi.form_id,
-      COALESCE(idp_form.effect_summary, idp_base.effect_summary) AS effect_summary,
-      COALESCE(idp_form.effect_summary, idp_base.effect_summary) AS ingredient_effect_summary,
       COALESCE(idp_form.timing, idp_base.timing, p.timing) AS timing,
       COALESCE(idp_form.timing, idp_base.timing) AS ingredient_timing,
       COALESCE(idp_form.timing_note, idp_base.timing_note) AS ingredient_timing_note,

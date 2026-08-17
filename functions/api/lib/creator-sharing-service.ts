@@ -18,7 +18,32 @@ export type PartyRow = {
   slug: string
   status: 'active' | 'blocked'
   auto_catalog_approval: number
+  public_profile_image_url: string | null
   version: number
+}
+
+export function publicProfileImageUrl(
+  value: unknown,
+): { ok: true; value: string | null } | { ok: false } {
+  if (value === undefined || value === null || value === '') return { ok: true, value: null }
+  if (typeof value !== 'string') return { ok: false }
+  const trimmed = value.trim()
+  if (!trimmed) return { ok: true, value: null }
+  if (trimmed.length > 500) return { ok: false }
+  if (trimmed.startsWith('/api/r2/')) {
+    const safeR2Path = /^\/api\/r2\/[A-Za-z0-9][A-Za-z0-9/_.%~-]*$/.test(trimmed)
+      && !trimmed.includes('..')
+      && !/%2e/i.test(trimmed)
+      && !trimmed.includes('//')
+    return safeR2Path ? { ok: true, value: trimmed } : { ok: false }
+  }
+  try {
+    const parsed = new URL(trimmed)
+    if (parsed.protocol !== 'https:' || parsed.username || parsed.password || !parsed.hostname) return { ok: false }
+    return { ok: true, value: parsed.toString() }
+  } catch {
+    return { ok: false }
+  }
 }
 
 export type ProductShopTargetRow = {
@@ -214,7 +239,8 @@ export async function globalProductVisibilitySql(db: D1Database, alias = 'p'): P
 
 export async function getPlatformParty(db: D1Database): Promise<PartyRow | null> {
   return db.prepare(`
-    SELECT id, type, name, slug, status, auto_catalog_approval, version
+    SELECT id, type, name, slug, status, auto_catalog_approval,
+      public_profile_image_url, version
     FROM parties
     WHERE slug = 'platform'
     LIMIT 1
@@ -223,7 +249,8 @@ export async function getPlatformParty(db: D1Database): Promise<PartyRow | null>
 
 export async function getParty(db: D1Database, partyId: number): Promise<PartyRow | null> {
   return db.prepare(`
-    SELECT id, type, name, slug, status, auto_catalog_approval, version
+    SELECT id, type, name, slug, status, auto_catalog_approval,
+      public_profile_image_url, version
     FROM parties
     WHERE id = ?
   `).bind(partyId).first<PartyRow>()

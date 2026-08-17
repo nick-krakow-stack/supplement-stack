@@ -7,7 +7,7 @@ import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-rou
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DosageGuideline } from '../types/local';
 import { useAuth } from '../contexts/AuthContext';
-import { reportProductLink } from '../api/stacks';
+import { getPublicIntakeTimings, reportProductLink } from '../api/stacks';
 import {
   applyPlannedDoseToProduct,
   buildStackPdf,
@@ -18,7 +18,7 @@ import {
   modalIngredientDescription,
   modalVisibleGuidelineOptions,
   populationLabel,
-  resolveIngredientEffectSummary,
+  productTimingLabel,
   selectStudyGuideline,
   StackWorkspace,
 } from './StackWorkspace';
@@ -94,7 +94,7 @@ function mockWorkspaceFetch(catalogProducts: Array<Record<string, unknown>> = []
       body = {
         ingredient: { id: 77, name: 'Magnesium', unit: 'mg', description: 'Ein Mineralstoff.' },
         forms: [],
-        display_profiles: [{ id: 1, form_id: null, part_id: null, effect_summary: 'Unterstützt normale Körperfunktionen.' }],
+        display_profiles: [{ id: 1, form_id: null, part_id: null, effect_summary: 'Mineralstoff für die normale Funktion von Muskeln und Nerven.' }],
       };
     } else if (url.includes('/ingredients/77/products')) {
       body = { products: catalogProducts };
@@ -124,6 +124,8 @@ function mockAuthenticatedStacksFetch(initialStacks: Array<Record<string, unknow
         delete row.products;
         return row;
       }) };
+    } else if (/\/stacks\/[^/]+\/email$/.test(url.pathname) && method === 'POST') {
+      body = { ok: true };
     } else {
       const match = /\/stacks\/([^/]+)$/.exec(url.pathname);
       const stackIndex = match ? stacks.findIndex((stack) => String(stack.id) === decodeURIComponent(match[1])) : -1;
@@ -268,24 +270,11 @@ describe('StackWorkspace dosage guideline helpers', () => {
     expect(stylesSource).toContain('font-family: var(--font)');
   });
 
-  it('uses the central effect profile without requiring a product and honors part, form, base priority', () => {
-    const profiles = [
-      { id: 1, form_id: null, part_id: null, effect_summary: 'Basiswirkung' },
-      { id: 2, form_id: 7, part_id: null, effect_summary: 'Formwirkung' },
-      { id: 3, form_id: null, part_id: 9, effect_summary: 'Partwirkung' },
-    ];
-
-    expect(resolveIngredientEffectSummary(profiles, null, null)).toBe('Basiswirkung');
-    expect(resolveIngredientEffectSummary(profiles, 7, null)).toBe('Formwirkung');
-    expect(resolveIngredientEffectSummary(profiles, 7, 9)).toBe('Partwirkung');
-    expect(resolveIngredientEffectSummary([], null, null)).toBe('');
-  });
-
   it('creates a byte-correct multipage PDF with every product and real German WinAnsi characters', async () => {
     const products = Array.from({ length: 70 }, (_, index) => ({
       id: index + 1,
       name: `Produkt ${index + 1} für Größe und Maß`,
-      price: 12.5,
+      price: index === 0 ? null : 12.5,
       dosage_text: `${index + 1} µg täglich`,
       timing_label: 'Morgens',
       creator_snapshot_at: '2026-08-10T09:00:00.000Z',
@@ -310,8 +299,11 @@ describe('StackWorkspace dosage guideline helpers', () => {
     expect(binary).toContain('/Encoding /WinAnsiEncoding');
     expect(binary).toContain('Produkt 70 f\u00fcr Gr\u00f6\u00dfe und Ma\u00df');
     expect(binary).toContain('Creatorin K\u00e4the');
+    expect(binary).toContain('Preis nicht verf\u00fcgbar');
+    expect(binary).not.toContain(`0,00 ${String.fromCharCode(0x80)}`);
     expect(binary).toContain('Stand der Creator-Empfehlung: 10.8.2026');
-    expect(binary).toContain('Pers\u00f6nlicher Hinweis des Creators: Bitte morgens mit einem Glas Wasser einnehmen.');
+    expect(binary).toContain('Allgemeiner Creator-Hinweis: Bitte morgens mit einem Glas Wasser einnehmen.');
+    expect((binary.match(/Allgemeiner Creator-Hinweis/g) ?? [])).toHaveLength(1);
     expect(binary).toContain('Pers\u00f6nlicher Stack-Hinweis: Vollst\u00e4ndige pers\u00f6nliche \u00dcbersicht.');
     expect(binary).not.toContain('Affiliate');
     expect(binary).toContain('Gesundheitshinweis: Diese \u00dcbersicht dient der Orientierung');
@@ -345,6 +337,199 @@ describe('StackWorkspace dosage guideline helpers', () => {
     expect(click).toHaveBeenCalledOnce();
     expect(print).not.toHaveBeenCalled();
     expect(link).toBeNull();
+  });
+
+  it('shows every saved intake time, honest plan values and one general creator context', async () => {
+    mockAuthenticatedStacksFetch([{
+      id: 1,
+      name: 'Alltagsplan',
+      description: 'Meine gespeicherte Übersicht.',
+      origin_party_name: 'Creatorin Mia',
+      version: 1,
+      products: [
+        {
+          id: 11,
+          product_type: 'catalog',
+          stack_item_id: 111,
+          version: 1,
+          name: 'Morgen-und-Abend-Produkt',
+          price: 30,
+          quantity: 1,
+          intake_interval_days: 1,
+          timing: 'Morgens & Abends',
+          timing_label: 'Morgens & Abends',
+          servings_per_container: 30,
+          container_count: 1,
+          serving_size: 1,
+          serving_unit: 'Kapsel',
+          creator_statement_snapshot: 'So nutze ich diesen Stack in meinem Alltag.',
+          creator_snapshot_at: '2026-08-10T09:00:00.000Z',
+          creator_party_name: 'Creatorin Mia',
+        },
+        {
+          id: 12,
+          product_type: 'catalog',
+          stack_item_id: 112,
+          version: 1,
+          name: 'Produkt zum Essen',
+          price: null,
+          product_price: null,
+          quantity: 1,
+          intake_interval_days: 1,
+          timing: 'with_meal',
+          timing_label: 'Zum Essen',
+          creator_statement_snapshot: 'So nutze ich diesen Stack in meinem Alltag.',
+          creator_party_name: 'Creatorin Mia',
+        },
+      ],
+    }]);
+
+    render(<MemoryRouter initialEntries={['/einnahmeplan']}><StackWorkspace mode="authenticated" view="routine" /></MemoryRouter>);
+
+    expect(await screen.findByRole('heading', { name: 'Dein Einnahmeplan', level: 1 })).toBeTruthy();
+    expect((await screen.findByRole('button', { name: /Alltagsplan/ })).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getAllByRole('heading', { name: 'Morgen-und-Abend-Produkt', level: 3 })).toHaveLength(2);
+    expect(screen.getAllByText('Die Menge ist die Gesamtmenge pro Einnahmetag. Wie sie auf die Zeitfenster verteilt wird, ist nicht gespeichert.')).toHaveLength(2);
+    expect(screen.getByRole('button', { name: /Mittags/ }).getAttribute('aria-expanded')).toBe('false');
+    expect(screen.getByRole('button', { name: /Flexibel/ }).getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByRole('heading', { name: 'Produkt zum Essen', level: 3 })).toBeTruthy();
+    expect(screen.getAllByText('30,00 €/Monat')).toHaveLength(2);
+    expect(screen.getByText('Nicht berechenbar – Packungsangaben fehlen.')).toBeTruthy();
+    expect(screen.getByText('Nicht berechenbar – Preis oder Packungsangaben fehlen.')).toBeTruthy();
+    expect(screen.getByText('So nutze ich diesen Stack in meinem Alltag.')).toBeTruthy();
+    expect(screen.getAllByText(/Allgemeiner Creator-Hinweis:/)).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'E-Mail' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Drucken' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'PDF' })).toBeTruthy();
+  });
+
+  it('separates the public example plan clearly from a saved private plan', async () => {
+    vi.mocked(useAuth).mockReturnValue(guestAuthValue());
+    render(<MemoryRouter initialEntries={['/einnahmeplan']}><StackWorkspace mode="demo" view="routine" /></MemoryRouter>);
+
+    expect(screen.getByRole('heading', { name: 'Dein Einnahmeplan', level: 1 })).toBeTruthy();
+    expect(screen.getByText(/Eine öffentliche Beispielansicht/)).toBeTruthy();
+    expect(screen.getByText('Das ist eine Beispielansicht.')).toBeTruthy();
+    expect(screen.getByText(/Dauerhaft gespeichert und per E-Mail versendet wird erst nach der Anmeldung/)).toBeTruthy();
+    expect(await screen.findByRole('button', { name: /Basis Gesundheit/ })).toBeTruthy();
+  });
+
+  it('edits one intake time without inventing a time and keeps meal timing flexible', async () => {
+    vi.mocked(getPublicIntakeTimings).mockResolvedValueOnce([
+      { value: 'with_meal', label: 'Zum Essen', description: null, sort_order: 10 },
+      { value: 'morning_evening', label: 'Morgens & Abends', description: null, sort_order: 20 },
+    ]);
+    const { fetchMock } = mockAuthenticatedStacksFetch([{
+      id: 1,
+      name: 'Zeitplan',
+      description: '',
+      version: 1,
+      products: [{
+        id: 21,
+        product_type: 'catalog',
+        stack_item_id: 121,
+        version: 1,
+        name: 'Zeitprodukt',
+        price: 20,
+        quantity: 1,
+        intake_interval_days: 1,
+        timing: 'with_meal',
+        timing_label: 'Zum Essen',
+        servings_per_container: 60,
+        container_count: 1,
+        serving_size: 1,
+        serving_unit: 'Kapsel',
+      }],
+    }]);
+
+    render(<MemoryRouter initialEntries={['/einnahmeplan']}><StackWorkspace mode="authenticated" view="routine" /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button', { name: 'Einnahmezeit bearbeiten' }));
+    const timing = screen.getByLabelText('Einnahmezeit') as HTMLSelectElement;
+    expect(timing.value).toBe('with_meal');
+    expect(screen.getByText(/„Zum Essen“ bleibt ohne erfundene Uhrzeit/)).toBeTruthy();
+    fireEvent.change(timing, { target: { value: 'morning_evening' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Speichern' }));
+
+    await screen.findByText('Einnahmemenge und Rhythmus wurden gespeichert.');
+    const putCall = fetchMock.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === 'PUT');
+    const payload = JSON.parse(String((putCall?.[1] as RequestInit | undefined)?.body ?? '{}')) as { product_ids?: Array<Record<string, unknown>> };
+    expect(payload.product_ids?.[0]).toMatchObject({ timing: 'morning_evening' });
+    expect(screen.getAllByRole('heading', { name: 'Zeitprodukt', level: 3 })).toHaveLength(2);
+  });
+
+  it('confirms the account address, content and privacy consequence before sending', async () => {
+    const { fetchMock } = mockAuthenticatedStacksFetch([{
+      id: 1,
+      name: 'Mail-Plan',
+      description: '',
+      version: 1,
+      products: [{ id: 31, name: 'Mail-Produkt', product_type: 'catalog', price: 10, quantity: 1, intake_interval_days: 1 }],
+    }]);
+    render(<MemoryRouter initialEntries={['/einnahmeplan']}><StackWorkspace mode="authenticated" view="routine" /></MemoryRouter>);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'E-Mail' }));
+    const dialog = screen.getByRole('dialog', { name: 'Einnahmeplan per E-Mail senden?' });
+    expect(within(dialog).getByText(/Mail-Plan/)).toBeTruthy();
+    expect(within(dialog).getByText(/user@test.invalid/)).toBeTruthy();
+    expect(within(dialog).getByText(/E-Mail-Dienst/)).toBeTruthy();
+    expect(within(dialog).getByRole('link', { name: 'Datenschutzerklärung' }).getAttribute('href')).toBe('/datenschutz');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'An meine Account-Adresse senden' }));
+
+    expect(await screen.findByText(/Der Einnahmeplan „Mail-Plan“ wurde an user@test.invalid gesendet/)).toBeTruthy();
+    expect(fetchMock.mock.calls.some(([input, init]) => String(input).includes('/stacks/1/email') && (init as RequestInit | undefined)?.method === 'POST')).toBe(true);
+  });
+
+  it('never turns missing or unknown timing values into jederzeit', () => {
+    expect(productTimingLabel({ timing: null, timing_label: null, ingredient_timing_label: null })).toBe('Keine Angabe');
+    expect(productTimingLabel({ timing: null, timing_label: null, ingredient_timing_label: 'Morgens' })).toBe('Keine Angabe');
+    expect(productTimingLabel({ timing: 'UNKNOWN_TIMING', timing_label: null, ingredient_timing_label: 'Morgens' })).toBe('Keine Angabe');
+    expect(productTimingLabel({ timing: 'anytime', timing_label: null, ingredient_timing_label: null })).toBe('Jederzeit');
+  });
+
+  it('does not present one-time or monthly totals as complete when a selected price is missing', async () => {
+    mockAuthenticatedStacksFetch([{
+      id: 1,
+      name: 'Kostenplan',
+      description: '',
+      version: 1,
+      products: [
+        {
+          id: 41,
+          stack_item_id: 141,
+          product_type: 'catalog',
+          name: 'Produkt mit Preis',
+          price: 10,
+          quantity: 1,
+          intake_interval_days: 1,
+          servings_per_container: 30,
+          container_count: 1,
+        },
+        {
+          id: 42,
+          stack_item_id: 142,
+          product_type: 'catalog',
+          name: 'Produkt ohne Preis',
+          price: null,
+          product_price: null,
+          quantity: 1,
+          intake_interval_days: 1,
+          servings_per_container: 30,
+          container_count: 1,
+        },
+      ],
+    }]);
+
+    render(<MemoryRouter initialEntries={['/stacks']}><StackWorkspace mode="authenticated" /></MemoryRouter>);
+
+    expect(await screen.findByText('2 von 2 Produkten enthalten')).toBeTruthy();
+    expect(screen.getByText('Packungen einmalig').parentElement?.textContent).toContain('Nicht vollständig berechenbar');
+    expect(screen.getByText('Aus Nutzung pro Monat').parentElement?.textContent).toContain('Nicht vollständig berechenbar');
+    expect(screen.queryByText('0,00 €')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Produkt ohne Preis aus der Kostenübersicht entfernen' }));
+    await waitFor(() => expect(screen.getByText('1 von 2 Produkten enthalten')).toBeTruthy());
+    expect(screen.getByText('Packungen einmalig').parentElement?.textContent).toContain('10,00 €');
+    expect(screen.getByText('Aus Nutzung pro Monat').parentElement?.textContent).toContain('10,00 €');
   });
 
   it('keeps modal copy compact enough for the supplied template card', () => {
@@ -409,7 +594,7 @@ describe('StackWorkspace dosage guideline helpers', () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(await screen.findByRole('button', { name: 'PDF erstellen' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'PDF' }));
     expect(await screen.findByRole('dialog', { name: 'PDF kostenlos erstellen' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Kostenlos anmelden' })).toBeTruthy();
     expect(screen.getByText(/sobald du angemeldet bist/)).toBeTruthy();
@@ -422,7 +607,7 @@ describe('StackWorkspace dosage guideline helpers', () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(await screen.findByRole('button', { name: 'PDF erstellen' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'PDF' }));
     expect(await screen.findByRole('dialog', { name: 'Funktion in deinen Stacks nutzen' })).toBeTruthy();
     expect(screen.getByText(/Du bist bereits angemeldet/)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Meine Stacks öffnen' })).toBeTruthy();
@@ -627,6 +812,7 @@ describe('StackWorkspace dosage guideline helpers', () => {
         id: 301,
         name: 'Produkt mit 300 mg',
         price: 30,
+        shop_link: 'https://shop.example/magnesium',
         servings_per_container: 30,
         container_count: 1,
         serving_size: 1,
@@ -657,11 +843,14 @@ describe('StackWorkspace dosage guideline helpers', () => {
     fireEvent.change(screen.getByRole('combobox', { name: 'Wirkstoff suchen' }), { target: { value: 'Magnesium' } });
     fireEvent.mouseDown(await screen.findByRole('option', { name: /Magnesium/ }, { timeout: 1500 }));
     await screen.findByText('DGE-Referenzwert für die gesamte tägliche Zufuhr');
+    expect(screen.queryByText('Wirkung')).toBeNull();
+    expect(screen.queryByText('Mineralstoff für die normale Funktion von Muskeln und Nerven.')).toBeNull();
     fireEvent.change(screen.getByLabelText('Mit welcher täglichen Wirkstoffmenge möchtest du planen?'), { target: { value: '400' } });
     fireEvent.click(screen.getByRole('button', { name: 'Passende Produkte anzeigen' }));
 
     expect(await screen.findByText('Für deinen Plan: 2 Portionen, reicht 15 Tage, 60,00 €/Monat')).toBeTruthy();
     expect(screen.getByText('Für deinen Plan: 1 Portion, reicht 30 Tage, 30,00 €/Monat')).toBeTruthy();
+    expect(screen.getByRole('link', { name: /Jetzt kaufen: Produkt mit 300 mg/ })).toBeTruthy();
     const targetSelect = screen.getByRole('combobox', { name: 'Für Stack' }) as HTMLSelectElement;
     const firstStackId = (targetSelect.options[0] as HTMLOptionElement).value;
     fireEvent.change(targetSelect, { target: { value: firstStackId } });
@@ -682,6 +871,7 @@ describe('StackWorkspace dosage guideline helpers', () => {
       serving_unit: 'Portion',
       ingredients: [{ ingredient_id: 77, quantity: 300, unit: 'mg', basis_quantity: 1, basis_unit: 'Portion' }],
     }, { value: 400, unit: 'mg' });
+    expect(planned.timing).toBeNull();
     expect(describeProductPlan(planned)).toContain('Reichweite nicht berechenbar, Monatskosten nicht berechenbar');
   });
 

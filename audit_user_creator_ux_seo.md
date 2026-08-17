@@ -184,7 +184,7 @@ saubere Browserdarstellung – nicht öffentliche Indexierung.
 | [x] | STACK-16 | Auswahl und Kostenleiste | 7 | Einmal- und Monatskosten sind nützlich. Warum Karten ausgewählt/abgewählt werden, ist nicht erklärt. | „In Kostenübersicht enthalten“ direkt an Auswahl erklären und Screenreaderstatus ergänzen. |
 | [x] | STACK-17 | Produktkarte: Identität | 8 | Bild, Marke, Name und Zeitpunkt sind schnell erfassbar. Sehr kleine 10–11-px-Texte bremsen. | Mindestschriftgröße erhöhen; fehlendes/defektes Bild mit stabilem Platzhalter. |
 | [x] | STACK-18 | Produktkarte: Menge/Reichweite/Intervall | 8 | Wichtige Nutzungsdaten sind kompakt. `unbekannt` oder Strich erklärt die Ursache nicht. | „Nicht berechenbar – Produktangaben fehlen“ mit Reparaturweg für eigene Produkte. |
-| [x] | STACK-19 | „Wofür es genutzt wird“ | 9 | Zentrale Wirkungs-/Nutzungstexte sind nun für alle verwendeten Wirkstoffe vorhanden und leicht scanbar. | Bei langen Texten maximal drei zentrale Punkte plus Link zum Wissensartikel. |
+| [x] | STACK-19 | Produktkontext und Wirkung | 9 | Produktkarten zeigen nur belegte Produkt- und Nutzungsangaben. Ungeprüfte Wirkungsclaims bleiben aus dem kaufnahen Kontext entfernt. | Zentrale Wirkstoffeinordnung ausschließlich in der produktfreien Wissensübersicht; kommerzielle Claims erst mit belegtem Claim- und Mengen-Guard. |
 | [x] | STACK-20 | Hinweise/Warnungen | 8 | B12 ist sachlicher Hinweis, echte Risiken bleiben unterscheidbar. Modaltexte „Kurzbeschreibung/Details“ sind technisch und redundant. | Ein klarer Titel, einfache Erklärung, konkrete sichere nächste Handlung und Link „Mehr dazu“. |
 | [x] | STACK-21 | Karten-Auswahl per Klick | 4 | Ganze Karte reagiert auf Maus, ist aber kein semantischer Button und nicht zuverlässig per Tastatur wählbar. | Echte Checkbox/Schaltfläche mit sichtbarem Label, Space/Enter, Fokusrahmen und Statusansage. |
 | [x] | STACK-22 | Kaufbutton | 8 | Zielshop ist meist im Button erkennbar; öffnet sicher in neuem Tab. | „Öffnet Shop in neuem Tab“ zugänglich ankündigen, defekte Links schnell melden. Keine produktbezogene Affiliate-Kennzeichnung ergänzen. |
@@ -201,7 +201,7 @@ saubere Browserdarstellung – nicht öffentliche Indexierung.
 | [x] | ADD-02A | Suchfeld-Semantik | 6 | Pfeiltasten und Abbruch funktionieren, aber vollständiges Combobox-Muster (`role`, `aria-controls`, Ergebnis-/Ladeansage) fehlt. | WAI-ARIA-Combobox vollständig umsetzen und automatisch testen. |
 | [x] | ADD-03 | Bereits vorhandener Wirkstoff | 7 | Ein Dialog verhindert Dubletten und bietet Bearbeiten/Produktwechsel. Der Sprung überrascht ohne Vorankündigung. | „Magnesium ist schon über Produkt X enthalten“ plus drei klar beschriebene Optionen. |
 | [x] | ADD-04 | Wirkstoffbeschreibung/Form | 7 | Kontext und Form werden gezeigt; „FORM“ wirkt intern. | „Gewählte Form“ und kurze Erklärung, wann Formen relevant sind. |
-| [x] | ADD-04A | Wirkungschips im Dialog | 4 | Der Dialog leitet Chips erneut per Keyword-Heuristik aus `ingredients.description` ab, obwohl zentrale `ingredient_display_profiles.effect_summary` existieren. | Dieselbe zentrale Profilprojektion wie auf Produktkarten verwenden und die Heuristik entfernen. |
+| [x] | ADD-04A | Wirkungschips im Dialog | 4 | Die alte Keyword-Heuristik und ungeprüfte Wirkungschips wurden vollständig aus dem kaufnahen Dialog entfernt. | Wirkstoffeinordnung bleibt zentral in `/wissen`; im Hinzufügen-Flow keine Gesundheitswirkung ohne belegten Claim- und Mengen-Guard anzeigen. |
 | [x] | ADD-04B | Fehlender Beschreibungstext | 4 | 35 von 92 aktiven Wirkstoffen haben keine `ingredients.description`; der Fallback behauptet pauschal einen DGE-/Studienvergleich, auch wenn Werte fehlen. | Neutralen zentralen Displaytext oder „Noch kein Kurztext verfügbar“ zeigen; DGE/Studien nur nennen, wenn tatsächlich vorhanden. |
 | [x] | ADD-05 | „DGE Empfehlung“ | 4 | Kann als Supplementdosierung verstanden werden. Gesamtzufuhr, Zielgruppe und Quelle sind nicht deutlich genug abgegrenzt. | „DGE-Referenzwert für die gesamte tägliche Zufuhr“; Erklärung „kein automatischer Bedarf aus einem Supplement“, Quelle/Stand/Zielgruppe. |
 | [ ] | ADD-06 | „Studien-Referenz“ | 3 | Eine einzelne Menge plus „Referenz übernehmen“ wirkt wie eine allgemeine Empfehlung; Studiendesign und Grenzen fehlen. | „In dieser Studie untersuchte Menge“ mit Population, Dauer, Form und Ergebnisgrenze; nicht ungeprüft als persönliche Menge übernehmen. |
@@ -218,12 +218,12 @@ saubere Browserdarstellung – nicht öffentliche Indexierung.
 
 | Erledigt | ID | Funktion/Text | ★ | Befund | Zielbild 10/10 |
 |---|---|---|---:|---|---|
-| [ ] | PLAN-01 | Seiteneinstieg | 6 | Stackname ist H2, ein Seiten-H1 fehlt; bei Gästen erscheint Demoinhalt ohne klare öffentliche Landing-Erklärung. | H1 „Dein Einnahmeplan“, aktiven Stack wählen können und private App klar von öffentlicher Erklärung trennen. |
-| [ ] | PLAN-02 | Tageszeit-Gruppen | 4 | `morning_evening` erscheint nur morgens; `with_meal` wird pauschal mittags einsortiert. Dadurch können gespeicherte Einnahmezeitpunkte fehlen oder falsch wirken. | Mehrfachtermine in beiden Zeitfenstern zeigen; „zum Essen“ nicht eigenmächtig einer Uhrzeit zuordnen; Original-Timing sichtbar halten. |
-| [ ] | PLAN-03 | Produktzeile | 7 | Menge, Rhythmus, Monatskosten und Reichweite zusammen sichtbar. Bindestriche und „EUR/Monat“ wirken roh. | Typografisch trennen, `€/Monat`, fehlende Werte erklären, Creator-Hinweis optional anzeigen. |
-| [ ] | PLAN-04 | Stack mailen | 2 | Sofortversand ohne Ziel-/Inhaltsbestätigung; Creatorname und persönliche Hinweise fehlen in der Mail. | Bestätigungsdialog, Account-Adresse, Inhalt und Datenschutzfolge; Creator/Snapshot/Disclaimer in Mail übernehmen. |
-| [ ] | PLAN-05 | Drucken/PDF | 7 | Funktion vorhanden und verständlich genug. | „Drucken oder als PDF speichern“, Druckkopf, Datum, Creatorherkunft und Hinweistext. |
-| [ ] | PLAN-06 | Leere Gruppen | 8 | „Keine Produkte“ ist eindeutig. | Leere Gruppen optional einklappen, ohne Tagesstruktur zu verlieren. |
+| [x] | PLAN-01 | Seiteneinstieg | 6 | Stackname ist H2, ein Seiten-H1 fehlt; bei Gästen erscheint Demoinhalt ohne klare öffentliche Landing-Erklärung. | H1 „Dein Einnahmeplan“, aktiven Stack wählen können und private App klar von öffentlicher Erklärung trennen. |
+| [x] | PLAN-02 | Tageszeit-Gruppen | 4 | `morning_evening` erscheint nur morgens; `with_meal` wird pauschal mittags einsortiert. Dadurch können gespeicherte Einnahmezeitpunkte fehlen oder falsch wirken. | Mehrfachtermine in beiden Zeitfenstern zeigen; „zum Essen“ nicht eigenmächtig einer Uhrzeit zuordnen; Original-Timing sichtbar halten. |
+| [x] | PLAN-03 | Produktzeile | 7 | Menge, Rhythmus, Monatskosten und Reichweite zusammen sichtbar. Bindestriche und „EUR/Monat“ wirken roh. | Typografisch trennen, `€/Monat`, fehlende Werte erklären, Creator-Hinweis optional anzeigen. |
+| [x] | PLAN-04 | Stack mailen | 2 | Sofortversand ohne Ziel-/Inhaltsbestätigung; Creatorname und persönliche Hinweise fehlen in der Mail. | Bestätigungsdialog, Account-Adresse, Inhalt und Datenschutzfolge; Creator/Snapshot/Disclaimer in Mail übernehmen. |
+| [x] | PLAN-05 | Drucken/PDF | 7 | Funktion vorhanden und verständlich genug. | „Drucken oder als PDF speichern“, Druckkopf, Datum, Creatorherkunft und Hinweistext. |
+| [x] | PLAN-06 | Leere Gruppen | 8 | „Keine Produkte“ ist eindeutig. | Leere Gruppen optional einklappen, ohne Tagesstruktur zu verlieren. |
 
 ## 10. Creator-Bereich `/creator`
 
@@ -241,7 +241,7 @@ saubere Browserdarstellung – nicht öffentliche Indexierung.
 | [x] | CRE-10 | Fehlendes Originalprodukt | 10 | Fehlend und momentan nicht teilbar werden korrekt unterschieden; kein stiller Ersatz, gezielter Reparaturweg. | Erfüllt. |
 | [x] | CRE-11 | Name der Empfehlung | 10 | Beispiel, Zeichenzähler, Zielort und Vorschau sind sichtbar. | Erfüllt. |
 | [x] | CRE-12 | „Dein Hinweis (optional)“ | 10 | Alltagssprache, Beispiele, Zeichenzähler und automatisch isolierte Entwurfssicherung sind vorhanden. | Erfüllt. |
-| [x] | CRE-13 | Vorschau | 10 | Snapshot-Reihenfolge, Bilder, zentrale Wirkung und verständlicher Einnahmezeitpunkt werden kategoriefrei gezeigt. | Erfüllt gemäß Owner-Entscheidung: keine Rückkehr von Kategorien. |
+| [x] | CRE-13 | Vorschau | 10 | Snapshot-Reihenfolge, Bilder, Produktidentität und verständlicher Einnahmezeitpunkt werden kategoriefrei gezeigt; ungeprüfte Wirkungsclaims bleiben entfernt. | Erfüllt gemäß Owner-Entscheidung: keine Rückkehr von Kategorien und keine Gesundheitswirkung im kaufnahen Produktkontext. |
 | [x] | CRE-14 | „Zur Prüfung senden“ | 10 | Bestätigung erklärt Prüfung, Portfolio und Überarbeitungsweg; In-App-Status ist verbindlich, Mail nur ergänzend. | Erfüllt ohne erfundene Prüfdauer oder Zustellgarantie. |
 | [x] | CRE-15 | Moderationsrückmeldung | 10 | Grund, betroffene Stelle beziehungsweise Produkt und direkter Deep-Link zum Ansehen oder Überarbeiten sind vorhanden. | Erfüllt; E-Mail-Versuch ist idempotent protokolliert. |
 | [x] | CRE-16 | Statusbezeichnungen | 10 | Prüfung, Freigabe, Ablehnung, Pause, Ende und Ablauf samt Folgen und Ablaufdatum sind verständlich getrennt. | Erfüllt. |
@@ -264,53 +264,59 @@ entfernt; die einzige sichtbare Affiliate-Erklärung ist der globale Hinweis.
 
 | Erledigt | ID | Funktion/Text | ★ | Befund | Zielbild 10/10 |
 |---|---|---|---:|---|---|
-| [ ] | SHARE-01 | Kopfzeile | 8 | Creator, Titel und Datum sind klar. | Optional verifiziertes, freiwillig öffentliches Creatorprofil verlinken, ohne Vertrauensversprechen. |
+| [x] | SHARE-01 | Kopfzeile | 8 | Creator, Titel und Datum sind klar; ein freiwillig gepflegtes, sicher geprüftes Profilbild erscheint optional. | Kein Profil oder Vertrauensmerkmal erfinden, solange dafür kein autoritatives öffentliches Datenfeld existiert. |
 | [x] | SHARE-02 | Snapshot-Erklärung | 9 | Stand und spätere Änderungen werden vorbildlich erklärt. | Nur typografisch kompakt halten. |
-| [ ] | SHARE-03 | Produktidentität | 5 | Name, Marke und Kategorie, aber kein Bild oder zentraler Nutzungstext. | Bild, kurzer zentraler Text und Produktdetail – ausschließlich aus vorhandenen Daten. |
-| [ ] | SHARE-04 | Persönliche Nutzung | 8 | Menge, Häufigkeit und Zeitpunkt werden getrennt. Doppelte Mengenangaben sind möglich. | Eine eindeutige Zusammenfassung; fehlende Einheit als Datenproblem sichtbar machen. |
-| [ ] | SHARE-04A | Zeitpunkt-Übersetzung | 4 | Die öffentliche Vorschau kann interne Werte wie `before_breakfast` ungefiltert anzeigen. | Zentrale Timing-Übersetzung nutzen; unbekannte Schlüssel als „Keine Angabe“, nie roh ausgeben. |
+| [x] | SHARE-03 | Produktidentität | 5 | Vorhandenes Bild, Marke, Name und persönliche Nutzung werden gezeigt; Kategorien und ungeprüfte Wirkungsclaims bleiben entfernt. | Ausschließlich vorhandene Produkt-/Nutzungsdaten zeigen; Wirkstoffeinordnung bleibt in `/wissen`. |
+| [x] | SHARE-04 | Persönliche Nutzung | 8 | Menge, Häufigkeit und Zeitpunkt werden getrennt. Doppelte Mengenangaben sind möglich. | Eine eindeutige Zusammenfassung; fehlende Einheit als Datenproblem sichtbar machen. |
+| [x] | SHARE-04A | Zeitpunkt-Übersetzung | 4 | Die öffentliche Vorschau kann interne Werte wie `before_breakfast` ungefiltert anzeigen. | Zentrale Timing-Übersetzung nutzen; unbekannte Schlüssel als „Keine Angabe“, nie roh ausgeben. |
 | [x] | SHARE-05 | Dosierungsabgrenzung | 9 | Persönliche Nutzung wird klar von Dosierungsanweisung getrennt. | Beibehalten. |
-| [ ] | SHARE-06 | Creator-Hinweis | 8 | Persönliche Aussage ist erkennbar. | Creatorname als Quelle der Aussage nennen und semantisch als Zitat auszeichnen. |
-| [ ] | SHARE-07 | Langer Stack | 5 | Bis zu 100 Produkte stehen flach hintereinander; Kategorien nur als Badge. | Nach Kategorien gruppieren, Inhaltsübersicht und Sprunglinks. |
-| [ ] | SHARE-08 | Nicht verfügbares Produkt | 6 | Transparenter Ersatztext, aber Importfolge bleibt unklar. | Explizit erklären, was gespeichert wird und was fehlt. |
+| [x] | SHARE-06 | Creator-Hinweis | 8 | Sämtliche vorhandenen Aussagen stehen dedupliziert in genau einem allgemeinen, klar dem Creator zugeordneten Hinweisblock. | Keine erfundene Zuordnung zu einzelnen Produkten und keine wiederholten Kartenhinweise. |
+| [x] | SHARE-07 | Langer Stack | 5 | Lange Empfehlungen sind in nummerierte 8er-Abschnitte mit Inhaltsübersicht und Sprunglinks gegliedert. | Kategorien bleiben gemäß Owner-Entscheidung entfernt. |
+| [x] | SHARE-08 | Nicht verfügbares Produkt | 6 | Transparenter Ersatztext, aber Importfolge bleibt unklar. | Explizit erklären, was gespeichert wird und was fehlt. |
 | [x] | SHARE-09 | Vor Anmeldung nichts speichern | 9 | Grenze und zwei Wege sind sehr klar. | CTA um Rückkehrversprechen ergänzen. |
-| [ ] | SHARE-10 | Passwort-Reset-Rückweg | 3 | Rückkehr zur Empfehlung geht verloren. | Siehe AUTH-04; Ende-zu-Ende-Test ergänzen. |
-| [ ] | SHARE-11 | Lokaler Importentwurf | 7 | Minimal, tokengebunden, 30 Minuten. Nutzer kennt Speicherung/Ablauf nicht. | Kurz erklären, abgelaufene Entwürfe aktiv aufräumen und Datenschutztext verlinken. |
-| [ ] | SHARE-12 | Zielwahl | 8 | Neuer/bestehender Stack und Folgen sind verständlich. Radio-Layout erbt globale 100-%-Breite. | `fieldset/legend`, kompakte Radios und Auswahlkarten. |
-| [ ] | SHARE-13 | Stack-Ladefehler | 8 | Retry blockiert korrekt die Prüfung. | `role=alert`, Fokus auf Fehler/Retry. |
-| [ ] | SHARE-14 | „Auswahl prüfen“ | 6 | Sicherheitsstufe sinnvoll, aber Schaltfläche kaum gestaltet. | Primärbutton „Änderungen ansehen“ mit klarer Folge. |
+| [x] | SHARE-10 | Passwort-Reset-Rückweg | 3 | Rückkehr zur Empfehlung geht verloren. | Siehe AUTH-04; Ende-zu-Ende-Test ergänzen. |
+| [x] | SHARE-11 | Lokaler Importentwurf | 7 | Minimal, tokengebunden, 30 Minuten. Nutzer kennt Speicherung/Ablauf nicht. | Kurz erklären, abgelaufene Entwürfe aktiv aufräumen und Datenschutztext verlinken. |
+| [x] | SHARE-12 | Zielwahl | 8 | Neuer/bestehender Stack und Folgen sind verständlich. Radio-Layout erbt globale 100-%-Breite. | `fieldset/legend`, kompakte Radios und Auswahlkarten. |
+| [x] | SHARE-13 | Stack-Ladefehler | 8 | Retry blockiert korrekt die Prüfung. | `role=alert`, Fokus auf Fehler/Retry. |
+| [x] | SHARE-14 | „Auswahl prüfen“ | 6 | Sicherheitsstufe sinnvoll, aber Schaltfläche kaum gestaltet. | Primärbutton „Änderungen ansehen“ mit klarer Folge. |
 | [x] | SHARE-15 | Gleicher Stackname | 9 | Neutral statt Fehler, Alternativname angeboten. | Beibehalten. |
-| [ ] | SHARE-16 | Ähnliche Produkte | 8 | Kein bedrohliches Konfliktwort; gemeinsame Wirkstoffe sichtbar. | „Ähnlich heißt nicht gleich“ und unterschiedliche Werte hervorheben. |
-| [ ] | SHARE-17 | Produktvergleich | 8 | Menge, Rhythmus, Zeitpunkt und Notiz nebeneinander. | Abweichungen visuell markieren; barrierefreie Textzusammenfassung. |
-| [ ] | SHARE-18 | Behalten/Ersetzen | 6 | Folge ist erklärt, Buttons sind visuell schwach. | Große Auswahlkarten; erklären, warum „beide“ fehlt oder sichere Option anbieten. |
+| [x] | SHARE-16 | Ähnliche Produkte | 8 | Kein bedrohliches Konfliktwort; gemeinsame Wirkstoffe sichtbar. | „Ähnlich heißt nicht gleich“ und unterschiedliche Werte hervorheben. |
+| [x] | SHARE-17 | Produktvergleich | 8 | Menge, Rhythmus, Zeitpunkt und Notiz nebeneinander. | Abweichungen visuell markieren; barrierefreie Textzusammenfassung. |
+| [x] | SHARE-18 | Behalten/Ersetzen | 6 | Folge ist erklärt, Buttons sind visuell schwach. | Große Auswahlkarten; erklären, warum „beide“ fehlt oder sichere Option anbieten. |
 | [x] | SHARE-19 | „Das passiert beim Bestätigen“ | 10 | Konkrete, einfache Sprache und vollständige Folgen. | Als Muster für andere Bestätigungen verwenden. |
-| [ ] | SHARE-20 | „Jetzt bestätigen“ | 6 | Zu allgemein und schwach gestaltet. | Dynamisch „Stack mit 3 Produkten anlegen“ oder „Produkt X ersetzen“. |
+| [x] | SHARE-20 | „Jetzt bestätigen“ | 6 | Zu allgemein und schwach gestaltet. | Dynamisch „Stack mit 3 Produkten anlegen“ oder „Produkt X ersetzen“. |
 | [x] | SHARE-21 | Schreibsicherheit | 9 | Fingerprint, Snapshot-/Versionsguard und Idempotenz verhindern Doppelwrites. | Technische Details weiterhin unsichtbar halten; automatisiert überwachen. |
-| [ ] | SHARE-22 | Ergebnis „Alles erledigt“ | 8 | Exakte Folge wird genannt. | Primäraktion hervorheben und Undo mit kurzer Frist. |
-| [ ] | SHARE-23 | „Stack jetzt ansehen“ | 3 | Ziel-ID wird von `/stacks` nicht verarbeitet. | Siehe STACK-04. |
-| [ ] | SHARE-24 | „Bei der Empfehlung bleiben“ | 5 | Unklar, was passiert. | „Empfehlung weiter ansehen“ oder „In einen weiteren Stack speichern“. |
-| [ ] | SHARE-25 | Rückgängig machen | 4 | Nach Ersetzen fehlt Undo. | Guarded Undo mit klarer Frist und exakter Änderungsübersicht. |
+| [x] | SHARE-22 | Ergebnis „Alles erledigt“ | 8 | Exakte Folge wird genannt. | Primäraktion hervorheben und Undo mit kurzer Frist. |
+| [x] | SHARE-23 | „Stack jetzt ansehen“ | 3 | Ziel-ID wird von `/stacks` nicht verarbeitet. | Siehe STACK-04. |
+| [x] | SHARE-24 | „Bei der Empfehlung bleiben“ | 5 | Unklar, was passiert. | „Empfehlung weiter ansehen“ oder „In einen weiteren Stack speichern“. |
+| [x] | SHARE-25 | Rückgängig machen | 4 | Nach Ersetzen fehlt Undo. | Guarded Undo mit klarer Frist und exakter Änderungsübersicht. |
 | [x] | SHARE-26 | Ablauf/Recovery-Texte | 9 | Ausstehend, abgelaufen, beendet/gesperrt und unbekannt sind klar getrennt. | Beibehalten; Statuscodes/Metadaten technisch korrigieren. |
-| [ ] | SHARE-27 | Recovery-Kopieraktion | 5 | Funktion vorhanden, live nur etwa 24 px hoher transparenter Textbutton. | Vollwertiger 44-px-Button, `role=status`, auswählbarer Textfallback. |
-| [ ] | SHARE-28 | Meldemöglichkeit | 4 | Irreführende/veraltete Empfehlung kann öffentlich nicht gemeldet werden. | Niedrigschwelliger Meldeweg mit Kategorie, Bestätigung und Moderationsprozess. |
-| [ ] | SHARE-29 | Dynamische Barrierefreiheit | 6 | Teilweise gute Labels; Fokuswechsel, Live-Regionen, `aria-expanded` und Legends fehlen. | Schrittweisen Fokusplan, Live-Status und komplette Tastaturmatrix umsetzen. |
-| [ ] | SHARE-30 | Creatorherkunft in Mail/PDF | 4 | Website behält Herkunft/Hinweis; Stack-Mail verliert beide. | Creatorname, Snapshot-Datum und persönliche Hinweise in Mail/PDF übernehmen. |
+| [x] | SHARE-27 | Recovery-Kopieraktion | 5 | Funktion vorhanden, live nur etwa 24 px hoher transparenter Textbutton. | Vollwertiger 44-px-Button, `role=status`, auswählbarer Textfallback. |
+| [x] | SHARE-28 | Meldemöglichkeit | 4 | Irreführende/veraltete Empfehlung kann öffentlich nicht gemeldet werden. | Niedrigschwelliger Meldeweg mit Kategorie, Bestätigung und Moderationsprozess. |
+| [x] | SHARE-29 | Dynamische Barrierefreiheit | 6 | Teilweise gute Labels; Fokuswechsel, Live-Regionen, `aria-expanded` und Legends fehlen. | Schrittweisen Fokusplan, Live-Status und komplette Tastaturmatrix umsetzen. |
+| [x] | SHARE-30 | Creatorherkunft in Mail/PDF | 4 | Website behält Herkunft/Hinweis; Stack-Mail verliert beide. | Creatorname, Snapshot-Datum und persönliche Hinweise in Mail/PDF übernehmen. |
+
+Abnahme 17.08.2026: User-/Creator-Delta-Review, technischer Review und
+Claim-Grenzen-Review jeweils `PASS`. Der 10-Minuten-Undo ist transaktional
+guarded; Meldungen sind idempotent und bei unklarem Ausgang exakt
+wiederholbar. Kategorien, produktspezifische Affiliate-Texte und ungeprüfte
+Wirkungsclaims bleiben aus der öffentlichen Produktempfehlung entfernt.
 
 ## 12. Wissensübersicht `/wissen`
 
 | Erledigt | ID | Funktion/Text | ★ | Befund | Zielbild 10/10 |
 |---|---|---|---:|---|---|
-| [ ] | KNOW-01 | Hero/Erklärung | 8 | Nutzerziel und Quellenbezug sind klar. Bindestrich statt Gedankenstrich und einige sehr absolute Kurztexte. | Typografie korrigieren; sachlich „Was bekannt ist, wo es vorkommt und welche Grenzen gelten“. |
-| [ ] | KNOW-02 | Suche | 9 | Direkt, URL-basiert, Aliasse werden berücksichtigt. | Ergebnisanzahl, Escape/Löschen per Tastatur und Suchvorschläge bei Nulltreffern. |
-| [ ] | KNOW-03 | Kategorienfilter | 8 | Schnell scanbar und mobil ohne Überlauf. Aktiver Zustand ist visuell, nicht immer semantisch. | `aria-pressed`, Trefferzahl live und Filterparameter kanonisch behandeln. |
-| [ ] | KNOW-04 | Kennzahlen 89/10/44 | 5 | Frontend zählt 89 fest codierte Einträge, zentrale API aktuell 92 aktive Wirkstoffe. | Zählung und Karten vollständig aus der kanonischen API; keine zweite Wirkstoffliste. |
-| [ ] | KNOW-05 | Hardcodierte `NUTRIENTS`-Daten | 3 | Namen, Kategorien, Aliasse und Kurztexte werden doppelt gepflegt; dadurch fehlen Molybdän, Natrium und Phosphor. | API/DB als einzige Quelle; reine Präsentationsattribute nur stabil per Ingredient-ID ergänzen. |
-| [ ] | KNOW-06 | Verfügbare Artikelkarten | 8 | Name, Kurztext, Löslichkeit, Studien/DGE und CTA sind gut scanbar. | Schriftgrößen erhöhen und Statusbegriffe mit Erklärung/Tooltip ergänzen. |
-| [ ] | KNOW-07 | „Bald“-Karten | 4 | Fokusierbarer `role=button`, aber deaktiviert und ohne Aktion – fühlt sich kaputt an. | Nichtinteraktive Karte mit „Artikel in Vorbereitung“ oder echte Benachrichtigungsfunktion. |
-| [ ] | KNOW-08 | 89 Wirkstoff-Kurztexte | 5 | Uneinheitlich: teils klar, teils jargonlastig oder unbelegt („vaskuläre Relevanz“, „Immunfokuslage“, „Traditionelle Leberbegleitwirkung“). | Zentral freigegebene, einfache und claim-sichere Kurztexte; keine Wirkung erfinden. Siehe Copy-Register. |
-| [ ] | KNOW-08A | Sichtbare Sprach-/Encodingfehler | 3 | Beispiele: „Pflanzlicher Stoffstoff“, „Bedeutet als Cofaktor“, „Schlaf- und Rhythmusrhythmus“; die Chrom-Zusammenfassung enthält sichtbare `?` in Wörtern wie „N?hrstoff“. | Zentralen Redaktionspass und UTF-8-/Ersatzzeichen-Gate vor Veröffentlichung; betroffene Daten korrigieren. |
-| [ ] | KNOW-09 | Fehler/Leerzustand | 6 | Verständlicher Text, aber kein Retry; Fehler und Nulltreffer können gleichzeitig erscheinen. | Zustände exklusiv, Retry, `role=alert`, Such-/Filterreset direkt anbieten. |
-| [ ] | KNOW-10 | Mobile Textgröße | 5 | 128 sichtbare Elemente unter 12 px. | Labels und Badges mindestens 12 px, wichtige Inhalte 14–16 px; Reflow prüfen. |
+| [x] | KNOW-01 | Hero/Erklärung | 8 | Nutzerziel und Quellenbezug sind klar. Bindestrich statt Gedankenstrich und einige sehr absolute Kurztexte. | Typografie korrigieren; sachlich „Was bekannt ist, wo es vorkommt und welche Grenzen gelten“. |
+| [x] | KNOW-02 | Suche | 9 | Direkt, URL-basiert, Aliasse werden berücksichtigt. | Ergebnisanzahl, Escape/Löschen per Tastatur und Suchvorschläge bei Nulltreffern. |
+| [x] | KNOW-03 | Kategorienfilter | 8 | Schnell scanbar und mobil ohne Überlauf. Aktiver Zustand ist visuell, nicht immer semantisch. | `aria-pressed`, Trefferzahl live und Filterparameter kanonisch behandeln. |
+| [x] | KNOW-04 | Kennzahlen 89/10/44 | 5 | Frontend zählt 89 fest codierte Einträge, zentrale API aktuell 92 aktive Wirkstoffe. | Zählung und Karten vollständig aus der kanonischen API; keine zweite Wirkstoffliste. |
+| [x] | KNOW-05 | Hardcodierte `NUTRIENTS`-Daten | 3 | Namen, Kategorien, Aliasse und Kurztexte werden doppelt gepflegt; dadurch fehlen Molybdän, Natrium und Phosphor. | API/DB als einzige Quelle; reine Präsentationsattribute nur stabil per Ingredient-ID ergänzen. |
+| [x] | KNOW-06 | Verfügbare Artikelkarten | 8 | Name, Kurztext, Löslichkeit, Studien/DGE und CTA sind gut scanbar. | Schriftgrößen erhöhen und Statusbegriffe mit Erklärung/Tooltip ergänzen. |
+| [x] | KNOW-07 | „Bald“-Karten | 4 | Fokusierbarer `role=button`, aber deaktiviert und ohne Aktion – fühlt sich kaputt an. | Nichtinteraktive Karte mit „Artikel in Vorbereitung“ oder echte Benachrichtigungsfunktion. |
+| [x] | KNOW-08 | 89 Wirkstoff-Kurztexte | 5 | Uneinheitlich: teils klar, teils jargonlastig oder unbelegt („vaskuläre Relevanz“, „Immunfokuslage“, „Traditionelle Leberbegleitwirkung“). | Zentral freigegebene, einfache und claim-sichere Kurztexte; keine Wirkung erfinden. Siehe Copy-Register. |
+| [x] | KNOW-08A | Sichtbare Sprach-/Encodingfehler | 3 | Beispiele: „Pflanzlicher Stoffstoff“, „Bedeutet als Cofaktor“, „Schlaf- und Rhythmusrhythmus“; die Chrom-Zusammenfassung enthält sichtbare `?` in Wörtern wie „N?hrstoff“. | Zentralen Redaktionspass und UTF-8-/Ersatzzeichen-Gate vor Veröffentlichung; betroffene Daten korrigieren. |
+| [x] | KNOW-09 | Fehler/Leerzustand | 6 | Verständlicher Text, aber kein Retry; Fehler und Nulltreffer können gleichzeitig erscheinen. | Zustände exklusiv, Retry, `role=alert`, Such-/Filterreset direkt anbieten. |
+| [x] | KNOW-10 | Mobile Textgröße | 5 | 128 sichtbare Elemente unter 12 px. | Labels und Badges mindestens 12 px, wichtige Inhalte 14–16 px; Reflow prüfen. |
 
 ## 13. Wissensartikel `/wissen/:slug`
 
@@ -510,7 +516,7 @@ aufgeführt.
 | Creator-Sichtbarkeit vs. Capability-Link | Sharetoken als öffentliches Profil behandeln | Freiwillige kuratierte `/creator/:slug`-Seite separat; `/share/:token` bleibt ephemer/noindex. |
 | Wissenschaftlicher Originaltitel vs. kurze Suchdarstellung | H1/Quellenlabel kürzen oder überlange Suchsnippets behalten | Original-H1 und Quellenlabel bytegleich lassen; separates sachlich gleichwertiges `meta_title`/`meta_description`. |
 | Wissensfilter vs. Duplicate Content | Jede Query indexieren oder Filter entfernen | UX-Filter behalten; Parameterzustände auf die vollständige `/wissen`-Seite canonicalisieren. |
-| Mehr Produkttext vs. unbelegte Gesundheitswerbung | SEO-Keywordtext oder zu wenig Entscheidungshilfe | Nur zentrale freigegebene Wirkstoff-/Produktdaten; Creator-Aussagen klar zuordnen; Unsicherheit und Grenzen sichtbar. |
+| Mehr Produkttext vs. unbelegte Gesundheitswerbung | SEO-Keywordtext oder ungesicherte Wirkung direkt neben Kaufaktionen | Produktflächen zeigen belegte Produkt-/Nutzungsdaten; zentrale Wirkstoffeinordnung bleibt in `/wissen`. Kommerzielle Wirkungsclaims erst nach belegtem Claim- und Mengen-Guard. |
 | Personalisierter eingeloggter Hero vs. stabiles SSR | Crawler sieht Nutzerdaten oder leere Shell | Öffentlichen stabilen SSR-Inhalt liefern; private CTA/Accountzustände erst nach Hydrierung einsetzen. |
 | Freundliche Fehlerseite vs. korrekter Status | Hübsche 200-Seite oder nackter 404 | Dieselbe verständliche UI mit echtem 404/410 und `noindex`. |
 | Affiliate-Rechtshinweis vs. ruhige Produktkarten | Badge an jedem Produkt oder gar kein Hinweis | Ausschließlich der vorhandene globale Footerhinweis; keine produktbezogenen Affiliate-Texte. |
@@ -519,30 +525,30 @@ aufgeführt.
 
 ### Phase A – P0: falsche Folgen, Vertrauen und Datenwahrheit
 
-- [ ] `?stack=<id>` sicher auswerten, Zielstack aktivieren und testen.
-- [ ] Share-`returnTo` durch Forgot/Reset/Mail/Login vollständig erhalten.
-- [ ] Mailversand mit Ziel-/Inhaltsbestätigung versehen; keinen Sofortversand.
-- [ ] Falsches `/Mo.` bei eigenen Produkten korrigieren.
-- [ ] Hardcodierte 89er-Wirkstoffliste durch die zentrale 92er-Datenquelle ersetzen.
-- [ ] DGE-Gesamtzufuhr, Studienmenge und geplante Supplementmenge klar trennen.
-- [ ] Einnahmeplan-Zuordnung für Mehrfachzeitpunkte und „zum Essen“ korrigieren.
-- [ ] Rohe Timing-Schlüssel in Creator-Vorschauen zentral übersetzen.
-- [ ] Unsichtbare Rückmeldung nach Linkmeldung sichtbar und zugänglich machen.
+- [x] `?stack=<id>` sicher auswerten, Zielstack aktivieren und testen.
+- [x] Share-`returnTo` durch Forgot/Reset/Mail/Login vollständig erhalten.
+- [x] Mailversand mit Ziel-/Inhaltsbestätigung versehen; keinen Sofortversand.
+- [x] Falsches `/Mo.` bei eigenen Produkten korrigieren.
+- [x] Hardcodierte 89er-Wirkstoffliste durch die zentrale 92er-Datenquelle ersetzen.
+- [x] DGE-Gesamtzufuhr, Studienmenge und geplante Supplementmenge klar trennen.
+- [x] Einnahmeplan-Zuordnung für Mehrfachzeitpunkte und „zum Essen“ korrigieren.
+- [x] Rohe Timing-Schlüssel in Creator-Vorschauen zentral übersetzen.
+- [x] Unsichtbare Rückmeldung nach Linkmeldung sichtbar und zugänglich machen.
 - [ ] Ungültige Share-/Wissens-/Catch-all-Pfade als 404/410 und noindex ausliefern.
 - [ ] Sharetokens mit `noindex`, `no-referrer` und sicherer Cache-Policy schützen.
 
 ### Phase B – P1: Kern-UX und einfache Sprache
 
-- [ ] Registrierung verkürzen, UTF-8 korrigieren und Einwilligung verständlich staffeln.
-- [ ] Stack-Symbolleiste, Importbuttons und Radios visuell/semantisch vereinheitlichen.
-- [ ] Produktkartenwahl, Dialoge, Fokusführung und Live-Status zugänglich machen.
-- [ ] Produkt-hinzufügen-Texte enttechnisieren und Produktauswahl vergleichbar machen.
-- [ ] Zentrale Wirkungstexte auch im Hinzufügen-Dialog verwenden; Keyword-Heuristik entfernen.
-- [ ] Stackbeschreibungen zentral statt nur im Browser speichern.
-- [ ] Eigene-Produkt-Formular in klare Schritte mit sofortiger Validierung teilen.
-- [ ] Creator-Entwürfe bei Reparatur erhalten; Ablehnungsgrund und Benachrichtigung ergänzen.
-- [ ] Creatorherkunft und Hinweis in E-Mail/PDF übernehmen.
-- [ ] Wissens-Kurztexte aus einer zentralen, claim-sicheren Quelle liefern.
+- [x] Registrierung verkürzen, UTF-8 korrigieren und Einwilligung verständlich staffeln.
+- [x] Stack-Symbolleiste, Importbuttons und Radios visuell/semantisch vereinheitlichen.
+- [x] Produktkartenwahl, Dialoge, Fokusführung und Live-Status zugänglich machen.
+- [x] Produkt-hinzufügen-Texte enttechnisieren und Produktauswahl vergleichbar machen.
+- [x] Keyword-Heuristik und ungeprüfte Wirkungschips aus dem Hinzufügen-Dialog entfernen; Wirkstoffeinordnung zentral in `/wissen` halten.
+- [x] Stackbeschreibungen zentral statt nur im Browser speichern.
+- [x] Eigene-Produkt-Formular in klare Schritte mit sofortiger Validierung teilen.
+- [x] Creator-Entwürfe bei Reparatur erhalten; Ablehnungsgrund und Benachrichtigung ergänzen.
+- [x] Creatorherkunft und Hinweis in E-Mail/PDF übernehmen.
+- [x] Wissens-Kurztexte aus einer zentralen, einfach verständlichen Quelle liefern; unsichere Einträge neutral auslassen.
 
 ### Phase C – P1 SEO: öffentliche technische Grundlage
 
@@ -556,12 +562,17 @@ aufgeführt.
 
 ### Phase D – P2: Creator-Wachstum und Komfort
 
-- [ ] Native Share-Funktion, WhatsApp, E-Mail und optional QR ergänzen.
-- [ ] Creator-Dashboard mit belastbaren Zeiträumen/Kennzahlen vervollständigen.
-- [ ] Portfolio filtern, sortieren, archivieren und paginieren.
-- [ ] Undo nach Import/Ersetzen und öffentliche Meldemöglichkeit ergänzen.
-- [ ] Lange öffentliche Stacks gruppieren; verwandte Wissensinhalte ergänzen.
-- [ ] Datenexport, Creatorprofil und öffentliche Erklär-Landingpages separat planen.
+- [x] Native Share-Funktion, WhatsApp und E-Mail ergänzen; QR bleibt optional.
+- [x] Creator-Dashboard mit belastbaren Zeiträumen/Kennzahlen vervollständigen.
+- [x] Portfolio filtern, sortieren, archivieren und paginieren.
+- [x] Undo nach Import/Ersetzen und öffentliche Meldemöglichkeit ergänzen.
+- [x] Lange öffentliche Stacks ohne Kategorien in nummerierte Abschnitte mit Sprunglinks gliedern.
+- [ ] Verwandte Wissensinhalte im öffentlichen Share ergänzen.
+- [x] Datenexport und freiwilliges öffentliches Creator-Profilbild ergänzen.
+- [ ] Öffentliche Creator-Erklär-Landingpages separat planen.
+- [ ] Meldelimit bei Bedarf auf einen atomaren, dauerhaft verfügbaren Zähler statt des optionalen KV-Fallbacks umstellen.
+- [ ] Abgelaufene Undo-Nutzdaten regelmäßig löschen beziehungsweise im Export- und Löschkonzept explizit behandeln.
+- [ ] Report-Moderation und zugehörigen Admin-Audit bei erhöhtem Compliance-Bedarf in einen atomaren Write-Vertrag überführen.
 
 ## 19. Definition of Done je abgehaktem Punkt
 

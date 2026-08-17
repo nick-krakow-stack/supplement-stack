@@ -24,7 +24,6 @@ export type CreatorShareItem = {
   product_name: string | null;
   brand: string | null;
   image_url?: string | null;
-  effect_summary?: string | null;
   quantity: number;
   unit: string | null;
   intake_interval_days: number | null;
@@ -38,7 +37,13 @@ export type CreatorSharePreview = {
   token: string;
   type: 'dose_recommendation' | 'stack';
   title: string;
-  creator: { id: number; name: string; type: string; slug?: string };
+  creator: {
+    id: number;
+    name: string;
+    type: string;
+    slug?: string;
+    profile_image_url?: string | null;
+  };
   published_at: string;
   items: CreatorShareItem[];
 };
@@ -99,7 +104,26 @@ export type CreatorShareSaveResult = {
   existing_product_name?: string;
   replaced_product_name?: string;
   replaced_user_product_retained?: boolean;
+  undo?: {
+    token: string;
+    expires_at: number;
+    version: number;
+    stack_id: number;
+    stack_item_id: number;
+    summary: string;
+  };
   idempotent_replay?: boolean;
+};
+
+export type CreatorShareReportCategory = 'outdated' | 'misleading' | 'safety' | 'other';
+
+export type CreatorShareUndoResult = {
+  ok: true;
+  stack_id: number;
+  stack_name: string;
+  summary: string;
+  restored_summary: string;
+  undone_at: string;
 };
 
 export type CreatorShareStatus = 'pending' | 'approved' | 'blocked' | 'paused' | 'revoked' | 'expired';
@@ -368,6 +392,37 @@ export async function importCreatorShare(token: string, input: CreatorShareTarge
   expected_stack_item_version?: number;
 }): Promise<CreatorShareSaveResult> {
   const response = await apiClient.post<CreatorShareSaveResult>(`/creator-sharing/shares/${encodeURIComponent(token)}/import`, input);
+  return response.data;
+}
+
+export async function undoCreatorShareImport(
+  shareToken: string,
+  input: {
+    undo_token: string;
+    expected_version: number;
+    expected_stack_id: number;
+    expected_stack_item_id: number;
+  },
+): Promise<CreatorShareUndoResult> {
+  const response = await apiClient.post<CreatorShareUndoResult>(
+    `/creator-sharing/shares/${encodeURIComponent(shareToken)}/import/undo`,
+    input,
+  );
+  return response.data;
+}
+
+export async function reportCreatorShare(
+  shareToken: string,
+  input: {
+    idempotency_key: string;
+    category: CreatorShareReportCategory;
+    details?: string;
+  },
+): Promise<{ ok: true; report_id: number; status: 'pending' }> {
+  const response = await apiClient.post<{ ok: true; report_id: number; status: 'pending' }>(
+    `/creator-sharing/shares/${encodeURIComponent(shareToken)}/report`,
+    input,
+  );
   return response.data;
 }
 

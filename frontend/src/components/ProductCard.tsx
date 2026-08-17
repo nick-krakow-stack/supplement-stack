@@ -13,7 +13,7 @@ interface ProductCardProduct {
   product_type?: 'catalog' | 'user_product';
   name: string;
   brand?: string;
-  price: number;
+  price?: number | null;
   shop_link?: string;
   click_url?: string;
   image_url?: string;
@@ -30,14 +30,13 @@ interface ProductCardProduct {
   unit?: string;
   basis_quantity?: number | null;
   basis_unit?: string | null;
-  product_price?: number;
+  product_price?: number | null;
   product_name?: string | null;
   product_brand?: string | null;
   timing?: string;
   timing_label?: string | null;
   dosage_text?: string | null;
   intake_interval_days?: number;
-  ingredient_effect_summary?: string | null;
   ingredient_timing?: string | null;
   ingredient_timing_label?: string | null;
   ingredient_timing_note?: string | null;
@@ -61,7 +60,6 @@ interface ProductCardProduct {
       search_relevant?: number | boolean;
     }>;
   }>;
-  effect_summary?: string;
   warning_title?: string;
   warning_message?: string;
   warning_type?: string;
@@ -164,14 +162,6 @@ const LIST_COUNT_UNITS = [
 
 const LIST_MASS_UNITS = ['mg', 'g', 'kg', 'ml', 'l', 'dl', 'cl', 'µg', 'ug', 'mcg', 'iu', 'ie'] as const;
 
-function effectPoints(value?: string | null): string[] {
-  return (value ?? '')
-    .split(/[,;]+/)
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .slice(0, 4);
-}
-
 function unitLabel(unit?: string, amount?: number): string {
   const normalized = normalizeDoseUnit(unit);
   const singular = amount == null || Math.abs(amount - 1) < 0.001;
@@ -216,8 +206,14 @@ function normalizeDoseUnit(unit?: string | null): string {
     .trim();
 }
 
-function calcMonthlyPrice(product: ProductCardProduct, price: number): number | null {
+function calcMonthlyPrice(product: ProductCardProduct, price: number | null): number | null {
+  if (price === null) return null;
   return calculateProductUsage(product, price).monthlyCost;
+}
+
+function resolvedProductPrice(product: ProductCardProduct): number | null {
+  const price = product.product_price ?? product.price;
+  return typeof price === 'number' && Number.isFinite(price) && price >= 0 ? price : null;
 }
 
 function parseGermanAmount(value: string): number | null {
@@ -534,7 +530,7 @@ export default function ProductCard({
 }: ProductCardProps) {
   const [openWarningIndex, setOpenWarningIndex] = useState<number | null>(null);
   const [imageFailed, setImageFailed] = useState(false);
-  const price = product.product_price ?? product.price;
+  const price = resolvedProductPrice(product);
   const brand = product.product_brand ?? product.brand;
   const name = product.product_name ?? product.name;
   const ingredientTitle = product.product_name && product.name.trim() !== product.product_name.trim()
@@ -571,8 +567,6 @@ export default function ProductCard({
   const daysSupply = getDaysSupply(product);
   const dose = getDose(product);
   const partBreakdown = visiblePartBreakdown(product);
-  const effectText = product.ingredient_effect_summary?.trim() ?? product.effect_summary?.trim() ?? '';
-  const effects = effectPoints(effectText);
   const intervalDays = getIntakeIntervalDays(product);
   const intervalLabel = intervalDays === 1 ? 't\u00e4glich' : `alle ${intervalDays} Tage`;
   const showInterval = product.intake_interval_days != null;
@@ -695,7 +689,7 @@ export default function ProductCard({
 
         <div className="ss-product-list-actions-panel ss-product-list-actions-stack">
           <div className="ss-product-list-price">
-            <strong>{formatEur(price)}</strong>
+            <strong>{price === null ? 'Preis nicht verfügbar' : formatEur(price)}</strong>
             {monthlyPrice !== null && <span>{formatEur(monthlyPrice)} pro Monat</span>}
           </div>
           <div className="ss-product-list-actions">
@@ -896,24 +890,6 @@ export default function ProductCard({
         </div>
       </div>
 
-      {/* Effect */}
-      {effectText && (
-        <div className="ss-product-card-effect mb-2.5">
-          <div className="text-xs font-bold uppercase tracking-[0.4px] text-slate-500 mb-1">Wirkung</div>
-          {effects.length > 1 ? (
-            <div className="ss-effect-points">
-              {effects.map((effect) => (
-                <span key={effect}>{effect}</span>
-              ))}
-            </div>
-          ) : (
-            <div className="text-[12px] text-slate-500 leading-relaxed font-medium">
-              {effectText}
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Discontinued */}
       {product.discontinued_at && (
         <div className="ss-product-card-note flex items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs text-slate-500 mb-2.5">
@@ -1007,7 +983,7 @@ export default function ProductCard({
 
       {/* Price row */}
       <div className="ss-product-card-price flex items-center justify-between pt-2.5 border-t border-slate-100 mb-2.5">
-        <span className="text-[18px] font-black text-slate-900">{formatEur(price)}</span>
+        <span className="text-[18px] font-black text-slate-900">{price === null ? 'Preis nicht verfügbar' : formatEur(price)}</span>
         {monthlyPrice !== null && (
           <span className="bg-emerald-500 text-white px-2.5 py-0.5 rounded-full text-[12px] font-extrabold">
             {formatEur(monthlyPrice)}/Mo

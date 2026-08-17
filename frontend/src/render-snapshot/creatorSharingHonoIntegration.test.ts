@@ -52,7 +52,10 @@ async function authToken(userId: number, role: 'user' | 'admin', email: string):
 async function jsonRequest(
   harness: ProductionKnowledgeHonoHarness,
   path: string,
-  options: { method?: string; token?: string; cookie?: string; body?: unknown; feature?: boolean; userAgent?: string; drainRun?: string } = {},
+  options: {
+    method?: string; token?: string; cookie?: string; body?: unknown; feature?: boolean;
+    userAgent?: string; drainRun?: string; clientIp?: string; rateLimiter?: KVNamespace;
+  } = {},
 ): Promise<Response> {
   const headers = new Headers();
   if (options.token) headers.set('Authorization', `Bearer ${options.token}`);
@@ -60,6 +63,7 @@ async function jsonRequest(
   if (options.body !== undefined) headers.set('Content-Type', 'application/json');
   if (options.userAgent) headers.set('User-Agent', options.userAgent);
   if (options.drainRun) headers.set('X-Creator-Drain-Run', options.drainRun);
+  if (options.clientIp) headers.set('CF-Connecting-IP', options.clientIp);
   const request = new Request(`https://supplementstack.de${path}`, {
     method: options.method ?? 'GET',
     headers,
@@ -70,6 +74,7 @@ async function jsonRequest(
     JWT_SECRET,
     FRONTEND_URL: 'https://supplementstack.de',
     CREATOR_STACK_SHARING_ENABLED: options.feature === false ? 'false' : 'true',
+    RATE_LIMITER: options.rateLimiter,
   }, { waitUntil() {}, passThroughOnException() {}, props: {} });
 }
 
@@ -241,6 +246,176 @@ describe('creator stack sharing runtime contract', () => {
       body: { party_id: 100, stack_id: 100, type: 'stack', title: 'Disabled' },
     });
     expect(response.status).toBe(404);
+  });
+
+  it('publishes only an explicitly maintained safe creator image and exposes no invented profile fallback', async () => {
+    const creator = await authToken(100, 'user', 'creator@test.invalid');
+    const admin = await authToken(102, 'admin', 'admin@test.invalid');
+    const createdResponse = await jsonRequest(harness, '/api/creator-sharing/shares', {
+      method: 'POST', token: creator,
+      body: { party_id: 100, stack_id: 100, type: 'stack', title: 'Profilbild-Grenze' },
+    });
+    const share = await createdResponse.json() as { id: number; token: string };
+    harness.run(`UPDATE share_links SET moderation_status = 'approved' WHERE id = ?`, share.id);
+
+    const withoutImage = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}`);
+    expect(withoutImage.status).toBe(200);
+    expect((await withoutImage.json() as { creator: { profile_image_url: string | null } }).creator.profile_image_url).toBeNull();
+
+    const unsafe = await jsonRequest(harness, '/api/admin/creator-sharing/parties/100', {
+      method: 'PATCH', token: admin,
+      body: { expected_version: 1, public_profile_image_url: 'javascript:alert(1)' },
+    });
+    expect(unsafe.status).toBe(400);
+    expect((await db.prepare('SELECT public_profile_image_url FROM parties WHERE id = 100')
+      .first<{ public_profile_image_url: string | null }>())?.public_profile_image_url).toBeNull();
+    const unsafeRelative = await jsonRequest(harness, '/api/admin/creator-sharing/parties/100', {
+      method: 'PATCH', token: admin,
+      body: { expected_version: 1, public_profile_image_url: '/api/r2/../auth/session' },
+    });
+    expect(unsafeRelative.status).toBe(400);
+
+    const maintained = await jsonRequest(harness, '/api/admin/creator-sharing/parties/100', {
+      method: 'PATCH', token: admin,
+      body: { expected_version: 1, public_profile_image_url: 'https://images.example/creator.jpg' },
+    });
+    expect(maintained.status).toBe(200);
+    const publicPreview = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}`);
+    expect(publicPreview.status).toBe(200);
+    expect(publicPreview.headers.get('Cache-Control')).toBe('private, no-store');
+    expect(publicPreview.headers.get('X-Robots-Tag')).toBe('noindex, nofollow, noarchive');
+    expect(publicPreview.headers.get('Referrer-Policy')).toBe('no-referrer');
+    expect((await publicPreview.json() as { creator: { profile_image_url: string | null } }).creator.profile_image_url)
+      .toBe('https://images.example/creator.jpg');
+
+    const cleared = await jsonRequest(harness, '/api/admin/creator-sharing/parties/100', {
+      method: 'PATCH', token: admin,
+      body: { expected_version: 2, public_profile_image_url: null },
+    });
+    expect(cleared.status).toBe(200);
+    expect((await cleared.json() as { party: { public_profile_image_url: string | null } }).party.public_profile_image_url).toBeNull();
+    harness.run(`UPDATE parties SET public_profile_image_url = 'javascript:alert(1)' WHERE id = 100`);
+    const unsafeStoredValue = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}`);
+    expect(unsafeStoredValue.status).toBe(200);
+    expect((await unsafeStoredValue.json() as { creator: { profile_image_url: string | null } }).creator.profile_image_url).toBeNull();
+  });
+
+  it('accepts a minimal public report idempotently and gives admins an exact guarded moderation path', async () => {
+    const creator = await authToken(100, 'user', 'creator@test.invalid');
+    const admin = await authToken(102, 'admin', 'admin@test.invalid');
+    const rateValues = new Map<string, string>();
+    const rateLimiter = {
+      get: async (key: string) => rateValues.get(key) ?? null,
+      put: async (key: string, value: string) => { rateValues.set(key, value); },
+    } as unknown as KVNamespace;
+    const createdResponse = await jsonRequest(harness, '/api/creator-sharing/shares', {
+      method: 'POST', token: creator,
+      body: { party_id: 100, stack_id: 100, type: 'stack', title: 'Meldbare Empfehlung' },
+    });
+    const share = await createdResponse.json() as { id: number; token: string };
+    harness.run(`UPDATE share_links SET moderation_status = 'approved' WHERE id = ?`, share.id);
+
+    const invalid = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}/report`, {
+      method: 'POST', body: { idempotency_key: 'report-invalid-category-0001', category: 'spam' },
+    });
+    expect(invalid.status).toBe(400);
+
+    const payload = {
+      idempotency_key: 'report-public-flow-000001',
+      category: 'misleading',
+      details: 'Die Angabe zum Zeitpunkt ist schwer verständlich.',
+    };
+    const submitted = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}/report`, {
+      method: 'POST', body: payload, clientIp: '203.0.113.14', rateLimiter,
+    });
+    expect(submitted.status).toBe(201);
+    expect(submitted.headers.get('Cache-Control')).toBe('private, no-store');
+    const submittedBody = await submitted.json() as { report_id: number; status: string };
+    expect(submittedBody).toMatchObject({ status: 'pending' });
+
+    const replay = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}/report`, {
+      method: 'POST', body: payload, clientIp: '203.0.113.14', rateLimiter,
+    });
+    expect(replay.status).toBe(200);
+    expect(await replay.json()).toMatchObject({ report_id: submittedBody.report_id, status: 'pending' });
+
+    const changedReplay = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}/report`, {
+      method: 'POST', clientIp: '203.0.113.14', rateLimiter,
+      body: {
+        ...payload,
+        category: 'safety',
+        details: 'Nach unklarer Antwort nachträglich geänderte Meldung.',
+      },
+    });
+    expect(changedReplay.status).toBe(409);
+    expect(await changedReplay.json()).toMatchObject({ code: 'REPORT_PAYLOAD_CHANGED' });
+    expect(await db.prepare(`
+      SELECT category, details FROM creator_share_reports WHERE id = ?
+    `).bind(submittedBody.report_id).first()).toEqual({
+      category: payload.category,
+      details: payload.details,
+    });
+
+    const schemaColumns = (await db.prepare('PRAGMA table_info(creator_share_reports)').all<{ name: string }>()).results
+      .map((column) => column.name);
+    expect(schemaColumns).not.toContain('ip_address');
+    expect(schemaColumns).not.toContain('user_agent');
+    const queue = await jsonRequest(harness, '/api/admin/creator-sharing/reports?status=open', { token: admin });
+    expect(queue.status).toBe(200);
+    expect(await queue.json()).toMatchObject({
+      reports: [expect.objectContaining({
+        id: submittedBody.report_id,
+        category: 'misleading',
+        details: payload.details,
+        status: 'pending',
+        share_link_id: share.id,
+        creator_name: 'Test Creator',
+      })],
+    });
+    for (let index = 1; index <= 4; index += 1) {
+      const extra = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}/report`, {
+        method: 'POST', clientIp: '203.0.113.14', rateLimiter,
+        body: { idempotency_key: `report-rate-extra-${String(index).padStart(4, '0')}`, category: 'other' },
+      });
+      expect(extra.status).toBe(201);
+    }
+    const limited = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}/report`, {
+      method: 'POST', clientIp: '203.0.113.14', rateLimiter,
+      body: { idempotency_key: 'report-rate-limited-0001', category: 'other' },
+    });
+    expect(limited.status).toBe(429);
+
+    const reviewed = await jsonRequest(harness, `/api/admin/creator-sharing/reports/${submittedBody.report_id}`, {
+      method: 'PATCH', token: admin,
+      body: { expected_version: 1, expected_status: 'pending', status: 'reviewed' },
+    });
+    expect(reviewed.status).toBe(200);
+    expect(await reviewed.json()).toMatchObject({ report: { version: 2, status: 'reviewed', reviewed_by_user_id: 102 } });
+    const stale = await jsonRequest(harness, `/api/admin/creator-sharing/reports/${submittedBody.report_id}`, {
+      method: 'PATCH', token: admin,
+      body: { expected_version: 1, expected_status: 'pending', status: 'resolved' },
+    });
+    expect(stale.status).toBe(409);
+    const resolved = await jsonRequest(harness, `/api/admin/creator-sharing/reports/${submittedBody.report_id}`, {
+      method: 'PATCH', token: admin,
+      body: { expected_version: 2, expected_status: 'reviewed', status: 'resolved', resolution_note: 'Geprüft und erledigt.' },
+    });
+    expect(resolved.status).toBe(200);
+    expect(await resolved.json()).toMatchObject({ report: { version: 3, status: 'resolved' } });
+    const terminal = await jsonRequest(harness, `/api/admin/creator-sharing/reports/${submittedBody.report_id}`, {
+      method: 'PATCH', token: admin,
+      body: { expected_version: 3, expected_status: 'resolved', status: 'dismissed' },
+    });
+    expect(terminal.status).toBe(409);
+
+    const unchangedShare = await db.prepare('SELECT moderation_status, is_revoked FROM share_links WHERE id = ?')
+      .bind(share.id).first<{ moderation_status: string; is_revoked: number }>();
+    expect(unchangedShare).toEqual({ moderation_status: 'approved', is_revoked: 0 });
+    const audit = await db.prepare(`
+      SELECT COUNT(*) AS count FROM admin_audit_log
+      WHERE action = 'moderate_creator_share_report' AND entity_id = ?
+    `).bind(submittedBody.report_id).first<{ count: number }>();
+    expect(audit?.count).toBe(2);
   });
 
   it('writes moderation and its outbox atomically in both expand and active schemas', async () => {
@@ -445,7 +620,7 @@ describe('creator stack sharing runtime contract', () => {
     });
   });
 
-  it('projects image, central effect and plain timing equally while keeping private source data private', async () => {
+  it('keeps central effect copy out of private and public commercial previews while projecting image and plain timing', async () => {
     const creator = await authToken(100, 'user', 'creator@test.invalid');
     const source = await db.prepare(`
       SELECT item.catalog_product_id AS product_id, ingredient.ingredient_id
@@ -468,10 +643,10 @@ describe('creator stack sharing runtime contract', () => {
     const privatePayload = await privateResponse.json() as { items: Array<Record<string, unknown>> } & Record<string, unknown>;
     expect(privatePayload.items[0]).toMatchObject({
       image_url: '/images/creator-preview.webp',
-      effect_summary: 'Zentral gepflegte Wirkung',
       timing: null,
       timing_label: 'Keine Angabe',
     });
+    expect(privatePayload.items[0]).not.toHaveProperty('effect_summary');
     expect(privatePayload).toMatchObject({ entity_id: 100, source_stack_id: 100, source_stack_name: 'Creator Stack' });
 
     harness.run(`UPDATE share_links SET moderation_status = 'approved' WHERE id = ?`, share.id);
@@ -983,9 +1158,21 @@ describe('creator stack sharing runtime contract', () => {
       method: 'POST', token: importer, body: replaceBody,
     });
     expect(replace.status).toBe(200);
-    expect(await replace.json()).toMatchObject({
+    const replacePayload = await replace.json() as {
+      action: string;
+      undo: { token: string; version: number; stack_id: number; stack_item_id: number; summary: string };
+    };
+    expect(replacePayload).toMatchObject({
       action: 'replaced', replaced_product_name: 'Eigenes Magnesium', replaced_user_product_retained: true,
+      undo: { version: 1, stack_id: 101, stack_item_id: 501 },
     });
+    expect(replacePayload.undo.token).toMatch(/^undo_[a-f0-9-]{36}$/i);
+    expect(replacePayload.undo.summary).toContain('Eigenes Magnesium');
+    const storedOperation = await db.prepare(`
+      SELECT result_json FROM share_import_operations WHERE idempotency_key = ?
+    `).bind(replaceBody.idempotency_key).first<{ result_json: string }>();
+    expect(storedOperation?.result_json).not.toContain(replacePayload.undo.token);
+    expect(storedOperation?.result_json).not.toContain('"undo"');
     expect(await db.prepare(`
       SELECT catalog_product_id, user_product_id, sort_order, version,
         quantity, intake_interval_days, dosage_text, timing
@@ -1007,8 +1194,270 @@ describe('creator stack sharing runtime contract', () => {
       method: 'POST', token: importer, body: replaceBody,
     });
     expect(replay.status).toBe(200);
-    expect((await replay.json() as { idempotent_replay: boolean }).idempotent_replay).toBe(true);
+    const replayPayload = await replay.json() as { idempotent_replay: boolean; undo?: unknown };
+    expect(replayPayload.idempotent_replay).toBe(true);
+    expect(replayPayload.undo).toBeUndefined();
     expect((await db.prepare('SELECT imports FROM share_links WHERE id = ?').bind(share.id).first<{ imports: number }>())?.imports).toBe(1);
+
+    const undo = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}/import/undo`, {
+      method: 'POST', token: importer,
+      body: {
+        undo_token: replacePayload.undo.token,
+        expected_version: replacePayload.undo.version,
+        expected_stack_id: replacePayload.undo.stack_id,
+        expected_stack_item_id: replacePayload.undo.stack_item_id,
+      },
+    });
+    expect(undo.status).toBe(200);
+    const undoPayload = await undo.json() as {
+      ok: boolean;
+      stack_id: number;
+      stack_name: string;
+      summary: string;
+      restored_summary: string;
+    };
+    expect(undoPayload).toMatchObject({
+      ok: true,
+      stack_id: 101,
+      stack_name: 'Zielstack',
+      restored_summary: 'Der vorherige Stand in „Zielstack“ wurde wiederhergestellt.',
+    });
+    expect(undoPayload.summary).toContain('wird');
+    expect(undoPayload.restored_summary).not.toContain(' wird ');
+    expect(await db.prepare(`
+      SELECT catalog_product_id, user_product_id, quantity, intake_interval_days,
+        dosage_text, timing, sort_order, version
+      FROM stack_items WHERE id = 501
+    `).first()).toMatchObject({
+      catalog_product_id: null,
+      user_product_id: 501,
+      quantity: 2,
+      intake_interval_days: 2,
+      dosage_text: 'Zwei Tabletten',
+      timing: 'abends',
+      sort_order: 8,
+      version: 5,
+    });
+    expect((await db.prepare('SELECT COUNT(*) AS count FROM stack_item_link_bindings WHERE stack_item_id = 501').first<{ count: number }>())?.count).toBe(0);
+    const repeatedUndo = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}/import/undo`, {
+      method: 'POST', token: importer,
+      body: {
+        undo_token: replacePayload.undo.token,
+        expected_version: 1,
+        expected_stack_id: 101,
+        expected_stack_item_id: 501,
+      },
+    });
+    expect(repeatedUndo.status).toBe(409);
+    expect(await repeatedUndo.json()).toMatchObject({ code: 'UNDO_ALREADY_USED' });
+  });
+
+  it('allows exactly one guarded undo attempt and preserves an identical previous link binding', async () => {
+    const creator = await authToken(100, 'user', 'creator@test.invalid');
+    const importer = await authToken(101, 'user', 'importer@test.invalid');
+    const source = await db.prepare(`
+      SELECT si.catalog_product_id AS product_id
+      FROM stack_items si WHERE si.id = 100
+    `).first<{ product_id: number }>();
+    const created = await jsonRequest(harness, '/api/creator-sharing/shares', {
+      method: 'POST', token: creator,
+      body: { party_id: 100, stack_id: 100, stack_item_id: 100, type: 'dose_recommendation', title: 'Parallel Undo' },
+    });
+    const share = await created.json() as { id: number; token: string };
+    harness.run(`UPDATE share_links SET moderation_status = 'approved' WHERE id = ?`, share.id);
+    const snapshotBinding = await db.prepare(`
+      SELECT
+        CAST(json_extract(snapshot_json, '$.items[0].shop_link_id') AS INTEGER) AS shop_link_id,
+        json_extract(snapshot_json, '$.items[0].link_binding.resolution_kind') AS resolution_kind,
+        CAST(json_extract(snapshot_json, '$.items[0].link_binding.affiliate_version_id') AS INTEGER) AS affiliate_version_id,
+        CAST(json_extract(snapshot_json, '$.items[0].link_binding.resolved_party_id') AS INTEGER) AS resolved_party_id
+      FROM share_links WHERE id = ?
+    `).bind(share.id).first<{
+      shop_link_id: number;
+      resolution_kind: string;
+      affiliate_version_id: number | null;
+      resolved_party_id: number | null;
+    }>();
+    expect(snapshotBinding).not.toBeNull();
+    harness.run(`INSERT INTO stacks (id, user_id, name) VALUES (101, 101, 'Parallelziel')`);
+    harness.run(`
+      INSERT INTO stack_items (
+        id, stack_id, catalog_product_id, quantity, intake_interval_days,
+        dosage_text, timing, sort_order, version
+      ) VALUES (501, 101, ?, 2, 2, 'Vorherige Angabe', 'morning', 4, 3)
+    `, source!.product_id);
+    harness.run(`
+      INSERT INTO stack_item_link_bindings (
+        stack_item_id, shop_link_id, resolution_kind, affiliate_version_id,
+        resolved_party_id, bound_at
+      ) VALUES (501, ?, ?, ?, ?, '2026-08-01 10:00:00')
+    `, snapshotBinding!.shop_link_id, snapshotBinding!.resolution_kind,
+    snapshotBinding!.affiliate_version_id, snapshotBinding!.resolved_party_id);
+
+    const selection = { target_mode: 'existing', target_stack_id: 101 };
+    const preflightResponse = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}/preflight`, {
+      method: 'POST', token: importer, body: selection,
+    });
+    const preflight = await preflightResponse.json() as {
+      preflight_fingerprint: string;
+      snapshot_hash: string;
+      similar_products: Array<{ stack_item_id: number; version: number }>;
+    };
+    const saved = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}/import`, {
+      method: 'POST', token: importer,
+      body: {
+        ...selection,
+        idempotency_key: 'parallel-undo-replace-0001',
+        decision: 'replace',
+        selected_stack_item_id: 501,
+        expected_stack_item_version: preflight.similar_products[0].version,
+        preflight_fingerprint: preflight.preflight_fingerprint,
+        expected_snapshot_hash: preflight.snapshot_hash,
+      },
+    });
+    expect(saved.status).toBe(200);
+    const payload = await saved.json() as {
+      undo: { token: string; version: number; stack_id: number; stack_item_id: number };
+    };
+    const undoBody = {
+      undo_token: payload.undo.token,
+      expected_version: payload.undo.version,
+      expected_stack_id: payload.undo.stack_id,
+      expected_stack_item_id: payload.undo.stack_item_id,
+    };
+    const [first, second] = await Promise.all([
+      jsonRequest(harness, `/api/creator-sharing/shares/${share.token}/import/undo`, { method: 'POST', token: importer, body: undoBody }),
+      jsonRequest(harness, `/api/creator-sharing/shares/${share.token}/import/undo`, { method: 'POST', token: importer, body: undoBody }),
+    ]);
+    expect([first.status, second.status].sort()).toEqual([200, 409]);
+    const finalItem = await db.prepare(`
+      SELECT catalog_product_id, quantity, intake_interval_days, dosage_text,
+        timing, sort_order, version
+      FROM stack_items WHERE id = 501
+    `).first();
+    expect(finalItem).toMatchObject({
+      catalog_product_id: source!.product_id,
+      quantity: 2,
+      intake_interval_days: 2,
+      dosage_text: 'Vorherige Angabe',
+      timing: 'morning',
+      sort_order: 4,
+      version: 5,
+    });
+    expect(await db.prepare(`
+      SELECT shop_link_id, resolution_kind, affiliate_version_id,
+        resolved_party_id, bound_at
+      FROM stack_item_link_bindings WHERE stack_item_id = 501
+    `).first()).toEqual({ ...snapshotBinding, bound_at: '2026-08-01 10:00:00' });
+    expect(await db.prepare(`
+      SELECT version, undone_at IS NOT NULL AS is_undone,
+        write_claim_token IS NOT NULL AS has_claim
+      FROM creator_share_import_undos WHERE stack_item_id = 501
+    `).first()).toEqual({ version: 2, is_undone: 1, has_claim: 1 });
+  });
+
+  it('rolls the whole undo batch back when its final exact postcondition is tampered', async () => {
+    const creator = await authToken(100, 'user', 'creator@test.invalid');
+    const importer = await authToken(101, 'user', 'importer@test.invalid');
+    const source = await db.prepare('SELECT catalog_product_id AS product_id FROM stack_items WHERE id = 100')
+      .first<{ product_id: number }>();
+    const created = await jsonRequest(harness, '/api/creator-sharing/shares', {
+      method: 'POST', token: creator,
+      body: { party_id: 100, stack_id: 100, stack_item_id: 100, type: 'dose_recommendation', title: 'Undo-Receipt' },
+    });
+    const share = await created.json() as { id: number; token: string };
+    harness.run('UPDATE share_links SET moderation_status = ? WHERE id = ?', 'approved', share.id);
+    harness.run(`INSERT INTO stacks (id, user_id, name) VALUES (101, 101, 'Receipt-Ziel')`);
+    harness.run(`
+      INSERT INTO stack_items (
+        id, stack_id, catalog_product_id, quantity, intake_interval_days,
+        dosage_text, timing, sort_order, version
+      ) VALUES (501, 101, ?, 2, 2, 'Vorherige Angabe', 'morning', 4, 3)
+    `, source!.product_id);
+
+    const selection = { target_mode: 'existing', target_stack_id: 101 };
+    const preflightResponse = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}/preflight`, {
+      method: 'POST', token: importer, body: selection,
+    });
+    const preflight = await preflightResponse.json() as {
+      preflight_fingerprint: string;
+      snapshot_hash: string;
+      similar_products: Array<{ stack_item_id: number; version: number }>;
+    };
+    const saved = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}/import`, {
+      method: 'POST', token: importer,
+      body: {
+        ...selection,
+        idempotency_key: 'receipt-bound-undo-replace-0001',
+        decision: 'replace',
+        selected_stack_item_id: 501,
+        expected_stack_item_version: preflight.similar_products[0].version,
+        preflight_fingerprint: preflight.preflight_fingerprint,
+        expected_snapshot_hash: preflight.snapshot_hash,
+      },
+    });
+    expect(saved.status).toBe(200);
+    const payload = await saved.json() as {
+      undo: { token: string; version: number; stack_id: number; stack_item_id: number };
+    };
+
+    const undoBefore = await db.prepare(`
+      SELECT version, undone_at, write_claim_token
+      FROM creator_share_import_undos WHERE stack_item_id = 501
+    `).first<Record<string, unknown>>();
+    const itemBefore = await db.prepare(`
+      SELECT catalog_product_id, user_product_id, quantity, dosage_text, timing,
+        intake_interval_days, sort_order, source_share_link_id,
+        creator_statement_snapshot, amount_source, version
+      FROM stack_items WHERE id = 501
+    `).first<Record<string, unknown>>();
+    const bindingBefore = await db.prepare(`
+      SELECT shop_link_id, resolution_kind, affiliate_version_id,
+        resolved_party_id, bound_at
+      FROM stack_item_link_bindings WHERE stack_item_id = 501
+    `).first<Record<string, unknown>>();
+
+    // Simulate an in-transaction mutation after the imported binding is
+    // removed. The final SQL assertion must abort and roll back every write.
+    harness.exec(`
+      CREATE TRIGGER tamper_creator_share_undo_receipt
+      AFTER DELETE ON stack_item_link_bindings
+      WHEN OLD.stack_item_id = 501
+      BEGIN
+        UPDATE creator_share_import_undos
+        SET write_claim_token = 'claim_tampered_receipt_0001'
+        WHERE stack_item_id = 501 AND undone_at IS NOT NULL;
+      END;
+    `);
+    const undoResponse = await jsonRequest(harness, `/api/creator-sharing/shares/${share.token}/import/undo`, {
+      method: 'POST', token: importer,
+      body: {
+        undo_token: payload.undo.token,
+        expected_version: payload.undo.version,
+        expected_stack_id: payload.undo.stack_id,
+        expected_stack_item_id: payload.undo.stack_item_id,
+      },
+    });
+    expect(undoResponse.status).toBe(409);
+    const failure = await undoResponse.json() as Record<string, unknown>;
+    expect(failure).toMatchObject({ code: 'UNDO_TARGET_CHANGED' });
+    expect(failure).not.toHaveProperty('undone_at');
+    expect(failure).not.toHaveProperty('ok', true);
+    expect(await db.prepare(`
+      SELECT version, undone_at, write_claim_token
+      FROM creator_share_import_undos WHERE stack_item_id = 501
+    `).first()).toEqual(undoBefore);
+    expect(await db.prepare(`
+      SELECT catalog_product_id, user_product_id, quantity, dosage_text, timing,
+        intake_interval_days, sort_order, source_share_link_id,
+        creator_statement_snapshot, amount_source, version
+      FROM stack_items WHERE id = 501
+    `).first()).toEqual(itemBefore);
+    expect(await db.prepare(`
+      SELECT shop_link_id, resolution_kind, affiliate_version_id,
+        resolved_party_id, bound_at
+      FROM stack_item_link_bindings WHERE stack_item_id = 501
+    `).first()).toEqual(bindingBefore);
   });
 
   it('creates the first target stack atomically, allows the same name and rejects stale preflight state', async () => {
@@ -1522,6 +1971,10 @@ describe('creator stack sharing runtime contract', () => {
       WHERE s.id = ?
     `).bind(imported.stack_id).first<{ stack_item_id: number; origin_party_id: number; source_share_link_id: number; affiliate_version_id: number; resolved_party_id: number }>();
     expect(importedRow).toMatchObject({ origin_party_id: 100, source_share_link_id: created.id, affiliate_version_id: 100, resolved_party_id: 100 });
+    const importedStackResponse = await jsonRequest(harness, `/api/stacks/${imported.stack_id}`, { token: importer });
+    expect(importedStackResponse.status).toBe(200);
+    const importedStack = await importedStackResponse.json() as { items: Array<{ creator_party_name: string | null }> };
+    expect(importedStack.items[0]?.creator_party_name).toBe('Test Creator');
     const shareCounters = await db.prepare(`SELECT imports FROM share_links WHERE id = ?`).bind(created.id).first<{ imports: number }>();
     expect(shareCounters?.imports).toBe(1);
 
@@ -1542,10 +1995,15 @@ describe('creator stack sharing runtime contract', () => {
       day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Berlin',
     }).format(new Date(storedSnapshot.published_at));
     expect(mailOptions.to).toBe('importer@test.invalid');
+    expect(mailOptions.subject).toBe('Dein Einnahmeplan: Importierter Stack');
     expect(mailOptions.html).toContain('Test Creator');
     expect(mailOptions.html).toContain(`Stand der Creator-Empfehlung:</strong> ${snapshotDate}`);
     expect(mailOptions.html).toContain('Meine persönliche Notiz zum importierten Stack.');
     expect(mailOptions.html).toContain('Sachlicher Kontext ohne individuelle Dosierung.');
+    expect(mailOptions.html).toContain('Allgemeiner Creator-Hinweis:');
+    expect((mailOptions.html.match(/Sachlicher Kontext ohne individuelle Dosierung\./g) ?? [])).toHaveLength(1);
+    expect(mailOptions.html).toContain('Deine geplante Menge pro Einnahmetag');
+    expect(mailOptions.html).not.toContain('Tagesdosis');
     expect(mailOptions.html).toContain(
       `href="https://supplementstack.de/api/products/${creatorProduct!.id}/out?stack_item_id=${importedRow!.stack_item_id}&amp;context=creator_stack"`,
     );

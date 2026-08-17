@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import type { AppContext } from '../lib/types'
 import { ensureAdmin, logAdminAction } from '../lib/helpers'
 import { normalizeDomain, snapshotHash, validateAffiliateTemplate } from '../lib/creator-sharing'
-import { getPlatformParty, parseStoredSnapshot } from '../lib/creator-sharing-service'
+import { getPlatformParty, parseStoredSnapshot, publicProfileImageUrl } from '../lib/creator-sharing-service'
 import { deliverCreatorShareNotification } from '../lib/creator-share-notifications'
 
 const creatorSharingAdmin = new Hono<AppContext>()
@@ -80,17 +80,22 @@ creatorSharingAdmin.post('/parties', async (c) => {
   const ownerUserId = body.owner_user_id === undefined || body.owner_user_id === null
     ? null
     : positiveInteger(body.owner_user_id)
-  if (!type || !name || !slug || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || (body.owner_user_id != null && !ownerUserId)) {
-    return c.json({ error: 'type, name, gültiger slug und optional owner_user_id sind erforderlich.' }, 400)
+  const profileImage = publicProfileImageUrl(body.public_profile_image_url)
+  if (!type || !name || !slug || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)
+    || (body.owner_user_id != null && !ownerUserId) || !profileImage.ok) {
+    return c.json({ error: 'Typ, Name und gültiger Kurzname sind erforderlich. Das optionale Profilbild braucht eine sichere HTTPS- oder R2-Adresse.' }, 400)
   }
   if (ownerUserId) {
     const owner = await c.env.DB.prepare('SELECT id FROM users WHERE id = ?').bind(ownerUserId).first<{ id: number }>()
     if (!owner) return c.json({ error: 'Owner user not found' }, 404)
   }
   const statements: D1PreparedStatement[] = [c.env.DB.prepare(`
-    INSERT INTO parties (type, name, slug, status, auto_catalog_approval, version)
-    VALUES (?, ?, ?, 'active', ?, 1)
-  `).bind(type, name, slug, body.auto_catalog_approval === true ? 1 : 0)]
+    INSERT INTO parties (
+      type, name, slug, status, auto_catalog_approval,
+      public_profile_image_url, version
+    )
+    VALUES (?, ?, ?, 'active', ?, ?, 1)
+  `).bind(type, name, slug, body.auto_catalog_approval === true ? 1 : 0, profileImage.value)]
   if (ownerUserId) {
     statements.push(c.env.DB.prepare(`
       INSERT INTO party_memberships (party_id, user_id, role, status)
@@ -99,7 +104,7 @@ creatorSharingAdmin.post('/parties', async (c) => {
   }
   await c.env.DB.batch(statements)
   const party = await c.env.DB.prepare('SELECT * FROM parties WHERE slug = ?').bind(slug).first()
-  await logAdminAction(c, { action: 'create_creator_party', entity_type: 'party', entity_id: Number((party as { id?: number } | null)?.id ?? 0), changes: { type, name, slug, owner_user_id: ownerUserId } })
+  await logAdminAction(c, { action: 'create_creator_party', entity_type: 'party', entity_id: Number((party as { id?: number } | null)?.id ?? 0), changes: { type, name, slug, owner_user_id: ownerUserId, public_profile_image_url: profileImage.value } })
   return c.json({ party }, 201)
 })
 
@@ -111,7 +116,8 @@ creatorSharingAdmin.patch('/parties/:id', async (c) => {
   const expectedVersion = positiveInteger(body.expected_version)
   if (!expectedVersion) return c.json({ error: 'expected_version is required' }, 400)
   const current = await c.env.DB.prepare('SELECT * FROM parties WHERE id = ?').bind(partyId).first<{
-    id: number; type: string; name: string; status: string; auto_catalog_approval: number; version: number
+    id: number; type: string; name: string; status: string; auto_catalog_approval: number;
+    public_profile_image_url: string | null; version: number
   }>()
   if (!current) return c.json({ error: 'Party not found' }, 404)
   const name = body.name === undefined ? current.name : boundedText(body.name, 160)
@@ -119,13 +125,19 @@ creatorSharingAdmin.patch('/parties/:id', async (c) => {
   const autoApproval = body.auto_catalog_approval === undefined
     ? current.auto_catalog_approval
     : body.auto_catalog_approval === true || body.auto_catalog_approval === 1 ? 1 : body.auto_catalog_approval === false || body.auto_catalog_approval === 0 ? 0 : null
-  if (!name || !status || autoApproval === null) return c.json({ error: 'Invalid party update' }, 400)
+  const profileImage = body.public_profile_image_url === undefined
+    ? { ok: true as const, value: current.public_profile_image_url }
+    : publicProfileImageUrl(body.public_profile_image_url)
+  if (!name || !status || autoApproval === null || !profileImage.ok) {
+    return c.json({ error: 'Die Änderung ist ungültig. Das optionale Profilbild braucht eine sichere HTTPS- oder R2-Adresse.' }, 400)
+  }
   if (current.type === 'platform' && status === 'blocked') return c.json({ error: 'Platform party cannot be blocked.' }, 409)
   const result = await c.env.DB.prepare(`
     UPDATE parties
-    SET name = ?, status = ?, auto_catalog_approval = ?, version = version + 1, updated_at = CURRENT_TIMESTAMP
+    SET name = ?, status = ?, auto_catalog_approval = ?, public_profile_image_url = ?,
+      version = version + 1, updated_at = CURRENT_TIMESTAMP
     WHERE id = ? AND version = ?
-  `).bind(name, status, autoApproval, partyId, expectedVersion).run()
+  `).bind(name, status, autoApproval, profileImage.value, partyId, expectedVersion).run()
   if (d1Changes(result) !== 1) return c.json({ error: 'Version conflict', current_version: current.version }, 409)
   const party = await c.env.DB.prepare('SELECT * FROM parties WHERE id = ?').bind(partyId).first()
   await logAdminAction(c, { action: 'update_creator_party', entity_type: 'party', entity_id: partyId, changes: { before: current, after: party } })
@@ -532,6 +544,83 @@ creatorSharingAdmin.patch('/shares/:id', async (c) => {
     },
   })
   return c.json({ share, notification_status: notificationStatus })
+})
+
+creatorSharingAdmin.get('/reports', async (c) => {
+  const requestedStatus = c.req.query('status') ?? 'open'
+  if (!['open', 'pending', 'reviewed', 'resolved', 'dismissed', 'all'].includes(requestedStatus)) {
+    return c.json({ error: 'Invalid report status' }, 400)
+  }
+  const where = requestedStatus === 'all'
+    ? '1 = 1'
+    : requestedStatus === 'open'
+      ? "report.status IN ('pending', 'reviewed')"
+      : 'report.status = ?'
+  const query = c.env.DB.prepare(`
+    SELECT
+      report.id, report.share_link_id, report.category, report.details,
+      report.status, report.version, report.created_at, report.reviewed_at,
+      report.resolution_note, share.token, share.entity_type,
+      json_extract(share.snapshot_json, '$.title') AS share_title,
+      party.name AS creator_name
+    FROM creator_share_reports report
+    JOIN share_links share ON share.id = report.share_link_id
+    JOIN parties party ON party.id = share.creator_party_id
+    WHERE ${where}
+    ORDER BY
+      CASE report.status WHEN 'pending' THEN 0 WHEN 'reviewed' THEN 1 ELSE 2 END,
+      report.created_at ASC, report.id ASC
+    LIMIT 100
+  `)
+  const { results } = requestedStatus !== 'all' && requestedStatus !== 'open'
+    ? await query.bind(requestedStatus).all()
+    : await query.all()
+  return c.json({ reports: results })
+})
+
+creatorSharingAdmin.patch('/reports/:id', async (c) => {
+  const reportId = positiveInteger(c.req.param('id'))
+  if (!reportId) return c.json({ error: 'Invalid report id' }, 400)
+  let body: Record<string, unknown>
+  try { body = await c.req.json() } catch { return c.json({ error: 'Invalid JSON' }, 400) }
+  const expectedVersion = positiveInteger(body.expected_version)
+  const expectedStatus = ['pending', 'reviewed', 'resolved', 'dismissed'].includes(String(body.expected_status))
+    ? String(body.expected_status)
+    : null
+  const status = ['reviewed', 'resolved', 'dismissed'].includes(String(body.status))
+    ? String(body.status)
+    : null
+  const resolutionNote = body.resolution_note === undefined || body.resolution_note === null || body.resolution_note === ''
+    ? null
+    : boundedText(body.resolution_note, 1000)
+  if (!expectedVersion || !expectedStatus || !status
+    || (body.resolution_note !== undefined && body.resolution_note !== null && body.resolution_note !== '' && !resolutionNote)) {
+    return c.json({ error: 'expected_version, expected_status and a valid status are required' }, 400)
+  }
+  if ((expectedStatus === 'resolved' || expectedStatus === 'dismissed') || expectedStatus === status) {
+    return c.json({ error: 'Report status cannot be changed from this state' }, 409)
+  }
+  const admin = c.get('user')
+  const result = await c.env.DB.prepare(`
+    UPDATE creator_share_reports
+    SET status = ?, version = version + 1, reviewed_by_user_id = ?,
+      reviewed_at = CURRENT_TIMESTAMP, resolution_note = ?
+    WHERE id = ? AND version = ? AND status = ?
+  `).bind(status, admin.userId, resolutionNote, reportId, expectedVersion, expectedStatus).run()
+  if (d1Changes(result) !== 1) return c.json({ error: 'Report status conflict' }, 409)
+  const report = await c.env.DB.prepare('SELECT * FROM creator_share_reports WHERE id = ?')
+    .bind(reportId).first()
+  await logAdminAction(c, {
+    action: 'moderate_creator_share_report',
+    entity_type: 'creator_share_report',
+    entity_id: reportId,
+    reason: resolutionNote,
+    changes: {
+      before: { version: expectedVersion, status: expectedStatus },
+      after: { version: expectedVersion + 1, status },
+    },
+  })
+  return c.json({ report })
 })
 
 creatorSharingAdmin.get('/missing-platform-codes', async (c) => {

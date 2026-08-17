@@ -51,8 +51,8 @@ export interface DemoProduct {
   version?: number;
   name: string;
   product_name?: string | null;
-  price: number;
-  product_price?: number;
+  price?: number | null;
+  product_price?: number | null;
   brand?: string;
   product_brand?: string | null;
   shop_link?: string;
@@ -76,8 +76,6 @@ export interface DemoProduct {
   ingredient_intake_hint?: string | null;
   dosage_text?: string | null;
   sort_order?: number;
-  ingredient_effect_summary?: string | null;
-  effect_summary?: string;
   warning_title?: string;
   warning_message?: string;
   warning_type?: string;
@@ -88,6 +86,7 @@ export interface DemoProduct {
   published_product_id?: number | null;
   creator_statement_snapshot?: string | null;
   creator_snapshot_at?: string | null;
+  creator_party_name?: string | null;
   origin_party_name?: string | null;
   has_attribution?: number;
   ingredients?: Array<{
@@ -158,6 +157,19 @@ const ROUTINE_META: Record<RoutineKey, { label: string; hint: string }> = {
   noon: { label: 'Mittags', hint: 'Produkte mit einer Einnahme am Mittag' },
   evening: { label: 'Abends', hint: 'Produkte mit einer Einnahme am Abend' },
   flexible: { label: 'Flexibel', hint: 'Zum Essen oder ohne feste Tageszeit' },
+};
+
+const INTAKE_TIMING_LABELS: Record<string, string> = {
+  anytime: 'Jederzeit',
+  flexible: 'Jederzeit',
+  jederzeit: 'Jederzeit',
+  before_breakfast: 'Vor dem Frühstück',
+  after_breakfast: 'Nach dem Frühstück',
+  with_meal: 'Zum Essen',
+  morning: 'Morgens',
+  evening: 'Abends',
+  noon: 'Mittags',
+  morning_evening: 'Morgens & Abends',
 };
 
 function credentialedFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
@@ -346,17 +358,17 @@ function productIntakeLabel(product: DemoProduct): string {
   return `${portions.toLocaleString('de-DE', { maximumFractionDigits: 2 })} ${portionLabel}${interval > 1 ? ` alle ${interval} Tage` : ' täglich'}`;
 }
 
-function productMonthlyPrice(product: DemoProduct): number {
-  const price = Number(product.price ?? product.product_price ?? 0);
-  const usage = calculateProductUsage(product, Number.isFinite(price) ? price : null);
-  return usage.monthlyCost ?? Number(product.price ?? product.product_price ?? 0);
+function productMonthlyPrice(product: DemoProduct): number | null {
+  const price = productPriceValue(product);
+  if (price === null) return null;
+  return calculateProductUsage(product, price).monthlyCost;
 }
 
 export function applyPlannedDoseToProduct(product: DemoProduct, dose: ManualDose): DemoProduct {
   const planned: DemoProduct = {
     ...product,
     dosage_text: dose.value > 0 && dose.unit ? `${dose.value} ${dose.unit} täglich` : product.dosage_text,
-    timing: product.ingredient_timing || product.timing || 'anytime',
+    timing: product.ingredient_timing || product.timing || null,
     intake_interval_days: product.intake_interval_days ?? 1,
   };
   planned.quantity = productServingsPerDay(planned);
@@ -364,8 +376,7 @@ export function applyPlannedDoseToProduct(product: DemoProduct, dose: ManualDose
 }
 
 export function describeProductPlan(product: DemoProduct): string {
-  const price = Number(product.price ?? product.product_price ?? 0);
-  const usage = calculateProductUsage(product, Number.isFinite(price) ? price : null);
+  const usage = calculateProductUsage(product, productPriceValue(product));
   if (product.dosage_text?.trim() && usage.calculationSource !== 'target_dose') {
     return 'Für deinen Plan: Portionen nicht berechenbar, Reichweite nicht berechenbar, Monatskosten nicht berechenbar';
   }
@@ -381,6 +392,11 @@ export function describeProductPlan(product: DemoProduct): string {
 
 function formatEuro(value: number): string {
   return value.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function completeCostTotal(values: Array<number | null>): number | null {
+  if (values.some((value) => value === null)) return null;
+  return values.reduce((sum, value) => sum + (value ?? 0), 0);
 }
 
 function timingRank(timing?: string): number {
@@ -402,11 +418,78 @@ function sortedProducts(products: DemoProduct[], mode: ProductSortMode): DemoPro
 
 function routineKeysForTiming(timing?: string): RoutineKey[] {
   const normalized = (timing ?? '').trim().toLowerCase().replace(/[ -]+/g, '_');
-  if (normalized.includes('morning_evening') || normalized.includes('morgens_und_abends')) return ['morning', 'evening'];
+  const containsMorning = normalized.includes('morning') || normalized.includes('morgen');
+  const containsEvening = normalized.includes('evening') || normalized.includes('abend') || normalized.includes('night') || normalized.includes('nacht');
+  if (normalized.includes('morning_evening') || (containsMorning && containsEvening)) return ['morning', 'evening'];
   if (normalized.includes('before_breakfast') || normalized.includes('after_breakfast') || normalized.includes('morning') || normalized.includes('morgen')) return ['morning'];
   if (normalized.includes('evening') || normalized.includes('abend') || normalized.includes('night')) return ['evening'];
   if (normalized.includes('noon') || normalized.includes('mittag')) return ['noon'];
   return ['flexible'];
+}
+
+function normalizeTimingKey(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_');
+}
+
+function isEnumLikeTiming(value: string): boolean {
+  const trimmed = value.trim();
+  return /^[A-Z0-9_-]+$/.test(trimmed) || /^[a-z0-9]+(?:[_-][a-z0-9]+)+$/.test(trimmed);
+}
+
+export function productTimingLabel(product: Pick<DemoProduct, 'timing' | 'timing_label' | 'ingredient_timing_label'>): string {
+  const managed = product.timing_label?.trim();
+  if (managed) return managed;
+  const raw = product.timing?.trim();
+  if (raw) {
+    const known = INTAKE_TIMING_LABELS[normalizeTimingKey(raw)];
+    if (known) return known;
+    if (!isEnumLikeTiming(raw)) return raw;
+    return 'Keine Angabe';
+  }
+  return 'Keine Angabe';
+}
+
+function stackCreatorNames(stack: DemoStack): string[] {
+  return [...new Set([
+    stack.origin_party_name?.trim(),
+    ...stack.products.map((product) => product.creator_party_name?.trim()),
+  ].filter((value): value is string => Boolean(value)))];
+}
+
+function stackCreatorStatements(stack: DemoStack): string[] {
+  return [...new Set(stack.products
+    .map((product) => product.creator_statement_snapshot?.trim())
+    .filter((value): value is string => Boolean(value)))];
+}
+
+function stackCreatorSnapshotDates(stack: DemoStack): string[] {
+  return [...new Set(stack.products.flatMap((product) => {
+    if (!product.creator_snapshot_at) return [];
+    const parsed = new Date(product.creator_snapshot_at);
+    return Number.isNaN(parsed.getTime()) ? [] : [parsed.toLocaleDateString('de-DE')];
+  }))];
+}
+
+function productPriceValue(product: Pick<DemoProduct, 'price' | 'product_price'>): number | null {
+  const rawPrice: unknown = product.price ?? product.product_price;
+  if (rawPrice === null || rawPrice === undefined) return null;
+  if (typeof rawPrice === 'string' && rawPrice.trim() === '') return null;
+  const price = typeof rawPrice === 'number' || typeof rawPrice === 'string'
+    ? Number(rawPrice)
+    : Number.NaN;
+  return Number.isFinite(price) && price >= 0 ? price : null;
+}
+
+function routineProductFacts(product: DemoProduct): { reach: string; monthly: string } {
+  const usage = calculateProductUsage(product, productPriceValue(product));
+  return {
+    reach: usage.daysSupply != null
+      ? `${usage.daysSupply} ${usage.daysSupply === 1 ? 'Tag' : 'Tage'}`
+      : 'Nicht berechenbar – Packungsangaben fehlen.',
+    monthly: usage.monthlyCost != null
+      ? `${formatEuro(usage.monthlyCost)} €/Monat`
+      : 'Nicht berechenbar – Preis oder Packungsangaben fehlen.',
+  };
 }
 
 function getUserDisplayName(user: User | null | undefined): string | null {
@@ -490,24 +573,22 @@ function wrapPdfLine(value: string, maxLength = 88): string[] {
 }
 
 export function buildStackPdf(stack: DemoStack, createdAt = new Date()): Blob {
-  const productLines = stack.products.flatMap((product, index) => [
-    ...wrapPdfLine(
-      `${index + 1}. ${productName(product)} · ${productIntakeLabel(product)} · ${product.timing_label || product.ingredient_timing_label || 'Zeit flexibel'} · ${formatEuro(Number(product.price ?? product.product_price ?? 0))} €`,
-    ),
-    ...(product.creator_statement_snapshot
-      ? wrapPdfLine(`Persönlicher Hinweis des Creators: ${product.creator_statement_snapshot}`)
-      : []),
-  ]);
-  const snapshotDates = [...new Set(stack.products.flatMap((product) => {
-    if (!product.creator_snapshot_at) return [];
-    const parsed = new Date(product.creator_snapshot_at);
-    return Number.isNaN(parsed.getTime()) ? [] : [parsed.toLocaleDateString('de-DE')];
-  }))];
+  const productLines = stack.products.flatMap((product, index) => {
+    const price = productPriceValue(product);
+    const priceLabel = price !== null ? `${formatEuro(price)} €` : 'Preis nicht verfügbar';
+    return wrapPdfLine(
+      `${index + 1}. ${productName(product)} · Gespeicherte Menge: ${productIntakeLabel(product)} · Einnahmezeit: ${productTimingLabel(product)} · ${priceLabel}`,
+    );
+  });
+  const creatorNames = stackCreatorNames(stack);
+  const creatorStatements = stackCreatorStatements(stack);
+  const snapshotDates = stackCreatorSnapshotDates(stack);
   const headingLines = [
-    `Supplement Stack: ${stack.name}`,
+    `Einnahmeplan: ${stack.name}`,
     `Erstellt am ${createdAt.toLocaleDateString('de-DE')} um ${createdAt.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}`,
-    ...(stack.origin_party_name ? [`Empfehlungsbezug: ${stack.origin_party_name}`] : []),
+    ...(creatorNames.length > 0 ? [`Creator-Herkunft: ${creatorNames.join(', ')}`] : []),
     ...(snapshotDates.length > 0 ? [`Stand der Creator-Empfehlung: ${snapshotDates.join(', ')}`] : []),
+    ...creatorStatements.flatMap((statement, index) => wrapPdfLine(`${index === 0 ? 'Allgemeiner Creator-Hinweis' : 'Weiterer Creator-Hinweis'}: ${statement}`)),
     ...wrapPdfLine(stack.description ? `Persönlicher Stack-Hinweis: ${stack.description}` : 'Keine Beschreibung hinterlegt.'),
     '',
   ];
@@ -521,7 +602,7 @@ export function buildStackPdf(stack: DemoStack, createdAt = new Date()): Blob {
   if (remaining.length === 0) remaining = ['Dieser Stack enthält noch keine Produkte.'];
   while (remaining.length > 0) {
     const pageNumber = pages.length + 1;
-    const prefix = pageNumber === 1 ? headingLines : [`Supplement Stack: ${stack.name}`, `Fortsetzung · Seite ${pageNumber}`, ''];
+    const prefix = pageNumber === 1 ? headingLines : [`Einnahmeplan: ${stack.name}`, `Fortsetzung · Seite ${pageNumber}`, ''];
     const footerCapacity = remaining.length <= maxBodyLines ? footerLines.length : 0;
     const capacity = Math.max(1, maxBodyLines - prefix.length - footerCapacity);
     const body = remaining.splice(0, capacity);
@@ -581,30 +662,6 @@ interface AddDraft {
   stackId: string;
 }
 
-export interface IngredientDisplayProfile {
-  id: number;
-  form_id: number | null;
-  part_id: number | null;
-  effect_summary: string | null;
-}
-
-export function resolveIngredientEffectSummary(
-  profiles: IngredientDisplayProfile[],
-  formId: number | null,
-  partId: number | null,
-): string {
-  const normalized = (profile: IngredientDisplayProfile | undefined) => profile?.effect_summary?.trim() ?? '';
-  if (partId !== null) {
-    const part = normalized(profiles.find((profile) => profile.part_id === partId));
-    if (part) return part;
-  }
-  if (formId !== null) {
-    const form = normalized(profiles.find((profile) => profile.part_id === null && profile.form_id === formId));
-    if (form) return form;
-  }
-  return normalized(profiles.find((profile) => profile.part_id === null && profile.form_id === null));
-}
-
 function loadAddDraft(): AddDraft | null {
   try {
     const raw = window.sessionStorage.getItem(ADD_PRODUCT_DRAFT_KEY);
@@ -648,7 +705,6 @@ function AddProductModal({
   const [selectedDgeId, setSelectedDgeId] = useState<number | null>(null);
   const [dose, setDose] = useState<ManualDose>({ value: 0, unit: '' });
   const [targetStackId, setTargetStackId] = useState(initialDraft?.stackId ?? activeStackId);
-  const [displayProfiles, setDisplayProfiles] = useState<IngredientDisplayProfile[]>([]);
   const [products, setProducts] = useState<DemoProduct[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -663,12 +719,6 @@ function AddProductModal({
   const dgeDose = primaryDose(dgeGuideline);
   const studyGuideline = selectStudyGuideline(guidelines, dgeGuideline);
   const studyDose = primaryDose(studyGuideline);
-  const effectSummary = resolveIngredientEffectSummary(
-    displayProfiles,
-    selectedFormId,
-    ingredient?.matched_part_id ?? null,
-  );
-
   const duplicateFor = useCallback((selected: Ingredient): DemoProduct | null => {
     return targetStack?.products.find((product) => product.ingredients?.some((row) => (
       row.ingredient_id === selected.id
@@ -689,14 +739,12 @@ function AddProductModal({
       const detail = detailResponse.ok ? await detailResponse.json() as {
         ingredient?: Ingredient;
         forms?: IngredientFormOption[];
-        display_profiles?: IngredientDisplayProfile[];
       } : {};
       const guidelineData = guidelineResponse.ok ? await guidelineResponse.json() as { guidelines?: DosageGuideline[] } : {};
       const merged = { ...(detail.ingredient ?? selected), ...selected };
       setIngredient(merged);
       const loadedForms = Array.isArray(detail.forms) ? detail.forms : [];
       setForms(loadedForms);
-      setDisplayProfiles(Array.isArray(detail.display_profiles) ? detail.display_profiles : []);
       setSelectedFormId(selected.matched_form_id ?? null);
       const loadedGuidelines = Array.isArray(guidelineData.guidelines) ? guidelineData.guidelines : [];
       setGuidelines(loadedGuidelines);
@@ -821,8 +869,6 @@ function AddProductModal({
                 <h3 className="ss-dosage-title">Einnahmemenge für {ingredient.name}</h3>
                 {ingredient.matched_part_name && <p className="ss-match-explanation">Treffer über den Bestandteil „{ingredient.matched_part_name}“. Ausgewählt wird der übergeordnete Wirkstoff „{ingredient.name}“; das konkrete Produkt wählst du später.</p>}
                 <p className="ss-dosage-description">{modalIngredientDescription(ingredient)}</p>
-                <div className="ss-canonical-effect"><strong>Wirkung</strong><span>{effectSummary || 'Noch kein Kurztext verfügbar.'}</span></div>
-
                 <details className="ss-expert-details">
                   <summary>Weitere Angaben für Experten</summary>
                   <label className="ss-input-label" htmlFor="ingredient-form">Darreichungsform</label>
@@ -928,11 +974,24 @@ function EditProductModal({
 }) {
   const initialInterval = productInterval(product);
   const [quantity, setQuantity] = useState(String(productServingsPerDay(product)));
-  const [timing, setTiming] = useState(product.timing ?? 'anytime');
+  const [timing, setTiming] = useState(product.timing ?? '');
   const [rhythm, setRhythm] = useState(initialInterval === 1 ? 'daily' : 'interval');
   const [interval, setInterval] = useState(String(initialInterval));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const availableTimingOptions = useMemo(() => {
+    const options = timingOptions.slice();
+    if (!options.some((option) => option.value === '')) {
+      options.unshift({ value: '', label: 'Keine Angabe', description: null, sort_order: -2 });
+    }
+    if (!options.some((option) => option.value === 'anytime')) {
+      options.unshift({ value: 'anytime', label: 'Jederzeit', description: null, sort_order: -1 });
+    }
+    if (timing && !options.some((option) => option.value === timing)) {
+      options.push({ value: timing, label: productTimingLabel(product), description: 'Bisher gespeicherte Auswahl', sort_order: Number.MAX_SAFE_INTEGER });
+    }
+    return options;
+  }, [product, timing, timingOptions]);
 
   const save = async () => {
     const amount = Number(quantity);
@@ -962,7 +1021,8 @@ function EditProductModal({
     <ModalWrapper onClose={onClose} title="Produkt bearbeiten" size="md">
       <div className="ss-modal ss-modal-embedded">
         <label className="ss-modal-label">Menge pro Einnahme<input className="ss-modal-input" type="number" min="0.01" step="any" value={quantity} onChange={(event) => setQuantity(event.target.value)} /></label>
-        <label className="ss-modal-label">Wann nimmst du es?<select className="ss-modal-input" value={timing} onChange={(event) => setTiming(event.target.value)}><option value="anytime">Flexibel</option>{timingOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+        <label className="ss-modal-label">Einnahmezeit<select className="ss-modal-input" value={timing} onChange={(event) => setTiming(event.target.value)}>{availableTimingOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+        <p className="ss-helper-text">Die gespeicherte Auswahl erscheint genauso im Einnahmeplan. „Morgens &amp; Abends“ steht in beiden Abschnitten; „Zum Essen“ bleibt ohne erfundene Uhrzeit im Bereich „Flexibel“.</p>
         <fieldset className="ss-rhythm-fieldset"><legend>Wie oft?</legend><label><input type="radio" checked={rhythm === 'daily'} onChange={() => setRhythm('daily')} /> täglich</label><label><input type="radio" checked={rhythm === 'interval'} onChange={() => setRhythm('interval')} /> alle X Tage</label></fieldset>
         {rhythm === 'interval' && <label className="ss-modal-label">Abstand in Tagen<input className="ss-modal-input" type="number" min="2" step="1" value={interval} onChange={(event) => setInterval(event.target.value)} /></label>}
         <p className="ss-helper-text">Reichweite und Monatskosten werden aus diesen Angaben automatisch neu berechnet.</p>
@@ -970,6 +1030,60 @@ function EditProductModal({
         <div className="ss-modal-actions"><button type="button" className="ss-modal-btn-cancel" onClick={onClose}>Abbrechen</button><button type="button" className="ss-modal-btn-save" disabled={saving} onClick={() => void save()}>{saving ? 'Speichern …' : 'Speichern'}</button></div>
       </div>
     </ModalWrapper>
+  );
+}
+
+type RoutineGroupData = (typeof ROUTINE_META)[RoutineKey] & {
+  key: RoutineKey;
+  products: DemoProduct[];
+};
+
+function RoutineGroup({ group, onEdit }: { group: RoutineGroupData; onEdit: (product: DemoProduct) => void }) {
+  const hasProducts = group.products.length > 0;
+  const [expanded, setExpanded] = useState(hasProducts);
+  const contentId = `routine-group-${group.key}`;
+
+  useEffect(() => {
+    setExpanded(hasProducts);
+  }, [hasProducts]);
+
+  return (
+    <section className={`routine-column${expanded ? ' is-expanded' : ' is-collapsed'}`}>
+      <button
+        type="button"
+        className="routine-column-head"
+        aria-expanded={expanded}
+        aria-controls={contentId}
+        onClick={() => setExpanded((current) => !current)}
+      >
+        <span className="routine-column-title"><strong>{group.label}</strong><small>{group.hint}</small></span>
+        <span className="routine-column-count">{group.products.length}</span>
+        <ChevronDown size={17} aria-hidden="true" />
+      </button>
+      <div id={contentId} className="routine-column-content" hidden={!expanded}>
+          {!hasProducts ? <div className="routine-empty">Keine Produkte mit dieser gespeicherten Einnahmezeit.</div> : (
+            <div className="routine-list">
+              {group.products.map((product) => {
+                const facts = routineProductFacts(product);
+                const hasMultipleTimeWindows = routineKeysForTiming(product.timing).length > 1;
+                return (
+                  <article key={`${group.key}-${productStackKey(product)}`} className="routine-item">
+                    <h3>{productName(product)}</h3>
+                    <p className="routine-timing"><strong>Einnahmezeit:</strong> {productTimingLabel(product)}</p>
+                    {hasMultipleTimeWindows && <p className="routine-multi-time-note">Die Menge ist die Gesamtmenge pro Einnahmetag. Wie sie auf die Zeitfenster verteilt wird, ist nicht gespeichert.</p>}
+                    <dl className="routine-facts">
+                      <div><dt>Menge und Rhythmus</dt><dd>{productIntakeLabel(product)}</dd></div>
+                      <div><dt>Reicht für</dt><dd>{facts.reach}</dd></div>
+                      <div><dt>Kosten</dt><dd>{facts.monthly}</dd></div>
+                    </dl>
+                    <button type="button" className="routine-edit" onClick={() => onEdit(product)}><Pencil size={15} />Einnahmezeit bearbeiten</button>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+      </div>
+    </section>
   );
 }
 
@@ -1047,8 +1161,8 @@ export function StackWorkspace({ mode = 'demo', standaloneHeader, view = 'worksp
   const activeStack = state.stacks.find((stack) => stack.id === state.activeStackId) ?? state.stacks[0];
   const activeProducts = useMemo(() => sortedProducts(activeStack?.products ?? [], sortMode), [activeStack, sortMode]);
   const selectedProducts = (activeStack?.products ?? []).filter((product) => selectedKeys.has(productStackKey(product)));
-  const totalOnce = selectedProducts.reduce((sum, product) => sum + Number(product.price ?? product.product_price ?? 0), 0);
-  const totalMonthly = selectedProducts.reduce((sum, product) => sum + productMonthlyPrice(product), 0);
+  const totalOnce = completeCostTotal(selectedProducts.map(productPriceValue));
+  const totalMonthly = completeCostTotal(selectedProducts.map(productMonthlyPrice));
   const ingredientTotals = aggregateStackIngredientTotals(activeStack?.products ?? []);
   const creatorReturn = mode === 'authenticated'
     ? safeCreatorReturn(new URLSearchParams(location.search).get('creatorReturn'))
@@ -1324,7 +1438,7 @@ export function StackWorkspace({ mode = 'demo', standaloneHeader, view = 'worksp
       const data = await response.json().catch(() => ({})) as Record<string, unknown>;
       if (!response.ok) throw new Error(typeof data.error === 'string' ? data.error : 'E-Mail konnte nicht gesendet werden.');
       setEmailConfirmOpen(false);
-      setStatus(`„${activeStack.name}“ wurde an ${user?.email ?? 'deine Account-Adresse'} gesendet.`);
+      setStatus(`Der Einnahmeplan „${activeStack.name}“ wurde an ${user?.email ?? 'deine Account-Adresse'} gesendet.`);
     } catch (reason) {
       setStatus(reason instanceof Error ? reason.message : 'E-Mail konnte nicht gesendet werden.');
     } finally {
@@ -1411,9 +1525,11 @@ export function StackWorkspace({ mode = 'demo', standaloneHeader, view = 'worksp
   };
 
   const header = standaloneHeader ?? false;
-  const title = view === 'routine' ? 'Mein Einnahmeplan' : isDemo ? 'Supplement Stack kostenlos testen' : 'Meine Stacks';
+  const title = view === 'routine' ? 'Dein Einnahmeplan' : isDemo ? 'Supplement Stack kostenlos testen' : 'Meine Stacks';
   const subtitle = view === 'routine'
-    ? 'Alle geplanten Einnahmen verständlich nach Tageszeit sortiert.'
+    ? isDemo
+      ? 'Eine öffentliche Beispielansicht. Deine Auswahl wird erst mit einem kostenlosen Konto dauerhaft gespeichert.'
+      : 'Wähle einen gespeicherten Stack und ordne jede Einnahmezeit so, wie sie für dich hinterlegt ist.'
     : isDemo
       ? user
         ? 'Du bist angemeldet. Diese Demo bleibt getrennt von deinen gespeicherten Stacks; dauerhafte Änderungen nimmst du unter „Meine Stacks“ vor.'
@@ -1427,6 +1543,11 @@ export function StackWorkspace({ mode = 'demo', standaloneHeader, view = 'worksp
     ...ROUTINE_META[key],
     products: (activeStack?.products ?? []).filter((product) => routineKeysForTiming(product.timing).includes(key)),
   }));
+  const deletingProduct = activeStack?.products.find((product) => productStackKey(product) === deleteProductKey);
+  const editingProduct = activeStack?.products.find((product) => productStackKey(product) === editingProductKey);
+  const creatorNames = activeStack ? stackCreatorNames(activeStack) : [];
+  const creatorStatements = activeStack ? stackCreatorStatements(activeStack) : [];
+  const creatorSnapshotDates = activeStack ? stackCreatorSnapshotDates(activeStack) : [];
 
   if (view === 'routine') {
     return (
@@ -1434,17 +1555,52 @@ export function StackWorkspace({ mode = 'demo', standaloneHeader, view = 'worksp
         {header && <StacksHeader variant={HEADER_VARIANT} title={title} subtitle={subtitle} rightSlot={rightSlot} />}
         <div className="ss-page ss-page-embedded ss-routine-page">
           {!header && <div className="ss-inline-page-heading"><h1>{title}</h1><p>{subtitle}</p></div>}
-          <div className="ss-stack-list" aria-label="Stacks auswählen">{state.stacks.map((stack) => <button type="button" key={stack.id} className={`ss-stack-list-item${stack.id === activeStack?.id ? ' is-active' : ''}`} onClick={() => selectStack(stack.id)}><strong>{stack.name}</strong><span>{stack.products.length} Produkte</span></button>)}</div>
-          {activeStack && <div className="ss-routine-actions"><button type="button" className="ss-btn ss-btn-outline" onClick={() => window.print()}><Printer size={17} />Drucken</button><button type="button" className="ss-btn ss-btn-outline" onClick={() => isDemo ? requestSignedIn('PDF kostenlos erstellen') : downloadStackPdf(activeStack)}><Download size={17} />PDF erstellen</button></div>}
-          <div className="routine-grid">{routineGroups.map((group) => <section key={group.key} className="routine-column"><div className="routine-column-head"><strong>{group.label}</strong><span>{group.products.length}</span></div><p>{group.hint}</p>{group.products.length === 0 ? <div className="routine-empty">Keine Produkte</div> : <div className="routine-list">{group.products.map((product) => <div key={`${group.key}-${productStackKey(product)}`} className="routine-item"><strong>{productName(product)}</strong><span>{productIntakeLabel(product)}</span><small>{product.timing_label || product.ingredient_timing_label || 'Flexibel'}</small></div>)}</div>}</section>)}</div>
+          {isDemo && <div className="info-banner info-banner-demo" role="note"><Info size={18} /><div><strong>Das ist eine Beispielansicht.</strong> <span>Du kannst Zeiten testweise ändern. Dauerhaft gespeichert und per E-Mail versendet wird erst nach der Anmeldung.</span></div></div>}
+          {error && <p className="ss-live-status ss-live-status-error" role="alert">{error}</p>}
+          {status && <p className="ss-live-status" role="status">{status}</p>}
+          {loading && <div className="ss-loading" role="status">Deine Einnahmepläne werden geladen …</div>}
+          {!loading && state.stacks.length > 0 && (
+            <div className="ss-routine-stack-picker">
+              <h2>Welchen Stack möchtest du ansehen?</h2>
+              <div className="ss-stack-list" aria-label="Aktiven Stack auswählen">{state.stacks.map((stack) => (
+                <button type="button" key={stack.id} aria-pressed={stack.id === activeStack?.id} className={`ss-stack-list-item${stack.id === activeStack?.id ? ' is-active' : ''}`} onClick={() => selectStack(stack.id)}>
+                  <strong>{stack.name}</strong><span>{stack.products.length} {stack.products.length === 1 ? 'Produkt' : 'Produkte'}</span>
+                </button>
+              ))}</div>
+            </div>
+          )}
+          {!loading && activeStack && (
+            <section className="ss-routine-plan" aria-labelledby="routine-stack-title">
+              <div className="ss-routine-stack-heading">
+                <div><h2 id="routine-stack-title">{activeStack.name}</h2>{activeStack.description && <p>{activeStack.description}</p>}</div>
+                <span className="ss-print-meta">Erstellt am {new Date().toLocaleDateString('de-DE')}</span>
+              </div>
+              {(creatorNames.length > 0 || creatorStatements.length > 0 || creatorSnapshotDates.length > 0) && (
+                <aside className="ss-routine-creator-context" aria-label="Herkunft der übernommenen Empfehlung">
+                  <strong>{creatorNames.length > 0 ? `Übernommen von ${creatorNames.join(', ')}` : 'Übernommene Creator-Empfehlung'}</strong>
+                  {creatorSnapshotDates.length > 0 && <span>Stand der Empfehlung: {creatorSnapshotDates.join(', ')}</span>}
+                  {creatorStatements.map((statement) => <p key={statement}><strong>Allgemeiner Creator-Hinweis:</strong> {statement}</p>)}
+                </aside>
+              )}
+              <div className="ss-routine-export">
+                <div><strong>Einnahmeplan mitnehmen</strong><span>Du kannst ihn direkt drucken, als PDF speichern oder an deine Account-Adresse senden.</span></div>
+                <div className="ss-routine-actions">
+                  <button type="button" className="ss-btn ss-btn-outline" onClick={() => isDemo ? requestSignedIn('Einnahmeplan kostenlos per E-Mail senden') : setEmailConfirmOpen(true)}><Mail size={17} />E-Mail</button>
+                  <button type="button" className="ss-btn ss-btn-outline" onClick={() => window.print()}><Printer size={17} />Drucken</button>
+                  <button type="button" className="ss-btn ss-btn-outline" onClick={() => isDemo ? requestSignedIn('PDF kostenlos erstellen') : downloadStackPdf(activeStack)}><Download size={17} />PDF</button>
+                </div>
+              </div>
+              <div className="routine-grid">{routineGroups.map((group) => <RoutineGroup key={group.key} group={group} onEdit={(product) => setEditingProductKey(productStackKey(product))} />)}</div>
+              <p className="ss-routine-health-note">Wichtig: Der Einnahmeplan zeigt deine gespeicherten Angaben. Er ist keine medizinische Dosierungsanweisung und ersetzt keine persönliche Beratung.</p>
+            </section>
+          )}
         </div>
+        {editingProduct && <EditProductModal product={editingProduct} timingOptions={timingOptions} onSave={(patch) => updateProduct(productStackKey(editingProduct), patch)} onClose={() => setEditingProductKey(null)} />}
+        {emailConfirmOpen && activeStack && <ConfirmDialog title="Einnahmeplan per E-Mail senden?" confirmLabel="An meine Account-Adresse senden" busy={busy} onConfirm={() => void sendEmail()} onClose={() => setEmailConfirmOpen(false)}><p>Gesendet wird „{activeStack.name}“ mit {activeStack.products.length} {activeStack.products.length === 1 ? 'Produkt' : 'Produkten'} an deine Account-Adresse <strong>{user?.email}</strong>.</p>{(creatorNames.length > 0 || creatorStatements.length > 0) && <p>Creator-Herkunft, Stand der Empfehlung und der allgemeine Creator-Hinweis werden mitgesendet.</p>}<p>Für den Versand werden diese gespeicherten Planangaben an unseren E-Mail-Dienst übertragen. Einzelheiten findest du in der <a href="/datenschutz">Datenschutzerklärung</a>.</p></ConfirmDialog>}
         {notice && <NoticeDialog {...notice} onClose={() => setNotice(null)} />}
       </>
     );
   }
-
-  const deletingProduct = activeStack?.products.find((product) => productStackKey(product) === deleteProductKey);
-  const editingProduct = activeStack?.products.find((product) => productStackKey(product) === editingProductKey);
 
   return (
     <>
@@ -1484,9 +1640,9 @@ export function StackWorkspace({ mode = 'demo', standaloneHeader, view = 'worksp
             <div className="ss-toolbar" aria-label="Stack-Aktionen">
               <button ref={addProductButtonRef} type="button" className="ss-btn ss-btn-green ss-toolbar-primary-action" onClick={() => { setAddDraft(null); setAddModalOpen(true); }}><Plus size={17} />Produkt hinzufügen</button>
               <button type="button" className="ss-btn ss-btn-outline" onClick={() => setEditStackOpen(true)}><Pencil size={17} />Stack bearbeiten</button>
-              <button type="button" className="ss-btn ss-btn-outline" onClick={() => isDemo ? requestSignedIn('Stack kostenlos per E-Mail senden') : setEmailConfirmOpen(true)}><Mail size={17} />Per E-Mail senden</button>
+              <button type="button" className="ss-btn ss-btn-outline" onClick={() => isDemo ? requestSignedIn('Einnahmeplan kostenlos per E-Mail senden') : setEmailConfirmOpen(true)}><Mail size={17} />Einnahmeplan per E-Mail senden</button>
               <button type="button" className="ss-btn ss-btn-outline" onClick={() => window.print()}><Printer size={17} />Drucken</button>
-              <button type="button" className="ss-btn ss-btn-outline" onClick={() => isDemo ? requestSignedIn('PDF kostenlos erstellen') : downloadStackPdf(activeStack)}><Download size={17} />PDF erstellen</button>
+              <button type="button" className="ss-btn ss-btn-outline" onClick={() => isDemo ? requestSignedIn('PDF kostenlos erstellen') : downloadStackPdf(activeStack)}><Download size={17} />PDF</button>
               <button type="button" className="ss-btn ss-btn-red-soft" onClick={() => setDeleteStackOpen(true)}><Trash2 size={17} />In Papierkorb</button>
             </div>
 
@@ -1521,14 +1677,14 @@ export function StackWorkspace({ mode = 'demo', standaloneHeader, view = 'worksp
         )}
       </div>
 
-      {activeStack && activeProducts.length > 0 && <div className="bottom-bar" aria-live="polite"><div><div className="bb-title">Kostenübersicht</div><div className="bb-sub">{selectedKeys.size} von {activeProducts.length} Produkten enthalten</div></div><div className="bb-prices"><div className="bb-price-block"><div className="bb-price-label">Packungen einmalig</div><div className="bb-price-value">{formatEuro(totalOnce)} €</div></div><div className="bb-divider" /><div className="bb-price-block"><div className="bb-price-label">Aus Nutzung pro Monat</div><div className="bb-price-value">{formatEuro(totalMonthly)} €</div></div><button type="button" className="btn-select-all" onClick={() => setSelectedKeys(selectedKeys.size === activeProducts.length ? new Set() : new Set(activeProducts.map(productStackKey)))}>{selectedKeys.size === activeProducts.length ? 'Alle abwählen' : 'Alle auswählen'}</button></div></div>}
+      {activeStack && activeProducts.length > 0 && <div className="bottom-bar" aria-live="polite"><div><div className="bb-title">Kostenübersicht</div><div className="bb-sub">{selectedKeys.size} von {activeProducts.length} Produkten enthalten</div></div><div className="bb-prices"><div className="bb-price-block"><div className="bb-price-label">Packungen einmalig</div><div className="bb-price-value">{totalOnce === null ? 'Nicht vollständig berechenbar' : `${formatEuro(totalOnce)} €`}</div></div><div className="bb-divider" /><div className="bb-price-block"><div className="bb-price-label">Aus Nutzung pro Monat</div><div className="bb-price-value">{totalMonthly === null ? 'Nicht vollständig berechenbar' : `${formatEuro(totalMonthly)} €`}</div></div><button type="button" className="btn-select-all" onClick={() => setSelectedKeys(selectedKeys.size === activeProducts.length ? new Set() : new Set(activeProducts.map(productStackKey)))}>{selectedKeys.size === activeProducts.length ? 'Alle abwählen' : 'Alle auswählen'}</button></div></div>}
 
       {addModalOpen && <AddProductModal stacks={state.stacks} activeStackId={state.activeStackId} isDemo={isDemo} guidelineSource={user?.guideline_source ?? 'DGE'} initialDraft={addDraft} onAdd={addProduct} onClose={() => { setAddModalOpen(false); setAddDraft(null); }} onRequestOwnProduct={(draft) => { if (isDemo) { requestSignedIn('Eigenes Produkt kostenlos anlegen'); return; } if (draft) window.sessionStorage.setItem(ADD_PRODUCT_DRAFT_KEY, JSON.stringify(draft)); navigate('/my-products?returnTo=%2Fstacks%3FopenSearch%3D1'); }} onEditExistingProduct={(key) => { setAddModalOpen(false); setEditingProductKey(key); }} />}
       {editStackOpen && activeStack && <EditStackModal initialName={activeStack.name} initialDescription={activeStack.description} onSave={saveStackMeta} onClose={() => setEditStackOpen(false)} />}
       {editingProduct && <EditProductModal product={editingProduct} timingOptions={timingOptions} onSave={(patch) => updateProduct(productStackKey(editingProduct), patch)} onClose={() => setEditingProductKey(null)} />}
       {deleteProductKey && <ConfirmDialog title="Produkt aus dem Stack entfernen?" confirmLabel="Produkt entfernen" danger busy={busy} onConfirm={() => void removeProduct()} onClose={() => setDeleteProductKey(null)}><strong>{deletingProduct ? productName(deletingProduct) : 'Dieses Produkt'}</strong> wird aus „{activeStack?.name}“ entfernt. Andere Produkte bleiben unverändert.</ConfirmDialog>}
       {deleteStackOpen && activeStack && <ConfirmDialog title="Stack in den Papierkorb verschieben?" confirmLabel="In Papierkorb verschieben" danger busy={busy} onConfirm={() => void trashStack()} onClose={() => setDeleteStackOpen(false)}>„{activeStack.name}“ mit {activeStack.products.length} {activeStack.products.length === 1 ? 'Produkt' : 'Produkten'} wird für 7 Tage in den Papierkorb verschoben. In dieser Zeit kannst du ihn wiederherstellen; danach wird er vollständig gelöscht.</ConfirmDialog>}
-      {emailConfirmOpen && activeStack && <ConfirmDialog title="Stack per E-Mail senden?" confirmLabel="Jetzt senden" busy={busy} onConfirm={() => void sendEmail()} onClose={() => setEmailConfirmOpen(false)}>Gesendet wird „{activeStack.name}“ mit {activeStack.products.length} Produkten{activeStack.origin_party_name ? ` und dem sichtbaren Creator-Bezug zu ${activeStack.origin_party_name}` : ''} an deine Account-Adresse <strong>{user?.email}</strong>.</ConfirmDialog>}
+      {emailConfirmOpen && activeStack && <ConfirmDialog title="Einnahmeplan per E-Mail senden?" confirmLabel="An meine Account-Adresse senden" busy={busy} onConfirm={() => void sendEmail()} onClose={() => setEmailConfirmOpen(false)}><p>Gesendet wird „{activeStack.name}“ mit {activeStack.products.length} {activeStack.products.length === 1 ? 'Produkt' : 'Produkten'} an deine Account-Adresse <strong>{user?.email}</strong>.</p>{(creatorNames.length > 0 || creatorStatements.length > 0) && <p>Creator-Herkunft, Stand der Empfehlung und der allgemeine Creator-Hinweis werden mitgesendet.</p>}<p>Für den Versand werden diese gespeicherten Planangaben an unseren E-Mail-Dienst übertragen. Einzelheiten findest du in der <a href="/datenschutz">Datenschutzerklärung</a>.</p></ConfirmDialog>}
       {notice && <NoticeDialog {...notice} onClose={() => setNotice(null)} />}
       {trashOpen && <ModalWrapper onClose={() => setTrashOpen(false)} title="Papierkorb" size="lg"><div className="ss-trash-modal"><p className="ss-modal-copy">Stacks bleiben ab dem Löschzeitpunkt 7 Tage wiederherstellbar. Danach entfernt der Server sie samt Produkten aus dem Stack.</p>{trash.length === 0 ? <div className="ss-empty-inline">Der Papierkorb ist leer.</div> : <div className="ss-trash-list">{trash.map((stack) => <article key={stack.id}><div><strong>{stack.name}</strong><span>{stack.items_count} Produkte · Löschung am {new Date(`${stack.delete_purge_after.replace(' ', 'T')}Z`).toLocaleString('de-DE')}</span></div><button type="button" className="ss-btn ss-btn-outline" disabled={busy} onClick={() => void restore(stack)}><Undo2 size={16} />Wiederherstellen</button></article>)}</div>}</div></ModalWrapper>}
     </>

@@ -240,6 +240,25 @@ export function createProductionKnowledgeSchema(harness: ProductionKnowledgeHono
       synonym TEXT NOT NULL,
       language TEXT NOT NULL DEFAULT 'de'
     );
+    CREATE TABLE ingredient_display_profiles (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      ingredient_id INTEGER NOT NULL,
+      form_id INTEGER,
+      sub_ingredient_id INTEGER,
+      part_id INTEGER,
+      effect_summary TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE display_profile_translations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      display_profile_id INTEGER NOT NULL,
+      language TEXT NOT NULL,
+      effect_summary TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(display_profile_id, language)
+    );
     CREATE TABLE ingredient_forms (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       ingredient_id INTEGER NOT NULL,
@@ -358,6 +377,10 @@ export function createProductionKnowledgeSchema(harness: ProductionKnowledgeHono
   ));
   harness.exec(readFileSync(
     new URL('../../../d1-migrations/0096_knowledge_article_seo.sql', import.meta.url),
+    'utf8',
+  ));
+  harness.exec(readFileSync(
+    new URL('../../../d1-migrations/0108_knowledge_overview_central_copy_projection.sql', import.meta.url),
     'utf8',
   ));
 }

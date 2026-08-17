@@ -101,6 +101,7 @@ import {
 } from './knowledge'
 import {
   auditKnowledgeOverviewProjection,
+  knowledgeOverviewCacheKey,
   refreshKnowledgeOverviewProjection,
   refreshKnowledgeOverviewProjectionIfNeeded,
 } from './knowledge-overview-projection'
@@ -120,10 +121,6 @@ import { ensureUserParty, getPlatformParty } from '../lib/creator-sharing-servic
 const admin = new Hono<AppContext>()
 
 const KNOWLEDGE_OVERVIEW_SOURCE_MUTATION = /(?:^|\/)(?:knowledge-articles|study-interpretation-records|dose-recommendations|ingredients)(?:\/|$)/
-
-function knowledgeOverviewCacheKey(requestUrl: string): Request {
-  return new Request(new URL('/api/knowledge', requestUrl).toString(), { method: 'GET' })
-}
 
 function mutatedKnowledgeArticleSlug(path: string): string | null {
   return path.match(/(?:^|\/)knowledge-articles\/([a-z0-9]+(?:-[a-z0-9]+)*)(?:\/|$)/)?.[1] ?? null
@@ -11724,7 +11721,10 @@ admin.post('/knowledge-overview-projection/refresh', async (c) => {
     return c.json({ error: 'Knowledge overview projection changed since preview', audit: before }, 409)
   }
 
-  if (before.consistent) return c.json({ applied: false, audit: before })
+  if (before.consistent) {
+    await caches.default.delete(knowledgeOverviewCacheKey(c.req.url))
+    return c.json({ applied: false, audit: before })
+  }
 
   const result = await refreshKnowledgeOverviewProjection(c.env.DB, {
     active_generation: expectedActiveGeneration,

@@ -1,6 +1,6 @@
 import { Hono, type Context } from 'hono'
 import type { AppContext } from '../lib/types'
-import { ensureAuth } from '../lib/helpers'
+import { checkRateLimit, ensureAuth } from '../lib/helpers'
 import creatorSharingImport from './creator-sharing-import'
 import {
   CREATOR_SHARING_SNAPSHOT_VERSION,
@@ -27,6 +27,7 @@ import {
   loadCreatorTimingLabels,
   loadMainIngredientIds,
   parseStoredSnapshot,
+  publicProfileImageUrl,
   SNAPSHOT_RELATION_SIGNATURE_SQL_GUARD,
   snapshotRelationSignatureJson,
   validateSnapshotRelations,
@@ -71,7 +72,6 @@ type PreviewProductRow = {
   name: string
   brand: string | null
   image_url: string | null
-  effect_summary: string | null
 }
 
 type CreatorShareListRow = ShareRow & {
@@ -241,6 +241,12 @@ const SOURCE_STACK_ITEMS_SQL_GUARD = `
 
 function ensureFeature(c: Context<AppContext>): Response | null {
   return creatorSharingEnabled(c.env) ? null : c.json({ error: 'Not found' }, 404)
+}
+
+function setPublicShareResponseHeaders(c: Context<AppContext>): void {
+  c.header('Cache-Control', 'private, no-store')
+  c.header('X-Robots-Tag', 'noindex, nofollow, noarchive')
+  c.header('Referrer-Policy', 'no-referrer')
 }
 
 function positiveInteger(value: unknown): number | null {
@@ -553,36 +559,25 @@ async function creatorPreviewPayload(
         product.id,
         product.name,
         product.brand,
-        product.image_url,
-        COALESCE(profile_form.effect_summary, profile_base.effect_summary) AS effect_summary
+        product.image_url
       FROM products product
-      LEFT JOIN product_ingredients ingredient ON ingredient.id = (
-        SELECT candidate.id
-        FROM product_ingredients candidate
-        WHERE candidate.product_id = product.id
-        ORDER BY candidate.is_main DESC, candidate.search_relevant DESC, candidate.id ASC
-        LIMIT 1
-      )
-      LEFT JOIN ingredient_display_profiles profile_form
-        ON profile_form.ingredient_id = ingredient.ingredient_id
-       AND profile_form.form_id = ingredient.form_id
-       AND profile_form.part_id IS NULL
-       AND profile_form.sub_ingredient_id IS NULL
-      LEFT JOIN ingredient_display_profiles profile_base
-        ON profile_base.ingredient_id = ingredient.ingredient_id
-       AND profile_base.form_id IS NULL
-       AND profile_base.part_id IS NULL
-       AND profile_base.sub_ingredient_id IS NULL
       WHERE product.id IN (${placeholders})
     `).bind(...productIds).all<PreviewProductRow>()
     for (const product of results ?? []) productById.set(product.id, product)
   }
   for (const [value, label] of await loadCreatorTimingLabels(db)) timingLabels.set(value, label)
+  const profileImage = publicProfileImageUrl(party.public_profile_image_url)
   return {
     token: row.token,
     type: snapshot.type,
     title: snapshot.title,
-    creator: { id: party.id, name: party.name, type: party.type, slug: party.slug },
+    creator: {
+      id: party.id,
+      name: party.name,
+      type: party.type,
+      slug: party.slug,
+      profile_image_url: profileImage.ok ? profileImage.value : null,
+    },
     published_at: snapshot.published_at,
     items: snapshot.items.map((item) => {
       const product = productById.get(item.catalog_product_id)
@@ -596,7 +591,6 @@ async function creatorPreviewPayload(
         product_name: product?.name ?? null,
         brand: product?.brand ?? null,
         image_url: product?.image_url ?? null,
-        effect_summary: product?.effect_summary ?? null,
         quantity: item.quantity,
         unit: item.unit ?? null,
         intake_interval_days: item.intake_interval_days,
@@ -1912,14 +1906,126 @@ async function publicShareFailure(db: D1Database, token: string): Promise<{
 creatorSharing.get('/shares/:token', async (c) => {
   const featureErr = ensureFeature(c)
   if (featureErr) return featureErr
+  setPublicShareResponseHeaders(c)
   const loaded = await loadShare(c.env.DB, c.req.param('token'), true)
   if (!loaded.row || !loaded.snapshot || !loaded.relations) {
     const failure = await publicShareFailure(c.env.DB, c.req.param('token'))
+    if (failure.code === 'SHARE_PENDING' || failure.code === 'SHARE_PAUSED') c.header('Retry-After', '300')
     return c.json({ error: failure.error, code: failure.code }, failure.httpStatus)
   }
   const preview = await creatorPreviewPayload(c.env.DB, loaded.row, loaded.snapshot)
   if (!preview) return c.json({ error: 'Creator oder Marke wurde nicht gefunden.' }, 409)
   return c.json(preview)
+})
+
+// POST /api/creator-sharing/shares/:token/report
+creatorSharing.post('/shares/:token/report', async (c) => {
+  const featureErr = ensureFeature(c)
+  if (featureErr) return featureErr
+  setPublicShareResponseHeaders(c)
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Bitte wähle einen Grund für deine Meldung.' }, 400)
+  }
+  const idempotencyKey = boundedText(body.idempotency_key, 120)
+  const category = ['outdated', 'misleading', 'safety', 'other'].includes(String(body.category))
+    ? String(body.category) as 'outdated' | 'misleading' | 'safety' | 'other'
+    : null
+  const details = body.details === undefined || body.details === null || body.details === ''
+    ? null
+    : boundedText(body.details, 500)
+  if (!idempotencyKey || !/^[A-Za-z0-9._:-]{16,120}$/.test(idempotencyKey) || !category
+    || (body.details !== undefined && body.details !== null && body.details !== '' && !details)) {
+    return c.json({ error: 'Bitte prüfe deine Meldung. Der optionale Hinweis darf höchstens 500 Zeichen lang sein.' }, 400)
+  }
+
+  const token = c.req.param('token')
+  const loaded = await loadShare(c.env.DB, token, true)
+  if (!loaded.row) {
+    const failure = await publicShareFailure(c.env.DB, token)
+    return c.json({ error: failure.error, code: failure.code }, failure.httpStatus)
+  }
+  const existing = await c.env.DB.prepare(`
+    SELECT report.id, report.share_link_id, report.category, report.details, report.status
+    FROM creator_share_reports report
+    WHERE report.idempotency_key = ?
+  `).bind(idempotencyKey).first<{
+    id: number
+    share_link_id: number
+    category: string
+    details: string | null
+    status: string
+  }>()
+  if (existing) {
+    return existing.share_link_id === loaded.row.id
+      && existing.category === category
+      && existing.details === details
+      ? c.json({ ok: true, report_id: existing.id, status: existing.status })
+      : c.json({
+        error: 'Diese Meldung wurde mit anderen Angaben begonnen. Bitte öffne das Meldeformular erneut.',
+        code: 'REPORT_PAYLOAD_CHANGED',
+      }, 409)
+  }
+
+  const ip = c.req.header('CF-Connecting-IP') ?? c.req.header('X-Forwarded-For') ?? 'unknown'
+  const rateKey = await sha256Hex(`${ip}|${loaded.row.id}`)
+  const allowed = await checkRateLimit(c.env.RATE_LIMITER, `creator-share-report:${rateKey}`, 5, 60 * 60)
+  if (!allowed) return c.json({ error: 'Du hast in kurzer Zeit mehrere Meldungen gesendet. Bitte versuche es später erneut.' }, 429)
+
+  const result = await c.env.DB.prepare(`
+    INSERT OR IGNORE INTO creator_share_reports (
+      share_link_id, idempotency_key, category, details, status, version
+    )
+    SELECT id, ?, ?, ?, 'pending', 1
+    FROM share_links
+    WHERE id = ? AND token = ? AND snapshot_hash IS ? AND version = ?
+      AND moderation_status = 'approved' AND is_revoked = 0
+      AND legacy_provenance_status IS NULL AND paused_at IS NULL
+      AND (expires_at IS NULL OR expires_at > strftime('%s', 'now'))
+      AND EXISTS (
+        SELECT 1 FROM parties party
+        WHERE party.id = share_links.creator_party_id AND party.status = 'active'
+      )
+  `).bind(
+    idempotencyKey,
+    category,
+    details,
+    loaded.row.id,
+    token,
+    loaded.row.snapshot_hash,
+    loaded.row.version,
+  ).run()
+  if (d1Changes(result) !== 1) {
+    const raced = await c.env.DB.prepare(`
+      SELECT id, share_link_id, category, details, status FROM creator_share_reports
+      WHERE idempotency_key = ?
+    `).bind(idempotencyKey).first<{
+      id: number
+      share_link_id: number
+      category: string
+      details: string | null
+      status: string
+    }>()
+    if (raced) {
+      return raced.share_link_id === loaded.row.id
+        && raced.category === category
+        && raced.details === details
+        ? c.json({ ok: true, report_id: raced.id, status: raced.status })
+        : c.json({
+          error: 'Diese Meldung wurde mit anderen Angaben begonnen. Bitte öffne das Meldeformular erneut.',
+          code: 'REPORT_PAYLOAD_CHANGED',
+        }, 409)
+    }
+    return c.json({ error: 'Die Empfehlung hat sich geändert. Bitte lade die Seite neu und prüfe sie noch einmal.' }, 409)
+  }
+  const report = await c.env.DB.prepare(`
+    SELECT id, status FROM creator_share_reports
+    WHERE idempotency_key = ? AND share_link_id = ?
+  `).bind(idempotencyKey, loaded.row.id).first<{ id: number; status: 'pending' }>()
+  if (!report) return c.json({ error: 'Die Meldung konnte nicht gespeichert werden.' }, 409)
+  return c.json({ ok: true, report_id: report.id, status: report.status }, 201)
 })
 
 // POST /api/creator-sharing/stacks/:id/open

@@ -6,6 +6,7 @@ import {
   creatorTimingLabel,
   creatorSharingEnabled,
   isSupportedCreatorShareSnapshotVersion,
+  sha256Hex,
   snapshotHash,
   type CreatorShareSnapshot,
   type CreatorShareSnapshotItem,
@@ -130,6 +131,52 @@ type StackDetailRow = {
   ingredient_name: string | null
 }
 
+type StackItemUndoState = {
+  id: number
+  stack_id: number
+  catalog_product_id: number | null
+  user_product_id: number | null
+  quantity: number
+  dosage_text: string | null
+  timing: string | null
+  intake_interval_days: number
+  sort_order: number
+  source_share_link_id: number | null
+  creator_statement_snapshot: string | null
+  amount_source: string | null
+  version: number
+}
+
+type StackItemBindingUndoState = {
+  stack_item_id: number
+  shop_link_id: number
+  resolution_kind: 'creator_version' | 'platform_version' | 'legacy_resolved' | 'bare'
+  affiliate_version_id: number | null
+  resolved_party_id: number | null
+  bound_at: string
+}
+
+type ExpectedStackItemBinding = Omit<StackItemBindingUndoState, 'bound_at'>
+
+type ImportUndoRow = {
+  id: number
+  operation_id: number
+  user_id: number
+  target_stack_id: number
+  stack_item_id: number
+  action: 'replaced'
+  previous_item_json: string
+  previous_binding_json: string | null
+  expected_item_json: string
+  expected_binding_json: string
+  summary: string
+  expires_at: number
+  undone_at: string | null
+  write_claim_token: string | null
+  version: number
+  stack_name: string
+}
+
 function ensureFeature(c: Context<AppContext>): Response | null {
   return creatorSharingEnabled(c.env) ? null : c.json({ error: 'Not found' }, 404)
 }
@@ -148,6 +195,129 @@ function boundedText(value: unknown, maximum: number): string | null {
 function d1Changes(result: D1Result<unknown>): number {
   const value = Number((result.meta as { changes?: number } | undefined)?.changes ?? 0)
   return Number.isFinite(value) ? value : 0
+}
+
+function parseUndoItem(value: string): StackItemUndoState | null {
+  try {
+    const parsed = JSON.parse(value) as Partial<StackItemUndoState>
+    if (!Number.isSafeInteger(parsed.id) || Number(parsed.id) <= 0
+      || !Number.isSafeInteger(parsed.stack_id) || Number(parsed.stack_id) <= 0
+      || !Number.isFinite(parsed.quantity)
+      || !Number.isSafeInteger(parsed.intake_interval_days) || Number(parsed.intake_interval_days) < 1
+      || !Number.isSafeInteger(parsed.sort_order)
+      || !Number.isSafeInteger(parsed.version) || Number(parsed.version) < 1
+      || (parsed.catalog_product_id === null) === (parsed.user_product_id === null)) return null
+    return parsed as StackItemUndoState
+  } catch {
+    return null
+  }
+}
+
+function parseUndoBinding(value: string | null, allowNull: true): StackItemBindingUndoState | null | undefined
+function parseUndoBinding(value: string, allowNull: false): ExpectedStackItemBinding | null
+function parseUndoBinding(
+  value: string | null,
+  allowNull: boolean,
+): StackItemBindingUndoState | ExpectedStackItemBinding | null | undefined {
+  if (value === null) return allowNull ? undefined : null
+  try {
+    const parsed = JSON.parse(value) as Partial<StackItemBindingUndoState>
+    if (!Number.isSafeInteger(parsed.stack_item_id) || Number(parsed.stack_item_id) <= 0
+      || !Number.isSafeInteger(parsed.shop_link_id) || Number(parsed.shop_link_id) <= 0
+      || !['creator_version', 'platform_version', 'legacy_resolved', 'bare'].includes(String(parsed.resolution_kind))
+      || (parsed.affiliate_version_id !== null && parsed.affiliate_version_id !== undefined
+        && (!Number.isSafeInteger(parsed.affiliate_version_id) || Number(parsed.affiliate_version_id) <= 0))
+      || (parsed.resolved_party_id !== null && parsed.resolved_party_id !== undefined
+        && (!Number.isSafeInteger(parsed.resolved_party_id) || Number(parsed.resolved_party_id) <= 0))) return null
+    if (allowNull && typeof parsed.bound_at !== 'string') return null
+    return parsed as StackItemBindingUndoState | ExpectedStackItemBinding
+  } catch {
+    return null
+  }
+}
+
+function itemGuardBindings(item: StackItemUndoState): unknown[] {
+  return [
+    item.id,
+    item.stack_id,
+    item.catalog_product_id,
+    item.user_product_id,
+    item.quantity,
+    item.dosage_text,
+    item.timing,
+    item.intake_interval_days,
+    item.sort_order,
+    item.source_share_link_id,
+    item.creator_statement_snapshot,
+    item.amount_source,
+    item.version,
+  ]
+}
+
+const STACK_ITEM_EXACT_GUARD_SQL = `
+  id = ? AND stack_id = ? AND catalog_product_id IS ? AND user_product_id IS ?
+  AND quantity = ? AND dosage_text IS ? AND timing IS ?
+  AND intake_interval_days = ? AND sort_order = ? AND source_share_link_id IS ?
+  AND creator_statement_snapshot IS ? AND amount_source IS ? AND version = ?
+`
+
+function undoPostconditionStatement(
+  db: D1Database,
+  input: {
+    undo: ImportUndoRow
+    userId: number
+    expectedVersion: number
+    writeClaimToken: string
+    restoredItem: StackItemUndoState
+    previousBinding: StackItemBindingUndoState | undefined
+  },
+): D1PreparedStatement {
+  const bindingGuard = input.previousBinding === undefined
+    ? `NOT EXISTS (
+        SELECT 1 FROM stack_item_link_bindings WHERE stack_item_id = ?
+      )`
+    : `(SELECT COUNT(*) FROM stack_item_link_bindings WHERE stack_item_id = ?) = 1
+      AND EXISTS (
+        SELECT 1 FROM stack_item_link_bindings binding
+        WHERE binding.stack_item_id = ? AND binding.shop_link_id = ?
+          AND binding.resolution_kind = ? AND binding.affiliate_version_id IS ?
+          AND binding.resolved_party_id IS ? AND binding.bound_at = ?
+      )`
+  const bindingValues: unknown[] = input.previousBinding === undefined
+    ? [input.undo.stack_item_id]
+    : [
+      input.previousBinding.stack_item_id,
+      input.previousBinding.stack_item_id,
+      input.previousBinding.shop_link_id,
+      input.previousBinding.resolution_kind,
+      input.previousBinding.affiliate_version_id,
+      input.previousBinding.resolved_party_id,
+      input.previousBinding.bound_at,
+    ]
+  return db.prepare(`
+    SELECT CASE WHEN
+      EXISTS (
+        SELECT 1 FROM creator_share_import_undos
+        WHERE id = ? AND operation_id = ? AND user_id = ? AND action = 'replaced'
+          AND target_stack_id = ? AND stack_item_id = ? AND version = ?
+          AND undone_at IS NOT NULL AND write_claim_token = ?
+      )
+      AND EXISTS (
+        SELECT 1 FROM stack_items WHERE ${STACK_ITEM_EXACT_GUARD_SQL}
+      )
+      AND ${bindingGuard}
+    THEN 1 ELSE json('UNDO_POSTCONDITION_FAILED') END AS undo_postcondition
+  `).bind(
+    input.undo.id,
+    input.undo.operation_id,
+    input.userId,
+    input.undo.target_stack_id,
+    input.undo.stack_item_id,
+    input.expectedVersion + 1,
+    input.writeClaimToken,
+    ...itemGuardBindings(input.restoredItem),
+    ...bindingValues,
+  )
 }
 
 async function hashCanonicalValue(value: unknown): Promise<string> {
@@ -500,11 +670,16 @@ function createWriteClaim(
   result: Record<string, unknown>,
   attemptNonce: string,
 ): ImportWriteClaim {
+  const storedResult: Record<string, unknown> = { ...result }
+  // Undo credentials are bearer secrets. Persist only the separately hashed
+  // token in creator_share_import_undos; an idempotent replay is safe but does
+  // not re-issue the short-lived credential.
+  delete storedResult.undo
   return {
     idempotencyKey,
     shareId,
     userId,
-    storedResultJson: JSON.stringify({ ...result, __attempt_nonce: attemptNonce }),
+    storedResultJson: JSON.stringify({ ...storedResult, __attempt_nonce: attemptNonce }),
   }
 }
 
@@ -541,11 +716,28 @@ function operationGuard(
     claim: ImportWriteClaim
     relationSignature: string
     targetState?: TargetState | null
+    expectedPreviousBinding?: {
+      stackItemId: number
+      binding: StackItemBindingUndoState | null
+    }
   },
 ): D1PreparedStatement {
   const targetGuard = input.targetStackId && input.targetState
     ? `AND EXISTS (SELECT 1 FROM stacks WHERE id = ? AND user_id = ? AND deleted_at IS NULL) ${TARGET_STATE_SQL_GUARD}`
     : ''
+  const previousBindingGuard = input.expectedPreviousBinding === undefined
+    ? ''
+    : input.expectedPreviousBinding.binding === null
+      ? `AND NOT EXISTS (
+          SELECT 1 FROM stack_item_link_bindings binding
+          WHERE binding.stack_item_id = ?
+        )`
+      : `AND EXISTS (
+          SELECT 1 FROM stack_item_link_bindings binding
+          WHERE binding.stack_item_id = ? AND binding.shop_link_id = ?
+            AND binding.resolution_kind = ? AND binding.affiliate_version_id IS ?
+            AND binding.resolved_party_id IS ? AND binding.bound_at IS ?
+        )`
   const bindings: unknown[] = [
     input.claim.idempotencyKey,
     input.claim.userId,
@@ -568,6 +760,19 @@ function operationGuard(
   if (input.targetStackId && input.targetState) {
     bindings.push(input.targetStackId, input.claim.userId, ...targetStateBindings(input.targetStackId, input.targetState))
   }
+  if (input.expectedPreviousBinding) {
+    const { stackItemId, binding } = input.expectedPreviousBinding
+    bindings.push(stackItemId)
+    if (binding) {
+      bindings.push(
+        binding.shop_link_id,
+        binding.resolution_kind,
+        binding.affiliate_version_id,
+        binding.resolved_party_id,
+        binding.bound_at,
+      )
+    }
+  }
   return db.prepare(`
     INSERT INTO share_import_operations (
       idempotency_key, share_link_id, user_id, target_stack_id, result_json
@@ -586,6 +791,7 @@ function operationGuard(
       )
       AND ${SNAPSHOT_RELATION_SIGNATURE_SQL_GUARD}
       ${targetGuard}
+      ${previousBindingGuard}
   `).bind(...bindings)
 }
 
@@ -696,6 +902,87 @@ function claimedSnapshotItemBindingStatement(
   )
 }
 
+async function loadUndoState(
+  db: D1Database,
+  stackItemId: number,
+  stackId: number,
+  userId: number,
+  expectedVersion: number,
+): Promise<{ item: StackItemUndoState; binding: StackItemBindingUndoState | null } | null> {
+  const item = await db.prepare(`
+    SELECT stack_item.*
+    FROM stack_items stack_item
+    JOIN stacks stack ON stack.id = stack_item.stack_id
+    WHERE stack_item.id = ? AND stack_item.stack_id = ? AND stack_item.version = ?
+      AND stack.user_id = ? AND stack.deleted_at IS NULL
+  `).bind(stackItemId, stackId, expectedVersion, userId).first<StackItemUndoState>()
+  if (!item) return null
+  const binding = await db.prepare(`
+    SELECT stack_item_id, shop_link_id, resolution_kind, affiliate_version_id,
+      resolved_party_id, bound_at
+    FROM stack_item_link_bindings
+    WHERE stack_item_id = ?
+  `).bind(stackItemId).first<StackItemBindingUndoState>()
+  return { item, binding }
+}
+
+function undoMetadataStatement(
+  db: D1Database,
+  input: {
+    claim: ImportWriteClaim
+    undoTokenHash: string
+    targetStackId: number
+    stackItemId: number
+    previousItem: StackItemUndoState
+    previousBinding: StackItemBindingUndoState | null
+    expectedItem: StackItemUndoState
+    expectedBinding: ExpectedStackItemBinding
+    summary: string
+    expiresAt: number
+  },
+): D1PreparedStatement {
+  return db.prepare(`
+    INSERT INTO creator_share_import_undos (
+      operation_id, undo_token_hash, user_id, target_stack_id, stack_item_id,
+      action, previous_item_json, previous_binding_json, expected_item_json,
+      expected_binding_json, summary, expires_at, version
+    )
+    SELECT operation.id, ?, operation.user_id, ?, ?, 'replaced', ?, ?, ?, ?, ?, ?, 1
+    FROM share_import_operations operation
+    WHERE operation.idempotency_key = ? AND operation.share_link_id = ?
+      AND operation.user_id = ? AND operation.result_json = ?
+      AND operation.target_stack_id = ?
+      AND EXISTS (
+        SELECT 1 FROM stack_items
+        WHERE ${STACK_ITEM_EXACT_GUARD_SQL}
+      )
+      AND EXISTS (
+        SELECT 1 FROM stack_item_link_bindings binding
+        WHERE binding.stack_item_id = ? AND binding.shop_link_id = ?
+          AND binding.resolution_kind = ? AND binding.affiliate_version_id IS ?
+          AND binding.resolved_party_id IS ?
+      )
+  `).bind(
+    input.undoTokenHash,
+    input.targetStackId,
+    input.stackItemId,
+    JSON.stringify(input.previousItem),
+    input.previousBinding ? JSON.stringify(input.previousBinding) : null,
+    JSON.stringify(input.expectedItem),
+    JSON.stringify(input.expectedBinding),
+    input.summary,
+    input.expiresAt,
+    ...claimBindings(input.claim),
+    input.targetStackId,
+    ...itemGuardBindings(input.expectedItem),
+    input.expectedBinding.stack_item_id,
+    input.expectedBinding.shop_link_id,
+    input.expectedBinding.resolution_kind,
+    input.expectedBinding.affiliate_version_id,
+    input.expectedBinding.resolved_party_id,
+  )
+}
+
 creatorSharingImport.post('/shares/:token/import', async (c) => {
   const featureErr = ensureFeature(c)
   if (featureErr) return featureErr
@@ -743,6 +1030,218 @@ creatorSharingImport.post('/shares/:token/import', async (c) => {
     return saveCompleteStack(c, preflight, idempotencyKey, token, attemptNonce)
   }
   return saveSingleRecommendation(c, preflight, idempotencyKey, token, body, attemptNonce)
+})
+
+creatorSharingImport.post('/shares/:token/import/undo', async (c) => {
+  const featureErr = ensureFeature(c)
+  if (featureErr) return featureErr
+  const authErr = await ensureAuth(c)
+  if (authErr) return authErr
+  const user = c.get('user')
+  let body: Record<string, unknown>
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: 'Die Rückgängig-Anfrage ist ungültig.' }, 400)
+  }
+  const undoToken = boundedText(body.undo_token, 120)
+  const expectedVersion = positiveInteger(body.expected_version)
+  const expectedStackId = positiveInteger(body.expected_stack_id)
+  const expectedStackItemId = positiveInteger(body.expected_stack_item_id)
+  if (!undoToken || !/^undo_[a-f0-9-]{36}$/i.test(undoToken)
+    || !expectedVersion || !expectedStackId || !expectedStackItemId) {
+    return c.json({ error: 'Die Rückgängig-Anfrage ist ungültig.' }, 400)
+  }
+  const undoTokenHash = await sha256Hex(undoToken)
+  const undo = await c.env.DB.prepare(`
+    SELECT undo.*, stack.name AS stack_name
+    FROM creator_share_import_undos undo
+    JOIN share_import_operations operation ON operation.id = undo.operation_id
+    JOIN share_links share ON share.id = operation.share_link_id
+    JOIN stacks stack ON stack.id = undo.target_stack_id
+    WHERE undo.undo_token_hash = ? AND undo.user_id = ? AND share.token = ?
+      AND operation.user_id = undo.user_id
+  `).bind(undoTokenHash, user.userId, c.req.param('token')).first<ImportUndoRow>()
+  if (!undo) return c.json({ error: 'Diese Änderung kann nicht rückgängig gemacht werden.', code: 'UNDO_UNKNOWN' }, 404)
+  if (undo.target_stack_id !== expectedStackId || undo.stack_item_id !== expectedStackItemId) {
+    return c.json({ error: 'Die Rückgängig-Anfrage passt nicht mehr zum gespeicherten Stand.', code: 'UNDO_TARGET_CHANGED' }, 409)
+  }
+  if (undo.undone_at !== null) {
+    return c.json({ error: 'Diese Änderung wurde bereits rückgängig gemacht.', code: 'UNDO_ALREADY_USED' }, 409)
+  }
+  if (undo.version !== expectedVersion) {
+    return c.json({ error: 'Die Rückgängig-Anfrage passt nicht mehr zum gespeicherten Stand.', code: 'UNDO_TARGET_CHANGED' }, 409)
+  }
+  if (undo.expires_at <= Math.floor(Date.now() / 1000)) {
+    return c.json({ error: 'Die kurze Rückgängig-Frist ist abgelaufen.', code: 'UNDO_EXPIRED' }, 410)
+  }
+  const previousItem = parseUndoItem(undo.previous_item_json)
+  const expectedItem = parseUndoItem(undo.expected_item_json)
+  const previousBinding = parseUndoBinding(undo.previous_binding_json, true)
+  const expectedBinding = parseUndoBinding(undo.expected_binding_json, false)
+  if (!previousItem || !expectedItem || previousBinding === null || !expectedBinding
+    || previousItem.id !== undo.stack_item_id || expectedItem.id !== undo.stack_item_id
+    || previousItem.stack_id !== undo.target_stack_id || expectedItem.stack_id !== undo.target_stack_id
+    || expectedBinding.stack_item_id !== undo.stack_item_id
+    || (previousBinding !== undefined && previousBinding.stack_item_id !== undo.stack_item_id)) {
+    return c.json({ error: 'Der gespeicherte Rückgängig-Stand ist ungültig.', code: 'UNDO_INVALID' }, 409)
+  }
+
+  const writeClaimToken = `claim_${crypto.randomUUID()}`
+  const claim = c.env.DB.prepare(`
+    UPDATE creator_share_import_undos
+    SET undone_at = CURRENT_TIMESTAMP, write_claim_token = ?, version = version + 1
+    WHERE id = ? AND operation_id = ? AND user_id = ? AND action = 'replaced'
+      AND target_stack_id = ? AND stack_item_id = ? AND version = ?
+      AND undone_at IS NULL AND expires_at = ? AND expires_at > strftime('%s', 'now')
+      AND EXISTS (
+        SELECT 1 FROM stacks
+        WHERE id = ? AND user_id = ? AND deleted_at IS NULL
+      )
+      AND EXISTS (
+        SELECT 1 FROM stack_items
+        WHERE ${STACK_ITEM_EXACT_GUARD_SQL}
+      )
+      AND EXISTS (
+        SELECT 1 FROM stack_item_link_bindings binding
+        WHERE binding.stack_item_id = ? AND binding.shop_link_id = ?
+          AND binding.resolution_kind = ? AND binding.affiliate_version_id IS ?
+          AND binding.resolved_party_id IS ?
+      )
+  `).bind(
+    writeClaimToken,
+    undo.id,
+    undo.operation_id,
+    user.userId,
+    expectedStackId,
+    expectedStackItemId,
+    expectedVersion,
+    undo.expires_at,
+    expectedStackId,
+    user.userId,
+    ...itemGuardBindings(expectedItem),
+    expectedBinding.stack_item_id,
+    expectedBinding.shop_link_id,
+    expectedBinding.resolution_kind,
+    expectedBinding.affiliate_version_id,
+    expectedBinding.resolved_party_id,
+  )
+  const restoredItem: StackItemUndoState = { ...previousItem, version: expectedItem.version + 1 }
+  const restoreItem = c.env.DB.prepare(`
+    UPDATE stack_items
+    SET catalog_product_id = ?, user_product_id = ?, quantity = ?, dosage_text = ?,
+      timing = ?, intake_interval_days = ?, sort_order = ?, source_share_link_id = ?,
+      creator_statement_snapshot = ?, amount_source = ?, version = version + 1
+    WHERE ${STACK_ITEM_EXACT_GUARD_SQL}
+      AND EXISTS (
+        SELECT 1 FROM creator_share_import_undos
+        WHERE id = ? AND user_id = ? AND version = ?
+          AND undone_at IS NOT NULL AND write_claim_token = ?
+      )
+  `).bind(
+    previousItem.catalog_product_id,
+    previousItem.user_product_id,
+    previousItem.quantity,
+    previousItem.dosage_text,
+    previousItem.timing,
+    previousItem.intake_interval_days,
+    previousItem.sort_order,
+    previousItem.source_share_link_id,
+    previousItem.creator_statement_snapshot,
+    previousItem.amount_source,
+    ...itemGuardBindings(expectedItem),
+    undo.id,
+    user.userId,
+    expectedVersion + 1,
+    writeClaimToken,
+  )
+  const clearImportedBinding = c.env.DB.prepare(`
+    DELETE FROM stack_item_link_bindings
+    WHERE stack_item_id = ? AND shop_link_id = ? AND resolution_kind = ?
+      AND affiliate_version_id IS ? AND resolved_party_id IS ?
+      AND EXISTS (SELECT 1 FROM stack_items WHERE ${STACK_ITEM_EXACT_GUARD_SQL})
+      AND EXISTS (
+        SELECT 1 FROM creator_share_import_undos
+        WHERE id = ? AND user_id = ? AND version = ?
+          AND undone_at IS NOT NULL AND write_claim_token = ?
+      )
+  `).bind(
+    expectedBinding.stack_item_id,
+    expectedBinding.shop_link_id,
+    expectedBinding.resolution_kind,
+    expectedBinding.affiliate_version_id,
+    expectedBinding.resolved_party_id,
+    ...itemGuardBindings(restoredItem),
+    undo.id,
+    user.userId,
+    expectedVersion + 1,
+    writeClaimToken,
+  )
+  const statements: D1PreparedStatement[] = [claim, restoreItem, clearImportedBinding]
+  if (previousBinding !== undefined) {
+    statements.push(c.env.DB.prepare(`
+      INSERT INTO stack_item_link_bindings (
+        stack_item_id, shop_link_id, resolution_kind, affiliate_version_id,
+        resolved_party_id, bound_at
+      )
+      SELECT ?, ?, ?, ?, ?, ?
+      WHERE NOT EXISTS (
+        SELECT 1 FROM stack_item_link_bindings WHERE stack_item_id = ?
+      )
+        AND EXISTS (SELECT 1 FROM stack_items WHERE ${STACK_ITEM_EXACT_GUARD_SQL})
+        AND EXISTS (
+          SELECT 1 FROM creator_share_import_undos
+          WHERE id = ? AND user_id = ? AND version = ?
+            AND undone_at IS NOT NULL AND write_claim_token = ?
+        )
+    `).bind(
+      previousBinding.stack_item_id,
+      previousBinding.shop_link_id,
+      previousBinding.resolution_kind,
+      previousBinding.affiliate_version_id,
+      previousBinding.resolved_party_id,
+      previousBinding.bound_at,
+      previousBinding.stack_item_id,
+      ...itemGuardBindings(restoredItem),
+      undo.id,
+      user.userId,
+      expectedVersion + 1,
+      writeClaimToken,
+    ))
+  }
+  statements.push(undoPostconditionStatement(c.env.DB, {
+    undo,
+    userId: user.userId,
+    expectedVersion,
+    writeClaimToken,
+    restoredItem,
+    previousBinding,
+  }))
+  let batch: D1Result<unknown>[]
+  try {
+    batch = await c.env.DB.batch(statements)
+  } catch {
+    return c.json({ error: 'Die Änderung konnte nicht sicher rückgängig gemacht werden.', code: 'UNDO_TARGET_CHANGED' }, 409)
+  }
+  if (d1Changes(batch[0]) !== 1 || d1Changes(batch[1]) !== 1 || d1Changes(batch[2]) !== 1
+    || (previousBinding !== undefined && d1Changes(batch[3]) !== 1)) {
+    return c.json({ error: 'Dein Stack wurde inzwischen geändert. Deshalb wurde nichts rückgängig gemacht.', code: 'UNDO_TARGET_CHANGED' }, 409)
+  }
+  const receipt = await c.env.DB.prepare(`
+    SELECT undone_at FROM creator_share_import_undos
+    WHERE id = ? AND user_id = ? AND version = ? AND write_claim_token = ?
+  `).bind(undo.id, user.userId, expectedVersion + 1, writeClaimToken).first<{ undone_at: string }>()
+  if (!receipt?.undone_at) {
+    return c.json({ error: 'Die Rückgängig-Bestätigung konnte nicht sicher gelesen werden.', code: 'UNDO_RECEIPT_MISSING' }, 409)
+  }
+  return c.json({
+    ok: true,
+    stack_id: expectedStackId,
+    stack_name: undo.stack_name,
+    summary: undo.summary,
+    restored_summary: `Der vorherige Stand in „${undo.stack_name}“ wurde wiederhergestellt.`,
+    undone_at: receipt.undone_at,
+  })
 })
 
 async function saveCompleteStack(
@@ -926,6 +1425,43 @@ async function replaceInExistingStack(
   if (!plan.stackId || !targetState) {
     return c.json({ error: 'Bitte prüfe das Ziel noch einmal.', code: 'PREFLIGHT_CHANGED' }, 409)
   }
+  const previous = await loadUndoState(
+    c.env.DB,
+    selected.stack_item_id,
+    plan.stackId,
+    user.userId,
+    selected.version,
+  )
+  if (!previous) {
+    return c.json({ error: 'Der Stack hat sich geändert. Bitte prüfe die Auswahl noch einmal.', code: 'PREFLIGHT_CHANGED' }, 409)
+  }
+  const undoToken = `undo_${crypto.randomUUID()}`
+  const undoTokenHash = await sha256Hex(undoToken)
+  const undoExpiresAt = Math.floor(Date.now() / 1000) + 10 * 60
+  const rawUndoSummary = `${selected.comparison.product_name} wird in „${plan.stackName}“ wiederhergestellt. ${productName} wird von diesem Platz entfernt.`
+  const undoSummary = rawUndoSummary.length <= 500 ? rawUndoSummary : `${rawUndoSummary.slice(0, 499)}…`
+  const expectedItem: StackItemUndoState = {
+    id: selected.stack_item_id,
+    stack_id: plan.stackId,
+    catalog_product_id: item.catalog_product_id,
+    user_product_id: null,
+    quantity: item.quantity,
+    dosage_text: item.dosage_text,
+    timing: item.timing,
+    intake_interval_days: item.intake_interval_days,
+    sort_order: previous.item.sort_order,
+    source_share_link_id: loaded.row.id,
+    creator_statement_snapshot: item.creator_statement,
+    amount_source: 'creator_snapshot',
+    version: selected.version + 1,
+  }
+  const expectedBinding: ExpectedStackItemBinding = {
+    stack_item_id: selected.stack_item_id,
+    shop_link_id: item.shop_link_id,
+    resolution_kind: item.link_binding.resolution_kind,
+    affiliate_version_id: item.link_binding.affiliate_version_id,
+    resolved_party_id: item.link_binding.resolved_party_id,
+  }
   const result = {
     ok: true,
     type: 'dose_recommendation',
@@ -936,6 +1472,14 @@ async function replaceInExistingStack(
     creator_product_name: productName,
     replaced_product_name: selected.comparison.product_name,
     replaced_user_product_retained: selected.product_type === 'user_product',
+    undo: {
+      token: undoToken,
+      expires_at: undoExpiresAt,
+      version: 1,
+      stack_id: plan.stackId,
+      stack_item_id: selected.stack_item_id,
+      summary: undoSummary,
+    },
   }
   const claim = createWriteClaim(idempotencyKey, loaded.row.id, user.userId, result, attemptNonce)
   const statements = [
@@ -945,6 +1489,10 @@ async function replaceInExistingStack(
       claim,
       relationSignature: preflight.relationSignature,
       targetState,
+      expectedPreviousBinding: {
+        stackItemId: selected.stack_item_id,
+        binding: previous.binding,
+      },
     }),
     c.env.DB.prepare(`
       UPDATE stack_items
@@ -990,11 +1538,24 @@ async function replaceInExistingStack(
       selected.version + 1,
       ...claimBindings(claim),
     ),
+    undoMetadataStatement(c.env.DB, {
+      claim,
+      undoTokenHash,
+      targetStackId: plan.stackId,
+      stackItemId: selected.stack_item_id,
+      previousItem: previous.item,
+      previousBinding: previous.binding,
+      expectedItem,
+      expectedBinding,
+      summary: undoSummary,
+      expiresAt: undoExpiresAt,
+    }),
     counterStatement(c.env.DB, loaded.row, claim),
   ]
   const execution = await executeBatch(c, statements, idempotencyKey, token)
   if (execution.replay) return c.json({ ...execution.replay, idempotent_replay: true })
-  if (!execution.batch || d1Changes(execution.batch[0]) !== 1 || d1Changes(execution.batch[1]) !== 1) {
+  if (!execution.batch || d1Changes(execution.batch[0]) !== 1
+    || d1Changes(execution.batch[1]) !== 1 || d1Changes(execution.batch[4]) !== 1) {
     return c.json({ error: 'Der Stack hat sich geändert. Bitte prüfe die Auswahl noch einmal.', code: 'PREFLIGHT_CHANGED' }, 409)
   }
   return c.json(result)

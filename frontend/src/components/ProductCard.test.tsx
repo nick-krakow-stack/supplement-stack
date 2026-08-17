@@ -64,18 +64,24 @@ describe('ProductCard sub-ingredients', () => {
     expect(screen.queryByText('Warnung')).toBeNull();
   });
 
-  it('renders a centrally supplied ingredient effect summary', () => {
-    render(<ProductCard product={{
+  it('keeps claims out of a commercial card while preserving its buy link and honest missing-data state', () => {
+    const legacyProduct = {
       id: 4,
-      name: 'Vitamin K2 MK-7 200µg',
+      name: 'Magnesium Bisglycinat',
       price: 22.9,
-      ingredient_effect_summary: 'Blutgerinnung, Knochenstoffwechsel',
+      shop_link: 'https://shop.example/magnesium',
+      ingredient_effect_summary: 'Mineralstoff für die normale Funktion von Muskeln und Nerven.',
+      effect_summary: 'Dieser alte Produkttext darf ebenfalls nicht erscheinen.',
       ingredients: [],
-    }} />);
+    };
+    const { container } = render(<ProductCard product={legacyProduct} />);
+    const card = within(container);
 
-    expect(screen.getByText('Wirkung')).toBeTruthy();
-    expect(screen.getByText('Blutgerinnung')).toBeTruthy();
-    expect(screen.getByText('Knochenstoffwechsel')).toBeTruthy();
+    expect(card.queryByText('Wirkung')).toBeNull();
+    expect(card.queryByText(legacyProduct.ingredient_effect_summary)).toBeNull();
+    expect(card.queryByText(legacyProduct.effect_summary)).toBeNull();
+    expect(card.getByText(/Nicht berechenbar/)).toBeTruthy();
+    expect(card.getByRole('link', { name: /Jetzt kaufen: Magnesium Bisglycinat/ })).toBeTruthy();
   });
 
   it.each(['card', 'list'] as const)(

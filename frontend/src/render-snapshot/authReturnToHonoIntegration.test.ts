@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { buildEmailVerificationMessage, buildPasswordResetMessage } from '../../../functions/api/lib/mail';
-import { hashResetToken } from '../../../functions/api/lib/helpers';
+import { hashPassword, hashResetToken } from '../../../functions/api/lib/helpers';
 import { validateReturnTo } from '../../../functions/api/lib/return-to';
 import { fetchAuthReturnToHono } from './authReturnToHonoHandlers.mjs';
 import { createProductionKnowledgeHonoHarness, type ProductionKnowledgeHonoHarness } from './productionKnowledgeHonoTestHarness';
@@ -148,6 +148,113 @@ describe('auth returnTo backend contract', () => {
     expect(payload).not.toHaveProperty('family_profiles');
     expect(JSON.stringify(payload)).not.toContain('not-exported-password-hash');
     expect(JSON.stringify(payload)).not.toContain('reset_token');
+  });
+
+  it('deletes active and expired share undo records with the account and confirms the exact event', async () => {
+    const userId = 504;
+    const email = 'delete-with-undo@test.invalid';
+    const password = 'delete-password-123';
+    const passwordHash = await hashPassword(password);
+    harness.run(`
+      INSERT INTO users (
+        id, email, password_hash, health_consent, health_consent_at, email_verified_at
+      ) VALUES (?, ?, ?, 1, datetime('now'), datetime('now'))
+    `, userId, email, passwordHash);
+    harness.run(`INSERT INTO stacks (id, user_id, name) VALUES (704, ?, 'Zu löschender Stack')`, userId);
+    harness.run(`
+      INSERT INTO share_links (token, entity_type, entity_id, snapshot_json)
+      VALUES ('account-delete-share-token-0001', 'stack', 704, '{}')
+    `);
+    const shareId = (await (harness.db as TestDatabase).prepare(`
+      SELECT id FROM share_links WHERE token = 'account-delete-share-token-0001'
+    `).first<{ id: number }>())?.id ?? 0;
+    expect(shareId).toBeGreaterThan(0);
+    const now = Math.floor(Date.now() / 1000);
+    for (const entry of [
+      { operationId: 804, key: 'account-delete-active-undo-0001', hash: 'a'.repeat(64), itemId: 904, expiresAt: now + 600 },
+      { operationId: 805, key: 'account-delete-expired-undo-001', hash: 'b'.repeat(64), itemId: 905, expiresAt: now - 600 },
+    ]) {
+      harness.run(`
+        INSERT INTO share_import_operations (
+          id, idempotency_key, share_link_id, user_id, target_stack_id, result_json
+        ) VALUES (?, ?, ?, ?, 704, '{}')
+      `, entry.operationId, entry.key, shareId, userId);
+      harness.run(`
+        INSERT INTO creator_share_import_undos (
+          operation_id, undo_token_hash, user_id, target_stack_id, stack_item_id,
+          action, previous_item_json, previous_binding_json, expected_item_json,
+          expected_binding_json, summary, expires_at, version
+        ) VALUES (?, ?, ?, 704, ?, 'replaced', '{}', NULL, '{}', '{}', 'Rückgängig-Test', ?, 1)
+      `, entry.operationId, entry.hash, userId, entry.itemId, entry.expiresAt);
+    }
+
+    const token = await authToken(userId, email);
+    const response = await fetchAuthReturnToHono(new Request('https://supplementstack.de/api/me', {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    }), {
+      DB: harness.db,
+      JWT_SECRET,
+      FRONTEND_URL: 'https://supplementstack.de',
+    }, { waitUntil() {}, passThroughOnException() {}, props: {} });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true });
+    const deleted = await (harness.db as TestDatabase).prepare(`
+      SELECT
+        (SELECT COUNT(*) FROM users WHERE id = 504) AS users,
+        (SELECT COUNT(*) FROM stacks WHERE user_id = 504) AS stacks,
+        (SELECT COUNT(*) FROM share_import_operations WHERE user_id = 504) AS operations,
+        (SELECT COUNT(*) FROM creator_share_import_undos WHERE user_id = 504) AS undos
+    `).first<Record<string, number>>();
+    expect(deleted).toEqual({ users: 0, stacks: 0, operations: 0, undos: 0 });
+    expect(await (harness.db as TestDatabase).prepare(`
+      SELECT had_verified_email, stack_count, user_product_count
+      FROM account_deletion_events WHERE deleted_user_id = 504
+    `).first()).toEqual({ had_verified_email: 1, stack_count: 1, user_product_count: 0 });
+  });
+
+  it('does not record an account deletion event when the guarded delete batch rolls back', async () => {
+    const userId = 505;
+    const email = 'blocked-delete@test.invalid';
+    const password = 'delete-password-123';
+    harness.run(`
+      INSERT INTO users (id, email, password_hash, health_consent, health_consent_at)
+      VALUES (?, ?, ?, 1, datetime('now'))
+    `, userId, email, await hashPassword(password));
+    harness.exec(`
+      CREATE TRIGGER block_test_account_delete
+      BEFORE DELETE ON users
+      WHEN OLD.id = 505
+      BEGIN
+        SELECT RAISE(ABORT, 'blocked test account delete');
+      END;
+    `);
+    const token = await authToken(userId, email);
+    const expectedError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    let response: Response;
+    try {
+      response = await fetchAuthReturnToHono(new Request('https://supplementstack.de/api/me', {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      }), {
+        DB: harness.db,
+        JWT_SECRET,
+        FRONTEND_URL: 'https://supplementstack.de',
+      }, { waitUntil() {}, passThroughOnException() {}, props: {} });
+    } finally {
+      expectedError.mockRestore();
+    }
+
+    expect(response.status).toBe(500);
+    expect((await (harness.db as TestDatabase).prepare(`
+      SELECT COUNT(*) AS count FROM users WHERE id = 505
+    `).first<{ count: number }>())?.count).toBe(1);
+    expect((await (harness.db as TestDatabase).prepare(`
+      SELECT COUNT(*) AS count FROM account_deletion_events WHERE deleted_user_id = 505
+    `).first<{ count: number }>())?.count).toBe(0);
   });
 
   it('allows only the two source preferences and keeps an explicit empty choice', async () => {

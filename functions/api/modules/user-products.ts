@@ -419,6 +419,7 @@ async function attachUserProductContext(
   return enriched.map((product) => {
     const publicProduct = { ...product }
     delete publicProduct.write_claim_token
+    delete publicProduct.effect_summary
     return {
       ...publicProduct,
       visibility: product.published_product_id == null ? 'private' : 'public',

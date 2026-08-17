@@ -25,6 +25,7 @@ import type { AppContext, IngredientRow } from '../lib/types'
 import { ensureAuth, requireAdmin, logAdminAction } from '../lib/helpers'
 import { convertAmount, normalizeUnit } from '../lib/units'
 import { globalProductVisibilitySql } from '../lib/creator-sharing-service'
+import { publicProductSelect } from '../lib/public-product-projection'
 import { attachWarningsToProducts, loadCatalogProductSafetyWarnings } from './knowledge'
 
 const ingredients = new Hono<AppContext>()
@@ -577,31 +578,6 @@ ingredients.get('/:id', async (c) => {
   const { results: forms } = await c.env.DB.prepare(
     'SELECT * FROM ingredient_forms WHERE ingredient_id = ? ORDER BY score DESC, name ASC, id ASC'
   ).bind(id).all()
-  const { results: displayProfiles } = await c.env.DB.prepare(`
-    SELECT
-      profile.id,
-      profile.form_id,
-      profile.part_id,
-      COALESCE(translation.effect_summary, profile.effect_summary) AS effect_summary
-    FROM ingredient_display_profiles profile
-    LEFT JOIN display_profile_translations translation
-      ON translation.display_profile_id = profile.id
-     AND translation.language = 'de'
-    WHERE profile.ingredient_id = ?
-      AND profile.sub_ingredient_id IS NULL
-    ORDER BY
-      CASE
-        WHEN profile.part_id IS NOT NULL THEN 0
-        WHEN profile.form_id IS NOT NULL THEN 1
-        ELSE 2
-      END,
-      profile.id ASC
-  `).bind(id).all<{
-    id: number
-    form_id: number | null
-    part_id: number | null
-    effect_summary: string | null
-  }>()
   const subIngredients = await getSubIngredientsForParent(c.env.DB, id)
   const parts = await getPartLinksForIngredient(c.env.DB, id)
   const precursors = parts.map((link) => partLinkToLegacyPrecursor(link))
@@ -609,7 +585,6 @@ ingredients.get('/:id', async (c) => {
     ingredient,
     synonyms,
     forms,
-    display_profiles: displayProfiles,
     parts,
     sub_ingredients: subIngredients,
     precursors,
@@ -976,13 +951,11 @@ ingredients.get('/:id/products', async (c) => {
        JOIN ingredient_parts part ON part.id = pip.part_id AND part.status = 'active'`
   const partDisplaySelect = partId === null
     ? {
-        effect: 'COALESCE(idp_form.effect_summary, idp_base.effect_summary)',
         timing: 'COALESCE(idp_form.timing, idp_base.timing)',
         timingNote: 'COALESCE(idp_form.timing_note, idp_base.timing_note)',
         intakeHint: 'COALESCE(idp_form.intake_hint, idp_base.intake_hint)',
       }
     : {
-        effect: 'COALESCE(idp_part.effect_summary, idp_form.effect_summary, idp_base.effect_summary)',
         timing: 'COALESCE(idp_part.timing, idp_form.timing, idp_base.timing)',
         timingNote: 'COALESCE(idp_part.timing_note, idp_form.timing_note, idp_base.timing_note)',
         intakeHint: 'COALESCE(idp_part.intake_hint, idp_form.intake_hint, idp_base.intake_hint)',
@@ -1002,7 +975,7 @@ ingredients.get('/:id/products', async (c) => {
   const { results: products } = await c.env.DB.prepare(`
     WITH matching_rows AS (
       SELECT
-        p.*,
+        ${publicProductSelect()},
         pi.quantity,
         pi.unit,
         pi.is_main,
@@ -1013,8 +986,6 @@ ingredients.get('/:id/products', async (c) => {
         pi.ingredient_id AS matched_ingredient_id,
         pi.form_id,
         ${partSelect}
-        ${partDisplaySelect.effect} AS effect_summary,
-        ${partDisplaySelect.effect} AS ingredient_effect_summary,
         COALESCE(${partDisplaySelect.timing}, p.timing) AS timing,
         ${partDisplaySelect.timing} AS ingredient_timing,
         ${partDisplaySelect.timingNote} AS ingredient_timing_note,

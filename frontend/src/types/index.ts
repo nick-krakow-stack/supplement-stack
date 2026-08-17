@@ -209,8 +209,6 @@ export interface Product {
   ingredient_intake_hint?: string | null;
   dosage_text?: string;
   intake_interval_days?: number;
-  ingredient_effect_summary?: string | null;
-  effect_summary?: string;
   warning_title?: string;
   warning_message?: string;
   warning_type?: string;
@@ -344,10 +342,13 @@ export interface KnowledgeArticleOverviewItem {
 }
 
 export interface KnowledgeNutrientStatus {
-  ingredient_id: number | string;
+  ingredient_id: number;
   name?: string | null;
   category?: string | null;
+  category_key?: string | null;
+  solubility?: 'fat' | 'water' | null;
   description?: string | null;
+  aliases?: string[];
   has_dge?: boolean;
   has_studies?: boolean;
 }

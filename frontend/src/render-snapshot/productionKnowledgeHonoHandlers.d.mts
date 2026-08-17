@@ -16,6 +16,7 @@ export function auditProductionKnowledgeOverviewProjection(db: unknown): Promise
   source_version: number;
 }>;
 export function hashProductionKnowledgeOverviewRows(rows: ProductionKnowledgeOverviewRow[]): Promise<string>;
+export function productionKnowledgeOverviewCacheKey(requestUrl: string): Request;
 export function loadProductionKnowledgeOverviewRows(db: unknown): Promise<ProductionKnowledgeOverviewRow[]>;
 export function refreshProductionKnowledgeOverviewProjection(
   db: unknown,

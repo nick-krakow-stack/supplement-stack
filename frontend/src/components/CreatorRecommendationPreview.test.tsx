@@ -21,7 +21,6 @@ const preview: CreatorSharePreview = {
     product_name: 'Magnesium Pur',
     brand: 'Beispiel',
     image_url: '/api/r2/products/magnesium.webp',
-    effect_summary: 'Unterstützt die normale Muskelfunktion.',
     quantity: 1,
     unit: null,
     intake_interval_days: 1,
@@ -36,7 +35,14 @@ describe('CreatorRecommendationPreview', () => {
   afterEach(cleanup);
 
   it('shows no additional affiliate notice, frames usage as the creator’s routine and invents no unit', () => {
-    render(<CreatorRecommendationPreview preview={preview} />);
+    const legacyClaimPreview = {
+      ...preview,
+      items: [{
+        ...preview.items[0],
+        effect_summary: 'Mineralstoff für die normale Funktion von Muskeln und Nerven.',
+      }],
+    } as unknown as CreatorSharePreview;
+    render(<CreatorRecommendationPreview preview={legacyClaimPreview} />);
 
     expect(screen.getByText('Empfohlen von Alex Alltag')).toBeTruthy();
     expect(screen.getByText('Stand: 7. August 2026')).toBeTruthy();
@@ -46,7 +52,8 @@ describe('CreatorRecommendationPreview', () => {
     expect(screen.getByText(/keine Dosierungsanweisung für dich/)).toBeTruthy();
     expect(screen.getByText(/Passt gut in meinen Alltag/)).toBeTruthy();
     expect(screen.getByRole('img', { name: 'Produktbild: Magnesium Pur' }).getAttribute('src')).toBe('/api/r2/products/magnesium.webp');
-    expect(screen.getByText('Wofür es genutzt wird:').parentElement?.textContent).toContain('Unterstützt die normale Muskelfunktion.');
+    expect(screen.queryByText('Wofür es genutzt wird:')).toBeNull();
+    expect(screen.queryByText('Mineralstoff für die normale Funktion von Muskeln und Nerven.')).toBeNull();
     expect(screen.getByText('Zeitpunkt:').parentElement?.textContent).toBe('Zeitpunkt: Abends');
     expect(screen.queryByText(/Affiliate-Hinweis:/)).toBeNull();
     expect(screen.queryByText(/^Affiliate$/)).toBeNull();
@@ -104,5 +111,38 @@ describe('CreatorRecommendationPreview', () => {
     expect(formatRecommendationAmount(2, 'Messlöffel')).toBe('2 Messlöffel');
     expect(screen.queryByText(/Affiliate-Hinweis:/)).toBeNull();
     expect(screen.queryByText(/^Affiliate$/)).toBeNull();
+  });
+
+  it('shows a creator profile image only when the canonical preview contains one', () => {
+    const { rerender } = render(<CreatorRecommendationPreview preview={preview} />);
+    expect(screen.queryByRole('img', { name: 'Profilbild von Alex Alltag' })).toBeNull();
+
+    rerender(<CreatorRecommendationPreview preview={{
+      ...preview,
+      creator: { ...preview.creator, profile_image_url: 'https://images.example/alex.jpg' },
+    }} />);
+    expect(screen.getByRole('img', { name: 'Profilbild von Alex Alltag' }).getAttribute('src'))
+      .toBe('https://images.example/alex.jpg');
+  });
+
+  it('deduplicates product statements into one general creator block and chunks long stacks without categories', () => {
+    const items = Array.from({ length: 10 }, (_, index) => ({
+      ...preview.items[0],
+      catalog_product_id: 100 + index,
+      product_name: `Produkt ${index + 1}`,
+      creator_statement: index === 9 ? 'Eine zweite allgemeine Ergänzung.' : 'Passt gut in meinen Alltag.',
+    }));
+    render(<CreatorRecommendationPreview preview={{ ...preview, type: 'stack', items }} />);
+
+    expect(screen.getAllByRole('heading', { name: 'Allgemeiner Hinweis von Alex Alltag' })).toHaveLength(1);
+    expect(screen.getAllByText(/keine Dosierungsanweisung für dich/)).toHaveLength(1);
+    const quotes = [...document.querySelectorAll('blockquote')];
+    expect(quotes).toHaveLength(2);
+    expect(quotes.filter((quote) => quote.textContent?.includes('Passt gut in meinen Alltag.'))).toHaveLength(1);
+    expect(quotes.every((quote) => quote.closest('article') === null)).toBe(true);
+    expect(screen.getByRole('navigation', { name: 'Übersicht der geteilten Produkte' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Produkte 1–8' }).getAttribute('href')).toMatch(/-products-1-8$/);
+    expect(screen.getByRole('link', { name: 'Produkte 9–10' }).getAttribute('href')).toMatch(/-products-9-10$/);
+    expect(screen.queryByText(/Kategorie/)).toBeNull();
   });
 });

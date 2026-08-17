@@ -31,6 +31,7 @@ import {
 } from '../lib/ingredient-parts'
 import { creatorSharingEnabled } from '../lib/creator-sharing'
 import { ensureUserParty, globalProductVisibilitySql, resolveBoundOutbound, resolvePublicProductOutbound } from '../lib/creator-sharing-service'
+import { publicProductSelect, type PublicProductRow } from '../lib/public-product-projection'
 
 const products = new Hono<AppContext>()
 
@@ -582,7 +583,7 @@ products.get('/', async (c) => {
   const visibility = await globalProductVisibilitySql(c.env.DB, 'p')
   const { results } = await c.env.DB.prepare(
     `SELECT
-      p.*,
+      ${publicProductSelect()},
       pi.ingredient_id,
       pi.quantity,
       pi.unit,
@@ -590,8 +591,6 @@ products.get('/', async (c) => {
       pi.basis_unit,
       pi.search_relevant,
       pi.form_id,
-      COALESCE(idp_form.effect_summary, idp_base.effect_summary) AS effect_summary,
-      COALESCE(idp_form.effect_summary, idp_base.effect_summary) AS ingredient_effect_summary,
       COALESCE(idp_form.timing, idp_base.timing, p.timing) AS timing,
       COALESCE(idp_form.timing, idp_base.timing) AS ingredient_timing,
       COALESCE(idp_form.timing_note, idp_base.timing_note) AS ingredient_timing_note,
@@ -615,7 +614,7 @@ products.get('/', async (c) => {
      AND idp_base.part_id IS NULL
      AND idp_base.sub_ingredient_id IS NULL
     WHERE ${visibility}`
-  ).all<ProductRow>()
+  ).all<PublicProductRow>()
   const ingredientsByProduct = await loadCatalogProductIngredients(
     c.env.DB,
     results.map((product) => product.id),
@@ -717,9 +716,7 @@ products.get('/:id', async (c) => {
   const visibility = await globalProductVisibilitySql(c.env.DB, 'p')
   const product = await c.env.DB.prepare(`
     SELECT
-      p.*,
-      COALESCE(idp_form.effect_summary, idp_base.effect_summary) AS effect_summary,
-      COALESCE(idp_form.effect_summary, idp_base.effect_summary) AS ingredient_effect_summary,
+      ${publicProductSelect()},
       COALESCE(idp_form.timing, idp_base.timing, p.timing) AS timing,
       COALESCE(idp_form.timing, idp_base.timing) AS ingredient_timing,
       COALESCE(idp_form.timing_note, idp_base.timing_note) AS ingredient_timing_note,
@@ -744,7 +741,7 @@ products.get('/:id', async (c) => {
      AND idp_base.sub_ingredient_id IS NULL
     WHERE p.id = ?
       AND ${visibility}
-  `).bind(id).first<ProductRow>()
+  `).bind(id).first<PublicProductRow>()
   if (!product) return c.json({ error: 'Not found' }, 404)
   const ingredientsByProduct = await loadCatalogProductIngredients(c.env.DB, [Number(id)], true)
   const ingredients = ingredientsByProduct.get(Number(id)) ?? []

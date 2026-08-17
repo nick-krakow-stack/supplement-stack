@@ -11,6 +11,7 @@ import {
   auditProductionKnowledgeOverviewProjection,
   hashProductionKnowledgeOverviewRows,
   loadProductionKnowledgeOverviewRows,
+  productionKnowledgeOverviewCacheKey,
   refreshProductionKnowledgeOverviewProjection,
 } from './productionKnowledgeHonoHandlers.mjs';
 
@@ -18,7 +19,10 @@ type NutrientStatus = {
   ingredient_id: number;
   name: string;
   category: string | null;
+  category_key: string;
+  solubility: 'fat' | 'water' | null;
   description: string | null;
+  aliases: string[];
   has_dge: boolean;
   has_studies: boolean;
 };
@@ -111,6 +115,28 @@ function statusByIngredient(payload: KnowledgeOverviewPayload, ingredientId: num
 }
 
 describe.sequential('production Knowledge/R2 Hono integration', () => {
+  it('ignores the legacy overview cache key and writes only the versioned payload key', async () => {
+    const harness = createHarness();
+    createProductionKnowledgeSchema(harness);
+    insertIngredient(harness, 7, 'Magnesium');
+    harness.run("INSERT INTO ingredient_display_profiles (ingredient_id, effect_summary) VALUES (7, 'Mineralstoff für die normale Funktion von Muskeln und Nerven.')");
+
+    const legacyKey = new Request('https://test.local/api/knowledge');
+    await harness.cache.put(legacyKey, new Response(JSON.stringify({ legacy: true }), {
+      headers: { 'Content-Type': 'application/json' },
+    }));
+
+    const response = await harness.fetch(new Request('https://test.local/api/knowledge'));
+    const payload = await response.json() as KnowledgeOverviewPayload & { legacy?: boolean };
+    expect(payload.legacy).toBeUndefined();
+    expect(statusByIngredient(payload, 7)?.description).toBe('Mineralstoff für die normale Funktion von Muskeln und Nerven.');
+
+    const versionedKey = productionKnowledgeOverviewCacheKey('https://test.local/api/knowledge?cfcheck=ignored');
+    expect(versionedKey.url).toBe('https://test.local/api/knowledge?__payload=v2');
+    expect(await harness.cache.match(versionedKey)).toBeDefined();
+    expect(JSON.stringify(payload)).not.toContain('__payload');
+  });
+
   it('returns every active ingredient and deterministically repairs the legacy status shape', async () => {
     const harness = createHarness();
     createProductionKnowledgeSchema(harness);
@@ -119,10 +145,22 @@ describe.sequential('production Knowledge/R2 Hono integration', () => {
         'INSERT INTO ingredients (id, name, category, description, is_active) VALUES (?, ?, ?, ?, 1)',
         id,
         `Aktiver Wirkstoff ${id}`,
-        id % 2 === 0 ? 'mineral' : 'other',
+        id === 2 ? 'vitamin_fat_soluble' : id % 2 === 0 ? 'mineral' : 'other',
+        `Nicht als Übersichtstext verwenden ${id}`,
+      );
+      harness.run(
+        'INSERT INTO ingredient_display_profiles (ingredient_id, effect_summary) VALUES (?, ?)',
+        id,
         `Zentraler Kurztext ${id}`,
       );
     }
+    harness.run("INSERT INTO ingredient_synonyms (ingredient_id, synonym, language) VALUES (1, 'Alias Eins', 'de')");
+    harness.run(`
+      INSERT INTO display_profile_translations (display_profile_id, language, effect_summary)
+      SELECT id, 'de', 'Einfacher deutscher Kurztext 1'
+      FROM ingredient_display_profiles
+      WHERE ingredient_id = 1
+    `);
     harness.run(
       "INSERT INTO ingredients (id, name, category, description, is_active) VALUES (999, 'Inaktiv', 'other', 'Nicht sichtbar', 0)",
     );
@@ -139,15 +177,22 @@ describe.sequential('production Knowledge/R2 Hono integration', () => {
     expect(firstPayload.nutrient_statuses).not.toContainEqual(expect.objectContaining({ ingredient_id: 999 }));
     expect(firstPayload.nutrient_statuses[0]).toMatchObject({
       category: 'other',
-      description: 'Zentraler Kurztext 1',
+      category_key: 'sonstige',
+      solubility: null,
+      description: 'Einfacher deutscher Kurztext 1',
+      aliases: ['Alias Eins'],
+    });
+    expect(statusByIngredient(firstPayload, 2)).toMatchObject({
+      category_key: 'vitamine',
+      solubility: 'fat',
     });
 
-    // Simulate the validly hashed 0095 payload shape that predates category
-    // and description. Its versions and hash look current, so only the
+    // Simulate the validly hashed 0095 payload shape that predates the central
+    // category, alias and short-copy projection. Its versions and hash look current, so only the
     // explicit schema guard may reject and repair it.
     harness.run(`
       UPDATE knowledge_overview_projection_rows
-      SET payload_json = json_remove(payload_json, '$.category', '$.description')
+      SET payload_json = json_remove(payload_json, '$.category_key', '$.aliases', '$.solubility')
       WHERE row_kind = 'status'
     `);
     const db = harness.db as ProjectionTestDatabase;
@@ -175,8 +220,43 @@ describe.sequential('production Knowledge/R2 Hono integration', () => {
     expect(repairedPayload.nutrient_statuses[91]).toMatchObject({
       ingredient_id: 92,
       category: 'mineral',
+      category_key: 'mineralstoffe',
+      solubility: null,
       description: 'Zentraler Kurztext 92',
+      aliases: [],
     });
+  });
+
+  it('invalidates the overview when a central alias or translated short text changes', async () => {
+    const harness = createHarness();
+    createProductionKnowledgeSchema(harness);
+    harness.run("INSERT INTO ingredients (id, name, category, description, is_active) VALUES (7, 'Magnesium', 'mineral', 'Alter Rohtext', 1)");
+    harness.run("INSERT INTO ingredient_display_profiles (ingredient_id, effect_summary) VALUES (7, 'Muskeln und Nerven')");
+
+    const first = await harness.fetch(new Request(`https://test.local/api/knowledge?cfcheck=sha256:${'4'.repeat(64)}`));
+    expect(statusByIngredient(await first.json() as KnowledgeOverviewPayload, 7)).toMatchObject({
+      description: 'Muskeln und Nerven',
+      aliases: [],
+    });
+
+    harness.run("INSERT INTO ingredient_synonyms (ingredient_id, synonym, language) VALUES (7, 'Mg', 'de')");
+    harness.run(`
+      INSERT INTO display_profile_translations (display_profile_id, language, effect_summary)
+      SELECT id, 'de', 'Zentral gepflegter Kurztext'
+      FROM ingredient_display_profiles
+      WHERE ingredient_id = 7
+    `);
+
+    const refreshed = await harness.fetch(new Request(`https://test.local/api/knowledge?cfcheck=sha256:${'5'.repeat(64)}`));
+    expect(refreshed.headers.get('x-knowledge-overview-source')).toBe('live');
+    expect(statusByIngredient(await refreshed.json() as KnowledgeOverviewPayload, 7)).toMatchObject({
+      description: 'Zentral gepflegter Kurztext',
+      aliases: ['Mg'],
+    });
+
+    harness.run("UPDATE display_profile_translations SET effect_summary = 'N?hrstoff mit defektem Encoding' WHERE language = 'de'");
+    const guarded = await harness.fetch(new Request(`https://test.local/api/knowledge?cfcheck=sha256:${'6'.repeat(64)}`));
+    expect(statusByIngredient(await guarded.json() as KnowledgeOverviewPayload, 7)?.description).toBeNull();
   });
 
   it('guards append-only projection refreshes and keeps the previous generation on conflicts', async () => {

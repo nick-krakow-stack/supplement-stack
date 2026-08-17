@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 vi.mock('cloudflare:sockets', () => ({ connect: vi.fn() }));
 
-import { fetchSubpartsHono } from './subparts-hono-handlers.mjs';
+import { fetchSubpartsHono, subpartsKnowledgeOverviewCacheKey } from './subparts-hono-handlers.mjs';
 import {
   createProductionKnowledgeHonoHarness,
   type ProductionKnowledgeHonoHarness,
@@ -383,6 +383,37 @@ describe.sequential('Sub-Wirkstoffe: echte Hono-Routen auf D1-Schema bis 0099', 
 
   afterAll(() => harness.close());
 
+  it('deletes the versioned knowledge overview cache on a guarded admin refresh', async () => {
+    const auditResponse = await api('/api/admin/knowledge-overview-projection', { role: 'admin' });
+    expect(auditResponse.status).toBe(200);
+    const audit = (await json(auditResponse)).audit as JsonRecord;
+    const cacheKey = subpartsKnowledgeOverviewCacheKey(`${apiOrigin}/api/admin/knowledge-overview-projection/refresh`);
+    await harness.cache.put(cacheKey, new Response(JSON.stringify({ stale: true })));
+    expect(await harness.cache.match(cacheKey)).toBeDefined();
+
+    const refreshResponse = await api('/api/admin/knowledge-overview-projection/refresh', {
+      body: {
+        expected_active_generation: audit.active_generation,
+        expected_source_version: audit.source_version,
+        expected_live_record_count: audit.live_record_count,
+        expected_live_content_hash: audit.live_content_hash,
+      },
+      method: 'POST',
+      role: 'admin',
+    });
+    expect(refreshResponse.status).toBe(200);
+    expect(await harness.cache.match(cacheKey)).toBeUndefined();
+
+    await harness.cache.put(cacheKey, new Response(JSON.stringify({ stale: true })));
+    const mutationResponse = await api(`/api/admin/ingredients/${omegaId}/task-status/forms`, {
+      body: { status: 'open' },
+      method: 'PUT',
+      role: 'admin',
+    });
+    expect(mutationResponse.status).toBe(200);
+    expect(await harness.cache.match(cacheKey)).toBeUndefined();
+  });
+
   it('keeps the stack description exactly once in a fresh schema through migration 0103', async () => {
     const migrationHarness = createProductionKnowledgeHonoHarness();
     try {
@@ -453,9 +484,14 @@ describe.sequential('Sub-Wirkstoffe: echte Hono-Routen auf D1-Schema bis 0099', 
   });
 
   it('liest ein Katalogprodukt verschachtelt und blendet nicht freigegebene Produkte aus', async () => {
+    harness.run("UPDATE products SET effect_summary = 'Kommerzieller Alttext', shop_link = 'https://shop.example/omega' WHERE id = ?", catalogOmegaProductId);
+    harness.run("UPDATE ingredient_display_profiles SET effect_summary = 'Zentrale Wirkungsbeschreibung'");
     const response = await api(`/api/products/${catalogOmegaProductId}`);
     expect(response.status).toBe(200);
     const body = await json(response);
+    expect(body.product).toMatchObject({ shop_link: 'https://shop.example/omega' });
+    expect(body.product).not.toHaveProperty('effect_summary');
+    expect(body.product).not.toHaveProperty('ingredient_effect_summary');
     const ingredients = body.ingredients as ProductIngredientRow[];
     expect(ingredients).toHaveLength(1);
     expect(ingredients[0]).toMatchObject({ ingredient_id: omegaId, quantity: 1000, unit: 'mg' });
@@ -465,9 +501,30 @@ describe.sequential('Sub-Wirkstoffe: echte Hono-Routen auf D1-Schema bis 0099', 
     ]));
 
     const listBody = await json(await api('/api/products'));
-    const listedIds = (listBody.products as ProductRow[]).map((product) => product.id);
+    const listedProducts = listBody.products as ProductRow[];
+    const listedIds = listedProducts.map((product) => product.id);
     expect(listedIds).toContain(catalogOmegaProductId);
     expect(listedIds).not.toContain(hiddenOmegaProductId);
+    expect(listedProducts.find((product) => product.id === catalogOmegaProductId)).toMatchObject({
+      shop_link: 'https://shop.example/omega',
+    });
+    expect(listedProducts.every((product) => !('effect_summary' in product) && !('ingredient_effect_summary' in product))).toBe(true);
+
+    const demoBody = await json(await api('/api/demo/products'));
+    expect((demoBody.products as JsonRecord[]).every((product) => (
+      !('effect_summary' in product) && !('ingredient_effect_summary' in product)
+    ))).toBe(true);
+  });
+
+  it('liefert über die öffentliche Wirkstoff-Detailroute keine Wirkungsprofile aus', async () => {
+    harness.run("UPDATE ingredient_display_profiles SET effect_summary = 'Zentrale Wirkungsbeschreibung' WHERE ingredient_id = ?", omegaId);
+
+    const response = await api(`/api/ingredients/${omegaId}`);
+    expect(response.status).toBe(200);
+    const body = await json(response);
+
+    expect(body).not.toHaveProperty('display_profiles');
+    expect(JSON.stringify(body)).not.toContain('Zentrale Wirkungsbeschreibung');
   });
 
   it('führt Katalogprodukt Create/Read/Update/Read mit verschachtelten Parts über die API aus', async () => {
@@ -1165,6 +1222,8 @@ describe.sequential('Sub-Wirkstoffe: echte Hono-Routen auf D1-Schema bis 0099', 
       expect(products.map((product) => product.id)).not.toContain(hiddenOmegaProductId);
       const product = products.find((candidate) => candidate.id === testCase.productId)!;
       expect(product).toMatchObject({ matched_part_id: testCase.partId });
+      expect(product).not.toHaveProperty('effect_summary');
+      expect(product).not.toHaveProperty('ingredient_effect_summary');
       expect(product.matched_part_quantity).toBeTypeOf('number');
     }
 
@@ -1220,6 +1279,9 @@ describe.sequential('Sub-Wirkstoffe: echte Hono-Routen auf D1-Schema bis 0099', 
     const items = body.items as Array<JsonRecord>;
     expect(items).toHaveLength(2);
     const catalogItem = items.find((item) => item.product_type === 'catalog')!;
+    expect(catalogItem).toMatchObject({ shop_link: 'https://shop.example/omega' });
+    expect(catalogItem).not.toHaveProperty('effect_summary');
+    expect(catalogItem).not.toHaveProperty('ingredient_effect_summary');
     const ingredients = catalogItem.ingredients as ProductIngredientRow[];
     expect(ingredients).toHaveLength(1);
     expect(ingredients[0]).toMatchObject({ ingredient_id: omegaId, quantity: 1000, unit: 'mg' });
@@ -1250,6 +1312,7 @@ describe.sequential('Sub-Wirkstoffe: echte Hono-Routen auf D1-Schema bis 0099', 
     });
     expect(createResponse.status).toBe(201);
     const userProductId = (await json(createResponse)).id as number;
+    harness.run("UPDATE user_products SET effect_summary = 'Privater kommerzieller Alttext' WHERE id = ?", userProductId);
 
     const publishResponse = await api(`/api/admin/user-products/${userProductId}/publish`, {
       body: {},
@@ -1282,6 +1345,7 @@ describe.sequential('Sub-Wirkstoffe: echte Hono-Routen auf D1-Schema bis 0099', 
     const publishedUserProduct = (userRead.products as ProductRow[])
       .find((product) => product.id === userProductId)!;
     expect(publishedUserProduct.visibility).toBe('public');
+    expect(publishedUserProduct).not.toHaveProperty('effect_summary');
     expect(publishedUserProduct.status_history?.[0]).toMatchObject({
       moderation_status: 'approved',
       visibility: 'public',
