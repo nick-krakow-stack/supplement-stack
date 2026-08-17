@@ -324,6 +324,7 @@ function ComingCard({ card }: { card: NutrientCard }) {
     <article
       className="nutri coming"
       data-ingredient-id={card.ingredientId}
+      data-ingredient-ids={card.ingredientId}
       data-name={normalizeSearchText(card.name)}
       data-cat={card.category}
     >
@@ -354,6 +355,7 @@ function ReadyCard({ card, search }: { card: NutrientCard & { article: Knowledge
       className="nutri is-ready"
       to={`/wissen/${card.article.slug}${search}`}
       data-ingredient-id={card.ingredientId}
+      data-ingredient-ids={card.ingredientId}
       data-name={normalizeSearchText(card.name)}
       data-cat={card.category}
       onFocus={prefetchArticle}

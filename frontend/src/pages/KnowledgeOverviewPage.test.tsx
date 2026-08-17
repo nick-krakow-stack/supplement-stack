@@ -269,6 +269,7 @@ describe('KnowledgeOverviewPage', () => {
     expect(card?.tagName).toBe('ARTICLE');
     expect(card?.getAttribute('role')).toBeNull();
     expect(card?.getAttribute('tabindex')).toBeNull();
+    expect(card?.getAttribute('data-ingredient-ids')).toBe('1');
     expect(within(card as HTMLElement).getByText('Artikel in Vorbereitung')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Zeolith/ })).toBeNull();
     expect(screen.getByText('1 Eintrag')).toBeTruthy();
@@ -285,6 +286,7 @@ describe('KnowledgeOverviewPage', () => {
     renderOverview();
 
     const card = await screen.findByRole('link', { name: /Vitamin D/ });
+    expect(card.getAttribute('data-ingredient-ids')).toBe('1');
     expect(within(card).getByText('fettlöslich')).toBeTruthy();
     expect(within(card).getByText('Artikel lesen')).toBeTruthy();
     expect(within(card).getByLabelText('DGE-Referenzwert vorhanden').getAttribute('title'))
