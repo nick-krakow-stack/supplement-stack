@@ -99,14 +99,35 @@ jobs:
             WHERE rollout_key = 'creator_portfolio_v1' AND phase = 'active';
           "
           DRAIN_ORIGIN="${DRAIN_ORIGIN%/}"
-          for _ in $(seq 1 50); do
-            DRAIN_RESPONSE="$(curl --silent --show-error --fail-with-body \
+          DRAIN_RESPONSE_FILE="${RUNNER_TEMP}/creator-notification-drain-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.json"
+          for _ in $(seq 1 30); do
+            if ! DRAIN_HTTP_STATUS="$(curl --silent --show-error \
+              --connect-timeout 5 \
+              --max-time 20 \
+              --output "${DRAIN_RESPONSE_FILE}" \
+              --write-out '%{http_code}' \
               --request POST "${DRAIN_ORIGIN}/api/creator-sharing/internal/notification-drain" \
               --header "Authorization: Bearer ${DRAIN_NONCE}" \
-              --header "X-Creator-Drain-Run: ${DRAIN_RUN_KEY}")"
-            if node -e "const value=JSON.parse(process.argv[1]); process.exit(value.complete === true ? 0 : 1)" "${DRAIN_RESPONSE}"; then
-              exit 0
+              --header "X-Creator-Drain-Run: ${DRAIN_RUN_KEY}")"; then
+              sleep 2
+              continue
             fi
+            DRAIN_RESPONSE="$(cat "${DRAIN_RESPONSE_FILE}")"
+            if [[ "${DRAIN_HTTP_STATUS}" =~ ^2[0-9][0-9]$ ]]; then
+              if node -e "const value=JSON.parse(process.argv[1]); process.exit(value.complete === true ? 0 : 1)" "${DRAIN_RESPONSE}"; then
+                exit 0
+              fi
+              sleep 2
+              continue
+            fi
+            case "${DRAIN_HTTP_STATUS}" in
+              404|429|502|504)
+                sleep 2
+                continue
+                ;;
+            esac
+            echo "Creator notification drain failed with HTTP ${DRAIN_HTTP_STATUS}." >&2
+            exit 1
           done
           echo "Creator notification drain did not finish." >&2
           exit 1

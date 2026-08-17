@@ -382,6 +382,15 @@ describe('creator portfolio workflow migration', () => {
     expect(workflow).toContain('creator_share_notification_drain_runs');
     expect(workflow).toContain('X-Creator-Drain-Run');
     expect(workflow).toContain('set -euo pipefail');
+    expect(workflow).toContain('for _ in $(seq 1 30)');
+    expect(workflow).toContain('if ! DRAIN_HTTP_STATUS="$(curl --silent --show-error');
+    expect(workflow).toContain('--connect-timeout 5');
+    expect(workflow).toContain('--max-time 20');
+    expect(workflow).toContain('--output "${DRAIN_RESPONSE_FILE}"');
+    expect(workflow).toContain("--write-out '%{http_code}'");
+    expect(workflow).toContain('404|429|502|504)');
+    expect(workflow).toContain('sleep 2');
+    expect(workflow).not.toContain('--fail-with-body');
     expect(workflow).not.toMatch(/set -x|echo[^\n]*DRAIN_NONCE/);
   });
 
