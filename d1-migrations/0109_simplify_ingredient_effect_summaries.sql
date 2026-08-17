@@ -130,6 +130,44 @@ BEGIN
   SELECT RAISE(ABORT, '0109: Unerwarteter Wirkstoff- oder Kurztextbestand; keine Kurztexte geändert.');
 END;
 
+-- Fresh databases retain the three inactive legacy vitamin rows, while the
+-- production catalog was compacted before 0092 and does not contain them.
+-- Accept only those two complete inventory fingerprints; a partial legacy set
+-- or any other ingredient count remains a hard failure.
+CREATE TABLE _0109_runtime_contract (
+  inventory_kind TEXT PRIMARY KEY CHECK (inventory_kind IN ('fresh_97', 'production_94')),
+  target_count INTEGER NOT NULL UNIQUE CHECK (target_count IN (94, 97))
+);
+
+INSERT INTO _0109_runtime_contract (inventory_kind, target_count)
+SELECT 'fresh_97', 97
+WHERE (SELECT COUNT(*) FROM ingredients) = 97
+  AND (
+    SELECT COUNT(*)
+    FROM ingredients
+    WHERE name IN ('Vitamin D3', 'Vitamin K2', 'Vitamin K1')
+  ) = 3
+UNION ALL
+SELECT 'production_94', 94
+WHERE (SELECT COUNT(*) FROM ingredients) = 94
+  AND (
+    SELECT COUNT(*)
+    FROM ingredients
+    WHERE name IN ('Vitamin D3', 'Vitamin K2', 'Vitamin K1')
+  ) = 0;
+
+-- Production's canonical Vitamin-D row is the historical D3 identity and
+-- therefore still carries the non-empty 0050 text that 0100 preserved.
+-- Change only the migration-local expected old value for that exact inventory.
+UPDATE _0109_expected_effect_summaries
+SET old_effect_summary = 'Immunsystem, Knochen, Hormone'
+WHERE ingredient_name = 'Vitamin D'
+  AND EXISTS (
+    SELECT 1
+    FROM _0109_runtime_contract
+    WHERE inventory_kind = 'production_94'
+  );
+
 -- Bind the complete identity and old values before either central table is
 -- touched. The de translation must already exist; this migration never creates
 -- a second or replacement translation source.
@@ -138,25 +176,36 @@ SELECT 'precondition'
 WHERE (SELECT COUNT(*) FROM _0109_expected_effect_summaries) <> 97
    OR (SELECT COUNT(*) FROM _0109_expected_effect_summaries WHERE new_effect_summary IS NULL) <> 13
    OR (SELECT COUNT(*) FROM _0109_expected_effect_summaries WHERE new_effect_summary IS NOT NULL) <> 84
+   OR (SELECT COUNT(*) FROM _0109_runtime_contract) <> 1
    OR (SELECT COUNT(*) FROM ingredients WHERE is_active = 1) <> 92
    OR EXISTS (
      SELECT 1
      FROM _0109_expected_effect_summaries expected
      LEFT JOIN ingredients ingredient ON ingredient.name = expected.ingredient_name
-     WHERE ingredient.id IS NULL
-        OR ingredient.is_active <> expected.expected_is_active
+     WHERE (ingredient.id IS NULL AND expected.ingredient_name NOT IN ('Vitamin D3', 'Vitamin K2', 'Vitamin K1'))
+        OR (ingredient.id IS NOT NULL AND ingredient.is_active <> expected.expected_is_active)
    )
    OR EXISTS (
      SELECT 1
      FROM ingredients ingredient
-     WHERE ingredient.is_active = 1
-       AND NOT EXISTS (
-         SELECT 1
-         FROM _0109_expected_effect_summaries expected
-         WHERE expected.ingredient_name = ingredient.name
-           AND expected.expected_is_active = 1
-       )
+     LEFT JOIN _0109_expected_effect_summaries expected
+       ON expected.ingredient_name = ingredient.name
+     WHERE expected.ingredient_name IS NULL
    )
+   OR (
+     SELECT COUNT(*)
+     FROM _0109_expected_effect_summaries expected
+     JOIN ingredients ingredient ON ingredient.name = expected.ingredient_name
+   ) <> (SELECT target_count FROM _0109_runtime_contract)
+   OR (
+     SELECT COUNT(*)
+     FROM ingredients
+     WHERE name IN ('Vitamin D3', 'Vitamin K2', 'Vitamin K1')
+   ) <> CASE
+     (SELECT inventory_kind FROM _0109_runtime_contract)
+     WHEN 'fresh_97' THEN 3
+     WHEN 'production_94' THEN 0
+   END
    OR (
      SELECT COUNT(*)
      FROM _0109_expected_effect_summaries expected
@@ -166,7 +215,7 @@ WHERE (SELECT COUNT(*) FROM _0109_expected_effect_summaries) <> 97
       AND profile.form_id IS NULL
       AND profile.part_id IS NULL
       AND profile.sub_ingredient_id IS NULL
-   ) <> 97
+   ) <> (SELECT target_count FROM _0109_runtime_contract)
    OR (
      SELECT COUNT(*)
      FROM _0109_expected_effect_summaries expected
@@ -179,7 +228,7 @@ WHERE (SELECT COUNT(*) FROM _0109_expected_effect_summaries) <> 97
      JOIN display_profile_translations translation
        ON translation.display_profile_id = profile.id
       AND translation.language = 'de'
-   ) <> 97
+   ) <> (SELECT target_count FROM _0109_runtime_contract)
    OR EXISTS (
      SELECT 1
      FROM _0109_expected_effect_summaries expected
@@ -222,7 +271,7 @@ WHERE form_id IS NULL
 
 INSERT INTO _0109_effect_summary_guard (scope)
 SELECT 'base-update-count'
-WHERE changes() <> 97;
+WHERE changes() <> (SELECT target_count FROM _0109_runtime_contract);
 
 UPDATE display_profile_translations
 SET effect_summary = (
@@ -247,7 +296,7 @@ WHERE language = 'de'
 
 INSERT INTO _0109_effect_summary_guard (scope)
 SELECT 'translation-update-count'
-WHERE changes() <> 97;
+WHERE changes() <> (SELECT target_count FROM _0109_runtime_contract);
 
 INSERT INTO _0109_effect_summary_guard (scope)
 SELECT 'postcondition'
@@ -269,4 +318,5 @@ WHERE EXISTS (
 
 DROP TRIGGER _0109_effect_summary_guard_abort;
 DROP TABLE _0109_effect_summary_guard;
+DROP TABLE _0109_runtime_contract;
 DROP TABLE _0109_expected_effect_summaries;

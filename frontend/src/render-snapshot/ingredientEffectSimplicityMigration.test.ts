@@ -42,6 +42,25 @@ type ExpectedSummary = {
   newSummary: string | null;
 };
 
+type SeededDatabaseOptions = {
+  omitNames?: readonly string[];
+  oldSummaryOverrides?: Readonly<Record<string, string>>;
+  translationSummaryOverrides?: Readonly<Record<string, string>>;
+  isActiveOverrides?: Readonly<Record<string, number>>;
+  extraRows?: readonly ExpectedSummary[];
+};
+
+type CentralSummaryRow = {
+  name: string;
+  isActive: number;
+  baseSummary: string | null;
+  translatedSummary: string | null;
+  profileVersion: number;
+};
+
+const productionMissingNames = ['Vitamin D3', 'Vitamin K2', 'Vitamin K1'] as const;
+const productionVitaminDOldSummary = 'Immunsystem, Knochen, Hormone';
+
 function unescapeSqlText(value: string): string {
   return value.replaceAll("''", "'");
 }
@@ -70,7 +89,10 @@ function parse0109Summaries(): ExpectedSummary[] {
   }));
 }
 
-function createSeededDatabase(rows: ExpectedSummary[], corruptTranslationFor: string | null = null): SqliteDatabase {
+function createSeededDatabase(
+  rows: ExpectedSummary[],
+  options: SeededDatabaseOptions = {},
+): SqliteDatabase {
   const database = new DatabaseSync(':memory:');
   database.exec(`
     PRAGMA foreign_keys = ON;
@@ -123,17 +145,50 @@ function createSeededDatabase(rows: ExpectedSummary[], corruptTranslationFor: st
     WHERE ingredient.name = ?
   `);
 
-  rows.forEach((row) => {
-    insertIngredient.run(row.name, row.isActive);
-    insertProfile.run(row.oldSummary, row.name);
+  const omittedNames = new Set(options.omitNames ?? []);
+  const seededRows = [
+    ...rows.filter((row) => !omittedNames.has(row.name)),
+    ...(options.extraRows ?? []),
+  ];
+
+  seededRows.forEach((row) => {
+    const oldSummary = options.oldSummaryOverrides?.[row.name] ?? row.oldSummary;
+    insertIngredient.run(row.name, options.isActiveOverrides?.[row.name] ?? row.isActive);
+    insertProfile.run(oldSummary, row.name);
     insertTranslation.run(
-      row.name === corruptTranslationFor ? `${row.oldSummary} (abweichend)` : row.oldSummary,
+      options.translationSummaryOverrides?.[row.name] ?? oldSummary,
       row.name,
     );
   });
 
   database.exec(migration0108);
   return database;
+}
+
+function readCentralSummaries(database: SqliteDatabase): CentralSummaryRow[] {
+  return database.prepare(`
+    SELECT
+      ingredient.name,
+      ingredient.is_active AS isActive,
+      profile.effect_summary AS baseSummary,
+      translation.effect_summary AS translatedSummary,
+      profile.version AS profileVersion
+    FROM ingredients ingredient
+    JOIN ingredient_display_profiles profile ON profile.ingredient_id = ingredient.id
+    JOIN display_profile_translations translation
+      ON translation.display_profile_id = profile.id
+     AND translation.language = 'de'
+    WHERE profile.form_id IS NULL
+      AND profile.part_id IS NULL
+      AND profile.sub_ingredient_id IS NULL
+    ORDER BY ingredient.name
+  `).all() as CentralSummaryRow[];
+}
+
+function readSourceVersion(database: SqliteDatabase): { source_version: number } {
+  return database.prepare(
+    'SELECT source_version FROM knowledge_overview_projection_meta WHERE id = 1',
+  ).get() as { source_version: number };
 }
 
 describe('0109 central ingredient short-copy repair', () => {
@@ -230,9 +285,82 @@ describe('0109 central ingredient short-copy repair', () => {
     database.close();
   });
 
+  it('updates the exact 94-row production inventory with its historical Vitamin-D old value', () => {
+    const rows = parse0109Summaries();
+    const productionRows = rows.filter((row) => !productionMissingNames.includes(
+      row.name as (typeof productionMissingNames)[number],
+    ));
+    const database = createSeededDatabase(rows, {
+      omitNames: productionMissingNames,
+      oldSummaryOverrides: { 'Vitamin D': productionVitaminDOldSummary },
+    });
+    const sourceVersionBefore = readSourceVersion(database);
+
+    database.exec(migration0109);
+
+    const repaired = readCentralSummaries(database);
+    const repairedByName = new Map(repaired.map((row) => [row.name, row]));
+    expect(repaired).toHaveLength(94);
+    expect(repaired.every((row) => row.profileVersion === 2)).toBe(true);
+    productionRows.forEach((expected) => {
+      expect(repairedByName.get(expected.name)).toMatchObject({
+        isActive: expected.isActive,
+        baseSummary: expected.newSummary,
+        translatedSummary: expected.newSummary,
+      });
+    });
+    productionMissingNames.forEach((name) => expect(repairedByName.has(name)).toBe(false));
+    expect(readSourceVersion(database).source_version - sourceVersionBefore.source_version).toBe(188);
+    database.close();
+  });
+
+  it.each([
+    {
+      label: 'a hybrid legacy inventory',
+      options: { omitNames: ['Vitamin D3'] },
+    },
+    {
+      label: 'an unexpected inactive ingredient',
+      options: {
+        extraRows: [{
+          name: 'Unerwarteter Wirkstoff',
+          isActive: 0,
+          oldSummary: 'Unerwarteter Alttext',
+          newSummary: null,
+        }],
+      },
+    },
+    {
+      label: 'a wrong active status',
+      options: { isActiveOverrides: { Ginseng: 0 } },
+    },
+    {
+      label: 'the canonical Vitamin-D old value in the production inventory',
+      options: { omitNames: productionMissingNames },
+    },
+  ] satisfies Array<{ label: string; options: SeededDatabaseOptions }>) (
+    'fails closed before central writes for $label',
+    ({ options }) => {
+      const rows = parse0109Summaries();
+      const database = createSeededDatabase(rows, options);
+      const centralBefore = readCentralSummaries(database);
+      const sourceVersionBefore = readSourceVersion(database);
+
+      expect(() => database.exec(migration0109)).toThrow(/0109: Unerwarteter Wirkstoff- oder Kurztextbestand/);
+
+      expect(readCentralSummaries(database)).toEqual(centralBefore);
+      expect(readSourceVersion(database)).toEqual(sourceVersionBefore);
+      database.close();
+    },
+  );
+
   it('fails closed before either central table changes when one old de value differs', () => {
     const rows = parse0109Summaries();
-    const database = createSeededDatabase(rows, 'Ginseng');
+    const database = createSeededDatabase(rows, {
+      translationSummaryOverrides: {
+        Ginseng: 'Energie, Stressresistenz, Immunsystem (abweichend)',
+      },
+    });
     const sourceVersionBefore = database.prepare(
       'SELECT source_version FROM knowledge_overview_projection_meta WHERE id = 1',
     ).get() as { source_version: number };
