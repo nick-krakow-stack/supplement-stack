@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   CREATOR_SHARE_DRAFT_MAX_AGE_MS,
   clearCreatorShareDraft,
+  clearExpiredCreatorShareDrafts,
   readCreatorShareDraft,
   writeCreatorShareDraft,
 } from './creatorShareDraft';
@@ -93,5 +94,28 @@ describe('token-bound creator share draft', () => {
     }));
     expect(readCreatorShareDraft(token, 1_001)).toBeNull();
     expect(window.localStorage.getItem(draftKey(token))).toBeNull();
+  });
+
+  it('sweeps expired or malformed drafts for every share while preserving fresh valid drafts', () => {
+    const freshToken = 'ffffffffffffffffffffffffffffffff';
+    const expiredToken = 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
+    const malformedToken = 'mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm';
+    writeCreatorShareDraft(freshToken, { stack_name: 'Bleibt', target_stack_id: 4 }, 20_000);
+    writeCreatorShareDraft(expiredToken, { stack_name: 'Zu alt', target_stack_id: null }, 1_000);
+    window.localStorage.setItem(draftKey(malformedToken), JSON.stringify({
+      version: 2,
+      token: malformedToken,
+      updated_at: 20_000,
+      stack_name: 'Falsches Format',
+      target_stack_id: null,
+    }));
+    window.localStorage.setItem('unrelated-key', 'unchanged');
+
+    clearExpiredCreatorShareDrafts(1_000 + CREATOR_SHARE_DRAFT_MAX_AGE_MS + 1);
+
+    expect(window.localStorage.getItem(draftKey(freshToken))).not.toBeNull();
+    expect(window.localStorage.getItem(draftKey(expiredToken))).toBeNull();
+    expect(window.localStorage.getItem(draftKey(malformedToken))).toBeNull();
+    expect(window.localStorage.getItem('unrelated-key')).toBe('unchanged');
   });
 });

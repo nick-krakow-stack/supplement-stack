@@ -1,12 +1,14 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import {
   getCreatorShare,
   importCreatorShare,
   preflightCreatorShare,
+  reportCreatorShare,
+  undoCreatorShareImport,
   type CreatorSharePreflight,
   type CreatorSharePreview,
   type CreatorShareSaveResult,
@@ -22,6 +24,8 @@ vi.mock('../api/creatorSharing', () => ({
   getCreatorShare: vi.fn(),
   importCreatorShare: vi.fn(),
   preflightCreatorShare: vi.fn(),
+  reportCreatorShare: vi.fn(),
+  undoCreatorShareImport: vi.fn(),
 }));
 vi.mock('../api/stacks', () => ({ getStacks: vi.fn() }));
 vi.mock('../contexts/AuthContext', () => ({
@@ -84,6 +88,25 @@ function checkedSelection(overrides: Partial<CreatorSharePreflight> = {}): Creat
   };
 }
 
+function similarProduct(stackItemId: number, productName: string): CreatorSharePreflight['similar_products'][number] {
+  return {
+    stack_item_id: stackItemId,
+    version: 1,
+    product_type: 'catalog',
+    main_ingredient_names: ['Magnesium'],
+    comparison: {
+      product_name: productName,
+      quantity: 1,
+      unit: 'Kapsel',
+      intake_interval_days: 1,
+      dosage_text: '1 Kapsel',
+      timing_label: 'Abends',
+      ...{ timing: 'evening' },
+    },
+    private_note: null,
+  };
+}
+
 describe('CreatorShareImportPage', () => {
   beforeEach(() => {
     currentUser = null;
@@ -91,6 +114,15 @@ describe('CreatorShareImportPage', () => {
     vi.mocked(getCreatorShare).mockReset();
     vi.mocked(preflightCreatorShare).mockReset();
     vi.mocked(importCreatorShare).mockReset();
+    vi.mocked(reportCreatorShare).mockReset().mockResolvedValue({ ok: true, report_id: 1, status: 'pending' });
+    vi.mocked(undoCreatorShareImport).mockReset().mockResolvedValue({
+      ok: true,
+      stack_id: 304,
+      stack_name: 'Ziel',
+      summary: 'Produkt B wird wiederhergestellt. Produkt A wird entfernt.',
+      restored_summary: 'Der vorherige Stand in „Ziel“ wurde wiederhergestellt.',
+      undone_at: '2026-08-17T08:05:00.000Z',
+    });
     vi.mocked(getStacks).mockReset();
     let uuidCounter = 0;
     Object.defineProperty(globalThis, 'crypto', {
@@ -104,6 +136,7 @@ describe('CreatorShareImportPage', () => {
       configurable: true,
       value: { writeText: vi.fn().mockResolvedValue(undefined) },
     });
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1024 });
     vi.mocked(getCreatorShare).mockResolvedValue(previewFor(
       'public-token',
       'Mein Magnesium',
@@ -115,6 +148,7 @@ describe('CreatorShareImportPage', () => {
 
   afterEach(() => {
     cleanup();
+    vi.useRealTimers();
     vi.clearAllMocks();
   });
 
@@ -151,7 +185,193 @@ describe('CreatorShareImportPage', () => {
     render(<MemoryRouter><ResultCard result={result} onStay={vi.fn()} /></MemoryRouter>);
 
     expect(screen.getByRole('link', { name: 'Stack jetzt ansehen' }).getAttribute('href')).toBe(`/stacks?stack=${result.stack_id}`);
-    expect(screen.getByRole('button', { name: 'Bei der Empfehlung bleiben' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Empfehlung weiter ansehen' })).toBeTruthy();
+  });
+
+  it('offers a short, exactly bound undo only for a replace result', async () => {
+    const result: CreatorShareSaveResult = {
+      ok: true,
+      type: 'dose_recommendation',
+      action: 'replaced',
+      stack_id: 304,
+      stack_name: 'Ziel',
+      stack_item_id: 88,
+      creator_product_name: 'Produkt A',
+      replaced_product_name: 'Produkt B',
+      undo: {
+        token: 'undo_00000000-0000-4000-8000-000000000099',
+        expires_at: 1_800_000_000,
+        version: 4,
+        stack_id: 304,
+        stack_item_id: 88,
+        summary: 'Produkt B wird in „Ziel“ wiederhergestellt. Produkt A wird von diesem Platz entfernt.',
+      },
+    };
+    render(<MemoryRouter><ResultCard result={result} shareToken="share-token" onStay={vi.fn()} /></MemoryRouter>);
+
+    expect(screen.getByText(result.undo!.summary)).toBeTruthy();
+    expect(screen.getByText(/bis .* Uhr verfügbar/)).toBeTruthy();
+    expect(screen.getByText(/nur Produkt B durch Produkt A ersetzt/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Änderung rückgängig machen' }));
+
+    await waitFor(() => expect(undoCreatorShareImport).toHaveBeenCalledWith('share-token', {
+      undo_token: result.undo!.token,
+      expected_version: 4,
+      expected_stack_id: 304,
+      expected_stack_item_id: 88,
+    }));
+    const confirmation = await screen.findByRole('status');
+    expect(screen.getByRole('heading', { name: 'Änderung rückgängig gemacht' })).toBeTruthy();
+    expect(confirmation.textContent).toContain('Der vorherige Stand in „Ziel“ wurde wiederhergestellt.');
+    expect(confirmation.textContent).not.toContain('wird wiederhergestellt');
+    expect(document.activeElement).toBe(confirmation);
+    expect(screen.queryByText(/nur Produkt B durch Produkt A ersetzt/)).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Alles erledigt' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Änderung rückgängig machen' })).toBeNull();
+  });
+
+  it('removes undo exactly at its deadline and cleans up the timer', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-17T08:00:00.000Z'));
+    const clearTimeoutSpy = vi.spyOn(window, 'clearTimeout');
+    const result: CreatorShareSaveResult = {
+      ok: true,
+      type: 'dose_recommendation',
+      action: 'replaced',
+      stack_id: 304,
+      stack_name: 'Ziel',
+      creator_product_name: 'Produkt A',
+      replaced_product_name: 'Produkt B',
+      undo: {
+        token: 'undo_deadline',
+        expires_at: Math.floor(Date.now() / 1000) + 2,
+        version: 1,
+        stack_id: 304,
+        stack_item_id: 88,
+        summary: 'Produkt B kann wiederhergestellt werden.',
+      },
+    };
+    render(<MemoryRouter><ResultCard result={result} shareToken="share-token" onStay={vi.fn()} /></MemoryRouter>);
+
+    expect(screen.getByRole('button', { name: 'Änderung rückgängig machen' })).toBeTruthy();
+    act(() => vi.advanceTimersByTime(1_999));
+    expect(screen.getByRole('button', { name: 'Änderung rückgängig machen' })).toBeTruthy();
+    act(() => vi.advanceTimersByTime(1));
+    expect(screen.queryByRole('button', { name: 'Änderung rückgängig machen' })).toBeNull();
+    const expirationStatus = screen.getByRole('status');
+    expect(expirationStatus.textContent).toContain('Frist zum Rückgängigmachen ist abgelaufen');
+    expect(document.activeElement).toBe(expirationStatus);
+    expect(clearTimeoutSpy).toHaveBeenCalled();
+    clearTimeoutSpy.mockRestore();
+  });
+
+  it.each([undefined, -1, 1.5, Number.NaN])('does not invent an imported item count for %s', (importedItems) => {
+    const result: CreatorShareSaveResult = {
+      ok: true,
+      type: 'stack',
+      action: 'stack_created',
+      stack_id: 301,
+      stack_name: 'Ganzer Stack',
+      imported_items: importedItems,
+    };
+    render(<MemoryRouter><ResultCard result={result} onStay={vi.fn()} /></MemoryRouter>);
+
+    expect(screen.getByText('Der neue Stack „Ganzer Stack“ wurde angelegt.')).toBeTruthy();
+    expect(document.body.textContent).not.toContain('mit 0 Produkten');
+  });
+
+  it('reports a public recommendation with a clear category, disclosure state and confirmation', async () => {
+    const token = 'rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr';
+    render(
+      <MemoryRouter initialEntries={[`/share/${token}`]}>
+        <Routes>
+          <Route path="/share/:token" element={<CreatorShareImportPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Empfohlen von Alex Alltag')).toBeTruthy();
+    const toggle = screen.getByRole('button', { name: 'Stimmt etwas mit dieser Empfehlung nicht?' });
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    const reportHeading = screen.getByRole('heading', { name: 'Empfehlung melden' });
+    expect(reportHeading).toBeTruthy();
+    expect(document.activeElement).toBe(reportHeading);
+    fireEvent.click(screen.getByRole('radio', { name: /Missverständlich/ }));
+    fireEvent.change(screen.getByLabelText(/Kurzer Hinweis \(optional\)/), {
+      target: { value: 'Der Zeitpunkt ist für mich unklar.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Meldung senden' }));
+
+    await waitFor(() => expect(reportCreatorShare).toHaveBeenCalledWith(token, expect.objectContaining({
+      idempotency_key: expect.stringMatching(/^[a-f0-9-]{36}$/),
+      category: 'misleading',
+      details: 'Der Zeitpunkt ist für mich unklar.',
+    })));
+    const reportStatus = await screen.findByRole('status');
+    expect(reportStatus.textContent).toContain('Danke. Deine Meldung ist angekommen');
+    expect(document.activeElement).toBe(reportStatus);
+  });
+
+  it('freezes the first report while pending and retries its exact payload until the user chooses to edit', async () => {
+    const token = 'ssssssssssssssssssssssssssssssss';
+    let rejectFirst!: (reason?: unknown) => void;
+    vi.mocked(reportCreatorShare)
+      .mockImplementationOnce(() => new Promise<Awaited<ReturnType<typeof reportCreatorShare>>>((_, reject) => { rejectFirst = reject; }))
+      .mockRejectedValueOnce(new Error('retry remains unclear'))
+      .mockResolvedValue({ ok: true, report_id: 2, status: 'pending' });
+    render(
+      <MemoryRouter initialEntries={[`/share/${token}`]}>
+        <Routes>
+          <Route path="/share/:token" element={<CreatorShareImportPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Empfohlen von Alex Alltag')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Stimmt etwas mit dieser Empfehlung nicht?' }));
+    fireEvent.click(screen.getByRole('radio', { name: /Nicht mehr aktuell/ }));
+    const detailsInput = screen.getByLabelText(/Kurzer Hinweis \(optional\)/) as HTMLTextAreaElement;
+    fireEvent.change(detailsInput, { target: { value: 'Meldung A bleibt gebunden.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Meldung senden' }));
+
+    await waitFor(() => expect(reportCreatorShare).toHaveBeenCalledTimes(1));
+    const firstSubmission = { ...vi.mocked(reportCreatorShare).mock.calls[0][1] };
+    expect(screen.getByRole('button', { name: 'Meldung wird gesendet…' })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: /Nicht mehr aktuell/ }).matches(':disabled')).toBe(true);
+    expect(detailsInput.disabled).toBe(true);
+    fireEvent.click(screen.getByRole('radio', { name: /Anderer Grund/ }));
+    fireEvent.change(detailsInput, { target: { value: 'Meldung B darf nicht in den Retry rutschen.' } });
+    expect((screen.getByRole('radio', { name: /Nicht mehr aktuell/ }) as HTMLInputElement).checked).toBe(true);
+    expect(detailsInput.value).toBe('Meldung A bleibt gebunden.');
+
+    await act(async () => {
+      rejectFirst(new Error('unclear network outcome'));
+      await Promise.resolve();
+    });
+    expect((await screen.findByRole('alert')).textContent).toContain('dieselbe Meldung noch einmal');
+    expect(screen.getByRole('radio', { name: /Nicht mehr aktuell/ }).matches(':disabled')).toBe(true);
+    expect(detailsInput.disabled).toBe(true);
+    expect(screen.getByRole('button', { name: 'Meldung ändern' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dieselbe Meldung erneut senden' }));
+    await waitFor(() => expect(reportCreatorShare).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(reportCreatorShare).mock.calls[1][1]).toEqual(firstSubmission);
+    expect((await screen.findByRole('alert')).textContent).toContain('dieselbe Meldung noch einmal');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Meldung ändern' }));
+    expect(screen.getByRole('radio', { name: /Nicht mehr aktuell/ }).matches(':disabled')).toBe(false);
+    expect(detailsInput.disabled).toBe(false);
+    fireEvent.click(screen.getByRole('radio', { name: /Anderer Grund/ }));
+    fireEvent.change(detailsInput, { target: { value: 'Meldung B ist jetzt bewusst neu.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Meldung senden' }));
+    await waitFor(() => expect(reportCreatorShare).toHaveBeenCalledTimes(3));
+    expect(vi.mocked(reportCreatorShare).mock.calls[2][1]).toMatchObject({
+      category: 'other',
+      details: 'Meldung B ist jetzt bewusst neu.',
+    });
+    expect(vi.mocked(reportCreatorShare).mock.calls[2][1].idempotency_key).not.toBe(firstSubmission.idempotency_key);
   });
 
   it('resets checked choices when the token or target changes', async () => {
@@ -192,7 +412,7 @@ describe('CreatorShareImportPage', () => {
 
     expect(await screen.findByText('Empfohlen von Creator A')).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Name des neuen Stacks'), { target: { value: 'Mein Name für A' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Auswahl prüfen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Änderungen ansehen' }));
     expect(await screen.findByText(/Ein neuer Stack „Mein Name für A“/)).toBeTruthy();
     expect(preflightCreatorShare).toHaveBeenLastCalledWith(tokenA, { stack_name: 'Mein Name für A' });
 
@@ -203,13 +423,13 @@ describe('CreatorShareImportPage', () => {
     expect(screen.queryByText(/Mein Name für A/)).toBeNull();
     expect((screen.getByLabelText('Ziel-Stack') as HTMLSelectElement).value).toBe('202');
     expect(window.localStorage.getItem(`ss_creator_share_draft_v1:${tokenB}`)).toContain('Entwurf B');
-    fireEvent.click(screen.getByRole('button', { name: 'Auswahl prüfen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Änderungen ansehen' }));
     expect(await screen.findByText(/Creator Magnesium wird zu „Stack B“ hinzugefügt/)).toBeTruthy();
     expect(preflightCreatorShare).toHaveBeenLastCalledWith(tokenB, { target_mode: 'existing', target_stack_id: 202 });
 
     fireEvent.click(screen.getByRole('radio', { name: /Neuen Stack anlegen/ }));
-    expect(screen.queryByRole('button', { name: 'Jetzt bestätigen' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Auswahl prüfen' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /anlegen|hinzufügen|ersetzen|unverändert/ })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Änderungen ansehen' })).toBeTruthy();
   });
 
   it('shows every similar product neutrally and explains an exact replacement before saving', async () => {
@@ -278,12 +498,13 @@ describe('CreatorShareImportPage', () => {
     expect(await screen.findByText('Empfohlen von Alex Alltag')).toBeTruthy();
     fireEvent.click(await screen.findByRole('radio', { name: /In einen vorhandenen Stack/ }));
     expect((screen.getByLabelText('Ziel-Stack') as HTMLSelectElement).value).toBe('101');
-    fireEvent.click(screen.getByRole('button', { name: 'Auswahl prüfen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Änderungen ansehen' }));
     expect(await screen.findByRole('heading', { name: 'Ähnliche Produkte sind schon in diesem Stack.' })).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Änderungen ansehen' }));
     expect(screen.getByText('Diese wichtigen Inhaltsstoffe stimmen überein: Magnesium.')).toBeTruthy();
     expect(screen.getByRole('radio', { name: 'Magnesium Alt' })).toBeTruthy();
     expect(screen.getByRole('radio', { name: 'Mein Magnesium' })).toBeTruthy();
-    expect((screen.getByRole('button', { name: 'Jetzt bestätigen' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Zuerst eine Auswahl treffen' }) as HTMLButtonElement).disabled).toBe(true);
     expect(document.body.textContent).not.toMatch(/Konflikt|Hauptwirkstoff-Set|Snapshot|Position|Import|Idempotenz/);
 
     fireEvent.click(screen.getByRole('radio', { name: 'Mein Magnesium' }));
@@ -293,22 +514,24 @@ describe('CreatorShareImportPage', () => {
     expect(screen.getAllByText('Keine Angabe').length).toBeGreaterThan(0);
     expect(document.body.textContent).not.toContain('evening');
     expect(document.body.textContent).not.toContain('unknown_internal_key');
-    fireEvent.click(screen.getByRole('button', { name: 'Mein Produkt behalten' }));
+    fireEvent.click(screen.getByRole('button', { name: /Nichts ändern/ }));
     expect(screen.getByText(/Mein Magnesium bleibt in „Mein Alltag“ unverändert/)).toBeTruthy();
     expect(screen.getByText(/Creator Magnesium wird nicht hinzugefügt/)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Empfehlung des Creators übernehmen' }));
+    fireEvent.click(screen.getByRole('button', { name: /Produkt ersetzen/ }));
     expect(screen.getByText(/Nur Mein Magnesium wird in „Mein Alltag“ durch Creator Magnesium ersetzt/)).toBeTruthy();
     expect(screen.getByText(/Die Reihenfolge bleibt gleich/)).toBeTruthy();
     expect(screen.queryByText(/Kategorie/)).toBeNull();
     expect(screen.getByText(/Dein eigenes Produkt und seine private Notiz bleiben gespeichert/)).toBeTruthy();
-    expect((screen.getByRole('button', { name: 'Jetzt bestätigen' }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole('button', { name: 'Mein Magnesium ersetzen' }) as HTMLButtonElement).disabled).toBe(false);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Jetzt bestätigen' }));
-    expect(await screen.findByRole('heading', { name: 'Alles erledigt' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Mein Magnesium ersetzen' }));
+    const resultHeading = await screen.findByRole('heading', { name: 'Alles erledigt' });
+    expect(resultHeading).toBeTruthy();
+    expect(document.activeElement?.contains(resultHeading)).toBe(true);
     expect(screen.getByText(/nur Mein Magnesium durch Creator Magnesium ersetzt/)).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Stack jetzt ansehen' }).getAttribute('href')).toBe('/stacks?stack=101');
     expect(screen.getByRole('link', { name: 'Eigene Produkte ansehen' }).getAttribute('href')).toBe('/my-products');
-    expect(screen.getByRole('button', { name: 'Bei der Empfehlung bleiben' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Empfehlung weiter ansehen' })).toBeTruthy();
     expect(importCreatorShare).toHaveBeenCalledWith(token, expect.objectContaining({
       idempotency_key: '00000000-0000-4000-8000-000000000001',
       preflight_fingerprint: 'fingerprint-1',
@@ -319,6 +542,44 @@ describe('CreatorShareImportPage', () => {
       target_mode: 'existing',
       target_stack_id: 101,
     }));
+  });
+
+  it.each([320, 390])('keeps every share radio compact with a touch-sized label at %spx', async (viewportWidth) => {
+    currentUser = { id: 11 };
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: viewportWidth });
+    window.dispatchEvent(new Event('resize'));
+    const token = `radio${viewportWidth}`.padEnd(32, 'r');
+    vi.mocked(getCreatorShare).mockResolvedValue(previewFor(token, 'Kompakte Auswahl', 'dose_recommendation', 'Alex Alltag'));
+    vi.mocked(getStacks).mockResolvedValue({
+      stacks: [{ id: 101, name: 'Mein Alltag', created_at: '2026-08-01T08:00:00.000Z' }],
+    });
+    vi.mocked(preflightCreatorShare).mockResolvedValue(checkedSelection({
+      similar_products: [similarProduct(31, 'Magnesium Eins'), similarProduct(32, 'Magnesium Zwei')],
+    }));
+
+    render(
+      <MemoryRouter initialEntries={[`/share/${token}`]}>
+        <Routes>
+          <Route path="/share/:token" element={<CreatorShareImportPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText('Empfohlen von Alex Alltag')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Änderungen ansehen' }));
+    expect(await screen.findByRole('radio', { name: 'Magnesium Eins' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Stimmt etwas mit dieser Empfehlung nicht?' }));
+
+    const radios = screen.getAllByRole('radio');
+    expect(radios.length).toBeGreaterThanOrEqual(8);
+    for (const radio of radios) {
+      expect(radio.className).toContain('shrink-0');
+      expect(radio.className).toContain('!w-5');
+      expect(radio.className).toContain('!p-0');
+      const label = radio.closest('label');
+      expect(label).toBeTruthy();
+      expect(label?.className).toMatch(/min-h-(11|14|16)/);
+    }
   });
 
   it('allows a full stack to keep a duplicate name and offers a clear alternative', async () => {
@@ -356,12 +617,12 @@ describe('CreatorShareImportPage', () => {
     );
 
     expect(await screen.findByText('Empfohlen von Creator A')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Auswahl prüfen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Änderungen ansehen' }));
     expect(await screen.findByText('Diesen Namen verwendest du bereits.')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Vorschlag verwenden: Abendroutine – von Creator A' })).toBeTruthy();
     expect(screen.getByText('Du kannst den Namen trotzdem behalten.')).toBeTruthy();
     expect(screen.getByText(/Ein neuer Stack „Abendroutine“ mit 3 Produkten wird angelegt/)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Jetzt bestätigen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Stack mit 3 Produkten anlegen' }));
     expect(await screen.findByText('Der neue Stack „Abendroutine“ wurde mit 3 Produkten angelegt.')).toBeTruthy();
   });
 
@@ -401,9 +662,9 @@ describe('CreatorShareImportPage', () => {
 
     expect(await screen.findByText('Empfohlen von Creator A')).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Name des neuen Stacks'), { target: { value: 'Nur A' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Auswahl prüfen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Änderungen ansehen' }));
     expect(await screen.findByText(/Ein neuer Stack „Nur A“/)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Jetzt bestätigen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Stack mit 1 Produkt anlegen' }));
     await waitFor(() => expect(importCreatorShare).toHaveBeenCalledTimes(1));
     expect(vi.mocked(importCreatorShare).mock.calls[0][0]).toBe(tokenA);
     expect(vi.mocked(importCreatorShare).mock.calls[0][1].idempotency_key).toBe('00000000-0000-4000-8000-000000000001');
@@ -440,9 +701,9 @@ describe('CreatorShareImportPage', () => {
     );
 
     expect(await screen.findByText('Empfohlen von Creator A')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Auswahl prüfen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Änderungen ansehen' }));
     expect(await screen.findByText(/Ein neuer Stack „Kurz verfügbar“/)).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Jetzt bestätigen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Stack mit 1 Produkt anlegen' }));
     expect(await screen.findByRole('heading', { name: 'Dieser Link ist abgelaufen.' })).toBeTruthy();
     expect(screen.queryByText('Das hat gerade nicht geklappt. Bitte versuche es noch einmal.')).toBeNull();
   });
@@ -465,12 +726,18 @@ describe('CreatorShareImportPage', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByRole('heading', { name: title })).toBeTruthy();
+    const recoveryHeading = await screen.findByRole('heading', { name: title });
+    const recoveryStatus = recoveryHeading.closest('[role="status"]');
+    expect(recoveryStatus).toBeTruthy();
+    expect(document.activeElement).toBe(recoveryStatus);
     expect(screen.getByText('Du kannst sie danach selbst senden.')).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Zu meinen Stacks' })).toBeTruthy();
     expect(screen.getAllByRole('link', { name: 'Zur Startseite' })).toHaveLength(1);
     fireEvent.click(screen.getByRole('button', { name: 'Nachricht an Creator kopieren' }));
     await waitFor(() => expect(screen.getByRole('button', { name: 'Nachricht kopiert' })).toBeTruthy());
+    const copyStatus = screen.getByRole('status');
+    expect(copyStatus.textContent).toContain('Zwischenablage kopiert');
+    expect(document.activeElement).toBe(copyStatus);
     expect(navigator.clipboard.writeText).toHaveBeenCalledTimes(1);
   });
 
@@ -490,7 +757,10 @@ describe('CreatorShareImportPage', () => {
 
     const error = await screen.findByText('Das hat gerade nicht geklappt. Bitte versuche es noch einmal.');
     expect(error.className).toContain('text-red-700');
-    fireEvent.click(screen.getByRole('button', { name: 'Erneut versuchen' }));
+    const retry = screen.getByRole('button', { name: 'Erneut versuchen' });
+    expect(retry.className).toContain('min-h-11');
+    expect(retry.className).toContain('border-2');
+    fireEvent.click(retry);
     expect(await screen.findByText('Empfohlen von Creator A')).toBeTruthy();
     expect(getCreatorShare).toHaveBeenCalledTimes(2);
   });
@@ -515,16 +785,20 @@ describe('CreatorShareImportPage', () => {
     );
 
     expect(await screen.findByText('Empfohlen von Creator A')).toBeTruthy();
-    expect((screen.getByRole('button', { name: 'Auswahl prüfen' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Änderungen ansehen' }) as HTMLButtonElement).disabled).toBe(true);
     rejectFirstLoad(new Error('network'));
     expect(await screen.findByText('Das hat gerade nicht geklappt. Bitte versuche es noch einmal.')).toBeTruthy();
-    expect((screen.getByRole('button', { name: 'Auswahl prüfen' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(document.activeElement).toBe(screen.getByRole('alert'));
+    expect((screen.getByRole('button', { name: 'Änderungen ansehen' }) as HTMLButtonElement).disabled).toBe(true);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Erneut versuchen' }));
+    const retry = screen.getByRole('button', { name: 'Erneut versuchen' });
+    expect(retry.className).toContain('min-h-11');
+    expect(retry.className).toContain('border-2');
+    fireEvent.click(retry);
     expect(await screen.findByRole('radio', { name: /In einen vorhandenen Stack/ })).toBeTruthy();
     fireEvent.click(screen.getByRole('radio', { name: /In einen vorhandenen Stack/ }));
     expect((screen.getByLabelText('Ziel-Stack') as HTMLSelectElement).value).toBe('909');
-    expect((screen.getByRole('button', { name: 'Auswahl prüfen' }) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByRole('button', { name: 'Änderungen ansehen' }) as HTMLButtonElement).disabled).toBe(false);
     expect(getStacks).toHaveBeenCalledTimes(2);
   });
 
@@ -544,11 +818,17 @@ describe('CreatorShareImportPage', () => {
 
     expect(await screen.findByRole('heading', { name: 'Dieser Link ist abgelaufen.' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Nachricht an Creator kopieren' }));
-    const copyError = await screen.findByText('Das hat gerade nicht geklappt. Bitte versuche es noch einmal.');
+    const copyError = await screen.findByText(/Das Kopieren hat nicht geklappt/);
     expect(copyError.className).toContain('text-red-700');
-    fireEvent.click(screen.getByRole('button', { name: 'Nachricht an Creator kopieren' }));
+    const copyAlert = screen.getByRole('alert');
+    expect(document.activeElement).toBe(copyAlert);
+    const retry = screen.getByRole('button', { name: 'Erneut kopieren' });
+    expect(retry.className).toContain('min-h-11');
+    fireEvent.click(retry);
     expect(await screen.findByRole('button', { name: 'Nachricht kopiert' })).toBeTruthy();
-    expect(screen.queryByText('Das hat gerade nicht geklappt. Bitte versuche es noch einmal.')).toBeNull();
+    const copyStatus = screen.getByRole('status');
+    expect(document.activeElement).toBe(copyStatus);
+    expect(screen.queryByText(/Das Kopieren hat nicht geklappt/)).toBeNull();
     expect(navigator.clipboard.writeText).toHaveBeenCalledTimes(2);
   });
 });

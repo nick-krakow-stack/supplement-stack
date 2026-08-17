@@ -47,7 +47,6 @@ type ShareableStackItem = StackItem & {
   name?: string;
   brand?: string | null;
   image_url?: string | null;
-  effect_summary?: string | null;
   product_type?: 'catalog' | 'user_product';
   serving_unit?: string | null;
   timing_label?: string | null;
@@ -744,7 +743,6 @@ export default function CreatorSharingPage() {
         product_name: item.name ?? null,
         brand: item.brand ?? null,
         image_url: item.image_url ?? null,
-        effect_summary: item.effect_summary ?? null,
         quantity: item.quantity,
         unit: item.serving_unit ?? null,
         intake_interval_days: Number.isSafeInteger(item.intake_interval_days) && Number(item.intake_interval_days) > 0

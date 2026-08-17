@@ -96,6 +96,15 @@ async function countUserRows(db: D1Database, table: string, userId: number): Pro
   }
 }
 
+async function authTableExists(db: D1Database, tableName: string): Promise<boolean> {
+  const row = await db.prepare(`
+    SELECT 1 AS present
+    FROM sqlite_master
+    WHERE type = 'table' AND name = ?
+  `).bind(tableName).first<{ present: number }>()
+  return row?.present === 1
+}
+
 function parseVerificationExpiry(value: number | string): number {
   if (typeof value === 'number') return value
   const numeric = Number(value)
@@ -310,7 +319,7 @@ auth.get('/google', async (c) => {
 })
 
 // GET /api/auth/google/callback (stub — Phase 5)
-auth.get('/google/callback', async (_c) => {
+auth.get('/google/callback', async () => {
   return Response.json({ error: 'Google OAuth callback noch nicht implementiert' }, { status: 501 })
 })
 
@@ -708,25 +717,26 @@ meApp.delete('/', async (c) => {
     countUserRows(c.env.DB, 'stacks', userId),
     countUserRows(c.env.DB, 'user_products', userId),
   ])
-  try {
-    await c.env.DB.prepare(`
-      INSERT INTO account_deletion_events (
-        deleted_user_id,
-        had_verified_email,
-        stack_count,
-        user_product_count
-      )
-      VALUES (?, ?, ?, ?)
-    `).bind(
-      userId,
-      row.email_verified_at ? 1 : 0,
-      stackCount,
-      userProductCount,
-    ).run()
-  } catch {
-    // Dashboard tracking table may not be migrated yet; deletion must still work.
+  const hasAccountDeletionEvents = await authTableExists(c.env.DB, 'account_deletion_events')
+  const hasShareImportUndos = await authTableExists(c.env.DB, 'creator_share_import_undos')
+  const deletionEventCountBefore = hasAccountDeletionEvents
+    ? (await c.env.DB.prepare(`
+      SELECT COUNT(*) AS count FROM account_deletion_events WHERE deleted_user_id = ?
+    `).bind(userId).first<{ count: number }>())?.count ?? 0
+    : 0
+  const coreStmts: D1PreparedStatement[] = []
+  if (hasShareImportUndos) {
+    coreStmts.push(c.env.DB.prepare(`
+      DELETE FROM creator_share_import_undos
+      WHERE user_id = ?
+        AND EXISTS (
+          SELECT 1 FROM share_import_operations operation
+          WHERE operation.id = creator_share_import_undos.operation_id
+            AND operation.user_id = ?
+        )
+    `).bind(userId, userId))
   }
-  const coreStmts = [
+  coreStmts.push(
     c.env.DB.prepare('DELETE FROM share_import_operations WHERE user_id = ?').bind(userId),
     c.env.DB.prepare('DELETE FROM product_link_reports WHERE user_id = ?').bind(userId),
     c.env.DB.prepare('DELETE FROM stack_item_link_bindings WHERE stack_item_id IN (SELECT item.id FROM stack_items item JOIN stacks stack ON stack.id = item.stack_id WHERE stack.user_id = ?)').bind(userId),
@@ -743,8 +753,52 @@ meApp.delete('/', async (c) => {
     c.env.DB.prepare('UPDATE stack_email_events SET user_id = NULL WHERE user_id = ?').bind(userId),
     c.env.DB.prepare('UPDATE product_link_clicks SET user_id = NULL WHERE user_id = ?').bind(userId),
     c.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(userId),
-  ]
+  )
+  if (hasAccountDeletionEvents) {
+    coreStmts.push(c.env.DB.prepare(`
+      INSERT INTO account_deletion_events (
+        deleted_user_id,
+        had_verified_email,
+        stack_count,
+        user_product_count
+      )
+      VALUES (?, ?, ?, ?)
+    `).bind(
+      userId,
+      row.email_verified_at ? 1 : 0,
+      stackCount,
+      userProductCount,
+    ))
+  }
   await c.env.DB.batch(coreStmts)
+
+  const coreReadback = await c.env.DB.prepare(`
+    SELECT
+      (SELECT COUNT(*) FROM users WHERE id = ?) AS users,
+      (SELECT COUNT(*) FROM share_import_operations WHERE user_id = ?) AS share_import_operations,
+      (SELECT COUNT(*) FROM stacks WHERE user_id = ?) AS stacks,
+      (SELECT COUNT(*) FROM user_products WHERE user_id = ?) AS user_products
+  `).bind(userId, userId, userId, userId).first<{
+    users: number
+    share_import_operations: number
+    stacks: number
+    user_products: number
+  }>()
+  const remainingUndos = hasShareImportUndos
+    ? (await c.env.DB.prepare(`
+      SELECT COUNT(*) AS count FROM creator_share_import_undos WHERE user_id = ?
+    `).bind(userId).first<{ count: number }>())?.count ?? 0
+    : 0
+  const deletionEventCountAfter = hasAccountDeletionEvents
+    ? (await c.env.DB.prepare(`
+      SELECT COUNT(*) AS count FROM account_deletion_events WHERE deleted_user_id = ?
+    `).bind(userId).first<{ count: number }>())?.count ?? 0
+    : 0
+  if (!coreReadback || Object.values(coreReadback).some((count) => count !== 0)
+    || remainingUndos !== 0
+    || (hasAccountDeletionEvents && deletionEventCountAfter !== deletionEventCountBefore + 1)) {
+    return c.json({ error: 'Die Kontolöschung konnte nicht sicher bestätigt werden.' }, 500)
+  }
 
   // Optionale Tabellen aus späteren Migrationen (0029+, 0031+, 0032+, 0033+).
   // Live-DB hat aktuell nur 0001-0022 angewendet — diese Tabellen fehlen evtl.

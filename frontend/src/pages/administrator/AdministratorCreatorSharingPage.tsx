@@ -4,7 +4,8 @@ import { AdminBadge, AdminButton, AdminCard, AdminEmpty, AdminError, AdminPageHe
 
 type Party = {
   id: number; type: string; name: string; slug: string; status: 'active' | 'blocked';
-  auto_catalog_approval: number; version: number; members_count: number; products_count: number; shares_count: number;
+  auto_catalog_approval: number; public_profile_image_url: string | null; version: number;
+  members_count: number; products_count: number; shares_count: number;
 };
 type Share = {
   id: number; token: string; entity_type: string; creator_name: string; snapshot_hash: string;
@@ -28,12 +29,26 @@ type AffiliateVersion = { id: number; shop_domain_id: number; shop_name: string;
 type DefaultShop = { shop_domain_id: number; version: number } | null;
 type ProductPick = { ingredient_id: number; ingredient_name: string; product_id: number; product_name: string; version: number };
 type ProductOwner = { id: number; name: string; brand: string | null; owner_party_id: number; owner_party_name: string };
+type ShareReportStatus = 'pending' | 'reviewed' | 'resolved' | 'dismissed';
+type ShareReport = {
+  id: number; share_link_id: number; category: 'outdated' | 'misleading' | 'safety' | 'other';
+  details: string | null; status: ShareReportStatus; version: number; created_at: string;
+  reviewed_at: string | null; resolution_note: string | null; token: string;
+  entity_type: string; share_title: string | null; creator_name: string;
+};
 
 const moderationTargetLabels: Record<ModerationTarget, string> = {
   general: 'Gesamte Empfehlung',
   title: 'Titel',
   creator_statement: 'Persönlicher Text',
   product: 'Produkt',
+};
+
+const reportCategoryLabels: Record<ShareReport['category'], string> = {
+  outdated: 'Nicht mehr aktuell',
+  misleading: 'Missverständlich',
+  safety: 'Möglicherweise unsicher',
+  other: 'Anderer Grund',
 };
 
 function moderationStatusLabel(share: Share) {
@@ -54,6 +69,7 @@ function moderationStatusTone(share: Share): 'neutral' | 'ok' | 'warn' | 'danger
 export default function AdministratorCreatorSharingPage() {
   const [parties, setParties] = useState<Party[]>([]);
   const [shares, setShares] = useState<Share[]>([]);
+  const [reports, setReports] = useState<ShareReport[]>([]);
   const [missingCodes, setMissingCodes] = useState<MissingCode[]>([]);
   const [shops, setShops] = useState<Shop[]>([]);
   const [selectedPartyId, setSelectedPartyId] = useState<number | null>(null);
@@ -62,7 +78,8 @@ export default function AdministratorCreatorSharingPage() {
   const [productPicks, setProductPicks] = useState<ProductPick[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [partyForm, setPartyForm] = useState({ name: '', slug: '', type: 'creator', owner_user_id: '' });
+  const [partyForm, setPartyForm] = useState({ name: '', slug: '', type: 'creator', owner_user_id: '', public_profile_image_url: '' });
+  const [profileImageUrl, setProfileImageUrl] = useState('');
   const [affiliateForm, setAffiliateForm] = useState({ shop_domain_id: '', code: '', link_template: '{url}?tag={code}', tracking_domain: '' });
   const [defaultShopId, setDefaultShopId] = useState('');
   const [pickForm, setPickForm] = useState({ ingredient_id: '', product_id: '' });
@@ -71,18 +88,21 @@ export default function AdministratorCreatorSharingPage() {
   const [newOwnerPartyId, setNewOwnerPartyId] = useState('');
   const [moderationDrafts, setModerationDrafts] = useState<Record<number, ModerationDraft>>({});
   const [moderatingShareId, setModeratingShareId] = useState<number | null>(null);
+  const [moderatingReportId, setModeratingReportId] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [partyResponse, shareResponse, missingResponse, shopResponse] = await Promise.all([
+      const [partyResponse, shareResponse, reportResponse, missingResponse, shopResponse] = await Promise.all([
         apiClient.get<{ parties: Party[] }>('/admin/creator-sharing/parties'),
         apiClient.get<{ shares: Share[] }>('/admin/creator-sharing/shares'),
+        apiClient.get<{ reports: ShareReport[] }>('/admin/creator-sharing/reports?status=open'),
         apiClient.get<{ shops: MissingCode[] }>('/admin/creator-sharing/missing-platform-codes'),
         apiClient.get<{ shops?: Shop[] }>('/admin/shop-domains'),
       ]);
       setParties(partyResponse.data.parties);
       setShares(shareResponse.data.shares);
+      setReports(reportResponse.data.reports);
       setMissingCodes(missingResponse.data.shops);
       setShops(shopResponse.data.shops ?? []);
       setSelectedPartyId((current) => current ?? partyResponse.data.parties.find((party) => party.type !== 'platform')?.id ?? null);
@@ -92,6 +112,10 @@ export default function AdministratorCreatorSharingPage() {
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    const selected = parties.find((party) => party.id === selectedPartyId);
+    setProfileImageUrl(selected?.public_profile_image_url ?? '');
+  }, [parties, selectedPartyId]);
   useEffect(() => {
     if (!selectedPartyId) { setAffiliateVersions([]); return; }
     apiClient.get<{ affiliate_versions: AffiliateVersion[]; default_shop: DefaultShop; product_picks: ProductPick[] }>(`/admin/creator-sharing/parties/${selectedPartyId}/settings`)
@@ -115,7 +139,7 @@ export default function AdministratorCreatorSharingPage() {
         ...partyForm,
         owner_user_id: partyForm.owner_user_id ? Number(partyForm.owner_user_id) : null,
       });
-      setPartyForm({ name: '', slug: '', type: 'creator', owner_user_id: '' });
+      setPartyForm({ name: '', slug: '', type: 'creator', owner_user_id: '', public_profile_image_url: '' });
       setNotice('Creator-/Markenpartei wurde angelegt.');
       await load();
     } catch (caught) { showError(caught, 'Partei konnte nicht angelegt werden.'); }
@@ -129,6 +153,48 @@ export default function AdministratorCreatorSharingPage() {
       });
       await load();
     } catch (caught) { showError(caught, 'Status konnte nicht geändert werden.'); }
+  };
+
+  const saveProfileImage = async () => {
+    const party = parties.find((entry) => entry.id === selectedPartyId);
+    if (!party) return;
+    setError(null); setNotice(null);
+    try {
+      await apiClient.patch(`/admin/creator-sharing/parties/${party.id}`, {
+        expected_version: party.version,
+        public_profile_image_url: profileImageUrl.trim() || null,
+      });
+      setNotice(profileImageUrl.trim()
+        ? 'Das freiwillige öffentliche Profilbild wurde gespeichert.'
+        : 'Das öffentliche Profilbild wurde entfernt.');
+      await load();
+    } catch (caught) { showError(caught, 'Das Profilbild konnte nicht gespeichert werden.'); }
+  };
+
+  const moderateReport = async (report: ShareReport, status: Exclude<ShareReportStatus, 'pending'>) => {
+    setError(null); setNotice(null); setModeratingReportId(report.id);
+    try {
+      await apiClient.patch(`/admin/creator-sharing/reports/${report.id}`, {
+        expected_version: report.version,
+        expected_status: report.status,
+        status,
+      });
+      setNotice(status === 'reviewed'
+        ? 'Die Meldung ist als geprüft markiert.'
+        : status === 'resolved'
+          ? 'Die Meldung ist erledigt.'
+          : 'Die Meldung wurde verworfen.');
+      await load();
+    } catch (caught: unknown) {
+      if ((caught as { response?: { status?: number } })?.response?.status === 409) {
+        await load();
+        setError('Diese Meldung wurde zwischenzeitlich bearbeitet. Die Liste wurde neu geladen.');
+      } else {
+        showError(caught, 'Die Meldung konnte nicht bearbeitet werden.');
+      }
+    } finally {
+      setModeratingReportId(null);
+    }
   };
 
   const moderationDraft = (share: Share): ModerationDraft => moderationDrafts[share.id] ?? {
@@ -279,11 +345,25 @@ export default function AdministratorCreatorSharingPage() {
           <label>Öffentlicher Kurzname<input value={partyForm.slug} onChange={(event) => setPartyForm((form) => ({ ...form, slug: event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-') }))} /></label>
           <label>Typ<select value={partyForm.type} onChange={(event) => setPartyForm((form) => ({ ...form, type: event.target.value }))}><option value="creator">Creator</option><option value="brand">Marke</option></select></label>
           <label>Kontoinhaber (Benutzer-ID, optional)<input type="number" min="1" value={partyForm.owner_user_id} onChange={(event) => setPartyForm((form) => ({ ...form, owner_user_id: event.target.value }))} /></label>
+          <label>Freiwilliges öffentliches Profilbild (optional)<input type="url" placeholder="https://… oder /api/r2/…" value={partyForm.public_profile_image_url} onChange={(event) => setPartyForm((form) => ({ ...form, public_profile_image_url: event.target.value }))} /></label>
         </div>
         <AdminButton variant="primary" onClick={createParty} disabled={!partyForm.name || !partyForm.slug}>Anlegen</AdminButton>
         <div className="admin-table-wrap" style={{ marginTop: 16 }}><table className="admin-table"><thead><tr><th>Name</th><th>Typ</th><th>Status</th><th>Produkte</th><th>Shares</th><th /></tr></thead><tbody>
           {parties.map((party) => <tr key={party.id}><td>{party.name}<div className="admin-muted">{party.slug}</div></td><td>{party.type}</td><td><AdminBadge tone={party.status === 'active' ? 'ok' : 'danger'}>{party.status}</AdminBadge></td><td>{party.products_count}</td><td>{party.shares_count}</td><td>{party.type !== 'platform' && <AdminButton size="sm" variant={party.status === 'active' ? 'danger' : 'default'} onClick={() => toggleParty(party)}>{party.status === 'active' ? 'Sperren' : 'Aktivieren'}</AdminButton>}</td></tr>)}
         </tbody></table></div>
+        <div className="mt-5 rounded-xl border border-slate-200 p-4">
+          <h3 className="font-semibold">Öffentliches Profilbild verwalten</h3>
+          <p className="admin-muted mt-1">Das Bild erscheint nur, wenn es hier freiwillig hinterlegt wurde. Ohne URL zeigt die öffentliche Empfehlung kein Profilbild und erfindet keinen Ersatz.</p>
+          <div className="admin-form-grid mt-3">
+            <label>Creator oder Marke<select value={selectedPartyId ?? ''} onChange={(event) => setSelectedPartyId(Number(event.target.value))}>{parties.filter((party) => party.type !== 'platform').map((party) => <option value={party.id} key={party.id}>{party.name}</option>)}</select></label>
+            <label>Sichere Bild-URL<input type="url" placeholder="https://… oder /api/r2/…" value={profileImageUrl} onChange={(event) => setProfileImageUrl(event.target.value)} /></label>
+            {profileImageUrl.trim() && <img src={profileImageUrl.trim()} alt="Vorschau des öffentlichen Profilbilds" className="h-20 w-20 rounded-full border border-slate-200 object-cover" />}
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <AdminButton variant="primary" onClick={saveProfileImage} disabled={!selectedPartyId}>Profilbild speichern</AdminButton>
+            <AdminButton onClick={() => setProfileImageUrl('')} disabled={!profileImageUrl}>Feld leeren</AdminButton>
+          </div>
+        </div>
       </AdminCard>
 
       <AdminCard title="Affiliate-Versionen" subtitle="Codes werden nie überschrieben; jede Änderung erzeugt eine neue Version." padded>
@@ -324,6 +404,34 @@ export default function AdministratorCreatorSharingPage() {
           </>}
         </div>
         {ownerProduct && <AdminButton onClick={saveProductOwner} disabled={!newOwnerPartyId || Number(newOwnerPartyId) === ownerProduct.owner_party_id}>Eigentümer ändern</AdminButton>}
+      </AdminCard>
+
+      <AdminCard title="Gemeldete Empfehlungen" subtitle="Öffentliche Meldungen enthalten nur den gewählten Grund und einen optionalen kurzen Hinweis. Prüfen, erledigen oder nachvollziehbar verwerfen." padded>
+        {reports.length === 0 ? <AdminEmpty>Keine offenen Meldungen.</AdminEmpty> : <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Empfehlung</th><th>Meldung</th><th>Status</th><th>Bearbeiten</th></tr></thead><tbody>
+          {reports.map((report) => {
+            const busy = moderatingReportId === report.id;
+            return <tr key={report.id}>
+              <td>
+                <strong>{report.share_title || 'Geteilte Empfehlung'}</strong>
+                <div className="admin-muted">von {report.creator_name} · Share #{report.share_link_id}</div>
+                <a className="font-semibold text-indigo-700 underline" href={`/share/${report.token}`} target="_blank" rel="noreferrer">Öffentliche Ansicht öffnen</a>
+              </td>
+              <td>
+                <strong>{reportCategoryLabels[report.category]}</strong>
+                <div className="mt-1">{report.details || <span className="admin-muted">Kein zusätzlicher Hinweis</span>}</div>
+                <div className="admin-muted mt-1">Eingegangen: {new Date(report.created_at).toLocaleString('de-DE')}</div>
+              </td>
+              <td><AdminBadge tone={report.status === 'pending' ? 'warn' : 'neutral'}>{report.status === 'pending' ? 'Offen' : 'Geprüft'}</AdminBadge></td>
+              <td>
+                <div className="flex flex-wrap gap-2">
+                  {report.status === 'pending' && <AdminButton size="sm" onClick={() => void moderateReport(report, 'reviewed')} disabled={busy}>Als geprüft markieren</AdminButton>}
+                  <AdminButton size="sm" variant="primary" onClick={() => void moderateReport(report, 'resolved')} disabled={busy}>Erledigt</AdminButton>
+                  <AdminButton size="sm" variant="danger" onClick={() => void moderateReport(report, 'dismissed')} disabled={busy}>Verwerfen</AdminButton>
+                </div>
+              </td>
+            </tr>;
+          })}
+        </tbody></table></div>}
       </AdminCard>
 
       <AdminCard title="Empfehlungen prüfen" subtitle="Freigeben oder mit einer klaren Rückmeldung ablehnen. Eine Ablehnung macht den Link vorläufig nicht öffentlich; der Creator kann die Empfehlung korrigieren." padded>

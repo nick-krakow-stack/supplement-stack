@@ -94,6 +94,7 @@ type StackMailItem = {
   dosage_text: string | null
   creator_statement_snapshot: string | null
   creator_snapshot_at: string | null
+  creator_party_name: string | null
 }
 
 type StackMailIngredient = {
@@ -409,12 +410,12 @@ function formatStackTimingForEmail(item: Pick<StackMailItem, 'timing_label' | 't
   if (managedLabel) return managedLabel
 
   const rawTiming = item.timing?.trim()
-  if (!rawTiming) return '-'
+  if (!rawTiming) return 'Keine Angabe'
 
   const mappedLabel = STACK_TIMING_EMAIL_LABELS[normalizeTimingDisplayKey(rawTiming)]
   if (mappedLabel) return mappedLabel
 
-  if (isEnumLikeTimingValue(rawTiming)) return 'Jederzeit'
+  if (isEnumLikeTimingValue(rawTiming)) return 'Keine Angabe'
 
   return rawTiming
 }
@@ -523,12 +524,11 @@ function buildStackEmailHtml(
         <td style="padding:14px 8px;border-bottom:1px solid #e5e7eb;">
           <strong style="font-size:15px;">${escapeHtml(item.name)}</strong>
           ${item.brand ? `<br><span style="color:#64748b;">${escapeHtml(item.brand)}</span>` : ''}
-          ${item.creator_statement_snapshot ? `<br><span style="display:inline-block;margin-top:6px;color:#475569;"><strong>Persönliche Creator-Notiz:</strong> ${escapeHtml(item.creator_statement_snapshot)}</span>` : ''}
         </td>
         <td style="padding:14px 8px;border-bottom:1px solid #e5e7eb;">${ingredientText}</td>
         <td style="padding:14px 8px;border-bottom:1px solid #e5e7eb;">
           <strong>${escapeHtml(item.dailyAmountLabel)}</strong>
-          ${item.dosage_text ? `<br><span style="color:#64748b;">Ziel: ${escapeHtml(item.dosage_text)}</span>` : ''}
+          ${item.dosage_text ? `<br><span style="color:#64748b;">Gespeicherte Mengenangabe: ${escapeHtml(item.dosage_text)}</span>` : ''}
           <br><span style="color:#64748b;">Intervall: ${escapeHtml(item.intakeIntervalLabel)}</span>
           ${item.daysSupply ? `<br><span style="color:#64748b;">reicht ca. ${item.daysSupply} Tage</span>` : ''}
         </td>
@@ -555,15 +555,25 @@ function buildStackEmailHtml(
       </div>`
     : ''
 
+  const creatorNames = Array.from(new Set([
+    stack.origin_party_name?.trim(),
+    ...items.map((item) => item.creator_party_name?.trim()),
+  ].filter((value): value is string => Boolean(value))))
+  const creatorStatements = Array.from(new Set(
+    items
+      .map((item) => item.creator_statement_snapshot?.trim())
+      .filter((value): value is string => Boolean(value)),
+  ))
   const creatorSnapshotDates = Array.from(new Set(
     items
       .map((item) => item.creator_snapshot_at ? formatCreatorSnapshotDate(item.creator_snapshot_at) : null)
       .filter((value): value is string => value !== null),
   ))
-  const creatorContext = stack.origin_party_name
+  const creatorContext = creatorNames.length > 0 || creatorStatements.length > 0 || creatorSnapshotDates.length > 0
     ? `<div style="margin:0 0 18px;padding:14px 16px;border-radius:12px;background:#eef2ff;border:1px solid #c7d2fe;">
-        <strong>Creator:</strong> ${escapeHtml(stack.origin_party_name)}
+        ${creatorNames.length > 0 ? `<strong>Creator-Herkunft:</strong> ${creatorNames.map(escapeHtml).join(', ')}` : '<strong>Übernommene Creator-Empfehlung</strong>'}
         ${creatorSnapshotDates.length > 0 ? `<br><strong>Stand der Creator-Empfehlung:</strong> ${creatorSnapshotDates.map(escapeHtml).join(', ')}` : ''}
+        ${creatorStatements.length > 0 ? `<div style="margin-top:8px;"><strong>Allgemeiner Creator-Hinweis:</strong>${creatorStatements.map((statement) => `<div style="margin-top:4px;">${escapeHtml(statement)}</div>`).join('')}</div>` : ''}
       </div>`
     : ''
   const stackNote = stack.description?.trim()
@@ -574,8 +584,8 @@ function buildStackEmailHtml(
 
   return `
     <div style="font-family:system-ui,-apple-system,Segoe UI,sans-serif;color:#0f172a;line-height:1.5;">
-      <h1 style="font-size:22px;margin:0 0 8px;">${escapeHtml(stack.name)}</h1>
-      <p style="margin:0 0 18px;color:#64748b;">Dein Supplement-Stack aus Supplement Stack.</p>
+      <h1 style="font-size:22px;margin:0 0 8px;">Dein Einnahmeplan: ${escapeHtml(stack.name)}</h1>
+      <p style="margin:0 0 18px;color:#64748b;">Deine gespeicherten Angaben aus Supplement Stack.</p>
       ${creatorContext}
       ${stackNote}
       <div style="margin:0 0 18px;padding:14px 16px;border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0;">
@@ -589,16 +599,17 @@ function buildStackEmailHtml(
             <th align="left" style="padding:10px 8px;">Foto</th>
             <th align="left" style="padding:10px 8px;">Produkt</th>
             <th align="left" style="padding:10px 8px;">Wirkstoff</th>
-            <th align="left" style="padding:10px 8px;">Tagesdosis</th>
-            <th align="left" style="padding:10px 8px;">Timing</th>
-            <th align="left" style="padding:10px 8px;">Wechselwirkung</th>
+            <th align="left" style="padding:10px 8px;">Deine geplante Menge pro Einnahmetag</th>
+            <th align="left" style="padding:10px 8px;">Einnahmezeit</th>
+            <th align="left" style="padding:10px 8px;">Hinweise</th>
             <th align="right" style="padding:10px 8px;">Kosten</th>
           </tr>
         </thead>
         <tbody>${rows || '<tr><td colspan="7" style="padding:12px 8px;color:#64748b;">Dieser Stack ist leer.</td></tr>'}</tbody>
       </table>
       <p style="margin:20px 0 0;color:#64748b;font-size:12px;">
-        Diese E-Mail dient deiner persönlichen Übersicht und ersetzt keine medizinische Beratung.
+        Diese E-Mail zeigt deine gespeicherten Angaben. Sie ist keine medizinische Dosierungsanweisung und ersetzt keine persönliche Beratung.
+        Informationen zur Verarbeitung findest du in der <a href="${escapeHtml(`${requestOrigin}/datenschutz`)}" style="color:#475569;">Datenschutzerklärung</a>.
       </p>
     </div>
   `
@@ -795,8 +806,6 @@ async function loadStackItems(
         p.container_count,
         COALESCE(si.timing, idp_form.timing, idp_base.timing, p.timing) AS timing,
         si.dosage_text AS dosage_text,
-        COALESCE(idp_form.effect_summary, idp_base.effect_summary) AS effect_summary,
-        COALESCE(idp_form.effect_summary, idp_base.effect_summary) AS ingredient_effect_summary,
         COALESCE(idp_form.timing, idp_base.timing) AS ingredient_timing,
         COALESCE(idp_form.timing_note, idp_base.timing_note) AS ingredient_timing_note,
         COALESCE(idp_form.intake_hint, idp_base.intake_hint) AS ingredient_intake_hint,
@@ -811,6 +820,7 @@ async function loadStackItems(
           datetime(source_share.created_at, 'unixepoch'),
           binding.bound_at
         ) AS creator_snapshot_at,
+        item_creator.name AS creator_party_name,
         si.amount_source,
         si.version,
         CASE
@@ -826,6 +836,7 @@ async function loadStackItems(
       JOIN products p ON p.id = si.catalog_product_id
       LEFT JOIN stack_item_link_bindings binding ON binding.stack_item_id = si.id
       LEFT JOIN share_links source_share ON source_share.id = si.source_share_link_id
+      LEFT JOIN parties item_creator ON item_creator.id = source_share.creator_party_id
       LEFT JOIN product_ingredients pi_main ON pi_main.id = (
         SELECT pi2.id
         FROM product_ingredients pi2
@@ -866,8 +877,6 @@ async function loadStackItems(
         up.container_count,
         COALESCE(si.timing, idp_form.timing, idp_base.timing, up.timing) AS timing,
         si.dosage_text AS dosage_text,
-        COALESCE(idp_form.effect_summary, idp_base.effect_summary) AS effect_summary,
-        COALESCE(idp_form.effect_summary, idp_base.effect_summary) AS ingredient_effect_summary,
         COALESCE(idp_form.timing, idp_base.timing) AS ingredient_timing,
         COALESCE(idp_form.timing_note, idp_base.timing_note) AS ingredient_timing_note,
         COALESCE(idp_form.intake_hint, idp_base.intake_hint) AS ingredient_intake_hint,
@@ -881,6 +890,7 @@ async function loadStackItems(
           json_extract(source_share.snapshot_json, '$.published_at'),
           datetime(source_share.created_at, 'unixepoch')
         ) AS creator_snapshot_at,
+        item_creator.name AS creator_party_name,
         si.amount_source,
         si.version,
         NULL AS click_url,
@@ -891,6 +901,7 @@ async function loadStackItems(
       FROM stack_items si
       JOIN user_products up ON up.id = si.user_product_id AND up.user_id = ?
       LEFT JOIN share_links source_share ON source_share.id = si.source_share_link_id
+      LEFT JOIN parties item_creator ON item_creator.id = source_share.creator_party_id
       LEFT JOIN user_product_ingredients upi_main ON upi_main.id = (
         SELECT upi2.id
         FROM user_product_ingredients upi2
@@ -1472,7 +1483,7 @@ stacks.post('/:id/email', async (c) => {
   const totalMonthly = preparedItems.reduce((sum, item) => sum + (item.monthlyCost ?? 0), 0)
   const result = await sendMail(c.env, {
     to: user.email,
-    subject: `Dein Supplement Stack: ${stack.name}`,
+    subject: `Dein Einnahmeplan: ${stack.name}`,
     html: buildStackEmailHtml(
       stack,
       preparedItems,

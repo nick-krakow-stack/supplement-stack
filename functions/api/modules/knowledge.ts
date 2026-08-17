@@ -14,6 +14,7 @@ import {
 } from './knowledge-source-projection'
 import {
   hashKnowledgeOverviewRows,
+  knowledgeOverviewCacheKey,
   loadKnowledgeOverview,
   refreshKnowledgeOverviewProjection,
 } from './knowledge-overview-projection'
@@ -536,9 +537,7 @@ knowledge.get('/', async (c) => {
   const startedAt = Date.now()
   const requestUrl = new URL(c.req.url)
   const bypassCache = requestUrl.searchParams.has('cfcheck')
-  const cacheUrl = new URL(c.req.url)
-  cacheUrl.search = ''
-  const cacheKey = new Request(cacheUrl.toString(), { method: 'GET' })
+  const cacheKey = knowledgeOverviewCacheKey(c.req.url)
   if (!bypassCache) {
     const cached = await caches.default.match(cacheKey)
     if (cached) return cached

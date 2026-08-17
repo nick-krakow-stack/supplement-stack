@@ -5,7 +5,7 @@ import type {
 
 export type KnowledgeOverviewResponse = {
   articles: KnowledgeArticleOverviewItem[];
-  nutrient_statuses?: KnowledgeNutrientStatus[];
+  nutrient_statuses: KnowledgeNutrientStatus[];
   total?: number;
 };
 
@@ -15,13 +15,28 @@ declare global {
   }
 }
 
-const OVERVIEW_SESSION_CACHE_KEY = 'knowledge-overview.v1';
+const OVERVIEW_SESSION_CACHE_KEY = 'knowledge-overview.v2';
 const OVERVIEW_SESSION_CACHE_TTL_MS = 5 * 60 * 1000;
 
 type CachedKnowledgeOverview = {
   cached_at: number;
   payload: KnowledgeOverviewResponse;
 };
+
+export function isKnowledgeOverviewResponse(value: unknown): value is KnowledgeOverviewResponse {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<KnowledgeOverviewResponse>;
+  return Array.isArray(candidate.articles)
+    && Array.isArray(candidate.nutrient_statuses)
+    && candidate.nutrient_statuses.every((status) => (
+      status !== null
+      && typeof status === 'object'
+      && Number.isInteger(Number(status.ingredient_id))
+      && Number(status.ingredient_id) > 0
+      && typeof status.category_key === 'string'
+      && Array.isArray(status.aliases)
+    ));
+}
 
 export function readCachedKnowledgeOverview(): KnowledgeOverviewResponse | null {
   try {
@@ -32,7 +47,7 @@ export function readCachedKnowledgeOverview(): KnowledgeOverviewResponse | null 
       window.sessionStorage.removeItem(OVERVIEW_SESSION_CACHE_KEY);
       return null;
     }
-    return cached.payload && Array.isArray(cached.payload.articles) ? cached.payload : null;
+    return isKnowledgeOverviewResponse(cached.payload) ? cached.payload : null;
   } catch {
     return null;
   }

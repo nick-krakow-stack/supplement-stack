@@ -7,3 +7,5 @@ export function fetchSubpartsHono(
     waitUntil: (promise: Promise<unknown>) => void;
   },
 ): Promise<Response>;
+
+export function subpartsKnowledgeOverviewCacheKey(requestUrl: string): Request;

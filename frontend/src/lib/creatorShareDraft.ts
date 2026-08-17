@@ -11,8 +11,54 @@ type StoredCreatorShareDraft = CreatorShareDraft & {
   updated_at: number;
 };
 
+const STORAGE_PREFIX = 'ss_creator_share_draft_v1:';
+
 function storageKey(token: string): string | null {
-  return /^[A-Za-z0-9_-]{24,80}$/.test(token) ? `ss_creator_share_draft_v1:${token}` : null;
+  return /^[A-Za-z0-9_-]{24,80}$/.test(token) ? `${STORAGE_PREFIX}${token}` : null;
+}
+
+function isValidStoredDraft(
+  parsed: Partial<StoredCreatorShareDraft>,
+  token: string,
+  now: number,
+): parsed is StoredCreatorShareDraft {
+  return parsed.version === 1
+    && parsed.token === token
+    && typeof parsed.updated_at === 'number'
+    && now >= parsed.updated_at
+    && now - parsed.updated_at <= CREATOR_SHARE_DRAFT_MAX_AGE_MS
+    && typeof parsed.stack_name === 'string'
+    && parsed.stack_name.length <= 120
+    && (parsed.target_stack_id === null
+      || (Number.isSafeInteger(parsed.target_stack_id) && Number(parsed.target_stack_id) > 0));
+}
+
+export function clearExpiredCreatorShareDrafts(
+  now = Date.now(),
+  storage: Storage = window.localStorage,
+): void {
+  try {
+    for (let index = storage.length - 1; index >= 0; index -= 1) {
+      const key = storage.key(index);
+      if (!key?.startsWith(STORAGE_PREFIX)) continue;
+      const raw = storage.getItem(key);
+      if (!raw) {
+        storage.removeItem(key);
+        continue;
+      }
+      try {
+        const parsed = JSON.parse(raw) as Partial<StoredCreatorShareDraft>;
+        const token = key.slice(STORAGE_PREFIX.length);
+        if (!storageKey(token) || !isValidStoredDraft(parsed, token, now)) {
+          storage.removeItem(key);
+        }
+      } catch {
+        storage.removeItem(key);
+      }
+    }
+  } catch {
+    // Storage can be unavailable without blocking the share flow.
+  }
 }
 
 export function readCreatorShareDraft(
@@ -20,21 +66,14 @@ export function readCreatorShareDraft(
   now = Date.now(),
   storage: Storage = window.localStorage,
 ): CreatorShareDraft | null {
+  clearExpiredCreatorShareDrafts(now, storage);
   const key = storageKey(token);
   if (!key) return null;
   try {
     const raw = storage.getItem(key);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<StoredCreatorShareDraft>;
-    const valid = parsed.version === 1
-      && parsed.token === token
-      && typeof parsed.updated_at === 'number'
-      && now >= parsed.updated_at
-      && now - parsed.updated_at <= CREATOR_SHARE_DRAFT_MAX_AGE_MS
-      && typeof parsed.stack_name === 'string'
-      && parsed.stack_name.length <= 120
-      && (parsed.target_stack_id === null || (Number.isSafeInteger(parsed.target_stack_id) && Number(parsed.target_stack_id) > 0));
-    if (!valid) {
+    if (!isValidStoredDraft(parsed, token, now)) {
       storage.removeItem(key);
       return null;
     }

@@ -21,6 +21,7 @@ const party = {
   slug: 'test-creator',
   status: 'active',
   auto_catalog_approval: 0,
+  public_profile_image_url: null,
   version: 3,
   members_count: 1,
   products_count: 4,
@@ -47,6 +48,22 @@ const share = {
   views: 91,
   imports: 13,
 };
+
+const report = {
+  id: 71,
+  share_link_id: 41,
+  category: 'misleading',
+  details: 'Der Zeitpunkt ist schwer verständlich.',
+  status: 'pending',
+  version: 1,
+  created_at: '2026-08-17T08:00:00.000Z',
+  reviewed_at: null,
+  resolution_note: null,
+  token: 'creator-share-token',
+  entity_type: 'stack',
+  share_title: 'Mein Morgen-Stack',
+  creator_name: 'Test Creator',
+};
 let visibleShare = share;
 
 function apiResponse(data: unknown) {
@@ -59,6 +76,7 @@ describe('AdministratorCreatorSharingPage moderation', () => {
     vi.mocked(apiClient.get).mockReset().mockImplementation((url) => {
       if (url === '/admin/creator-sharing/parties') return apiResponse({ parties: [party] });
       if (url === '/admin/creator-sharing/shares') return apiResponse({ shares: [visibleShare] });
+      if (url === '/admin/creator-sharing/reports?status=open') return apiResponse({ reports: [report] });
       if (url === '/admin/creator-sharing/missing-platform-codes') return apiResponse({ shops: [] });
       if (url === '/admin/shop-domains') return apiResponse({ shops: [] });
       if (url === `/admin/creator-sharing/parties/${party.id}/settings`) {
@@ -76,7 +94,7 @@ describe('AdministratorCreatorSharingPage moderation', () => {
   it('hides legacy counters and sends a fully bound rejection with a helpful target', async () => {
     render(<AdministratorCreatorSharingPage />);
 
-    expect(await screen.findByText('Mein Morgen-Stack')).toBeTruthy();
+    expect((await screen.findAllByText('Mein Morgen-Stack')).length).toBeGreaterThan(0);
     expect(screen.queryByText('Aufrufe / Importe')).toBeNull();
     expect(document.body.textContent).not.toContain('91 / 13');
     expect(screen.getByText('Korrektur von #39')).toBeTruthy();
@@ -154,5 +172,36 @@ describe('AdministratorCreatorSharingPage moderation', () => {
     expect(screen.getByRole('button', { name: 'Freigeben' }).hasAttribute('disabled')).toBe(true);
     expect(screen.getByRole('button', { name: 'Mit Rückmeldung ablehnen' }).hasAttribute('disabled')).toBe(true);
     expect(apiClient.patch).not.toHaveBeenCalled();
+  });
+
+  it('maintains the optional public profile image through the guarded party editor', async () => {
+    render(<AdministratorCreatorSharingPage />);
+
+    const input = await screen.findByLabelText('Sichere Bild-URL');
+    expect(screen.queryByAltText('Vorschau des öffentlichen Profilbilds')).toBeNull();
+    fireEvent.change(input, { target: { value: 'https://images.example/creator.jpg' } });
+    expect(screen.getByAltText('Vorschau des öffentlichen Profilbilds').getAttribute('src'))
+      .toBe('https://images.example/creator.jpg');
+    fireEvent.click(screen.getByRole('button', { name: 'Profilbild speichern' }));
+
+    await waitFor(() => expect(apiClient.patch).toHaveBeenCalledWith(
+      '/admin/creator-sharing/parties/12',
+      { expected_version: 3, public_profile_image_url: 'https://images.example/creator.jpg' },
+    ));
+    expect(await screen.findByText('Das freiwillige öffentliche Profilbild wurde gespeichert.')).toBeTruthy();
+  });
+
+  it('shows the public report reason and uses exact status/version guards when moderating it', async () => {
+    render(<AdministratorCreatorSharingPage />);
+
+    expect(await screen.findByText('Missverständlich')).toBeTruthy();
+    expect(screen.getByText('Der Zeitpunkt ist schwer verständlich.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Als geprüft markieren' }));
+
+    await waitFor(() => expect(apiClient.patch).toHaveBeenCalledWith(
+      '/admin/creator-sharing/reports/71',
+      { expected_version: 1, expected_status: 'pending', status: 'reviewed' },
+    ));
+    expect(await screen.findByText('Die Meldung ist als geprüft markiert.')).toBeTruthy();
   });
 });

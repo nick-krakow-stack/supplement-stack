@@ -5,6 +5,7 @@ import publicStats from '../../../functions/api/modules/public-stats.ts';
 import {
   auditKnowledgeOverviewProjection,
   hashKnowledgeOverviewRows,
+  knowledgeOverviewCacheKey,
   loadLiveKnowledgeOverviewRows,
   refreshKnowledgeOverviewProjection,
 } from '../../../functions/api/modules/knowledge-overview-projection.ts';
@@ -26,6 +27,10 @@ export function auditProductionKnowledgeOverviewProjection(db) {
 
 export function hashProductionKnowledgeOverviewRows(rows) {
   return hashKnowledgeOverviewRows(rows);
+}
+
+export function productionKnowledgeOverviewCacheKey(requestUrl) {
+  return knowledgeOverviewCacheKey(requestUrl);
 }
 
 export function loadProductionKnowledgeOverviewRows(db) {

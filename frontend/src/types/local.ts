@@ -139,8 +139,6 @@ export interface Product {
   ingredient_intake_hint?: string | null;
   dosage_text?: string;
   intake_interval_days?: number;
-  ingredient_effect_summary?: string | null;
-  effect_summary?: string;
   warning_title?: string;
   warning_message?: string;
   warning_type?: string;

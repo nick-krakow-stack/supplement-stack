@@ -18,7 +18,10 @@ export type KnowledgeOverviewNutrientStatus = {
   ingredient_id: number
   name: string | null
   category: string | null
+  category_key: string
+  solubility: 'fat' | 'water' | null
   description: string | null
+  aliases: string[]
   has_dge: boolean
   has_studies: boolean
 }
@@ -27,6 +30,15 @@ export type KnowledgeOverviewPayload = {
   articles: KnowledgeOverviewArticle[]
   nutrient_statuses: KnowledgeOverviewNutrientStatus[]
   total: number
+}
+
+export const KNOWLEDGE_OVERVIEW_CACHE_PAYLOAD_VERSION = 'v2'
+
+export function knowledgeOverviewCacheKey(requestUrl: string): Request {
+  const cacheUrl = new URL('/api/knowledge', requestUrl)
+  cacheUrl.search = ''
+  cacheUrl.searchParams.set('__payload', KNOWLEDGE_OVERVIEW_CACHE_PAYLOAD_VERSION)
+  return new Request(cacheUrl.toString(), { method: 'GET' })
 }
 
 type OverviewRowKind = 'article' | 'status'
@@ -80,6 +92,32 @@ type D1RunResultLike = {
 
 const OVERVIEW_CTE = `
   WITH
+  ordered_ingredient_aliases AS (
+    SELECT DISTINCT ingredient_id, trim(synonym) AS synonym
+    FROM ingredient_synonyms
+    WHERE trim(COALESCE(synonym, '')) <> ''
+    ORDER BY ingredient_id ASC, synonym COLLATE NOCASE ASC
+  ),
+  ingredient_aliases AS (
+    SELECT ingredient_id, json_group_array(synonym) AS aliases_json
+    FROM ordered_ingredient_aliases
+    GROUP BY ingredient_id
+  ),
+  overview_descriptions AS (
+    SELECT
+      profile.ingredient_id,
+      COALESCE(
+        NULLIF(trim(translation.effect_summary), ''),
+        NULLIF(trim(profile.effect_summary), '')
+      ) AS description
+    FROM ingredient_display_profiles profile
+    LEFT JOIN display_profile_translations translation
+      ON translation.display_profile_id = profile.id
+     AND translation.language = 'de'
+    WHERE profile.form_id IS NULL
+      AND profile.sub_ingredient_id IS NULL
+      AND profile.part_id IS NULL
+  ),
   ordered_article_ingredients AS (
     SELECT
       kai.article_slug,
@@ -178,11 +216,31 @@ const OVERVIEW_CTE = `
         'ingredient_id', i.id,
         'name', i.name,
         'category', i.category,
-        'description', i.description,
+        'category_key', CASE
+          WHEN lower(COALESCE(i.category, '')) LIKE 'vitamin%' THEN 'vitamine'
+          WHEN lower(COALESCE(i.category, '')) = 'mineral' THEN 'mineralstoffe'
+          WHEN lower(COALESCE(i.category, '')) = 'trace_element' THEN 'spurenelemente'
+          WHEN lower(COALESCE(i.category, '')) IN ('amino_acid', 'amino_acids', 'amino_acids_proteins', 'amino_acid_protein') THEN 'aminosaeuren_proteine'
+          WHEN lower(COALESCE(i.category, '')) = 'fatty_acid' THEN 'fettsaeuren'
+          WHEN lower(COALESCE(i.category, '')) IN ('plant_extract', 'plant_extracts', 'adaptogen', 'adaptogens') THEN 'pflanzenstoffe_extrakte'
+          WHEN lower(COALESCE(i.category, '')) = 'medicinal_mushroom' THEN 'heilpilze'
+          WHEN lower(COALESCE(i.category, '')) IN ('enzyme', 'enzymes', 'enzyme_coenzyme') THEN 'enzyme'
+          WHEN lower(COALESCE(i.category, '')) IN ('probiotic', 'probiotics') THEN 'probiotika'
+          ELSE 'sonstige'
+        END,
+        'solubility', CASE
+          WHEN lower(COALESCE(i.category, '')) = 'vitamin_fat_soluble' THEN 'fat'
+          WHEN lower(COALESCE(i.category, '')) = 'vitamin_water_soluble' THEN 'water'
+          ELSE NULL
+        END,
+        'description', od.description,
+        'aliases', json(COALESCE(ia.aliases_json, '[]')),
         'has_dge', CASE WHEN ds.has_dge = 1 THEN json('true') ELSE json('false') END,
         'has_studies', CASE WHEN ss.has_studies = 1 THEN json('true') ELSE json('false') END
       ) AS payload_json
     FROM ingredients i
+    LEFT JOIN ingredient_aliases ia ON ia.ingredient_id = i.id
+    LEFT JOIN overview_descriptions od ON od.ingredient_id = i.id
     LEFT JOIN dge_status ds ON ds.ingredient_id = i.id
     LEFT JOIN study_status ss ON ss.ingredient_id = i.id
     WHERE i.is_active = 1
@@ -296,11 +354,23 @@ function parseOverviewStatus(value: unknown): KnowledgeOverviewNutrientStatus | 
   const row = value as Record<string, unknown>
   const ingredientId = Number(row.ingredient_id)
   if (!Number.isInteger(ingredientId) || ingredientId <= 0) return null
+  const aliases = Array.isArray(row.aliases)
+    ? [...new Set(row.aliases.flatMap((alias) => {
+      if (typeof alias !== 'string') return []
+      const trimmed = alias.trim()
+      return trimmed ? [trimmed] : []
+    }))]
+    : []
+  const rawDescription = typeof row.description === 'string' ? row.description.trim() : ''
+  const descriptionHasEncodingError = /\uFFFD|\u00C3.|\u00C2.|[A-Za-zÄÖÜäöüß]\?[A-Za-zÄÖÜäöüß]/.test(rawDescription)
   return {
     ingredient_id: ingredientId,
     name: typeof row.name === 'string' ? row.name : null,
     category: typeof row.category === 'string' ? row.category : null,
-    description: typeof row.description === 'string' ? row.description : null,
+    category_key: typeof row.category_key === 'string' ? row.category_key : 'sonstige',
+    solubility: row.solubility === 'fat' || row.solubility === 'water' ? row.solubility : null,
+    description: rawDescription && !descriptionHasEncodingError ? rawDescription : null,
+    aliases,
     has_dge: row.has_dge === true || row.has_dge === 1,
     has_studies: row.has_studies === true || row.has_studies === 1,
   }
@@ -400,7 +470,10 @@ async function projectionIsCurrent(state: KnowledgeOverviewProjectionState): Pro
       try {
         const payload = JSON.parse(row.payload_json) as Record<string, unknown>
         return Object.prototype.hasOwnProperty.call(payload, 'category')
+          && Object.prototype.hasOwnProperty.call(payload, 'category_key')
+          && Object.prototype.hasOwnProperty.call(payload, 'solubility')
           && Object.prototype.hasOwnProperty.call(payload, 'description')
+          && Array.isArray(payload.aliases)
       } catch {
         return false
       }

@@ -5,9 +5,12 @@ import {
   getCreatorShare,
   importCreatorShare,
   preflightCreatorShare,
+  reportCreatorShare,
+  undoCreatorShareImport,
   type CreatorShareComparison,
   type CreatorSharePreflight,
   type CreatorSharePreview,
+  type CreatorShareReportCategory,
   type CreatorShareSaveResult,
   type CreatorShareTargetSelection,
 } from '../api/creatorSharing';
@@ -21,6 +24,23 @@ import { authPath, currentLocationReturnTo } from '../lib/returnTo';
 
 type UnavailableKind = 'pending' | 'paused' | 'expired' | 'unavailable' | 'unknown';
 type Decision = 'keep' | 'replace';
+
+const REPORT_CATEGORIES: Array<{ value: CreatorShareReportCategory; label: string; description: string }> = [
+  { value: 'outdated', label: 'Nicht mehr aktuell', description: 'Produkte oder Angaben wirken veraltet.' },
+  { value: 'misleading', label: 'Missverständlich', description: 'Die Empfehlung kann leicht falsch verstanden werden.' },
+  { value: 'safety', label: 'Möglicherweise unsicher', description: 'Eine Angabe sollte besonders geprüft werden.' },
+  { value: 'other', label: 'Anderer Grund', description: 'Etwas anderes sollte sich unser Team ansehen.' },
+];
+
+const SHARE_RADIO_CLASS = 'mt-0.5 !h-5 !w-5 min-w-5 shrink-0 !p-0 accent-indigo-600';
+
+function validImportedItemCount(value: number | undefined): number | null {
+  return Number.isSafeInteger(value) && Number(value) >= 0 ? Number(value) : null;
+}
+
+function undoDeadlineHasPassed(expiresAt: number): boolean {
+  return !Number.isFinite(expiresAt) || expiresAt * 1000 <= Date.now();
+}
 
 function errorData(caught: unknown): { code?: string; error?: string } {
   return (caught as { response?: { data?: { code?: string; error?: string } } })?.response?.data ?? {};
@@ -47,18 +67,36 @@ function selectionFor(
     : { target_mode: 'new', stack_name: stackName };
 }
 
-function Comparison({ title, value }: { title: string; value: CreatorShareComparison }) {
+function comparisonDifferences(first: CreatorShareComparison, second: CreatorShareComparison): string[] {
+  const differences: string[] = [];
+  if (first.quantity !== second.quantity || (first.unit ?? '').trim() !== (second.unit ?? '').trim()) differences.push('Menge');
+  if ((first.dosage_text ?? '').trim() !== (second.dosage_text ?? '').trim()) differences.push('Einnahme');
+  if (first.intake_interval_days !== second.intake_interval_days) differences.push('Häufigkeit');
+  if ((first.timing_label ?? '').trim() !== (second.timing_label ?? '').trim()) differences.push('Zeitpunkt');
+  return differences;
+}
+
+function Comparison({
+  title,
+  value,
+  differences,
+}: {
+  title: string;
+  value: CreatorShareComparison;
+  differences: ReadonlySet<string>;
+}) {
   const interval = formatRecommendationInterval(value.intake_interval_days);
   const timingLabel = value.timing_label?.trim() || null;
+  const rowClass = (name: string) => differences.has(name) ? 'rounded-md bg-amber-100 px-2 py-1' : 'px-2 py-1';
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4">
       <h4 className="font-semibold text-slate-900">{title}</h4>
       <p className="mt-2 font-medium">{value.product_name}</p>
       <dl className="mt-3 space-y-1 text-sm text-slate-700">
-        <div><dt className="inline font-medium">Menge: </dt><dd className="inline">{formatRecommendationAmount(value.quantity, value.unit)}</dd></div>
-        {value.dosage_text && <div><dt className="inline font-medium">Einnahme: </dt><dd className="inline">{value.dosage_text}</dd></div>}
-        {interval && <div><dt className="inline font-medium">Wie oft: </dt><dd className="inline">{interval}</dd></div>}
-        <div><dt className="inline font-medium">Wann: </dt><dd className="inline">{timingLabel ?? 'Keine Angabe'}</dd></div>
+        <div className={rowClass('Menge')}>{differences.has('Menge') && <span className="sr-only">Unterschied: </span>}<dt className="inline font-medium">Menge: </dt><dd className="inline">{formatRecommendationAmount(value.quantity, value.unit)}</dd></div>
+        <div className={rowClass('Einnahme')}>{differences.has('Einnahme') && <span className="sr-only">Unterschied: </span>}<dt className="inline font-medium">Einnahme: </dt><dd className="inline">{value.dosage_text?.trim() || 'Keine Angabe'}</dd></div>
+        <div className={rowClass('Häufigkeit')}>{differences.has('Häufigkeit') && <span className="sr-only">Unterschied: </span>}<dt className="inline font-medium">Wie oft: </dt><dd className="inline">{interval ?? 'Keine Angabe'}</dd></div>
+        <div className={rowClass('Zeitpunkt')}>{differences.has('Zeitpunkt') && <span className="sr-only">Unterschied: </span>}<dt className="inline font-medium">Wann: </dt><dd className="inline">{timingLabel ?? 'Keine Angabe'}</dd></div>
       </dl>
     </div>
   );
@@ -67,6 +105,9 @@ function Comparison({ title, value }: { title: string; value: CreatorShareCompar
 function RecoveryCard({ kind, user }: { kind: UnavailableKind; user: boolean }) {
   const [copied, setCopied] = useState(false);
   const [copyError, setCopyError] = useState(false);
+  const recoveryRef = useRef<HTMLElement>(null);
+  const copySuccessRef = useRef<HTMLParagraphElement>(null);
+  const copyErrorRef = useRef<HTMLDivElement>(null);
   const content = {
     pending: {
       title: 'Diese Empfehlung wird noch geprüft.',
@@ -94,6 +135,19 @@ function RecoveryCard({ kind, user }: { kind: UnavailableKind; user: boolean }) 
       message: 'Hallo, ich kann deine Empfehlung über diesen Link nicht finden. Kannst du mir den aktuellen Link schicken?',
     },
   }[kind];
+
+  useEffect(() => {
+    recoveryRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    if (copied) copySuccessRef.current?.focus();
+  }, [copied]);
+
+  useEffect(() => {
+    if (copyError) copyErrorRef.current?.focus();
+  }, [copyError]);
+
   const copyMessage = async () => {
     setCopyError(false);
     try {
@@ -105,11 +159,36 @@ function RecoveryCard({ kind, user }: { kind: UnavailableKind; user: boolean }) 
     }
   };
   return (
-    <section className="card max-w-2xl mx-auto">
+    <section
+      className="card max-w-2xl mx-auto outline-none"
+      ref={recoveryRef}
+      role={!copied && !copyError ? 'status' : undefined}
+      aria-live={!copied && !copyError ? 'polite' : undefined}
+      tabIndex={-1}
+    >
       <h1 className="text-xl font-semibold">{content.title}</h1>
       <p className="mt-3 text-slate-600">{content.text}</p>
-      <button type="button" className="mt-5" onClick={copyMessage}>{copied ? 'Nachricht kopiert' : 'Nachricht an Creator kopieren'}</button>
-      {copyError && <p className="mt-3 text-sm text-red-700">Das hat gerade nicht geklappt. Bitte versuche es noch einmal.</p>}
+      <button
+        type="button"
+        className="mt-5 inline-flex min-h-11 items-center justify-center rounded-xl bg-indigo-600 px-4 py-3 font-bold text-white hover:bg-indigo-700"
+        onClick={copyMessage}
+      >
+        {copied ? 'Nachricht kopiert' : copyError ? 'Erneut kopieren' : 'Nachricht an Creator kopieren'}
+      </button>
+      {copied && (
+        <p className="mt-3 text-sm font-medium text-emerald-800 outline-none" role="status" aria-live="polite" ref={copySuccessRef} tabIndex={-1}>
+          Die Nachricht wurde in deine Zwischenablage kopiert.
+        </p>
+      )}
+      {copyError && (
+        <div className="mt-3 outline-none" role="alert" ref={copyErrorRef} tabIndex={-1}>
+          <p className="text-sm text-red-700">Das Kopieren hat nicht geklappt. Markiere den Text und kopiere ihn selbst:</p>
+          <label className="mt-2 block text-sm font-bold text-slate-700">
+            Nachricht zum Kopieren
+            <textarea className="input mt-1 min-h-28" readOnly value={content.message} onFocus={(event) => event.currentTarget.select()} />
+          </label>
+        </div>
+      )}
       <p className="mt-2 text-sm text-slate-500">Du kannst sie danach selbst senden.</p>
       <div className="mt-5 flex flex-wrap gap-4">
         {user && <Link to="/stacks" className="text-indigo-600">Zu meinen Stacks</Link>}
@@ -119,9 +198,30 @@ function RecoveryCard({ kind, user }: { kind: UnavailableKind; user: boolean }) 
   );
 }
 
-export function ResultCard({ result, onStay }: { result: CreatorShareSaveResult; onStay: () => void }) {
+export function ResultCard({
+  result,
+  shareToken,
+  onStay,
+}: {
+  result: CreatorShareSaveResult;
+  shareToken?: string;
+  onStay: () => void;
+}) {
+  const [undoState, setUndoState] = useState<'idle' | 'busy' | 'done' | 'error' | 'expired'>(() => (
+    result.undo && undoDeadlineHasPassed(result.undo.expires_at) ? 'expired' : 'idle'
+  ));
+  const [undoMessage, setUndoMessage] = useState<string | null>(null);
+  const [undoResult, setUndoResult] = useState<Awaited<ReturnType<typeof undoCreatorShareImport>> | null>(null);
+  const undoConfirmationRef = useRef<HTMLDivElement>(null);
+  const undoExpirationRef = useRef<HTMLParagraphElement>(null);
+  const importedItemCount = validImportedItemCount(result.imported_items);
+  const undoDeadlineLabel = result.undo && Number.isFinite(result.undo.expires_at)
+    ? new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit' }).format(new Date(result.undo.expires_at * 1000))
+    : null;
   const message = result.action === 'stack_created'
-    ? `Der neue Stack „${result.stack_name}“ wurde mit ${result.imported_items ?? 0} Produkten angelegt.`
+    ? importedItemCount === null
+      ? `Der neue Stack „${result.stack_name}“ wurde angelegt.`
+      : `Der neue Stack „${result.stack_name}“ wurde mit ${importedItemCount} ${importedItemCount === 1 ? 'Produkt' : 'Produkten'} angelegt.`
     : result.action === 'added'
       ? result.created_stack
         ? `Der neue Stack „${result.stack_name}“ wurde angelegt. ${result.creator_product_name ?? 'Das Produkt'} wurde hinzugefügt.`
@@ -129,18 +229,250 @@ export function ResultCard({ result, onStay }: { result: CreatorShareSaveResult;
       : result.action === 'kept_existing'
         ? `${result.existing_product_name ?? 'Dein vorhandenes Produkt'} bleibt in „${result.stack_name}“ unverändert. ${result.creator_product_name ?? 'Die Creator-Empfehlung'} wurde nicht hinzugefügt.`
         : `In „${result.stack_name}“ wurde nur ${result.replaced_product_name ?? 'das gewählte Produkt'} durch ${result.creator_product_name ?? 'die Creator-Empfehlung'} ersetzt.`;
+
+  useEffect(() => {
+    if (!result.undo || !shareToken || undoState === 'done' || undoState === 'expired') return undefined;
+    let timer: number | undefined;
+    const scheduleExpiry = () => {
+      const remainingMs = result.undo!.expires_at * 1000 - Date.now();
+      if (!Number.isFinite(remainingMs) || remainingMs <= 0) {
+        setUndoState('expired');
+        return;
+      }
+      timer = window.setTimeout(scheduleExpiry, Math.min(remainingMs, 2_147_483_647));
+    };
+    scheduleExpiry();
+    return () => {
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [result.undo, shareToken, undoState]);
+
+  useEffect(() => {
+    if (undoState === 'done') undoConfirmationRef.current?.focus();
+    if (undoState === 'expired') undoExpirationRef.current?.focus();
+  }, [undoState]);
+
+  const runUndo = async () => {
+    if (!shareToken || !result.undo || undoState === 'busy' || undoState === 'done' || undoState === 'expired') return;
+    if (undoDeadlineHasPassed(result.undo.expires_at)) {
+      setUndoState('expired');
+      return;
+    }
+    setUndoState('busy');
+    setUndoMessage(null);
+    try {
+      const restored = await undoCreatorShareImport(shareToken, {
+        undo_token: result.undo.token,
+        expected_version: result.undo.version,
+        expected_stack_id: result.undo.stack_id,
+        expected_stack_item_id: result.undo.stack_item_id,
+      });
+      setUndoResult(restored);
+      setUndoState('done');
+    } catch (caught: unknown) {
+      const code = errorData(caught).code;
+      if (code === 'UNDO_EXPIRED') {
+        setUndoState('expired');
+        setUndoMessage(null);
+      } else {
+        setUndoState('error');
+        setUndoMessage(code === 'UNDO_TARGET_CHANGED'
+          ? 'Dein Stack wurde inzwischen geändert. Deshalb wurde nichts rückgängig gemacht.'
+          : 'Das Rückgängigmachen hat nicht geklappt. Bitte prüfe deinen Stack.');
+      }
+    }
+  };
+  const undone = undoState === 'done';
   return (
-    <section className="card border-emerald-200 bg-emerald-50">
-      <h2 className="text-lg font-semibold text-emerald-900">Alles erledigt</h2>
-      <p className="mt-2 text-emerald-900">{message}</p>
-      {result.replaced_user_product_retained && (
+    <section className="card border-emerald-200 bg-emerald-50" tabIndex={-1}>
+      <div
+        className="outline-none"
+        ref={undone ? undoConfirmationRef : undefined}
+        role={undone ? 'status' : undefined}
+        aria-live={undone ? 'polite' : undefined}
+        tabIndex={undone ? -1 : undefined}
+      >
+        <h2 className="text-lg font-semibold text-emerald-900">{undone ? 'Änderung rückgängig gemacht' : 'Alles erledigt'}</h2>
+        <p className="mt-2 text-emerald-900">
+          {undone ? undoResult?.restored_summary ?? `Der vorherige Stand in „${result.stack_name}“ wurde wiederhergestellt.` : message}
+        </p>
+      </div>
+      {result.replaced_user_product_retained && !undone && (
         <p className="mt-2 text-sm text-emerald-900">Dein eigenes Produkt und seine private Notiz bleiben unter „Eigene Produkte“ gespeichert.</p>
       )}
-      <div className="mt-5 flex flex-wrap gap-4">
-        <Link className="btn" to={`/stacks?stack=${result.stack_id}`}>Stack jetzt ansehen</Link>
-        <button type="button" onClick={onStay}>Bei der Empfehlung bleiben</button>
+      {result.undo && shareToken && !undone && (
+        <div className="mt-4 rounded-xl border border-emerald-300 bg-white p-4 text-sm text-slate-700">
+          <p className="font-bold text-slate-900">Kurz rückgängig machen</p>
+          <p className="mt-1">{result.undo.summary}</p>
+          {undoState === 'expired' ? (
+            <p className="mt-3 rounded-lg bg-slate-100 p-3 font-medium text-slate-700 outline-none" role="status" ref={undoExpirationRef} tabIndex={-1}>Die Frist zum Rückgängigmachen ist abgelaufen.</p>
+          ) : (
+            <>
+              <p className="mt-1 text-slate-600">Diese Möglichkeit ist bis {undoDeadlineLabel} Uhr verfügbar und funktioniert nur, solange du dieses Produkt im Stack nicht noch einmal änderst.</p>
+              <button
+                type="button"
+                className="mt-3 inline-flex min-h-11 items-center justify-center rounded-xl border-2 border-slate-300 bg-white px-4 py-2 font-bold text-slate-800 hover:bg-slate-50"
+                disabled={undoState === 'busy'}
+                onClick={runUndo}
+              >
+                {undoState === 'busy' ? 'Wird rückgängig gemacht…' : 'Änderung rückgängig machen'}
+              </button>
+            </>
+          )}
+        </div>
+      )}
+      {undoMessage && (
+        <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm font-medium text-red-800" role="alert">
+          {undoMessage}
+        </p>
+      )}
+      <div className="mt-5 flex flex-wrap gap-3">
+        <Link className="inline-flex min-h-11 items-center justify-center rounded-xl bg-indigo-600 px-4 py-3 font-bold text-white hover:bg-indigo-700" to={`/stacks?stack=${result.stack_id}`}>Stack jetzt ansehen</Link>
+        <button type="button" className="min-h-11 rounded-xl border border-slate-300 bg-white px-4 py-3 font-bold text-slate-800" onClick={onStay}>Empfehlung weiter ansehen</button>
         {result.replaced_user_product_retained && <Link to="/my-products" className="text-indigo-600 self-center">Eigene Produkte ansehen</Link>}
       </div>
+    </section>
+  );
+}
+
+function ReportRecommendation({ token }: { token: string }) {
+  const [open, setOpen] = useState(false);
+  const [category, setCategory] = useState<CreatorShareReportCategory | null>(null);
+  const [details, setDetails] = useState('');
+  const [state, setState] = useState<'idle' | 'busy' | 'done' | 'error'>('idle');
+  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const successRef = useRef<HTMLParagraphElement>(null);
+  const frozenReportRef = useRef<{
+    idempotency_key: string;
+    category: CreatorShareReportCategory;
+    details?: string;
+  } | null>(null);
+  const reportInputsLocked = state === 'busy' || state === 'error';
+
+  useEffect(() => {
+    if (open) headingRef.current?.focus();
+  }, [open]);
+
+  useEffect(() => {
+    if (state === 'done') successRef.current?.focus();
+  }, [state]);
+
+  const sendReport = async () => {
+    if (state === 'busy' || state === 'done') return;
+    let submission = frozenReportRef.current;
+    if (!submission) {
+      if (!category) return;
+      submission = {
+        idempotency_key: idempotencyKey,
+        category,
+        details: details.trim() || undefined,
+      };
+      frozenReportRef.current = submission;
+    }
+    setState('busy');
+    try {
+      await reportCreatorShare(token, submission);
+      setState('done');
+    } catch {
+      setState('error');
+    }
+  };
+
+  const startNewReport = () => {
+    frozenReportRef.current = null;
+    setCategory(null);
+    setDetails('');
+    setState('idle');
+    setIdempotencyKey(crypto.randomUUID());
+    headingRef.current?.focus();
+  };
+
+  const editFailedReport = () => {
+    const frozenReport = frozenReportRef.current;
+    if (frozenReport) {
+      setCategory(frozenReport.category);
+      setDetails(frozenReport.details ?? '');
+    }
+    frozenReportRef.current = null;
+    setState('idle');
+    setIdempotencyKey(crypto.randomUUID());
+    headingRef.current?.focus();
+  };
+
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5" aria-labelledby="share-report-toggle">
+      <button
+        id="share-report-toggle"
+        type="button"
+        className="inline-flex min-h-11 items-center font-bold text-slate-700 underline decoration-slate-300 underline-offset-4 hover:text-indigo-700"
+        aria-expanded={open}
+        aria-controls="share-report-panel"
+        onClick={() => setOpen((current) => !current)}
+      >
+        Stimmt etwas mit dieser Empfehlung nicht?
+      </button>
+      {open && (
+        <div className="mt-4 space-y-4" id="share-report-panel">
+          <h2 className="text-lg font-black text-slate-900 outline-none" id="share-report-heading" ref={headingRef} tabIndex={-1}>
+            Empfehlung melden
+          </h2>
+          {state === 'done' ? (
+            <div className="space-y-3">
+              <p className="rounded-xl bg-emerald-50 p-4 font-medium text-emerald-900 outline-none" role="status" aria-live="polite" ref={successRef} tabIndex={-1}>
+                Danke. Deine Meldung ist angekommen und wird von unserem Team geprüft.
+              </p>
+              <button
+                type="button"
+                className="inline-flex min-h-11 items-center justify-center rounded-xl border-2 border-slate-300 bg-white px-4 py-2 font-bold text-slate-800 hover:bg-slate-50"
+                onClick={startNewReport}
+              >
+                Neue Meldung verfassen
+              </button>
+            </div>
+          ) : (
+            <>
+              <fieldset className="space-y-2" disabled={reportInputsLocked}>
+                <legend className="font-bold text-slate-900">Was sollen wir prüfen?</legend>
+                {REPORT_CATEGORIES.map((entry) => (
+                  <label className={`flex min-h-14 items-start gap-3 rounded-xl border p-3 ${reportInputsLocked ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'} ${category === entry.value ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 bg-white'}`} key={entry.value}>
+                    <input className={SHARE_RADIO_CLASS} type="radio" name="share-report-category" value={entry.value} checked={category === entry.value} onChange={() => { if (!reportInputsLocked) setCategory(entry.value); }} />
+                    <span><strong className="block text-slate-900">{entry.label}</strong><span className="text-sm text-slate-600">{entry.description}</span></span>
+                  </label>
+                ))}
+              </fieldset>
+              <label className="block font-bold text-slate-900">
+                Kurzer Hinweis (optional)
+                <textarea className="input mt-1 min-h-24" disabled={reportInputsLocked} maxLength={500} value={details} onChange={(event) => { if (!reportInputsLocked) setDetails(event.target.value); }} />
+                <span className="mt-1 block text-right text-xs font-normal text-slate-500">{details.length}/500</span>
+              </label>
+              {state === 'error' && (
+                <div className="rounded-xl bg-red-50 p-3 text-sm font-medium text-red-800" role="alert">
+                  <p>Die Meldung wurde nicht sicher bestätigt. Sende deshalb dieselbe Meldung noch einmal.</p>
+                  <p className="mt-1 font-normal">Wenn du die Angaben ändern möchtest, beginne bewusst eine neue Meldung.</p>
+                </div>
+              )}
+              <button
+                type="button"
+                className="inline-flex min-h-11 items-center justify-center rounded-xl bg-slate-900 px-4 py-3 font-bold text-white hover:bg-slate-800 disabled:opacity-50"
+                disabled={!category || state === 'busy'}
+                onClick={sendReport}
+              >
+                {state === 'busy' ? 'Meldung wird gesendet…' : state === 'error' ? 'Dieselbe Meldung erneut senden' : 'Meldung senden'}
+              </button>
+              {state === 'error' && (
+                <button
+                  type="button"
+                  className="ml-3 inline-flex min-h-11 items-center justify-center rounded-xl border-2 border-slate-300 bg-white px-4 py-3 font-bold text-slate-800 hover:bg-slate-50"
+                  onClick={editFailedReport}
+                >
+                  Meldung ändern
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </section>
   );
 }
@@ -175,6 +507,10 @@ function CreatorShareImportPageForToken({ token }: { token: string }) {
   const [technicalError, setTechnicalError] = useState<string | null>(null);
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
   const activeRef = useRef(true);
+  const preflightHeadingRef = useRef<HTMLHeadingElement>(null);
+  const resultRef = useRef<HTMLDivElement>(null);
+  const stackErrorRef = useRef<HTMLDivElement>(null);
+  const technicalErrorRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     activeRef.current = true;
@@ -224,9 +560,25 @@ function CreatorShareImportPageForToken({ token }: { token: string }) {
   }, [stacksAttempt, user, preview?.type]);
 
   useEffect(() => {
-    if (!token) return;
+    if (!token || !user) return;
     writeCreatorShareDraft(token, { stack_name: stackName, target_stack_id: targetMode === 'existing' ? targetStackId : null });
-  }, [stackName, targetMode, targetStackId, token]);
+  }, [stackName, targetMode, targetStackId, token, user]);
+
+  useEffect(() => {
+    if (preflight) preflightHeadingRef.current?.focus();
+  }, [preflight]);
+
+  useEffect(() => {
+    if (result) resultRef.current?.focus();
+  }, [result]);
+
+  useEffect(() => {
+    if (stacksError) stackErrorRef.current?.focus();
+  }, [stacksError]);
+
+  useEffect(() => {
+    if (technicalError) technicalErrorRef.current?.focus();
+  }, [technicalError]);
 
   const invalidateCheck = () => {
     setPreflight(null);
@@ -241,7 +593,26 @@ function CreatorShareImportPageForToken({ token }: { token: string }) {
     [preview, stackName, targetMode, targetStackId],
   );
   const selectedProduct = preflight?.similar_products.find((entry) => entry.stack_item_id === selectedProductId) ?? null;
+  const selectedDifferences = useMemo(() => new Set(
+    selectedProduct && preflight?.recommendation
+      ? comparisonDifferences(selectedProduct.comparison, preflight.recommendation)
+      : [],
+  ), [preflight?.recommendation, selectedProduct]);
   const returnTo = currentLocationReturnTo(location);
+  const confirmLabel = useMemo(() => {
+    if (!preflight) return 'Änderung bestätigen';
+    if (preview?.type === 'stack') return `Stack mit ${preflight.stack_item_count} ${preflight.stack_item_count === 1 ? 'Produkt' : 'Produkten'} anlegen`;
+    if (preflight.similar_products.length === 0) {
+      return preflight.target.mode === 'new'
+        ? `Stack mit ${preflight.recommendation?.product_name ?? 'Produkt'} anlegen`
+        : `${preflight.recommendation?.product_name ?? 'Produkt'} hinzufügen`;
+    }
+    if (decision === 'keep') return 'Stack unverändert lassen';
+    if (decision === 'replace' && selectedProduct) {
+      return `${selectedProduct.comparison.product_name} ersetzen`;
+    }
+    return 'Zuerst eine Auswahl treffen';
+  }, [decision, preflight, preview?.type, selectedProduct]);
 
   const runPreflight = async () => {
     if (!preview || !currentSelection) return;
@@ -310,15 +681,15 @@ function CreatorShareImportPageForToken({ token }: { token: string }) {
   if (unavailable) return <RecoveryCard kind={unavailable} user={Boolean(user)} />;
   if (!preview && technicalError) {
     return (
-      <section className="card max-w-2xl mx-auto">
+      <section className="card max-w-2xl mx-auto outline-none" role="alert" ref={technicalErrorRef} tabIndex={-1}>
         <h1 className="text-xl font-semibold">Empfehlung konnte nicht geladen werden</h1>
         <p className="mt-3 text-red-700">{technicalError}</p>
-        <button type="button" className="mt-4" onClick={() => setPreviewAttempt((value) => value + 1)}>Erneut versuchen</button>
+        <button type="button" className="mt-4 inline-flex min-h-11 items-center justify-center rounded-xl border-2 border-red-300 bg-white px-4 py-2 font-bold text-red-800 hover:bg-red-50" onClick={() => setPreviewAttempt((value) => value + 1)}>Erneut versuchen</button>
         <div className="mt-4"><Link to="/" className="text-indigo-600">Zur Startseite</Link></div>
       </section>
     );
   }
-  if (previewLoading || !preview) return <div className="text-center py-16 text-gray-500">Empfehlung wird geladen…</div>;
+  if (previewLoading || !preview) return <div className="text-center py-16 text-gray-500" role="status" aria-live="polite">Empfehlung wird geladen…</div>;
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -328,7 +699,8 @@ function CreatorShareImportPageForToken({ token }: { token: string }) {
         <section className="card">
           <h2 className="text-lg font-semibold">Möchtest du die Empfehlung in deinen Stacks speichern?</h2>
           <p className="text-sm text-gray-600 mt-2">Vor der Anmeldung wird nichts gespeichert.</p>
-          <div className="flex gap-3 mt-4">
+          <p className="mt-1 text-sm text-gray-600">Nach der Anmeldung kommst du genau zu dieser Empfehlung zurück.</p>
+          <div className="flex flex-wrap gap-3 mt-4">
             <Link className="btn" to={authPath('/login', returnTo)}>Anmelden und weitermachen</Link>
             <Link className="text-indigo-600 self-center" to={authPath('/register', returnTo)}>Konto erstellen</Link>
           </div>
@@ -338,6 +710,9 @@ function CreatorShareImportPageForToken({ token }: { token: string }) {
           <div>
             <h2 className="text-lg font-semibold">Wo möchtest du die Empfehlung speichern?</h2>
             <p className="mt-1 text-sm text-slate-600">Prüfe zuerst dein Ziel. Danach siehst du genau, was beim Bestätigen passiert.</p>
+            <p className="mt-2 text-xs leading-5 text-slate-500">
+              Deine Auswahl wird nur in diesem Browser für höchstens 30 Minuten zwischengespeichert, damit sie bei der Rückkehr erhalten bleibt. Abgelaufene Entwürfe werden entfernt. <Link className="font-bold text-indigo-700 underline" to="/datenschutz">Mehr zum Datenschutz</Link>
+            </p>
           </div>
 
           {preview.type === 'stack' ? (
@@ -345,10 +720,11 @@ function CreatorShareImportPageForToken({ token }: { token: string }) {
               <input className="input mt-1" value={stackName} maxLength={120} onChange={(event) => { setStackName(event.target.value); invalidateCheck(); }} />
             </label>
           ) : (
-            <div className="space-y-4">
+            <fieldset className="space-y-3">
+              <legend className="font-bold text-slate-900">Ziel für dieses Produkt</legend>
               {stacks.length > 0 && (
-                <label className="flex gap-2 items-start">
-                  <input type="radio" name="target-mode" checked={targetMode === 'existing'} onChange={() => { setTargetMode('existing'); invalidateCheck(); }} />
+                <label className={`flex min-h-16 cursor-pointer items-start gap-3 rounded-xl border p-4 ${targetMode === 'existing' ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 bg-white'}`}>
+                  <input className={SHARE_RADIO_CLASS} type="radio" name="target-mode" checked={targetMode === 'existing'} onChange={() => { setTargetMode('existing'); invalidateCheck(); }} />
                   <span><strong>In einen vorhandenen Stack</strong><span className="block text-sm text-slate-600">Das Produkt wird nur zu diesem Stack hinzugefügt oder dort ausgetauscht.</span></span>
                 </label>
               )}
@@ -360,8 +736,8 @@ function CreatorShareImportPageForToken({ token }: { token: string }) {
                   </select>
                 </label>
               )}
-              <label className="flex gap-2 items-start">
-                <input type="radio" name="target-mode" checked={targetMode === 'new'} onChange={() => { setTargetMode('new'); invalidateCheck(); }} />
+              <label className={`flex min-h-16 cursor-pointer items-start gap-3 rounded-xl border p-4 ${targetMode === 'new' ? 'border-indigo-500 bg-indigo-50' : 'border-slate-200 bg-white'}`}>
+                <input className={SHARE_RADIO_CLASS} type="radio" name="target-mode" checked={targetMode === 'new'} onChange={() => { setTargetMode('new'); invalidateCheck(); }} />
                 <span><strong>Neuen Stack anlegen</strong><span className="block text-sm text-slate-600">Der neue Stack und das Produkt werden erst beim Bestätigen gemeinsam angelegt.</span></span>
               </label>
               {targetMode === 'new' && (
@@ -370,7 +746,7 @@ function CreatorShareImportPageForToken({ token }: { token: string }) {
                 </label>
               )}
               {stacksLoading && <p className="text-sm text-slate-500">Deine Stacks werden geladen…</p>}
-            </div>
+            </fieldset>
           )}
 
           {!preflight && (
@@ -379,27 +755,30 @@ function CreatorShareImportPageForToken({ token }: { token: string }) {
               disabled={checking || !stackName.trim()
                 || (preview.type === 'dose_recommendation' && (stacksLoading || stacksError || (targetMode === 'existing' && !targetStackId)))}
               onClick={runPreflight}
+              className="inline-flex min-h-11 items-center justify-center rounded-xl bg-indigo-600 px-5 py-3 font-bold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {checking ? 'Auswahl wird geprüft…' : 'Auswahl prüfen'}
+              {checking ? 'Änderungen werden vorbereitet…' : 'Änderungen ansehen'}
             </button>
           )}
 
-          {notice && <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950">{notice}</p>}
+          <p className="sr-only" aria-live="polite">{checking ? 'Änderungen werden vorbereitet.' : busy ? 'Änderung wird gespeichert.' : result ? 'Änderung wurde gespeichert.' : ''}</p>
+          {notice && <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950" role="status">{notice}</p>}
           {stacksError && (
-            <div className="rounded-lg border border-red-300 bg-red-50 p-3">
+            <div className="rounded-lg border border-red-300 bg-red-50 p-3 outline-none" role="alert" ref={stackErrorRef} tabIndex={-1}>
               <p className="text-sm text-red-800">Das hat gerade nicht geklappt. Bitte versuche es noch einmal.</p>
-              <button type="button" className="mt-3" onClick={() => setStacksAttempt((value) => value + 1)}>Erneut versuchen</button>
+              <button type="button" className="mt-3 inline-flex min-h-11 items-center justify-center rounded-xl border-2 border-red-300 bg-white px-4 py-2 font-bold text-red-800 hover:bg-red-50" onClick={() => setStacksAttempt((value) => value + 1)}>Erneut versuchen</button>
             </div>
           )}
           {technicalError && (
-            <div className="rounded-lg border border-red-300 bg-red-50 p-3">
+            <div className="rounded-lg border border-red-300 bg-red-50 p-3 outline-none" role="alert" ref={technicalErrorRef} tabIndex={-1}>
               <p className="text-sm text-red-800">{technicalError}</p>
-              <button type="button" className="mt-3" onClick={preflight ? runSave : runPreflight}>Erneut versuchen</button>
+              <button type="button" className="mt-3 inline-flex min-h-11 items-center justify-center rounded-xl border-2 border-red-300 bg-white px-4 py-2 font-bold text-red-800 hover:bg-red-50" onClick={preflight ? runSave : runPreflight}>Erneut versuchen</button>
             </div>
           )}
 
           {preflight && !result && (
             <div className="space-y-5">
+              <h3 className="text-xl font-black text-slate-900 outline-none" ref={preflightHeadingRef} tabIndex={-1}>Änderungen ansehen</h3>
               {preflight.target.name_already_used && (
                 <div className="rounded-lg border border-sky-200 bg-sky-50 p-4">
                   <p className="font-medium">Diesen Namen verwendest du bereits.</p>
@@ -423,13 +802,15 @@ function CreatorShareImportPageForToken({ token }: { token: string }) {
                     {preflight.main_ingredient_names.length > 0 && (
                       <p className="mt-1 text-sm text-slate-700">Diese wichtigen Inhaltsstoffe stimmen überein: {preflight.main_ingredient_names.join(', ')}.</p>
                     )}
+                    <p className="mt-2 text-sm font-medium text-slate-800">Ähnlich heißt nicht gleich. Prüfe deshalb die Unterschiede, bevor du auswählst.</p>
                   </div>
                   {preflight.similar_products.length > 1 && (
                     <fieldset className="space-y-2">
                       <legend className="text-sm font-medium">Welches vorhandene Produkt möchtest du vergleichen?</legend>
                       {preflight.similar_products.map((candidate) => (
-                        <label className="flex gap-2" key={candidate.stack_item_id}>
+                        <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg px-2 py-2" key={candidate.stack_item_id}>
                           <input
+                            className={SHARE_RADIO_CLASS}
                             type="radio"
                             name="similar-product"
                             checked={selectedProductId === candidate.stack_item_id}
@@ -442,15 +823,40 @@ function CreatorShareImportPageForToken({ token }: { token: string }) {
                   )}
                   {selectedProduct && (
                     <>
+                      <p className="rounded-lg bg-white p-3 text-sm text-slate-700" role="status">
+                        {selectedDifferences.size > 0
+                          ? `Unterschiedlich sind: ${[...selectedDifferences].join(', ')}. Die abweichenden Zeilen sind farbig markiert.`
+                          : 'Bei Menge, Einnahme, Häufigkeit und Zeitpunkt wurden keine Unterschiede gefunden.'}
+                      </p>
                       <div className="grid gap-3 md:grid-cols-2">
-                        <Comparison title="Bereits in deinem Stack" value={selectedProduct.comparison} />
-                        <Comparison title="Empfehlung des Creators" value={preflight.recommendation} />
+                        <Comparison title="Bereits in deinem Stack" value={selectedProduct.comparison} differences={selectedDifferences} />
+                        <Comparison title="Empfehlung des Creators" value={preflight.recommendation} differences={selectedDifferences} />
                       </div>
                       {selectedProduct.private_note && <p className="text-sm text-slate-700">Deine private Notiz: {selectedProduct.private_note}</p>}
-                      <div className="grid gap-3 md:grid-cols-2">
-                        <button type="button" aria-pressed={decision === 'keep'} onClick={() => setDecision('keep')}>Mein Produkt behalten</button>
-                        <button type="button" aria-pressed={decision === 'replace'} onClick={() => setDecision('replace')}>Empfehlung des Creators übernehmen</button>
-                      </div>
+                      <fieldset className="space-y-3">
+                        <legend className="font-bold text-slate-900">Was möchtest du tun?</legend>
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <button
+                            type="button"
+                            className={`min-h-24 rounded-xl border-2 p-4 text-left ${decision === 'keep' ? 'border-indigo-600 bg-indigo-50 text-indigo-950' : 'border-slate-300 bg-white text-slate-900'}`}
+                            aria-pressed={decision === 'keep'}
+                            onClick={() => setDecision('keep')}
+                          >
+                            <strong className="block">Nichts ändern</strong>
+                            <span className="mt-1 block text-sm">Mein vorhandenes Produkt bleibt im Stack.</span>
+                          </button>
+                          <button
+                            type="button"
+                            className={`min-h-24 rounded-xl border-2 p-4 text-left ${decision === 'replace' ? 'border-indigo-600 bg-indigo-50 text-indigo-950' : 'border-slate-300 bg-white text-slate-900'}`}
+                            aria-pressed={decision === 'replace'}
+                            onClick={() => setDecision('replace')}
+                          >
+                            <strong className="block">Produkt ersetzen</strong>
+                            <span className="mt-1 block text-sm">Die Creator-Empfehlung übernimmt genau diesen Platz.</span>
+                          </button>
+                        </div>
+                        <p className="text-sm text-slate-600">„Beide“ wird hier nicht angeboten, damit ähnliche Inhaltsstoffe nicht versehentlich doppelt in diesem Stack landen. Mit „Nichts ändern“ bleibt alles wie zuvor.</p>
+                      </fieldset>
                     </>
                   )}
                 </div>
@@ -481,23 +887,27 @@ function CreatorShareImportPageForToken({ token }: { token: string }) {
                 type="button"
                 disabled={busy || (preflight.similar_products.length > 0 && (!selectedProduct || !decision))}
                 onClick={runSave}
+                className="inline-flex min-h-11 items-center justify-center rounded-xl bg-indigo-600 px-5 py-3 font-bold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {busy ? 'Wird gespeichert…' : 'Jetzt bestätigen'}
+                {busy ? 'Wird gespeichert…' : confirmLabel}
               </button>
             </div>
           )}
 
           {result && (
-            <ResultCard result={result} onStay={() => {
-              setResult(null);
-              setPreflight(null);
-              setDecision(null);
-              setSelectedProductId(null);
-              setIdempotencyKey(crypto.randomUUID());
-            }} />
+            <div className="outline-none" ref={resultRef} tabIndex={-1}>
+              <ResultCard result={result} shareToken={token} onStay={() => {
+                setResult(null);
+                setPreflight(null);
+                setDecision(null);
+                setSelectedProductId(null);
+                setIdempotencyKey(crypto.randomUUID());
+              }} />
+            </div>
           )}
         </section>
       ) : null}
+      <ReportRecommendation token={token} />
     </div>
   );
 }
