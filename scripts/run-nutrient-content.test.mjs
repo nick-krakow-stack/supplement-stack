@@ -6,7 +6,7 @@ import { dirname, join, relative, resolve } from 'node:path'
 import test from 'node:test'
 import { artifactHashV2, buildEvidencePipelineV2, buildReviewSampleV2, loadEvidenceManifestV2, mergeEvidenceV2, validateCoveragePlanV2, validateEvidencePipelineLockV2, validateFactsPackageForImportV2, validateStackProjectionV2 } from './lib/evidence-pipeline-v2.mjs'
 import { canonicalJsonHash, sha256Bytes } from './lib/content-validation.mjs'
-import { buildContentReleaseV2, buildTechnicalSeo, findDuplicateLiveSeoTitleV2, normalizeVisibleSeoTextV2, stage3PresentationSourcesV2, technicalMetaTitleV2, validateNumberUnitTokens, writerWorkOrderIdV2 } from './lib/article-runtime-v2.mjs'
+import { buildContentReleaseV2, buildTechnicalSeo, findDuplicateLiveSeoTitleV2, normalizeVisibleSeoTextV2, projectInlineLinksV2, projectVisibleAssetV2, stage3PresentationSourcesV2, technicalMetaTitleV2, validateNumberUnitTokens, writerWorkOrderIdV2 } from './lib/article-runtime-v2.mjs'
 import { STATE_WORK_ORDER_MATRIX, WORK_ORDER_KIND_CONTRACTS, findDuplicateReleaseSeoGroupsV2, groupDuplicateReleaseSeoRepairsV2, isStaleWriterBindingError, loadNutrientContentRunManifest, repairFailureBundle, runNutrientContent, selectFrameworkGapTransition, selectReusableInitialWriterOrderV2, selectReusablePublicationQaOrderV2, summarizeWorkOrderTimingsV1 } from './lib/nutrient-content-runner.mjs'
 import { buildSourceCatalogSyncRequestV1, buildStage2InterpretationProjectionV1 } from './lib/content-publication-targets-v2.mjs'
 import { buildKnowledgeBadgeExpectationsV1 } from './lib/knowledge-badge-readback-v1.mjs'
@@ -70,9 +70,22 @@ test('Stage-2 interpretation projection skips factless meta-family constituents 
   }), [])
 })
 
-test('visible SEO normalization preserves the required German micro sign', () => {
+test('visible SEO normalization removes supported inline Markdown and preserves the required German micro sign', () => {
   assert.equal(normalizeVisibleSeoTextV2('  4,0 µg   Vitamin B12  '), '4,0 µg Vitamin B12')
   assert.notEqual(normalizeVisibleSeoTextV2('4,0 µg'), '4,0 μg')
+  assert.equal(normalizeVisibleSeoTextV2(' Eine **klare** und *vorsichtige* Einordnung. '), 'Eine klare und vorsichtige Einordnung.')
+  assert.equal(technicalMetaTitleV2('**Teststoff** im Überblick'), 'Teststoff im Überblick')
+})
+
+test('compiler inline links and visible assets use one marker-free projection pass', () => {
+  assert.deepEqual(
+    projectInlineLinksV2('[\\*literal\\*](#fazit), [protokollrelativ](//example.com), [Zugangsdaten](https://user:pass@example.com) und [**Wissen**](/wissen/test).'),
+    [{ label: '*literal*', url: '#fazit' }, { label: 'Wissen', url: '/wissen/test' }],
+  )
+  assert.deepEqual(
+    projectVisibleAssetV2({ public_url: '/api/r2/knowledge/schema.png', alt: '**Schema**', caption: 'Eine **klare** Einordnung.' }),
+    { src: '/api/r2/knowledge/schema.png', alt: 'Schema', caption: 'Eine klare Einordnung.' },
+  )
 })
 
 test('technical meta title shortens long visible titles deterministically without changing the H1', () => {

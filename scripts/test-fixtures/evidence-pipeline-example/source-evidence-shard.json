@@ -2,7 +2,7 @@
   "schema": "source_evidence_shard.v1",
   "shard_id": "example-shard",
   "coverage_plan_id": "example-plan-v1",
-  "coverage_plan_content_hash": "sha256:146adf751ee7cf0b3b6d27602fbfa50e071b7c18ed4bd889ac0cad8b97e87cd1",
+  "coverage_plan_content_hash": "sha256:a88ca213b632e6798a12dff8f267bae52c7f4fcafea625794172e3c0fb67f5f7",
   "extractor": { "role": "source-evidence-extractor", "id": "example-extractor" },
   "created_at": "2026-07-13T10:00:00.000Z",
   "sources": [{
@@ -44,5 +44,5 @@
       "direct_user_dose_recommendation": false
     }
   }],
-  "content_hash": "sha256:08cf4d1cdfb0ea2f64e7f0adb644787582f2bc9a5302cf91d991525e82e14035"
+  "content_hash": "sha256:6ad0939bbb843a1ea165f28384c10f35e9b587938ba4e4f8f1b774ca058aed96"
 }

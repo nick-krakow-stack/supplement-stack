@@ -1,7 +1,7 @@
 {
   "schema": "coverage_plan.v1",
   "coverage_plan_id": "example-plan-v1",
-  "content_hash": "sha256:146adf751ee7cf0b3b6d27602fbfa50e071b7c18ed4bd889ac0cad8b97e87cd1",
+  "content_hash": "sha256:a88ca213b632e6798a12dff8f267bae52c7f4fcafea625794172e3c0fb67f5f7",
   "substance": "Beispielstoff",
   "stage4_requested": false,
   "stage3_archetype_decision": {
@@ -40,7 +40,7 @@
     "framework_fit": {
       "decision": "existing",
       "framework_id": "stage2.meta_study",
-      "version": "2.0.0",
+      "version": "2.0.1",
       "variant_id": "systematic_review_or_meta_analysis",
       "reason": "Static example fit.",
       "owner_approval": { "required": false, "status": "not_required" },

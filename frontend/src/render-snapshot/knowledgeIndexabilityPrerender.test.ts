@@ -139,7 +139,7 @@ describe('knowledge indexability delivery', () => {
     expect(document.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe('index,follow');
     expect(document.querySelector('link[rel="canonical"]')?.getAttribute('href')).toBe(canonicalUrl);
     expect(JSON.parse(document.querySelector('script[type="application/ld+json"]')?.textContent ?? '')).toEqual(articleJsonLd(article, canonicalUrl));
-    expect(document.body.textContent).toContain('Ein *klarer* interner Link mit `p = 0,068`.');
+    expect(document.body.textContent).toContain('Ein klarer interner Link mit `p = 0,068`.');
     expect(document.body.textContent).toContain('Erster Punkt\nZweiter Punkt');
     expect(document.body.textContent).toContain(article.sources[0].label);
     expect(document.body.textContent).not.toContain('knowledge-template');
@@ -151,8 +151,77 @@ describe('knowledge indexability delivery', () => {
     ).toEqual({ article });
   });
 
+  it('uses marker-free public text while preserving the raw bootstrap article bytes', () => {
+    const formattedArticle: PublicKnowledgeArticle = {
+      ...article,
+      title: 'Grapefruitkernextrakt: **Wirkung** & Sicherheit',
+      summary: 'Eine **klare** und *vorsichtige* Einordnung.',
+      body: article.body
+        .replace('Ein *klarer*', 'Ein **klarer** und *betonter*')
+        .replace('Erster Punkt', 'Erster Punkt mit ~~literalem~~ Zeichen und <https://example.com>')
+        .replace('## Quellen', '![Schema](/api/r2/knowledge/schema.png)\n\n_Untertitel_\n\n## Quellen'),
+      seo: null,
+    };
+    const canonicalUrl = 'https://supplementstack.de/wissen/grapefruitkernextrakt';
+    const html = renderKnowledgeArticleHtml(
+      '<!doctype html><html lang="de"><head><title>Supplement Stack</title></head><body><div id="root"></div></body></html>',
+      formattedArticle,
+      canonicalUrl,
+    );
+    const document = new JSDOM(html, { url: canonicalUrl }).window.document;
+
+    expect(document.querySelector('h1')?.textContent).toBe('Grapefruitkernextrakt: Wirkung & Sicherheit');
+    expect(document.querySelector('.knowledge-prerender p')?.textContent).toBe('Eine klare und vorsichtige Einordnung.');
+    expect(document.body.textContent).toContain('Ein klarer und betonter interner Link');
+    expect(document.body.textContent).toContain('~~literalem~~');
+    expect(document.body.textContent).toContain('<https://example.com>');
+    expect(document.body.textContent).toContain('Untertitel');
+    expect(document.body.textContent).not.toContain('_Untertitel_');
+    expect(document.body.textContent).not.toContain('**Wirkung**');
+    expect(document.querySelector('meta[name="description"]')?.getAttribute('content')).toBe('Eine klare und vorsichtige Einordnung.');
+    expect(JSON.parse(document.querySelector('script[type="application/ld+json"]')?.textContent ?? '').headline).toBe('Grapefruitkernextrakt: Wirkung & Sicherheit');
+    const bootstrap = JSON.parse(
+      document.querySelector('script:not([type])')?.textContent?.replace('window.__knowledgeArticleBootstrap=', '').replace(/;$/, '') ?? '',
+    ) as { article: PublicKnowledgeArticle };
+    expect(bootstrap.article).toEqual(formattedArticle);
+    expect(bootstrap.article.body).toBe(formattedArticle.body);
+  });
+
+  it('normalizes supported formatting in stored SEO and JSON-LD without rewriting the bootstrap article', () => {
+    const storedSeoArticle: PublicKnowledgeArticle = {
+      ...article,
+      seo: {
+        ...article.seo!,
+        meta_title: 'Grapefruitkernextrakt: **Wirkung** und Sicherheit',
+        meta_description: 'Eine **klare** und *vorsichtige* Einordnung der freigegebenen Evidenz.',
+        json_ld: {
+          ...article.seo!.json_ld,
+          headline: 'Grapefruitkernextrakt: **Wirkung** und Sicherheit',
+          description: 'Eine **klare** und *vorsichtige* Einordnung der freigegebenen Evidenz.',
+        },
+      },
+    };
+    const canonicalUrl = 'https://supplementstack.de/wissen/grapefruitkernextrakt';
+    const html = renderKnowledgeArticleHtml(
+      '<!doctype html><html lang="de"><head><title>Supplement Stack</title></head><body><div id="root"></div></body></html>',
+      storedSeoArticle,
+      canonicalUrl,
+    );
+    const document = new JSDOM(html, { url: canonicalUrl }).window.document;
+    const jsonLd = JSON.parse(document.querySelector('script[type="application/ld+json"]')?.textContent ?? '') as Record<string, unknown>;
+
+    expect(document.title).toBe('Grapefruitkernextrakt: Wirkung und Sicherheit');
+    expect(document.querySelector('meta[name="description"]')?.getAttribute('content')).toBe('Eine klare und vorsichtige Einordnung der freigegebenen Evidenz.');
+    expect(jsonLd.headline).toBe('Grapefruitkernextrakt: Wirkung und Sicherheit');
+    expect(jsonLd.description).toBe('Eine klare und vorsichtige Einordnung der freigegebenen Evidenz.');
+    const bootstrap = JSON.parse(
+      document.querySelector('script:not([type])')?.textContent?.replace('window.__knowledgeArticleBootstrap=', '').replace(/;$/, '') ?? '',
+    ) as { article: PublicKnowledgeArticle };
+    expect(bootstrap.article).toEqual(storedSeoArticle);
+  });
+
   it('derives robots and sitemap delivery from the published slug inventory', () => {
-    expect(markdownToPrerenderText(article.body)).toContain('Ein *klarer* interner Link mit `p = 0,068`.');
+    expect(markdownToPrerenderText(article.body)).toContain('Ein klarer interner Link mit `p = 0,068`.');
     expect(markdownToPrerenderText('„Vitamin D | DGE Referenzwerte“ bleibt vollständig.')).toBe('„Vitamin D | DGE Referenzwerte“ bleibt vollständig.');
     expect(markdownToPrerenderText('| Wert | Einheit |\n| --- | --- |\n| 20 | µg |')).toBe('Wert Einheit\n\n20 µg');
     const robots = buildRobotsTxt(releasedKnowledgeSlugs);

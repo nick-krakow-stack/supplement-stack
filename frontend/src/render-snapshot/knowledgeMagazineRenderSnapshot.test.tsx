@@ -8,6 +8,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { StaticRouter } from 'react-router-dom/server';
 import { describe, expect, it } from 'vitest';
 import { KnowledgeMagazineArticle } from '../pages/KnowledgeMagazineArticle';
+import { knowledgeInlineMarkdownToText } from '../pages/KnowledgeMarkdown';
 import {
   canonicalJsonHash,
   inspectKnowledgeMagazineMarkup,
@@ -73,8 +74,8 @@ function validProjection(payload = validPayload(), route = `/wissen/${payload.sl
     article_id: 'stage3-teststoff',
     route,
     template: 'magazine',
-    h1: payload.title,
-    dek: payload.dek,
+    h1: knowledgeInlineMarkdownToText(payload.title),
+    dek: knowledgeInlineMarkdownToText(payload.dek),
     sections: [
       {
         section_id: 'ueberblick',
@@ -240,8 +241,8 @@ describe('knowledge magazine real-render snapshot', () => {
     expect(first.errors).toEqual([]);
     expect(first.renderer).toMatchObject({
       component: 'KnowledgeMagazineArticle',
-      version: 'knowledge-magazine-react-ssr.v2.2.0',
-      contract_version: 'knowledge-magazine-dom-contract.v2.2.0',
+      version: 'knowledge-magazine-react-ssr.v2.2.1',
+      contract_version: 'knowledge-magazine-dom-contract.v2.2.1',
     });
     expect(first.request_hash).toBe(canonicalJsonHash(request));
     expect(first.actual_projection).toEqual(request.expected_projection);
@@ -266,6 +267,70 @@ describe('knowledge magazine real-render snapshot', () => {
       link_count: 1,
       invalid_link_count: 0,
     });
+  });
+
+  it('keeps supported inline formatting marker-free and projection-exact', () => {
+    const formattedBody = VALID_BODY
+      .replace('## Was ist Teststoff?', '## Was ist **Teststoff**?')
+      .replace('Dieser Abschnitt erklärt den Begriff', 'Dieser Abschnitt erklärt den **Begriff**')
+      .replace('[Vertiefung](/wissen/vertiefung)', '[**Vertiefung**](/wissen/vertiefung)')
+      .replace('| Merkmal | Einordnung |', '| **Merkmal** | Einordnung |');
+    const request = validRequest({
+      title: '**Teststoff** im Überblick',
+      dek: 'Eine **klare** Einordnung.',
+      body: formattedBody,
+    });
+    const snapshot = renderKnowledgeMagazineSnapshot(request);
+    const markup = renderKnowledgeMagazineMarkup(request);
+    const document = new JSDOM(markup).window.document;
+
+    expect(snapshot.result, JSON.stringify(snapshot.errors, null, 2)).toBe('PASS');
+    expect(snapshot.actual_projection).toEqual(request.expected_projection);
+    expect(snapshot.actual_projection.h1).toBe('Teststoff im Überblick');
+    expect(snapshot.actual_projection.dek).toBe('Eine klare Einordnung.');
+    expect(snapshot.actual_projection.sections[1].heading).toBe('Was ist Teststoff?');
+    expect(snapshot.actual_projection.sections[1].links[0].label).toBe('Vertiefung');
+    expect(snapshot.actual_projection.sections[1].tables[0].headers[0]).toBe('Merkmal');
+    expect(document.querySelectorAll('strong').length).toBeGreaterThanOrEqual(5);
+    expect(document.body.textContent).not.toContain('**');
+  });
+
+  it('keeps hash links and escaped labels exact while unsafe link targets stay inert', () => {
+    const linkSentence = 'Dieser Abschnitt erklärt den Begriff mit [\\*literal\\*](#fazit), [protokollrelativ](//example.com) und [Zugangsdaten](https://user:pass@example.com).';
+    const body = VALID_BODY.replace(
+      'Dieser Abschnitt erklärt den Begriff und verweist auf [Vertiefung](/wissen/vertiefung).',
+      linkSentence,
+    );
+    const payload = validPayload({ body });
+    const projection = validProjection(payload);
+    projection.sections[1].normalized_text = 'Dieser Abschnitt erklärt den Begriff mit *literal*, protokollrelativ und Zugangsdaten. Merkmal Einordnung Status Beispiel Die Grafik erklärt Teststoff anschaulich.';
+    projection.sections[1].links = [{ label: '*literal*', url: '#fazit' }];
+    const request = validRequest({ body }, { expected_projection: projection });
+    const snapshot = renderKnowledgeMagazineSnapshot(request);
+    const document = new JSDOM(renderKnowledgeMagazineMarkup(request)).window.document;
+
+    expect(snapshot.result, JSON.stringify(snapshot.errors, null, 2)).toBe('PASS');
+    expect(snapshot.actual_projection.sections[1].links).toEqual([{ label: '*literal*', url: '#fazit' }]);
+    expect(document.querySelector('#was-ist-teststoff a[href="#fazit"]')?.textContent).toBe('*literal*');
+    expect(Array.from(document.querySelectorAll('a')).some((link) => link.textContent === 'protokollrelativ')).toBe(false);
+    expect(Array.from(document.querySelectorAll('a')).some((link) => link.textContent === 'Zugangsdaten')).toBe(false);
+  });
+
+  it('projects formatted image alt text and captions exactly as the rendered figure', () => {
+    const body = VALID_BODY
+      .replace('![Schema von Teststoff]', '![**Schema von Teststoff**]')
+      .replace('*Die Grafik erklärt Teststoff anschaulich.*', '_Die **Grafik** erklärt Teststoff anschaulich._');
+    const payload = validPayload({ body });
+    const projection = validProjection(payload);
+    const request = validRequest({ body }, { expected_projection: projection });
+    const snapshot = renderKnowledgeMagazineSnapshot(request);
+
+    expect(snapshot.result, JSON.stringify(snapshot.errors, null, 2)).toBe('PASS');
+    expect(snapshot.actual_projection.sections[1].assets).toEqual([{
+      src: GENERATED_ASSET_PATH,
+      alt: 'Schema von Teststoff',
+      caption: 'Die Grafik erklärt Teststoff anschaulich.',
+    }]);
   });
 
   it('keeps an enriched sources DOM byte-equal to the frozen source projection', () => {
@@ -625,7 +690,7 @@ describe('knowledge magazine real-render snapshot', () => {
     expect(sections.find((section) => section.section_id === 'rechtlicher-hinweis')?.normalized_text).toBe('Dieser Hinweis bleibt sichtbar.');
   });
 
-  it('rejects route mismatch and a missing magazine marker', () => {
+  it('rejects route mismatch and a missing publication marker', () => {
     const routeMismatch = renderKnowledgeMagazineSnapshot(validRequest({}, { route: '/wissen/anderer-stoff' }));
     expect(errorCodes(routeMismatch)).toContain('ROUTE_SLUG_MISMATCH');
 
@@ -633,6 +698,7 @@ describe('knowledge magazine real-render snapshot', () => {
       body: VALID_BODY.replace('<!-- knowledge-template:magazine -->\n\n', ''),
     }));
     expect(errorCodes(markerMissing)).toContain('MAGAZINE_MARKER_MISSING');
+    expect(markerMissing.actual.template).toBe('magazine');
   });
 
   it('offers a Windows-safe CLI with atomic replacement and stable PASS/FAIL/input exits', () => {

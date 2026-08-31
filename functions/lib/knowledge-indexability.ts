@@ -1,4 +1,5 @@
 import type { PublicKnowledgeArticle } from '../api/modules/knowledge'
+import { isKnowledgeControlMarkerLine, knowledgeInlineMarkdownToText } from './knowledge-inline-markdown.mjs'
 
 export const SITE_ORIGIN = 'https://supplementstack.de'
 const SEARCH_CRAWLERS = Object.freeze([
@@ -41,21 +42,17 @@ function serializeBootstrapJson(value: unknown): string {
 }
 
 function inlineMarkdownToText(value: string): string {
-  return value
-    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-    .replace(/<((?:https?:\/\/|mailto:)[^>]+)>/g, '$1')
-    .replace(/<[^>]+>/g, '')
-    // Keep inline-code backticks because the canonical render projection also
-    // retains them in normalized visible text; removing them makes exact raw
-    // HTML delivery readback fail despite otherwise identical article bytes.
-    .replace(/~/g, '')
-    .replace(/\\([\\`*_[\]{}()#+.!>|-])/g, '$1')
+  return knowledgeInlineMarkdownToText(value)
+}
+
+function inlineMetadataText(value: string): string {
+  return knowledgeInlineMarkdownToText(value).replace(/\s+/g, ' ').trim()
 }
 
 export function markdownToPrerenderText(markdown: string): string {
-  const lines = markdown.replace(/<!--[\s\S]*?-->/g, '').split(/\r?\n/)
+  const lines = markdown.split(/\r?\n/)
   const tableLines = new Set<number>()
+  const captionLines = new Set<number>()
   const tableCells = (line: string): string[] | null => {
     const trimmed = line.trim()
     if (!trimmed.includes('|')) return null
@@ -69,14 +66,27 @@ export function markdownToPrerenderText(markdown: string): string {
     tableLines.add(index + 1)
     for (let row = index + 2; row < lines.length && tableCells(lines[row]) && !isSeparator(lines[row]); row += 1) tableLines.add(row)
   }
+  for (let index = 0; index < lines.length; index += 1) {
+    if (!/^!\[([^\]\n]*)\]\([^)]*\)\s*$/.test(lines[index].trim())) continue
+    let captionIndex = index + 1
+    while (captionIndex < lines.length && !lines[captionIndex].trim()) captionIndex += 1
+    if (/^(?:\*([^*\n]+)\*|_([^_\n]+)_)$/.test(lines[captionIndex]?.trim() ?? '')) captionLines.add(captionIndex)
+  }
 
   return lines
     .map((line, index) => {
+      if (isKnowledgeControlMarkerLine(line)) return ''
       if (/^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(line)) return ''
       let withoutBlockSyntax = line
         .replace(/^\s{0,3}#{1,6}\s+/, '')
         .replace(/^\s*>\s?/, '')
         .replace(/^\s*(?:[-+*]|\d+[.)])\s+/, '')
+      const image = withoutBlockSyntax.trim().match(/^!\[([^\]\n]*)\]\([^)]*\)\s*$/)
+      if (image) withoutBlockSyntax = image[1]
+      const caption = captionLines.has(index)
+        ? withoutBlockSyntax.trim().match(/^(?:\*([^*\n]+)\*|_([^_\n]+)_)$/)
+        : null
+      if (caption) withoutBlockSyntax = caption[1] ?? caption[2]
       if (tableLines.has(index)) {
         withoutBlockSyntax = withoutBlockSyntax
           .replace(/^\s*\|/, '')
@@ -92,11 +102,24 @@ export function markdownToPrerenderText(markdown: string): string {
 }
 
 export function articleJsonLd(article: PublicKnowledgeArticle, canonicalUrl: string): Record<string, unknown> {
-  return article.seo?.json_ld ?? {
+  const storedJsonLd = article.seo?.json_ld
+  if (storedJsonLd) {
+    return {
+      ...storedJsonLd,
+      ...(typeof storedJsonLd.headline === 'string'
+        ? { headline: inlineMetadataText(storedJsonLd.headline) }
+        : {}),
+      ...(typeof storedJsonLd.description === 'string'
+        ? { description: inlineMetadataText(storedJsonLd.description) }
+        : {}),
+    }
+  }
+
+  return {
     '@context': 'https://schema.org',
     '@type': 'Article',
-    headline: article.title,
-    description: article.summary,
+    headline: inlineMetadataText(article.title),
+    description: inlineMetadataText(article.summary),
     mainEntityOfPage: canonicalUrl,
     inLanguage: 'de',
     datePublished: article.published_at,
@@ -121,8 +144,8 @@ export function renderKnowledgeArticleHtml(
   article: PublicKnowledgeArticle,
   canonicalUrl: string,
 ): string {
-  const metaTitle = article.seo?.meta_title ?? article.title
-  const metaDescription = article.seo?.meta_description ?? article.summary
+  const metaTitle = inlineMetadataText(article.seo?.meta_title ?? article.title)
+  const metaDescription = inlineMetadataText(article.seo?.meta_description ?? article.summary)
   const robots = article.seo?.robots ?? 'index,follow'
   const jsonLd = JSON.stringify(articleJsonLd(article, canonicalUrl)).replace(/</g, '\\u003c')
   const articleBootstrap = serializeBootstrapJson({ article })
@@ -132,8 +155,8 @@ export function renderKnowledgeArticleHtml(
   const prerenderedArticle = `
     <main class="knowledge-prerender" data-knowledge-prerender="${escapeHtml(article.slug)}">
       <article>
-        <h1>${escapeHtml(article.title)}</h1>
-        <p>${escapeHtml(article.summary)}</p>
+        <h1>${escapeHtml(inlineMetadataText(article.title))}</h1>
+        <p>${escapeHtml(inlineMetadataText(article.summary))}</p>
         <div style="white-space: pre-wrap">${escapeHtml(markdownToPrerenderText(article.body))}</div>
         <section aria-labelledby="prerender-sources">
           <h2 id="prerender-sources">Quellen</h2>

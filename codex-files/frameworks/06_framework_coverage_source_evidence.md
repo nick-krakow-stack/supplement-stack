@@ -755,7 +755,7 @@ exakt diesen Feldern:
   "evidence_membership_hash": "sha256:...",
   "framework": {
     "framework_id": "stage2.clinical_single_study",
-    "version": "2.0.0",
+    "version": "2.0.1",
     "variant": "clinical_single_study",
     "path": "codex-files/frameworks/01_framework_single_study.md",
     "byte_hash": "sha256:..."

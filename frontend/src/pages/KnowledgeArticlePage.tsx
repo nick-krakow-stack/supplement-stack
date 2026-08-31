@@ -1,5 +1,5 @@
-import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
-import { Link, useLocation, useParams } from 'react-router-dom';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Link, useLocation, useNavigationType, useParams } from 'react-router-dom';
 import { ArrowLeft, ExternalLink } from 'lucide-react';
 import { apiPath } from '../api/base';
 import {
@@ -9,15 +9,16 @@ import {
 import type { KnowledgeArticle } from '../types';
 import {
   hasUnsafeKnowledgeUrlCharacters,
-  isMagazineKnowledgeArticle,
   isRenderableKnowledgeSource,
   KnowledgeMagazineArticle,
   KnowledgeSourceInternalArticleLinks,
   normalizeKnowledgeSourceUrl,
 } from './KnowledgeMagazineArticle';
 import {
+  knowledgeInlineMarkdownToText,
   type KnowledgeMarkdownBlock,
   parseKnowledgeMarkdown,
+  renderKnowledgeInlineMarkdown,
   renderKnowledgeMarkdownBlock,
 } from './KnowledgeMarkdown';
 
@@ -54,14 +55,15 @@ function buildStudyArticleSections(markdown: string): StudyArticleSection[] {
 
   for (const block of blocks) {
     if (block.type === 'heading' && block.level === 2) {
-      if (/^quellen?$/i.test(block.text.trim())) {
+      const headingText = knowledgeInlineMarkdownToText(block.text).trim();
+      if (/^quellen?$/i.test(headingText)) {
         active = null;
         skippingSources = true;
         continue;
       }
       skippingSources = false;
-      const isFazit = /^fazit$/i.test(block.text.trim());
-      const id = isFazit ? 'fazit' : studySectionId(block.text, usedIds);
+      const isFazit = /^fazit$/i.test(headingText);
+      const id = isFazit ? 'fazit' : studySectionId(headingText, usedIds);
       usedIds.add(id);
       active = { id, title: block.text, blocks: [] };
       sections.push(active);
@@ -122,10 +124,7 @@ export function knowledgeSeoTimestamps(article: KnowledgeArticle): { publishedAt
 }
 
 function normalizeSeoText(value: string): string {
-  return value
-    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-    .replace(/[*_`~]+/g, '')
+  return knowledgeInlineMarkdownToText(value)
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -258,6 +257,8 @@ function createMetaTag(attributeName: 'name' | 'property', attributeValue: strin
 export default function KnowledgeArticlePage() {
   const { slug } = useParams();
   const location = useLocation();
+  const navigationType = useNavigationType();
+  const previousArticleSlugRef = useRef<string | null>(null);
   const bypassPrimedArticle = useMemo(
     () => new URLSearchParams(location.search).has('cfcheck'),
     [location.search],
@@ -269,6 +270,13 @@ export default function KnowledgeArticlePage() {
   const [article, setArticle] = useState<KnowledgeArticle | null>(initialArticle);
   const [loading, setLoading] = useState(initialArticle === null);
   const [error, setError] = useState('');
+
+  useLayoutEffect(() => {
+    const previousSlug = previousArticleSlugRef.current;
+    previousArticleSlugRef.current = slug ?? null;
+    if (!slug || previousSlug === slug || navigationType === 'POP' || location.hash) return;
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [location.hash, navigationType, slug]);
   const articleApiEndpoint = useMemo(
     () => slug ? knowledgeApiPathWithCacheCheck(`/knowledge/${encodeURIComponent(slug)}`, location.search) : null,
     [location.search, slug],
@@ -378,18 +386,29 @@ export default function KnowledgeArticlePage() {
       );
     }
 
-    const structuredData: Record<string, unknown> = visibleArticle.seo?.json_ld ?? {
-      '@context': 'https://schema.org',
-      '@type': 'Article',
-      headline: articleTitle,
-      description,
-      mainEntityOfPage: canonicalUrl,
-      inLanguage: 'de',
-      ...(publishedAt && modifiedAt ? { datePublished: publishedAt, dateModified: modifiedAt } : {}),
-      author: organization,
-      publisher: organization,
-      ...(imageUrl ? { image: imageUrl } : {}),
-    };
+    const storedStructuredData = visibleArticle.seo?.json_ld;
+    const structuredData: Record<string, unknown> = storedStructuredData
+      ? {
+        ...storedStructuredData,
+        ...(typeof storedStructuredData.headline === 'string'
+          ? { headline: normalizeSeoText(storedStructuredData.headline) }
+          : {}),
+        ...(typeof storedStructuredData.description === 'string'
+          ? { description: normalizeSeoText(storedStructuredData.description) }
+          : {}),
+      }
+      : {
+        '@context': 'https://schema.org',
+        '@type': 'Article',
+        headline: articleTitle,
+        description,
+        mainEntityOfPage: canonicalUrl,
+        inLanguage: 'de',
+        ...(publishedAt && modifiedAt ? { datePublished: publishedAt, dateModified: modifiedAt } : {}),
+        author: organization,
+        publisher: organization,
+        ...(imageUrl ? { image: imageUrl } : {}),
+      };
     const structuredDataElement = document.createElement('script');
     structuredDataElement.type = 'application/ld+json';
     structuredDataElement.dataset.knowledgeArticleJsonLd = 'true';
@@ -406,7 +425,7 @@ export default function KnowledgeArticlePage() {
 
   const reviewedDate = formatReviewedDate(visibleArticle?.reviewed_at);
   const normalizedBody = visibleArticle?.body ?? '';
-  const useMagazineTemplate = isMagazineKnowledgeArticle(normalizedBody);
+  const useMagazineTemplate = visibleArticle?.article_layer === 'main_article';
   const backToKnowledgeOverview = `/wissen${location.search}`;
   const stageIngredientName = visibleArticle?.ingredients?.length === 1
     ? visibleArticle.ingredients[0].name?.trim() || null
@@ -456,8 +475,8 @@ export default function KnowledgeArticlePage() {
           className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8"
         >
           <div className="mb-6 border-b border-slate-100 pb-6">
-            <h1 className="break-words text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">{visibleArticle.title}</h1>
-            <p data-knowledge-ui="dek" className="mt-4 text-base font-semibold leading-relaxed text-slate-600">{visibleArticle.summary}</p>
+            <h1 className="break-words text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">{renderKnowledgeInlineMarkdown(visibleArticle.title)}</h1>
+            <p data-knowledge-ui="dek" className="mt-4 text-base font-semibold leading-relaxed text-slate-600">{renderKnowledgeInlineMarkdown(visibleArticle.summary)}</p>
             <div className="mt-4 flex flex-wrap gap-3 text-sm font-semibold text-slate-500">
               {stageIngredientName && (
                 <span data-knowledge-ui="ingredient-chip">Wirkstoffe: {stageIngredientName}</span>
@@ -481,7 +500,7 @@ export default function KnowledgeArticlePage() {
                   <h2 className={section.id === 'fazit'
                     ? 'text-sm font-black uppercase tracking-[0.12em] text-emerald-700'
                     : 'mt-8 text-xl font-black tracking-tight text-slate-950 sm:text-2xl'}>
-                    {section.title}
+                    {renderKnowledgeInlineMarkdown(section.title)}
                   </h2>
                 )}
                 {section.blocks.map(renderKnowledgeMarkdownBlock)}

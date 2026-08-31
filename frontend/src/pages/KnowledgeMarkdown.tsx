@@ -1,5 +1,14 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import {
+  knowledgeInlineMarkdownToText,
+  isKnowledgeControlMarkerLine,
+  normalizeKnowledgeInlineLink,
+  tokenizeKnowledgeInlineMarkdown,
+} from '../../../functions/lib/knowledge-inline-markdown.mjs';
+import type { KnowledgeInlineMarkdownToken } from '../../../functions/lib/knowledge-inline-markdown.mjs';
+
+export { knowledgeInlineMarkdownToText };
 
 type HeadingLevel = 1 | 2 | 3;
 
@@ -71,7 +80,7 @@ function isAllowedImageSrc(src: string): boolean {
 }
 
 export function isKnowledgeSourceHeading(header: string): boolean {
-  return /^(quellen?|sources?)$/i.test(header.trim());
+  return /^(quellen?|sources?)$/i.test(knowledgeInlineMarkdownToText(header).trim());
 }
 
 function startsTable(lines: string[], index: number): boolean {
@@ -98,6 +107,11 @@ export function parseKnowledgeMarkdown(markdown: string): KnowledgeMarkdownBlock
   while (index < lines.length) {
     const line = lines[index];
     if (!line.trim()) {
+      index += 1;
+      continue;
+    }
+
+    if (isKnowledgeControlMarkerLine(line)) {
       index += 1;
       continue;
     }
@@ -180,58 +194,42 @@ export function parseKnowledgeMarkdown(markdown: string): KnowledgeMarkdownBlock
   return blocks;
 }
 
-function isInternalKnowledgeLink(href: string): boolean {
-  return href.startsWith('/wissen/');
-}
-
-function isExternalLink(href: string): boolean {
-  return /^https?:\/\//i.test(href) || href.startsWith('//');
-}
-
 export function renderKnowledgeInlineMarkdown(text: string): ReactNode[] {
-  const nodes: ReactNode[] = [];
-  const linkPattern = /\[([^\]\n]+)]\(([^)\s]+)\)/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
+  const renderTokens = (tokens: KnowledgeInlineMarkdownToken[], keyPrefix: string): ReactNode[] => tokens.map((token, index) => {
+    const key = `${keyPrefix}-${index}`;
+    if (token.type === 'text') return token.value;
+    if (token.type === 'strong') return <strong key={key}>{renderTokens(token.children, key)}</strong>;
+    if (token.type === 'emphasis') return <em key={key}>{renderTokens(token.children, key)}</em>;
 
-  while ((match = linkPattern.exec(text)) !== null) {
-    if (match.index > lastIndex) {
-      nodes.push(text.slice(lastIndex, match.index));
-    }
-
-    const label = match[1];
-    const href = match[2];
-    const key = `${href}-${match.index}`;
+    const normalizedLink = normalizeKnowledgeInlineLink(token.href);
+    const label = renderTokens(token.children, key);
     const className = 'font-bold text-blue-700 underline-offset-4 hover:text-blue-900 hover:underline';
 
-    if (isInternalKnowledgeLink(href)) {
-      nodes.push(
-        <Link key={key} to={href} className={className} data-knowledge-leaf="link">
+    if (normalizedLink?.kind === 'internal') {
+      return (
+        <Link key={key} to={normalizedLink.href} className={className} data-knowledge-leaf="link">
           {label}
-        </Link>,
-      );
-    } else if (isExternalLink(href)) {
-      nodes.push(
-        <a key={key} href={href} target="_blank" rel="noopener noreferrer" className={className} data-knowledge-leaf="link">
-          {label}
-        </a>,
-      );
-    } else {
-      nodes.push(
-        <a key={key} href={href} className={className} data-knowledge-leaf="link">
-          {label}
-        </a>,
+        </Link>
       );
     }
+    if (normalizedLink?.kind === 'external') {
+      return (
+        <a key={key} href={normalizedLink.href} target="_blank" rel="noopener noreferrer" className={className} data-knowledge-leaf="link">
+          {label}
+        </a>
+      );
+    }
+    if (normalizedLink?.kind === 'hash') {
+      return (
+        <a key={key} href={normalizedLink.href} className={className} data-knowledge-leaf="link">
+          {label}
+        </a>
+      );
+    }
+    return label;
+  });
 
-    lastIndex = linkPattern.lastIndex;
-  }
-
-  if (lastIndex < text.length) {
-    nodes.push(text.slice(lastIndex));
-  }
-
-  return nodes.length ? nodes : [text];
+  return renderTokens(tokenizeKnowledgeInlineMarkdown(text), 'inline');
 }
 
 function renderHeading(block: Extract<KnowledgeMarkdownBlock, { type: 'heading' }>, index: number): ReactNode {
@@ -289,8 +287,8 @@ export function renderKnowledgeMarkdownBlock(block: KnowledgeMarkdownBlock, inde
         key={index}
         className="w-full max-w-full overflow-hidden rounded-lg border border-slate-200 bg-white p-2 shadow-sm sm:p-3"
       >
-        <img src={block.src} alt={block.alt} className="block h-auto w-full rounded-md object-contain" loading="lazy" />
-        {block.caption && <figcaption className="mt-2 text-xs font-medium text-slate-500">{block.caption}</figcaption>}
+        <img src={block.src} alt={knowledgeInlineMarkdownToText(block.alt)} className="block h-auto w-full rounded-md object-contain" loading="lazy" />
+        {block.caption && <figcaption className="mt-2 text-xs font-medium text-slate-500">{renderKnowledgeInlineMarkdown(block.caption)}</figcaption>}
       </figure>
     );
   }

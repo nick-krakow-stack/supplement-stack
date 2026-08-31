@@ -63,7 +63,7 @@ export const RELEASE_SCHEMA = 'content_release.v2'
 export const RUNNER_VERSION = 'nutrient-content-runner.v2.2.0'
 export const ARTICLE_VALIDATOR_VERSION = 'article-validator.v2.3.0'
 export const EVIDENCE_VALIDATOR_VERSION = 'evidence-pipeline-builder.v2.0.0'
-export const RENDERER_VERSION = 'knowledge-magazine-react-ssr.v2.2.0'
+export const RENDERER_VERSION = 'knowledge-magazine-react-ssr.v2.2.1'
 export const RUN_STATES = Object.freeze([
   'WAITING_FOR_CORRECTION',
   'WAITING_FOR_CORRECTION_REVIEW',

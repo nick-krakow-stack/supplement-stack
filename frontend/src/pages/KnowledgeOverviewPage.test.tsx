@@ -173,7 +173,7 @@ describe('KnowledgeOverviewPage', () => {
     expect(screen.getByText('Vitamin D').closest('.nutri')?.tagName).toBe('ARTICLE');
   });
 
-  it('uses central descriptions and aliases for search and shows the approved neutral fallback for missing copy', async () => {
+  it('uses central descriptions and aliases for search without inventing copy for missing text', async () => {
     stubOverview([
       status(1, 'Magnesium', 'mineralstoffe', {
         description: 'Muskel- und Nervenfunktion',
@@ -187,7 +187,9 @@ describe('KnowledgeOverviewPage', () => {
     renderOverview();
 
     expect(await screen.findByText('Muskel- und Nervenfunktion')).toBeTruthy();
-    expect(screen.getByText('Kurztext wird geprüft.')).toBeTruthy();
+    const boswelliaCard = screen.getByText('Boswellia (Weihrauch)').closest('.nutri');
+    expect(boswelliaCard?.querySelector('p')).toBeNull();
+    expect(screen.queryByText('Kurztext wird geprüft.')).toBeNull();
     expect(screen.getByText('Quellen beschreiben Ginseng im Zusammenhang mit Energie und Stress.')).toBeTruthy();
 
     fireEvent.change(screen.getByRole('searchbox', { name: 'Wirkstoff suchen' }), { target: { value: 'Magnesiumcitrat' } });
@@ -261,7 +263,7 @@ describe('KnowledgeOverviewPage', () => {
     expect(screen.getByLabelText('Aktuelle URL').textContent).toBe('/wissen?category=mineralstoffe&q=magnesium');
   });
 
-  it('renders unfinished cards as noninteractive content with a clear preparation status', async () => {
+  it('renders cards without articles as noninteractive content without a public lifecycle status', async () => {
     stubOverview([status(1, 'Zeolith', 'sonstige')]);
     renderOverview();
 
@@ -270,7 +272,8 @@ describe('KnowledgeOverviewPage', () => {
     expect(card?.getAttribute('role')).toBeNull();
     expect(card?.getAttribute('tabindex')).toBeNull();
     expect(card?.getAttribute('data-ingredient-ids')).toBe('1');
-    expect(within(card as HTMLElement).getByText('Artikel in Vorbereitung')).toBeTruthy();
+    expect(within(card as HTMLElement).queryByText('Artikel in Vorbereitung')).toBeNull();
+    expect(card?.querySelector('.nutri__tags')).toBeNull();
     expect(screen.queryByRole('button', { name: /Zeolith/ })).toBeNull();
     expect(screen.getByText('1 Eintrag')).toBeTruthy();
   });

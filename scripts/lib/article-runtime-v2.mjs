@@ -11,6 +11,7 @@ import { buildStage2InterpretationProjectionV1 } from './content-publication-tar
 import { buildKnowledgeBadgeExpectationsV1, validateKnowledgeBadgeReadbackV1 } from './knowledge-badge-readback-v1.mjs'
 import { indexabilityNeedsReleaseV1, validateArticleOriginIndexabilityV1, validateRawHtmlDeliveryV1, validateOriginIndexabilityStateV1 } from './public-delivery-status-v1.mjs'
 import { validatePublicApiReadbackActualV1 } from './public-api-readback-v1.mjs'
+import { isKnowledgeControlMarkerLine, knowledgeInlineMarkdownToText, normalizeKnowledgeInlineLink, tokenizeKnowledgeInlineMarkdown } from '../../functions/lib/knowledge-inline-markdown.mjs'
 
 const HASH = /^sha256:[a-f0-9]{64}$/
 const MAX_REVISION = 2
@@ -296,7 +297,7 @@ function markdownAst(markdown) {
     const bullet = line.match(/^([-*+])\s+(.+)$/)
     if (bullet) { flush(); nodes.push({ type: 'list_item', marker: bullet[1], text: bullet[2].trim() }); continue }
     if (/^\|.*\|\s*$/.test(line)) { flush(); nodes.push({ type: 'table_row', cells: line.slice(1, line.lastIndexOf('|')).split('|').map((cell) => cell.trim()) }); continue }
-    if (/^<!--.*-->$/.test(line.trim())) { flush(); nodes.push({ type: 'marker', value: line.trim() }); continue }
+    if (isKnowledgeControlMarkerLine(line)) { flush(); nodes.push({ type: 'marker', value: line.trim() }); continue }
     paragraph.push(line)
   }
   flush()
@@ -305,7 +306,22 @@ function markdownAst(markdown) {
 
 function linkInventory(markdown) {
   const links = []
-  for (const match of markdown.matchAll(/(?<!!)\[([^\]\n]+)\]\(([^)\n]+)\)/g)) links.push({ label: match[1].trim(), url: match[2].trim().replace(/^<|>$/g, '') })
+  const markdownWithoutImagesOrComments = String(markdown)
+    .split('\n')
+    .filter((line) => !isKnowledgeControlMarkerLine(line))
+    .join('\n')
+    .replace(/!\[[^\]\n]*\]\([^\n)]*\)/g, '')
+  const tokenText = (tokens) => tokens.map((token) => token.type === 'text' ? token.value : tokenText(token.children)).join('')
+  const collect = (tokens) => {
+    for (const token of tokens) {
+      if (token.type === 'link') {
+        const normalizedLink = normalizeKnowledgeInlineLink(token.href)
+        if (normalizedLink) links.push({ label: normalizeProjectionText(tokenText(token.children)), url: normalizedLink.href })
+      }
+      else if (Array.isArray(token.children)) collect(token.children)
+    }
+  }
+  for (const line of markdownWithoutImagesOrComments.split('\n')) collect(tokenizeKnowledgeInlineMarkdown(line))
   return links
 }
 
@@ -315,22 +331,21 @@ function normalizeProjectionText(value) {
 
 function projectionUrl(value) {
   const raw = String(value).trim()
-  try {
-    if (raw.startsWith('/wissen/')) {
-      const parsed = new URL(raw, 'https://supplementstack.invalid')
-      if (parsed.origin !== 'https://supplementstack.invalid' || !parsed.pathname.startsWith('/wissen/')) fail(`invalid internal projection URL ${raw}`)
-      return `${parsed.pathname}${parsed.search}${parsed.hash}`
-    }
-    const parsed = new URL(raw)
-    if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || !parsed.hostname) fail(`invalid external projection URL ${raw}`)
-    return parsed.href
-  } catch (error) {
-    fail(`invalid projection URL ${raw}: ${error.message}`)
-  }
+  const normalizedLink = normalizeKnowledgeInlineLink(raw)
+  if (!normalizedLink) fail(`invalid projection URL ${raw}`)
+  return normalizedLink.href
 }
 
 function projectionInlineText(value) {
-  return normalizeProjectionText(String(value).replace(/\[([^\]\n]+)]\(([^)\s]+)\)/g, '$1'))
+  return normalizeProjectionText(knowledgeInlineMarkdownToText(String(value)))
+}
+
+function projectInlineLinksV2(markdown) {
+  return linkInventory(markdown).map((link) => ({ label: normalizeProjectionText(link.label), url: projectionUrl(link.url) }))
+}
+
+function projectVisibleAssetV2(asset) {
+  return { src: asset.public_url, alt: projectionInlineText(asset.alt), caption: projectionInlineText(asset.caption) }
 }
 
 function projectionSectionId(value, used) {
@@ -391,7 +406,7 @@ function projectionSectionText(raw) {
   for (let index = 0; index < lines.length; index += 1) {
     if (hiddenFoodGridHeaderRows.has(index)) continue
     const line = lines[index].trim()
-    if (!line || /^<!--.*-->$/.test(line) || /^\|?(?:\s*:?-{3,}:?\s*\|)+\s*$/.test(line)) continue
+    if (!line || isKnowledgeControlMarkerLine(line) || /^\|?(?:\s*:?-{3,}:?\s*\|)+\s*$/.test(line)) continue
     const image = line.match(/^!\[([^\]]*)]\(([^)]*)\)$/)
     if (image) continue
     let textValue = line.replace(/^#{1,3}\s+/, '').replace(/^[-*+]\s+/, '').replace(/^\d+\.\s+/, '')
@@ -413,7 +428,7 @@ function expectedStage3Projection({ article, markdown, publishPayload, assets })
   const sections = []
   let numbered = 0
   for (const [index, heading] of headings.entries()) {
-    const title = heading[1].trim()
+    const title = projectionInlineText(heading[1].trim())
     const start = (heading.index ?? 0) + heading[0].length
     const end = headings[index + 1]?.index ?? body.length
     const raw = body.slice(start, end).trim()
@@ -426,14 +441,14 @@ function expectedStage3Projection({ article, markdown, publishPayload, assets })
     if (!isOverview && !isControl) numbered += 1
     const sectionStart = markerIndex + '<!-- knowledge-template:magazine -->'.length + start
     const sectionEnd = markerIndex + '<!-- knowledge-template:magazine -->'.length + end
-    const sectionAssets = assets.filter((asset) => asset.position.markdown_offset >= sectionStart && asset.position.markdown_offset < sectionEnd).map((asset) => ({ src: asset.public_url, alt: asset.alt, caption: asset.caption }))
+    const sectionAssets = assets.filter((asset) => asset.position.markdown_offset >= sectionStart && asset.position.markdown_offset < sectionEnd).map(projectVisibleAssetV2)
     sections.push({
       section_id: sectionId,
       kind: isOverview ? 'overview' : isControl ? 'control' : isFazit ? 'fazit' : 'content',
       control_type: controlMatch?.[1].toLowerCase() === 'merkkasten' ? 'merkkasten' : isControl ? 'legal_notice' : null,
       heading: title, number: isOverview || isControl ? null : String(numbered).padStart(2, '0'), order: sections.length,
       normalized_text: projectionSectionText(raw),
-      links: linkInventory(raw).map((link) => ({ label: normalizeProjectionText(link.label), url: projectionUrl(link.url) })),
+      links: projectInlineLinksV2(raw),
       tables: projectionTables(raw), assets: sectionAssets,
     })
   }
@@ -447,7 +462,7 @@ function expectedStage3Projection({ article, markdown, publishPayload, assets })
   const fazit = sections.find((section) => section.section_id === 'fazit')
   if (!fazit) fail(`${article.article_id} projection has no Fazit section`)
   return {
-    schema: 'article_render_projection.v2', article_id: article.article_id, route, template: 'magazine', h1: publishPayload.title, dek: publishPayload.dek,
+    schema: 'article_render_projection.v2', article_id: article.article_id, route, template: 'magazine', h1: projectionInlineText(publishPayload.title), dek: projectionInlineText(publishPayload.dek),
     ui: {
       contract_version: 'knowledge-magazine-ui.v2', eyebrow: 'Wissen', toc_title: 'Auf dieser Seite', ingredient_chip: 'Wirkstoff: Wissensartikel', reviewed_date: null,
       reading_time: (() => {
@@ -466,16 +481,16 @@ function expectedStage2Projection({ article, markdown, publishPayload, assets })
   const headings = [...markdown.matchAll(/^##\s+(.+?)\s*$/gm)]
   const sections = []
   for (const [index, heading] of headings.entries()) {
-    const title = heading[1].trim()
+    const title = projectionInlineText(heading[1].trim())
     const start = (heading.index ?? 0) + heading[0].length
     const end = headings[index + 1]?.index ?? markdown.length
     if (/^quellen?$/i.test(title)) continue
     const raw = markdown.slice(start, end).trim()
     const sectionId = /^fazit$/i.test(title) ? 'fazit' : projectionSectionId(title, new Set(sections.map((section) => section.section_id)))
-    const sectionAssets = assets.filter((asset) => asset.position.markdown_offset >= start && asset.position.markdown_offset < end).map((asset) => ({ src: asset.public_url, alt: asset.alt, caption: asset.caption }))
+    const sectionAssets = assets.filter((asset) => asset.position.markdown_offset >= start && asset.position.markdown_offset < end).map(projectVisibleAssetV2)
     sections.push({
       section_id: sectionId, kind: /^fazit$/i.test(title) ? 'fazit' : 'content', control_type: null, heading: title, number: null, order: sections.length,
-      normalized_text: projectionSectionText(raw), links: linkInventory(raw).map((link) => ({ label: normalizeProjectionText(link.label), url: projectionUrl(link.url) })),
+      normalized_text: projectionSectionText(raw), links: projectInlineLinksV2(raw),
       tables: projectionTables(raw), assets: sectionAssets,
     })
   }
@@ -488,7 +503,7 @@ function expectedStage2Projection({ article, markdown, publishPayload, assets })
   const fazit = sections.find((section) => section.section_id === 'fazit')
   if (!fazit) fail(`${article.article_id} Stage-2 projection has no Fazit section`)
   return {
-    schema: 'article_render_projection.v2', article_id: article.article_id, route: `/wissen/${article.slug}`, template: 'study_article_v2', h1: publishPayload.title, dek: publishPayload.dek,
+    schema: 'article_render_projection.v2', article_id: article.article_id, route: `/wissen/${article.slug}`, template: 'study_article_v2', h1: projectionInlineText(publishPayload.title), dek: projectionInlineText(publishPayload.dek),
     ui: { contract_version: 'knowledge-study-article-ui.v2', eyebrow: null, toc_title: null, ingredient_chip: null, reviewed_date: null, reading_time: null, sources_label: 'Quellen', sources_count: { count: publishPayload.sources.length, label: `${publishPayload.sources.length} ${publishPayload.sources.length === 1 ? 'Quelle' : 'Quellen'}` } },
     sections, toc: [], fazit: { section_id: fazit.section_id, normalized_text: fazit.normalized_text },
     sources: publishPayload.sources.map((source, order) => ({ source_id: source.source_id, label: normalizeProjectionText(source.label), url: projectionUrl(source.url), order })),
@@ -623,7 +638,12 @@ function structuredFactQuantityKey(fact) {
   return baseUnit ? `${Number(fact.value)}|${normalizeUnit(baseUnit)}` : null
 }
 
-function normalizeVisibleSeoTextV2(value) { return String(value ?? '').normalize('NFC').replace(/\s+/g, ' ').trim() }
+function normalizeVisibleSeoTextV2(value) {
+  return knowledgeInlineMarkdownToText(String(value ?? ''))
+    .normalize('NFC')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
 
 function technicalMetaTitleV2(value, contextPrefix = null) {
   const visibleTitle = normalizeVisibleSeoTextV2(value)
@@ -807,7 +827,7 @@ function buildRenderSnapshot({ context, article, writer, articleByteHash, visibl
   if (!existsSync(snapshotPath)) infrastructureFail(`${article.article_id} React renderer did not create its snapshot`)
   const snapshot = readJson(snapshotPath, `${article.article_id} render snapshot`)
   if (snapshot.schema !== 'article_render_snapshot.v2' || snapshot.content_hash !== artifactHashV2(snapshot)) fail(`${article.article_id} render snapshot schema/hash is invalid`)
-  if (snapshot.result !== 'PASS' || snapshot.article_id !== article.article_id || snapshot.article_byte_hash !== articleByteHash || snapshot.visible_payload_hash !== visiblePayloadHash || snapshot.payload_hash !== payloadHash || snapshot.request_hash !== canonicalJsonHash(requestBase) || snapshot.projection_hash !== requestBase.projection_hash || snapshot.renderer?.version !== context.rendererVersion || snapshot.renderer?.contract_version !== 'knowledge-magazine-dom-contract.v2.2.0') fail(`${article.article_id} render snapshot lineage/result/renderer differs`)
+  if (snapshot.result !== 'PASS' || snapshot.article_id !== article.article_id || snapshot.article_byte_hash !== articleByteHash || snapshot.visible_payload_hash !== visiblePayloadHash || snapshot.payload_hash !== payloadHash || snapshot.request_hash !== canonicalJsonHash(requestBase) || snapshot.projection_hash !== requestBase.projection_hash || snapshot.renderer?.version !== context.rendererVersion || snapshot.renderer?.contract_version !== 'knowledge-magazine-dom-contract.v2.2.1') fail(`${article.article_id} render snapshot lineage/result/renderer differs`)
   if (canonicalJsonHash(snapshot.actual_projection) !== requestBase.projection_hash || !Array.isArray(snapshot.projection_checks) || snapshot.projection_checks.some((entry) => entry.result !== 'PASS') || !Array.isArray(snapshot.checks) || snapshot.checks.some((entry) => entry.result !== 'PASS') || (snapshot.errors ?? []).length) fail(`${article.article_id} rendered DOM differs from the independent compiler projection`)
   return { request, requestPath, snapshotPath, snapshotByteHash: sha256Bytes(readFileSync(snapshotPath)), snapshot }
 }
@@ -1422,4 +1442,4 @@ export function validatePublishReceiptV2({ context, release, receiptPath }) {
   return { status: 'pass', receipt, receiptHash: receipt.content_hash, indexabilityBlockers, deliveryGaps, badgeReadback, badgeMismatches: badgeReadback.mismatches, seoLiveClaim: indexabilityBlockers.length === 0 && deliveryGaps.length === 0 && badgeReadback.result === 'MATCH' }
 }
 
-export { MAX_REVISION, buildTechnicalSeo, findDuplicateLiveSeoTitleV2, normalizeVisibleSeoTextV2, technicalMetaTitleV2, writeJsonAtomic, validateNumberUnitTokens }
+export { MAX_REVISION, buildTechnicalSeo, findDuplicateLiveSeoTitleV2, normalizeVisibleSeoTextV2, projectInlineLinksV2, projectVisibleAssetV2, technicalMetaTitleV2, writeJsonAtomic, validateNumberUnitTokens }
