@@ -3,6 +3,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { StaticRouter } from 'react-router-dom/server';
 import { JSDOM } from 'jsdom';
 import type { KnowledgeArticle, KnowledgeArticleIngredient, KnowledgeArticleSource } from '../types';
+import { knowledgeInlineMarkdownToText } from '../pages/KnowledgeMarkdown';
+import { normalizeKnowledgeInlineLink } from '../../../functions/lib/knowledge-inline-markdown.mjs';
 import {
   calculateKnowledgeReadingMinutes,
   isMagazineKnowledgeArticle,
@@ -11,8 +13,8 @@ import {
   KnowledgeMagazineArticle,
 } from '../pages/KnowledgeMagazineArticle';
 
-export const KNOWLEDGE_MAGAZINE_RENDERER_VERSION = 'knowledge-magazine-react-ssr.v2.2.0';
-export const KNOWLEDGE_MAGAZINE_CONTRACT_VERSION = 'knowledge-magazine-dom-contract.v2.2.0';
+export const KNOWLEDGE_MAGAZINE_RENDERER_VERSION = 'knowledge-magazine-react-ssr.v2.2.1';
+export const KNOWLEDGE_MAGAZINE_CONTRACT_VERSION = 'knowledge-magazine-dom-contract.v2.2.1';
 export const KNOWLEDGE_MAGAZINE_UI_CONTRACT_VERSION = 'knowledge-magazine-ui.v2';
 
 const HASH_PATTERN = /^sha256:[a-f0-9]{64}$/;
@@ -87,8 +89,8 @@ export type ArticleRenderRequestV2 = {
 };
 
 export type RenderSnapshotErrorCode =
-  | 'MAGAZINE_MARKER_MISSING'
   | 'ROUTE_SLUG_MISMATCH'
+  | 'MAGAZINE_MARKER_MISSING'
   | 'TEMPLATE_ROOT_COUNT_INVALID'
   | 'TEMPLATE_KIND_MISMATCH'
   | 'H1_COUNT_INVALID'
@@ -264,13 +266,15 @@ export function normalizeKnowledgeProjectionUrl(value: string | null | undefined
       || character === '\\'
     ) return null;
   }
+  const inlineLink = normalizeKnowledgeInlineLink(value);
+  if (inlineLink) return inlineLink.href;
+  if (value.startsWith('//') || value.startsWith('#')) return null;
   try {
     if (value.startsWith('/')) {
       const parsed = new URL(value, PROJECTION_URL_BASE);
       if (parsed.origin !== PROJECTION_URL_BASE) return null;
       return `${parsed.pathname}${parsed.search}${parsed.hash}`;
     }
-    if (value.startsWith('//')) return new URL(`https:${value}`).href;
     const parsed = new URL(value);
     if (!['https:', 'http:'].includes(parsed.protocol) || !parsed.hostname || parsed.username || parsed.password) return null;
     return parsed.href;
@@ -581,8 +585,8 @@ export function normalizeArticleRenderRequest(value: unknown): ArticleRenderRequ
   if (
     expectedProjection.article_id !== articleId
     || expectedProjection.route !== route
-    || expectedProjection.h1 !== normalizeKnowledgeProjectionText(normalizedPayload.title)
-    || expectedProjection.dek !== normalizeKnowledgeProjectionText(normalizedPayload.dek)
+    || expectedProjection.h1 !== normalizeKnowledgeProjectionText(knowledgeInlineMarkdownToText(normalizedPayload.title))
+    || expectedProjection.dek !== normalizeKnowledgeProjectionText(knowledgeInlineMarkdownToText(normalizedPayload.dek))
     || canonicalJsonHash(expectedProjection.sources) !== canonicalJsonHash(expectedSourceBinding)
     || canonicalJsonHash(expectedProjection.ui) !== canonicalJsonHash(expectedUi)
   ) {
@@ -610,6 +614,7 @@ function requestArticle(request: ArticleRenderRequestV2): KnowledgeArticle {
     title: request.publish_payload.title,
     summary: request.publish_payload.dek,
     body: request.publish_payload.body,
+    article_layer: 'main_article',
     conclusion: request.publish_payload.conclusion,
     sources: request.publish_payload.sources.map(({ source_id, label, url }) => ({ source_id, label, url })),
     ingredients: request.ingredients,
@@ -917,15 +922,15 @@ export function inspectKnowledgeMagazineMarkup(requestValue: unknown, html: stri
     runCheck(checks, errors, 'route-and-template-selection', () => {
       const expectedRoute = `/wissen/${request.publish_payload.slug}`;
       if (request.route !== expectedRoute) addError(errors, 'ROUTE_SLUG_MISMATCH', 'Route und Slug stimmen nicht exakt überein.', expectedRoute, request.route);
-      if (!isMagazineKnowledgeArticle(request.publish_payload.body)) addError(errors, 'MAGAZINE_MARKER_MISSING', 'Die reale Route würde nicht den Magazin-Renderer wählen.');
+      if (!isMagazineKnowledgeArticle(request.publish_payload.body)) addError(errors, 'MAGAZINE_MARKER_MISSING', 'Der gebundene Magazin-Marker fehlt im Publication-Payload.');
       if (rootCandidates.length !== 1) addError(errors, 'TEMPLATE_ROOT_COUNT_INVALID', 'Genau ein Magazin-Root ist erforderlich.', 1, rootCandidates.length);
       if (root?.getAttribute('data-template') !== 'magazine') addError(errors, 'TEMPLATE_KIND_MISMATCH', 'Das Root trägt nicht data-template=magazine.', 'magazine', root?.getAttribute('data-template') ?? null);
     });
 
     runCheck(checks, errors, 'hero', () => {
       if (h1Candidates.length !== 1) addError(errors, 'H1_COUNT_INVALID', 'Genau eine H1 ist erforderlich.', 1, h1Candidates.length);
-      if (actualProjection.h1 !== normalizeKnowledgeProjectionText(request.publish_payload.title)) addError(errors, 'H1_MISMATCH', 'H1 und Payload-Titel unterscheiden sich.', request.publish_payload.title, actualProjection.h1);
-      if (actualProjection.dek !== normalizeKnowledgeProjectionText(request.publish_payload.dek)) addError(errors, 'DEK_MISMATCH', 'Dek und Payload unterscheiden sich.', request.publish_payload.dek, actualProjection.dek);
+      if (actualProjection.h1 !== normalizeKnowledgeProjectionText(knowledgeInlineMarkdownToText(request.publish_payload.title))) addError(errors, 'H1_MISMATCH', 'H1 und Payload-Titel unterscheiden sich.', request.publish_payload.title, actualProjection.h1);
+      if (actualProjection.dek !== normalizeKnowledgeProjectionText(knowledgeInlineMarkdownToText(request.publish_payload.dek))) addError(errors, 'DEK_MISMATCH', 'Dek und Payload unterscheiden sich.', request.publish_payload.dek, actualProjection.dek);
     });
 
     runCheck(checks, errors, 'dom-exposure', () => {

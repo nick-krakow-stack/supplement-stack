@@ -273,9 +273,10 @@ function pluralize(count: number, singular: string, plural: string): string {
 }
 
 function CoverageBadges({ card }: { card: NutrientCard }) {
+  if (!card.status.has_studies && !card.status.has_dge) return null;
+
   return (
     <div className="nutri__tags" aria-label={`${card.name}: vorhandene Informationen`}>
-      {!card.article && <span className="tag-soon">Artikel in Vorbereitung</span>}
       {card.status.has_studies && (
         <span
           className="tag-data tag-data--studies"
@@ -309,7 +310,7 @@ function CardBody({ card }: { card: NutrientCard }) {
         </span>
       </div>
       <h3>{card.name}</h3>
-      <p>{card.description ?? 'Kurztext wird geprüft.'}</p>
+      {card.description && <p>{card.description}</p>}
       {solubility && (
         <div className="nutri__sol">
           <span className={`tag-sm ${card.solubility}`}>{solubility}</span>

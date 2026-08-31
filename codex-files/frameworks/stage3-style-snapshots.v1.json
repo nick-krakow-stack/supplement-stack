@@ -4,20 +4,20 @@
   "status": "approved",
   "annotation": {
     "path": "codex-files/frameworks/stage3-style-references.v1.md",
-    "sha256": "sha256:e27d17174621a4ae9258cf33a9b20b2ee82d6394c785b0bb28a75b4be779c64e"
+    "sha256": "sha256:10b8c4b1567c049f63ef0ef81f6335c41753f4a6fc403ba500edc7e1cf61e5c4"
   },
   "snapshots": [
     {
       "reference_id": "magnesium-reader-reference-v2",
       "slug": "magnesium",
       "path": "codex-files/frameworks/style-snapshots/v2/magnesium.md",
-      "sha256": "sha256:fcdd57534bd880c71b0196d6b13f01d3df0889879847c7e0fcb7d214abf18569"
+      "sha256": "sha256:0e9d16bea9ef9bc8f41a254588864de692d1cf18b4a0bd38e550fe4d84051d9f"
     },
     {
       "reference_id": "vitamin-a-reader-reference-v2",
       "slug": "vitamin-a",
       "path": "codex-files/frameworks/style-snapshots/v2/vitamin-a.md",
-      "sha256": "sha256:34c950f809cfeb3ebb7c45dc830af2f1b947a215fb903426ed78044502562f5e"
+      "sha256": "sha256:4882d6d9888868966de7f263d98b083c3f3c47ebe3514f6b4dd6472871a99a03"
     }
   ]
 }

@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import type { KnowledgeArticle, KnowledgeArticleSource } from '../types';
 import {
   isKnowledgeSourceHeading,
+  knowledgeInlineMarkdownToText,
   type KnowledgeMarkdownBlock,
   parseKnowledgeMarkdown,
   renderKnowledgeInlineMarkdown,
@@ -73,15 +74,15 @@ function allocateSectionId(text: string, usedIds: Set<string>): string {
 }
 
 function isTemplateControlHeading(text: string): boolean {
-  return /^(merkkasten|rechtlicher hinweis)$/i.test(text.trim());
+  return /^(merkkasten|rechtlicher hinweis)$/i.test(knowledgeInlineMarkdownToText(text).trim());
 }
 
 function isConclusionHeading(text: string): boolean {
-  return /^fazit(?:\b|$)/i.test(text.trim());
+  return /^fazit(?:\b|$)/i.test(knowledgeInlineMarkdownToText(text).trim());
 }
 
 function controlTypeForHeading(text: string): Section['controlType'] {
-  const normalized = text.trim().toLowerCase();
+  const normalized = knowledgeInlineMarkdownToText(text).trim().toLowerCase();
   if (normalized === 'merkkasten') return 'merkkasten';
   if (normalized === 'rechtlicher hinweis') return 'legal_notice';
   return null;
@@ -193,7 +194,7 @@ function splitMagazineBody(markdown: string, options: { skipBodySourceSections?:
         continue;
       }
 
-      if (/^auf einen blick$/i.test(block.text)) {
+      if (/^auf einen blick$/i.test(knowledgeInlineMarkdownToText(block.text))) {
         activeControl = 'takeaways';
         activeSection = null;
         continue;
@@ -201,7 +202,7 @@ function splitMagazineBody(markdown: string, options: { skipBodySourceSections?:
 
       activeControl = null;
       activeSection = {
-        id: allocateSectionId(block.text, usedSectionIds),
+        id: allocateSectionId(knowledgeInlineMarkdownToText(block.text), usedSectionIds),
         title: block.text,
         blocks: [],
         controlType: controlTypeForHeading(block.text),
@@ -522,8 +523,8 @@ function renderBlock(block: KnowledgeMarkdownBlock, key: string, sectionTitle: s
   if (block.type === 'image') {
     return (
       <figure key={key} className={figureClassForSection(sectionTitle)} data-knowledge-leaf="figure">
-        <img src={block.src} alt={block.alt} loading="lazy" data-knowledge-leaf="image" />
-        {block.caption && <figcaption data-knowledge-leaf="caption">{block.caption}</figcaption>}
+        <img src={block.src} alt={knowledgeInlineMarkdownToText(block.alt)} loading="lazy" data-knowledge-leaf="image" />
+        {block.caption && <figcaption data-knowledge-leaf="caption">{renderKnowledgeInlineMarkdown(block.caption)}</figcaption>}
       </figure>
     );
   }
@@ -554,7 +555,7 @@ function FaqSection({ section, number, controlNamespace }: { section: Section; n
 
   return (
     <section key={section.id} id={section.id} data-testid={`knowledge-magazine-section-${section.id}`}>
-      <div className="sec-head"><span className="num">{number}</span><h2>{section.title}</h2></div>
+      <div className="sec-head"><span className="num">{number}</span><h2>{renderKnowledgeInlineMarkdown(section.title)}</h2></div>
       <div className="faq">
         {faqItems.map((item, index) => {
           const isOpen = openIndex === index;
@@ -611,7 +612,7 @@ function renderCompareSection(section: Section, number: string): ReactNode {
 
   return (
     <section key={section.id} id={section.id} data-testid={`knowledge-magazine-section-${section.id}`}>
-      <div className="sec-head"><span className="num">{number}</span><h2>{section.title}</h2></div>
+      <div className="sec-head"><span className="num">{number}</span><h2>{renderKnowledgeInlineMarkdown(section.title)}</h2></div>
       <div className="compare">
         {groups.map((group, index) => (
           <div key={`${group.title}-${index}`} className={`cmp ${index === 0 ? 'is-tier' : 'is-pflz'}`}>
@@ -625,9 +626,10 @@ function renderCompareSection(section: Section, number: string): ReactNode {
 }
 
 function renderSection(section: Section, number: string, controlNamespace: string): ReactNode {
-  const sectionClassName = /^fazit$/i.test(section.title.trim()) ? 'fazit' : undefined;
-  if (/^häufige fragen$/i.test(section.title)) return <FaqSection key={section.id} section={section} number={number} controlNamespace={controlNamespace} />;
-  if (/^häufige verwechslungen$/i.test(section.title)) return renderCompareSection(section, number);
+  const structuralTitle = knowledgeInlineMarkdownToText(section.title).trim();
+  const sectionClassName = /^fazit$/i.test(structuralTitle) ? 'fazit' : undefined;
+  if (/^häufige fragen$/i.test(structuralTitle)) return <FaqSection key={section.id} section={section} number={number} controlNamespace={controlNamespace} />;
+  if (/^häufige verwechslungen$/i.test(structuralTitle)) return renderCompareSection(section, number);
   if (section.controlType) {
     return (
       <section
@@ -637,7 +639,7 @@ function renderSection(section: Section, number: string, controlNamespace: strin
         data-testid={`knowledge-magazine-section-${section.id}`}
         data-knowledge-control-block={section.controlType}
       >
-        <h2 className="callout-title" data-knowledge-leaf="control-heading">{section.title}</h2>
+        <h2 className="callout-title" data-knowledge-leaf="control-heading">{renderKnowledgeInlineMarkdown(section.title)}</h2>
         <div className="callout-body">
           {section.blocks.map((block, blockIndex) => renderBlock(block, `${section.id}-${blockIndex}`, section.title))}
         </div>
@@ -647,7 +649,7 @@ function renderSection(section: Section, number: string, controlNamespace: strin
 
   return (
     <section key={section.id} id={section.id} className={sectionClassName} data-testid={`knowledge-magazine-section-${section.id}`}>
-      <div className="sec-head"><span className="num">{number}</span><h2>{section.title}</h2></div>
+      <div className="sec-head"><span className="num">{number}</span><h2>{renderKnowledgeInlineMarkdown(section.title)}</h2></div>
       {section.blocks.map((block, blockIndex) => renderBlock(block, `${section.id}-${blockIndex}`, section.title))}
     </section>
   );
@@ -878,8 +880,8 @@ export function KnowledgeMagazineArticle({ article, reviewedDate }: Props) {
     >
       <header data-testid="knowledge-magazine-hero" className="hero">
         <span className="eyebrow" data-knowledge-ui="eyebrow">Wissen</span>
-        <h1>{article.title}</h1>
-        <p className="dek" data-knowledge-ui="dek" data-knowledge-leaf="dek">{article.summary}</p>
+        <h1>{renderKnowledgeInlineMarkdown(article.title)}</h1>
+        <p className="dek" data-knowledge-ui="dek" data-knowledge-leaf="dek">{renderKnowledgeInlineMarkdown(article.summary)}</p>
         <div className="hero-meta">
           <span className="chip"><CheckCircle size={15} aria-hidden="true" /> <span data-knowledge-ui="ingredient-chip">{ingredientChipLabel}</span></span>
           {reviewedDate && <span className="meta-item"><CheckCircle size={16} aria-hidden="true" /> <span data-knowledge-ui="reviewed-date">Geprüft am {reviewedDate}</span></span>}
@@ -897,12 +899,12 @@ export function KnowledgeMagazineArticle({ article, reviewedDate }: Props) {
                 <li key={link.id}>
                   <a
                     href={`#${link.id}`}
-                    aria-label={link.title}
+                    aria-label={knowledgeInlineMarkdownToText(link.title)}
                     aria-current={isActive ? 'true' : undefined}
                     className={isActive ? 'is-active' : undefined}
                     data-knowledge-leaf="toc-link"
                   >
-                    {link.title}
+                    {renderKnowledgeInlineMarkdown(link.title)}
                   </a>
                 </li>
               );

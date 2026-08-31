@@ -10,8 +10,8 @@ import {
 } from "@testing-library/react";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { Link, MemoryRouter, Route, Routes } from "react-router-dom";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { Link, MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import KnowledgeArticlePage, { knowledgeSeoTimestamps } from "./KnowledgeArticlePage";
 import {
   KnowledgeMagazineArticle,
@@ -19,6 +19,7 @@ import {
 } from "./KnowledgeMagazineArticle";
 import {
   KnowledgeMarkdownRenderer,
+  knowledgeInlineMarkdownToText,
   parseKnowledgeMarkdown,
 } from "./KnowledgeMarkdown";
 const markdown = [
@@ -61,7 +62,15 @@ function knowledgeResponse(article: Record<string, unknown>) {
   };
 }
 
+function BrowserBackControl() {
+  const navigate = useNavigate();
+  return <button type="button" onClick={() => navigate(-1)}>Browser-Zurück simulieren</button>;
+}
+
 describe("KnowledgeMarkdown", () => {
+  beforeEach(() => {
+    vi.stubGlobal("scrollTo", vi.fn());
+  });
   afterEach(() => {
     cleanup();
     window.sessionStorage.clear();
@@ -91,6 +100,101 @@ describe("KnowledgeMarkdown", () => {
     expect(screen.getByRole("heading", { level: 1, name: "Vitamin A sofort sichtbar" })).toBeTruthy();
     expect(screen.queryByText("Artikel wird geladen...")).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+  it("selects the public template only from article_layer", () => {
+    const mainArticle = {
+      slug: "hauptartikel-ohne-marker",
+      title: "Hauptartikel ohne Marker",
+      summary: "Die Datenebene entscheidet.",
+      article_layer: "main_article" as const,
+      body: [
+        "## Auf einen Blick",
+        "",
+        "- Erster Punkt",
+        "- Zweiter Punkt",
+        "- Dritter Punkt",
+        "",
+        "## Fazit",
+        "",
+        "Der Hauptartikel bleibt im Magazinlayout.",
+      ].join("\n"),
+      sources: [],
+    };
+    window.__knowledgeArticleBootstrap = { article: mainArticle };
+    const { unmount } = render(
+      <MemoryRouter initialEntries={["/wissen/hauptartikel-ohne-marker"]}>
+        <Routes><Route path="/wissen/:slug" element={<KnowledgeArticlePage />} /></Routes>
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId("knowledge-magazine-article")).toBeTruthy();
+    expect(screen.queryByTestId("knowledge-study-article")).toBeNull();
+    unmount();
+
+    const studyArticle = {
+      slug: "studie-mit-marker",
+      title: "Studie mit versehentlichem Marker",
+      summary: "Die Studienebene bleibt maßgeblich.",
+      article_layer: "single_study" as const,
+      body: [
+        "<!-- knowledge-template:magazine -->",
+        "",
+        "## Einordnung",
+        "",
+        "Der Marker darf das Layout nicht wechseln.",
+        "",
+        "## Fazit",
+        "",
+        "Die Studienansicht bleibt aktiv.",
+      ].join("\n"),
+      sources: [],
+    };
+    window.__knowledgeArticleBootstrap = { article: studyArticle };
+    render(
+      <MemoryRouter initialEntries={["/wissen/studie-mit-marker"]}>
+        <Routes><Route path="/wissen/:slug" element={<KnowledgeArticlePage />} /></Routes>
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId("knowledge-study-article")).toBeTruthy();
+    expect(screen.queryByTestId("knowledge-magazine-article")).toBeNull();
+    expect(screen.queryByText("<!-- knowledge-template:magazine -->")).toBeNull();
+  });
+  it("resets a newly pushed article to the top without overriding hash or POP navigation", async () => {
+    const scrollToMock = vi.fn();
+    vi.stubGlobal("scrollTo", scrollToMock);
+    window.__knowledgeArticleBootstrap = {
+      article: {
+        slug: "scroll-test",
+        title: "Scroll-Test",
+        summary: "Scroll-Verhalten",
+        article_layer: "single_study",
+        body: "## Einordnung\n\nText.\n\n## Fazit\n\nFazit.",
+        sources: [],
+      },
+    };
+
+    render(
+      <MemoryRouter initialEntries={["/wissen"]}>
+        <BrowserBackControl />
+        <Link to="/wissen/scroll-test#fazit">Hash im selben Artikel</Link>
+        <Routes>
+          <Route path="/wissen" element={<Link to="/wissen/scroll-test">Artikel öffnen</Link>} />
+          <Route path="/wissen/:slug" element={<KnowledgeArticlePage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("link", { name: "Artikel öffnen" }));
+    await screen.findByRole("heading", { level: 1, name: "Scroll-Test" });
+    expect(scrollToMock).toHaveBeenCalledTimes(1);
+    expect(scrollToMock).toHaveBeenLastCalledWith({ top: 0, left: 0, behavior: "auto" });
+
+    fireEvent.click(screen.getByRole("link", { name: "Hash im selben Artikel" }));
+    expect(scrollToMock).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "Browser-Zurück simulieren" }));
+    expect(scrollToMock).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "Browser-Zurück simulieren" }));
+    await screen.findByRole("link", { name: "Artikel öffnen" });
+    expect(scrollToMock).toHaveBeenCalledTimes(1);
   });
   it("parses headings, paragraphs, lists, and simple tables", () => {
     const blocks = parseKnowledgeMarkdown(markdown);
@@ -128,6 +232,113 @@ describe("KnowledgeMarkdown", () => {
       headers: ["Bereich", "Einordnung"],
       rows: [["Sicherheit", "[Details](/wissen/vitamin-a-sicherheit)"]],
     });
+  });
+  it("renders supported inline emphasis safely and keeps unsupported syntax literal", () => {
+    const { container } = render(
+      <MemoryRouter>
+        <KnowledgeMarkdownRenderer markdown={[
+          "# **Starker Titel**",
+          "",
+          "## **Struktur**",
+          "",
+          "Ein **wichtiger Absatz** mit **[internem Link](/wissen/intern)**, [**externer Quelle**](https://example.com/source) und [Sprungziel](#fazit).",
+          "",
+          "- **Wichtiger Listenpunkt**",
+          "",
+          "| **Kopf** | Wert |",
+          "| --- | --- |",
+          "| Zelle | **Einordnung** |",
+          "",
+          "Nicht geschlossen: **bleibt literal.",
+          "Triple bleibt literal: ***nicht unterstützt***.",
+          "Code bleibt literal: `**kein Fett**`.",
+          "Maskiert: [\\*literal\\*](/wissen/literal).",
+          "Unsicher: [nicht anklicken](javascript:alert(1)), [auch nicht](data:text/html,hi), [protokollrelativ](//example.com) und [mit Zugangsdaten](https://user:pass@example.com).",
+        ].join("\n")} />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByRole("heading", { level: 1, name: "Starker Titel" }).querySelector("strong")?.textContent).toBe("Starker Titel");
+    expect(screen.getByRole("heading", { level: 2, name: "Struktur" }).querySelector("strong")?.textContent).toBe("Struktur");
+    expect(screen.getByRole("link", { name: "internem Link" }).getAttribute("href")).toBe("/wissen/intern");
+    expect(screen.getByRole("link", { name: "externer Quelle" }).getAttribute("rel")).toBe("noopener noreferrer");
+    expect(screen.getByRole("link", { name: "Sprungziel" }).getAttribute("href")).toBe("#fazit");
+    expect(screen.getByRole("link", { name: "*literal*" }).getAttribute("href")).toBe("/wissen/literal");
+    expect(screen.queryByRole("link", { name: "nicht anklicken" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "auch nicht" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "protokollrelativ" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "mit Zugangsdaten" })).toBeNull();
+    expect(container.querySelectorAll("strong").length).toBeGreaterThanOrEqual(7);
+    expect(container.textContent).not.toContain("**wichtiger Absatz**");
+    expect(container.textContent).toContain("Nicht geschlossen: **bleibt literal.");
+    expect(container.textContent).toContain("Triple bleibt literal: ***nicht unterstützt***.");
+    expect(container.textContent).toContain("Code bleibt literal: `**kein Fett**`.");
+    expect(knowledgeInlineMarkdownToText("Vor **Fett** und *kursiv* mit [**Link**](/wissen/test).")).toBe("Vor Fett und kursiv mit Link.");
+  });
+  it("uses marker-free heading text for every magazine structural decision and TOC label", () => {
+    render(
+      <MemoryRouter>
+        <KnowledgeMagazineArticle
+          reviewedDate={null}
+          article={{
+            slug: "formatierte-struktur",
+            title: "**Formatierter Hauptartikel**",
+            summary: "Eine **klare Einordnung**.",
+            article_layer: "main_article",
+            body: [
+              "<!-- knowledge-template:magazine -->",
+              "",
+              "## **Auf einen Blick**",
+              "",
+              "- **Erster Punkt**",
+              "- Zweiter Punkt",
+              "- Dritter Punkt",
+              "",
+              "## **Häufige Fragen**",
+              "",
+              "### **Was ist wichtig?**",
+              "",
+              "Eine **klare Antwort**.",
+              "",
+              "## **Häufige Verwechslungen**",
+              "",
+              "### **Begriff A**",
+              "",
+              "Eine Einordnung.",
+              "",
+              "## **Merkkasten**",
+              "",
+              "Ein Merksatz.",
+              "",
+              "## **Rechtlicher Hinweis**",
+              "",
+              "Ein Hinweis.",
+              "",
+              "## **Fazit**",
+              "",
+              "Ein **klares Fazit**.",
+              "",
+              "## **Quellen**",
+              "",
+              "Dieser Body-Quellenblock wird durch die gebundene Quelle ersetzt.",
+            ].join("\n"),
+            sources: [{ source_id: "source-1", label: "Institution (2026). Quelle.", url: "https://example.com/source" }],
+          }}
+        />
+      </MemoryRouter>,
+    );
+
+    const article = screen.getByTestId("knowledge-magazine-article");
+    expect(article.textContent).not.toContain("**");
+    expect(screen.getByRole("button", { name: "Was ist wichtig?" })).toBeTruthy();
+    expect(screen.getByTestId("knowledge-magazine-section-haufige-verwechslungen").querySelector(".compare")).toBeTruthy();
+    expect(screen.getByTestId("knowledge-magazine-section-merkkasten").getAttribute("data-knowledge-control-block")).toBe("merkkasten");
+    expect(screen.getByTestId("knowledge-magazine-section-rechtlicher-hinweis").getAttribute("data-knowledge-control-block")).toBe("legal_notice");
+    expect(screen.getByTestId("knowledge-magazine-section-fazit").classList.contains("fazit")).toBe(true);
+    const toc = screen.getByLabelText("Inhaltsverzeichnis");
+    expect(within(toc).getByRole("link", { name: "Häufige Fragen" }).getAttribute("href")).toBe("#haufige-fragen");
+    expect(within(toc).queryByRole("link", { name: "Merkkasten" })).toBeNull();
+    expect(within(toc).queryByRole("link", { name: "Rechtlicher Hinweis" })).toBeNull();
   });
   it("renders internal links without a blank target and external links with a blank target", () => {
     render(
@@ -545,13 +756,18 @@ describe("KnowledgeMarkdown", () => {
     const bodyAssetPath = `/api/r2/knowledge/quercetin/${"a".repeat(64)}.png`;
     const technicalZinkUrl = new URL('/wissen/zink', window.location.origin).href;
     const technicalZinkDescription = 'Technische Zink-Beschreibung aus der freigegebenen SEO-Projektion.';
-    const technicalZinkJsonLd = {
+    const storedTechnicalZinkJsonLd = {
       '@context': 'https://schema.org',
       '@type': 'Article',
-      headline: 'Zink: technischer Meta-Titel',
-      description: technicalZinkDescription,
+      headline: 'Zink: **technischer** Meta-Titel',
+      description: 'Technische **Zink**-Beschreibung aus der freigegebenen SEO-Projektion.',
       mainEntityOfPage: technicalZinkUrl,
       inLanguage: 'de',
+    };
+    const technicalZinkJsonLd = {
+      ...storedTechnicalZinkJsonLd,
+      headline: 'Zink: technischer Meta-Titel',
+      description: technicalZinkDescription,
     };
     const articles = {
       quercetin: {
@@ -582,7 +798,7 @@ describe("KnowledgeMarkdown", () => {
           canonical_path: '/wissen/zink',
           robots: 'index,follow',
           indexable: true,
-          json_ld: technicalZinkJsonLd,
+          json_ld: storedTechnicalZinkJsonLd,
         },
       },
     };
@@ -777,6 +993,7 @@ describe("KnowledgeMarkdown", () => {
                 title: "Vitamin A: Warum Augen, Haut und Abwehr es brauchen",
                 summary:
                   "Vitamin A einfach erklärt: Formen, Lebensmittel, Aufgaben im Körper und Sicherheit.",
+                article_layer: "main_article",
                 reviewed_at: "2026-06-02T14:45:00Z",
                 body: [
                   "<!-- knowledge-template:magazine -->",
@@ -941,6 +1158,7 @@ describe("KnowledgeMarkdown", () => {
         slug: "quercetin",
         title: "Quercetin Magazin",
         summary: "Erster Magazinartikel",
+        article_layer: "main_article",
         body: [
           "<!-- knowledge-template:magazine -->",
           "",
@@ -956,6 +1174,7 @@ describe("KnowledgeMarkdown", () => {
         slug: "zink",
         title: "Zink Magazin",
         summary: "Zweiter Magazinartikel",
+        article_layer: "main_article",
         body: [
           "<!-- knowledge-template:magazine -->",
           "",
@@ -1107,6 +1326,7 @@ describe("KnowledgeMarkdown", () => {
               slug: "quercetin",
               title: "Quercetin verständlich erklärt",
               summary: "Quercetin in klarer Sprache eingeordnet.",
+              article_layer: "main_article",
               conclusion: [
                 "Das gespeicherte Quercetin-Fazit bleibt sichtbar.",
                 "Hinweis: Diese Informationen ersetzen keine medizinische Beratung.",
@@ -1199,6 +1419,7 @@ describe("KnowledgeMarkdown", () => {
               slug: "selen",
               title: "Selen verständlich erklärt",
               summary: "Selen kompakt eingeordnet.",
+              article_layer: "main_article",
               conclusion: "Das separat gespeicherte Fazit ist maßgeblich.",
               body: [
                 "<!-- knowledge-template:magazine -->",
@@ -1273,6 +1494,7 @@ describe("KnowledgeMarkdown", () => {
                 slug: "vitamin-a",
                 title: "Vitamin A",
                 summary: "Vitamin A einfach erklärt.",
+                article_layer: "main_article",
                 body: [
                   "<!-- knowledge-template:magazine -->",
                   "",
@@ -1346,8 +1568,9 @@ describe("KnowledgeMarkdown", () => {
             article: {
               slug: "vitamin-a",
               title: "Vitamin A",
-              summary: "Vitamin A einfach erklärt.",
-              body: [
+                summary: "Vitamin A einfach erklärt.",
+                article_layer: "main_article",
+                body: [
                 "<!-- knowledge-template:magazine -->",
                 "",
                 "Ein Lead.",
@@ -1419,8 +1642,9 @@ describe("KnowledgeMarkdown", () => {
             article: {
               slug: "vitamin-a",
               title: "Vitamin A",
-              summary: "Vitamin A einfach erklärt.",
-              body: [
+                summary: "Vitamin A einfach erklärt.",
+                article_layer: "main_article",
+                body: [
                 "<!-- knowledge-template:magazine -->",
                 "",
                 "Ein Lead.",
@@ -1498,6 +1722,7 @@ describe("KnowledgeMarkdown", () => {
                 slug: "vitamin-a",
                 title: "Vitamin A",
                 summary: "Vitamin A einfach erklärt.",
+                article_layer: "main_article",
                 body: [
                   "<!-- knowledge-template:magazine -->",
                   "",
@@ -1571,6 +1796,7 @@ describe("KnowledgeMarkdown", () => {
                 slug: "vitamin-a",
                 title: "Vitamin A",
                 summary: "Vitamin A einfach erklärt.",
+                article_layer: "main_article",
                 body: [
                   "<!-- knowledge-template:magazine -->",
                   "",
@@ -1728,6 +1954,7 @@ describe("KnowledgeMarkdown", () => {
                 slug: "vitamin-a",
                 title: "Vitamin A",
                 summary: "Vitamin A einfach erklärt.",
+                article_layer: "main_article",
                 reviewed_at: "2026-06-02T14:45:00Z",
                 body: [
                   "<!-- knowledge-template:magazine -->",

@@ -1,0 +1,5 @@
+/codex-files/frameworks/*.md text eol=lf
+/codex-files/frameworks/*.json text eol=lf
+/codex-files/frameworks/**/*.md text eol=lf
+/codex-files/frameworks/**/*.json text eol=lf
+/scripts/test-fixtures/evidence-pipeline-example/** text eol=lf
