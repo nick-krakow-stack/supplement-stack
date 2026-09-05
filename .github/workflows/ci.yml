@@ -60,3 +60,5 @@ jobs:
           node-version: 22
       - run: node --check scripts/admin-browser-smoke.mjs
       - run: node --check scripts/user-browser-smoke.mjs
+      - name: Verify guarded legacy article corrections
+        run: node --test scripts/article-legacy-field-correction.test.mjs scripts/article-authoritative-correction.test.mjs

@@ -320,6 +320,11 @@ Wirkungsclaims bleiben aus der öffentlichen Produktempfehlung entfernt.
 
 ## 13. Wissensartikel `/wissen/:slug`
 
+Umsetzungsstand 5. September 2026: ARTICLE-01 bis ARTICLE-10 sind implementiert
+und unabhängig technisch freigegeben. Die Häkchen unten werden erst nach dem
+Produktionsreadback gesetzt. Einzelheiten und getrennte Artikelkorrekturen:
+[`umsetzung_wissensartikel_audit.md`](umsetzung_wissensartikel_audit.md).
+
 | Erledigt | ID | Funktion/Text | ★ | Befund | Zielbild 10/10 |
 |---|---|---|---:|---|---|
 | [ ] | ARTICLE-01 | Rückweg „Zurück“ | 6 | Ziel ist die Übersicht mit Filtern, Text ist aber unspezifisch. | „Zur Wissensübersicht“ und bei erhaltenem Filter dessen Namen ankündigen. |

@@ -10,7 +10,7 @@ declare global {
   }
 }
 
-const ARTICLE_CACHE_PREFIX = 'knowledge-article.v1:';
+const ARTICLE_CACHE_PREFIX = 'knowledge-article.v2:';
 const ARTICLE_CACHE_TTL_MS = 5 * 60 * 1000;
 const prefetchRequests = new Map<string, Promise<KnowledgeArticle>>();
 
@@ -63,10 +63,17 @@ export function readPrimedKnowledgeArticle(slug: string): KnowledgeArticle | nul
   return parseArticlePayload(window.__knowledgeArticleBootstrap, slug) ?? readSessionArticle(slug);
 }
 
+export class KnowledgeArticleLoadError extends Error {
+  constructor(public readonly status: number) {
+    super(status === 404 || status === 410 ? 'Artikel nicht gefunden.' : 'Der Artikel konnte gerade nicht geladen werden.');
+    this.name = 'KnowledgeArticleLoadError';
+  }
+}
+
 async function fetchKnowledgeArticle(slug: string, endpoint: string): Promise<KnowledgeArticle> {
   const response = await fetch(endpoint, { headers: { Accept: 'application/json' } });
   if (!response.ok) {
-    throw new Error(response.status === 404 ? 'Artikel nicht gefunden.' : 'Artikel konnte nicht geladen werden.');
+    throw new KnowledgeArticleLoadError(response.status);
   }
   const article = parseArticlePayload(await response.json(), slug);
   if (!article) throw new Error('Artikel konnte nicht eindeutig geladen werden.');

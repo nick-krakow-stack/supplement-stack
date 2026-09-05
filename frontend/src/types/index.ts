@@ -326,7 +326,14 @@ export interface KnowledgeArticle {
   updated_at?: string;
   published_at?: string | null;
   modified_at?: string | null;
+  update_reason?: string | null;
   seo?: KnowledgeArticleSeo | null;
+  related_articles?: Array<{
+    slug: string;
+    title: string;
+    article_layer: 'main_article' | 'single_study';
+    ingredients: Array<{ ingredient_id: number; name: string }>;
+  }>;
 }
 
 export interface KnowledgeArticleOverviewItem {

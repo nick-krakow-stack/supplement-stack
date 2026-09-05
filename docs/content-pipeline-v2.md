@@ -1125,6 +1125,41 @@ ausgegebene `work_order_id`. S/M öffnen weder Research noch Facts- oder volles
 Publication-Gate; L auditiert keine unbetroffenen Artikel. Alle Klassen nutzen
 bei Publish denselben zentralen `publication_apply`-Executor und Write-Guard.
 
+Historische Artikel ohne rekonstruierbare Compiler-Lineage dürfen für rein
+lokale Klasse-M-Umlautreparaturen den begrenzten `legacy_field_patch`-Modus
+desselben Executors verwenden: höchstens sechs explizite, publizierte
+Version-1-Ziele ohne gespeicherte SEO-Payload; nur `summary`/`conclusion` und
+nachweislich einzelne `?`→Umlaut/`ß`-Ersetzungen. Ein eingefrorener echter
+Editorvorschlag, unabhängiger lokaler Kurzreview samt exakter ausgegebener
+Order und Executionreceipt sind Pflicht. Der Guard bindet vollständige
+Artikelzeilen, Quellen-, Ingredient-, Interpretations- und Partzeilen samt
+Counts vor und nach dem atomaren Batch; ausschließlich die neue nullable
+`update_reason`-Spalte wird bei älteren Snapshots zu `null` ergänzt. Erst beim
+Apply steigen Version und technisches Änderungsdatum. Vorher wird ein echter
+Snapshot gesichert, danach werden D1, öffentliche API und Zielartikel-DOM/SEO
+auf Desktop/Mobil geprüft. Ein gültiger identischer Nachzustand ist ein Noop;
+fehlender öffentlicher Readback bleibt ausdrücklich unvollständig und kann
+idempotent nachgeholt werden. Es werden keine historischen Facts-, Render-
+oder Publication-Belege erfunden. Klasse L ist in diesem Modus unzulässig
+und verwendet weiterhin ausschließlich den normalen betroffenen v2-Slice.
+
+Für einen historischen L-Artikel ohne gespeicherte Compiler-/SEO-Lineage darf
+der Parent ausschließlich seinen Altzustand als echten
+`article_correction_authoritative_before.v1`-Readback binden:
+`before.authoritative_snapshot_path` erzeugt einen L-Input mit
+`mode=authoritative_before`, ausdrücklich ohne erfundenes altes oder vorab
+kompiliertes Kandidaten-Release. Der normale Ein-Artikel-Child bindet unter
+`article_plan.*[].authoritative_before` denselben `path` und `content_hash`
+sowie einen echten `update_reason`; Identität und Update-Guard müssen zum
+Parent passen. Neue Extraktion, Facts, Writer, Compiler und Publication-Gate
+bleiben unverändert verpflichtend. Erst der normale `publication_apply`
+speichert einen frischen Vorher-Snapshot und prüft vollständige Artikel-,
+Quellen-, Ingredient-, Interpretations- und Partzeilen samt Counts atomar.
+Artikelteile bleiben unverändert; gültige Wiederholungen sind Noops.
+Der normale vollständige öffentliche DOM-/SEO-Readback bleibt erforderlich;
+ein Rücksetzen nach fehlgeschlagenem Readback restauriert auch den alten
+Aktualisierungsgrund unter demselben exakten Snapshot-Guard.
+
 ## Optionaler Stage-4-Stack-Sync
 
 Stage 4 läuft nur bei explizitem Auftrag und zweigt nach bestandenem

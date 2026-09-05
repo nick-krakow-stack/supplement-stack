@@ -719,6 +719,7 @@ type KnowledgeArticleDbRow = {
   status: KnowledgeArticleStatus
   article_layer: KnowledgeArticleLayer
   reviewed_at: string | null
+  update_reason: string | null
   sources_json: string
   conclusion: string | null
   featured_image_r2_key: string | null
@@ -742,6 +743,7 @@ type KnowledgeArticlePayload = {
   status: KnowledgeArticleStatus
   article_layer: KnowledgeArticleLayer
   reviewed_at: string | null
+  update_reason: string | null
   sources_json: string
   sources: KnowledgeArticleSourceInput[]
   ingredient_ids: number[]
@@ -5878,6 +5880,9 @@ function validateKnowledgeArticlePayload(
   const reviewedAt = optionalDateTextField(body, 'reviewed_at')
   if (!reviewedAt.ok) return reviewedAt
 
+  const updateReason = optionalTextField(body, 'update_reason', 500)
+  if (!updateReason.ok) return updateReason
+
   const legacySources = serializeKnowledgeSources(existing?.sources_json ?? undefined)
   if (!legacySources.ok) return legacySources
   const sourceInput = hasOwnKey(body, 'sources')
@@ -5928,6 +5933,7 @@ function validateKnowledgeArticlePayload(
       status,
       article_layer: articleLayer,
       reviewed_at: reviewedAt.value === undefined ? existing?.reviewed_at ?? null : reviewedAt.value,
+      update_reason: updateReason.value === undefined ? existing?.update_reason ?? null : updateReason.value,
       sources_json: sourcesJson,
       sources: sources.value,
       ingredient_ids: ingredientIds.value,
@@ -6348,6 +6354,7 @@ async function getKnowledgeArticleRow(db: D1Database, slug: string): Promise<Kno
       status,
       ${columns.has('article_layer') ? 'article_layer' : "'main_article' AS article_layer"},
       reviewed_at,
+      ${columns.has('update_reason') ? 'update_reason' : 'NULL AS update_reason'},
       sources_json,
       ${columns.has('conclusion') ? 'conclusion' : 'NULL AS conclusion'},
       ${columns.has('featured_image_r2_key') ? 'featured_image_r2_key' : 'NULL AS featured_image_r2_key'},
@@ -11817,6 +11824,7 @@ admin.get('/knowledge-articles', async (c) => {
       status,
       ${columns.has('article_layer') ? 'article_layer' : "'main_article' AS article_layer"},
       reviewed_at,
+      ${columns.has('update_reason') ? 'update_reason' : 'NULL AS update_reason'},
       sources_json,
       ${columns.has('conclusion') ? 'conclusion' : 'NULL AS conclusion'},
       ${columns.has('featured_image_r2_key') ? 'featured_image_r2_key' : 'NULL AS featured_image_r2_key'},
@@ -11867,6 +11875,7 @@ admin.post('/knowledge-articles', async (c) => {
   const columns = await getTableColumns(c.env.DB, 'knowledge_articles')
   const extraFields: Array<[string, string | number | null]> = []
   if (columns.has('article_layer')) extraFields.push(['article_layer', data.article_layer])
+  if (columns.has('update_reason')) extraFields.push(['update_reason', data.update_reason])
   if (columns.has('conclusion')) extraFields.push(['conclusion', data.conclusion])
   if (columns.has('featured_image_r2_key')) extraFields.push(['featured_image_r2_key', data.featured_image_r2_key])
   if (columns.has('featured_image_url')) extraFields.push(['featured_image_url', data.featured_image_url])
@@ -11971,6 +11980,7 @@ admin.put('/knowledge-articles/:slug', async (c) => {
   const whereSql = lock.value.enforce ? optimisticWhere('slug') : 'slug = ?'
   const extraFields: Array<[string, string | number | null]> = []
   if (columns.has('article_layer')) extraFields.push(['article_layer', data.article_layer])
+  if (columns.has('update_reason')) extraFields.push(['update_reason', data.update_reason])
   if (columns.has('conclusion')) extraFields.push(['conclusion', data.conclusion])
   if (columns.has('featured_image_r2_key')) extraFields.push(['featured_image_r2_key', data.featured_image_r2_key])
   if (columns.has('featured_image_url')) extraFields.push(['featured_image_url', data.featured_image_url])

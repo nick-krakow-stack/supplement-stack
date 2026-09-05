@@ -1803,9 +1803,12 @@ test('release dependencies contain only same-release edges while live links rema
   })
   const source = entry({ articleId: 'source-a', slug: 'source-a', title: 'Source A', links: [linkLive, linkSameRelease], compiledLinks: [{ label: 'Magnesium', url: '/wissen/magnesium' }, { label: 'Target B vertiefen', url: '/wissen/target-b' }] })
   const target = entry({ articleId: 'target-b', slug: 'target-b', title: 'Target B', links: [], compiledLinks: [] })
+  target.article.stage = 'stage2'
+  target.factsPackage.visible_sources = []
   const ingredientIdentity = { ingredient_id: 7, canonical_name: 'Teststoff', canonical_slug: 'teststoff', status: 'active', version: 1 }
   const release = buildContentReleaseV2({ context: { runId: 'link-release-run', manifestHash: canonicalJsonHash({ manifest: 'link-release' }), policyVersion: 'policy-v2', ingredientTarget: { ...ingredientIdentity, identity_hash: canonicalJsonHash(ingredientIdentity), receipt_hash: canonicalJsonHash({ ingredient: 7 }) }, sourceResolution: { receipt_hash: canonicalJsonHash({ sources: [] }), bySourceId: new Map() }, assetDeployment: { receipt_hash: null, assets: [] }, publish: { target: 'test', publicBaseUrl: 'https://supplementstack.de/' } }, articles: [source, target] })
   assert.deepEqual(release.articles.find((article) => article.article_id === 'source-a').internal_link_dependencies, [linkSameRelease])
+  assert.ok(release.articles.every((article) => article.expected_projection.ui.ingredient_chip === 'Wirkstoff: Teststoff'))
   assert.ok(source.compiled.links.some((link) => link.url === linkLive.path))
 })
 

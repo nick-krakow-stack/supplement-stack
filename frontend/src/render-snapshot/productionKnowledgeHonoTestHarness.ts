@@ -383,6 +383,10 @@ export function createProductionKnowledgeSchema(harness: ProductionKnowledgeHono
     new URL('../../../d1-migrations/0108_knowledge_overview_central_copy_projection.sql', import.meta.url),
     'utf8',
   ));
+  harness.exec(readFileSync(
+    new URL('../../../d1-migrations/0110_knowledge_article_update_reason.sql', import.meta.url),
+    'utf8',
+  ));
 }
 
 export function seedProductionKnowledgeArticle(

@@ -150,6 +150,18 @@ export function buildArticleCorrectionInputReceiptV1({ root, request, frozenAt =
   const runId = assertSafeId(request.run_id, 'article correction request run_id')
   const changeClass = text(request.change_class, 'article correction request change_class')
   if (!['S', 'M', 'L'].includes(changeClass)) fail('article correction change_class must be S, M or L')
+  if (request.before?.authoritative_snapshot_path != null) {
+    if (changeClass !== 'L' || request.before.release_article != null || request.candidate != null) fail('authoritative-before correction is L-only and cannot invent a prior or candidate release')
+    const snapshotPath = resolveManifestPath(root, request.before.authoritative_snapshot_path, 'L correction authoritative before path')
+    const snapshot = strictJson(snapshotPath, 'L correction authoritative before')
+    validateAuthoritativeCorrectionBeforeV1(snapshot)
+    const base = {
+      schema: 'article_correction_input_receipt.v1', mode: 'authoritative_before', run_id: runId, change_class: 'L', frozen_at: iso(frozenAt, 'article correction frozen_at'),
+      affected_article_ids: [snapshot.article_id],
+      before: { authoritative_snapshot_path: portablePath(root, snapshotPath), authoritative_snapshot_hash: snapshot.content_hash },
+    }
+    return { ...base, content_hash: artifactHashV2(base) }
+  }
   const beforeArticle = validateReleaseArticle(request.before?.release_article, 'article correction before.release_article')
   const candidateArticle = validateReleaseArticle(request.candidate?.release_article, 'article correction candidate.release_article')
   if (beforeArticle.article_id !== candidateArticle.article_id || beforeArticle.stage !== candidateArticle.stage || beforeArticle.slug !== candidateArticle.slug) fail('article correction before/candidate identity differs')
@@ -180,6 +192,17 @@ export function loadArticleCorrectionInputReceiptV1({ root, path, runId, changeC
   if (receipt.schema !== 'article_correction_input_receipt.v1' || receipt.content_hash !== artifactHashV2(receipt)) fail('article correction input receipt schema/hash is invalid')
   if (receipt.run_id !== runId || receipt.change_class !== changeClass) fail('article correction input receipt run/class differs from manifest')
   iso(receipt.frozen_at, 'article correction input receipt frozen_at')
+  if (receipt.mode === 'authoritative_before') {
+    if (changeClass !== 'L' || receipt.candidate != null || receipt.before?.release_article != null) fail('authoritative-before correction must remain L without invented release lineage')
+    const beforePath = resolveManifestPath(root, receipt.before.authoritative_snapshot_path, 'L correction authoritative before path')
+    const authoritativeBefore = strictJson(beforePath, 'L correction authoritative before')
+    validateAuthoritativeCorrectionBeforeV1(authoritativeBefore)
+    if (authoritativeBefore.content_hash !== receipt.before.authoritative_snapshot_hash || !sameSet(receipt.affected_article_ids, [authoritativeBefore.article_id])) fail('L correction authoritative before hash/identity differs')
+    const state = authoritativeBefore.state
+    return { value: receipt, beforePath, authoritativeBefore, candidatePath: null,
+      candidateArticle: { article_id: state.article_id, stage: state.stage, slug: state.slug,
+        write_guard: { mode: 'update', expected_status: state.status, expected_version: state.version, expected_payload_hash: state.payload_hash } } }
+  }
   const beforePath = resolveManifestPath(root, receipt.before.markdown_path, 'article correction before Markdown path')
   const candidatePath = resolveManifestPath(root, receipt.candidate.markdown_path, 'article correction candidate Markdown path')
   const before = markdown(beforePath, 'article correction before Markdown'), candidate = markdown(candidatePath, 'article correction candidate Markdown')
@@ -261,3 +284,185 @@ export function buildCorrectionContentReleaseV2({ context, input, correctionResu
 }
 
 export { semanticFingerprint }
+
+/** An actual historical readback is a prestate, never a reconstructed v2 release. */
+export function validateAuthoritativeCorrectionBeforeV1(value, target = null) {
+  exactArtifact(value, 'L authoritative before')
+  if (value.schema !== 'article_correction_authoritative_before.v1' || value.read_only !== true || value.historical_compiled_lineage !== null || value.expected_changed_row_count !== 1) fail('L authoritative before schema/read-only/count/history is invalid')
+  iso(value.captured_at, 'L authoritative before captured_at')
+  text(value.database_id, 'L authoritative before database_id'); text(value.database_name, 'L authoritative before database_name')
+  assertSafeId(value.article_id, 'L authoritative before article_id'); assertSafeId(value.slug, 'L authoritative before slug')
+  const state = object(value.state, 'L authoritative before state')
+  const snapshot = validateLegacySnapshot(value.full_snapshot, value.slug)
+  const row = snapshot.article
+  const columns = ['slug', 'title', 'summary', 'body', 'status', 'reviewed_at', 'sources_json', 'created_at', 'updated_at', 'version', 'conclusion', 'featured_image_r2_key', 'featured_image_url', 'dose_min', 'dose_max', 'dose_unit', 'product_note', 'article_layer', 'seo_json', 'update_reason']
+  if (columns.some(key => !Object.hasOwn(row, key))) fail('L authoritative before article row is incomplete')
+  if (row.status !== 'published' || !Number.isInteger(row.version) || row.version < 1 || row.seo_json !== null || state.seo !== null || state.compiled_payload_hash !== null) fail('L authoritative before is not a published article without historical compiled/SEO lineage')
+  if (state.article_id !== value.article_id || state.slug !== value.slug || state.status !== row.status || state.version !== row.version || state.article_layer !== row.article_layer || state.stage !== (row.article_layer === 'single_study' ? 'stage2' : row.article_layer === 'main_article' ? 'stage3' : null)) fail('L authoritative before state identity differs from raw row')
+  hash(state.payload_hash, 'L authoritative before payload hash')
+  const persisted = object(state.persistence_snapshot, 'L authoritative before persistence snapshot')
+  if (canonicalJsonHash(normalizeLegacyCorrectionRowV1(persisted.article)) !== canonicalJsonHash(row)) fail('L authoritative before raw article differs from inspected state')
+  for (const key of ['source_rows', 'ingredient_rows', 'interpretation_rows']) if (canonicalJsonHash(persisted[key]) !== canonicalJsonHash(snapshot[key])) fail(`L authoritative before ${key} differs from inspected state`)
+  if (target) {
+    if (target.change_class !== 'L' || target.article_id !== value.article_id || target.slug !== value.slug || target.stage !== state.stage) fail('L authoritative before target identity/class differs')
+    const expected = { mode: 'update', expected_status: state.status, expected_version: state.version, expected_payload_hash: state.payload_hash }
+    if (canonicalJsonHash(target.write_guard) !== canonicalJsonHash(expected)) fail('L authoritative before target write guard differs')
+  }
+  return snapshot
+}
+
+export const LEGACY_FIELD_CORRECTION_MODE = 'legacy_field_patch'
+export const LEGACY_SPELLING_UPDATE_REASON = 'Schreibfehler und beschädigte Umlaute korrigiert.'
+
+function withoutHash(value) { return Object.fromEntries(Object.entries(value).filter(([key]) => key !== 'content_hash')) }
+function exactArtifact(value, label) {
+  object(value, label)
+  if (value.content_hash !== canonicalJsonHash(withoutHash(value))) fail(`${label} content hash is stale`)
+}
+
+/** Migration 0110 adds only NULL; no other historical or present field is dropped. */
+export function normalizeLegacyCorrectionRowV1(value) {
+  const row = object(value, 'legacy article row')
+  return Object.hasOwn(row, 'update_reason') ? { ...row } : { ...row, update_reason: null }
+}
+
+function validateLegacySnapshot(snapshot, slug) {
+  object(snapshot, `${slug} snapshot`)
+  if (snapshot.article?.slug !== slug) fail(`${slug} snapshot identity differs`)
+  for (const [key, column] of [['source_rows', 'article_slug'], ['ingredient_rows', 'article_slug'], ['interpretation_rows', 'knowledge_article_slug'], ['part_rows', 'article_slug']]) {
+    for (const row of array(snapshot[key], `${slug} ${key}`)) {
+      if (row[column] !== slug) fail(`${slug} ${key} contains another article`)
+    }
+  }
+  return { ...snapshot, article: normalizeLegacyCorrectionRowV1(snapshot.article) }
+}
+
+function validateUmlautFieldPatch(patch, row, label) {
+  if (!['summary', 'conclusion'].includes(patch.field)) fail(`${label} changes a field outside the legacy M spelling scope`)
+  if (typeof patch.before !== 'string' || typeof patch.after !== 'string' || patch.before === patch.after || patch.before.length !== patch.after.length) fail(`${label} is not an exact character repair`)
+  if (row[patch.field] !== patch.before || canonicalJsonHash(patch.before) !== patch.expected_before_hash || canonicalJsonHash(patch.after) !== patch.expected_after_hash) fail(`${label} field prestate/hash differs`)
+  for (let index = 0; index < patch.before.length; index += 1) {
+    if (patch.before[index] !== patch.after[index] && (patch.before[index] !== '?' || !/[äöüÄÖÜß]/u.test(patch.after[index]))) fail(`${label} changes more than a damaged umlaut`)
+  }
+}
+
+export function buildLegacyFieldCorrectionInputV1({ runId, prestate, proposal, authoritativeSnapshots, publicBefore, publicBaseUrl = 'https://supplementstack.de/', frozenAt = new Date().toISOString() }) {
+  assertSafeId(runId, 'legacy correction run id')
+  exactArtifact(prestate, 'legacy original snapshot'); exactArtifact(proposal, 'legacy editor proposal')
+  if (prestate.read_only !== true || proposal.before_snapshot_hash !== prestate.content_hash) fail('legacy proposal does not bind the read-only original snapshot')
+  if (proposal.schema !== 'article_spelling_correction_editor_proposal.v1') fail('legacy editor proposal schema is invalid')
+  const proposals = array(proposal.proposals, 'legacy proposals')
+  if (!proposals.length || proposals.length > 6 || new Set(proposals.map((entry) => entry.slug)).size !== proposals.length) fail('legacy M correction requires 1..6 distinct articles')
+  const editorIds = [...new Set(proposals.map((entry) => assertSafeId(entry.editor_id, 'legacy editor id')))]
+  if (editorIds.length !== 1) fail('legacy M correction requires one accountable editor')
+  const articles = proposals.map((entry) => {
+    assertSafeId(entry.article_id, 'legacy article id'); assertSafeId(entry.slug, 'legacy article slug')
+    if (entry.requested_class !== 'M' || entry.article_id !== entry.slug) fail('legacy M article identity/class differs')
+    const old = prestate.articles.filter((row) => row.slug === entry.slug)
+    if (old.length !== 1 || old[0].status !== 'published' || old[0].version !== 1 || old[0].seo_json !== null) fail(`${entry.slug} is not an exact published version-1 legacy article`)
+    const row = normalizeLegacyCorrectionRowV1(old[0])
+    if (row.update_reason !== null || !['main_article', 'single_study'].includes(row.article_layer)) fail(`${entry.slug} legacy layer/reason differs`)
+    const snapshot = validateLegacySnapshot(authoritativeSnapshots[entry.slug], entry.slug)
+    if (canonicalJsonHash(snapshot.article) !== canonicalJsonHash(row)) fail(`${entry.slug} authoritative article differs from original snapshot`)
+    const fields = array(entry.fields, `${entry.slug} fields`)
+    if (!fields.length || fields.length > 2 || new Set(fields.map((patch) => patch.field)).size !== fields.length) fail(`${entry.slug} fields are empty or duplicate`)
+    for (const patch of fields) validateUmlautFieldPatch(patch, row, entry.slug)
+    const unchanged = Object.fromEntries(Object.entries(old[0]).filter(([key]) => !fields.some((patch) => patch.field === key)))
+    const guard = object(entry.guard, `${entry.slug} guard`)
+    if (guard.expected_row_hash !== canonicalJsonHash(old[0]) || guard.expected_unchanged_fields_hash !== canonicalJsonHash(unchanged)
+      || guard.expected_status !== row.status || guard.expected_version !== row.version || guard.expected_article_layer !== row.article_layer || guard.expected_changed_row_count !== 1) fail(`${entry.slug} proposed full-row guard differs`)
+    for (const [key, snapshotKey, column] of [['sources', 'source_rows', 'article_slug'], ['ingredients', 'ingredient_rows', 'article_slug'], ['interpretations', 'interpretation_rows', 'knowledge_article_slug']]) {
+      const original = prestate[key].filter((relation) => relation[column] === entry.slug)
+      if (canonicalJsonHash(original) !== guard[`expected_${key}_hash`] || canonicalJsonHash(snapshot[snapshotKey]) !== canonicalJsonHash(original)) fail(`${entry.slug} ${key} changed before freeze`)
+    }
+    const publicRow = publicBefore.articles.find((observed) => observed.slug === entry.slug)
+    if (!publicRow || canonicalJsonHash(publicRow.article) !== publicRow.article_hash) fail(`${entry.slug} public prestate is missing or stale`)
+    for (const field of ['title', 'summary', 'body', 'conclusion']) if (publicRow.article[field] !== row[field]) fail(`${entry.slug} public ${field} differs from D1 prestate`)
+    const candidate = { ...row, ...Object.fromEntries(fields.map((patch) => [patch.field, patch.after])) }
+    if (canonicalJsonHash(normalizeLegacyCorrectionRowV1(entry.candidate_article_without_executor_metadata)) !== canonicalJsonHash(candidate)) fail(`${entry.slug} candidate changes undeclared fields`)
+    return { article_id: entry.article_id, slug: entry.slug, before: snapshot, before_hash: canonicalJsonHash(snapshot), fields,
+      candidate_row: candidate, candidate_row_hash: canonicalJsonHash(candidate), public_before: publicRow.article,
+      public_before_hash: publicRow.article_hash, expected_changed_row_count: 1 }
+  })
+  const base = { schema: 'article_correction_input_receipt.v1', mode: LEGACY_FIELD_CORRECTION_MODE, operation: 'article_correction', run_id: runId,
+    change_class: 'M', frozen_at: iso(frozenAt, 'legacy frozen_at'), database_id: text(prestate.database_id, 'legacy database id'),
+    publish_target: text(prestate.database_name, 'legacy database name'), public_base_url: publicBaseUrl,
+    original_snapshot_hash: prestate.content_hash, correction_result_hash: proposal.content_hash, editor: { id: editorIds[0], role: 'article-correction-editor' },
+    affected_article_ids: articles.map((entry) => entry.article_id), expected_article_count: articles.length,
+    update_reason: LEGACY_SPELLING_UPDATE_REASON, articles,
+    patch: { patch_hash: canonicalJsonHash(articles.map(({ article_id, fields }) => ({ article_id, fields }))) } }
+  const input = { ...base, content_hash: canonicalJsonHash(base) }
+  validateLegacyFieldCorrectionInputV1(input)
+  return input
+}
+
+export function validateLegacyFieldCorrectionInputV1(input) {
+  exactArtifact(input, 'legacy correction input')
+  if (input.schema !== 'article_correction_input_receipt.v1' || input.mode !== LEGACY_FIELD_CORRECTION_MODE || input.operation !== 'article_correction' || input.change_class !== 'M') fail('legacy correction mode/schema/class is invalid')
+  if (input.update_reason !== LEGACY_SPELLING_UPDATE_REASON) fail('legacy correction update reason differs')
+  assertSafeId(input.run_id, 'legacy run id'); assertSafeId(input.editor?.id, 'legacy editor id')
+  if (input.editor.role !== 'article-correction-editor') fail('legacy editor role is invalid')
+  iso(input.frozen_at, 'legacy frozen_at')
+  for (const value of [input.original_snapshot_hash, input.correction_result_hash]) hash(value, 'legacy input lineage hash')
+  const articles = array(input.articles, 'legacy input articles')
+  if (!articles.length || articles.length > 6 || articles.length !== input.expected_article_count || !sameSet(articles.map((entry) => entry.article_id), input.affected_article_ids)) fail('legacy correction article scope/count differs')
+  for (const target of articles) {
+    if (target.article_id !== target.slug || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(target.slug)) fail('legacy article ID/slug differs')
+    const before = validateLegacySnapshot(target.before, target.slug)
+    if (canonicalJsonHash(before) !== target.before_hash || target.before.article.update_reason !== null) fail(`${target.slug} frozen snapshot hash/reason differs`)
+    if (before.article.status !== 'published' || before.article.version !== 1 || before.article.seo_json !== null || !['main_article', 'single_study'].includes(before.article.article_layer)) fail(`${target.slug} frozen legacy state differs`)
+    if (target.expected_changed_row_count !== 1 || !target.fields.length || target.fields.length > 2 || new Set(target.fields.map((patch) => patch.field)).size !== target.fields.length) fail(`${target.slug} frozen field scope/count differs`)
+    for (const patch of target.fields) validateUmlautFieldPatch(patch, before.article, target.slug)
+    const candidate = { ...before.article, ...Object.fromEntries(target.fields.map((patch) => [patch.field, patch.after])) }
+    if (canonicalJsonHash(candidate) !== target.candidate_row_hash || canonicalJsonHash(target.candidate_row) !== target.candidate_row_hash) fail(`${target.slug} frozen candidate differs`)
+    if (canonicalJsonHash(target.public_before) !== target.public_before_hash) fail(`${target.slug} frozen public prestate hash differs`)
+  }
+  if (input.patch.patch_hash !== canonicalJsonHash(articles.map(({ article_id, fields }) => ({ article_id, fields })))) fail('legacy correction patch hash differs')
+  return input
+}
+
+export function buildLegacyFieldCorrectionReviewOrderV1(input) {
+  validateLegacyFieldCorrectionInputV1(input)
+  const order = { schema: 'nutrient_content_work_order.v2', run_id: input.run_id, kind: 'article_correction_review', execution_class: 'llm', reasoning_tier: 'standard',
+    assignee: { role: 'article-correction-reviewer', independent_from_ids: [input.editor.id] },
+    task: { mode: input.mode, input_receipt_hash: input.content_hash, correction_result_hash: input.correction_result_hash, patch_hash: input.patch.patch_hash,
+      affected_article_ids: input.affected_article_ids },
+    execution_receipt: { root: 'run', path: 'legacy-correction-review.work-order-execution-receipt.v1.json', schema: 'work_order_execution_receipt.v1' } }
+  return { ...order, work_order_id: exactWorkOrderId(order) }
+}
+
+export function buildLegacyFieldCorrectionReleaseV1({ input, review, reviewWorkOrder, reviewExecutionReceipt }) {
+  validateLegacyFieldCorrectionInputV1(input)
+  const expectedOrder = buildLegacyFieldCorrectionReviewOrderV1(input)
+  if (canonicalJsonHash(reviewWorkOrder) !== canonicalJsonHash(expectedOrder)) fail('legacy correction review Order does not bind the frozen input')
+  const validated = validateArticleCorrectionReviewV1({ review, input: { value: input }, result: { value: { content_hash: input.correction_result_hash }, editorId: input.editor.id }, issuedWorkOrders: [reviewWorkOrder] })
+  if (validated.value.result !== 'PASS') fail('legacy field correction has not passed independent M review')
+  exactArtifact(reviewExecutionReceipt, 'legacy review execution receipt')
+  const timing = reviewExecutionReceipt
+  if (timing.schema !== 'work_order_execution_receipt.v1' || timing.run_id !== input.run_id || timing.work_order_id !== reviewWorkOrder.work_order_id
+    || timing.execution_class !== reviewWorkOrder.execution_class || timing.reasoning_tier !== reviewWorkOrder.reasoning_tier
+    || timing.executor?.role !== review.reviewer.role || timing.executor?.id !== review.reviewer.id || timing.result !== 'PASS'
+    || timing.result_hash !== review.content_hash) fail('legacy review execution receipt differs from exact review/Order')
+  const started = Date.parse(iso(timing.started_at, 'legacy review started_at')), finished = Date.parse(iso(timing.finished_at, 'legacy review finished_at'))
+  if (finished < started || Date.parse(review.reviewed_at) < started || Date.parse(review.reviewed_at) > finished) fail('legacy review execution timing differs from actual review')
+  const base = { schema: 'content_release.v2', operation: 'article_correction', mode: LEGACY_FIELD_CORRECTION_MODE, run_id: input.run_id,
+    publish_target: input.publish_target, public_base_url: input.public_base_url, database_id: input.database_id, atomic: true,
+    input, review, review_work_order: reviewWorkOrder, review_execution_receipt: reviewExecutionReceipt, articles: input.articles }
+  return { ...base, release_hash: canonicalJsonHash(base) }
+}
+
+export function validateLegacyFieldCorrectionReleaseV1(release) {
+  const expected = buildLegacyFieldCorrectionReleaseV1({ input: release.input, review: release.review, reviewWorkOrder: release.review_work_order, reviewExecutionReceipt: release.review_execution_receipt })
+  if (canonicalJsonHash(release) !== canonicalJsonHash(expected)) fail('legacy correction release full-contract hash differs')
+  return release
+}
+
+export function buildLegacyFieldCorrectionApplyOrderV1({ release, releasePath, receiptPath = 'legacy-content-publish-receipt.v2.json' }) {
+  validateLegacyFieldCorrectionReleaseV1(release)
+  const order = { schema: 'nutrient_content_work_order.v2', run_id: release.run_id, kind: 'publication_apply', execution_class: 'deterministic', wave_index: null,
+    reasoning_tier: 'standard', assignee: { role: 'deterministic-content-publication-executor' }, task: { mode: release.mode, release_hash: release.release_hash },
+    inputs: [{ name: 'content_release', schema: 'content_release.v2', root: 'run', path: releasePath, byte_hash: sha256Bytes(readFileSync(releasePath)), content_hash: release.release_hash }],
+    outputs: [{ name: 'publish_receipt', schema: 'content_publish_receipt.v2', root: 'run', path: receiptPath }],
+    execution_receipt: { root: 'run', path: 'legacy-publication-apply.work-order-execution-receipt.v1.json', schema: 'work_order_execution_receipt.v1' } }
+  return { ...order, work_order_id: exactWorkOrderId(order) }
+}

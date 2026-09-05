@@ -2,7 +2,6 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import {
   knowledgeInlineMarkdownToText,
-  isKnowledgeControlMarkerLine,
   normalizeKnowledgeInlineLink,
   tokenizeKnowledgeInlineMarkdown,
 } from '../../../functions/lib/knowledge-inline-markdown.mjs';
@@ -10,189 +9,15 @@ import type { KnowledgeInlineMarkdownToken } from '../../../functions/lib/knowle
 
 export { knowledgeInlineMarkdownToText };
 
-type HeadingLevel = 1 | 2 | 3;
+import { isKnowledgeSourceHeading, parseKnowledgeMarkdown } from '../../../functions/lib/knowledge-markdown-blocks.mjs';
+import type { KnowledgeMarkdownBlock } from '../../../functions/lib/knowledge-markdown-blocks.mjs';
 
-export type KnowledgeMarkdownBlock =
-  | { type: 'heading'; level: HeadingLevel; text: string }
-  | { type: 'paragraph'; text: string }
-  | { type: 'list'; ordered: boolean; items: string[] }
-  | { type: 'table'; headers: string[]; rows: string[][] }
-  | { type: 'image'; alt: string; src: string; caption: string | null };
+export { isKnowledgeSourceHeading, parseKnowledgeMarkdown };
+export type { KnowledgeMarkdownBlock };
 
 type Props = {
   markdown: string;
 };
-
-function normalizeMarkdown(markdown: string): string {
-  return markdown.replace(/\\n/g, '\n').replace(/\r\n?/g, '\n');
-}
-
-function headingForLine(line: string): { level: HeadingLevel; text: string } | null {
-  const match = /^(#{1,3})\s+(.+)$/.exec(line.trim());
-  if (!match) return null;
-  return {
-    level: match[1].length as HeadingLevel,
-    text: match[2].trim(),
-  };
-}
-
-function unorderedListItem(line: string): string | null {
-  const match = /^[-*]\s+(.+)$/.exec(line.trim());
-  return match ? match[1].trim() : null;
-}
-
-function orderedListItem(line: string): string | null {
-  const match = /^\d+\.\s+(.+)$/.exec(line.trim());
-  return match ? match[1].trim() : null;
-}
-
-function parseTableRow(line: string): string[] | null {
-  const trimmed = line.trim();
-  if (!trimmed.includes('|')) return null;
-  const withoutOuterPipes = trimmed.replace(/^\|/, '').replace(/\|$/, '');
-  const cells = withoutOuterPipes.split('|').map((cell) => cell.trim());
-  return cells.length > 1 ? cells : null;
-}
-
-function isTableSeparator(line: string): boolean {
-  const cells = parseTableRow(line);
-  return Boolean(cells?.length && cells.every((cell) => /^:?-{3,}:?$/.test(cell)));
-}
-
-function parseImageLine(line: string): { alt: string; src: string } | null {
-  const trimmed = line.trim();
-  const match = /^!\[([^\]\n]*)\]\(([^)]*)\)\s*$/.exec(trimmed);
-  if (!match) return null;
-
-  const alt = match[1].trim();
-  const src = match[2].trim();
-  return { alt, src };
-}
-
-function parseItalicCaption(line: string): string | null {
-  const match = line.trim().match(/^(?:\*([^*\n]+)\*|_([^_\n]+)_)$/);
-  const caption = (match?.[1] ?? match?.[2] ?? '').trim();
-  return caption || null;
-}
-
-function isAllowedImageSrc(src: string): boolean {
-  return /^(https?:\/\/|\/\/|\/|data:image\/)/i.test(src);
-}
-
-export function isKnowledgeSourceHeading(header: string): boolean {
-  return /^(quellen?|sources?)$/i.test(knowledgeInlineMarkdownToText(header).trim());
-}
-
-function startsTable(lines: string[], index: number): boolean {
-  return Boolean(parseTableRow(lines[index]) && lines[index + 1] && isTableSeparator(lines[index + 1]));
-}
-
-function startsNewBlock(lines: string[], index: number): boolean {
-  const line = lines[index];
-  return Boolean(
-    !line.trim()
-    || headingForLine(line)
-    || parseImageLine(line)
-    || unorderedListItem(line)
-    || orderedListItem(line)
-    || startsTable(lines, index),
-  );
-}
-
-export function parseKnowledgeMarkdown(markdown: string): KnowledgeMarkdownBlock[] {
-  const lines = normalizeMarkdown(markdown).split('\n');
-  const blocks: KnowledgeMarkdownBlock[] = [];
-  let index = 0;
-
-  while (index < lines.length) {
-    const line = lines[index];
-    if (!line.trim()) {
-      index += 1;
-      continue;
-    }
-
-    if (isKnowledgeControlMarkerLine(line)) {
-      index += 1;
-      continue;
-    }
-
-    const heading = headingForLine(line);
-    if (heading) {
-      blocks.push({ type: 'heading', ...heading });
-      index += 1;
-      continue;
-    }
-
-    if (startsTable(lines, index)) {
-      const headers = parseTableRow(lines[index]) ?? [];
-      const rows: string[][] = [];
-      index += 2;
-      while (index < lines.length) {
-        const cells = parseTableRow(lines[index]);
-        if (!cells || isTableSeparator(lines[index])) break;
-        rows.push(cells);
-        index += 1;
-      }
-      blocks.push({ type: 'table', headers, rows });
-      continue;
-    }
-
-    const unorderedItem = unorderedListItem(line);
-    if (unorderedItem) {
-      const items: string[] = [];
-      while (index < lines.length) {
-        const item = unorderedListItem(lines[index]);
-        if (!item) break;
-        items.push(item);
-        index += 1;
-      }
-      blocks.push({ type: 'list', ordered: false, items });
-      continue;
-    }
-
-    const orderedItem = orderedListItem(line);
-    if (orderedItem) {
-      const items: string[] = [];
-      while (index < lines.length) {
-        const item = orderedListItem(lines[index]);
-        if (!item) break;
-        items.push(item);
-        index += 1;
-      }
-      blocks.push({ type: 'list', ordered: true, items });
-      continue;
-    }
-
-    const image = parseImageLine(line);
-    if (image) {
-      if (!isAllowedImageSrc(image.src)) {
-        blocks.push({ type: 'paragraph', text: line.trim() });
-        index += 1;
-        continue;
-      }
-
-      let nextNonEmptyIndex = index + 1;
-      while (nextNonEmptyIndex < lines.length && !lines[nextNonEmptyIndex].trim()) {
-        nextNonEmptyIndex += 1;
-      }
-      const caption = nextNonEmptyIndex < lines.length
-        ? parseItalicCaption(lines[nextNonEmptyIndex])
-        : null;
-      blocks.push({ type: 'image', ...image, caption });
-      index = caption ? nextNonEmptyIndex + 1 : index + 1;
-      continue;
-    }
-
-    const paragraphLines: string[] = [];
-    while (index < lines.length && !startsNewBlock(lines, index)) {
-      paragraphLines.push(lines[index].trim());
-      index += 1;
-    }
-    blocks.push({ type: 'paragraph', text: paragraphLines.join('\n') });
-  }
-
-  return blocks;
-}
 
 export function renderKnowledgeInlineMarkdown(text: string): ReactNode[] {
   const renderTokens = (tokens: KnowledgeInlineMarkdownToken[], keyPrefix: string): ReactNode[] => tokens.map((token, index) => {

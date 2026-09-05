@@ -4,11 +4,17 @@ import { ArrowLeft, ExternalLink } from 'lucide-react';
 import { apiPath } from '../api/base';
 import {
   loadKnowledgeArticle,
+  KnowledgeArticleLoadError,
   readPrimedKnowledgeArticle,
 } from '../lib/knowledgeArticleClient';
 import type { KnowledgeArticle } from '../types';
+import { knowledgeCategoryLabel } from '../lib/knowledgeCategories';
+import { knowledgeContextLabel, knowledgeNavigationState, knowledgeOverviewSearch } from '../lib/knowledgeNavigation';
+import { KnowledgeArticleActions } from './KnowledgeArticleActions';
+import KnowledgeArticleRecovery from './KnowledgeArticleRecovery';
 import {
   hasUnsafeKnowledgeUrlCharacters,
+  deduplicateKnowledgeSources,
   isRenderableKnowledgeSource,
   KnowledgeMagazineArticle,
   KnowledgeSourceInternalArticleLinks,
@@ -270,6 +276,8 @@ export default function KnowledgeArticlePage() {
   const [article, setArticle] = useState<KnowledgeArticle | null>(initialArticle);
   const [loading, setLoading] = useState(initialArticle === null);
   const [error, setError] = useState('');
+  const [errorStatus, setErrorStatus] = useState(0);
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   useLayoutEffect(() => {
     const previousSlug = previousArticleSlugRef.current;
@@ -285,6 +293,7 @@ export default function KnowledgeArticlePage() {
     if (!slug || !articleApiEndpoint) {
       setArticle(null);
       setError('Artikel nicht gefunden.');
+      setErrorStatus(404);
       setLoading(false);
       return;
     }
@@ -294,6 +303,7 @@ export default function KnowledgeArticlePage() {
     setArticle(primedArticle);
     setLoading(primedArticle === null);
     setError('');
+    setErrorStatus(0);
 
     loadKnowledgeArticle(slug, articleApiEndpoint, bypassPrimedArticle)
       .then((loadedArticle) => {
@@ -303,6 +313,7 @@ export default function KnowledgeArticlePage() {
       .catch((err) => {
         if (!active) return;
         setError(err instanceof Error ? err.message : 'Artikel konnte nicht geladen werden.');
+        setErrorStatus(err instanceof KnowledgeArticleLoadError ? err.status : 0);
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -311,7 +322,7 @@ export default function KnowledgeArticlePage() {
     return () => {
       active = false;
     };
-  }, [articleApiEndpoint, bypassPrimedArticle, slug]);
+  }, [articleApiEndpoint, bypassPrimedArticle, slug, loadAttempt]);
 
   const visibleArticle = article && slug && article.slug === slug ? article : null;
 
@@ -426,12 +437,19 @@ export default function KnowledgeArticlePage() {
   const reviewedDate = formatReviewedDate(visibleArticle?.reviewed_at);
   const normalizedBody = visibleArticle?.body ?? '';
   const useMagazineTemplate = visibleArticle?.article_layer === 'main_article';
-  const backToKnowledgeOverview = `/wissen${location.search}`;
+  const inheritedNavigationState = knowledgeNavigationState(location.state);
+  const overviewSearch = knowledgeOverviewSearch(location.search) || inheritedNavigationState.overviewSearch || '';
+  const backToKnowledgeOverview = `/wissen${overviewSearch}`;
+  const navigationState = { ...inheritedNavigationState, overviewSearch };
+  const overviewParams = new URLSearchParams(overviewSearch);
+  const filterName = knowledgeCategoryLabel(overviewParams.get('category'));
+  const filterQuery = overviewParams.get('q')?.trim();
+  const filterDescription = [overviewParams.get('saved') === '1' ? 'Gemerkte Artikel' : null, filterName, filterQuery ? `Suche „${filterQuery}“` : null].filter(Boolean).join(' · ');
   const stageIngredientName = visibleArticle?.ingredients?.length === 1
     ? visibleArticle.ingredients[0].name?.trim() || null
     : null;
   const visibleSources = useMemo(
-    () => visibleArticle?.sources.filter(isRenderableKnowledgeSource) ?? [],
+    () => deduplicateKnowledgeSources(visibleArticle?.sources.filter(isRenderableKnowledgeSource) ?? []),
     [visibleArticle],
   );
   const studySections = useMemo(
@@ -440,31 +458,59 @@ export default function KnowledgeArticlePage() {
   );
   const routeTransitionPending = Boolean(article && slug && article.slug !== slug);
   const showLoading = loading || routeTransitionPending;
+  const missingArticle = errorStatus === 404 || errorStatus === 410;
+
+  useLayoutEffect(() => {
+    if (showLoading || !error) return;
+    const previousTitle = document.title;
+    const title = `${missingArticle ? 'Artikel nicht gefunden' : 'Artikel gerade nicht erreichbar'} | Supplement Stack`;
+    document.title = title;
+    const restore = setHeadAttribute('meta[name="robots"]', () => createMetaTag('name', 'robots'), 'content', 'noindex,follow');
+    return () => { restore(); if (document.title === title) document.title = previousTitle; };
+  }, [error, missingArticle, showLoading]);
+
+  const relatedArticles = visibleArticle?.related_articles ?? [];
+  const mainArticles = useMagazineTemplate ? [] : relatedArticles.filter((related) => related.article_layer === 'main_article');
+  const linkedSourcePaths = new Set(visibleSources.flatMap((source) => [source.url, ...(source.internal_articles ?? []).map((entry) => entry.url)]).map((url) => url.split(/[?#]/)[0]));
+  const furtherArticles = relatedArticles.filter((related) => (
+    related.slug !== visibleArticle?.slug
+    && !mainArticles.some((entry) => entry.slug === related.slug)
+    && !linkedSourcePaths.has(`/wissen/${related.slug}`)
+  ));
+  const editorialInfo = (
+    <details className="mt-4 text-sm text-slate-600" data-projection-additive-navigation="true">
+      <summary className="min-h-11 cursor-pointer py-3 font-bold">Redaktion und Artikelstand</summary>
+      <p className="py-2">Verantwortlich für diese Wissensseite: <Link to="/impressum" className="font-bold text-blue-700 underline">Supplement Stack</Link>.</p>
+      {reviewedDate && <p className="py-2">Der angezeigte Prüfstand bezieht sich auf den {reviewedDate}.</p>}
+      {visibleArticle?.update_reason && <p className="py-2"><strong>Grund der letzten Aktualisierung:</strong> {visibleArticle.update_reason}</p>}
+    </details>
+  );
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
       <Link
         to={backToKnowledgeOverview}
+        state={navigationState}
         className="mb-8 inline-flex items-center gap-2 text-sm font-bold text-slate-500 transition-colors hover:text-slate-900"
       >
         <ArrowLeft size={16} />
-        Zurück
+        Zur Wissensübersicht
       </Link>
+      {filterDescription && <p className="-mt-5 mb-6 text-sm text-slate-600">Deine Auswahl bleibt erhalten: {filterDescription}.</p>}
+      {navigationState.returnTo && <Link to={navigationState.returnTo} className="mb-6 flex min-h-11 items-center gap-2 text-sm font-bold text-blue-700 underline">{knowledgeContextLabel(navigationState.returnTo)}</Link>}
 
       {showLoading && (
-        <div className="rounded-xl border border-slate-200 bg-white p-8 text-sm font-semibold text-slate-500 shadow-sm">
-          Artikel wird geladen...
+        <div role="status" aria-live="polite" className="rounded-xl border border-slate-200 bg-white p-8 text-base font-semibold text-slate-600 shadow-sm">
+          Artikel wird geladen …
         </div>
       )}
 
       {!showLoading && error && (
-        <div className="rounded-xl border border-red-200 bg-red-50 p-8 text-sm font-bold text-red-700">
-          {error}
-        </div>
+        <KnowledgeArticleRecovery key={slug} missing={missingArticle} slug={slug ?? ''} onRetry={() => setLoadAttempt((attempt) => attempt + 1)} />
       )}
 
       {!showLoading && visibleArticle && useMagazineTemplate && (
-        <KnowledgeMagazineArticle key={visibleArticle.slug} article={visibleArticle} reviewedDate={reviewedDate} />
+        <KnowledgeMagazineArticle key={visibleArticle.slug} article={visibleArticle} reviewedDate={reviewedDate} navigationState={navigationState} heroActions={<KnowledgeArticleActions key={visibleArticle.slug} slug={visibleArticle.slug} title={knowledgeInlineMarkdownToText(visibleArticle.title)} />} editorialInfo={editorialInfo} />
       )}
 
       {!showLoading && visibleArticle && !useMagazineTemplate && (
@@ -475,16 +521,19 @@ export default function KnowledgeArticlePage() {
           className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8"
         >
           <div className="mb-6 border-b border-slate-100 pb-6">
-            <h1 className="break-words text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">{renderKnowledgeInlineMarkdown(visibleArticle.title)}</h1>
+            {mainArticles.length > 0 && <nav className="mb-5 space-y-2" aria-label="Einordnung zum Wirkstoff">{mainArticles.map((related) => <Link key={related.slug} to={`/wissen/${related.slug}${overviewSearch}`} state={navigationState} className="block min-h-11 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-base font-bold text-blue-800 hover:underline">Einordnung zu {related.ingredients.map((ingredient) => ingredient.name).join(', ')}</Link>)}</nav>}
+            <h1 tabIndex={-1} className="break-words text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">{renderKnowledgeInlineMarkdown(visibleArticle.title)}</h1>
             <p data-knowledge-ui="dek" className="mt-4 text-base font-semibold leading-relaxed text-slate-600">{renderKnowledgeInlineMarkdown(visibleArticle.summary)}</p>
             <div className="mt-4 flex flex-wrap gap-3 text-sm font-semibold text-slate-500">
               {stageIngredientName && (
-                <span data-knowledge-ui="ingredient-chip">Wirkstoffe: {stageIngredientName}</span>
+                <span data-knowledge-ui="ingredient-chip">Wirkstoff: {stageIngredientName}</span>
               )}
               {reviewedDate && (
                 <span data-knowledge-ui="reviewed-date">Geprüft am {reviewedDate}</span>
               )}
             </div>
+            <KnowledgeArticleActions key={visibleArticle.slug} slug={visibleArticle.slug} title={knowledgeInlineMarkdownToText(visibleArticle.title)} />
+            {editorialInfo}
           </div>
 
           <div data-study-content className="space-y-4">
@@ -514,6 +563,7 @@ export default function KnowledgeArticlePage() {
               <span className="sr-only" data-knowledge-ui="sources-count">
                 {visibleSources.length} {visibleSources.length === 1 ? 'Quelle' : 'Quellen'}
               </span>
+              <p data-projection-additive-navigation="true" className="mt-2 text-sm text-slate-600">{visibleSources.length} {visibleSources.length === 1 ? 'Originalquelle bildet' : 'Originalquellen bilden'} die Grundlage dieses Artikels. Dort findest du die genauen Ergebnisse und Grenzen.</p>
               <ul className="mt-4 space-y-3">
                 {visibleSources.map((source, index) => {
                   const normalizedUrl = normalizeKnowledgeSourceUrl(source.url);
@@ -529,7 +579,7 @@ export default function KnowledgeArticlePage() {
                   return (
                     <li key={`${source.url}-${label}-${index}`} data-source-id={source.source_id ?? ''}>
                       {normalizedUrl?.kind === 'internal' ? (
-                        <Link to={normalizedUrl.href} className={className}>
+                        <Link to={normalizedUrl.href} state={navigationState} className={className}>
                           {content}
                         </Link>
                       ) : normalizedUrl?.kind === 'external' ? (
@@ -548,6 +598,7 @@ export default function KnowledgeArticlePage() {
                       )}
                       <KnowledgeSourceInternalArticleLinks
                         source={source}
+                        navigationState={navigationState}
                         className="source-internal-links mt-2 flex flex-col gap-1 pl-6"
                       />
                     </li>
@@ -558,6 +609,14 @@ export default function KnowledgeArticlePage() {
           )}
         </article>
       )}
+      {!showLoading && visibleArticle && furtherArticles.length > 0 && (
+        <nav className="mt-8 rounded-2xl border border-slate-200 bg-white p-6" aria-label="Verwandte Wissensartikel">
+          <h2 className="text-xl font-black text-slate-900">Weiterlesen zum Wirkstoff</h2>
+          <p className="mt-2 text-base text-slate-600">Diese Artikel sind mit denselben Wirkstoffen verknüpft.</p>
+          <ul className="mt-4 space-y-3">{furtherArticles.map((related) => <li key={related.slug}><Link to={`/wissen/${related.slug}${overviewSearch}`} state={navigationState} className="inline-flex min-h-11 items-center break-words font-bold text-blue-700 underline">{renderKnowledgeInlineMarkdown(related.title)}</Link></li>)}</ul>
+        </nav>
+      )}
+      {!showLoading && visibleArticle && !useMagazineTemplate && <a href="#" onClick={(event) => { event.preventDefault(); window.scrollTo({ top: 0, behavior: 'auto' }); document.querySelector<HTMLElement>('main h1')?.focus({ preventScroll: true }); }} className="mt-6 inline-flex min-h-11 items-center font-bold text-blue-700 underline">Nach oben</a>}
     </main>
   );
 }

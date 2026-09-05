@@ -143,7 +143,10 @@ describe('knowledge indexability delivery', () => {
     expect(document.body.textContent).toContain('Erster Punkt\nZweiter Punkt');
     expect(document.body.textContent).toContain(article.sources[0].label);
     expect(document.body.textContent).not.toContain('knowledge-template');
-    expect(document.querySelector('a')?.getAttribute('href')).toBe(article.sources[0].url);
+    expect(document.querySelector('#prerender-sources + ol a')?.getAttribute('href')).toBe(article.sources[0].url);
+    expect(document.querySelector('h2')?.textContent).toBe('Einordnung');
+    expect(document.querySelector('ul li')?.textContent).toBe('Erster Punkt');
+    expect(document.querySelector('a[href="/wissen/test"]')?.textContent).toBe('interner Link');
     expect(
       JSON.parse(
         document.querySelector('script:not([type])')?.textContent?.replace('window.__knowledgeArticleBootstrap=', '').replace(/;$/, '') ?? '',
@@ -260,7 +263,7 @@ describe('knowledge indexability delivery', () => {
     expect(JSON.parse(document.querySelector('script[type="application/ld+json"]')?.textContent ?? '').mainEntityOfPage).toBe('https://supplementstack.de/wissen/grapefruitkernextrakt');
   });
 
-  it('falls back to a noindex/no-store SPA shell when D1 readback fails', async () => {
+  it('returns a readable noindex/no-store 503 when D1 readback fails', async () => {
     const shell = '<!doctype html><html><head><title>Shell</title></head><body><div id="root"></div></body></html>';
     const compressedShell = gzipSync(shell);
     const server = createServer((_request, response) => {
@@ -287,13 +290,16 @@ describe('knowledge indexability delivery', () => {
       };
       const response = await onRequestGet(context as never);
 
-      expect(response.status).toBe(200);
+      expect(response.status).toBe(503);
       expect(response.headers.get('x-robots-tag')).toBe('noindex, nofollow');
       expect(response.headers.get('cache-control')).toBe('no-store');
       expect(response.headers.get('content-encoding')).toBeNull();
       expect(response.headers.get('content-length')).toBeNull();
       expect(response.headers.get('etag')).toBeNull();
-      expect(await response.text()).toBe(shell);
+      expect(response.headers.get('retry-after')).toBe('60');
+      const document = new JSDOM(await response.text()).window.document;
+      expect(document.querySelector('h1')?.textContent).toBe('Artikel gerade nicht verfügbar');
+      expect(document.querySelector('a[href="/wissen"]')?.textContent).toBe('Zur Wissensübersicht');
     } finally {
       await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
     }
@@ -310,7 +316,10 @@ describe('knowledge indexability delivery', () => {
 
     expect(response.headers.get('x-robots-tag')).toBe('noindex, nofollow');
     expect(response.headers.get('cache-control')).toBe('no-store');
-    expect(await response.text()).toBe(shell);
+    expect(response.status).toBe(404);
+    const document = new JSDOM(await response.text()).window.document;
+    expect(document.querySelector('h1')?.textContent).toBe('Artikel nicht gefunden');
+    expect(document.querySelector('form')?.getAttribute('action')).toBe('/wissen');
   });
 
   it('makes robots and sitemap reflect each current published-state read without stale caching', async () => {

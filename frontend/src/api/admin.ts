@@ -768,6 +768,7 @@ export interface AdminKnowledgeArticle {
   status: string;
   article_layer: AdminKnowledgeArticleLayer;
   reviewed_at: string | null;
+  update_reason?: string | null;
   sources_json: unknown;
   sources: AdminKnowledgeArticleSource[];
   ingredient_ids: number[];
@@ -809,6 +810,7 @@ export interface AdminKnowledgeArticlePayload {
   status?: string | null;
   article_layer?: AdminKnowledgeArticleLayer | null;
   reviewed_at?: string | null;
+  update_reason?: string | null;
   sources_json?: unknown;
   sources?: AdminKnowledgeArticleSource[];
   ingredient_ids?: number[];
@@ -1564,6 +1566,7 @@ function parseKnowledgeArticle(raw: Record<string, unknown>): AdminKnowledgeArti
     status: toTextOrNull(raw.status) || 'draft',
     article_layer: parseKnowledgeArticleLayer(raw.article_layer ?? raw.layer),
     reviewed_at: toDateOrNull(raw.reviewed_at),
+    update_reason: toTextOrNull(raw.update_reason),
     sources_json: raw.sources_json ?? raw.sources ?? null,
     sources,
     ingredient_ids: ingredientIds,
@@ -1636,6 +1639,7 @@ function normalizeKnowledgeArticlePayload(
     status: toTextOrNull(payload.status) ?? 'draft',
     article_layer: parseKnowledgeArticleLayer(payload.article_layer),
     reviewed_at: payload.reviewed_at !== undefined ? toDateOrNull(payload.reviewed_at) : null,
+    ...(payload.update_reason !== undefined ? { update_reason: toTextOrNull(payload.update_reason) } : {}),
     sources_json: payload.sources_json ?? payload.sources?.map((source) => ({ label: source.name, url: source.link })) ?? null,
     sources: payload.sources?.map((source, index) => ({
       name: toTextOrNull(source.name) ?? '',

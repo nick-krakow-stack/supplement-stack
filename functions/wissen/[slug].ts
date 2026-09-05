@@ -7,20 +7,23 @@ import {
   isValidKnowledgeSlug,
   knowledgeCanonicalUrl,
   renderKnowledgeArticleHtml,
+  renderKnowledgeUnavailableHtml,
 } from '../lib/knowledge-indexability'
 
 type KnowledgePagesFunction = PagesFunction<Env, 'slug'>
 
-export async function failClosedKnowledgeShell(response: Response): Promise<Response> {
+export async function failClosedKnowledgeShell(response: Response, status: 404 | 503 = 503): Promise<Response> {
   const shellHtml = await response.text()
   const headers = new Headers(response.headers)
   headers.set('Cache-Control', 'no-store')
   headers.set('X-Robots-Tag', 'noindex, nofollow')
+  headers.set('Content-Type', 'text/html; charset=utf-8')
+  if (status === 503) headers.set('Retry-After', '60')
   headers.delete('Content-Length')
   headers.delete('Content-Encoding')
   headers.delete('ETag')
   headers.delete('Last-Modified')
-  return new Response(shellHtml, { status: response.status, statusText: response.statusText, headers })
+  return new Response(renderKnowledgeUnavailableHtml(shellHtml, status), { status, headers })
 }
 
 export async function buildKnowledgePrerenderResponse(
@@ -49,7 +52,7 @@ export const onRequestGet: KnowledgePagesFunction = async (context) => {
   const slug = Array.isArray(rawSlug) ? rawSlug[0] : rawSlug
   const shellResponse = await context.next()
   if (!shellResponse.ok) return shellResponse
-  if (!slug || !isValidKnowledgeSlug(slug)) return await failClosedKnowledgeShell(shellResponse)
+  if (!slug || !isValidKnowledgeSlug(slug)) return await failClosedKnowledgeShell(shellResponse, 404)
 
   let article
   try {
@@ -60,6 +63,6 @@ export const onRequestGet: KnowledgePagesFunction = async (context) => {
     article = result.article
   }
   catch { return await failClosedKnowledgeShell(shellResponse) }
-  if (!article) return await failClosedKnowledgeShell(shellResponse)
+  if (!article) return await failClosedKnowledgeShell(shellResponse, 404)
   return buildKnowledgePrerenderResponse(shellResponse, article, slug)
 }

@@ -50,6 +50,7 @@ type KnowledgeArticleRow = {
   seo_json: string | null
   created_at: string
   updated_at: string
+  update_reason: string | null
 }
 
 export type PublicKnowledgeArticleSeo = {
@@ -85,6 +86,69 @@ export type PublicKnowledgeArticle = {
   published_at: string
   modified_at: string
   seo: PublicKnowledgeArticleSeo | null
+  related_articles?: RelatedKnowledgeArticle[]
+  update_reason?: string | null
+}
+
+export type RelatedKnowledgeArticle = {
+  slug: string
+  title: string
+  article_layer: 'main_article' | 'single_study'
+  ingredients: { ingredient_id: number; name: string }[]
+}
+
+type RelatedKnowledgeArticleRow = {
+  slug: string
+  title: string
+  article_layer: 'main_article' | 'single_study'
+  ingredient_id: number
+  name: string
+}
+
+const RELATED_KNOWLEDGE_ARTICLES_SQL = `
+  WITH eligible_relations AS (
+    SELECT DISTINCT target.slug, target.title, target.article_layer, i.id AS ingredient_id, i.name
+    FROM knowledge_article_ingredients owner_relation
+    JOIN knowledge_articles owner ON owner.slug = owner_relation.article_slug AND owner.status = 'published'
+    JOIN ingredients i ON i.id = owner_relation.ingredient_id AND i.is_active = 1
+    JOIN knowledge_article_ingredients target_relation ON target_relation.ingredient_id = i.id
+    JOIN knowledge_articles target ON target.slug = target_relation.article_slug AND target.status = 'published'
+    WHERE owner.slug = ?
+      AND target.slug <> owner.slug
+      AND trim(COALESCE(i.name, '')) <> ''
+      AND (
+        target.article_layer = 'main_article'
+        OR (target.article_layer = 'single_study' AND EXISTS (
+          SELECT 1 FROM study_interpretation_records sir
+          JOIN ingredient_research_sources source ON source.id = sir.source_id AND source.ingredient_id = sir.ingredient_id
+          WHERE sir.knowledge_article_slug = target.slug
+            AND sir.ingredient_id = i.id AND sir.status = 'accepted'
+        ))
+      )
+  ), selected_articles AS (
+    SELECT DISTINCT slug, title, article_layer FROM eligible_relations
+    ORDER BY CASE article_layer WHEN 'main_article' THEN 0 ELSE 1 END, title COLLATE NOCASE, slug
+    LIMIT 8
+  )
+  SELECT relation.* FROM eligible_relations relation
+  JOIN selected_articles selected ON selected.slug = relation.slug
+  ORDER BY CASE relation.article_layer WHEN 'main_article' THEN 0 ELSE 1 END,
+    relation.title COLLATE NOCASE, relation.slug, relation.name COLLATE NOCASE, relation.ingredient_id
+`
+
+function projectRelatedKnowledgeArticles(rows: readonly RelatedKnowledgeArticleRow[]): RelatedKnowledgeArticle[] {
+  const articles = new Map<string, RelatedKnowledgeArticle>()
+  for (const row of rows) {
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(row.slug)) continue
+    const article = articles.get(row.slug) ?? {
+      slug: row.slug, title: row.title, article_layer: row.article_layer, ingredients: [],
+    }
+    if (!article.ingredients.some((ingredient) => ingredient.ingredient_id === row.ingredient_id)) {
+      article.ingredients.push({ ingredient_id: row.ingredient_id, name: row.name })
+    }
+    articles.set(row.slug, article)
+  }
+  return [...articles.values()]
 }
 
 function parsePublicKnowledgeArticleSeo(value: string | null): PublicKnowledgeArticleSeo | null {
@@ -592,6 +656,7 @@ async function loadPublishedKnowledgeArticleLegacy(
       ${columns.has('dose_unit') ? 'dose_unit' : 'NULL AS dose_unit'},
       ${columns.has('product_note') ? 'product_note' : 'NULL AS product_note'},
       ${columns.has('seo_json') ? 'seo_json' : 'NULL AS seo_json'},
+      ${columns.has('update_reason') ? 'update_reason' : 'NULL AS update_reason'},
       created_at,
       updated_at
     FROM knowledge_articles
@@ -607,6 +672,13 @@ async function loadPublishedKnowledgeArticleLegacy(
     articleLayer: article.article_layer,
     ingredientIds,
   })
+  const canLoadRelated = columns.has('article_layer')
+    && await hasTable(db, 'knowledge_article_ingredients')
+    && await hasTable(db, 'study_interpretation_records')
+    && await hasTable(db, 'ingredient_research_sources')
+  const relatedRows = canLoadRelated
+    ? (await db.prepare(RELATED_KNOWLEDGE_ARTICLES_SQL).bind(article.slug).all<RelatedKnowledgeArticleRow>()).results ?? []
+    : []
 
   return {
     slug: article.slug,
@@ -631,6 +703,8 @@ async function loadPublishedKnowledgeArticleLegacy(
     published_at: article.created_at,
     modified_at: article.updated_at,
     seo: parsePublicKnowledgeArticleSeo(article.seo_json),
+    related_articles: projectRelatedKnowledgeArticles(relatedRows),
+    update_reason: article.update_reason,
   }
 }
 
@@ -649,6 +723,7 @@ async function loadPublishedKnowledgeArticleCurrentSchema(
     sourceResult,
     relationTargetResult,
     interpretationTargetResult,
+    relatedArticleResult,
   ] = await db.batch([
     db.prepare(`
       SELECT
@@ -668,6 +743,7 @@ async function loadPublishedKnowledgeArticleCurrentSchema(
         dose_unit,
         product_note,
         seo_json,
+        update_reason,
         created_at,
         updated_at
       FROM knowledge_articles
@@ -756,6 +832,7 @@ async function loadPublishedKnowledgeArticleCurrentSchema(
         AND ka.article_layer = 'single_study'
       ORDER BY ka.slug ASC, ka.title ASC
     `).bind(slug, slug),
+    db.prepare(RELATED_KNOWLEDGE_ARTICLES_SQL).bind(slug),
   ])
 
   const article = batchRows<KnowledgeArticleRow>(articleResult)[0]
@@ -796,6 +873,8 @@ async function loadPublishedKnowledgeArticleCurrentSchema(
     published_at: article.created_at,
     modified_at: article.updated_at,
     seo: parsePublicKnowledgeArticleSeo(article.seo_json),
+    related_articles: projectRelatedKnowledgeArticles(batchRows<RelatedKnowledgeArticleRow>(relatedArticleResult)),
+    update_reason: article.update_reason,
   }
 }
 
@@ -803,7 +882,7 @@ export async function loadPublishedKnowledgeArticle(
   db: D1Database,
   slug: string,
 ): Promise<PublicKnowledgeArticle | null> {
-  if (!/^[a-z0-9-]+$/.test(slug)) return null
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) return null
   try {
     return await loadPublishedKnowledgeArticleCurrentSchema(db, slug)
   } catch {
@@ -817,7 +896,7 @@ export type CachedPublishedKnowledgeArticle = {
 }
 
 export function knowledgeArticleCacheKey(requestUrl: string, slug: string): Request {
-  return new Request(new URL(`/api/knowledge/${slug}`, requestUrl).toString(), { method: 'GET' })
+  return new Request(new URL(`/api/knowledge/${slug}?projection=article-navigation-v2`, requestUrl).toString(), { method: 'GET' })
 }
 
 function defaultKnowledgeCache(): Cache | null {
@@ -875,12 +954,17 @@ export async function loadCachedPublishedKnowledgeArticle(
 knowledge.get('/:slug', async (c) => {
   const startedAt = Date.now()
   const slug = c.req.param('slug')
-  if (!/^[a-z0-9-]+$/.test(slug)) return c.json({ error: 'Invalid slug' }, 400)
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) return c.json({ error: 'Artikel nicht gefunden.' }, 404, { 'Cache-Control': 'no-store' })
   const requestUrl = new URL(c.req.url)
-  const result = await loadCachedPublishedKnowledgeArticle(c.env.DB, c.req.url, slug, {
-    bypassCache: requestUrl.searchParams.has('cfcheck'),
-    waitUntil: (promise) => c.executionCtx.waitUntil(promise),
-  })
+  let result: CachedPublishedKnowledgeArticle
+  try {
+    result = await loadCachedPublishedKnowledgeArticle(c.env.DB, c.req.url, slug, {
+      bypassCache: requestUrl.searchParams.has('cfcheck'),
+      waitUntil: (promise) => c.executionCtx.waitUntil(promise),
+    })
+  } catch {
+    return c.json({ error: 'Der Artikel konnte gerade nicht geladen werden.' }, 503, { 'Cache-Control': 'no-store', 'Retry-After': '60' })
+  }
   if (!result.article) return c.json({ error: 'Not found' }, 404, { 'Cache-Control': 'no-store' })
   return new Response(JSON.stringify({ article: result.article }), {
     headers: {

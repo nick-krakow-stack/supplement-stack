@@ -98,7 +98,7 @@ describe("KnowledgeMarkdown", () => {
     );
 
     expect(screen.getByRole("heading", { level: 1, name: "Vitamin A sofort sichtbar" })).toBeTruthy();
-    expect(screen.queryByText("Artikel wird geladen...")).toBeNull();
+    expect(screen.queryByText("Artikel wird geladen …")).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
   });
   it("selects the public template only from article_layer", () => {
@@ -598,7 +598,7 @@ describe("KnowledgeMarkdown", () => {
 
     fireEvent.click(screen.getByRole("link", { name: "Zum langsamen Zinkartikel" }));
     expect(screen.queryByRole("heading", { level: 1, name: "Quercetin sichtbar" })).toBeNull();
-    expect(screen.getByText("Artikel wird geladen...")).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toBe("Artikel wird geladen …");
     expect(document.title).not.toBe("Quercetin sichtbar");
 
     await act(async () => {
@@ -680,7 +680,7 @@ describe("KnowledgeMarkdown", () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText("Artikel konnte nicht eindeutig geladen werden.")).toBeTruthy();
+    expect(await screen.findByRole("heading", { level: 1, name: "Artikel gerade nicht erreichbar" })).toBeTruthy();
     expect(screen.queryByRole("heading", { level: 1, name: "Falscher Zinkartikel" })).toBeNull();
     expect(document.head.querySelector('link[rel="canonical"]')).toBeNull();
     expect(document.head.querySelector('script[data-knowledge-article-json-ld="true"]')).toBeNull();
@@ -2063,7 +2063,7 @@ describe("KnowledgeMarkdown", () => {
     );
 
     await screen.findByRole("heading", { level: 1, name: "Zinkstudie verständlich eingeordnet" });
-    expect(screen.getByText("Wirkstoffe: Zink")).toBeTruthy();
+    expect(screen.getByText("Wirkstoff: Zink")).toBeTruthy();
     expect(screen.getByText("Geprüft am 14. Juli 2026")).toBeTruthy();
     expect(screen.queryByText(/Dosisdetails/)).toBeNull();
     expect(screen.queryByText("Legacy-Produkthinweis darf nicht sichtbar sein.")).toBeNull();
