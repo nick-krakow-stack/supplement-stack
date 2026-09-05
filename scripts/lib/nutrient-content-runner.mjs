@@ -41,6 +41,7 @@ import {
   validateArticleCorrectionResultV1,
   validateArticleCorrectionReviewV1,
   validateCorrectionClassV1,
+  validateAuthoritativeCorrectionBeforeV1,
 } from './article-correction-v1.mjs'
 import {
   buildSourceCatalogSyncRequestV1,
@@ -286,7 +287,7 @@ function normalizeArticle(entry, stage, context, index) {
   if (!['L', 'M', 'S'].includes(changeClass)) fail(`article ${articleId}.change_class must be L, M or S`)
   const renderProfile = stage === 'stage3' ? text(entry.render_profile ?? context.renderProfile, `${articleId}.render_profile`) : 'study_article_v2'
   if (stage === 'stage3' && renderProfile !== 'knowledge_magazine_v1') fail(`${articleId} Stage-3 render_profile must equal knowledge_magazine_v1`)
-  return {
+  const article = {
     article_id: articleId,
     stage,
     slug: articleSlug,
@@ -295,6 +296,17 @@ function normalizeArticle(entry, stage, context, index) {
     render_profile: renderProfile,
     write_guard: normalizeWriteGuard(entry.write_guard, `${articleId}.write_guard`),
   }
+  if (entry.authoritative_before != null) {
+    const binding = object(entry.authoritative_before, `${articleId}.authoritative_before`)
+    const path = resolveManifestPath(context.root, binding.path, `${articleId}.authoritative_before.path`)
+    const snapshot = strictJson(path, `${articleId}.authoritative_before`)
+    validateAuthoritativeCorrectionBeforeV1(snapshot, article)
+    if (binding.content_hash !== snapshot.content_hash) fail(`${articleId} authoritative-before binding hash differs`)
+    article.authoritative_before = snapshot
+    article.authoritative_before_path = path
+    article.update_reason = text(binding.update_reason, `${articleId}.authoritative_before.update_reason`)
+  }
+  return article
 }
 
 function loadArticleCorrectionRunContext({ absolute, root, mode, raw, runId, substance, policyVersion, renderProfile }) {
@@ -384,12 +396,14 @@ export function loadNutrientContentRunManifest(manifestPath) {
   const stage4Target = stage4.enabled ? text(stage4.target ?? rawProbe.publish?.target, 'manifest.stage4.target') : null
   const stage4WriteGuard = stage4.enabled ? normalizeStage4WriteGuard(stage4.write_guard, 'manifest.stage4.write_guard') : null
   const stage4PrestatePath = stage4.enabled && stage4.prestate_path ? resolveManifestPath(root, stage4.prestate_path, 'manifest.stage4.prestate_path') : null
-  const inputPaths = [absolute, researchPath, coveragePlanPath, evidenceManifestPath, linkInventorySourcePath, sourceArtifactReceiptPath, ...(ingredientTargetReceiptProvided ? [ingredientTargetReceiptPath] : []), ...(sourceResolutionReceiptProvided ? [sourceResolutionReceiptPath] : []), ...(stage4PrestatePath ? [stage4PrestatePath] : []), ...all.map((entry) => entry.markdown_path)]
+  const inputPaths = [absolute, researchPath, coveragePlanPath, evidenceManifestPath, linkInventorySourcePath, sourceArtifactReceiptPath, ...(ingredientTargetReceiptProvided ? [ingredientTargetReceiptPath] : []), ...(sourceResolutionReceiptProvided ? [sourceResolutionReceiptPath] : []), ...(stage4PrestatePath ? [stage4PrestatePath] : []), ...all.map((entry) => entry.markdown_path), ...all.flatMap(entry => entry.authoritative_before_path ? [entry.authoritative_before_path] : [])]
   assertNoPathCollisions(inputPaths.map((path, index) => ({ path, label: index === 0 ? 'run manifest' : `run input ${index}`, kind: 'input' })))
   for (const [label, outputDir] of [['state_dir', stateDir], ['evidence_dir', evidenceDir]]) {
     if (inputPaths.some((path) => isContained(outputDir, path))) fail(`${label} cannot contain a run input`)
   }
   const publish = object(rawProbe.publish, 'manifest.publish')
+  if (all.some(article => article.authoritative_before) && (all.length !== 1 || stage4.enabled || (publish.retire_articles ?? []).length)) fail('L authoritative-before child must contain exactly one article without retirements or Stage 4')
+  for (const article of all.filter(entry => entry.authoritative_before)) if (article.authoritative_before.database_name !== publish.target) fail('L authoritative-before database target differs from child publish target')
   const publicBaseUrl = normalizePublicBaseUrl(publish.public_base_url, mode)
   const retireArticles = array(publish.retire_articles ?? [], 'manifest.publish.retire_articles')
     .map((entry, index) => normalizeRetireArticle(entry, `manifest.publish.retire_articles[${index}]`))
@@ -1897,6 +1911,8 @@ function runArticleCorrection(context, issuedWorkOrders, started, stats) {
     if (child.articles.all.some((article) => article.change_class !== 'L')) fail('L correction child pipeline articles must remain class L')
     if (canonicalJsonHash(child.substance) !== canonicalJsonHash(context.substance) || child.policyVersion !== context.policyVersion || child.renderProfile !== context.renderProfile) fail('L correction child pipeline substance/policy/render profile differs from its parent')
     if (child.publish.required !== context.publish.required || child.publish.target !== context.publish.target || child.publish.publicBaseUrl !== context.publish.publicBaseUrl) fail('L correction child pipeline publish scope differs from its parent')
+    if (input.authoritativeBefore && (child.articles.all[0].authoritative_before?.content_hash !== input.authoritativeBefore.content_hash
+      || canonicalJsonHash(child.articles.all[0].write_guard) !== canonicalJsonHash(input.candidateArticle.write_guard))) fail('L correction child must bind the exact authoritative before and update guard')
     const status = runNutrientContent({ manifestPath: context.correction.affectedPipelineManifestPath })
     return { ...status, parent_correction_run_id: context.runId, correction_route: { class: 'L', affected_article_ids: input.value.affected_article_ids, full_pipeline_slice_only: true } }
   }
@@ -2359,7 +2375,15 @@ export function runNutrientContent({ manifestPath }) {
     const state = waitsForAsset ? 'WAITING_FOR_ASSET_DEPLOYMENT' : waitsForArticleTarget ? 'WAITING_FOR_ARTICLE_TARGETS' : waitsForIngredient ? 'WAITING_FOR_INGREDIENT_TARGET' : 'WAITING_FOR_SOURCE_CATALOG_SYNC'
     return finishAfterGate(state, preflightOrders, { published: false, publish_preflight_phase: preflightOrders.map((order) => order.kind).sort(), additive_prestage_only: true, independent_orders_parallelizable: preflightOrders.length > 1 })
   }
-  const release = buildContentReleaseV2({ context, articles: compiled })
+  let release = buildContentReleaseV2({ context, articles: compiled })
+  if (context.articles.all.some(article => article.authoritative_before)) {
+    const { release_hash: previousHash, ...base } = release
+    base.articles = base.articles.map(article => {
+      const plan = context.articles.all.find(entry => entry.article_id === article.article_id)
+      return plan.authoritative_before ? { ...article, authoritative_before: plan.authoritative_before, update_reason: plan.update_reason } : article
+    })
+    release = { ...base, release_hash: canonicalJsonHash(base) }
+  }
   writeJsonAtomic(context.releasePath, release)
   let publish
   const publishValidationStarted = performance.now()

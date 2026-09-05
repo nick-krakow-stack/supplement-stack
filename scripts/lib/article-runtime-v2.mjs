@@ -1216,7 +1216,7 @@ function lateBoundReleaseProjection({ entry, ingredientName }) {
   const reviewed = publicationReviewedDate(entry.publicationReview.review.reviewed_at)
   projection.ui = {
     ...projection.ui,
-    ingredient_chip: `${entry.article.stage === 'stage3' ? 'Wirkstoff' : 'Wirkstoffe'}: ${ingredientName}`,
+    ingredient_chip: `Wirkstoff: ${ingredientName}`,
     reviewed_date: reviewed.reviewed_label,
   }
   return { projection, ...reviewed }

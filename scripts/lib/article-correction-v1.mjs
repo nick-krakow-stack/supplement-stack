@@ -150,6 +150,18 @@ export function buildArticleCorrectionInputReceiptV1({ root, request, frozenAt =
   const runId = assertSafeId(request.run_id, 'article correction request run_id')
   const changeClass = text(request.change_class, 'article correction request change_class')
   if (!['S', 'M', 'L'].includes(changeClass)) fail('article correction change_class must be S, M or L')
+  if (request.before?.authoritative_snapshot_path != null) {
+    if (changeClass !== 'L' || request.before.release_article != null || request.candidate != null) fail('authoritative-before correction is L-only and cannot invent a prior or candidate release')
+    const snapshotPath = resolveManifestPath(root, request.before.authoritative_snapshot_path, 'L correction authoritative before path')
+    const snapshot = strictJson(snapshotPath, 'L correction authoritative before')
+    validateAuthoritativeCorrectionBeforeV1(snapshot)
+    const base = {
+      schema: 'article_correction_input_receipt.v1', mode: 'authoritative_before', run_id: runId, change_class: 'L', frozen_at: iso(frozenAt, 'article correction frozen_at'),
+      affected_article_ids: [snapshot.article_id],
+      before: { authoritative_snapshot_path: portablePath(root, snapshotPath), authoritative_snapshot_hash: snapshot.content_hash },
+    }
+    return { ...base, content_hash: artifactHashV2(base) }
+  }
   const beforeArticle = validateReleaseArticle(request.before?.release_article, 'article correction before.release_article')
   const candidateArticle = validateReleaseArticle(request.candidate?.release_article, 'article correction candidate.release_article')
   if (beforeArticle.article_id !== candidateArticle.article_id || beforeArticle.stage !== candidateArticle.stage || beforeArticle.slug !== candidateArticle.slug) fail('article correction before/candidate identity differs')
@@ -180,6 +192,17 @@ export function loadArticleCorrectionInputReceiptV1({ root, path, runId, changeC
   if (receipt.schema !== 'article_correction_input_receipt.v1' || receipt.content_hash !== artifactHashV2(receipt)) fail('article correction input receipt schema/hash is invalid')
   if (receipt.run_id !== runId || receipt.change_class !== changeClass) fail('article correction input receipt run/class differs from manifest')
   iso(receipt.frozen_at, 'article correction input receipt frozen_at')
+  if (receipt.mode === 'authoritative_before') {
+    if (changeClass !== 'L' || receipt.candidate != null || receipt.before?.release_article != null) fail('authoritative-before correction must remain L without invented release lineage')
+    const beforePath = resolveManifestPath(root, receipt.before.authoritative_snapshot_path, 'L correction authoritative before path')
+    const authoritativeBefore = strictJson(beforePath, 'L correction authoritative before')
+    validateAuthoritativeCorrectionBeforeV1(authoritativeBefore)
+    if (authoritativeBefore.content_hash !== receipt.before.authoritative_snapshot_hash || !sameSet(receipt.affected_article_ids, [authoritativeBefore.article_id])) fail('L correction authoritative before hash/identity differs')
+    const state = authoritativeBefore.state
+    return { value: receipt, beforePath, authoritativeBefore, candidatePath: null,
+      candidateArticle: { article_id: state.article_id, stage: state.stage, slug: state.slug,
+        write_guard: { mode: 'update', expected_status: state.status, expected_version: state.version, expected_payload_hash: state.payload_hash } } }
+  }
   const beforePath = resolveManifestPath(root, receipt.before.markdown_path, 'article correction before Markdown path')
   const candidatePath = resolveManifestPath(root, receipt.candidate.markdown_path, 'article correction candidate Markdown path')
   const before = markdown(beforePath, 'article correction before Markdown'), candidate = markdown(candidatePath, 'article correction candidate Markdown')
@@ -261,6 +284,32 @@ export function buildCorrectionContentReleaseV2({ context, input, correctionResu
 }
 
 export { semanticFingerprint }
+
+/** An actual historical readback is a prestate, never a reconstructed v2 release. */
+export function validateAuthoritativeCorrectionBeforeV1(value, target = null) {
+  exactArtifact(value, 'L authoritative before')
+  if (value.schema !== 'article_correction_authoritative_before.v1' || value.read_only !== true || value.historical_compiled_lineage !== null || value.expected_changed_row_count !== 1) fail('L authoritative before schema/read-only/count/history is invalid')
+  iso(value.captured_at, 'L authoritative before captured_at')
+  text(value.database_id, 'L authoritative before database_id'); text(value.database_name, 'L authoritative before database_name')
+  assertSafeId(value.article_id, 'L authoritative before article_id'); assertSafeId(value.slug, 'L authoritative before slug')
+  const state = object(value.state, 'L authoritative before state')
+  const snapshot = validateLegacySnapshot(value.full_snapshot, value.slug)
+  const row = snapshot.article
+  const columns = ['slug', 'title', 'summary', 'body', 'status', 'reviewed_at', 'sources_json', 'created_at', 'updated_at', 'version', 'conclusion', 'featured_image_r2_key', 'featured_image_url', 'dose_min', 'dose_max', 'dose_unit', 'product_note', 'article_layer', 'seo_json', 'update_reason']
+  if (columns.some(key => !Object.hasOwn(row, key))) fail('L authoritative before article row is incomplete')
+  if (row.status !== 'published' || !Number.isInteger(row.version) || row.version < 1 || row.seo_json !== null || state.seo !== null || state.compiled_payload_hash !== null) fail('L authoritative before is not a published article without historical compiled/SEO lineage')
+  if (state.article_id !== value.article_id || state.slug !== value.slug || state.status !== row.status || state.version !== row.version || state.article_layer !== row.article_layer || state.stage !== (row.article_layer === 'single_study' ? 'stage2' : row.article_layer === 'main_article' ? 'stage3' : null)) fail('L authoritative before state identity differs from raw row')
+  hash(state.payload_hash, 'L authoritative before payload hash')
+  const persisted = object(state.persistence_snapshot, 'L authoritative before persistence snapshot')
+  if (canonicalJsonHash(normalizeLegacyCorrectionRowV1(persisted.article)) !== canonicalJsonHash(row)) fail('L authoritative before raw article differs from inspected state')
+  for (const key of ['source_rows', 'ingredient_rows', 'interpretation_rows']) if (canonicalJsonHash(persisted[key]) !== canonicalJsonHash(snapshot[key])) fail(`L authoritative before ${key} differs from inspected state`)
+  if (target) {
+    if (target.change_class !== 'L' || target.article_id !== value.article_id || target.slug !== value.slug || target.stage !== state.stage) fail('L authoritative before target identity/class differs')
+    const expected = { mode: 'update', expected_status: state.status, expected_version: state.version, expected_payload_hash: state.payload_hash }
+    if (canonicalJsonHash(target.write_guard) !== canonicalJsonHash(expected)) fail('L authoritative before target write guard differs')
+  }
+  return snapshot
+}
 
 export const LEGACY_FIELD_CORRECTION_MODE = 'legacy_field_patch'
 export const LEGACY_SPELLING_UPDATE_REASON = 'Schreibfehler und beschädigte Umlaute korrigiert.'

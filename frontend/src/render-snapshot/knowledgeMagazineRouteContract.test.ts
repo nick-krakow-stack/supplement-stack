@@ -804,7 +804,7 @@ describe('hydrated knowledge route browser contract', () => {
           contract_version: 'knowledge-study-article-ui.v2',
           eyebrow: null,
           toc_title: null,
-          ingredient_chip: 'Wirkstoffe: Quercetin',
+          ingredient_chip: 'Wirkstoff: Quercetin',
           reviewed_date: 'Geprüft am 14. Juli 2026',
           reading_time: null,
           sources_label: 'Quellen',

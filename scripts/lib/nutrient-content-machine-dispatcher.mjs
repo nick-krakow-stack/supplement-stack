@@ -12,7 +12,7 @@ import { stageArticleAssetsV1 } from './article-asset-deployment-v1.mjs'
 import { buildKnowledgeBadgeExpectationsV1, knowledgeBadgeOriginMismatchKeysV1, validateKnowledgeBadgeReadbackV1 } from './knowledge-badge-readback-v1.mjs'
 import { validateArticleOriginIndexabilityV1, validateRawHtmlDeliveryV1, validateOriginIndexabilityStateV1 } from './public-delivery-status-v1.mjs'
 import { buildPublicApiReadbackActualV1, PUBLIC_API_READBACK_CHECKS_V1 } from './public-api-readback-v1.mjs'
-import { LEGACY_FIELD_CORRECTION_MODE, normalizeLegacyCorrectionRowV1, validateLegacyFieldCorrectionReleaseV1 } from './article-correction-v1.mjs'
+import { LEGACY_FIELD_CORRECTION_MODE, normalizeLegacyCorrectionRowV1, validateLegacyFieldCorrectionReleaseV1, validateAuthoritativeCorrectionBeforeV1 } from './article-correction-v1.mjs'
 import { parseKnowledgeMarkdown, isKnowledgeSourceHeading } from '../../functions/lib/knowledge-markdown-blocks.mjs'
 import { knowledgeInlineMarkdownToText } from '../../functions/lib/knowledge-inline-markdown.mjs'
 
@@ -218,6 +218,13 @@ export function validateContentReleaseForApplyV2(value) {
   if (!Number.isInteger(ingredientTarget.ingredient_id) || ingredientTarget.ingredient_id <= 0 || ingredientTarget.status !== 'active' || !Number.isInteger(ingredientTarget.version) || ingredientTarget.version <= 0 || !HASH.test(ingredientTarget.identity_hash ?? '') || !HASH.test(ingredientTarget.receipt_hash ?? '') || !HASH.test(release.source_resolution_receipt_hash ?? '')) fail('content release ingredient/source target lineage is invalid')
   if (ingredientTarget.identity_hash !== canonicalJsonHash({ ingredient_id: ingredientTarget.ingredient_id, canonical_name: ingredientTarget.canonical_name, canonical_slug: ingredientTarget.canonical_slug, status: ingredientTarget.status, version: ingredientTarget.version })) fail('content release ingredient identity hash is stale')
   const articles = array(release.articles, 'content release articles')
+  const authoritativeTargets = articles.filter(article => article.authoritative_before != null)
+  if (authoritativeTargets.length && (articles.length !== 1 || (release.retire_articles ?? []).length)) fail('L authoritative-before release requires exactly one normal article and no retirements')
+  for (const article of authoritativeTargets) {
+    validateAuthoritativeCorrectionBeforeV1(article.authoritative_before, article)
+    if (article.authoritative_before.database_name !== release.publish_target || publicationGuardPayloadHash(article.authoritative_before.state) !== article.write_guard.expected_payload_hash) fail('L authoritative-before release target/payload hash differs')
+    text(article.update_reason, 'L correction update_reason')
+  }
   if (!articles.length || new Set(articles.map((article) => article.article_id)).size !== articles.length || new Set(articles.map((article) => article.slug)).size !== articles.length) fail('content release article IDs/slugs must be non-empty and unique')
   const retireArticles = array(release.retire_articles ?? [], 'content release retire_articles')
   if (new Set(retireArticles.map((article) => article.article_id)).size !== retireArticles.length || new Set(retireArticles.map((article) => article.slug)).size !== retireArticles.length) fail('content release retirement IDs/slugs must be unique')
@@ -760,6 +767,16 @@ function legacyCorrectionAlreadyCurrent(snapshot, target, input) {
   return canonicalJsonHash(snapshot) === canonicalJsonHash(expected)
 }
 
+function authoritativeBeforePartGuards(slug, rows) {
+  const guards = [{ sql: "SELECT CASE WHEN (SELECT COUNT(*) FROM knowledge_article_parts WHERE article_slug=?)=? THEN 1 ELSE json_extract('correction-part-count-failed','$') END AS exact_part_count", params: [slug, rows.length] }]
+  for (const row of rows) {
+    const keys = Object.keys(row)
+    if (!keys.length || keys.some(key => !/^[a-z][a-z0-9_]*$/.test(key))) fail('L authoritative part snapshot contains unsafe columns')
+    guards.push({ sql: `SELECT CASE WHEN (SELECT COUNT(*) FROM knowledge_article_parts WHERE ${keys.map(key => `${key} IS ?`).join(' AND ')})=1 THEN 1 ELSE json_extract('correction-part-row-failed','$') END AS exact_part_row`, params: keys.map(key => row[key]) })
+  }
+  return guards
+}
+
 export class CloudflareD1ContentPublicationAdapter {
   constructor({ accountId, databaseId, apiToken, publicBaseUrl, legacyDomReadback = null }) {
     this.kind = 'cloudflare-d1'; this.authority = 'd1-readback'
@@ -1006,6 +1023,17 @@ export class CloudflareD1ContentPublicationAdapter {
     const retirementProbeTargets = retireArticles.map((target) => ({ ...target, stage2_interpretation_projection: [] }))
     const allTargets = [...release.articles, ...retirementProbeTargets]
     const before = await this.inspectArticlesByTargets(allTargets)
+    for (const target of release.articles) if (target.change_class === 'L' && before[target.article_id]?.seo === null && !target.authoritative_before) fail('legacy L update requires its authoritative-before snapshot binding')
+    const authoritativeTargets = release.articles.filter(target => target.authoritative_before)
+    const fullBefore = authoritativeTargets.length ? await this.readLegacyFieldCorrectionSnapshots(authoritativeTargets) : {}
+    for (const target of authoritativeTargets) {
+      const frozen = validateAuthoritativeCorrectionBeforeV1(target.authoritative_before, target)
+      if (this.databaseId !== target.authoritative_before.database_id || release.publish_target !== target.authoritative_before.database_name) fail('L authoritative-before database differs')
+      if (exactTargetState(before[target.article_id], target)) {
+        const current = fullBefore[target.slug]
+        if (current.article.version !== frozen.article.version + 1 || current.article.update_reason !== target.update_reason || canonicalJsonHash(current.part_rows) !== canonicalJsonHash(frozen.part_rows)) fail('L authoritative-before idempotent state/version/reason/parts differs')
+      } else if (canonicalJsonHash(fullBefore[target.slug]) !== canonicalJsonHash(frozen)) fail('L authoritative-before full row/relations/parts changed since freeze')
+    }
     const decisions = []
     for (const target of release.articles) {
       const current = before[target.article_id]
@@ -1023,6 +1051,7 @@ export class CloudflareD1ContentPublicationAdapter {
       retirementDecisions.push({ target, current, result: 'applied' })
     }
     const batch = []
+    for (const { target, result } of decisions) if (result === 'applied' && target.authoritative_before) batch.push(...legacySnapshotGuards(target.slug, fullBefore[target.slug]))
     for (const { target, current, result } of decisions) if (result === 'applied') batch.push(...this.#snapshotGuards(target, current))
     for (const { target, current, result } of retirementDecisions) if (result === 'applied') batch.push(...this.#snapshotGuards(target, current))
     for (const { target, current, result } of decisions) {
@@ -1035,6 +1064,7 @@ export class CloudflareD1ContentPublicationAdapter {
         batch.push({ sql: 'UPDATE knowledge_articles SET title=?,summary=?,body=?,status=?,reviewed_at=?,sources_json=?,seo_json=?,article_layer=?,conclusion=?,featured_image_url=?,featured_image_r2_key=?,dose_min=NULL,dose_max=NULL,dose_unit=NULL,product_note=NULL,created_at=?,updated_at=?,version=version+1 WHERE slug=? AND version=? AND status=? AND article_layer=? AND created_at=?', params: [target.publish_payload.title, target.publish_payload.dek, target.publish_payload.body, target.desired_status, target.reviewed_at, sourcesJson, seoJson, layer, target.publish_payload.conclusion, featuredImageUrl, featuredImageR2Key, target.published_at, target.modified_at, target.slug, current.version, current.status, current.article_layer, current.created_at] })
       }
       batch.push({ sql: "SELECT CASE WHEN changes()=1 THEN 1 ELSE json_extract('d1-article-write-guard-failed','$') END AS exact_guarded_row" })
+      if (target.authoritative_before) batch.push({ sql: 'UPDATE knowledge_articles SET update_reason=? WHERE slug=? AND version=? AND status=?', params: [target.update_reason, target.slug, current.version + 1, target.desired_status] })
       this.#appendTargetRelations(batch, target)
     }
     for (const { target, result } of retirementDecisions) {
@@ -1042,6 +1072,7 @@ export class CloudflareD1ContentPublicationAdapter {
       batch.push({ sql: 'UPDATE knowledge_articles SET status=\'draft\',version=version+1 WHERE slug=? AND status=? AND version=?', params: [target.slug, target.expected_status, target.expected_version] })
       batch.push({ sql: "SELECT CASE WHEN changes()=1 THEN 1 ELSE json_extract('d1-retirement-write-guard-failed','$') END AS exact_retirement_guard" })
     }
+    for (const { target, result } of decisions) if (result === 'applied' && target.authoritative_before) batch.push(...authoritativeBeforePartGuards(target.slug, fullBefore[target.slug].part_rows))
     if (batch.length) await this.query({ batch })
     const after = await this.inspectArticlesByTargets(allTargets)
     for (const decision of decisions) {
@@ -1049,7 +1080,9 @@ export class CloudflareD1ContentPublicationAdapter {
       if (!current) fail(`${decision.target.article_id} disappeared after D1 atomic batch`)
       current.compiled_payload_hash = decision.target.compiled_payload_hash
     }
-    return { transaction_id: `d1-${release.release_hash.slice(-16)}-${Date.now()}`, before, after, decisions, retirementDecisions }
+    const fullAfter = authoritativeTargets.length ? await this.readLegacyFieldCorrectionSnapshots(authoritativeTargets) : {}
+    for (const target of authoritativeTargets) if (fullAfter[target.slug].article.update_reason !== target.update_reason || canonicalJsonHash(fullAfter[target.slug].part_rows) !== canonicalJsonHash(fullBefore[target.slug].part_rows)) fail('L correction reason/unchanged parts readback differs')
+    return { transaction_id: `d1-${release.release_hash.slice(-16)}-${Date.now()}`, before, after, decisions, retirementDecisions, authoritative_before_snapshots: fullBefore, authoritative_after_snapshots: fullAfter }
   }
 
   #appendSnapshotRestore(batch, target, snapshot, resulting) {
@@ -1083,7 +1116,15 @@ export class CloudflareD1ContentPublicationAdapter {
 
   async rollbackAtomic(transaction) {
     const batch = []
-    for (const decision of transaction.decisions.filter((entry) => entry.result === 'applied')) this.#appendSnapshotRestore(batch, decision.target, transaction.before[decision.target.article_id], transaction.after[decision.target.article_id])
+    for (const decision of transaction.decisions.filter((entry) => entry.result === 'applied')) {
+      if (decision.target.authoritative_before) batch.push(...legacySnapshotGuards(decision.target.slug, transaction.authoritative_after_snapshots[decision.target.slug]))
+      this.#appendSnapshotRestore(batch, decision.target, transaction.before[decision.target.article_id], transaction.after[decision.target.article_id])
+      if (decision.target.authoritative_before) {
+        const frozen = transaction.authoritative_before_snapshots[decision.target.slug]
+        batch.push({ sql: 'UPDATE knowledge_articles SET update_reason=? WHERE slug=? AND version=? AND status=?', params: [frozen.article.update_reason, decision.target.slug, frozen.article.version, frozen.article.status] })
+        batch.push(...legacySnapshotGuards(decision.target.slug, frozen))
+      }
+    }
     for (const decision of (transaction.retirementDecisions ?? []).filter((entry) => entry.result === 'applied')) {
       const before = transaction.before[decision.target.article_id], after = transaction.after[decision.target.article_id]
       batch.push(...this.#snapshotGuards(decision.target, after))
@@ -1246,6 +1287,17 @@ export async function applyContentReleaseV2({ release, workOrder, adapter, publi
   const output = workOrder.outputs.find((entry) => entry.name === 'publish_receipt' && entry.schema === 'content_publish_receipt.v2')
   if (!output) fail('publication_apply WorkOrder has no canonical publish receipt output')
   const appliedAt = now()
+  let authoritativeBeforeReceipt = null
+  const authoritativeTargets = release.articles.filter(target => target.authoritative_before)
+  if (authoritativeTargets.length) {
+    if (typeof adapter.readLegacyFieldCorrectionSnapshots !== 'function') fail('L authoritative-before requires an exact raw persistence snapshot reader')
+    const snapshots = await adapter.readLegacyFieldCorrectionSnapshots(authoritativeTargets)
+    const base = { schema: 'article_correction_apply_prestate.v1', release_hash: release.release_hash, captured_at: appliedAt, read_only: true, snapshots }
+    const receipt = { ...base, content_hash: artifactHashV2(base) }
+    const path = `${receiptPath}.before-${Date.now()}.json`
+    writeJsonAtomic(path, receipt)
+    authoritativeBeforeReceipt = { path, content_hash: receipt.content_hash }
+  }
   let transaction
   try {
     transaction = await adapter.applyAtomicRelease(release)
@@ -1314,6 +1366,7 @@ export async function applyContentReleaseV2({ release, workOrder, adapter, publi
       executor: { role: 'deterministic-content-publication-executor', id: `machine-${adapter.kind}` }, applied_at: appliedAt,
       atomic_batch: { result: 'COMMITTED', scope: 'd1_articles_relations_interpretations_only', excludes: ['r2_asset_staging', 'source_catalog_staging'], transaction_id: transaction.transaction_id, article_ids: release.articles.map((article) => article.article_id).sort(), retire_article_ids: (release.retire_articles ?? []).map((article) => article.article_id).sort() },
       origin_results: renderer.receipt.origin_results, article_results: articleResults, retirement_results: retirementResults, badge_readback: renderer.receipt.badge_readback,
+      ...(authoritativeBeforeReceipt ? { authoritative_before_snapshot: authoritativeBeforeReceipt } : {}),
     }
     const receipt = { ...base, content_hash: artifactHashV2(base) }
     writeJsonAtomic(receiptPath, receipt)
