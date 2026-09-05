@@ -320,23 +320,26 @@ Wirkungsclaims bleiben aus der öffentlichen Produktempfehlung entfernt.
 
 ## 13. Wissensartikel `/wissen/:slug`
 
-Umsetzungsstand 5. September 2026: ARTICLE-01 bis ARTICLE-10 sind implementiert
-und unabhängig technisch freigegeben. Die Häkchen unten werden erst nach dem
-Produktionsreadback gesetzt. Einzelheiten und getrennte Artikelkorrekturen:
+Abschluss 5. September 2026: ARTICLE-01 bis ARTICLE-10 sind implementiert,
+unabhängig technisch freigegeben und produktiv geprüft (PR #25, Deployment
+33984550402). Alle sechs konkreten Schreibkorrekturen und die BfR-Korrektur
+sind veröffentlicht und per API, Roh-HTML und Browser verifiziert. Die
+ursprünglichen Bewertungen unten bleiben als Audit-Ausgangslage erhalten.
+Einzelheiten, Abschlussbelege und nicht blockierende Folgebeobachtungen:
 [`umsetzung_wissensartikel_audit.md`](umsetzung_wissensartikel_audit.md).
 
 | Erledigt | ID | Funktion/Text | ★ | Befund | Zielbild 10/10 |
 |---|---|---|---:|---|---|
-| [ ] | ARTICLE-01 | Rückweg „Zurück“ | 6 | Ziel ist die Übersicht mit Filtern, Text ist aber unspezifisch. | „Zur Wissensübersicht“ und bei erhaltenem Filter dessen Namen ankündigen. |
-| [ ] | ARTICLE-02 | Hauptartikel-Hero | 9 | Titel, Zusammenfassung, Wirkstoff, Prüfdatum und Lesezeit sind stark. | Teilen/Speichern, Aktualisierungsgrund und verantwortliche Redaktion ergänzen. |
-| [ ] | ARTICLE-03 | Inhaltsverzeichnis/Fortschritt | 9 | Sticky Navigation, aktive Sektion und Fortschritt helfen langen Artikeln. | Mobil kompakte aufklappbare Inhaltsübersicht und „Nach oben“-Aktion. |
-| [ ] | ARTICLE-04 | „Auf einen Blick“/Abschnitte | 9 | Sehr scanbar und gute semantische Struktur nach Hydrierung. | Kernaussagen konsequent an Quellen/Unsicherheit binden. |
-| [ ] | ARTICLE-05 | FAQ | 9 | Akkordeons besitzen `aria-expanded` und Regionen. | Fokus/Deep-Link je Frage und „alle öffnen“ nur bei echtem Bedarf. |
-| [ ] | ARTICLE-06 | Quellen | 9 | Interne Stage-2-Carrier und sichtbare Quellen sind nachvollziehbar. | Quellenanzahl bereits im geschlossenen Zustand stärker erklären; keine doppelten Links. |
-| [ ] | ARTICLE-07 | Studien-/Quellenseite | 8 | Ergebnisse, Grenzen und Quellen sind strukturiert; Rückbezug zum Hauptartikel ist zu schwach. | Sichtbarer „Einordnung zu Wirkstoff X“-Rücklink und verwandte Evidenznavigation. |
-| [ ] | ARTICLE-08 | Lade-/Fehlerzustand | 5 | Text verständlich, aber unbekannter Slug bleibt technisch ein 200-Shell; kein direkter Übersicht-/Suchweg. | Echter 404/410, H1, Übersichtssuche und relevante Artikel. |
-| [ ] | ARTICLE-09 | Verwandte Inhalte/Teilen | 4 | Kein klarer Bereich für verwandte Artikel, nächste Schritte oder Teilen. | Claim-sichere verwandte Inhalte aus zentralen Relationen, Copy-Link/Share und Rückkehr zum Stack-Kontext. |
-| [ ] | ARTICLE-10 | SSR-Semantik | 6 | Hydrierte Seite ist gut; serverseitig erscheint Text weitgehend als einfacher Block. | H2/H3, Listen, Tabellen und Links bereits im Roh-HTML semantisch ausgeben. |
+| [x] | ARTICLE-01 | Rückweg „Zurück“ | 6 | Ziel ist die Übersicht mit Filtern, Text ist aber unspezifisch. | „Zur Wissensübersicht“ und bei erhaltenem Filter dessen Namen ankündigen. |
+| [x] | ARTICLE-02 | Hauptartikel-Hero | 9 | Titel, Zusammenfassung, Wirkstoff, Prüfdatum und Lesezeit sind stark. | Teilen/Speichern, Aktualisierungsgrund und verantwortliche Redaktion ergänzen. |
+| [x] | ARTICLE-03 | Inhaltsverzeichnis/Fortschritt | 9 | Sticky Navigation, aktive Sektion und Fortschritt helfen langen Artikeln. | Mobil kompakte aufklappbare Inhaltsübersicht und „Nach oben“-Aktion. |
+| [x] | ARTICLE-04 | „Auf einen Blick“/Abschnitte | 9 | Sehr scanbar und gute semantische Struktur nach Hydrierung. | Kernaussagen konsequent an Quellen/Unsicherheit binden. |
+| [x] | ARTICLE-05 | FAQ | 9 | Akkordeons besitzen `aria-expanded` und Regionen. | Fokus/Deep-Link je Frage und „alle öffnen“ nur bei echtem Bedarf. |
+| [x] | ARTICLE-06 | Quellen | 9 | Interne Stage-2-Carrier und sichtbare Quellen sind nachvollziehbar. | Quellenanzahl bereits im geschlossenen Zustand stärker erklären; keine doppelten Links. |
+| [x] | ARTICLE-07 | Studien-/Quellenseite | 8 | Ergebnisse, Grenzen und Quellen sind strukturiert; Rückbezug zum Hauptartikel ist zu schwach. | Sichtbarer „Einordnung zu Wirkstoff X“-Rücklink und verwandte Evidenznavigation. |
+| [x] | ARTICLE-08 | Lade-/Fehlerzustand | 5 | Text verständlich, aber unbekannter Slug bleibt technisch ein 200-Shell; kein direkter Übersicht-/Suchweg. | Echter 404/410, H1, Übersichtssuche und relevante Artikel. |
+| [x] | ARTICLE-09 | Verwandte Inhalte/Teilen | 4 | Kein klarer Bereich für verwandte Artikel, nächste Schritte oder Teilen. | Claim-sichere verwandte Inhalte aus zentralen Relationen, Copy-Link/Share und Rückkehr zum Stack-Kontext. |
+| [x] | ARTICLE-10 | SSR-Semantik | 6 | Hydrierte Seite ist gut; serverseitig erscheint Text weitgehend als einfacher Block. | H2/H3, Listen, Tabellen und Links bereits im Roh-HTML semantisch ausgeben. |
 
 ### Volltextprüfung aller 790 veröffentlichten Wissensseiten
 
@@ -366,17 +369,19 @@ Sprache trotz vollständiger Quellenbindung ein eigener Arbeitsschwerpunkt ist.
 
 | Erledigt | Pfad | ★ | Sichtbarer Fehler | Zielbild 10/10 |
 |---|---|---:|---|---|
-| [ ] | `/wissen/chrom` | 4 | `N?hrstoff`, `ungew?hnlich`, `Sch?tzwerte`, `w?hrend`, `f?r`, `pers?nlicher` | Originalzeichen guarded wiederherstellen, gesamten Artikel auf weitere Schäden prüfen und öffentlich byte-/DOM-verifizieren. |
-| [ ] | `/wissen/jod-fruehe-schwangerschaft-intelligenz-2026` | 5 | `pers?nliche` | `persönliche` aus der gebundenen Quelle wiederherstellen und Zielartikel-Readback. |
-| [ ] | `/wissen/jod-who-monitoring-uic-salzjodierung` | 4 | `f?r`, `Schilddr?senmarker`, `Jodmangelst?rungen` | Umlaute guarded wiederherstellen; WHO-Aussagen und Quellenlabel unverändert bewahren. |
-| [ ] | `/wissen/kupfer-zink-prothesenhaftcreme-jamal` | 4 | `j?hrigen`, `?berm??igem`, `Blutbildver?nderungen` | Umlaute im gesamten Artikel wiederherstellen; Fallbericht nicht verallgemeinern. |
-| [ ] | `/wissen/mangan-pn-blutspiegel-abdalian` | 4 | `Ern?hrung`, `?ber` | Umlaute im gesamten Artikel wiederherstellen und Quellenbezug readbacken. |
-| [ ] | `/wissen/saccharomyces-boulardii-chen-hpylori-bismuth-quadruple-meta-2024` | 4 | `ver?ffentlichten`, `b?ndelte`, `unerw?nschten` | Umlaute guarded wiederherstellen; Zahlen, Design und Grenzen bytegleich bewahren. |
+| [x] | `/wissen/chrom` | 4 | `N?hrstoff`, `ungew?hnlich`, `Sch?tzwerte`, `w?hrend`, `f?r`, `pers?nlicher` | Originalzeichen guarded wiederherstellen, gesamten Artikel auf weitere Schäden prüfen und öffentlich byte-/DOM-verifizieren. |
+| [x] | `/wissen/jod-fruehe-schwangerschaft-intelligenz-2026` | 5 | `pers?nliche` | `persönliche` aus der gebundenen Quelle wiederherstellen und Zielartikel-Readback. |
+| [x] | `/wissen/jod-who-monitoring-uic-salzjodierung` | 4 | `f?r`, `Schilddr?senmarker`, `Jodmangelst?rungen` | Umlaute guarded wiederherstellen; WHO-Aussagen und Quellenlabel unverändert bewahren. |
+| [x] | `/wissen/kupfer-zink-prothesenhaftcreme-jamal` | 4 | `j?hrigen`, `?berm??igem`, `Blutbildver?nderungen` | Umlaute im gesamten Artikel wiederherstellen; Fallbericht nicht verallgemeinern. |
+| [x] | `/wissen/mangan-pn-blutspiegel-abdalian` | 4 | `Ern?hrung`, `?ber` | Umlaute im gesamten Artikel wiederherstellen und Quellenbezug readbacken. |
+| [x] | `/wissen/saccharomyces-boulardii-chen-hpylori-bismuth-quadruple-meta-2024` | 4 | `ver?ffentlichten`, `b?ndelte`, `unerw?nschten` | Umlaute guarded wiederherstellen; Zahlen, Design und Grenzen bytegleich bewahren. |
 
 Alle 790 individuellen Text-UX-Werte stehen in Abschnitt 21. Der niedrigste
 nicht durch Encoding verursachte Wert betrifft
 `/wissen/vitamin-d-bfr-hoechstmengen` mit 4/10; hier ist ein fachlich
 kontrollierter Lesbarkeitsdurchgang statt einer rein mechanischen Kürzung nötig.
+Dieser Durchgang ist am 5. September 2026 als normaler artikelbegrenzter
+L-v2-Slice mit unabhängigen Facts-/Publication-Gates abgeschlossen und live.
 
 ## 14. Rechtstexte und Fehlerseite
 

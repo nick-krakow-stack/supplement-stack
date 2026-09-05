@@ -1,6 +1,6 @@
 # Umsetzung: Wissensartikel aus Audit Abschnitt 13
 
-Stand: 5. September 2026 · Status: in Arbeit
+Stand: 5. September 2026 · Status: abgeschlossen und veröffentlicht
 
 Auftrag: ARTICLE-01 bis ARTICLE-10 aus `audit_user_creator_ux_seo.md`
 einschließlich der konkreten Schreibweisen- und Textkorrekturen in Abschnitt 13
@@ -32,13 +32,13 @@ vollständig bis zum geprüften Produktionsrelease umsetzen.
 
 ## Konkret benannte Artikelkorrekturen
 
-- [ ] Chrom: beschädigte Umlaute im vollständigen Zielartikel wiederherstellen.
-- [ ] Jod / frühe Schwangerschaft und Intelligenz 2026: `persönliche`.
-- [ ] Jod / WHO-Monitoring: beschädigte Umlaute wiederherstellen.
-- [ ] Kupfer / Zink-Prothesenhaftcreme (Jamal): Umlaute wiederherstellen.
-- [ ] Mangan / parenterale Ernährung (Abdalian): Umlaute wiederherstellen.
-- [ ] Saccharomyces boulardii / Chen 2024: Umlaute wiederherstellen.
-- [ ] Vitamin D / BfR-Höchstmengen: fachlich kontrollierte lokale
+- [x] Chrom: beschädigte Umlaute im vollständigen Zielartikel wiederherstellen.
+- [x] Jod / frühe Schwangerschaft und Intelligenz 2026: `persönliche`.
+- [x] Jod / WHO-Monitoring: beschädigte Umlaute wiederherstellen.
+- [x] Kupfer / Zink-Prothesenhaftcreme (Jamal): Umlaute wiederherstellen.
+- [x] Mangan / parenterale Ernährung (Abdalian): Umlaute wiederherstellen.
+- [x] Saccharomyces boulardii / Chen 2024: Umlaute wiederherstellen.
+- [x] Vitamin D / BfR-Höchstmengen: fachlich kontrollierte lokale
   Verständlichkeitskorrekturen umsetzen.
 
 Artikelkorrekturen werden vor Bearbeitung nach S/M/L klassifiziert und mit
@@ -51,26 +51,52 @@ Quellen und Grenzen bleiben gebunden. Die pauschalen Text-UX-Wertungen aller
 - [x] Programmieraufgaben mit getrennten Dateibereichen umgesetzt.
 - [x] Nutzer-/Creator-Feedback zu fertigen Aufgaben eingeholt und konkrete
   notwendige Änderungen direkt an den jeweiligen Programmierer zurückgegeben.
-- [ ] Risikoproportionale Tests, UTF-8-Prüfung und unabhängiger technischer
+- [x] Risikoproportionale Tests, UTF-8-Prüfung und unabhängiger technischer
   Review bestanden; Artikelkorrekturen separat im vorgeschriebenen Verfahren.
 
   Code und M-Übernahme: technischer PASS für 39 Releasepfade; 7/7 neue
   Guard-/Rollback-/Idempotenztests, 4/4 SSR-/Relationsfälle, 1/1 Admin-
   Grenzwert/Erhalt, 33/33 Markdown und 12/12 neue Artikel-UX-/Journeyfälle.
-  Build, Lint, Functions-Typecheck und UTF-8 bestanden. Bekannte lokale
-  Node-24-Importprobleme der übrigen Vollsuite werden in Node-22-CI abgegrenzt.
-- [ ] Auditstatus aktualisiert; Commit, PR, Merge und Deployment erfolgreich.
-- [ ] Produktionsreadback für Artikeltypen, Fehlerstatus, Navigation,
+  Build, Lint, Functions-Typecheck und UTF-8 bestanden. Die vollständige
+  Node-22-PR-CI ist mit 377/377 Frontendtests grün (Run 33984404639);
+  zusätzlich 34/34 gezielte L-Guard-/Publisher-Tests und 7/7 M-Guardtests.
+  PR #25 ist als f796e71 zusammengeführt. Deployment 33984550402 ist erfolgreich.
+- [x] Auditstatus aktualisiert; Commit, PR, Merge und Deployment erfolgreich.
+- [x] Produktionsreadback für Artikeltypen, Fehlerstatus, Navigation,
   Desktop/Mobil, semantisches HTML und korrigierte Zielartikel bestanden.
-- [ ] Ein knapper Deploy-Log-Eintrag und aktuelle Live-Checkliste.
+- [x] Knappe Deploy-Log-Einträge je Produktionsaktion und aktuelle Live-Checkliste.
+
+Abschlussbelege: sechs M-Artikel mit 8 Feldern und 27 Zeichenreparaturen;
+vollständiger Altwert-/Versionsguard, unabhängiger Kurzreview und öffentlicher
+API-/Roh-HTML-/Desktop-/Mobilabgleich `COMPLETE`. Der Abschlussretry änderte
+0 Zeilen und erzeugte keine zusätzliche Version. DOM-Beleg
+`3c83e749…`, Publishreceipt `6511bc68…`; alle sechs Zielartikel bei 1440 und
+390 px ohne horizontalen Überlauf. BfR: normaler L-Slice mit unabhängigen
+Facts-/Publication-Gates, Version 1 → 2; Child und Parent `COMPLETE`,
+Publishreceipt `5f1080b6…`, `HYDRATED_DOM_MATCH`, `RAW_HTML_MATCH`,
+`INDEXABLE`, Sitemap `INCLUDED`, Badge `MATCH`.
+
+Live bestätigt: echte 404-Seite mit H1 und `noindex,nofollow`, semantisches
+Roh-HTML (Chrom: 18 H2, 10 H3, 7 Listen, 9 Tabellen), acht zentrale verwandte
+Vitamin-D-Inhalte, sichtbarer Änderungsgrund und Hauptartikel-Rückweg bei
+Scrollposition 0. FAQ-Direktlink öffnet und fokussiert die konkrete Frage;
+„Nach oben“ setzt Scrollposition 0 und H1-Fokus.
+
+Nicht blockierender P2 für einen späteren Darstellungsdurchgang: Ein kalter
+direkter Chrom-FAQ-Aufruf platzierte die korrekt geöffnete/fokussierte Frage
+nahe dem unteren Bildschirmrand. Eine stabilere obere Ausrichtung wäre
+angenehmer; kein weiterer Review-/Release-Zyklus nur für diese Feinheit.
+Der historische Chrom-Text enthält außerdem sichtbare Grafik-Briefings;
+deren inhaltliche Entfernung ist kein bedeutungsfreier M-Umlautpatch und
+bleibt einem getrennten fachlichen Artikelkorrekturauftrag vorbehalten.
 
 ## Verbindliche Grenzen
 
-Implementierung lokal geprüft; Veröffentlichungsabnahme separat noch offen.
-Die sechs Schreibkorrekturen sind unabhängig als M geprüft (6 Artikel,
-8 Felder, 27 Zeichenreparaturen). BfR bleibt Klasse L und durchläuft einen
-neuen, auf diesen Artikel begrenzten normalen v2-Slice. Fehlende historische
-Pipeline-Belege werden nicht nachträglich erfunden.
+Implementierung und Veröffentlichungsabnahme abgeschlossen. Die sechs
+Schreibkorrekturen wurden unabhängig als M geprüft und veröffentlicht. BfR
+blieb Klasse L und durchlief einen neuen, auf diesen Artikel begrenzten
+normalen v2-Slice. Fehlende historische Pipeline-Belege wurden nicht
+nachträglich erfunden.
 
 
 Zentrale Daten bleiben die einzige Pflegequelle. Fehlende Autorennamen,
