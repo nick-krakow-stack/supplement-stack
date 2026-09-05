@@ -1838,8 +1838,7 @@ function publicApiProjectionMatches(state, expected, releaseHash) {
   if (ingredients.length !== 1 || !Number.isInteger(ingredients[0]?.ingredient_id) || ingredients[0].ingredient_id <= 0) return false;
   const ingredientName = typeof ingredients[0]?.name === 'string' ? ingredients[0].name.trim() : '';
   if (!ingredientName) return false;
-  const expectedPrefix = expected.stage === 'stage3' ? 'Wirkstoff' : 'Wirkstoffe';
-  if (expected.expected_projection.ui?.ingredient_chip !== `${expectedPrefix}: ${ingredientName}`) return false;
+  if (expected.expected_projection.ui?.ingredient_chip !== `Wirkstoff: ${ingredientName}`) return false;
   if (publicReviewedDateLabel(article.reviewed_at) !== expected.expected_projection.ui?.reviewed_date) return false;
   if (article.featured_image_url !== null || article.featured_image_r2_key !== null) return false;
   if (expected.stage === 'stage3') return article.article_layer === 'main_article';
