@@ -363,7 +363,7 @@ describe('knowledge magazine real-render snapshot', () => {
     );
 
     const document = new JSDOM(markup).window.document;
-    const additiveLink = document.querySelector('[data-projection-additive-navigation="true"] a');
+    const additiveLink = document.querySelector('#quellen [data-projection-additive-navigation="true"] a');
     expect(additiveLink?.textContent).toContain('Studienartikel');
     expect(additiveLink?.textContent).toContain('Originalquelle');
     expect(additiveLink?.getAttribute('href')).toBe('/wissen/teststudie-eingeordnet');

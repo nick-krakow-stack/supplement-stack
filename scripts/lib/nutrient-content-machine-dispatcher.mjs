@@ -12,6 +12,9 @@ import { stageArticleAssetsV1 } from './article-asset-deployment-v1.mjs'
 import { buildKnowledgeBadgeExpectationsV1, knowledgeBadgeOriginMismatchKeysV1, validateKnowledgeBadgeReadbackV1 } from './knowledge-badge-readback-v1.mjs'
 import { validateArticleOriginIndexabilityV1, validateRawHtmlDeliveryV1, validateOriginIndexabilityStateV1 } from './public-delivery-status-v1.mjs'
 import { buildPublicApiReadbackActualV1, PUBLIC_API_READBACK_CHECKS_V1 } from './public-api-readback-v1.mjs'
+import { LEGACY_FIELD_CORRECTION_MODE, normalizeLegacyCorrectionRowV1, validateLegacyFieldCorrectionReleaseV1 } from './article-correction-v1.mjs'
+import { parseKnowledgeMarkdown, isKnowledgeSourceHeading } from '../../functions/lib/knowledge-markdown-blocks.mjs'
+import { knowledgeInlineMarkdownToText } from '../../functions/lib/knowledge-inline-markdown.mjs'
 
 const HASH = /^sha256:[a-f0-9]{64}$/
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
@@ -726,12 +729,45 @@ function d1Rows(response, index = 0) {
   return result.results ?? []
 }
 
+const LEGACY_CORRECTION_TABLES = [
+  { key: 'article', table: 'knowledge_articles', column: 'slug', order: 'slug' },
+  { key: 'source_rows', table: 'knowledge_article_sources', column: 'article_slug', order: 'article_slug,sort_order,id' },
+  { key: 'ingredient_rows', table: 'knowledge_article_ingredients', column: 'article_slug', order: 'article_slug,sort_order,ingredient_id' },
+  { key: 'interpretation_rows', table: 'study_interpretation_records', column: 'knowledge_article_slug', order: 'knowledge_article_slug,source_id,id' },
+  { key: 'part_rows', table: 'knowledge_article_parts', column: 'article_slug', order: 'article_slug,ingredient_id,part_id' },
+]
+
+function legacySnapshotGuards(slug, snapshot) {
+  if (!snapshot?.article) fail(`${slug} has no exact legacy snapshot`)
+  const guards = []
+  for (const { key, table, column } of LEGACY_CORRECTION_TABLES) {
+    const rows = key === 'article' ? [snapshot.article] : snapshot[key]
+    if (!Array.isArray(rows)) fail(`${slug} legacy ${key} snapshot is missing`)
+    guards.push({ sql: `SELECT CASE WHEN (SELECT COUNT(*) FROM ${table} WHERE ${column}=?)=? THEN 1 ELSE json_extract('legacy-snapshot-count-failed','$') END AS exact_snapshot_count`, params: [slug, rows.length] })
+    for (const row of rows) {
+      const keys = Object.keys(row)
+      if (!keys.length || keys.some((name) => !/^[a-z][a-z0-9_]*$/.test(name))) fail('legacy snapshot contains an unsafe SQL column')
+      guards.push({ sql: `SELECT CASE WHEN (SELECT COUNT(*) FROM ${table} WHERE ${keys.map((name) => `${name} IS ?`).join(' AND ')})=1 THEN 1 ELSE json_extract('legacy-snapshot-row-failed','$') END AS exact_snapshot_row`, params: keys.map((name) => row[name]) })
+    }
+  }
+  return guards
+}
+
+function legacyCorrectionAlreadyCurrent(snapshot, target, input) {
+  if (!snapshot?.article || snapshot.article.version !== target.before.article.version + 1 || snapshot.article.update_reason !== input.update_reason
+    || !Number.isFinite(Date.parse(snapshot.article.updated_at)) || Date.parse(snapshot.article.updated_at) < Date.parse(input.frozen_at)) return false
+  const expected = { ...target.before, article: { ...target.candidate_row, version: snapshot.article.version, updated_at: snapshot.article.updated_at, update_reason: input.update_reason } }
+  return canonicalJsonHash(snapshot) === canonicalJsonHash(expected)
+}
+
 export class CloudflareD1ContentPublicationAdapter {
-  constructor({ accountId, databaseId, apiToken, publicBaseUrl }) {
+  constructor({ accountId, databaseId, apiToken, publicBaseUrl, legacyDomReadback = null }) {
     this.kind = 'cloudflare-d1'; this.authority = 'd1-readback'
     this.publicReadbackRetry = { attempts: 10, delayMs: 500 }
     this.accountId = text(accountId, 'Cloudflare account id'); this.databaseId = text(databaseId, 'Cloudflare D1 database id'); this.apiToken = text(apiToken, 'Cloudflare API token')
     this.publicBaseUrl = normalizeUrlOrigin(publicBaseUrl, 'Cloudflare public base URL')
+    if (legacyDomReadback !== null && typeof legacyDomReadback !== 'function') fail('legacy DOM readback adapter must be a function')
+    this.legacyDomReadback = legacyDomReadback
     this.endpoint = `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(this.accountId)}/d1/database/${encodeURIComponent(this.databaseId)}/query`
   }
 
@@ -742,6 +778,64 @@ export class CloudflareD1ContentPublicationAdapter {
     if (!response.ok || value.success !== true) fail(`Cloudflare D1 HTTP/API error ${response.status}: ${(value.errors ?? []).map((error) => error.message).join('; ')}`)
     if (Array.isArray(value.result) && value.result.some((entry) => entry?.success !== true)) fail(`Cloudflare D1 transactional batch failed: ${JSON.stringify(value.result.filter((entry) => entry?.success !== true).map((entry) => entry?.error ?? entry))}`)
     return value
+  }
+
+  async readLegacyFieldCorrectionSnapshots(targets) {
+    if (!targets.length || targets.length > 6 || new Set(targets.map((target) => target.slug)).size !== targets.length) fail('legacy snapshot requires 1..6 exact distinct targets')
+    const slugs = targets.map((target) => assertSafeId(target.slug, 'legacy snapshot slug'))
+    const placeholders = slugs.map(() => '?').join(',')
+    const response = await this.query({ batch: LEGACY_CORRECTION_TABLES.map(({ table, column, order }) => ({
+      sql: `SELECT * FROM ${table} WHERE ${column} IN (${placeholders}) ORDER BY ${order}`, params: slugs,
+    })) })
+    const result = {}
+    for (const slug of slugs) {
+      const snapshot = {}
+      LEGACY_CORRECTION_TABLES.forEach(({ key, column }, index) => {
+        const rows = d1Rows(response, index).filter((row) => row[column] === slug)
+        if (key === 'article') {
+          if (rows.length !== 1) fail(`${slug} legacy snapshot found ${rows.length} articles instead of one`)
+          snapshot.article = normalizeLegacyCorrectionRowV1(rows[0])
+        } else snapshot[key] = rows
+      })
+      result[slug] = snapshot
+    }
+    return result
+  }
+
+  async readLegacyFieldCorrectionDom(release) {
+    if (this.legacyDomReadback) return this.legacyDomReadback(release)
+    const { collectLegacyCorrectionDomV1 } = await import('../../frontend/validate-knowledge-magazine-style.mjs')
+    return collectLegacyCorrectionDomV1(release.articles.map(target => ({ article_id: target.article_id, slug: target.slug,
+      article_layer: target.before.article.article_layer, public_url: new URL(`/wissen/${target.slug}`, release.public_base_url).href })), release.release_hash)
+  }
+
+  async applyAtomicLegacyFieldCorrection(release, { appliedAt, before }) {
+    if (this.databaseId !== release.database_id || this.publicBaseUrl !== normalizeUrlOrigin(release.public_base_url, 'legacy public base URL')) fail('legacy publication adapter target/origin differs from the frozen release')
+    const batch = [], decisions = [], expectedAfter = {}
+    for (const target of release.articles) {
+      const current = before[target.slug]
+      if (canonicalJsonHash(current) === target.before_hash) {
+        decisions.push({ slug: target.slug, result: 'applied' })
+        expectedAfter[target.slug] = { ...target.before, article: { ...target.candidate_row, version: target.before.article.version + 1, updated_at: appliedAt, update_reason: release.input.update_reason } }
+      } else if (legacyCorrectionAlreadyCurrent(current, target, release.input)) {
+        decisions.push({ slug: target.slug, result: 'already_current' })
+        expectedAfter[target.slug] = current
+      } else fail(`${target.slug} authoritative legacy prestate/version/status/relations differs`)
+      batch.push(...legacySnapshotGuards(target.slug, current))
+    }
+    for (const target of release.articles) {
+      if (decisions.find((entry) => entry.slug === target.slug).result === 'already_current') continue
+      const assignments = target.fields.map((patch) => `${patch.field}=?`).join(',')
+      batch.push({ sql: `UPDATE knowledge_articles SET ${assignments},version=version+1,updated_at=?,update_reason=? WHERE slug=? AND status=? AND version=? AND article_layer=?`,
+        params: [...target.fields.map((patch) => patch.after), appliedAt, release.input.update_reason, target.slug, target.before.article.status, target.before.article.version, target.before.article.article_layer] })
+      batch.push({ sql: "SELECT CASE WHEN changes()=1 THEN 1 ELSE json_extract('legacy-correction-write-count-failed','$') END AS exact_changed_row" })
+    }
+    // Validate the complete resulting rows and untouched relations inside the same transaction.
+    for (const target of release.articles) batch.push(...legacySnapshotGuards(target.slug, expectedAfter[target.slug]))
+    await this.query({ batch })
+    const after = await this.readLegacyFieldCorrectionSnapshots(release.articles)
+    if (canonicalJsonHash(after) !== canonicalJsonHash(expectedAfter)) fail('legacy correction D1 content readback differs after atomic batch')
+    return { before, after, decisions, transaction_id: `d1-legacy-${release.release_hash.slice(-16)}-${Date.now()}` }
   }
 
   async readRoutes() {
@@ -1144,6 +1238,7 @@ function articleResultReadbacks(release, target, current, publicState, seoDelive
 }
 
 export async function applyContentReleaseV2({ release, workOrder, adapter, publishEnabled = false, receiptPath, rendererRequestPath = null, rendererReceiptPath = null }) {
+  if (release?.mode === LEGACY_FIELD_CORRECTION_MODE) return applyLegacyFieldCorrectionV1({ release, workOrder, adapter, publishEnabled, receiptPath })
   validateContentReleaseForApplyV2(release)
   validateDeterministicWorkOrderV2(workOrder, { kind: 'publication_apply', runId: release.run_id })
   if (workOrder.task?.release_hash !== release.release_hash || workOrder.assignee?.role !== 'deterministic-content-publication-executor') fail('publication_apply WorkOrder release/role differs')
@@ -1229,6 +1324,126 @@ export async function applyContentReleaseV2({ release, workOrder, adapter, publi
     }
     throw error
   }
+}
+
+async function readLegacyCorrectionPublicState(adapter, release, target, expected) {
+  const url = new URL(`/api/knowledge/${target.slug}`, release.public_base_url)
+  url.searchParams.set('cfcheck', release.release_hash)
+  const response = await fetch(url)
+  const bytes = new Uint8Array(await response.arrayBuffer())
+  const decoded = decodeUtf8Strict(bytes, `${target.slug} public content`)
+  if (!response.ok || decoded.errors.length) fail(`${target.slug} legacy public readback HTTP/UTF-8 failed`)
+  let article
+  try { article = JSON.parse(decoded.text).article } catch { fail(`${target.slug} legacy public readback is invalid JSON`) }
+  if (!article || article.slug !== target.slug) fail(`${target.slug} legacy public identity differs`)
+  for (const field of ['title', 'summary', 'body', 'conclusion', 'article_layer', 'reviewed_at', 'created_at', 'updated_at', 'update_reason']) {
+    if (article[field] !== expected.article[field]) fail(`${target.slug} legacy public ${field} readback differs`)
+  }
+  for (const field of ['sources', 'ingredients', 'parts', 'ingredient_ids', 'featured_image_url', 'featured_image_r2_key', 'dose_min', 'dose_max', 'dose_unit', 'product_note', 'seo']) {
+    if (canonicalJsonHash(article[field] ?? null) !== canonicalJsonHash(target.public_before[field] ?? null)) fail(`${target.slug} legacy public unchanged ${field} differs`)
+  }
+  return { url: url.href, status: response.status, checked_at: now(), body_hash: sha256Bytes(bytes), article_hash: canonicalJsonHash(article), result: 'MATCH' }
+}
+
+export function validateLegacyCorrectionDomV1(observation, release, after) {
+  if (observation?.schema !== 'legacy_article_dom_readback.v1' || observation.release_hash !== release.release_hash
+    || observation.content_hash !== artifactHashV2(observation) || !observation.browser?.product || !Number.isFinite(Date.parse(observation.checked_at))
+    || !sameSet((observation.article_results ?? []).map(entry => entry.article_id), release.input.affected_article_ids)) fail('legacy DOM observation identity/browser/time differs')
+  const normalizeText = value => knowledgeInlineMarkdownToText(String(value ?? '')).normalize('NFKC').replace(/\s+/gu, ' ').trim()
+  const utcTimestamp = value => Date.parse(typeof value === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(value) ? value.replace(' ', 'T') + 'Z' : value)
+  for (const target of release.articles) {
+    const row = after[target.slug].article
+    if (Date.parse(observation.checked_at) < Date.parse(row.updated_at)) fail(`${target.slug} DOM observation predates actual applied content`)
+    const actual = observation.article_results.find(entry => entry.article_id === target.article_id)
+    const url = new URL(`/wissen/${target.slug}`, release.public_base_url).href
+    if (actual.public_url !== url || actual.raw_html?.http_status !== 200 || !/text\/html/i.test(actual.raw_html.content_type ?? '') || !HASH.test(actual.raw_html.body_hash ?? '')) fail(`${target.slug} raw DOM fetch differs`)
+    const required = [row.title, row.summary]
+    let skipSourceLevel = null, skippingFazit = false
+    const body = parseKnowledgeMarkdown(row.body)
+    if (row.article_layer === 'main_article' && row.conclusion) body.push(...parseKnowledgeMarkdown(row.conclusion))
+    const originalBodyCount = parseKnowledgeMarkdown(row.body).length
+    for (const [index, block] of body.entries()) {
+      if (index === originalBodyCount) { skippingFazit = false; skipSourceLevel = null }
+      if (block.type === 'heading') {
+        if (isKnowledgeSourceHeading(block.text)) { skipSourceLevel = block.level; continue }
+        if (skipSourceLevel !== null && block.level <= skipSourceLevel) skipSourceLevel = null
+        if (index < originalBodyCount && row.article_layer === 'main_article' && row.conclusion && block.level === 2) skippingFazit = /^fazit(?:\b|$)/i.test(normalizeText(block.text))
+      }
+      if (skipSourceLevel !== null || skippingFazit) continue
+      if (block.type === 'paragraph' || block.type === 'heading') required.push(block.text)
+      else if (block.type === 'list') required.push(...block.items)
+      else if (block.type === 'table') required.push(...block.headers, ...block.rows.flat())
+      else if (block.type === 'image' && block.caption) required.push(block.caption)
+    }
+    for (const [surface, state] of [['raw_html', actual.raw_html], ['desktop', actual.viewports?.desktop], ['mobile', actual.viewports?.mobile]]) {
+      if (!state) fail(`${target.slug} ${surface} DOM missing`)
+      const actualText = normalizeText(state.text)
+      const visibleFieldTexts = [row.summary, ...(row.article_layer === 'main_article' && target.fields.some(patch => patch.field === 'conclusion') ? [row.conclusion] : [])]
+      const requiredSurfaceTexts = surface === 'raw_html' ? required : visibleFieldTexts
+      if (normalizeText(state.h1) !== normalizeText(row.title) || requiredSurfaceTexts.some(value => normalizeText(value) && !actualText.includes(normalizeText(value)))) fail(`${target.slug} ${surface} visible content differs`)
+      if (state.canonical !== url || state.robots !== 'index,follow' || normalizeText(state.title) !== normalizeText(row.title) || normalizeText(state.description) !== normalizeText(row.summary)) fail(`${target.slug} ${surface} SEO differs`)
+      const jsonLd = state.json_ld?.find(value => value?.['@type'] === 'Article' && value.mainEntityOfPage === url)
+      if (!jsonLd || normalizeText(jsonLd.headline) !== normalizeText(row.title) || normalizeText(jsonLd.description) !== normalizeText(row.summary)
+        || utcTimestamp(jsonLd.datePublished) !== utcTimestamp(row.created_at) || utcTimestamp(jsonLd.dateModified) !== utcTimestamp(row.updated_at)) fail(`${target.slug} ${surface} JSON-LD differs`)
+      for (const source of target.public_before.sources ?? []) {
+        if (!state.links?.some(link => normalizeText(link.label) === normalizeText(source.label) && link.url === new URL(source.url, url).href)) fail(`${target.slug} ${surface} source differs`)
+      }
+    }
+  }
+  const result = { ...observation, result: 'MATCH' }
+  return { ...result, content_hash: artifactHashV2(result) }
+}
+
+async function applyLegacyFieldCorrectionV1({ release, workOrder, adapter, publishEnabled, receiptPath }) {
+  validateLegacyFieldCorrectionReleaseV1(release)
+  validateDeterministicWorkOrderV2(workOrder, { kind: 'publication_apply', runId: release.run_id })
+  if (workOrder.task?.release_hash !== release.release_hash || workOrder.assignee?.role !== 'deterministic-content-publication-executor') fail('legacy publication_apply release/role binding differs')
+  if (!publishEnabled) fail('publication apply is disabled; pass the explicit publish flag after reviewing target and guards')
+  if (!workOrder.outputs?.some((entry) => entry.name === 'publish_receipt' && entry.schema === 'content_publish_receipt.v2')) fail('legacy publication_apply has no canonical receipt output')
+  if (typeof adapter.readLegacyFieldCorrectionSnapshots !== 'function' || typeof adapter.applyAtomicLegacyFieldCorrection !== 'function') fail('publication adapter does not implement the exact legacy field mode')
+  const appliedAt = now()
+  const before = await adapter.readLegacyFieldCorrectionSnapshots(release.articles)
+  const snapshotBase = { schema: 'article_legacy_correction_snapshot.v1', release_hash: release.release_hash, database_id: release.database_id,
+    captured_at: appliedAt, read_only: true, snapshots: before }
+  const snapshot = { ...snapshotBase, content_hash: artifactHashV2(snapshotBase) }
+  const snapshotPath = `${receiptPath}.before-${Date.now()}.json`
+  writeJsonAtomic(snapshotPath, snapshot)
+  const transaction = await adapter.applyAtomicLegacyFieldCorrection(release, { appliedAt, before })
+  const articleResults = []
+  let domReadback
+  try {
+  for (const target of release.articles) {
+    const expected = transaction.after[target.slug]
+    const publicReadback = await readLegacyCorrectionPublicState(adapter, release, target, expected)
+    const decision = transaction.decisions.find((entry) => entry.slug === target.slug)
+    articleResults.push({ article_id: target.article_id, slug: target.slug, result: decision.result, changed_rows: decision.result === 'applied' ? 1 : 0,
+      resulting_version: expected.article.version, resulting_status: expected.article.status,
+      before_hash: canonicalJsonHash(before[target.slug]), after_hash: canonicalJsonHash(expected),
+      readbacks: { persistence: { result: 'MATCH', actual: expected }, public_api: publicReadback } })
+  }
+  if (typeof adapter.readLegacyFieldCorrectionDom !== 'function') fail('legacy target DOM reader is missing')
+  domReadback = validateLegacyCorrectionDomV1(await adapter.readLegacyFieldCorrectionDom(release), release, transaction.after)
+  } catch (error) {
+    const pending = { schema: 'content_publish_receipt.v2', mode: LEGACY_FIELD_CORRECTION_MODE, operation: 'article_correction', release_hash: release.release_hash,
+      work_order_id: workOrder.work_order_id, completion_state: 'PUBLISHED_READBACK_PENDING', seo_live_claim: false, applied_at: appliedAt,
+      snapshot: { path: snapshotPath, content_hash: snapshot.content_hash }, atomic_batch: { result: 'COMMITTED', transaction_id: transaction.transaction_id },
+      persistence_after: transaction.after, article_results: articleResults, readback_error: String(error.message) }
+    writeJsonAtomic(receiptPath, { ...pending, content_hash: artifactHashV2(pending) })
+    throw error
+  }
+  const base = { schema: 'content_publish_receipt.v2', mode: LEGACY_FIELD_CORRECTION_MODE, operation: 'article_correction',
+    release_hash: release.release_hash, work_order_id: workOrder.work_order_id, target: release.publish_target,
+    correction_input_receipt_hash: release.input.content_hash, correction_review_hash: release.review.content_hash,
+    review_execution_receipt_hash: release.review_execution_receipt.content_hash, completion_state: 'COMPLETE', seo_live_claim: false,
+    target_dom_seo: domReadback,
+    executor: { role: 'deterministic-content-publication-executor', id: `machine-${adapter.kind}` }, applied_at: appliedAt,
+    snapshot: { path: snapshotPath, content_hash: snapshot.content_hash },
+    atomic_batch: { result: 'COMMITTED', scope: 'existing_article_fields_only', transaction_id: transaction.transaction_id,
+      article_ids: release.input.affected_article_ids, unchanged: ['sources', 'ingredient_relations', 'interpretations', 'parts', 'article_titles', 'stored_seo', 'article_bodies'] },
+    article_results: articleResults }
+  const receipt = { ...base, content_hash: artifactHashV2(base) }
+  writeJsonAtomic(receiptPath, receipt)
+  return receipt
 }
 
 export async function exportSiteLinkInventorySourceV2({ workOrder, adapter, root, outputPath = null }) {

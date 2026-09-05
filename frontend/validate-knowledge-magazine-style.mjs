@@ -2755,6 +2755,56 @@ export async function writeReceiptAtomic(path, serialized) {
   if (primaryError) throw primaryError;
 }
 
+// A legacy M correction has no historical compiler projection. Reuse the actual
+// browser and DOM collector; the publisher checks its frozen visible field scope.
+export async function collectLegacyCorrectionDomV1(articles, releaseHash) {
+  const browserPath = findBrowserExecutable();
+  const debugPort = await getFreePort();
+  const userDataDirectory = await createTemporaryBrowserProfile();
+  let browserProcess;
+  let page;
+  try {
+    browserProcess = await spawnBrowserProcess(browserPath, ['--headless=new', `--remote-debugging-port=${debugPort}`, `--user-data-dir=${userDataDirectory}`, '--no-first-run', '--no-default-browser-check', '--disable-extensions', '--disable-sync', '--hide-scrollbars', 'about:blank']);
+    const browserVersion = await waitForJson(`http://127.0.0.1:${debugPort}/json/version`);
+    const target = await createBrowserTarget(debugPort);
+    page = await new CdpClient(target.webSocketDebuggerUrl).connect();
+    await page.send('Page.enable');
+    await page.send('Runtime.enable');
+    const results = [];
+    for (const article of articles) {
+      const url = new URL(article.public_url);
+      url.searchParams.set('cfcheck', releaseHash);
+      const response = await fetch(url);
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      const html = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+      const dom = new JSDOM(html, { url: url.href });
+      const collect = document => {
+        const root = document.querySelector('article[data-template], [data-knowledge-prerender] article');
+        const text = root ? [...root.querySelectorAll('h1,h2,h3,p,li,th,td,figcaption')].map(node => node.textContent ?? '').join(' ') : '';
+        return { text, title: document.title, h1: root?.querySelector('h1')?.textContent ?? null,
+          description: document.querySelector('meta[name="description"]')?.content ?? null,
+          canonical: document.querySelector('link[rel="canonical"]')?.href ?? null,
+          robots: document.querySelector('meta[name="robots"]')?.content ?? null,
+          json_ld: [...document.querySelectorAll('script[type="application/ld+json"]')].map(node => { try { return JSON.parse(node.textContent); } catch { return null; } }),
+          links: root ? [...root.querySelectorAll('a[href]')].map(node => ({ label: node.textContent ?? '', url: node.href })) : [] };
+      };
+      const raw = { ...collect(dom.window.document), http_status: response.status, content_type: response.headers.get('content-type'), body_hash: sha256Bytes(bytes) };
+      dom.window.close();
+      const viewports = {};
+      for (const [name, viewport] of Object.entries(VIEWPORTS)) {
+        await applyViewport(page, viewport);
+        await page.send('Page.navigate', { url: url.href });
+        await waitForPublicRoute(page, { slug: article.slug, expected_projection: { template: article.article_layer === 'main_article' ? 'magazine' : 'study_article_v2' } });
+        if (article.article_layer === 'main_article') await expandDisclosures(page);
+        viewports[name] = await runtimeValue(page, `(${collect.toString()})(document)`);
+      }
+      results.push({ article_id: article.article_id, public_url: article.public_url, raw_html: raw, viewports });
+    }
+    const observed = { schema: 'legacy_article_dom_readback.v1', release_hash: releaseHash, browser: { product: browserVersion.Browser, protocol_version: browserVersion['Protocol-Version'] }, checked_at: new Date().toISOString(), article_results: results };
+    return { ...observed, content_hash: canonicalJsonHash(observed) };
+  } finally { await cleanupBrowserResources({ page, browserProcess, userDataDirectory }); }
+}
+
 function errorJson(error) {
   return JSON.stringify({ schema: 'renderer_style_validation_error.v2', code: error?.code ?? 'STYLE_VALIDATION_INTERNAL', message: error?.message ?? 'Unbekannter Style-Validatorfehler.' });
 }

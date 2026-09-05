@@ -383,6 +383,19 @@ describe.sequential('Sub-Wirkstoffe: echte Hono-Routen auf D1-Schema bis 0099', 
 
   afterAll(() => harness.close());
 
+  it('validates and preserves the canonical optional article update reason', async () => {
+    const payload = { slug: 'article-update-reason-test', title: 'Testartikel', summary: 'Ein Kurztext.', body: 'Ein Artikel.', status: 'draft', sources: [], ingredient_ids: [], update_reason: 'a'.repeat(500) };
+    const tooLong = await api('/api/admin/knowledge-articles', { role: 'admin', method: 'POST', body: { ...payload, update_reason: 'a'.repeat(501) } });
+    expect(tooLong.status).toBe(400);
+    const created = await api('/api/admin/knowledge-articles', { role: 'admin', method: 'POST', body: payload });
+    expect(created.status).toBe(201);
+    const article = (await json(created)).article as JsonRecord;
+    expect(article.update_reason).toBe(payload.update_reason);
+    const updated = await api(`/api/admin/knowledge-articles/${payload.slug}`, { role: 'admin', method: 'PUT', body: { title: 'Testartikel überarbeitet', version: article.version } });
+    expect(updated.status).toBe(200);
+    expect(((await json(updated)).article as JsonRecord).update_reason).toBe(payload.update_reason);
+  });
+
   it('deletes the versioned knowledge overview cache on a guarded admin refresh', async () => {
     const auditResponse = await api('/api/admin/knowledge-overview-projection', { role: 'admin' });
     expect(auditResponse.status).toBe(200);

@@ -1,5 +1,8 @@
 import type { PublicKnowledgeArticle } from '../api/modules/knowledge'
-import { isKnowledgeControlMarkerLine, knowledgeInlineMarkdownToText } from './knowledge-inline-markdown.mjs'
+import { knowledgeSourceIdentity } from './knowledge-source-identity.mjs'
+import { isKnowledgeControlMarkerLine, knowledgeInlineMarkdownToText, normalizeKnowledgeInlineLink, tokenizeKnowledgeInlineMarkdown } from './knowledge-inline-markdown.mjs'
+import type { KnowledgeInlineMarkdownToken } from './knowledge-inline-markdown.mjs'
+import { isKnowledgeSourceHeading, parseKnowledgeMarkdown } from './knowledge-markdown-blocks.mjs'
 
 export const SITE_ORIGIN = 'https://supplementstack.de'
 const SEARCH_CRAWLERS = Object.freeze([
@@ -139,6 +142,87 @@ export function articleJsonLd(article: PublicKnowledgeArticle, canonicalUrl: str
   }
 }
 
+function renderInlineTokens(tokens: KnowledgeInlineMarkdownToken[]): string {
+  return tokens.map((token): string => {
+    if (token.type === 'text') return escapeHtml(token.value)
+    const content = renderInlineTokens(token.children)
+    if (token.type === 'strong') return `<strong>${content}</strong>`
+    if (token.type === 'emphasis') return `<em>${content}</em>`
+    const link = normalizeKnowledgeInlineLink(token.href)
+    if (!link) return content
+    return `<a href="${escapeHtml(link.href)}"${link.kind === 'external' ? ' rel="noopener noreferrer"' : ''}>${content}</a>`
+  }).join('')
+}
+
+function renderInlineHtml(value: string): string {
+  return renderInlineTokens(tokenizeKnowledgeInlineMarkdown(value))
+}
+
+function renderSourceLink(label: string, url: string): string {
+  const link = normalizeKnowledgeInlineLink(url)
+  const content = escapeHtml(label)
+  return link ? `<a href="${escapeHtml(link.href)}"${link.kind === 'external' ? ' rel="noopener noreferrer"' : ''}>${content}</a>` : content
+}
+
+export function renderKnowledgeMarkdownHtml(markdown: string, title = '', options: { skipBodySources?: boolean; conclusion?: string | null; stripLeadingConclusionHeading?: boolean } = {}): string {
+  let sourceSectionLevel: number | null = null
+  let skippingConclusion = false
+  let conclusionInserted = false
+  const conclusion = options.conclusion?.trim()
+  const isConclusion = (text: string) => /^fazit(?:\b|$)/i.test(knowledgeInlineMarkdownToText(text).trim())
+  const conclusionHtml = conclusion ? `<h2>Fazit</h2>${renderKnowledgeMarkdownHtml(conclusion, title, { stripLeadingConclusionHeading: true })}` : ''
+  const bodyHtml = parseKnowledgeMarkdown(markdown).map((block, index): string => {
+    if (options.stripLeadingConclusionHeading && index === 0 && block.type === 'heading' && isConclusion(block.text)) return ''
+    if (skippingConclusion) {
+      if (block.type !== 'heading' || block.level > 2) return ''
+      skippingConclusion = false
+    }
+    if (conclusion && block.type === 'heading' && block.level === 2 && isConclusion(block.text)) {
+      skippingConclusion = true
+      if (conclusionInserted) return ''
+      conclusionInserted = true
+      return conclusionHtml
+    }
+    if (options.skipBodySources && block.type === 'heading' && isKnowledgeSourceHeading(block.text)) {
+      sourceSectionLevel = block.level
+      return ''
+    }
+    if (sourceSectionLevel !== null) {
+      if (block.type !== 'heading' || block.level > sourceSectionLevel) return ''
+      sourceSectionLevel = null
+    }
+    if (block.type === 'heading') {
+      if (block.level === 1 && inlineMetadataText(block.text) === inlineMetadataText(title)) return ''
+      const level = Math.max(2, block.level)
+      return `<h${level}>${renderInlineHtml(block.text)}</h${level}>`
+    }
+    if (block.type === 'paragraph') return `<p>${renderInlineHtml(block.text)}</p>`
+    if (block.type === 'list') {
+      const tag = block.ordered ? 'ol' : 'ul'
+      return `<${tag}>${block.items.map((item) => `<li>${renderInlineHtml(item)}</li>`).join('\n')}</${tag}>`
+    }
+    if (block.type === 'image') {
+      return `<figure><img src="${escapeHtml(block.src)}" alt="${escapeHtml(knowledgeInlineMarkdownToText(block.alt))}" loading="lazy" />${block.caption ? `<figcaption>${renderInlineHtml(block.caption)}</figcaption>` : ''}</figure>`
+    }
+    return `<table><thead><tr>${block.headers.map((header) => `<th scope="col">${renderInlineHtml(header)}</th>`).join('')}</tr></thead><tbody>${block.rows.map((row) => `<tr>${block.headers.map((_, index) => `<td>${renderInlineHtml(row[index] ?? '')}</td>`).join('')}</tr>`).join('\n')}</tbody></table>`
+  }).filter(Boolean).join('\n')
+  return bodyHtml + (conclusion && !conclusionInserted ? `\n${conclusionHtml}` : '')
+}
+
+export function renderKnowledgeUnavailableHtml(shellHtml: string, status: 404 | 503): string {
+  const title = status === 404 ? 'Artikel nicht gefunden' : 'Artikel gerade nicht verfügbar'
+  const explanation = status === 404
+    ? 'Dieser Artikel ist nicht verfügbar. In der Wissensübersicht findest du weitere Artikel und kannst nach einem Wirkstoff suchen.'
+    : 'Der Artikel konnte gerade nicht geladen werden. Bitte versuche es gleich noch einmal.'
+  const main = `<main class="knowledge-prerender"><h1>${title}</h1><p>${explanation}</p><a href="/wissen">Zur Wissensübersicht</a><form action="/wissen" method="get"><label for="knowledge-error-search">Wirkstoff suchen</label><input id="knowledge-error-search" name="q" type="search" /><button type="submit">Suchen</button></form></main>`
+  return shellHtml
+    .replace(/<title>[\s\S]*?<\/title>/i, `<title>${title} | Supplement Stack</title>`)
+    .replace(/<meta\b(?=[^>]*\bname=["'](?:robots|description)["'])[^>]*>/gi, '')
+    .replace(/<link\b(?=[^>]*\brel=["']canonical["'])[^>]*>/gi, '')
+    .replace('</head>', `<meta name="robots" content="noindex,nofollow" /><meta name="description" content="${explanation}" /></head>`)
+    .replace(/<div\s+id=["']root["']\s*><\/div>/i, `<div id="root">${main}</div>`)
+}
+
 export function renderKnowledgeArticleHtml(
   shellHtml: string,
   article: PublicKnowledgeArticle,
@@ -149,21 +233,33 @@ export function renderKnowledgeArticleHtml(
   const robots = article.seo?.robots ?? 'index,follow'
   const jsonLd = JSON.stringify(articleJsonLd(article, canonicalUrl)).replace(/</g, '\\u003c')
   const articleBootstrap = serializeBootstrapJson({ article })
+  const seenSources = new Set<string>()
   const sourceItems = article.sources
-    .map((source) => `        <li><a href="${escapeHtml(source.url)}">${escapeHtml(source.label)}</a></li>`)
+    .filter((source) => {
+      const identity = knowledgeSourceIdentity(source)
+      if (!source.label.trim() || !source.url.trim() || seenSources.has(identity)) return false
+      seenSources.add(identity)
+      return true
+    })
+    .map((source) => `        <li>${renderSourceLink(source.label, source.url)}</li>`)
+    .join('\n')
+  const relatedItems = (article.related_articles ?? [])
+    .filter((related) => related.slug !== article.slug && isValidKnowledgeSlug(related.slug))
+    .map((related) => `<li><a href="/wissen/${escapeHtml(related.slug)}">${related.article_layer === 'main_article' ? `Einordnung zu ${escapeHtml(related.ingredients.map((ingredient) => ingredient.name).join(', '))}: ` : ''}${escapeHtml(inlineMetadataText(related.title))}</a></li>`)
     .join('\n')
   const prerenderedArticle = `
     <main class="knowledge-prerender" data-knowledge-prerender="${escapeHtml(article.slug)}">
       <article>
         <h1>${escapeHtml(inlineMetadataText(article.title))}</h1>
         <p>${escapeHtml(inlineMetadataText(article.summary))}</p>
-        <div style="white-space: pre-wrap">${escapeHtml(markdownToPrerenderText(article.body))}</div>
-        <section aria-labelledby="prerender-sources">
+        <div data-knowledge-prerender-content>${renderKnowledgeMarkdownHtml(article.body, article.title, { skipBodySources: Boolean(sourceItems), conclusion: article.article_layer === 'main_article' ? article.conclusion : null })}</div>
+        ${sourceItems ? `<section aria-labelledby="prerender-sources">
           <h2 id="prerender-sources">Quellen</h2>
           <ol>
 ${sourceItems}
           </ol>
-        </section>
+        </section>` : ''}
+        ${relatedItems ? `<nav aria-label="Verwandte Artikel"><h2>Weiterlesen zum Wirkstoff</h2><ul>${relatedItems}</ul></nav>` : ''}
       </article>
     </main>`
   const head = [

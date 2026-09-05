@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
+import { KNOWLEDGE_CATEGORY_LABELS } from '../lib/knowledgeCategories';
+import { knowledgeNavigationState } from '../lib/knowledgeNavigation';
+import SavedKnowledgeArticles from './SavedKnowledgeArticles';
 import { apiPath } from '../api/base';
 import {
   isKnowledgeOverviewResponse,
@@ -60,70 +63,70 @@ const ICON_PATHS = {
 const CATEGORIES: CategoryConfig[] = [
   {
     key: 'vitamine',
-    label: 'Vitamine',
+    label: KNOWLEDGE_CATEGORY_LABELS.vitamine,
     cssClass: 'c-vit',
     icon: 'spark',
     description: 'Vitamine und vitaminähnliche Stoffe',
   },
   {
     key: 'mineralstoffe',
-    label: 'Mineralstoffe',
+    label: KNOWLEDGE_CATEGORY_LABELS.mineralstoffe,
     cssClass: 'c-min',
     icon: 'atom',
     description: 'Mineralstoffe, die der Körper in größeren Mengen benötigt',
   },
   {
     key: 'spurenelemente',
-    label: 'Spurenelemente',
+    label: KNOWLEDGE_CATEGORY_LABELS.spurenelemente,
     cssClass: 'c-spur',
     icon: 'flask',
     description: 'Mineralstoffe, von denen der Körper nur kleine Mengen benötigt',
   },
   {
     key: 'aminosaeuren_proteine',
-    label: 'Aminosäuren & Proteine',
+    label: KNOWLEDGE_CATEGORY_LABELS.aminosaeuren_proteine,
     cssClass: 'c-amino-protein',
     icon: 'muscle',
     description: 'Aminosäuren, Eiweiße und verwandte Stoffe',
   },
   {
     key: 'fettsaeuren',
-    label: 'Fettsäuren',
+    label: KNOWLEDGE_CATEGORY_LABELS.fettsaeuren,
     cssClass: 'c-fett',
     icon: 'fish',
     description: 'Fettsäuren und daraus gewonnene Produkte',
   },
   {
     key: 'pflanzenstoffe_extrakte',
-    label: 'Pflanzenstoffe & Extrakte',
+    label: KNOWLEDGE_CATEGORY_LABELS.pflanzenstoffe_extrakte,
     cssClass: 'c-pflz-extrakt',
     icon: 'sprout',
     description: 'Pflanzen, Pflanzenstoffe und Extrakte',
   },
   {
     key: 'heilpilze',
-    label: 'Heilpilze',
+    label: KNOWLEDGE_CATEGORY_LABELS.heilpilze,
     cssClass: 'c-heilpilz',
     icon: 'leaf',
     description: 'Pilze und Pilzextrakte im Nahrungsergänzungsbereich',
   },
   {
     key: 'enzyme',
-    label: 'Enzyme',
+    label: KNOWLEDGE_CATEGORY_LABELS.enzyme,
     cssClass: 'c-enzyme',
     icon: 'flask',
     description: 'Enzyme und enzymähnliche Stoffe',
   },
   {
     key: 'probiotika',
-    label: 'Probiotika',
+    label: KNOWLEDGE_CATEGORY_LABELS.probiotika,
     cssClass: 'c-probiotika',
     icon: 'heart',
     description: 'Lebende Kulturen und verwandte Produkte',
   },
   {
     key: 'sonstige',
-    label: 'Sonstige',
+    label: KNOWLEDGE_CATEGORY_LABELS.sonstige,
     cssClass: 'c-sonstige',
     icon: 'wave',
     description: 'Weitere Wirkstoffe außerhalb der anderen Gruppen',
@@ -338,6 +341,7 @@ function ComingCard({ card }: { card: NutrientCard }) {
 }
 
 function ReadyCard({ card, search }: { card: NutrientCard & { article: KnowledgeArticleOverviewItem }; search: string }) {
+  const location = useLocation();
   const prefetchArticle = () => {
     if (new URLSearchParams(search).has('cfcheck')) return;
     void Promise.all([
@@ -355,6 +359,7 @@ function ReadyCard({ card, search }: { card: NutrientCard & { article: Knowledge
     <Link
       className="nutri is-ready"
       to={`/wissen/${card.article.slug}${search}`}
+      state={{ ...knowledgeNavigationState(location.state), overviewSearch: search }}
       data-ingredient-id={card.ingredientId}
       data-ingredient-ids={card.ingredientId}
       data-name={normalizeSearchText(card.name)}
@@ -376,6 +381,13 @@ function ReadyCard({ card, search }: { card: NutrientCard & { article: Knowledge
 }
 
 export default function KnowledgeOverviewPage() {
+  const location = useLocation();
+  return new URLSearchParams(location.search).get('saved') === '1'
+    ? <SavedKnowledgeArticles /> : <KnowledgeOverview />;
+}
+
+function KnowledgeOverview() {
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const query = getSearchQuery(searchParams);
   const activeCategory = getActiveCategory(searchParams);
@@ -394,8 +406,8 @@ export default function KnowledgeOverviewPage() {
   const currentSearch = searchParams.toString();
   useEffect(() => {
     const canonicalParams = new URLSearchParams(canonicalSearch.startsWith('?') ? canonicalSearch.slice(1) : canonicalSearch);
-    if (currentSearch !== canonicalParams.toString()) setSearchParams(canonicalParams, { replace: true });
-  }, [canonicalSearch, currentSearch, setSearchParams]);
+    if (currentSearch !== canonicalParams.toString()) setSearchParams(canonicalParams, { replace: true, state: knowledgeNavigationState(location.state) });
+  }, [canonicalSearch, currentSearch, setSearchParams, location.state]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -466,7 +478,7 @@ export default function KnowledgeOverviewPage() {
 
   const updateOverviewSearch = (nextCategory: CategoryKey | 'all', nextQuery: string) => {
     const nextSearch = buildOverviewSearch(nextCategory, nextQuery, cacheCheck);
-    setSearchParams(new URLSearchParams(nextSearch.startsWith('?') ? nextSearch.slice(1) : nextSearch), { replace: true });
+    setSearchParams(new URLSearchParams(nextSearch.startsWith('?') ? nextSearch.slice(1) : nextSearch), { replace: true, state: knowledgeNavigationState(location.state) });
   };
 
   const resetOverviewSearch = () => {
@@ -484,6 +496,7 @@ export default function KnowledgeOverviewPage() {
             Hier findest du, was über einen Wirkstoff bekannt ist, wo er vorkommt und welche Grenzen der Wissensstand hat.
             Verständlich erklärt und mit Quellen.
           </p>
+          <Link to={`/wissen?${new URLSearchParams({ ...Object.fromEntries(new URLSearchParams(canonicalSearch)), saved: '1' })}`} state={knowledgeNavigationState(location.state)} className="mb-4 inline-flex min-h-11 items-center font-bold text-blue-700 underline underline-offset-4">Gemerkte Artikel ansehen</Link>
 
           <div className={`db-search${hasQuery ? ' has-text' : ''}`}>
             <SvgIcon icon="search" className="mag" />

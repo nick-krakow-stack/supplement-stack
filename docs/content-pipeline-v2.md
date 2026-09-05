@@ -1125,6 +1125,24 @@ ausgegebene `work_order_id`. S/M öffnen weder Research noch Facts- oder volles
 Publication-Gate; L auditiert keine unbetroffenen Artikel. Alle Klassen nutzen
 bei Publish denselben zentralen `publication_apply`-Executor und Write-Guard.
 
+Historische Artikel ohne rekonstruierbare Compiler-Lineage dürfen für rein
+lokale Klasse-M-Umlautreparaturen den begrenzten `legacy_field_patch`-Modus
+desselben Executors verwenden: höchstens sechs explizite, publizierte
+Version-1-Ziele ohne gespeicherte SEO-Payload; nur `summary`/`conclusion` und
+nachweislich einzelne `?`→Umlaut/`ß`-Ersetzungen. Ein eingefrorener echter
+Editorvorschlag, unabhängiger lokaler Kurzreview samt exakter ausgegebener
+Order und Executionreceipt sind Pflicht. Der Guard bindet vollständige
+Artikelzeilen, Quellen-, Ingredient-, Interpretations- und Partzeilen samt
+Counts vor und nach dem atomaren Batch; ausschließlich die neue nullable
+`update_reason`-Spalte wird bei älteren Snapshots zu `null` ergänzt. Erst beim
+Apply steigen Version und technisches Änderungsdatum. Vorher wird ein echter
+Snapshot gesichert, danach werden D1, öffentliche API und Zielartikel-DOM/SEO
+auf Desktop/Mobil geprüft. Ein gültiger identischer Nachzustand ist ein Noop;
+fehlender öffentlicher Readback bleibt ausdrücklich unvollständig und kann
+idempotent nachgeholt werden. Es werden keine historischen Facts-, Render-
+oder Publication-Belege erfunden. Klasse L ist in diesem Modus unzulässig
+und verwendet weiterhin ausschließlich den normalen betroffenen v2-Slice.
+
 ## Optionaler Stage-4-Stack-Sync
 
 Stage 4 läuft nur bei explizitem Auftrag und zweigt nach bestandenem

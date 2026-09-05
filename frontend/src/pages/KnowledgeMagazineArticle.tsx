@@ -1,8 +1,11 @@
-import { Link, useLocation } from 'react-router-dom';
-import { CheckCircle, ChevronDown, Clock, ExternalLink, Lightbulb, Plus } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { ArrowUp, CheckCircle, ChevronDown, Clock, Copy, ExternalLink, Lightbulb, Plus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { MouseEvent, ReactNode } from 'react';
 import type { KnowledgeArticle, KnowledgeArticleSource } from '../types';
+import { knowledgeSourceIdentity } from '../../../functions/lib/knowledge-source-identity.mjs';
+import type { KnowledgeNavigationState } from '../lib/knowledgeNavigation';
+import './KnowledgeArticleUx.css';
 import {
   isKnowledgeSourceHeading,
   knowledgeInlineMarkdownToText,
@@ -14,6 +17,9 @@ import {
 type Props = {
   article: KnowledgeArticle;
   reviewedDate: string | null;
+  heroActions?: ReactNode;
+  editorialInfo?: ReactNode;
+  navigationState?: KnowledgeNavigationState;
 };
 
 type Section = {
@@ -24,6 +30,7 @@ type Section = {
 };
 
 type FaqItem = {
+  id: string;
   question: string;
   answer: KnowledgeMarkdownBlock[];
 };
@@ -158,6 +165,34 @@ export function isRenderableKnowledgeSource(source: KnowledgeArticleSource): boo
   return Boolean(label && rawUrl.trim() !== '#');
 }
 
+/** Collapse only identical entries, retaining distinct source identities and locators. */
+export function deduplicateKnowledgeSources(sources: KnowledgeArticleSource[]): KnowledgeArticleSource[] {
+  const seen = new Set<string>();
+  return sources.filter((source) => {
+    const identity = knowledgeSourceIdentity(source);
+    if (seen.has(identity)) return false;
+    seen.add(identity);
+    return true;
+  });
+}
+
+function decodeArticleHash(hash: string): string {
+  try {
+    return decodeURIComponent(hash.replace(/^#/, ''));
+  } catch {
+    return '';
+  }
+}
+
+function afterArticleLayout(callback: () => void): () => void {
+  if (typeof window.requestAnimationFrame === 'function') {
+    const frame = window.requestAnimationFrame(callback);
+    return () => window.cancelAnimationFrame(frame);
+  }
+  const timer = window.setTimeout(callback, 0);
+  return () => window.clearTimeout(timer);
+}
+
 export function calculateKnowledgeReadingMinutes(body: string, conclusion?: string | null): number {
   const readableText = `${stripMagazineMarker(body)} ${conclusion ?? ''}`;
   const words = readableText.trim().split(/\s+/).filter(Boolean).length;
@@ -263,7 +298,7 @@ function mergeStoredConclusion(sections: Section[], conclusion?: string | null):
   return mergedSections;
 }
 
-function renderSourceLink(source: KnowledgeArticleSource): ReactNode {
+function renderSourceLink(source: KnowledgeArticleSource, navigationState?: Props['navigationState']): ReactNode {
   const className = 'source-link';
   const normalizedUrl = normalizeKnowledgeSourceUrl(source.url);
   const label = source.label.trim();
@@ -284,6 +319,7 @@ function renderSourceLink(source: KnowledgeArticleSource): ReactNode {
           {internalArticles.length === 1 ? (
             <Link
               to={internalArticles[0].href}
+              state={navigationState}
               className="source-primary-link"
               data-knowledge-leaf="internal-article-link"
             >
@@ -298,6 +334,7 @@ function renderSourceLink(source: KnowledgeArticleSource): ReactNode {
                   <Link
                     key={article.slug}
                     to={article.href}
+                    state={navigationState}
                     className="source-internal-link"
                     data-knowledge-leaf="internal-article-link"
                   >
@@ -332,7 +369,7 @@ function renderSourceLink(source: KnowledgeArticleSource): ReactNode {
 
   if (normalizedUrl.kind === 'internal') {
     return (
-      <Link to={normalizedUrl.href} className={className} data-knowledge-leaf="source-link">
+      <Link to={normalizedUrl.href} state={navigationState} className={className} data-knowledge-leaf="source-link">
         {content}
       </Link>
     );
@@ -372,9 +409,11 @@ export function knowledgeSourceInternalArticles(source: KnowledgeArticleSource):
 export function KnowledgeSourceInternalArticleLinks({
   source,
   className = 'source-internal-links mt-2 flex flex-col gap-1 pl-6',
+  navigationState,
 }: {
   source: KnowledgeArticleSource;
   className?: string;
+  navigationState?: Props['navigationState'];
 }): ReactNode {
   const links = knowledgeSourceInternalArticles(source);
   if (links.length === 0) return null;
@@ -389,6 +428,7 @@ export function KnowledgeSourceInternalArticleLinks({
         <Link
           key={article.slug}
           to={article.href}
+          state={navigationState}
           className="source-internal-link text-sm font-bold text-blue-700 hover:text-blue-900"
           data-knowledge-leaf="internal-article-link"
         >
@@ -532,13 +572,18 @@ function renderBlock(block: KnowledgeMarkdownBlock, key: string, sectionTitle: s
   return null;
 }
 
-function collectFaqItems(blocks: KnowledgeMarkdownBlock[]): FaqItem[] {
+function collectFaqItems(blocks: KnowledgeMarkdownBlock[], sectionId: string): FaqItem[] {
   const items: FaqItem[] = [];
+  const usedIds = new Set<string>();
   let active: FaqItem | null = null;
 
   for (const block of blocks) {
     if (block.type === 'heading' && block.level === 3) {
-      active = { question: block.text, answer: [] };
+      active = {
+        id: allocateSectionId(`${sectionId}-frage-${knowledgeInlineMarkdownToText(block.text)}`, usedIds),
+        question: block.text,
+        answer: [],
+      };
       items.push(active);
       continue;
     }
@@ -551,7 +596,45 @@ function collectFaqItems(blocks: KnowledgeMarkdownBlock[]): FaqItem[] {
 
 function FaqSection({ section, number, controlNamespace }: { section: Section; number: string; controlNamespace: string }) {
   const [openIndex, setOpenIndex] = useState<number | null>(null);
-  const faqItems = collectFaqItems(section.blocks);
+  const [copyMessage, setCopyMessage] = useState('');
+  const [copyFallback, setCopyFallback] = useState('');
+  const location = useLocation();
+  const faqItems = useMemo(() => collectFaqItems(section.blocks, section.id), [section.blocks, section.id]);
+
+  useEffect(() => {
+    let cancelLayout: (() => void) | undefined;
+    const openHashQuestion = (hash: string) => {
+      const index = faqItems.findIndex((item) => item.id === decodeArticleHash(hash));
+      if (index < 0) return;
+      setOpenIndex(index);
+      cancelLayout?.();
+      cancelLayout = afterArticleLayout(() => {
+        const question = document.getElementById(faqItems[index].id);
+        question?.focus({ preventScroll: true });
+        question?.scrollIntoView?.({ block: 'start', behavior: 'auto' });
+      });
+    };
+    openHashQuestion(location.hash);
+    const onHashChange = () => openHashQuestion(window.location.hash);
+    window.addEventListener('hashchange', onHashChange);
+    return () => {
+      window.removeEventListener('hashchange', onHashChange);
+      cancelLayout?.();
+    };
+  }, [faqItems, location.hash]);
+
+  const copyQuestionLink = async (id: string) => {
+    const url = `${window.location.origin}${location.pathname}#${id}`;
+    setCopyMessage('');
+    setCopyFallback('');
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopyMessage('Link zur Frage kopiert.');
+    } catch {
+      setCopyFallback(url);
+      setCopyMessage('Markiere den Link und kopiere ihn.');
+    }
+  };
 
   return (
     <section key={section.id} id={section.id} data-testid={`knowledge-magazine-section-${section.id}`}>
@@ -559,12 +642,12 @@ function FaqSection({ section, number, controlNamespace }: { section: Section; n
       <div className="faq">
         {faqItems.map((item, index) => {
           const isOpen = openIndex === index;
-          const triggerId = `${controlNamespace}:${section.id}:faq:${index}:trigger`;
+          const triggerId = item.id;
           const panelId = `${controlNamespace}:${section.id}:faq:${index}:panel`;
 
           return (
           <div key={`${item.question}-${index}`} className={`faq-item${isOpen ? ' is-open' : ''}`}>
-            <button
+            <h3 className="faq-heading"><button
               id={triggerId}
               type="button"
               className="faq-q"
@@ -572,11 +655,15 @@ function FaqSection({ section, number, controlNamespace }: { section: Section; n
               data-knowledge-disclosure="trigger"
               aria-expanded={isOpen}
               aria-controls={panelId}
-              onClick={() => setOpenIndex((current) => (current === index ? null : index))}
+              onClick={() => {
+                setOpenIndex((current) => (current === index ? null : index));
+                setCopyMessage('');
+                setCopyFallback('');
+              }}
             >
               <span>{renderKnowledgeInlineMarkdown(item.question)}</span>
               <span className="pm" aria-hidden="true"><Plus size={16} /></span>
-            </button>
+            </button></h3>
             <div
               id={panelId}
               className="faq-a"
@@ -587,6 +674,13 @@ function FaqSection({ section, number, controlNamespace }: { section: Section; n
             >
               <div className="faq-a__in">
                 {item.answer.map((block, blockIndex) => renderBlock(block, `${section.id}-faq-${index}-${blockIndex}`, section.title))}
+                <div className="faq-link-action" data-projection-additive-navigation="true">
+                  <button type="button" onClick={() => void copyQuestionLink(item.id)}>
+                    <Copy size={15} aria-hidden="true" /> Link zur Frage kopieren
+                  </button>
+                  {isOpen && <span role="status">{copyMessage}</span>}
+                  {isOpen && copyFallback && <input aria-label="Link zu dieser Frage" readOnly value={copyFallback} onFocus={(event) => event.currentTarget.select()} />}
+                </div>
               </div>
             </div>
           </div>
@@ -616,7 +710,7 @@ function renderCompareSection(section: Section, number: string): ReactNode {
       <div className="compare">
         {groups.map((group, index) => (
           <div key={`${group.title}-${index}`} className={`cmp ${index === 0 ? 'is-tier' : 'is-pflz'}`}>
-            <h4>{renderKnowledgeInlineMarkdown(group.title)}</h4>
+            <h3>{renderKnowledgeInlineMarkdown(group.title)}</h3>
             {group.blocks.map((block, blockIndex) => renderBlock(block, `${section.id}-compare-${index}-${blockIndex}`, section.title))}
           </div>
         ))}
@@ -655,15 +749,22 @@ function renderSection(section: Section, number: string, controlNamespace: strin
   );
 }
 
-export function KnowledgeMagazineArticle({ article, reviewedDate }: Props) {
+export function KnowledgeMagazineArticle({ article, reviewedDate, heroActions, editorialInfo, navigationState }: Props) {
   const [sourceListOpen, setSourceListOpen] = useState(false);
   const [readingProgress, setReadingProgress] = useState(0);
   const [activeSectionId, setActiveSectionId] = useState('');
+  const [mobileTocOpen, setMobileTocOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' && Boolean(window.matchMedia?.('(max-width: 900px)').matches));
   const activeSectionIdRef = useRef('');
   const location = useLocation();
+  const navigate = useNavigate();
   const articleDomId = useMemo(() => slugifyHeading(article.slug) || 'knowledge-article', [article.slug]);
   const controlNamespace = `knowledge-control:${articleDomId}`;
-  const visibleSources = useMemo(() => article.sources.filter(isRenderableKnowledgeSource), [article.sources]);
+  const visibleSources = useMemo(() => deduplicateKnowledgeSources(article.sources.filter(isRenderableKnowledgeSource)), [article.sources]);
+  const sourceAnchorIds = useMemo(() => {
+    const usedIds = new Set<string>();
+    return visibleSources.map((source) => allocateSectionId(`quelle-${source.source_id || source.label}`, usedIds));
+  }, [visibleSources]);
   const { leadBlocks, takeaways, sections: bodySections } = useMemo(
     () => splitMagazineBody(article.body, { skipBodySourceSections: visibleSources.length > 0 }),
     [article.body, visibleSources.length],
@@ -696,10 +797,70 @@ export function KnowledgeMagazineArticle({ article, reviewedDate }: Props) {
     [article.body, article.conclusion],
   );
   const ingredientChipLabel = `Wirkstoff: ${ingredientNames.join(', ') || 'Wissensartikel'}`;
+  const takeawayContextLinks = useMemo(() => {
+    const evidence = tocSections.find((section) => /forschung|studien|evidenz|datenlage/i.test(knowledgeInlineMarkdownToText(section.title)));
+    const uncertainty = tocSections.find((section) => /nicht beantwortet|unbeantwortet|offene fragen|unsicher|grenzen|was (?:ist|bleibt) (?:noch )?offen/i.test(knowledgeInlineMarkdownToText(section.title)));
+    return [evidence, uncertainty].filter((section, index, entries): section is Section => Boolean(section) && entries.indexOf(section) === index);
+  }, [tocSections]);
 
   const visibleSectionIds = useMemo(() => tocLinks.map((link) => link.id), [tocLinks]);
   const sourceToggleId = `${controlNamespace}:sources:toggle`;
   const sourcePanelId = `${controlNamespace}:sources:panel`;
+  const sourceDescriptionId = `${controlNamespace}:sources:description`;
+  const tocToggleId = `${controlNamespace}:toc:toggle`;
+  const tocPanelId = `${controlNamespace}:toc:panel`;
+  const articleTopId = `${articleDomId}-anfang`;
+
+  useEffect(() => {
+    const media = window.matchMedia?.('(max-width: 900px)');
+    if (!media) return;
+    const onChange = () => setIsMobile(media.matches);
+    onChange();
+    media.addEventListener('change', onChange);
+    return () => media.removeEventListener('change', onChange);
+  }, []);
+
+  useEffect(() => {
+    let cancelLayout: (() => void) | undefined;
+    const openSourceHash = (hash: string) => {
+      const target = decodeArticleHash(hash);
+      if ((target === 'quellen' && visibleSources.length > 0) || sourceAnchorIds.includes(target)) {
+        setSourceListOpen(true);
+        cancelLayout?.();
+        cancelLayout = afterArticleLayout(() => document.getElementById(target)?.scrollIntoView?.({ block: 'start', behavior: 'auto' }));
+      }
+    };
+    openSourceHash(location.hash);
+    const onHashChange = () => openSourceHash(window.location.hash);
+    window.addEventListener('hashchange', onHashChange);
+    return () => {
+      window.removeEventListener('hashchange', onHashChange);
+      cancelLayout?.();
+    };
+  }, [location.hash, visibleSources.length, sourceAnchorIds]);
+
+  const followSectionLink = (id: string, event: MouseEvent<HTMLAnchorElement>) => {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    navigate({ hash: `#${id}`, search: location.search }, { state: navigationState ?? location.state });
+    setMobileTocOpen(false);
+    if (id === 'quellen') setSourceListOpen(true);
+    afterArticleLayout(() => {
+      const section = document.getElementById(id);
+      const focusTarget = id === 'quellen'
+        ? document.getElementById(sourceToggleId)
+        : section?.querySelector<HTMLElement>('h2') ?? section;
+      if (focusTarget && focusTarget.tagName !== 'BUTTON') focusTarget.tabIndex = -1;
+      focusTarget?.focus({ preventScroll: true });
+      section?.scrollIntoView?.({ block: 'start', behavior: 'auto' });
+    });
+  };
+
+  const goToTop = () => {
+    setMobileTocOpen(false);
+    document.getElementById(articleTopId)?.focus({ preventScroll: true });
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  };
 
   const setActiveSectionIdSafe = useCallback((nextSectionId: string) => {
     if (activeSectionIdRef.current === nextSectionId) return;
@@ -721,7 +882,7 @@ export function KnowledgeMagazineArticle({ article, reviewedDate }: Props) {
     try {
       const normalizedHash = decodeURIComponent(hash.slice(1));
       return sectionIsVisible(normalizedHash) ? normalizedHash : '';
-    } catch (error) {
+    } catch {
       return '';
     }
   }, [sectionIsVisible, location.hash]);
@@ -880,19 +1041,27 @@ export function KnowledgeMagazineArticle({ article, reviewedDate }: Props) {
     >
       <header data-testid="knowledge-magazine-hero" className="hero">
         <span className="eyebrow" data-knowledge-ui="eyebrow">Wissen</span>
-        <h1>{renderKnowledgeInlineMarkdown(article.title)}</h1>
+        <h1 id={articleTopId} tabIndex={-1}>{renderKnowledgeInlineMarkdown(article.title)}</h1>
         <p className="dek" data-knowledge-ui="dek" data-knowledge-leaf="dek">{renderKnowledgeInlineMarkdown(article.summary)}</p>
         <div className="hero-meta">
           <span className="chip"><CheckCircle size={15} aria-hidden="true" /> <span data-knowledge-ui="ingredient-chip">{ingredientChipLabel}</span></span>
           {reviewedDate && <span className="meta-item"><CheckCircle size={16} aria-hidden="true" /> <span data-knowledge-ui="reviewed-date">Geprüft am {reviewedDate}</span></span>}
           <span className="meta-item"><Clock size={16} aria-hidden="true" /> <span data-knowledge-ui="reading-time">{knowledgeReadingTimeLabel(readingMinutes)}</span></span>
         </div>
+        {editorialInfo}
+        {heroActions}
       </header>
 
       <div className="layout">
-        <aside className="toc" aria-label="Inhaltsverzeichnis">
+        <aside className="toc knowledge-article-toc" aria-label="Inhaltsverzeichnis">
           <div className="toc__title" data-knowledge-ui="toc-title">Auf dieser Seite</div>
-          <ol data-knowledge-leaf="toc-list">
+          <div className="toc-mobile-bar">
+            <button id={tocToggleId} type="button" aria-expanded={mobileTocOpen} aria-controls={tocPanelId} onClick={() => setMobileTocOpen((open) => !open)}>
+              Inhaltsübersicht <ChevronDown size={18} aria-hidden="true" />
+            </button>
+            <button type="button" onClick={goToTop}><ArrowUp size={16} aria-hidden="true" /> Nach oben</button>
+          </div>
+          <ol id={tocPanelId} aria-labelledby={tocToggleId} hidden={isMobile && !mobileTocOpen} data-knowledge-leaf="toc-list">
             {tocLinks.map((link) => {
               const isActive = link.id === activeSectionId;
               return (
@@ -903,6 +1072,7 @@ export function KnowledgeMagazineArticle({ article, reviewedDate }: Props) {
                     aria-current={isActive ? 'true' : undefined}
                     className={isActive ? 'is-active' : undefined}
                     data-knowledge-leaf="toc-link"
+                    onClick={(event) => followSectionLink(link.id, event)}
                   >
                     {renderKnowledgeInlineMarkdown(link.title)}
                   </a>
@@ -910,6 +1080,7 @@ export function KnowledgeMagazineArticle({ article, reviewedDate }: Props) {
               );
             })}
           </ol>
+          <button type="button" className="toc-back-to-top" onClick={goToTop}><ArrowUp size={16} aria-hidden="true" /> Nach oben</button>
         </aside>
 
         <div className="content">
@@ -928,6 +1099,13 @@ export function KnowledgeMagazineArticle({ article, reviewedDate }: Props) {
                   <li key={`${item}-${index}`} data-knowledge-leaf="list-item"><CheckCircle size={21} aria-hidden="true" /> <span>{renderKnowledgeInlineMarkdown(item)}</span></li>
                 ))}
               </ul>
+              {(takeawayContextLinks.length > 0 || visibleSources.length > 0) && (
+                <div className="takeaway-context" data-projection-additive-navigation="true">
+                  <span>Zum Einordnen der Kurzfassung:</span>
+                  {takeawayContextLinks.map((section) => <a key={section.id} href={`#${section.id}`} onClick={(event) => followSectionLink(section.id, event)}>{knowledgeInlineMarkdownToText(section.title)}</a>)}
+                  {visibleSources.length > 0 && <a href="#quellen" onClick={(event) => followSectionLink('quellen', event)}>Quellen ansehen</a>}
+                </div>
+              )}
             </div>
             </section>
           )}
@@ -941,18 +1119,24 @@ export function KnowledgeMagazineArticle({ article, reviewedDate }: Props) {
           {visibleSources.length > 0 && (
             <section id="quellen">
             <div className={`sources${sourceListOpen ? ' is-open' : ''}`}>
-              <button
+              <h2 className="sources-heading"><button
                 id={sourceToggleId}
                 type="button"
                 className={`src-toggle${sourceListOpen ? ' is-open' : ''}`}
                 data-knowledge-disclosure="trigger"
                 aria-expanded={sourceListOpen}
                 aria-controls={sourcePanelId}
+                aria-describedby={sourceDescriptionId}
                 onClick={() => setSourceListOpen((current) => !current)}
               >
                 <span data-knowledge-ui="sources-label">Quellen</span>
                 <span className="cnt"><span data-knowledge-ui="sources-count">{knowledgeSourceCountLabel(visibleSources.length)}</span> <ChevronDown className="chev" size={18} aria-hidden="true" /></span>
-              </button>
+              </button></h2>
+              <p id={sourceDescriptionId} className="sources-explanation" data-projection-additive-navigation="true">
+                {visibleSources.every((source) => normalizeKnowledgeSourceUrl(source.url)?.kind === 'internal')
+                  ? 'Die Quellen öffnen Studienartikel mit Ergebnissen, Grenzen und Links zu den Originalquellen.'
+                  : 'Hier findest du die verwendeten Quellen. Verlinkte Studienartikel erklären ihre Ergebnisse und Grenzen.'}
+              </p>
               <div
                 id={sourcePanelId}
                 className="src-list"
@@ -962,12 +1146,13 @@ export function KnowledgeMagazineArticle({ article, reviewedDate }: Props) {
                 hidden={!sourceListOpen}
               >
                 <div className="src-list__in">
-                {visibleSources.map((source) => (
+                {visibleSources.map((source, index) => (
                   <div
-                    key={`${source.source_id ?? ''}-${source.url}-${source.label}`}
+                    key={sourceAnchorIds[index]}
+                    id={sourceAnchorIds[index]}
                     data-source-id={source.source_id}
                   >
-                    {renderSourceLink(source)}
+                    {renderSourceLink(source, navigationState)}
                   </div>
                 ))}
                 </div>

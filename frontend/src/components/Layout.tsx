@@ -6,6 +6,7 @@ import LegalDisclaimer from './LegalDisclaimer';
 import AppLogo from './AppLogo';
 import { resetAnalyticsConsentChoice } from '../lib/analytics';
 import { creatorSharingEnabled } from '../api/creatorSharing';
+import { knowledgeNavigationState } from '../lib/knowledgeNavigation';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -54,7 +55,11 @@ export default function Layout({ children }: LayoutProps) {
 
   const navLinks = (
     <>
-      <NavLink to="/wissen" className={navClass} onClick={closeMobile}>Wissen</NavLink>
+      <NavLink to="/wissen" state={knowledgeNavigationState(
+        ['/stacks', '/demo', '/einnahmeplan'].includes(location.pathname)
+          ? { returnTo: `${location.pathname}${location.search}${location.hash}` }
+          : location.state,
+      )} className={navClass} onClick={closeMobile}>Wissen</NavLink>
       <NavLink to="/stacks" className={navClass} onClick={closeMobile}>Meine Stacks</NavLink>
       <NavLink to="/einnahmeplan" className={navClass} onClick={closeMobile}>Einnahmeplan</NavLink>
       {user && <NavLink to="/my-products" className={navClass} onClick={closeMobile}>Eigene Produkte</NavLink>}

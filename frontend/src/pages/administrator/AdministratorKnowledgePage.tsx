@@ -72,6 +72,7 @@ type ArticleDraft = {
   status: string;
   article_layer: AdminKnowledgeArticleLayer;
   reviewed_at: string;
+  update_reason: string;
   sources: AdminKnowledgeArticleSource[];
   conclusion: string;
   featured_image_url: string;
@@ -131,6 +132,7 @@ function emptyDraft(): ArticleDraft {
     status: 'draft',
     article_layer: 'main_article',
     reviewed_at: '',
+    update_reason: '',
     sources: [{ name: '', link: '', sort_order: 0 }],
     conclusion: '',
     featured_image_url: '',
@@ -180,6 +182,7 @@ function articleToDraft(article: AdminKnowledgeArticle): ArticleDraft {
     status: article.status || 'draft',
     article_layer: article.article_layer,
     reviewed_at: toDateInput(article.reviewed_at),
+    update_reason: article.update_reason ?? '',
     sources: article.sources.length > 0
       ? article.sources.map((source, index) => ({
           name: source.name || source.label || '',
@@ -604,6 +607,7 @@ export default function AdministratorKnowledgePage() {
         status: draft.status,
         article_layer: draft.article_layer,
         reviewed_at: draft.reviewed_at || null,
+        update_reason: draft.update_reason.trim() || null,
         sources,
         ingredient_ids: draft.ingredient_ids,
         conclusion: draft.conclusion.trim() || null,
@@ -1189,6 +1193,10 @@ export default function AdministratorKnowledgePage() {
                 />
               </label>
 
+              <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
+                Grund der letzten Aktualisierung (optional, öffentlich sichtbar)
+                <input value={draft.update_reason} maxLength={500} onChange={(event) => updateDraft('update_reason', event.target.value)} className="admin-input mt-1" placeholder="z. B. Schreibfehler korrigiert" />
+              </label>
               <div className="grid gap-3 lg:grid-cols-[1fr_1fr_1fr_1fr]">
                 <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
                   Geprüft am
