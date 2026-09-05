@@ -23,7 +23,14 @@
       {
         "source_id": "src-external",
         "label": "Externe Originalquelle",
-        "url": "https://example.com/study"
+        "url": "https://example.com/study",
+        "internal_articles": [
+          {
+            "slug": "render-contract-study",
+            "title": "Teststudie eingeordnet",
+            "url": "/wissen/render-contract-study"
+          }
+        ]
       },
       {
         "source_id": "src-internal",

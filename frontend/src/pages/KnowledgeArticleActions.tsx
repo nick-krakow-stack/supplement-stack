@@ -47,7 +47,7 @@ export function KnowledgeArticleActions({ slug, title }: { slug: string; title: 
   };
 
   return (
-    <div className="mt-5 space-y-2" aria-label="Artikel teilen und merken">
+    <div className="mt-5 space-y-2" aria-label="Artikel teilen und merken" data-projection-additive-navigation="true">
       <div className="flex flex-wrap gap-2">
         <button type="button" onClick={() => void share()} className={buttonClass}><Share2 size={17} aria-hidden="true" />Teilen</button>
         <button type="button" onClick={() => void copyLink()} className={buttonClass}><Copy size={17} aria-hidden="true" />Link kopieren</button>

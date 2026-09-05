@@ -1195,6 +1195,9 @@ const ROUTE_STATE_EXPRESSION = `(async () => {
   const article = document.querySelector('article[data-testid="knowledge-magazine-article"], article[data-testid="knowledge-study-article"]');
   const layout = article?.querySelector('.layout') ?? null;
   const toc = article?.querySelector('aside[aria-label="Inhaltsverzeichnis"]') ?? null;
+  const tocToggle = toc?.querySelector('.toc-mobile-bar button[aria-controls]') ?? null;
+  const tocPanel = toc?.querySelector('ol[data-knowledge-leaf="toc-list"]') ?? null;
+  const tocTopButton = toc?.querySelector('.toc-mobile-bar button:not([aria-controls])') ?? null;
   const content = article?.querySelector('.content') ?? null;
   const primaryNav = document.querySelector('body > #root nav');
   const mobileMenuButton = primaryNav?.querySelector('button[aria-label="Menü öffnen"], button[aria-label="Menü schließen"]') ?? null;
@@ -1399,7 +1402,8 @@ const ROUTE_STATE_EXPRESSION = `(async () => {
     label: normalizeText(link.textContent),
     href: link.getAttribute('href') ?? '',
   })) : [];
-  const sourceEntries = article ? Array.from(article.querySelectorAll('[data-source-id]')) : [];
+  const sourceEntries = article ? Array.from(article.querySelectorAll('[data-source-id]'))
+    .filter((entry) => !entry.closest('[data-projection-additive-navigation="true"]')) : [];
   const releaseSources = sourceEntries.map((entry, order) => {
     const link = entry.querySelector('a.source-link');
     const labelElement = link?.querySelector('span:last-of-type') ?? entry.querySelector('.source-label') ?? link;
@@ -1461,7 +1465,9 @@ const ROUTE_STATE_EXPRESSION = `(async () => {
       panel_hidden: panel?.hasAttribute('hidden') ?? null,
       panel: inspect(panel),
       relation_back: panel?.getAttribute('aria-labelledby') ?? null,
-      links: panel ? Array.from(panel.querySelectorAll('a')).map((link) => ({ label: normalizeText(link.textContent), href: link.getAttribute('href') ?? '', ...inspect(link) })) : [],
+      links: panel ? Array.from(panel.querySelectorAll('a'))
+        .filter((link) => !link.closest('[data-projection-additive-navigation="true"]'))
+        .map((link) => ({ label: normalizeText(link.textContent), href: link.getAttribute('href') ?? '', ...inspect(link) })) : [],
     };
   }) : [];
   const food = article?.querySelector('[data-knowledge-table-presentation="food_grid"]') ?? null;
@@ -1507,6 +1513,9 @@ const ROUTE_STATE_EXPRESSION = `(async () => {
     ui: uiProjection,
     layout: { ...inspect(layout), grid_template_columns: layout ? getComputedStyle(layout).gridTemplateColumns : '' },
     toc: inspect(toc),
+    toc_toggle: { ...inspect(tocToggle), id: tocToggle?.id ?? null, expanded: tocToggle?.getAttribute('aria-expanded') ?? null, controls: tocToggle?.getAttribute('aria-controls') ?? null },
+    toc_panel: { ...inspect(tocPanel), id: tocPanel?.id ?? null, labelled_by: tocPanel?.getAttribute('aria-labelledby') ?? null },
+    toc_top_button: inspect(tocTopButton),
     content: inspect(content),
     direct_children: directChildren.map((element) => ({ tag: element.tagName.toLowerCase(), id: element.id, ...inspect(element) })),
     toc_links: tocLinks.map((link) => ({ label: normalizeText(link.textContent), href: link.getAttribute('href') ?? '', target_id: (link.getAttribute('href') ?? '').replace(/^#/, ''), ...inspect(link) })),
@@ -1562,6 +1571,21 @@ function exposed(value) {
     && Array.isArray(value?.exposure_chain)
     && value.exposure_chain.length > 0
     && value.exposure_chain.every(exposureEntryIsClear);
+}
+
+export function mobileTocStateMatches(state) {
+  const toggle = state?.toc_toggle;
+  const panel = state?.toc_panel;
+  const topButton = state?.toc_top_button;
+  return exposed(state?.toc) && state.toc.display === 'block' && state.toc.position === 'sticky'
+    && exposed(toggle) && toggle.pointer_events !== 'none' && toggle.rect.height >= 44
+    && exposed(topButton) && topButton.pointer_events !== 'none' && topButton.rect.height >= 44
+    && typeof toggle.id === 'string' && toggle.id.length > 0
+    && toggle.expanded === 'false' && typeof toggle.controls === 'string' && toggle.controls.length > 0
+    && panel?.id === toggle.controls && panel?.labelled_by === toggle.id
+    && panel.hidden === true && !exposed(panel)
+    && state.toc.rect.height <= Math.max(toggle.rect.height, topButton.rect.height) + 24
+    && Array.isArray(state?.toc_links) && state.toc_links.length > 0 && state.toc_links.every((link) => !exposed(link));
 }
 
 function addFailure(checks, errors, id, code, message, expected, actual) {
@@ -1655,11 +1679,11 @@ export function assessHydratedRouteState(state, fixture, viewportName = 'desktop
       && exposed(state?.h1),
     expected, { template: state?.template, ui_contract: state?.ui_contract, h1: state?.h1, ui: state?.ui });
   if (isMobile) {
-    probe('mobile-responsive-layout', 'STYLE_MOBILE_LAYOUT_INVALID', 'Das Magazinlayout ist mobil nicht einspaltig oder das Desktop-TOC bleibt sichtbar.',
+    probe('mobile-responsive-layout', 'STYLE_MOBILE_LAYOUT_INVALID', 'Das mobile Magazinlayout braucht eine kompakte, geschlossene und bedienbare Inhaltsübersicht.',
       exposed(state?.layout) && state.layout.display === 'block' && exposed(state?.content)
-        && state?.toc?.display === 'none' && !exposed(state?.toc),
-      { layout_display: 'block', content_exposed: true, toc_display: 'none' },
-      { layout: state?.layout, toc: state?.toc, content: state?.content });
+        && mobileTocStateMatches(state),
+      { layout_display: 'block', content_exposed: true, toc_display: 'block', toc_position: 'sticky', toc_expanded: false, toc_panel_hidden: true },
+      { layout: state?.layout, toc: state?.toc, toc_toggle: state?.toc_toggle, toc_panel: state?.toc_panel, toc_top_button: state?.toc_top_button, content: state?.content });
     probe('mobile-horizontal-overflow', 'STYLE_MOBILE_HORIZONTAL_OVERFLOW', 'Die Wissensroute erzeugt im kanonischen Mobile-Viewport horizontalen Seitenüberlauf.',
       state?.document_metrics?.horizontal_overflow === false
         && state?.document_metrics?.document_width <= state?.document_metrics?.viewport_width + 1,
@@ -1856,8 +1880,7 @@ function publicResponsiveStateMatches(state, expected, viewportName) {
   }
   return exposed(state?.layout)
     && state.layout.display === 'block'
-    && state?.toc?.display === 'none'
-    && !exposed(state?.toc)
+    && mobileTocStateMatches(state)
     && state?.document_metrics?.horizontal_overflow === false
     && state?.document_metrics?.document_width <= state?.document_metrics?.viewport_width + 1
     && responsiveTables.every((table) => table.presentation === 'data_table'
@@ -1905,7 +1928,7 @@ export function assessPublicRouteState(state, expected, viewportName = 'desktop'
     internal_links: canonicalJsonHash(projectionInternalLinks(projection)) === canonicalJsonHash(projectionInternalLinks(expected.expected_projection)),
     json_ld: state?.seo_diagnostics?.json_ld_parse_error === null
       && canonicalJsonHash(seo?.json_ld) === canonicalJsonHash(expected.expected_seo.json_ld),
-    left_navigation: isMobile ? state?.toc?.display === 'none' && !exposed(state?.toc) : exposed(state?.toc),
+    left_navigation: isMobile ? mobileTocStateMatches(state) : exposed(state?.toc),
     projection: state?.route === expected.expected_projection.route
       && state?.fixture_fetch_count === 0
       && publicApiProjectionMatches(state, expected, releaseHash)
@@ -2646,7 +2669,12 @@ async function runPublicReadbackContract(request) {
           },
           toc: {
             display: viewportResult.route_state.toc?.display ?? null,
+            position: viewportResult.route_state.toc?.position ?? null,
             exposed: exposed(viewportResult.route_state.toc),
+            toggle_exposed: exposed(viewportResult.route_state.toc_toggle),
+            expanded: viewportResult.route_state.toc_toggle?.expanded ?? null,
+            panel_hidden: viewportResult.route_state.toc_panel?.hidden ?? null,
+            compact_mobile: mobileTocStateMatches(viewportResult.route_state),
           },
           controls_exposed: (viewportResult.route_state.controls ?? []).map(exposed),
           images_exposed: (viewportResult.route_state.images ?? []).map(exposed),
@@ -2841,6 +2869,10 @@ function compactViewportRouteContract(state) {
       position: state?.toc?.position ?? null,
       exposed: exposed(state?.toc),
       link_count: state?.toc_links?.length ?? 0,
+      toggle_exposed: exposed(state?.toc_toggle),
+      expanded: state?.toc_toggle?.expanded ?? null,
+      panel_hidden: state?.toc_panel?.hidden ?? null,
+      compact_mobile: mobileTocStateMatches(state),
     },
     mobile_nav_interactions: (state?.mobile_nav_interactions ?? []).map((interaction) => ({
       expected_open: interaction.expected_open,

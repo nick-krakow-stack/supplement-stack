@@ -24,6 +24,7 @@ import {
   deriveIndexabilityState,
   deriveOriginIndexabilityState,
   interpretRobotsTxt,
+  mobileTocStateMatches,
   removeBrowserProfile,
   spawnBrowserProcess,
   startActualRouteServer,
@@ -479,6 +480,33 @@ describe('hydrated knowledge route browser contract', () => {
     expect(styles).toMatch(/\.knowledge-magazine \.sec-head h2 \{[\s\S]*?min-width:\s*0;/);
   });
 
+  it('requires the mobile TOC to stay compact, accessible and collapsed instead of hiding its navigation', () => {
+    const clearExposure = {
+      hidden: false, inert: false, aria_hidden: false, display: 'block', visibility: 'visible', opacity: '1',
+    };
+    const visible = {
+      ...clearExposure, exposed: true, pointer_events: 'auto',
+      rect: { width: 120, height: 44 }, exposure_chain: [clearExposure],
+    };
+    const hidden = { ...visible, hidden: true, display: 'none', exposed: false, rect: { width: 0, height: 0 } };
+    const state = {
+      toc: { ...visible, position: 'sticky', rect: { width: 288, height: 62 } },
+      toc_toggle: { ...visible, id: 'toc-toggle', expanded: 'false', controls: 'toc-panel' },
+      toc_top_button: { ...visible },
+      toc_panel: { ...hidden, id: 'toc-panel', labelled_by: 'toc-toggle' },
+      toc_links: [{ ...hidden }],
+    };
+    expect(mobileTocStateMatches(state)).toBe(true);
+    expect(mobileTocStateMatches({ ...state, toc: { ...state.toc, display: 'none', exposed: false } })).toBe(false);
+    expect(mobileTocStateMatches({ ...state, toc: { ...state.toc, position: 'static' } })).toBe(false);
+    expect(mobileTocStateMatches({ ...state, toc_toggle: { ...state.toc_toggle, expanded: 'true' } })).toBe(false);
+    expect(mobileTocStateMatches({ ...state, toc_toggle: { ...state.toc_toggle, controls: 'wrong-panel' } })).toBe(false);
+    expect(mobileTocStateMatches({ ...state, toc_top_button: { ...visible, pointer_events: 'none' } })).toBe(false);
+    expect(mobileTocStateMatches({ ...state, toc_panel: { ...state.toc_panel, hidden: false } })).toBe(false);
+    expect(mobileTocStateMatches({ ...state, toc_links: [{ ...visible }] })).toBe(false);
+    expect(mobileTocStateMatches({ ...state, toc: { ...state.toc, rect: { width: 288, height: 200 } } })).toBe(false);
+  });
+
   it('hydrates the real App/Layout/KnowledgeArticlePage route and proves interactions, leaves, images and food tuples', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'knowledge-route-browser-'));
     try {
@@ -514,7 +542,10 @@ describe('hydrated knowledge route browser contract', () => {
         viewport: { width: 390, height: 844, device_scale_factor: 1 },
         document_metrics: { viewport_width: 390, horizontal_overflow: false },
       });
-      expect(receipt.viewports.mobile.route_contract.toc.display).toBe('none');
+      expect(receipt.viewports.mobile.route_contract.toc).toMatchObject({
+        display: 'block', position: 'sticky', exposed: true, toggle_exposed: true,
+        expanded: 'false', panel_hidden: true, compact_mobile: true,
+      });
       expect(receipt.viewports.mobile.route_contract.mobile_nav_interactions).toHaveLength(2);
       expect(receipt.viewports.mobile.route_contract.mobile_nav_interactions.every((interaction: { trusted_click: boolean }) => interaction.trusted_click)).toBe(true);
       expect(receipt.viewports.mobile.route_contract.pointer_interactions).toHaveLength(2);
@@ -538,6 +569,14 @@ describe('hydrated knowledge route browser contract', () => {
         rows: hashes.fixture.expected.food_rows,
       });
       expect(receipt.route_contract.projection).toEqual(hashes.fixture.expected.projection);
+      expect(receipt.route_contract.semantic_leaves).toEqual(expect.arrayContaining([
+        expect.objectContaining({ leaf: 'internal-article-link', text: 'StudienartikelExterne Originalquelle' }),
+      ]));
+      expect(receipt.route_contract.projection.links.map((link: { href: string }) => link.href))
+        .not.toContain('/wissen/render-contract-study');
+      expect(receipt.route_contract.release_projection.sources).toEqual(hashes.fixture.expected.release_projection.sources);
+      expect(receipt.route_contract.disclosures.at(-1).links.map((link: { href: string }) => link.href))
+        .toEqual(hashes.fixture.article.sources.map((source: { url: string }) => source.url));
       expect(receipt.route_contract.pointer_interactions).toHaveLength(2);
       expect(receipt.route_contract.pointer_interactions.every((interaction: {
         dispatched_via: string;
@@ -1159,7 +1198,10 @@ describe('hydrated knowledge route browser contract', () => {
       expect(receipt.article_results[1].viewports.mobile.responsive_diagnostics).toMatchObject({
         document_metrics: { horizontal_overflow: false },
         layout: { display: 'block', exposed: true },
-        toc: { display: 'none', exposed: false },
+        toc: {
+          display: 'block', position: 'sticky', exposed: true, toggle_exposed: true,
+          expanded: 'false', panel_hidden: true, compact_mobile: true,
+        },
       });
       expect(routeServer.request_log.filter((entry) => entry === '/robots.txt')).toHaveLength(1);
       expect(routeServer.request_log.filter((entry) => entry === '/sitemap.xml')).toHaveLength(1);
