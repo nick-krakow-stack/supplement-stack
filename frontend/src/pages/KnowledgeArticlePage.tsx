@@ -563,7 +563,7 @@ export default function KnowledgeArticlePage() {
               <span className="sr-only" data-knowledge-ui="sources-count">
                 {visibleSources.length} {visibleSources.length === 1 ? 'Quelle' : 'Quellen'}
               </span>
-              <p className="mt-2 text-sm text-slate-600">{visibleSources.length} {visibleSources.length === 1 ? 'Originalquelle bildet' : 'Originalquellen bilden'} die Grundlage dieses Artikels. Dort findest du die genauen Ergebnisse und Grenzen.</p>
+              <p data-projection-additive-navigation="true" className="mt-2 text-sm text-slate-600">{visibleSources.length} {visibleSources.length === 1 ? 'Originalquelle bildet' : 'Originalquellen bilden'} die Grundlage dieses Artikels. Dort findest du die genauen Ergebnisse und Grenzen.</p>
               <ul className="mt-4 space-y-3">
                 {visibleSources.map((source, index) => {
                   const normalizedUrl = normalizeKnowledgeSourceUrl(source.url);
