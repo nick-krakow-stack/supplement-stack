@@ -402,6 +402,11 @@ Die ursprünglichen Sterne/Befunde dokumentieren weiterhin die Audit-Ausgangslag
 
 ## 15. Copy-Register: verbindliche einfache Sprache
 
+Die ersten acht Zeilen sind am 6. September 2026 abgeschlossen und produktiv
+geprüft (PR #27, Deployment `34061348653`). Details und Nachweise:
+[`umsetzung_copy_register_01_08.md`](umsetzung_copy_register_01_08.md).
+Die übrigen Registerzeilen gehören nicht zu diesem Umsetzungsauftrag.
+
 Die Tabelle deckt alle wiederkehrenden oder konkret problematischen
 Oberflächentexte ab. Nicht aufgeführte dynamische Produkt-, Creator- und
 Artikelinhalte werden nicht frei umgeschrieben, sondern müssen aus ihrer
@@ -410,14 +415,14 @@ vor Veröffentlichung weiterhin den jeweils vorgeschriebenen Fach-/Claim-Review.
 
 | Erledigt | Aktuell | Zieltext beziehungsweise Regel |
 |---|---|---|
-| [ ] | „Menü öffnen“ in beiden Zuständen | „Menü öffnen“ / „Menü schließen“ passend zum Zustand. |
-| [ ] | E-Mail-Adresse als alleiniger Profil-Link | Sichtbar „Mein Profil“, Adresse nur ergänzend/gekürzt. |
-| [ ] | „Laden...“ | Vorgang benennen: „Deine Stacks werden geladen …“, „Artikel wird geladen …“. |
-| [ ] | „Unbekannter Fehler“ | „[Vorgang] hat gerade nicht geklappt. Bitte versuche es erneut.“ plus Retry. |
-| [ ] | Gesundheitsfooter mit „konsultiere“ und führendem `*` | „Diese Inhalte dienen nur zur Orientierung und ersetzen keine medizinische Beratung. Bei Fragen sprich bitte mit ärztlichem oder pharmazeutischem Fachpersonal. Nahrungsergänzungsmittel ersetzen keine ausgewogene Ernährung.“ Kein unreferenziertes Sternchen. |
-| [ ] | „Analytics-Einwilligung“ | „Optionale Nutzungsanalyse“; ergänzen: „Die App funktioniert auch, wenn du ablehnst.“ |
-| [ ] | „DGE · EFSA · NIH Quellen“ | „Quellen: DGE, EFSA und NIH“. |
-| [ ] | „Preis-pro-Portion Vergleich“ | „Kosten pro Einnahme im Vergleich“. |
+| [x] | „Menü öffnen“ in beiden Zuständen | „Menü öffnen“ / „Menü schließen“ passend zum Zustand. |
+| [x] | E-Mail-Adresse als alleiniger Profil-Link | Sichtbar „Mein Profil“, Adresse nur ergänzend/gekürzt. |
+| [x] | „Laden...“ | Vorgang benennen: „Deine Stacks werden geladen …“, „Artikel wird geladen …“. |
+| [x] | „Unbekannter Fehler“ | „[Vorgang] hat gerade nicht geklappt. Bitte versuche es erneut.“ plus Retry. |
+| [x] | Gesundheitsfooter mit „konsultiere“ und führendem `*` | „Diese Inhalte dienen nur zur Orientierung und ersetzen keine medizinische Beratung. Bei Fragen sprich bitte mit ärztlichem oder pharmazeutischem Fachpersonal. Nahrungsergänzungsmittel ersetzen keine ausgewogene Ernährung.“ Kein unreferenziertes Sternchen. |
+| [x] | „Analytics-Einwilligung“ | „Optionale Nutzungsanalyse“; ergänzen: „Die App funktioniert auch, wenn du ablehnst.“ |
+| [x] | „DGE · EFSA · NIH Quellen“ | „Quellen: DGE, EFSA und NIH“. |
+| [x] | „Preis-pro-Portion Vergleich“ | „Kosten pro Einnahme im Vergleich“. |
 | [ ] | „Kostenlos & ohne Konto nutzbar“ | „Demo ohne Konto ausprobieren“. |
 | [ ] | „vollständig ausprobieren“, „Alles nutzbar“, „ohne Risiko“ | „Teste Suche, Stack-Aufbau und Kostenübersicht. Speichern, E-Mail und eigene Produkte gibt es nach kostenloser Anmeldung.“ |
 | [ ] | „neueste Erkenntnisse“ | „Wissensartikel mit Quellen und Prüfdatum“, solange Aktualität nicht anderweitig garantiert wird. |
