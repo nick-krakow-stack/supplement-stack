@@ -177,7 +177,6 @@ export default function Layout({ children }: LayoutProps) {
             Cookie-Einstellungen
           </button>
         </nav>
-        <p className="text-xs font-semibold text-slate-500">Rechtstexte: Stand 16. August 2026</p>
         <LegalDisclaimer variant="affiliate" />
         <LegalDisclaimer variant="health" />
       </footer>

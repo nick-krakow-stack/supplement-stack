@@ -1,9 +1,12 @@
-import { Navigate, Route, Routes, Link, useLocation } from 'react-router-dom';
-import { lazy, Suspense, useEffect } from 'react';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { lazy, Suspense } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import Layout from './components/Layout';
 import ProtectedRoute from './components/ProtectedRoute';
 import CookieConsentBanner from './components/CookieConsentBanner';
+import RouteMetadata from './components/RouteMetadata';
+import NotFoundPage from './pages/NotFoundPage';
+import './components/LegalDocument.css';
 
 const LandingPage = lazy(() => import('./pages/LandingPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
@@ -51,26 +54,6 @@ const AdministratorManagementPage = lazy(() => import('./pages/administrator/Adm
 const AdministratorResearchPage = lazy(() => import('./pages/administrator/AdministratorResearchPage'));
 const AdministratorCreatorSharingPage = lazy(() => import('./pages/administrator/AdministratorCreatorSharingPage'));
 
-function NotFoundPage() {
-  return (
-    <div className="min-h-[60vh] flex items-center justify-center px-6">
-      <div className="text-center">
-        <p className="text-6xl font-bold text-indigo-200 mb-4">404</p>
-        <h1 className="text-2xl font-semibold text-slate-800 mb-2">Seite nicht gefunden</h1>
-        <p className="text-slate-500 mb-8">
-          Die aufgerufene Seite existiert nicht oder wurde verschoben.
-        </p>
-        <Link
-          to="/"
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 transition-colors"
-        >
-          Zurück zur Startseite
-        </Link>
-      </div>
-    </div>
-  );
-}
-
 function RouteLoadingFallback() {
   const location = useLocation();
   if (location.pathname === '/wissen') return null;
@@ -81,41 +64,6 @@ function RouteLoadingFallback() {
       </div>
     </div>
   );
-}
-
-const routeTitles: Record<string, string> = {
-  '/': 'Supplement Stack – quellenbasiert planen und vergleichen',
-  '/login': 'Anmelden | Supplement Stack',
-  '/register': 'Kostenlos registrieren | Supplement Stack',
-  '/profile': 'Mein Profil | Supplement Stack',
-  '/stacks': 'Meine Stacks | Supplement Stack',
-  '/demo': 'Kostenlose Demo | Supplement Stack',
-  '/creator': 'Creator-Bereich | Supplement Stack',
-  '/einnahmeplan': 'Einnahmeplan | Supplement Stack',
-  '/my-products': 'Eigene Produkte | Supplement Stack',
-  '/forgot-password': 'Passwort zurücksetzen | Supplement Stack',
-  '/reset-password': 'Neues Passwort | Supplement Stack',
-  '/verify-email': 'E-Mail bestätigen | Supplement Stack',
-  '/impressum': 'Impressum | Supplement Stack',
-  '/datenschutz': 'Datenschutz | Supplement Stack',
-  '/nutzungsbedingungen': 'Nutzungsbedingungen | Supplement Stack',
-  '/agb': 'Nutzungsbedingungen | Supplement Stack',
-  '/wissen': 'Wissen zu Nahrungsergänzung | Supplement Stack',
-};
-
-function RouteMetadata() {
-  const location = useLocation();
-
-  useEffect(() => {
-    if (location.pathname.startsWith('/administrator')) return;
-    const title = routeTitles[location.pathname]
-      ?? (location.pathname.startsWith('/wissen/') ? 'Wissensartikel | Supplement Stack' : null)
-      ?? (location.pathname.startsWith('/share/') ? 'Geteilte Empfehlung | Supplement Stack' : null)
-      ?? 'Seite nicht gefunden | Supplement Stack';
-    document.title = title;
-  }, [location.pathname]);
-
-  return null;
 }
 
 function RoutinePageRoute() {
@@ -222,7 +170,7 @@ export default function App() {
                   <Route path="/impressum" element={<ImprintPage />} />
                   <Route path="/datenschutz" element={<PrivacyPage />} />
                   <Route path="/nutzungsbedingungen" element={<TermsPage />} />
-                  <Route path="/agb" element={<TermsPage />} />
+                  <Route path="/agb" element={<Navigate to="/nutzungsbedingungen" replace />} />
                   <Route path="/wissen" element={<KnowledgeOverviewPage />} />
                   <Route path="/wissen/:slug" element={<KnowledgeArticlePage />} />
                   <Route path="/share/:token" element={<CreatorShareImportPage />} />

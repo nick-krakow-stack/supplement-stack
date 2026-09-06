@@ -62,3 +62,5 @@ jobs:
       - run: node --check scripts/user-browser-smoke.mjs
       - name: Verify guarded legacy article corrections
         run: node --test scripts/article-legacy-field-correction.test.mjs scripts/article-authoritative-correction.test.mjs
+      - name: Verify guarded central legal document migration
+        run: node --test scripts/legal-documents-migration.test.mjs
