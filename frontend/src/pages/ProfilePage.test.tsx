@@ -8,7 +8,7 @@ import {
   updateMe,
 } from '../api/auth';
 import { useAuth } from '../contexts/AuthContext';
-import { readStoredAnalyticsConsent } from '../lib/analytics';
+import { initializeAnalytics, persistAnalyticsConsent, readStoredAnalyticsConsent, revokeAnalyticsConsent } from '../lib/analytics';
 import ProfilePage from './ProfilePage';
 
 vi.mock('../contexts/AuthContext', () => ({ useAuth: vi.fn() }));
@@ -120,5 +120,25 @@ describe('ProfilePage preferences and privacy controls', () => {
     expect(click).toHaveBeenCalledTimes(1);
     expect(await screen.findByText('Deine Datendatei wurde erstellt und heruntergeladen.')).toBeTruthy();
     click.mockRestore();
+  });
+
+  it('explains optional analysis without changing acceptance or revocation', () => {
+    renderProfile();
+    expect(screen.getByRole('group', { name: 'Optionale Nutzungsanalyse' })).toBeTruthy();
+    expect(screen.getByText(/Die App funktioniert auch, wenn du ablehnst\./)).toBeTruthy();
+    expect(screen.queryByText('Freiwillige Nutzungsstatistik')).toBeNull();
+    expect(initializeAnalytics).not.toHaveBeenCalled();
+    expect(persistAnalyticsConsent).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Zulassen' }));
+    expect(persistAnalyticsConsent).toHaveBeenLastCalledWith('accepted');
+    expect(initializeAnalytics).toHaveBeenCalledTimes(1);
+    expect((screen.getByRole('radio', { name: 'Zulassen' }) as HTMLInputElement).checked).toBe(true);
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Nicht zulassen' }));
+    expect(persistAnalyticsConsent).toHaveBeenLastCalledWith('declined');
+    expect(revokeAnalyticsConsent).toHaveBeenCalledTimes(1);
+    expect((screen.getByRole('radio', { name: 'Nicht zulassen' }) as HTMLInputElement).checked).toBe(true);
+    expect(initializeAnalytics).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,8 +1,11 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { MemoryRouter } from 'react-router-dom';
 
-import { buildTrustStats, FeaturesSection, TrustSection } from './LandingPage';
+import LandingPage, { buildTrustStats, FeaturesSection, TrustSection } from './LandingPage';
+
+vi.mock('../contexts/AuthContext', () => ({ useAuth: () => ({ user: null }) }));
 
 describe('LandingPage trust statistics', () => {
   afterEach(() => {
@@ -74,5 +77,15 @@ describe('LandingPage trust statistics', () => {
     expect(screen.getByText(/Filtere selbst.*Vergleiche.*entscheide selbst/i)).toBeTruthy();
     expect(screen.queryByText('Passende Produktauswahl')).toBeNull();
     expect(screen.queryByText('Automatisch gefiltert')).toBeNull();
+  });
+
+  it('uses the same source and cost labels in hero chips and feature cards', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }));
+    const { container } = render(<MemoryRouter><LandingPage /></MemoryRouter>);
+    expect(screen.getAllByText('Quellen: DGE, EFSA und NIH')).toHaveLength(2);
+    expect(screen.getAllByText('Kosten pro Einnahme im Vergleich')).toHaveLength(2);
+    expect(screen.getByText(/Vergleiche Produkte anhand der Kosten pro Einnahme/)).toBeTruthy();
+    expect(container.textContent).not.toMatch(/Preis[- ]pro[- ]Portion|Preises pro Portion|DGE · EFSA · NIH/);
+    await screen.findByRole('button', { name: 'Erneut laden' });
   });
 });

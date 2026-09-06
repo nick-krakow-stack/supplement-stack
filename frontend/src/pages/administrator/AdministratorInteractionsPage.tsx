@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, LayoutGrid, List, Plus, Trash2 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { AdminBadge, AdminButton, AdminCard, AdminEmpty, AdminError } from './AdminUi';
+import { operationErrorMessage } from '../../lib/operationError';
 
 type PartnerType = 'ingredient' | 'food' | 'medication' | 'condition';
 type InteractionSeverity = 'info' | 'medium' | 'high' | 'danger';
@@ -204,6 +205,7 @@ export default function AdministratorInteractionsPage() {
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [error, setError] = useState('');
+  const [loadFailed, setLoadFailed] = useState(false);
 
   const [ingredientId, setIngredientId] = useState('');
   const [partnerType, setPartnerType] = useState<PartnerType>('ingredient');
@@ -242,6 +244,7 @@ export default function AdministratorInteractionsPage() {
   const loadInteractions = useCallback(async () => {
     setLoading(true);
     setError('');
+    setLoadFailed(false);
     try {
       const res = await fetch('/api/interactions', {
         credentials: 'include',
@@ -257,7 +260,8 @@ export default function AdministratorInteractionsPage() {
         .filter((entry): entry is Interaction => entry !== null);
       setInteractions(parsed);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Unbekannter Fehler.');
+      setLoadFailed(true);
+      setError(operationErrorMessage(err, 'Das Laden der Wechselwirkungen hat gerade nicht geklappt. Bitte versuche es erneut.'));
     } finally {
       setLoading(false);
     }
@@ -535,7 +539,7 @@ export default function AdministratorInteractionsPage() {
       resetForm();
       await loadInteractions();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Unbekannter Fehler.');
+      setError(operationErrorMessage(err, 'Das Speichern der Wechselwirkung hat gerade nicht geklappt. Bitte versuche es erneut.'));
     } finally {
       setSaving(false);
     }
@@ -563,7 +567,7 @@ export default function AdministratorInteractionsPage() {
       }
       setInteractions((prev) => prev.filter((item) => item.id !== id));
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Unbekannter Fehler.');
+      setError(operationErrorMessage(err, 'Das Löschen der Wechselwirkung hat gerade nicht geklappt. Bitte versuche es erneut.'));
     } finally {
       setDeletingId(null);
     }
@@ -757,7 +761,7 @@ export default function AdministratorInteractionsPage() {
       </AdminCard>
       ) : null}
 
-      {error && <AdminError>{error}</AdminError>}
+      {error && <AdminError><div role="alert">{error}</div>{loadFailed && <AdminButton onClick={() => void loadInteractions()} disabled={loading} className="mt-2">Übersicht erneut laden</AdminButton>}</AdminError>}
 
       <AdminCard title="Übersicht" className="admin-compact-card mb-5" subtitle="Wechselwirkungen prüfen, filtern und bearbeiten.">
         <div className="admin-filter-bar mb-3">
@@ -857,8 +861,8 @@ export default function AdministratorInteractionsPage() {
         </div>
 
         {loading ? (
-          <AdminEmpty>Laden...</AdminEmpty>
-        ) : filteredInteractions.length === 0 ? (
+          <AdminEmpty><span role="status">Wechselwirkungen werden geladen …</span></AdminEmpty>
+        ) : loadFailed ? null : filteredInteractions.length === 0 ? (
           <AdminEmpty>Keine Einträge für die aktuelle Filterung.</AdminEmpty>
         ) : viewMode === 'matrix' ? (
           <>

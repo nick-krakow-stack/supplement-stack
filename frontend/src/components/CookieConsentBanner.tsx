@@ -53,10 +53,10 @@ export default function CookieConsentBanner() {
         aria-labelledby="analytics-consent-title"
       >
         <div className="min-w-0 space-y-1">
-          <h2 ref={titleRef} id="analytics-consent-title" tabIndex={-1} className="text-base font-extrabold text-slate-900">Nutzungsstatistik</h2>
+          <h2 ref={titleRef} id="analytics-consent-title" tabIndex={-1} className="text-base font-extrabold text-slate-900">Optionale Nutzungsanalyse</h2>
           <p className="text-sm leading-relaxed text-slate-600">
             Mit deiner Zustimmung erfassen wir, welche Seiten genutzt werden. So können wir die App verbessern.
-            Ohne Zustimmung wird diese Statistik nicht geladen.
+            Ohne Zustimmung wird diese Statistik nicht geladen. Die App funktioniert auch, wenn du ablehnst.
             {' '}
             <Link to="/datenschutz" className="font-bold text-blue-700 underline-offset-4 hover:underline">
               Datenschutz

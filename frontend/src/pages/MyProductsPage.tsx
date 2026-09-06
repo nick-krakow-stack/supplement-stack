@@ -414,7 +414,7 @@ export default function MyProductsPage() {
         )}
 
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          {loading && <div className="divide-y divide-slate-100"><SkeletonRow /><SkeletonRow /><SkeletonRow /></div>}
+          {loading && <div><p className="px-6 py-4 text-sm text-slate-600" role="status">Deine Produkte werden geladen …</p><div className="divide-y divide-slate-100" aria-hidden="true"><SkeletonRow /><SkeletonRow /><SkeletonRow /></div></div>}
           {!loading && !error && products.length === 0 && (
             <div className="px-6 py-16 text-center">
               <h2 className="text-lg font-bold text-slate-900">Noch keine eigenen Produkte</h2>

@@ -23,6 +23,23 @@ describe('UserProductForm sub-ingredient roundtrip', () => {
     vi.clearAllMocks();
   });
 
+  it('keeps product inputs after an unknown save failure and retries only through the existing guarded submit', async () => {
+    const product = { id: 7, version: 1, name: 'Mein Produkt', brand: 'Meine Marke', form: 'Kapsel', price: 20, serving_size: 1, serving_unit: 'Kapsel', servings_per_container: 60, container_count: 1, status: 'pending' as const, ingredients: [{ ingredient_id: 10, ingredient_name: 'Magnesium', quantity: 100, unit: 'mg', basis_quantity: 1, basis_unit: 'Kapsel', search_relevant: 1, parts: [] }] };
+    const fetchMock = vi.fn().mockRejectedValueOnce(null).mockResolvedValueOnce({ ok: true, json: async () => ({ product: { ...product, version: 2 } }) });
+    vi.stubGlobal('fetch', fetchMock);
+    const onSaved = vi.fn();
+    render(<UserProductForm onClose={() => undefined} onSaved={onSaved} initialProduct={product} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Änderungen speichern' }));
+    expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Das Speichern deines Produkts hat gerade nicht geklappt. Bitte versuche es erneut.');
+    expect(screen.getByDisplayValue('Mein Produkt')).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(onSaved).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Änderungen speichern' }));
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(expect.objectContaining({ version: 2 })));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    for (const call of fetchMock.mock.calls) expect(JSON.parse(String((call[1] as RequestInit).body)).expected_version).toBe(1);
+  });
+
   it('keeps sub-ingredients nested under their parent on save', async () => {
     const fetchMock = vi.fn().mockImplementation(async (_url: string, init?: RequestInit) => {
       const request = JSON.parse(String(init?.body));

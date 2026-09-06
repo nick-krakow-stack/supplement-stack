@@ -99,7 +99,7 @@ function HeroSection({ isLoggedIn }: { isLoggedIn: boolean }) {
         <div className="flex flex-wrap justify-center gap-3">
           {[
             { icon: <FlaskConical size={14} />, label: 'Quellen: DGE, EFSA und NIH' },
-            { icon: <TrendingDown size={14} />, label: 'Preis-pro-Portion-Vergleich' },
+            { icon: <TrendingDown size={14} />, label: 'Kosten pro Einnahme im Vergleich' },
             { icon: <Shield size={14} />, label: 'Demo ohne Konto · dauerhaft speichern mit kostenlosem Konto' },
             { icon: <BarChart3 size={14} />, label: 'Monatliche Kostenübersicht' },
           ].map(({ icon, label }) => (
@@ -187,15 +187,15 @@ const features = [
     title: 'Quellenbasierte Richtwerte',
     description:
       'Die Auswertung orientiert sich an veröffentlichten Datenquellen wie der Deutschen Gesellschaft für Ernährung (DGE), der European Food Safety Authority (EFSA) und den National Institutes of Health (NIH). Sie ist als Orientierung gedacht.',
-    tag: 'DGE · EFSA · NIH',
+    tag: 'Quellen: DGE, EFSA und NIH',
     tagColor: 'bg-indigo-50 text-indigo-600',
   },
   {
     icon: <TrendingDown size={24} className="text-emerald-500" />,
     title: 'Transparenter Kostenvergleich',
     description:
-      'Vergleiche Produkte anhand des Preises pro Portion – nicht nur anhand des Packungspreises. So siehst du sofort die monatlichen Gesamtkosten deines Stacks.',
-    tag: 'Preis pro Portion',
+      'Vergleiche Produkte anhand der Kosten pro Einnahme – nicht nur anhand des Packungspreises. So siehst du sofort die monatlichen Gesamtkosten deines Stacks.',
+    tag: 'Kosten pro Einnahme im Vergleich',
     tagColor: 'bg-emerald-50 text-emerald-600',
   },
   {

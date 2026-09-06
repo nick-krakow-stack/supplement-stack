@@ -78,6 +78,11 @@ const products = [
 ];
 
 describe('MyProductsPage', () => {
+  it('names the product read while skeleton rows are visible', () => {
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => undefined)));
+    render(<MemoryRouter><MyProductsPage /></MemoryRouter>);
+    expect(screen.getByRole('status').textContent).toBe('Deine Produkte werden geladen …');
+  });
   afterEach(() => {
     cleanup();
     vi.unstubAllGlobals();
