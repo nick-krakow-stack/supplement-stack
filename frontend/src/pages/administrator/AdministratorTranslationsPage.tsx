@@ -896,7 +896,7 @@ export default function AdministratorTranslationsPage() {
         {loading ? (
           <AdminEmpty>
             <Loader2 size={16} className="mr-2 inline animate-spin" />
-            Lade...
+            Übersetzungen werden geladen …
           </AdminEmpty>
         ) : visibleRows.length === 0 ? (
           <AdminEmpty>{config.emptyLabel}</AdminEmpty>

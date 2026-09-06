@@ -7,12 +7,11 @@ export default function LegalDisclaimer({ variant }: Props) {
     return (
       <details className="text-sm leading-relaxed text-slate-500">
         <summary className="min-h-11 cursor-pointer py-2 font-semibold text-slate-600">
-          Die Inhalte dienen nur der allgemeinen Orientierung und ersetzen keine medizinische Beratung. Warum dieser Hinweis?
+          Diese Inhalte dienen nur zur Orientierung und ersetzen keine medizinische Beratung.
         </summary>
         <p className="pb-1 pl-1">
-          Nahrungserg&auml;nzungsmittel ersetzen weder eine ausgewogene Ern&auml;hrung noch eine Diagnose
-          oder Behandlung. Bitte wende dich bei gesundheitlichen Fragen oder Unsicherheiten an
-          medizinisches Fachpersonal.
+          Bei Fragen sprich bitte mit ärztlichem oder pharmazeutischem Fachpersonal.
+          Nahrungsergänzungsmittel ersetzen keine ausgewogene Ernährung.
         </p>
       </details>
     );

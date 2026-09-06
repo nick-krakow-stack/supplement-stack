@@ -213,7 +213,7 @@ export default function AdministratorShell() {
   if (loading) {
     return (
       <div className="admin-app min-h-screen flex items-center justify-center">
-        <div className="admin-muted">Lade Administrator-Oberflaeche...</div>
+        <div className="admin-muted" role="status">Der Admin-Bereich wird geladen …</div>
       </div>
     );
   }

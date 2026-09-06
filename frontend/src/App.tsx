@@ -6,6 +6,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import CookieConsentBanner from './components/CookieConsentBanner';
 import RouteMetadata from './components/RouteMetadata';
 import NotFoundPage from './pages/NotFoundPage';
+import { routeLoadingText } from './lib/routeLoadingText';
 import './components/LegalDocument.css';
 
 const LandingPage = lazy(() => import('./pages/LandingPage'));
@@ -60,7 +61,7 @@ function RouteLoadingFallback() {
   return (
     <div className="min-h-[40vh] flex items-center justify-center px-6">
       <div className="text-sm font-semibold text-slate-600" role="status" aria-live="polite">
-        Die Seite wird geladen …
+        {routeLoadingText(location.pathname)}
       </div>
     </div>
   );

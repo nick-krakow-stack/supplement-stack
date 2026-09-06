@@ -302,7 +302,7 @@ export default function ProfilePage() {
           <ShieldCheck className="mt-1 h-6 w-6 shrink-0 text-blue-700" aria-hidden="true" />
           <div>
             <h2 id="privacy-heading">Daten und Einwilligungen</h2>
-            <p className="mt-1 text-sm leading-6 text-slate-600">Hier kannst du deine gespeicherten Daten herunterladen und freiwillige Nutzungsstatistik verwalten.</p>
+            <p className="mt-1 text-sm leading-6 text-slate-600">Hier kannst du deine gespeicherten Daten herunterladen und die optionale Nutzungsanalyse verwalten.</p>
           </div>
         </div>
 
@@ -315,8 +315,8 @@ export default function ProfilePage() {
         </div>
 
         <fieldset className="mt-4 rounded-xl border border-slate-200 p-4">
-          <legend className="px-1 font-bold text-slate-900">Freiwillige Nutzungsstatistik</legend>
-          <p className="mb-3 text-sm leading-6 text-slate-600">Hilft uns zu verstehen, welche Seiten genutzt werden. Deine Stack- und Produktinhalte werden dafür nicht als Statistik-Inhalt übertragen.</p>
+          <legend className="px-1 font-bold text-slate-900">Optionale Nutzungsanalyse</legend>
+          <p className="mb-3 text-sm leading-6 text-slate-600">Hilft uns zu verstehen, welche Seiten genutzt werden. Deine Stack- und Produktinhalte werden dafür nicht als Statistik-Inhalt übertragen. Die App funktioniert auch, wenn du ablehnst.</p>
           <div className="flex flex-wrap gap-3">
             <label className="flex min-h-11 cursor-pointer items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold">
               <input type="radio" name="analytics-consent" checked={analyticsConsent === 'accepted'} onChange={() => changeAnalyticsConsent('accepted')} /> Zulassen

@@ -5,6 +5,7 @@ import ImageCropModal from '../ImageCropModal';
 import SearchBar from '../SearchBar';
 import { Camera, ChevronDown, ChevronUp, Info, Plus, X } from 'lucide-react';
 import { getIngredient, getIngredientParts } from '../../api/ingredients';
+import { operationErrorMessage } from '../../lib/operationError';
 import type {
   Ingredient,
   IngredientPartAmount,
@@ -985,7 +986,7 @@ export default function UserProductForm({ onClose, onSaved, initialProduct, copy
       if (!isEdit && draftKey) window.localStorage.removeItem(draftKey);
       onSaved(saved);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Unbekannter Fehler.';
+      const message = operationErrorMessage(err, 'Das Speichern deines Produkts hat gerade nicht geklappt. Bitte versuche es erneut.');
       setError(message);
       if (message.includes('Wirkstoff') || message.includes('Menge') || message.includes('Bezugs') || message.includes('ingredient')) {
         setShowIngredientSection(true);

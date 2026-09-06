@@ -1018,7 +1018,7 @@ function TaskModal({
       {error && <AdminError>{error}</AdminError>}
       {message && <p className="admin-muted text-xs">{message}</p>}
       {loading ? (
-        <AdminEmpty>Lade Daten...</AdminEmpty>
+        <AdminEmpty>Die Angaben zu {ingredient.name} werden geladen …</AdminEmpty>
       ) : (
         <>
           {task !== 'forms' && (
