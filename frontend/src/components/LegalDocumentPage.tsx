@@ -1,95 +1,87 @@
-import { type ReactNode, useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Link, useLocation, useNavigationType } from 'react-router-dom';
+import { legalDocumentVersionText, renderLegalMarkdown } from '../../../functions/lib/legal-document-renderer.mjs';
+import { loadLegalDocument, readLegalDocumentBootstrap, type LegalDocumentState, type LegalSlug } from '../lib/legalDocumentClient';
+import { setPublicPageHead } from '../lib/publicPageHead';
 
-type LegalDocument = {
-  slug: string;
-  title: string;
-  body_md: string;
-  updated_at: string | null;
-};
+type Props = { slug: LegalSlug; title: string };
 
-type Props = {
-  slug: string;
-  eyebrow: string;
-  title: string;
-  children: ReactNode;
-};
+function LegalDocumentContent({ slug, title }: Props) {
+  const bootstrap = useRef(readLegalDocumentBootstrap(slug));
+  const [state, setState] = useState<LegalDocumentState>(() => bootstrap.current ?? { status: 'loading' });
+  const [attempt, setAttempt] = useState(0);
+  const location = useLocation();
+  const navigationType = useNavigationType();
 
-function markdownBlocks(markdown: string) {
-  return markdown
-    .replace(/\r\n/g, '\n')
-    .split(/\n{2,}/)
-    .map((block) => block.trim())
-    .filter(Boolean);
-}
+  useEffect(() => {
+    // The initial server projection is already the published source, not a cache to refresh.
+    if (attempt === 0 && bootstrap.current) return;
+    const controller = new AbortController();
+    let active = true;
+    setState({ status: 'loading' });
+    void loadLegalDocument(slug, controller.signal).then((next) => {
+      if (active) setState(next);
+    });
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [slug, attempt]);
 
-function renderBlock(block: string, index: number) {
-  if (block.startsWith('### ')) {
-    return <h3 key={index} className="mt-6 text-lg font-black text-slate-900">{block.slice(4).trim()}</h3>;
-  }
+  useLayoutEffect(() => {
+    document.getElementById('legal-prerender')?.remove();
+    document.getElementById('legal-document-bootstrap')?.remove();
+  }, []);
 
-  if (block.startsWith('## ')) {
-    return <h2 key={index} className="mt-8 text-xl font-black text-slate-900">{block.slice(3).trim()}</h2>;
-  }
+  useLayoutEffect(() => {
+    if (navigationType !== 'POP' && !location.hash) window.scrollTo(0, 0);
+  }, [navigationType, location.hash]);
 
-  if (block.startsWith('# ')) {
-    return <h2 key={index} className="mt-8 text-xl font-black text-slate-900">{block.slice(2).trim()}</h2>;
-  }
+  useLayoutEffect(() => {
+    setPublicPageHead({
+      title: `${state.status === 'ready' ? state.document.title : title} | Supplement Stack`,
+      robots: state.status === 'ready' ? 'index,follow' : 'noindex,nofollow',
+      canonicalPath: state.status === 'ready' ? `/${slug}` : null,
+    });
+  }, [slug, state, title]);
 
-  const lines = block.split('\n').map((line) => line.trim()).filter(Boolean);
-  if (lines.length > 1 && lines.every((line) => line.startsWith('- '))) {
+  if (state.status !== 'ready') {
     return (
-      <ul key={index} className="list-disc space-y-1 pl-5 text-sm leading-relaxed text-slate-700">
-        {lines.map((line, lineIndex) => <li key={lineIndex}>{line.slice(2).trim()}</li>)}
-      </ul>
+      <div className="legal-page">
+        <article className="legal-document" aria-labelledby="legal-page-title">
+          <h1 id="legal-page-title" className="legal-document-title">{title}</h1>
+          {state.status === 'loading' ? (
+            <p className="legal-page-message" role="status">Der Text wird geladen …</p>
+          ) : (
+            <div className="legal-page-recovery">
+              <p role="alert">{state.httpStatus === 404
+                ? 'Dieser Text ist gerade nicht verfügbar.'
+                : 'Der Text konnte gerade nicht geladen werden. Bitte versuche es erneut.'}</p>
+              <div className="legal-page-actions">
+                <button className="legal-page-primary" type="button" onClick={() => setAttempt((value) => value + 1)}>Erneut versuchen</button>
+                <Link className="legal-page-secondary" to="/">Zur Startseite</Link>
+              </div>
+            </div>
+          )}
+        </article>
+      </div>
     );
   }
 
+  const legalDocument = state.document;
+  const versionText = legalDocumentVersionText(legalDocument);
   return (
-    <p key={index} className="whitespace-pre-line text-sm leading-relaxed text-slate-700">
-      {block}
-    </p>
+    <div className="legal-page">
+      <article className="legal-document" aria-labelledby="legal-page-title" data-legal-slug={slug} data-legal-version={legalDocument.version ?? undefined}>
+        <h1 id="legal-page-title" className="legal-document-title">{legalDocument.title}</h1>
+        {versionText && <p className="legal-document-version">{versionText}</p>}
+        <div className="legal-document-body" dangerouslySetInnerHTML={{ __html: renderLegalMarkdown(legalDocument.body_md, legalDocument.title) }} />
+      </article>
+    </div>
   );
 }
 
-export default function LegalDocumentPage({ slug, eyebrow, title, children }: Props) {
-  const [document, setDocument] = useState<LegalDocument | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadDocument() {
-      try {
-        const response = await fetch(`/api/legal-documents/${encodeURIComponent(slug)}`, {
-          credentials: 'include',
-        });
-        if (!response.ok) return;
-        const data = (await response.json()) as { document?: LegalDocument };
-        if (!cancelled && data.document?.body_md?.trim()) {
-          setDocument(data.document);
-        }
-      } catch {
-        // Static legal fallback remains the source when the dynamic copy is unavailable.
-      }
-    }
-
-    void loadDocument();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [slug]);
-
-  if (!document) {
-    return <>{children}</>;
-  }
-
-  return (
-    <article className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8">
-      <p className="mb-2 text-sm font-bold uppercase tracking-wide text-blue-600">{eyebrow}</p>
-      <h1 className="mb-6 text-3xl font-black text-slate-900">{document.title || title}</h1>
-      <section className="space-y-3">
-        {markdownBlocks(document.body_md).map(renderBlock)}
-      </section>
-    </article>
-  );
+export default function LegalDocumentPage(props: Props) {
+  // A slug change must never keep the previous legal text visible while loading.
+  return <LegalDocumentContent key={props.slug} {...props} />;
 }
