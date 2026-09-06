@@ -385,15 +385,20 @@ L-v2-Slice mit unabhängigen Facts-/Publication-Gates abgeschlossen und live.
 
 ## 14. Rechtstexte und Fehlerseite
 
+Abgeschlossen am 6. September 2026: LEGAL-01–05 und ERR-01/02 produktiv
+veröffentlicht und live geprüft (PR #26, Deployment `34054531443`).
+Details und Nachweise: [`umsetzung_rechtstexte_fehlerseite_audit.md`](umsetzung_rechtstexte_fehlerseite_audit.md).
+Die ursprünglichen Sterne/Befunde dokumentieren weiterhin die Audit-Ausgangslage.
+
 | Erledigt | ID | Funktion/Text | ★ | Befund | Zielbild 10/10 |
 |---|---|---|---:|---|---|
-| [ ] | LEGAL-01 | Impressum | 9 | Klar, vollständig gegliedert und Kontakt anklickbar. | Änderungsstand anzeigen; Affiliate-Abschnitt mit globaler Formulierung konsistent halten. |
-| [ ] | LEGAL-02 | Datenschutz | 6 | Inhaltlich ausführlich, aber sehr technisch (D1/KV/R2, TTL, Art.-Ketten) und ohne Kurzüberblick. | Oben „Kurz erklärt“ mit Daten/Zweck/Dauer/Rechten, darunter vollständige Rechtsfassung; Stand anzeigen. |
-| [ ] | LEGAL-03 | Nutzungsbedingungen | 7 | Gut gegliedert. Notfall- und Haftungstexte wirken für eine Verwaltungsapp wiederholt/streng. | Kurze Alltagssummary, vollständige Fassung darunter; medizinische Grenze einmal präzise statt mehrfach alarmistisch. |
-| [ ] | LEGAL-04 | Dynamische Rechtsdokumente | 5 | API-Inhalt kann statischen Text nachträglich ersetzen; `updated_at` wird nicht gezeigt, Inline-Markdown nur teilweise gerendert. | Eine nachvollziehbare Quelle, Version/Stand sichtbar, vollständiger sicherer Markdownrenderer und kein inhaltlicher Layoutsprung. |
-| [ ] | LEGAL-05 | `/agb` | 4 | Identischer Inhalt parallel zu `/nutzungsbedingungen`. | Permanente 301/308-Weiterleitung auf den kanonischen Pfad. |
-| [ ] | ERR-01 | Visuelle 404-Seite | 8 | Freundlich und klarer Startseitenlink. | Zusätzlich Wissen/Stacks anbieten und gesuchten Pfad nicht wiederholen, wenn tokenhaltig. |
-| [ ] | ERR-02 | Technischer 404-Status | 2 | Beliebige Pfade liefern HTTP 200 und generische Metadaten. | Echter 404, `noindex`, eigener Titel und serverseitiger H1. |
+| [x] | LEGAL-01 | Impressum | 9 | Klar, vollständig gegliedert und Kontakt anklickbar. | Änderungsstand anzeigen; Affiliate-Abschnitt mit globaler Formulierung konsistent halten. |
+| [x] | LEGAL-02 | Datenschutz | 6 | Inhaltlich ausführlich, aber sehr technisch (D1/KV/R2, TTL, Art.-Ketten) und ohne Kurzüberblick. | Oben „Kurz erklärt“ mit Daten/Zweck/Dauer/Rechten, darunter vollständige Rechtsfassung; Stand anzeigen. |
+| [x] | LEGAL-03 | Nutzungsbedingungen | 7 | Gut gegliedert. Notfall- und Haftungstexte wirken für eine Verwaltungsapp wiederholt/streng. | Kurze Alltagssummary, vollständige Fassung darunter; medizinische Grenze einmal präzise statt mehrfach alarmistisch. |
+| [x] | LEGAL-04 | Dynamische Rechtsdokumente | 5 | API-Inhalt kann statischen Text nachträglich ersetzen; `updated_at` wird nicht gezeigt, Inline-Markdown nur teilweise gerendert. | Eine nachvollziehbare Quelle, Version/Stand sichtbar, vollständiger sicherer Markdownrenderer und kein inhaltlicher Layoutsprung. |
+| [x] | LEGAL-05 | `/agb` | 4 | Identischer Inhalt parallel zu `/nutzungsbedingungen`. | Permanente 301/308-Weiterleitung auf den kanonischen Pfad. |
+| [x] | ERR-01 | Visuelle 404-Seite | 8 | Freundlich und klarer Startseitenlink. | Zusätzlich Wissen/Stacks anbieten und gesuchten Pfad nicht wiederholen, wenn tokenhaltig. |
+| [x] | ERR-02 | Technischer 404-Status | 2 | Beliebige Pfade liefern HTTP 200 und generische Metadaten. | Echter 404, `noindex`, eigener Titel und serverseitiger H1. |
 
 ## 15. Copy-Register: verbindliche einfache Sprache
 
