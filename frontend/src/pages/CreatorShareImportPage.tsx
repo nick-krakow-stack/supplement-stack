@@ -21,6 +21,7 @@ import type { Stack } from '../types';
 import { clearCreatorShareDraft, readCreatorShareDraft, writeCreatorShareDraft } from '../lib/creatorShareDraft';
 import { formatRecommendationAmount, formatRecommendationInterval } from '../lib/creatorRecommendationFormat';
 import { authPath, currentLocationReturnTo } from '../lib/returnTo';
+import { countLabel, timingLabel } from '../lib/displayCopy';
 
 type UnavailableKind = 'pending' | 'paused' | 'expired' | 'unavailable' | 'unknown';
 type Decision = 'keep' | 'replace';
@@ -86,7 +87,7 @@ function Comparison({
   differences: ReadonlySet<string>;
 }) {
   const interval = formatRecommendationInterval(value.intake_interval_days);
-  const timingLabel = value.timing_label?.trim() || null;
+  const formattedTiming = timingLabel(null, value.timing_label);
   const rowClass = (name: string) => differences.has(name) ? 'rounded-md bg-amber-100 px-2 py-1' : 'px-2 py-1';
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-4">
@@ -96,7 +97,7 @@ function Comparison({
         <div className={rowClass('Menge')}>{differences.has('Menge') && <span className="sr-only">Unterschied: </span>}<dt className="inline font-medium">Menge: </dt><dd className="inline">{formatRecommendationAmount(value.quantity, value.unit)}</dd></div>
         <div className={rowClass('Einnahme')}>{differences.has('Einnahme') && <span className="sr-only">Unterschied: </span>}<dt className="inline font-medium">Einnahme: </dt><dd className="inline">{value.dosage_text?.trim() || 'Keine Angabe'}</dd></div>
         <div className={rowClass('Häufigkeit')}>{differences.has('Häufigkeit') && <span className="sr-only">Unterschied: </span>}<dt className="inline font-medium">Wie oft: </dt><dd className="inline">{interval ?? 'Keine Angabe'}</dd></div>
-        <div className={rowClass('Zeitpunkt')}>{differences.has('Zeitpunkt') && <span className="sr-only">Unterschied: </span>}<dt className="inline font-medium">Wann: </dt><dd className="inline">{timingLabel ?? 'Keine Angabe'}</dd></div>
+        <div className={rowClass('Zeitpunkt')}>{differences.has('Zeitpunkt') && <span className="sr-only">Unterschied: </span>}<dt className="inline font-medium">Zeitpunkt: </dt><dd className="inline">{formattedTiming}</dd></div>
       </dl>
     </div>
   );
@@ -189,7 +190,7 @@ function RecoveryCard({ kind, user }: { kind: UnavailableKind; user: boolean }) 
           </label>
         </div>
       )}
-      <p className="mt-2 text-sm text-slate-500">Du kannst sie danach selbst senden.</p>
+      <p className="mt-2 text-sm text-slate-500">Füge die kopierte Nachricht anschließend in deinen Messenger oder deine E-Mail ein.</p>
       <div className="mt-5 flex flex-wrap gap-4">
         {user && <Link to="/stacks" className="text-indigo-600">Zu meinen Stacks</Link>}
         <Link to="/" className="text-indigo-600">Zur Startseite</Link>
@@ -221,7 +222,7 @@ export function ResultCard({
   const message = result.action === 'stack_created'
     ? importedItemCount === null
       ? `Der neue Stack „${result.stack_name}“ wurde angelegt.`
-      : `Der neue Stack „${result.stack_name}“ wurde mit ${importedItemCount} ${importedItemCount === 1 ? 'Produkt' : 'Produkten'} angelegt.`
+      : `Der neue Stack „${result.stack_name}“ wurde mit ${countLabel(importedItemCount, 'Produkt', 'Produkten')} angelegt.`
     : result.action === 'added'
       ? result.created_stack
         ? `Der neue Stack „${result.stack_name}“ wurde angelegt. ${result.creator_product_name ?? 'Das Produkt'} wurde hinzugefügt.`
@@ -533,7 +534,7 @@ function CreatorShareImportPageForToken({ token }: { token: string }) {
         if (cancelled) return;
         const kind = unavailableKind(errorData(caught).code);
         if (kind) setUnavailable(kind);
-        else setTechnicalError('Das hat gerade nicht geklappt. Bitte versuche es noch einmal.');
+        else setTechnicalError('Die Empfehlung konnte nicht geladen werden. Bitte versuche es noch einmal.');
       })
       .finally(() => { if (!cancelled) setPreviewLoading(false); });
     return () => { cancelled = true; };
@@ -601,7 +602,7 @@ function CreatorShareImportPageForToken({ token }: { token: string }) {
   const returnTo = currentLocationReturnTo(location);
   const confirmLabel = useMemo(() => {
     if (!preflight) return 'Änderung bestätigen';
-    if (preview?.type === 'stack') return `Stack mit ${preflight.stack_item_count} ${preflight.stack_item_count === 1 ? 'Produkt' : 'Produkten'} anlegen`;
+    if (preview?.type === 'stack') return `Stack mit ${countLabel(preflight.stack_item_count, 'Produkt', 'Produkten')} anlegen`;
     if (preflight.similar_products.length === 0) {
       return preflight.target.mode === 'new'
         ? `Stack mit ${preflight.recommendation?.product_name ?? 'Produkt'} anlegen`
@@ -633,7 +634,7 @@ function CreatorShareImportPageForToken({ token }: { token: string }) {
       const kind = unavailableKind(data.code);
       if (kind) setUnavailable(kind);
       else if (data.code === 'TARGET_CHANGED' || data.code === 'INVALID_TARGET') setNotice(data.error ?? 'Bitte wähle dein Ziel noch einmal.');
-      else setTechnicalError('Das hat gerade nicht geklappt. Bitte versuche es noch einmal.');
+      else setTechnicalError('Die Empfehlung konnte nicht geprüft werden. Bitte versuche es noch einmal.');
     } finally {
       if (activeRef.current) setChecking(false);
     }
@@ -668,7 +669,7 @@ function CreatorShareImportPageForToken({ token }: { token: string }) {
         invalidateCheck();
         setNotice('Die Empfehlung oder dein Stack hat sich geändert. Bitte prüfe deine Auswahl noch einmal.');
       } else {
-        setTechnicalError('Das hat gerade nicht geklappt. Bitte versuche es noch einmal.');
+        setTechnicalError('Die Empfehlung konnte nicht gespeichert werden. Bitte versuche es noch einmal.');
       }
     } finally {
       if (activeRef.current) setBusy(false);
@@ -765,7 +766,7 @@ function CreatorShareImportPageForToken({ token }: { token: string }) {
           {notice && <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950" role="status">{notice}</p>}
           {stacksError && (
             <div className="rounded-lg border border-red-300 bg-red-50 p-3 outline-none" role="alert" ref={stackErrorRef} tabIndex={-1}>
-              <p className="text-sm text-red-800">Das hat gerade nicht geklappt. Bitte versuche es noch einmal.</p>
+              <p className="text-sm text-red-800">Deine Stacks konnten nicht geladen werden. Bitte versuche es noch einmal.</p>
               <button type="button" className="mt-3 inline-flex min-h-11 items-center justify-center rounded-xl border-2 border-red-300 bg-white px-4 py-2 font-bold text-red-800 hover:bg-red-50" onClick={() => setStacksAttempt((value) => value + 1)}>Erneut versuchen</button>
             </div>
           )}
@@ -865,7 +866,7 @@ function CreatorShareImportPageForToken({ token }: { token: string }) {
               <div className="rounded-lg border border-slate-300 bg-slate-50 p-4">
                 <h3 className="font-semibold">Das passiert beim Bestätigen</h3>
                 {preview.type === 'stack' ? (
-                  <p className="mt-2 text-sm text-slate-700">Ein neuer Stack „{preflight.target.stack_name}“ mit {preflight.stack_item_count} Produkten wird angelegt. Deine vorhandenen Stacks bleiben unverändert.</p>
+                  <p className="mt-2 text-sm text-slate-700">Ein neuer Stack „{preflight.target.stack_name}“ mit {countLabel(preflight.stack_item_count, 'Produkt', 'Produkten')} wird angelegt. Deine vorhandenen Stacks bleiben unverändert.</p>
                 ) : preflight.similar_products.length === 0 ? (
                   <p className="mt-2 text-sm text-slate-700">
                     {preflight.recommendation?.product_name} wird {preflight.target.mode === 'new' ? `gemeinsam mit dem neuen Stack „${preflight.target.stack_name}“ angelegt` : `zu „${preflight.target.stack_name}“ hinzugefügt`}. Andere Produkte und Stacks bleiben unverändert.

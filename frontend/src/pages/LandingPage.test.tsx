@@ -88,4 +88,15 @@ describe('LandingPage trust statistics', () => {
     expect(container.textContent).not.toMatch(/Preis[- ]pro[- ]Portion|Preises pro Portion|DGE · EFSA · NIH/);
     await screen.findByRole('button', { name: 'Erneut laden' });
   });
+
+  it('states the real demo scope and account-only actions instead of promising all steps', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false }));
+    const { container } = render(<MemoryRouter><LandingPage /></MemoryRouter>);
+    const demoLinks = screen.getAllByRole('link', { name: 'Demo ohne Konto ausprobieren' });
+    expect(demoLinks).toHaveLength(2);
+    expect(demoLinks.every((link) => link.getAttribute('href') === '/demo')).toBe(true);
+    expect(screen.getAllByText('Teste Suche, Stack-Aufbau und Kostenübersicht. Speichern, E-Mail und eigene Produkte gibt es nach kostenloser Anmeldung.')).toHaveLength(3);
+    expect(container.textContent).not.toMatch(/alle Schritte ausprobieren|vollständig ausprobieren|Alles nutzbar|ohne Risiko|neueste Erkenntnisse|geprüfte Inhaltsstoffe/);
+    await screen.findByRole('button', { name: 'Erneut laden' });
+  });
 });

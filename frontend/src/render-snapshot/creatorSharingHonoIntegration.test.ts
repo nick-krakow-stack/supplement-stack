@@ -1996,6 +1996,9 @@ describe('creator stack sharing runtime contract', () => {
     }).format(new Date(storedSnapshot.published_at));
     expect(mailOptions.to).toBe('importer@test.invalid');
     expect(mailOptions.subject).toBe('Dein Einnahmeplan: Importierter Stack');
+    expect(mailOptions.html).toMatch(/€ pro Monat/);
+    expect(mailOptions.html).not.toContain('/Monat');
+    expect(mailOptions.html).not.toContain('Stack-Mail');
     expect(mailOptions.html).toContain('Test Creator');
     expect(mailOptions.html).toContain(`Stand der Creator-Empfehlung:</strong> ${snapshotDate}`);
     expect(mailOptions.html).toContain('Meine persönliche Notiz zum importierten Stack.');
@@ -2795,6 +2798,9 @@ describe('creator stack sharing runtime contract', () => {
       trend: Array<{ date: string; unique_visitors: number }>;
     };
     expect(dashboard.current).toMatchObject({ unique_visitors: 4, clicks: 2, saves: 2, clicked_shops: 1 });
+    expect(dashboard.period.definitions.saves).toContain('Übernahmen in einen Stack');
+    expect(dashboard.period.definitions.saves).toContain('nicht einzelne Produkte');
+    expect(dashboard.period.definitions.imported_stacks).toContain('nicht im Papierkorb');
     expect(dashboard.previous).toMatchObject({ unique_visitors: 2, saves: 1 });
     expect(dashboard.trend).toHaveLength(30);
     expect(dashboard.trend[0].date).toBe(dashboard.period.from.slice(0, 10));

@@ -60,7 +60,7 @@ function HeroSection({ isLoggedIn }: { isLoggedIn: boolean }) {
 
         {!isLoggedIn && (
           <p className="mx-auto -mt-5 mb-8 max-w-2xl text-sm font-medium leading-6 text-slate-600">
-            In der Demo kannst du alle Schritte ausprobieren. Mit einem kostenlosen Konto bleiben deine Stacks und eigenen Produkte dauerhaft gespeichert.
+            Teste Suche, Stack-Aufbau und Kostenübersicht. Speichern, E-Mail und eigene Produkte gibt es nach kostenloser Anmeldung.
           </p>
         )}
 
@@ -72,7 +72,7 @@ function HeroSection({ isLoggedIn }: { isLoggedIn: boolean }) {
               className="inline-flex items-center gap-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-semibold rounded-2xl px-8 py-4 text-base shadow-lg hover:shadow-xl transition-all duration-200 w-full sm:w-auto justify-center"
             >
               <Zap size={18} />
-              Demo starten
+              Demo ohne Konto ausprobieren
             </Link>
           )}
           {!isLoggedIn && (
@@ -100,7 +100,7 @@ function HeroSection({ isLoggedIn }: { isLoggedIn: boolean }) {
           {[
             { icon: <FlaskConical size={14} />, label: 'Quellen: DGE, EFSA und NIH' },
             { icon: <TrendingDown size={14} />, label: 'Kosten pro Einnahme im Vergleich' },
-            { icon: <Shield size={14} />, label: 'Demo ohne Konto · dauerhaft speichern mit kostenlosem Konto' },
+            { icon: <Shield size={14} />, label: 'Demo ohne Konto ausprobieren' },
             { icon: <BarChart3 size={14} />, label: 'Monatliche Kostenübersicht' },
           ].map(({ icon, label }) => (
             <span
@@ -226,7 +226,7 @@ export function FeaturesSection() {
             Alles, was du für deinen Stack brauchst
           </h2>
           <p className="text-gray-500 max-w-xl mx-auto">
-            Supplement Stack verbindet veröffentlichte Referenzdaten mit praktischer Nutzbarkeit – kostenlos und ohne Anmeldung.
+            Teste Suche, Stack-Aufbau und Kostenübersicht. Speichern, E-Mail und eigene Produkte gibt es nach kostenloser Anmeldung.
           </p>
         </div>
 
@@ -428,15 +428,14 @@ function DemoCtaSection({ isLoggedIn }: { isLoggedIn: boolean }) {
               Starte jetzt mit deinem persönlichen Stack
             </h2>
             <p className="text-indigo-100 text-base md:text-lg mb-8 max-w-xl mx-auto">
-              Im Demo-Modus kannst du die wichtigsten Stack-Schritte ausprobieren –
-              ohne Anmeldung oder Kreditkarte. Speichern, E-Mail und weitere Kontofunktionen sind nach kostenloser Registrierung verfügbar.
+              Teste Suche, Stack-Aufbau und Kostenübersicht. Speichern, E-Mail und eigene Produkte gibt es nach kostenloser Anmeldung.
             </p>
             <Link
               to="/demo"
               className="inline-flex items-center gap-2 bg-white text-indigo-700 font-bold rounded-2xl px-8 py-4 text-base shadow-lg hover:shadow-xl hover:bg-indigo-50 transition-all duration-200"
             >
               <Zap size={18} />
-              Demo jetzt starten
+              Demo ohne Konto ausprobieren
               <ArrowRight size={18} />
             </Link>
           </div>

@@ -45,7 +45,7 @@ describe('Wissensartikel aus Nutzer- und Creator-Sicht', () => {
   it('keeps stack and filters through search, article, bookmarks and back', async () => {
     renderJourney('/wissen?category=vitamine', { returnTo: '/stacks?stack=17' });
     await screen.findByRole('link', { name: /Teststoff.*Artikel lesen/ });
-    fireEvent.change(screen.getByRole('searchbox', { name: 'Wirkstoff suchen' }), { target: { value: 'Teststoff' } });
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Nährstoff suchen' }), { target: { value: 'Teststoff' } });
     fireEvent.click(screen.getByRole('link', { name: /Teststoff.*Artikel lesen/ }));
     await screen.findByRole('heading', { name: 'Teststoff erklärt', level: 1 });
     expect(screen.getByRole('link', { name: 'Zurück zu meinen Stacks' })).toHaveAttribute('href', '/stacks?stack=17');

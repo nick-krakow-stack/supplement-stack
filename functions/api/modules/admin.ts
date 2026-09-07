@@ -13138,7 +13138,7 @@ admin.get('/launch-checks', async (c) => {
       status: 'info',
       severity: 'warning',
       source: 'manual',
-      details: 'Echte Registrierung, Verifizierung, Passwort-Reset und Stack-Mail muessen in externen Inboxen geprueft werden.',
+      details: 'Registrierung, E-Mail-Bestätigung, Passwort-Zurücksetzen und Einnahmeplan per E-Mail müssen in den tatsächlichen Postfächern geprüft werden.',
       action: 'Header auf SPF/DKIM/DMARC alignment und Spam-Placement pruefen.',
     },
     {

@@ -41,6 +41,7 @@ import {
   type CreatorAuthorDraftScope,
 } from '../lib/creatorAuthorDraft';
 import type { Stack, StackItem } from '../types';
+import { countLabel } from '../lib/displayCopy';
 
 type CreatorView = 'stack' | 'product' | 'portfolio';
 type ShareableStackItem = StackItem & {
@@ -87,11 +88,11 @@ const ROLE_LABELS: Record<CreatorParty['role'], string> = {
 
 const READINESS_REASONS: Record<string, string> = {
   product_missing: 'Das Produkt ist nicht mehr verfügbar und muss im Stack ersetzt oder entfernt werden.',
-  own_product_not_published: 'Dieses eigene Produkt ist noch nicht für öffentliche Empfehlungen freigegeben.',
-  not_approved: 'Das Produkt wartet noch auf Freigabe.',
+  own_product_not_published: 'Produkt ist noch nicht freigegeben. Prüfe den Freigabestatus deines eigenen Produkts.',
+  not_approved: 'Produkt ist noch nicht freigegeben.',
   not_visible: 'Das Produkt ist für diese öffentliche Empfehlung nicht sichtbar.',
   owner_inactive: 'Der Produktanbieter ist derzeit nicht freigeschaltet.',
-  shop_link_missing: 'Für dieses Produkt fehlt ein nutzbarer Shop-Link.',
+  shop_link_missing: 'Shop-Link fehlt. Für dieses Produkt ist noch kein nutzbarer Shop-Link hinterlegt.',
   shop_link_unsafe: 'Der hinterlegte Shop-Link kann derzeit nicht sicher geöffnet werden.',
   intake_missing: 'Im Stack fehlt die Angabe, wie oft das Produkt genutzt wird.',
   main_ingredient_missing: 'Die Produktangaben sind noch nicht vollständig geprüft.',
@@ -254,7 +255,7 @@ function CreatorDashboardPanel({ dashboard }: { dashboard: CreatorDashboard }) {
   const cards: Array<{ key: keyof CreatorDashboardMetricSet; label: string }> = [
     { key: 'unique_visitors', label: 'Erfasste eindeutige Besuche (mit Statistik-Zustimmung)' },
     { key: 'clicks', label: 'Produktklicks' },
-    { key: 'saves', label: 'Gespeichert' },
+    { key: 'saves', label: 'In einen Stack übernommen' },
     { key: 'imported_stacks', label: 'Übernommene Stacks' },
     { key: 'clicked_products', label: 'Angeklickte Produkte' },
     { key: 'clicked_shops', label: 'Genutzte Shops' },
@@ -272,7 +273,7 @@ function CreatorDashboardPanel({ dashboard }: { dashboard: CreatorDashboard }) {
           </p>
         </div>
         <p className="rounded-full bg-indigo-50 px-4 py-2 text-sm font-black text-indigo-800">
-          {dashboard.active_shares.toLocaleString('de-DE')} aktive Links
+          {countLabel(dashboard.active_shares, 'freigegebener Link', 'freigegebene Links')}
         </p>
       </div>
       <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -291,7 +292,7 @@ function CreatorDashboardPanel({ dashboard }: { dashboard: CreatorDashboard }) {
             {dashboard.trend.map((entry) => (
               <p className="text-sm text-slate-600" role="listitem" key={entry.date}>
                 <span className="font-bold text-slate-800">{formatDay(entry.date)}:</span>{' '}
-                {entry.unique_visitors.toLocaleString('de-DE')} erfasste eindeutige Besuche (mit Statistik-Zustimmung) · {entry.clicks.toLocaleString('de-DE')} Klicks · {entry.saves.toLocaleString('de-DE')} gespeichert
+                {countLabel(entry.unique_visitors, 'erfasster eindeutiger Besuch', 'erfasste eindeutige Besuche')} (mit Statistik-Zustimmung) · {countLabel(entry.clicks, 'Klick', 'Klicks')} · {countLabel(entry.saves, 'Übernahme', 'Übernahmen')}
               </p>
             ))}
           </div>
@@ -1579,7 +1580,7 @@ export default function CreatorSharingPage() {
 
       {!canEdit && (
         <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm leading-6 text-blue-900">
-          Du kannst nur ansehen. Bitte den Inhaber von {selectedParty?.name} um Bearbeitungsrechte. Falls du nicht weißt, wer das ist, kannst du <a className="font-bold underline" href="mailto:email@nickkrakow.de">Kontakt aufnehmen</a>.
+          Du kannst die Empfehlungen ansehen, aber nicht ändern. Zum Erstellen oder Beenden brauchst du Bearbeitungsrechte für {selectedParty?.name}. Bitte den Inhaber darum. Falls du nicht weißt, wer das ist, kannst du <a className="font-bold underline" href="mailto:email@nickkrakow.de">Kontakt aufnehmen</a>.
         </div>
       )}
 
@@ -1754,7 +1755,7 @@ export default function CreatorSharingPage() {
                 )}
 
                 <div className="flex flex-wrap items-center gap-3">
-                  <button type="button" className="btn btn-primary" disabled={!canEdit || busy || detailsLoading || detailsError || selectedItems.length === 0 || !title.trim() || missingOriginalProduct || (view === 'stack' && hasUnshareableItems)} onClick={() => void submit()}>{busy ? 'Wird gesendet…' : 'Zur Prüfung senden'}</button>
+                  <button type="button" className="btn btn-primary" disabled={!canEdit || busy || detailsLoading || detailsError || selectedItems.length === 0 || !title.trim() || missingOriginalProduct || (view === 'stack' && hasUnshareableItems)} onClick={() => void submit()}>{busy ? 'Wird zur Prüfung eingereicht …' : 'Zur Prüfung senden'}</button>
                   <Link to={stackRepairPath()} onClick={persistCurrentDraft} className="text-sm font-bold text-indigo-600">Stack bearbeiten</Link>
                 </div>
               </>
@@ -1819,8 +1820,8 @@ export default function CreatorSharingPage() {
                         <p className="mt-1 text-sm text-slate-500">Erstellt: {formatCreatedAt(share.created_at)}</p>
                         <p className="mt-2 text-sm leading-6 text-slate-700">{statusNextStep(status)}</p>
                         <p className="mt-1 text-sm font-bold text-slate-600">{share.expires_at ? `${status === 'expired' ? 'Abgelaufen am' : 'Läuft ab am'} ${formatTimestamp(share.expires_at)}` : 'Kein Ablaufdatum'}</p>
-                        <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm font-semibold text-slate-700"><span>{share.metrics.unique_visitors.toLocaleString('de-DE')} erfasste eindeutige Besuche (mit Statistik-Zustimmung)</span><span>{share.metrics.saves.toLocaleString('de-DE')}-mal gespeichert</span></div>
-                        <p className="mt-1 text-xs text-slate-500">Erfasste Besuche: {metricComparison(share.metrics.unique_visitors, share.metrics.previous_unique_visitors)} · Gespeichert: {metricComparison(share.metrics.saves, share.metrics.previous_saves)}. Besuche ohne Statistik-Zustimmung sind nicht enthalten; automatische Aufrufe werden, soweit erkennbar, ausgeschlossen.</p>
+                        <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm font-semibold text-slate-700"><span>{countLabel(share.metrics.unique_visitors, 'erfasster eindeutiger Besuch', 'erfasste eindeutige Besuche')} (mit Statistik-Zustimmung)</span><span>{countLabel(share.metrics.saves, 'Übernahme', 'Übernahmen')}</span></div>
+                        <p className="mt-1 text-xs text-slate-500">Erfasste Besuche: {metricComparison(share.metrics.unique_visitors, share.metrics.previous_unique_visitors)} · Übernahmen in einen Stack: {metricComparison(share.metrics.saves, share.metrics.previous_saves)}. Besuche ohne Statistik-Zustimmung sind nicht enthalten; automatische Aufrufe werden, soweit erkennbar, ausgeschlossen.</p>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <button type="button" className="btn btn-secondary" disabled={busyShareId === share.id} onClick={() => void showOwnedPreview(share)}>{expandedShareId === share.id ? 'Vorschau schließen' : 'Vorschau ansehen'}</button>

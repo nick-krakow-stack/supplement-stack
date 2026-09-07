@@ -451,11 +451,11 @@ describe('CreatorSharingPage', () => {
 
     const send = await screen.findByRole('button', { name: 'Zur Prüfung senden' });
     expect((send as HTMLButtonElement).disabled).toBe(false);
-    expect(screen.queryByText('Dieses eigene Produkt ist noch nicht für öffentliche Empfehlungen freigegeben.')).toBeNull();
+    expect(screen.queryByText('Produkt ist noch nicht freigegeben. Prüfe den Freigabestatus deines eigenen Produkts.')).toBeNull();
     expect(screen.queryByRole('link', { name: 'Eigenes Produkt und Freigabestatus prüfen' })).toBeNull();
 
     fireEvent.change(screen.getByLabelText('Welches Produkt möchtest du empfehlen?'), { target: { value: '91' } });
-    expect(await screen.findByText('Dieses eigene Produkt ist noch nicht für öffentliche Empfehlungen freigegeben.')).toBeTruthy();
+    expect(await screen.findByText('Produkt ist noch nicht freigegeben. Prüfe den Freigabestatus deines eigenen Produkts.')).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Eigenes Produkt und Freigabestatus prüfen' })).toBeTruthy();
     expect((screen.getByRole('button', { name: 'Zur Prüfung senden' }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.queryByText(/ursprünglich empfohlene Produkt ist nicht mehr in diesem Stack/)).toBeNull();
@@ -517,6 +517,46 @@ describe('CreatorSharingPage', () => {
     expect(params.get('creatorReturn')).toContain('repair=90');
     expect(screen.queryByText(/Affiliate/i)).toBeNull();
     expect(screen.queryByText(/Familienprofil|Kategorie auswählen/)).toBeNull();
+  });
+
+  it.each([
+    ['shop_link_missing', 'Shop-Link fehlt. Für dieses Produkt ist noch kein nutzbarer Shop-Link hinterlegt.'],
+    ['not_approved', 'Produkt ist noch nicht freigegeben.'],
+  ])('names the actual per-product blocker %s', async (reason, copy) => {
+    vi.mocked(getCreatorShareReadiness).mockResolvedValue({
+      ready: false, shareable_stack_item_ids: [],
+      unshareable_products: [{ stack_item_id: 90, product_name: 'Magnesium Pur' }],
+      products: [{ stack_item_id: 90, product_name: 'Magnesium Pur', shareable: false, reason_code: reason, repair_kind: 'stack_product' }],
+    });
+    renderCreator('/creator?bereich=stack&party=7&stack=10');
+    const explanation = await screen.findByText(copy);
+    expect(explanation.closest('article')?.textContent).toContain('Magnesium Pur');
+    expect((screen.getByRole('button', { name: 'Zur Prüfung senden' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('names the pending action as submission for review, not publication or sending mail', async () => {
+    vi.mocked(createCreatorShare).mockReturnValue(new Promise(() => {}));
+    renderCreator('/creator?bereich=stack&party=7&stack=10');
+    const button = await screen.findByRole('button', { name: 'Zur Prüfung senden' });
+    await waitFor(() => expect((button as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(button);
+    expect(await screen.findByRole('button', { name: 'Wird zur Prüfung eingereicht …' })).toBeTruthy();
+    expect(createCreatorShare).toHaveBeenCalledTimes(1);
+  });
+
+  it('pluralizes actual consent-scoped visits, approved links and stack transfers centrally', async () => {
+    vi.mocked(getCreatorDashboard).mockResolvedValue({ ...dashboard, active_shares: 1 });
+    vi.mocked(getCreatorPortfolio).mockResolvedValue(portfolioPage([ownedShare(1, 'approved'), ownedShare(2, 'approved')]));
+    renderCreator('/creator?bereich=portfolio&party=7');
+    expect(await screen.findByText('1 freigegebener Link')).toBeTruthy();
+    expect(screen.getByText('In einen Stack übernommen')).toBeTruthy();
+    const first = screen.getByRole('heading', { name: 'Empfehlung 1' }).closest('article') as HTMLElement;
+    const second = screen.getByRole('heading', { name: 'Empfehlung 2' }).closest('article') as HTMLElement;
+    expect(within(first).getByText('1 erfasster eindeutiger Besuch (mit Statistik-Zustimmung)')).toBeTruthy();
+    expect(within(first).getByText('1 Übernahme')).toBeTruthy();
+    expect(within(second).getByText('2 erfasste eindeutige Besuche (mit Statistik-Zustimmung)')).toBeTruthy();
+    expect(within(second).getByText('2 Übernahmen')).toBeTruthy();
+    expect(screen.queryByText(/-mal gespeichert/)).toBeNull();
   });
 
   it('sends an unpublished own product to its real management page and saves the exact creator draft first', async () => {
@@ -705,7 +745,7 @@ describe('CreatorSharingPage', () => {
     await waitFor(() => expect((screen.getByLabelText('Creator oder Marke wechseln') as HTMLSelectElement).value).toBe('8'));
     expect(screen.getByTestId('creator-location').textContent).toContain('party=8');
     expect(screen.getByTestId('creator-location').textContent).toContain('editShare=77');
-    expect(screen.queryByText(/Du kannst nur ansehen/)).toBeNull();
+    expect(screen.queryByText(/Du kannst die Empfehlungen ansehen, aber nicht ändern/)).toBeNull();
   });
 
   it('keeps a blocked deep-link while a remembered viewer party is active and prepares it for its editor party', async () => {
@@ -725,7 +765,7 @@ describe('CreatorSharingPage', () => {
     expect(screen.getByTestId('creator-location').textContent).toContain('party=8');
     expect(screen.getByTestId('creator-location').textContent).toContain('sourceShare=78');
     expect(screen.getByTestId('creator-location').textContent).not.toContain('editShare=78');
-    expect(screen.queryByText(/Du kannst nur ansehen/)).toBeNull();
+    expect(screen.queryByText(/Du kannst die Empfehlungen ansehen, aber nicht ändern/)).toBeNull();
   });
 
   it('does not call a blocked deep-link stack missing when stack loading failed and prepares it after retry', async () => {
@@ -780,7 +820,7 @@ describe('CreatorSharingPage', () => {
     vi.mocked(getCreatorPortfolio).mockResolvedValue(portfolioPage([ownedShare(2, 'approved'), ownedShare(3, 'blocked')]));
     renderCreator('/creator');
 
-    expect(await screen.findByText(/Du kannst nur ansehen/)).toBeTruthy();
+    expect(await screen.findByText(/Du kannst die Empfehlungen ansehen, aber nicht ändern/)).toBeTruthy();
     await waitFor(() => expect(screen.getByTestId('creator-location').textContent).toContain('bereich=portfolio'));
     expect(screen.getByRole('tab', { name: /Meine Empfehlungen/ }).getAttribute('aria-selected')).toBe('true');
     expect((screen.getByRole('tab', { name: /Ganzen Stack teilen/ }) as HTMLButtonElement).disabled).toBe(true);

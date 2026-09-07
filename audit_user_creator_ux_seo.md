@@ -405,7 +405,8 @@ Die ursprünglichen Sterne/Befunde dokumentieren weiterhin die Audit-Ausgangslag
 Die ersten acht Zeilen sind am 6. September 2026 abgeschlossen und produktiv
 geprüft (PR #27, Deployment `34061348653`). Details und Nachweise:
 [`umsetzung_copy_register_01_08.md`](umsetzung_copy_register_01_08.md).
-Die übrigen Registerzeilen gehören nicht zu diesem Umsetzungsauftrag.
+Die übrigen 58 Registerzeilen werden im anschließenden Goal vollständig
+abgearbeitet: [`umsetzung_copy_register_09_66.md`](umsetzung_copy_register_09_66.md).
 
 Die Tabelle deckt alle wiederkehrenden oder konkret problematischen
 Oberflächentexte ab. Nicht aufgeführte dynamische Produkt-, Creator- und
@@ -466,7 +467,7 @@ vor Veröffentlichung weiterhin den jeweils vorgeschriebenen Fach-/Claim-Review.
 | [ ] | Creator „Schreibzugriff“ | „Du kannst die Empfehlungen ansehen, aber nicht ändern. Zum Erstellen oder Beenden brauchst du Bearbeitungsrechte für …“. |
 | [ ] | „Wird gesendet …“ bei Moderation | „Wird zur Prüfung eingereicht …“. |
 | [ ] | „Freigabe und Shop-Link“ | Je Produkt konkret: „Shop-Link fehlt“ / „Produkt ist noch nicht freigegeben“. |
-| [ ] | „1 aktuell freigegebene Links“, „1-mal angesehen/gespeichert“ | „1 freigegebener Link“, „1 Ansicht“, „1 Übernahme“; Mehrzahl zentral bilden. |
+| [ ] | „1 aktuell freigegebene Links“, „1-mal angesehen/gespeichert“ | „1 freigegebener Link“, „1 Übernahme“; Mehrzahl zentral bilden. Besuche gemäß tatsächlicher Messung als „erfasste eindeutige Besuche“ mit Zustimmungshinweis bezeichnen, nicht als rohe Ansichten. |
 | [ ] | „über aktive Links gespeichert“ | „in einen Stack übernommen“. |
 | [ ] | roher Timingwert `before_breakfast` | „Vor dem Frühstück“; alle Werte zentral übersetzen, unbekannt = „Keine Angabe“. |
 | [ ] | „Du kannst sie danach selbst senden“ | „Füge die kopierte Nachricht anschließend in deinen Messenger oder deine E-Mail ein.“ |
@@ -476,9 +477,9 @@ vor Veröffentlichung weiterhin den jeweils vorgeschriebenen Fach-/Claim-Review.
 | [ ] | „Das hat gerade nicht geklappt“ | Schritt nennen: „Die Empfehlung konnte nicht geprüft/gespeichert werden.“ |
 | [ ] | H1 „Co. - einfach erklärt“ | „Alles über Vitamine, Mineralstoffe & Co. – einfach erklärt“. |
 | [ ] | Suche „Nährstoff suchen - z. B. … ...“ | „Nährstoff suchen – z. B. Vitamin D, Magnesium oder Eisen …“. |
-| [ ] | „Bald“ | „Artikel in Vorbereitung“. |
+| [ ] | „Bald“ | Kein unbelegter Bearbeitungsstatus: Karten ohne Artikel bleiben nichtinteraktiv und ohne „Bald“/„Artikel in Vorbereitung“. |
 | [ ] | „1 Einträge“ | „1 Eintrag“. |
-| [ ] | „Pflanzlicher Stoffstoff“, „Bedeutet als Cofaktor“, „Schlaf- und Rhythmusrhythmus“, „Fokuslage“, „Wirkungsdebatten“ | Nicht lokal einzeln flicken: zentralen geprüften Kurztext liefern; bis dahin neutral „Kurztext wird geprüft“. |
+| [ ] | „Pflanzlicher Stoffstoff“, „Bedeutet als Cofaktor“, „Schlaf- und Rhythmusrhythmus“, „Fokuslage“, „Wirkungsdebatten“ | Geprüfte Kurztexte aus der zentralen Quelle; keine lokalen Einzelflicken und gemäß ausdrücklicher Owner-Korrektur keine Systemstatusmeldung als Ersatztext. |
 | [ ] | Artikel „Zurück“ | „Zur Wissensübersicht“. |
 | [ ] | Rechtsseiten ohne Datum | „Stand: {Datum}“ aus der kanonischen Dokumentversion. |
 

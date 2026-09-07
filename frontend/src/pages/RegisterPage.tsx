@@ -151,7 +151,8 @@ export default function RegisterPage() {
                 className="mt-1 h-5 w-5 shrink-0 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
               />
               <span className="text-sm font-semibold leading-6 text-gray-800">
-                Ich stimme zu, dass meine Stack- und Produktdaten gespeichert werden.
+                Ich willige ein, dass Supplement Stack meine Stack-, Produkt- und Einnahmedaten speichert, damit ich die App nutzen kann.
+                Daraus können Rückschlüsse auf meine Gesundheit möglich sein. Mehr dazu im <Link to="/datenschutz" className="font-bold text-blue-700 underline">Datenschutz</Link>.
               </span>
             </label>
             <details className="ml-8 mt-2 text-sm leading-6 text-slate-600">

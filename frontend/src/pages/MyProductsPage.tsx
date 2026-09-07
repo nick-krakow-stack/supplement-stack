@@ -7,6 +7,7 @@ import UserProductForm, {
 } from '../components/modals/UserProductForm';
 import { useAuth } from '../contexts/AuthContext';
 import { calculateProductUsage } from '../lib/stackCalculations';
+import { countLabel, formatMonthlyCost } from '../lib/displayCopy';
 
 type VisibilityFilter = 'all' | 'private' | 'public';
 type ProductSort = 'newest' | 'name' | 'price-asc' | 'price-desc';
@@ -173,7 +174,7 @@ function ProductRow({
             {product.serving_size != null && product.serving_unit && (
               <span>{number.format(product.serving_size)} {product.serving_unit} pro Portion</span>
             )}
-            {servings != null && <span>{number.format(servings)} Portionen insgesamt</span>}
+            {servings != null && <span>{countLabel(servings, 'Portion', 'Portionen')} insgesamt</span>}
             {(product.ingredients ?? []).length > 0 && (
               <span>{(product.ingredients ?? []).map((item) => item.ingredient_name).filter(Boolean).join(', ')}</span>
             )}
@@ -200,7 +201,7 @@ function ProductRow({
                     return (
                       <li key={usage.stack_item_id}>
                         <span className="font-semibold">{usage.stack_name}:</span>{' '}
-                        {cost == null ? 'nicht berechenbar – Packungs- oder Nutzungsangaben fehlen' : `${currency.format(cost)} pro Monat`}
+                        {cost == null ? 'nicht berechenbar – Packungs- oder Nutzungsangaben fehlen' : formatMonthlyCost(cost)}
                       </li>
                     );
                   })}

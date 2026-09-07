@@ -1,5 +1,6 @@
 import { useId, useState } from 'react';
 import type { CreatorSharePreview } from '../api/creatorSharing';
+import { timingLabel } from '../lib/displayCopy';
 import {
   formatRecommendationAmount,
   formatRecommendationDate,
@@ -8,27 +9,11 @@ import {
 
 export { formatRecommendationDate, formatRecommendationInterval } from '../lib/creatorRecommendationFormat';
 
-const KNOWN_TIMING_LABELS: Record<string, string> = {
-  before_breakfast: 'Vor dem Frühstück',
-  after_breakfast: 'Nach dem Frühstück',
-  with_breakfast: 'Zum Frühstück',
-  with_meal: 'Zum Essen',
-  morning: 'Morgens',
-  noon: 'Mittags',
-  evening: 'Abends',
-  morning_evening: 'Morgens und abends',
-  anytime: 'Zeit flexibel',
-};
-
 export function formatRecommendationTiming(
-  timingLabel?: string | null,
+  managedLabel?: string | null,
   rawTiming?: string | null,
-): string | null {
-  const label = timingLabel?.trim();
-  if (label) return label;
-  const rawKey = rawTiming?.trim().toLowerCase();
-  if (!rawKey) return null;
-  return KNOWN_TIMING_LABELS[rawKey] ?? 'Keine Angabe';
+): string {
+  return timingLabel(rawTiming, managedLabel);
 }
 
 function PreviewProductImage({ imageUrl, productName }: { imageUrl?: string | null; productName: string | null }) {
@@ -184,16 +169,12 @@ export default function CreatorRecommendationPreview({
               <div className="mt-4 rounded-xl bg-slate-50 p-4 text-sm text-slate-700">
                 <p className="font-black text-slate-900">So nutzt {preview.creator.name} das Produkt:</p>
                 <p className="mt-2">
-                  <span className="font-bold">Menge laut Empfehlung:</span>{' '}
+                  <span className="font-bold">Menge:</span>{' '}
                   {formatRecommendationAmount(item.quantity, item.unit)}
                 </p>
-                {item.dosage_text && (
-                  <p className="mt-1"><span className="font-bold">Angabe des Creators:</span> {item.dosage_text}</p>
-                )}
-                {interval && <p className="mt-1"><span className="font-bold">Einnahme:</span> {interval}</p>}
-                {timing && (
-                  <p className="mt-1"><span className="font-bold">Zeitpunkt:</span> {timing}</p>
-                )}
+                <p className="mt-1"><span className="font-bold">Eigene Angabe:</span> {item.dosage_text?.trim() || 'Keine Angabe'}</p>
+                <p className="mt-1"><span className="font-bold">Wie oft:</span> {interval ?? 'Keine Angabe'}</p>
+                <p className="mt-1"><span className="font-bold">Zeitpunkt:</span> {timing}</p>
               </div>
 
             </article>
