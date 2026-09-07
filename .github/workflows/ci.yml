@@ -64,3 +64,5 @@ jobs:
         run: node --test scripts/article-legacy-field-correction.test.mjs scripts/article-authoritative-correction.test.mjs
       - name: Verify guarded central legal document migration
         run: node --test scripts/legal-documents-migration.test.mjs
+      - name: Verify publication metadata length gate
+        run: node --test scripts/article-seo-length-gate.test.mjs

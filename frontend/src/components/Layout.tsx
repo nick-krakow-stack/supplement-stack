@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { AlertCircle, Menu, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -26,6 +26,12 @@ export default function Layout({ children }: LayoutProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const mobileToggleRef = useRef<HTMLButtonElement>(null);
   const mobileMenuRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    // This layout commits only once its lazy page has mounted. Until then keep SSR visible.
+    document.getElementById('site-page-prerender')?.remove();
+    document.getElementById('site-delivery-bootstrap')?.remove();
+  }, [location.pathname]);
 
   useEffect(() => {
     if (!mobileOpen) return;
@@ -61,7 +67,7 @@ export default function Layout({ children }: LayoutProps) {
           : location.state,
       )} className={navClass} onClick={closeMobile}>Wissen</NavLink>
       <NavLink to="/stacks" className={navClass} onClick={closeMobile}>Meine Stacks</NavLink>
-      <NavLink to="/einnahmeplan" className={navClass} onClick={closeMobile}>Einnahmeplan</NavLink>
+      <NavLink to={user ? '/einnahmeplan' : '/einnahmeplan-erstellen'} className={navClass} onClick={closeMobile}>Einnahmeplan</NavLink>
       {user && <NavLink to="/my-products" className={navClass} onClick={closeMobile}>Eigene Produkte</NavLink>}
       {user && creatorSharingEnabled && <NavLink to="/creator" className={navClass} onClick={closeMobile}>Für Creator</NavLink>}
       {!user && <NavLink to="/demo" className={navClass} onClick={closeMobile}>Demo</NavLink>}

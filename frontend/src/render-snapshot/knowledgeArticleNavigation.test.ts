@@ -1,7 +1,7 @@
 import { JSDOM } from 'jsdom';
 import { describe, expect, it } from 'vitest';
 import type { PublicKnowledgeArticle } from '../../../functions/api/modules/knowledge';
-import { renderKnowledgeArticleHtml, renderKnowledgeMarkdownHtml } from '../../../functions/lib/knowledge-indexability';
+import { knowledgeCanonicalUrl, renderKnowledgeArticleHtml, renderKnowledgeMarkdownHtml } from '../../../functions/lib/knowledge-indexability';
 import { onRequestGet } from '../../../functions/wissen/[slug]';
 import {
   createProductionKnowledgeHonoHarness,
@@ -130,6 +130,7 @@ describe('published article navigation and semantic HTML', () => {
       const response = await harness.fetch(new Request('https://test.local/api/knowledge/magnesium?cfcheck=1'));
       const { article } = await response.json() as { article: PublicKnowledgeArticle };
       const shell = '<html><head><title>Shell</title></head><body><div id="root"></div></body></html>';
+      const canonicalUrl = knowledgeCanonicalUrl(article.slug);
       article.sources = [
         { source_id: 'a', label: 'Studie A', url: '/wissen/evidenz' },
         { source_id: 'b', label: 'Studie B', url: '/wissen/evidenz' },
@@ -137,13 +138,13 @@ describe('published article navigation and semantic HTML', () => {
       ];
       article.body = '## Ergebnis\n\nEin Befund.\n\n## **Fazit und Einordnung**\n\nAltes Fazit.\n\n## Quellen\n\n[Bodyquelle](https://example.com/original)';
       article.conclusion = '## **Fazit**\n\n**Aktuelles** Fazit.';
-      const document = new JSDOM(renderKnowledgeArticleHtml(shell, article, 'https://test.local/wissen/magnesium')).window.document;
+      const document = new JSDOM(renderKnowledgeArticleHtml(shell, article, canonicalUrl)).window.document;
       expect(document.querySelectorAll('#prerender-sources + ol li')).toHaveLength(2);
       expect(document.querySelector('article')?.textContent).not.toContain('Altes Fazit.');
       expect(document.querySelectorAll('article h2')).toHaveLength(3);
       expect(document.querySelector('article strong')?.textContent).toBe('Aktuelles');
       article.sources = [];
-      const bodyOnly = new JSDOM(renderKnowledgeArticleHtml(shell, article, 'https://test.local/wissen/magnesium')).window.document;
+      const bodyOnly = new JSDOM(renderKnowledgeArticleHtml(shell, article, canonicalUrl)).window.document;
       expect(bodyOnly.querySelector('article a[href="https://example.com/original"]')?.textContent).toBe('Bodyquelle');
     } finally { harness.close(); }
   });

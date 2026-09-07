@@ -1,6 +1,6 @@
 const APP_ROUTES = new Set([
   '/', '/login', '/register', '/profile', '/forgot-password', '/reset-password', '/verify-email',
-  '/stacks', '/demo', '/creator', '/einnahmeplan', '/my-products', '/wissen',
+  '/stacks', '/demo', '/creator', '/einnahmeplan', '/einnahmeplan-erstellen', '/my-products', '/wissen',
   '/impressum', '/datenschutz', '/nutzungsbedingungen', '/administrator',
   ...['dashboard', 'ingredients', 'products', 'interactions', 'dosing', 'health', 'knowledge',
     'translations', 'user-products', 'product-qa', 'link-reports', 'launch-checks', 'users',

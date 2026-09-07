@@ -16,6 +16,7 @@ import {
 import {
   buildKnowledgePrerenderResponse,
   onRequestGet,
+  onRequestHead,
 } from '../../../functions/wissen/[slug]';
 import { onRequestGet as onRobotsRequest } from '../../../functions/robots.txt';
 import { onRequestGet as onSitemapRequest } from '../../../functions/sitemap.xml';
@@ -182,7 +183,7 @@ describe('knowledge indexability delivery', () => {
     expect(document.body.textContent).not.toContain('_Untertitel_');
     expect(document.body.textContent).not.toContain('**Wirkung**');
     expect(document.querySelector('meta[name="description"]')?.getAttribute('content')).toBe('Eine klare und vorsichtige Einordnung.');
-    expect(JSON.parse(document.querySelector('script[type="application/ld+json"]')?.textContent ?? '').headline).toBe('Grapefruitkernextrakt: Wirkung & Sicherheit');
+    expect(JSON.parse(document.querySelector('script[type="application/ld+json"]')?.textContent ?? '')['@graph'][0].headline).toBe('Grapefruitkernextrakt: Wirkung & Sicherheit');
     const bootstrap = JSON.parse(
       document.querySelector('script:not([type])')?.textContent?.replace('window.__knowledgeArticleBootstrap=', '').replace(/;$/, '') ?? '',
     ) as { article: PublicKnowledgeArticle };
@@ -211,7 +212,7 @@ describe('knowledge indexability delivery', () => {
       canonicalUrl,
     );
     const document = new JSDOM(html, { url: canonicalUrl }).window.document;
-    const jsonLd = JSON.parse(document.querySelector('script[type="application/ld+json"]')?.textContent ?? '') as Record<string, unknown>;
+    const jsonLd = JSON.parse(document.querySelector('script[type="application/ld+json"]')?.textContent ?? '')['@graph'][0] as Record<string, unknown>;
 
     expect(document.title).toBe('Grapefruitkernextrakt: Wirkung und Sicherheit');
     expect(document.querySelector('meta[name="description"]')?.getAttribute('content')).toBe('Eine klare und vorsichtige Einordnung der freigegebenen Evidenz.');
@@ -230,20 +231,20 @@ describe('knowledge indexability delivery', () => {
     const robots = buildRobotsTxt(releasedKnowledgeSlugs);
     const sitemap = buildSitemapXml(new Map(releasedKnowledgeSlugs.map((slug) => [slug, '2026-07-15T11:00:00.000Z'])));
     for (const slug of releasedKnowledgeSlugs) {
-      expect(robots).toContain(`Allow: /wissen/${slug}$`);
       expect(sitemap).toContain(`<loc>https://supplementstack.de/wissen/${slug}</loc>`);
       expect(knowledgeCanonicalUrl(slug)).toBe(`https://supplementstack.de/wissen/${slug}`);
     }
-    expect(robots).toContain('Disallow: /');
+    expect(robots).not.toContain('Disallow: /');
+    expect(robots).toContain('Allow: /');
     expect(robots).toContain('User-agent: Googlebot\nUser-agent: Googlebot-Image');
     expect(interpretRobotsTxt(robots, 'https://supplementstack.de/wissen/grapefruitkernextrakt', 'Googlebot').global_rule).toBe('ALLOW');
-    expect(interpretRobotsTxt(robots, 'https://supplementstack.de/wissen/grapefruitkernextrakt-beliebig', 'Googlebot').global_rule).toBe('DISALLOW');
+    expect(interpretRobotsTxt(robots, 'https://supplementstack.de/wissen/grapefruitkernextrakt-beliebig', 'Googlebot').global_rule).toBe('ALLOW');
     for (const slug of newlyReleasedStage2Slugs) {
       expect(interpretRobotsTxt(robots, `https://supplementstack.de/wissen/${slug}`, 'Googlebot').global_rule).toBe('ALLOW');
     }
-    expect(interpretRobotsTxt(robots, 'https://supplementstack.de/wissen/vitamin-d-evidenzquellen-entwurf', 'Googlebot').global_rule).toBe('DISALLOW');
-    expect(interpretRobotsTxt(robots, 'https://supplementstack.de/wissen/vitamin-a', 'Googlebot').global_rule).toBe('DISALLOW');
-    expect((sitemap.match(/<url>/g) ?? [])).toHaveLength(releasedKnowledgeSlugs.length);
+    expect(interpretRobotsTxt(robots, 'https://supplementstack.de/wissen/vitamin-d-evidenzquellen-entwurf', 'Googlebot').global_rule).toBe('ALLOW');
+    expect(interpretRobotsTxt(robots, 'https://supplementstack.de/wissen/vitamin-a', 'Googlebot').global_rule).toBe('ALLOW');
+    expect((sitemap.match(/<url>/g) ?? [])).toHaveLength(releasedKnowledgeSlugs.length + 4);
   });
 
   it('rewrites stale shell headers and keeps the production canonical on preview hosts', async () => {
@@ -258,9 +259,9 @@ describe('knowledge indexability delivery', () => {
     expect(response.headers.get('etag')).toBeNull();
     expect(response.headers.get('last-modified')).toBeNull();
     expect(response.headers.get('content-length')).toBeNull();
-    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get('cache-control')).toBe('public, max-age=0, must-revalidate');
     expect(document.querySelector('link[rel="canonical"]')?.getAttribute('href')).toBe('https://supplementstack.de/wissen/grapefruitkernextrakt');
-    expect(JSON.parse(document.querySelector('script[type="application/ld+json"]')?.textContent ?? '').mainEntityOfPage).toBe('https://supplementstack.de/wissen/grapefruitkernextrakt');
+    expect(JSON.parse(document.querySelector('script[type="application/ld+json"]')?.textContent ?? '')['@graph'][0].mainEntityOfPage).toBe('https://supplementstack.de/wissen/grapefruitkernextrakt');
   });
 
   it('returns a readable noindex/no-store 503 when D1 readback fails', async () => {
@@ -322,6 +323,47 @@ describe('knowledge indexability delivery', () => {
     expect(document.querySelector('form')?.getAttribute('action')).toBe('/wissen');
   });
 
+  it('deduplicates stale shell SEO and emits one graph plus Twitter and a real social image', () => {
+    const shell = '<html><head><title>Alt</title><meta name="description" content="Alt"><meta property="og:image" content="https://old.invalid/image"><script type="application/ld+json">{"@type":"Article","headline":"Alt"}</script></head><body><div id="root"></div></body></html>';
+    const document = new JSDOM(renderKnowledgeArticleHtml(shell, article, knowledgeCanonicalUrl(article.slug))).window.document;
+    expect(document.querySelectorAll('title')).toHaveLength(1);
+    expect(document.querySelectorAll('meta[name="description"]')).toHaveLength(1);
+    expect(document.querySelectorAll('script[type="application/ld+json"]')).toHaveLength(1);
+    expect(document.querySelector('meta[name="twitter:card"]')?.getAttribute('content')).toBe('summary_large_image');
+    expect(document.querySelector('meta[property="og:image"]')?.getAttribute('content')).toBe('https://supplementstack.de/logo.png');
+    expect(document.querySelectorAll('h1')).toHaveLength(1);
+  });
+
+  it.each([200, 404, 503])('serves GET and HEAD with identical article-state %s headers and no HEAD body', async (status) => {
+    const harness = createProductionKnowledgeHonoHarness();
+    try {
+      createProductionKnowledgeSchema(harness);
+      if (status === 200) {
+        harness.run("INSERT INTO ingredients (id, name, is_active) VALUES (7, 'Grapefruitkernextrakt', 1)");
+        seedProductionKnowledgeArticle(harness, { slug: article.slug, ingredientId: 7, title: article.title, summary: article.summary, body: article.body, status: 'published', articleLayer: 'main_article', reviewedAt: article.reviewed_at, createdAt: article.created_at, updatedAt: article.updated_at, sources: [] });
+      }
+      const context = (method: 'GET' | 'HEAD') => ({
+        params: { slug: article.slug },
+        request: new Request(`https://supplementstack.de/wissen/${article.slug}?cfcheck=head-test`, { method, headers: { 'If-None-Match': 'shell-etag', 'If-Modified-Since': 'yesterday' } }),
+        env: { DB: status === 503 ? { prepare: () => { throw new Error('D1 unavailable'); } } : harness.db },
+        next: async (request: Request) => {
+          expect(request.method).toBe('GET');
+          expect(request.headers.has('If-None-Match')).toBe(false);
+          expect(request.headers.has('If-Modified-Since')).toBe(false);
+          return new Response('<html><head><title>Shell</title></head><body><div id="root"></div></body></html>', { headers: { 'Content-Type': 'text/html', ETag: 'shell-etag' } });
+        },
+      });
+      const get = await onRequestGet(context('GET') as never);
+      const head = await onRequestHead(context('HEAD') as never);
+      expect(get.status).toBe(status);
+      expect(head.status).toBe(get.status);
+      expect([...head.headers]).toEqual([...get.headers]);
+      expect(await head.text()).toBe('');
+      expect(await get.text()).toContain('<h1>');
+      expect(head.headers.get('cache-control')).toBe('no-store');
+    } finally { harness.close(); }
+  });
+
   it('makes robots and sitemap reflect each current published-state read without stale caching', async () => {
     let published = [{ slug: 'vitamin-d-neu', updated_at: '2026-07-18T00:00:00.000Z' }];
     const db = {
@@ -338,8 +380,8 @@ describe('knowledge indexability delivery', () => {
     const robotsPublished = await onRobotsRequest(context);
     const sitemapPublished = await onSitemapRequest(context);
     expect(robotsPublished.status).toBe(200);
-    expect(robotsPublished.headers.get('cache-control')).toBe('no-store');
-    expect(await robotsPublished.text()).toContain('Allow: /wissen/vitamin-d-neu$');
+    expect(robotsPublished.headers.get('cache-control')).toBe('public, max-age=0, must-revalidate');
+    expect(await robotsPublished.text()).toContain('Allow: /');
     expect(sitemapPublished.status).toBe(200);
     expect(sitemapPublished.headers.get('cache-control')).toBe('no-store');
     expect(await sitemapPublished.text()).toContain('<loc>https://supplementstack.de/wissen/vitamin-d-neu</loc>');
@@ -347,9 +389,12 @@ describe('knowledge indexability delivery', () => {
     published = [];
     const robotsRetired = await onRobotsRequest(context);
     const sitemapRetired = await onSitemapRequest(context);
-    expect(robotsRetired.status).toBe(503);
-    expect(robotsRetired.headers.get('cache-control')).toBe('no-store');
-    expect(sitemapRetired.status).toBe(503);
+    expect(robotsRetired.status).toBe(200);
+    expect(robotsRetired.headers.get('cache-control')).toBe('public, max-age=0, must-revalidate');
+    expect(sitemapRetired.status).toBe(200);
     expect(sitemapRetired.headers.get('cache-control')).toBe('no-store');
+    const retiredXml = await sitemapRetired.text();
+    expect(retiredXml).not.toContain('/wissen/vitamin-d-neu');
+    expect(retiredXml).toContain('<loc>https://supplementstack.de/wissen</loc>');
   });
 });

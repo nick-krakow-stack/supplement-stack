@@ -9,6 +9,9 @@ import {
   within,
 } from "@testing-library/react";
 import { readFileSync } from "node:fs";
+import { useLayoutEffect } from 'react';
+import { applyPublicRouteHead } from '../lib/publicPageHead';
+import { DEFAULT_SOCIAL_IMAGE, resolveRouteHead } from '../../../functions/lib/route-head-contract.mjs';
 import { resolve } from "node:path";
 import { Link, MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -720,264 +723,61 @@ describe("KnowledgeMarkdown", () => {
       modifiedAt: "2026-08-01T09:00:00.000Z",
     });
   });
-  it("sets article SEO metadata from the current article and restores the previous head on navigation and unmount", async () => {
-    const initialTitle = document.title;
-    const previousDescription = document.head.querySelector<HTMLMetaElement>(
-      'meta[name="description"]',
-    );
-    const previousDescriptionContent = previousDescription?.getAttribute("content") ?? null;
-    const baselineDescription = previousDescription ?? document.createElement("meta");
-    if (!previousDescription) {
-      baselineDescription.setAttribute("name", "description");
-      document.head.append(baselineDescription);
+  it("replaces SSR metadata with one bound graph across articles and clears it on the overview", async () => {
+    const core = {
+      '@context': 'https://schema.org', '@type': 'Article', headline: 'Zink: technischer Meta-Titel',
+      description: 'Die freigegebene technische Beschreibung.',
+      mainEntityOfPage: 'https://supplementstack.de/wissen/zink', inLanguage: 'de',
+    };
+    const bodyAsset = `/api/r2/knowledge/quercetin/${"a".repeat(64)}.png`;
+    const first = {
+      slug: 'quercetin', title: 'Quercetin verständlich erklärt',
+      summary: 'Eine **klare** Einordnung mit </script> als Text.',
+      body: `Ein Artikel.\n\n![Vorhandene Grafik](${bodyAsset})`, sources: [],
+      created_at: '2025-01-02 08:30:00', updated_at: '2026-07-13T18:00:00Z', reviewed_at: '2026-07-14T10:00:00Z',
+    };
+    const second = {
+      slug: 'zink', title: 'Zink im Überblick', summary: 'Eine verständliche Einordnung.',
+      body: 'Ein Artikel über Zink.', sources: [],
+      seo: { meta_title: core.headline, meta_description: core.description, canonical_url: core.mainEntityOfPage, canonical_path: '/wissen/zink', robots: 'index,follow', indexable: true, json_ld: core },
+    };
+    window.__knowledgeArticleBootstrap = { article: first };
+    document.head.innerHTML += '<meta property="og:image" content="https://old.invalid/stale.png"><script type="application/ld+json">{"@type":"Article","headline":"Alte SSR-Daten"}</script>';
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(knowledgeResponse(second)));
+    function OverviewHead() {
+      useLayoutEffect(() => { applyPublicRouteHead(resolveRouteHead({ pathname: '/wissen' })); }, []);
+      return <h1>Wissensübersicht</h1>;
     }
-    baselineDescription.setAttribute("content", "Beschreibung der vorherigen Seite.");
-
-    const previousOgTitle = document.head.querySelector<HTMLMetaElement>(
-      'meta[property="og:title"]',
-    );
-    const previousOgTitleContent = previousOgTitle?.getAttribute("content") ?? null;
-    const baselineOgTitle = previousOgTitle ?? document.createElement("meta");
-    if (!previousOgTitle) {
-      baselineOgTitle.setAttribute("property", "og:title");
-      document.head.append(baselineOgTitle);
-    }
-    baselineOgTitle.setAttribute("content", "Vorheriger OpenGraph-Titel");
-    const previousRobots = document.head.querySelector<HTMLMetaElement>(
-      'meta[name="robots"]',
-    );
-    const previousRobotsContent = previousRobots?.getAttribute("content") ?? null;
-    document.title = "Vorherige Seite | Supplement Stack";
-
-    const quercetinSummary =
-      'Quercetin kompakt: **"klar"** & </script> sicher eingeordnet.';
-    const quercetinDescription =
-      'Quercetin kompakt: "klar" & </script> sicher eingeordnet.';
-    const bodyAssetPath = `/api/r2/knowledge/quercetin/${"a".repeat(64)}.png`;
-    const technicalZinkUrl = new URL('/wissen/zink', window.location.origin).href;
-    const technicalZinkDescription = 'Technische Zink-Beschreibung aus der freigegebenen SEO-Projektion.';
-    const storedTechnicalZinkJsonLd = {
-      '@context': 'https://schema.org',
-      '@type': 'Article',
-      headline: 'Zink: **technischer** Meta-Titel',
-      description: 'Technische **Zink**-Beschreibung aus der freigegebenen SEO-Projektion.',
-      mainEntityOfPage: technicalZinkUrl,
-      inLanguage: 'de',
-    };
-    const technicalZinkJsonLd = {
-      ...storedTechnicalZinkJsonLd,
-      headline: 'Zink: technischer Meta-Titel',
-      description: technicalZinkDescription,
-    };
-    const articles = {
-      quercetin: {
-        slug: "quercetin",
-        title: "Quercetin verständlich erklärt",
-        summary: quercetinSummary,
-        body: `Ein Artikel über Quercetin.\n\n![Quercetin-Grafik](${bodyAssetPath})`,
-        reviewed_at: "2026-07-14T10:00:00.000Z",
-        created_at: "2025-01-02 08:30:00",
-        updated_at: "2026-07-13T18:00:00.000Z",
-        featured_image_url: "/api/r2/knowledge/quercetin/hero.webp",
-        sources: [],
-      },
-      zink: {
-        slug: "zink",
-        title: "Zink im Überblick",
-        summary: "Zink verständlich erklärt: Funktionen, Quellen und Einordnung.",
-        body: "Ein Artikel über Zink.",
-        reviewed_at: "2026-07-01T09:00:00.000Z",
-        created_at: "2026-08-01T09:00:00.000Z",
-        updated_at: "2026-07-01T09:00:00.000Z",
-        featured_image_url: "data:image/png;base64,unsafe",
-        sources: [],
-        seo: {
-          meta_title: 'Zink: technischer Meta-Titel',
-          meta_description: technicalZinkDescription,
-          canonical_url: technicalZinkUrl,
-          canonical_path: '/wissen/zink',
-          robots: 'index,follow',
-          indexable: true,
-          json_ld: storedTechnicalZinkJsonLd,
-        },
-      },
-    };
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((input: RequestInfo | URL) => {
-        const article = String(input).endsWith("/zink")
-          ? articles.zink
-          : articles.quercetin;
-        return Promise.resolve({
-          ok: true,
-          json: () => Promise.resolve({ article }),
-        });
-      }),
-    );
-
-    const { unmount } = render(
-      <MemoryRouter initialEntries={["/wissen/quercetin"]}>
+    render(
+      <MemoryRouter initialEntries={['/wissen/quercetin']}>
         <Link to="/wissen/zink">Zum Zinkartikel</Link>
+        <Link to="/wissen">Zur Übersicht</Link>
         <Routes>
           <Route path="/wissen/:slug" element={<KnowledgeArticlePage />} />
+          <Route path="/wissen" element={<OverviewHead />} />
         </Routes>
       </MemoryRouter>,
     );
-
-    await screen.findByRole("heading", {
-      level: 1,
-      name: "Quercetin verständlich erklärt",
-    });
-    const quercetinUrl = new URL(
-      "/wissen/quercetin",
-      window.location.origin,
-    ).href;
-    await waitFor(() => {
-      expect(document.title).toBe("Quercetin verständlich erklärt");
-    });
-    expect(baselineDescription.getAttribute("content")).toBe(
-      quercetinDescription,
-    );
-    expect(
-      document.head
-        .querySelector('meta[name="robots"]')
-        ?.getAttribute("content"),
-    ).toBe("index,follow");
-    expect(
-      document.head
-        .querySelector('link[rel="canonical"]')
-        ?.getAttribute("href"),
-    ).toBe(quercetinUrl);
-    expect(baselineOgTitle.getAttribute("content")).toBe(
-      "Quercetin verständlich erklärt",
-    );
-    expect(
-      document.head
-        .querySelector('meta[property="og:description"]')
-        ?.getAttribute("content"),
-    ).toBe(quercetinDescription);
-    expect(
-      document.head
-        .querySelector('meta[property="og:url"]')
-        ?.getAttribute("content"),
-    ).toBe(quercetinUrl);
-    expect(
-      document.head
-        .querySelector('meta[property="og:type"]')
-        ?.getAttribute("content"),
-    ).toBe("article");
-    const quercetinImageUrl = new URL(bodyAssetPath, window.location.origin).href;
-    expect(
-      document.head
-        .querySelector('meta[property="og:image"]')
-        ?.getAttribute("content"),
-    ).toBe(quercetinImageUrl);
-
-    const quercetinJsonLdElement = document.head.querySelector<HTMLScriptElement>(
-      'script[data-knowledge-article-json-ld="true"]',
-    );
-    expect(quercetinJsonLdElement?.textContent).not.toContain("</script>");
-    const quercetinJsonLd = JSON.parse(
-      quercetinJsonLdElement?.textContent ?? "{}",
-    ) as Record<string, unknown>;
-    expect(quercetinJsonLd).toMatchObject({
-      "@context": "https://schema.org",
-      "@type": "Article",
-      headline: "Quercetin verständlich erklärt",
-      description: quercetinDescription,
-      mainEntityOfPage: quercetinUrl,
-      inLanguage: "de",
-      datePublished: "2025-01-02T08:30:00.000Z",
-      dateModified: "2026-07-14T10:00:00.000Z",
-      author: {
-        "@type": "Organization",
-        "@id": "http://localhost:3000/#organization",
-        name: "Supplement Stack",
-        url: "http://localhost:3000/",
-      },
-      publisher: {
-        "@type": "Organization",
-        "@id": "http://localhost:3000/#organization",
-        name: "Supplement Stack",
-        url: "http://localhost:3000/",
-      },
-      image: quercetinImageUrl,
-    });
-    expect(quercetinJsonLd).not.toHaveProperty("url");
-
-    fireEvent.click(screen.getByRole("link", { name: "Zum Zinkartikel" }));
-    await screen.findByRole("heading", { level: 1, name: "Zink im Überblick" });
-    const zinkUrl = technicalZinkUrl;
-    await waitFor(() => {
-      expect(document.title).toBe("Zink: technischer Meta-Titel");
-      expect(baselineDescription.getAttribute("content")).toBe(
-        technicalZinkDescription,
-      );
-    });
-    expect(
-      document.head
-        .querySelector('link[rel="canonical"]')
-        ?.getAttribute("href"),
-    ).toBe(zinkUrl);
-    expect(
-      document.head.querySelectorAll(
-        'script[data-knowledge-article-json-ld="true"]',
-      ),
-    ).toHaveLength(1);
-    const zinkJsonLd = JSON.parse(
-      document.head.querySelector<HTMLScriptElement>(
-        'script[data-knowledge-article-json-ld="true"]',
-      )?.textContent ?? "{}",
-    ) as Record<string, unknown>;
-    expect(zinkJsonLd).toEqual(technicalZinkJsonLd);
-    expect(zinkJsonLd).not.toHaveProperty("url");
-    expect(zinkJsonLd).not.toHaveProperty("image");
-    expect(document.head.querySelector('meta[property="og:image"]')).toBeNull();
-    unmount();
-    expect(document.title).toBe("Vorherige Seite | Supplement Stack");
-    expect(baselineDescription.getAttribute("content")).toBe(
-      "Beschreibung der vorherigen Seite.",
-    );
-    expect(baselineOgTitle.getAttribute("content")).toBe(
-      "Vorheriger OpenGraph-Titel",
-    );
-    expect(document.head.querySelector('link[rel="canonical"]')).toBeNull();
-    expect(
-      document.head.querySelector('meta[property="og:description"]'),
-    ).toBeNull();
-    expect(document.head.querySelector('meta[property="og:url"]')).toBeNull();
-    expect(document.head.querySelector('meta[property="og:type"]')).toBeNull();
-    expect(document.head.querySelector('meta[property="og:image"]')).toBeNull();
-    expect(
-      document.head.querySelector(
-        'script[data-knowledge-article-json-ld="true"]',
-      ),
-    ).toBeNull();
-    if (previousRobots) {
-      expect(previousRobots.getAttribute("content")).toBe(previousRobotsContent);
-    } else {
-      expect(document.head.querySelector('meta[name="robots"]')).toBeNull();
-    }
-
-    document.title = initialTitle;
-    if (previousDescription) {
-      if (previousDescriptionContent === null) {
-        previousDescription.removeAttribute("content");
-      } else {
-        previousDescription.setAttribute("content", previousDescriptionContent);
-      }
-    } else {
-      baselineDescription.remove();
-    }
-    if (previousOgTitle) {
-      if (previousOgTitleContent === null) {
-        previousOgTitle.removeAttribute("content");
-      } else {
-        previousOgTitle.setAttribute("content", previousOgTitleContent);
-      }
-    } else {
-      baselineOgTitle.remove();
-    }
+    await screen.findByRole('heading', { name: first.title, level: 1 });
+    const graph = () => JSON.parse(document.head.querySelector('script[type="application/ld+json"]')?.textContent ?? '{}');
+    expect(document.head.querySelectorAll('script[type="application/ld+json"]')).toHaveLength(1);
+    expect(graph()['@graph'][0]).toMatchObject({ headline: first.title, description: 'Eine klare Einordnung mit </script> als Text.', datePublished: '2025-01-02T08:30:00.000Z', dateModified: '2026-07-14T10:00:00.000Z' });
+    expect(document.head.querySelector('link[rel="canonical"]')?.getAttribute('href')).toBe('https://supplementstack.de/wissen/quercetin');
+    expect(document.head.querySelector('meta[property="og:image"]')?.getAttribute('content')).toBe(`https://supplementstack.de${bodyAsset}`);
+    expect(document.head.querySelector('meta[name="twitter:card"]')?.getAttribute('content')).toBe('summary_large_image');
+    fireEvent.click(screen.getByRole('link', { name: 'Zum Zinkartikel' }));
+    await screen.findByRole('heading', { name: second.title, level: 1 });
+    expect(document.title).toBe(core.headline);
+    expect(graph()['@graph'][0]).toEqual(core);
+    expect(document.head.querySelectorAll('script[type="application/ld+json"]')).toHaveLength(1);
+    expect(document.head.querySelector('meta[property="og:image"]')?.getAttribute('content')).toBe(DEFAULT_SOCIAL_IMAGE);
+    expect(document.head.querySelectorAll('link[rel="canonical"]')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('link', { name: 'Zur Übersicht' }));
+    await screen.findByRole('heading', { name: 'Wissensübersicht' });
+    expect(document.head.querySelectorAll('script[type="application/ld+json"]')).toHaveLength(1);
+    expect(document.head.textContent).not.toContain(core.headline);
+    expect(document.head.querySelector('link[rel="canonical"]')?.getAttribute('href')).toBe('https://supplementstack.de/wissen');
+    expect(JSON.stringify(graph())).not.toContain('"@type":"Article"');
   });
   it("renders marked main articles with the magazine template architecture", async () => {
     vi.stubGlobal(
@@ -2098,7 +1898,7 @@ describe("KnowledgeMarkdown", () => {
     expect(String(fetchMock.mock.calls[0][0]))
       .toMatch(/\/api\/knowledge\/vitamin-a\?cfcheck=sha256%3Arelease-1$/);
     expect(document.head.querySelector('link[rel="canonical"]')?.getAttribute("href"))
-      .toBe("http://localhost:3000/wissen/vitamin-a");
+      .toBe("https://supplementstack.de/wissen/vitamin-a");
   });
   it("treats disallowed image URLs as plain text", () => {
     const blockedImageMarkdown = "![JavaScript-Bild](javascript:alert(1) )";

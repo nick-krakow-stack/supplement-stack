@@ -4,6 +4,7 @@ import { apiClient } from '../api/client';
 import { authPath, authReturnTo, returnToLabel } from '../lib/returnTo';
 import PasswordField from '../components/PasswordField';
 import StatusMessage from '../components/StatusMessage';
+import { authDeliveryStatus } from '../lib/authDeliveryState';
 
 function passwordQuality(password: string): { label: string; color: string } {
   if (!password) return { label: 'Noch nicht eingegeben', color: 'bg-slate-200' };
@@ -21,6 +22,8 @@ export default function ResetPasswordPage() {
   const location = useLocation();
   const token = searchParams.get('token') ?? '';
   const returnTo = authReturnTo(location);
+  const [initialDelivery] = useState(() => ({ token, status: authDeliveryStatus(location.pathname) }));
+  const deliveryError = initialDelivery.token === token ? initialDelivery.status : null;
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -61,6 +64,16 @@ export default function ResetPasswordPage() {
       setSubmitting(false);
     }
   };
+
+  if (deliveryError) {
+    return (
+      <div className="flex min-h-[70vh] items-center justify-center"><div className="card w-full max-w-sm">
+        <h1 className="mb-4">{deliveryError === 503 ? 'Link gerade nicht prüfbar' : deliveryError === 410 ? 'Link abgelaufen' : 'Link ungültig'}</h1>
+        <StatusMessage tone="error">{deliveryError === 503 ? 'Der Link konnte gerade nicht geprüft werden. Bitte versuche es später noch einmal.' : 'Bitte fordere einen neuen Link an, um dein Passwort zurückzusetzen.'}</StatusMessage>
+        {deliveryError === 503 ? <button type="button" onClick={() => window.location.reload()} className="mt-4 min-h-11">Erneut versuchen</button> : <Link to={authPath('/forgot-password', returnTo)} className="mt-4 inline-flex min-h-11 items-center font-bold text-indigo-700 hover:underline">Neuen Link anfordern</Link>}
+      </div></div>
+    );
+  }
 
   if (!token) {
     return (

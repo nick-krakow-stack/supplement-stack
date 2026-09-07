@@ -74,7 +74,7 @@ describe('Wissensartikel aus Nutzer- und Creator-Sicht', () => {
     vi.mocked(fetch).mockImplementation(async (input) => ({ ok: !String(input).includes('/fehlend'), status: String(input).includes('/fehlend') ? 404 : 200, json: async () => overview } as Response));
     renderJourney('/wissen/fehlend');
     await screen.findByRole('heading', { name: 'Artikel nicht gefunden', level: 1 });
-    expect(document.head.querySelector('meta[name="robots"]')).toHaveAttribute('content', 'noindex,follow');
+    expect(document.head.querySelector('meta[name="robots"]')).toHaveAttribute('content', 'noindex,nofollow');
     fireEvent.change(screen.getByRole('searchbox', { name: 'Wirkstoff suchen' }), { target: { value: 'Teststoff' } });
     fireEvent.click(screen.getByRole('button', { name: 'Suchen' }));
     await screen.findByRole('link', { name: /Teststoff.*Artikel lesen/ });

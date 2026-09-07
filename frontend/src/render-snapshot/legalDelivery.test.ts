@@ -5,6 +5,7 @@ import { onRequest } from '../../../functions/_middleware';
 import type { Env } from '../../../functions/api/lib/types';
 import type { PublicLegalDocument } from '../../../functions/lib/legal-documents';
 import { formatLegalDocumentDate, legalDocumentVersionText, normalizeLegalLink, renderLegalMarkdown } from '../../../functions/lib/legal-document-renderer.mjs';
+vi.mock('cloudflare:sockets', () => ({ connect: vi.fn() }));
 
 const document: PublicLegalDocument = {
   slug: 'impressum', title: 'Impressum', body_md: '# Impressum\n\n## Kontakt\n\n**Name** und *Anschrift*\nZweite Zeile\n\n- [E-Mail](mailto:kontakt@example.test)\n- [Telefon](tel:+491234567)\n\n1. [Datenschutz](/datenschutz)\n2. [Original](https://example.test/?a=1&b=2)\n\n| Spalte | Inhalt |\n| --- | --- |\n| A | **Text** |', status: 'published', published_at: '2026-09-06 09:00:00', updated_at: '2026-09-06 12:30:00', version: 1,
@@ -30,6 +31,8 @@ describe('canonical legal documents API, initial HTML and safe rendering', () =>
     const response = await page(db);
     const dom = new JSDOM(await response.text()).window.document;
     expect(response.status).toBe(200);
+    expect(response.headers.get('X-Robots-Tag')).toBe('noindex, follow');
+    expect(dom.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe('noindex,follow');
     expect(api.status).toBe(200);
     expect(JSON.parse(dom.querySelector('#legal-document-bootstrap')?.textContent ?? '')).toEqual(apiPayload);
     expect(apiPayload).toEqual({ document });

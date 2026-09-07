@@ -40,7 +40,7 @@ function LegalDocumentContent({ slug, title }: Props) {
   useLayoutEffect(() => {
     setPublicPageHead({
       title: `${state.status === 'ready' ? state.document.title : title} | Supplement Stack`,
-      robots: state.status === 'ready' ? 'index,follow' : 'noindex,nofollow',
+      robots: state.status === 'ready' ? 'noindex,follow' : 'noindex,nofollow',
       canonicalPath: state.status === 'ready' ? `/${slug}` : null,
     });
   }, [slug, state, title]);

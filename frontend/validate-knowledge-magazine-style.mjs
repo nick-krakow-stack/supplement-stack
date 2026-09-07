@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+// CLI: node frontend/validate-knowledge-magazine-style.mjs
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { EventEmitter } from 'node:events';
@@ -11,6 +11,7 @@ import { dirname, extname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build as buildVite } from 'vite';
 import { JSDOM } from 'jsdom';
+import { SITE_ORIGIN } from '../functions/lib/route-head-contract.mjs';
 import {
   canonicalJsonHash,
   computeKnowledgeMagazineContractHashes,
@@ -157,7 +158,7 @@ const PUBLIC_CHECKS = Object.freeze({
   stage3: Object.freeze(['assets', 'canonical', 'controls', 'fazit', 'h1_dek', 'indexability', 'internal_links', 'json_ld', 'left_navigation', 'projection', 'robots', 'sources', 'toc', 'ui']),
 });
 
-function normalizePublicArticle(value, index) {
+export function normalizePublicArticle(value, index) {
   const path = `articles[${index}]`;
   const article = requireRecord(value, path);
   requireExactKeys(article, new Set([
@@ -192,7 +193,7 @@ function normalizePublicArticle(value, index) {
   const expectedSeo = requireRecord(article.expected_seo, `${path}.expected_seo`);
   requireExactKeys(expectedSeo, new Set(['meta_title', 'meta_description', 'canonical_url', 'canonical_path', 'robots', 'indexable', 'json_ld']), `${path}.expected_seo`);
   if (canonicalJsonHash(expectedSeo) !== article.seo_hash
-    || expectedSeo.canonical_url !== publicUrl
+    || (expectedSeo.canonical_url !== publicUrl && expectedSeo.canonical_url !== `${SITE_ORIGIN}/wissen/${slug}`)
     || expectedSeo.canonical_path !== `/wissen/${slug}`
     || expectedSeo.robots !== 'index,follow'
     || expectedSeo.indexable !== true) {
@@ -1435,7 +1436,14 @@ const ROUTE_STATE_EXPRESSION = `(async () => {
   let jsonLd = null;
   let jsonLdParseError = null;
   const jsonLdElement = document.head.querySelector('script[data-knowledge-article-json-ld="true"][type="application/ld+json"]');
-  try { jsonLd = jsonLdElement ? JSON.parse(jsonLdElement.textContent || '') : null; } catch (error) { jsonLdParseError = String(error); }
+  try {
+    const parsed = jsonLdElement ? JSON.parse(jsonLdElement.textContent || '') : null;
+    const nodes = Array.isArray(parsed?.['@graph']) ? parsed['@graph'] : [parsed];
+    const articles = nodes.filter((node) => node && (node['@type'] === 'Article' || (Array.isArray(node['@type']) && node['@type'].includes('Article'))));
+    if (document.head.querySelectorAll('script[type="application/ld+json"]').length !== 1 || articles.length !== 1) {
+      jsonLdParseError = 'Expected exactly one JSON-LD script and one Article core.';
+    } else jsonLd = articles[0];
+  } catch (error) { jsonLdParseError = String(error); }
   const seo = {
     meta_title: normalizeText(document.title),
     meta_description: normalizeText(document.head.querySelector('meta[name="description"]')?.getAttribute('content')),
@@ -2099,8 +2107,11 @@ export function assessRawHtmlReadback(readback, expected) {
   ].map(normalizedDocumentText).filter(Boolean);
   const titleMatch = normalizedDocumentText(document?.title) === normalizedDocumentText(expected.expected_seo.meta_title);
   const articleTextMatch = Boolean(document) && expectedTextSegments.every((segment) => rawText.includes(segment));
-  const articleJsonLdMatch = Boolean(document) && articleJsonLdDocuments(document)
-    .some((value) => canonicalJsonHash(value) === canonicalJsonHash(expected.expected_seo.json_ld));
+  const articleCores = document ? articleJsonLdDocuments(document) : [];
+  const articleJsonLdMatch = Boolean(document)
+    && document.head.querySelectorAll('script[type="application/ld+json"]').length === 1
+    && articleCores.length === 1
+    && canonicalJsonHash(articleCores[0]) === canonicalJsonHash(expected.expected_seo.json_ld);
   const seoDeliveryState = htmlTransportMatches && titleMatch && articleTextMatch && articleJsonLdMatch
     ? 'RAW_HTML_MATCH'
     : 'CLIENT_RENDERED_ONLY';

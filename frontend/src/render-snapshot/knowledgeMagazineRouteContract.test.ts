@@ -31,7 +31,6 @@ import {
   terminateBrowserProcess,
   writeReceiptAtomic,
 } from '../../validate-knowledge-magazine-style.mjs';
-import { buildRobotsTxt } from '../../../functions/lib/knowledge-indexability';
 import type { ArticleRenderProjectionV2 } from './knowledgeMagazineRenderSnapshot';
 import {
   createProductionKnowledgeHonoHarness,
@@ -717,7 +716,8 @@ describe('hydrated knowledge route browser contract', () => {
         sources: [{ source_id: 'src-study', label: 'Originalstudie', url: 'https://example.com/study' }],
         ingredients: [{ ingredient_id: 42, name: 'Quercetin', sort_order: 0 }],
       };
-      const robotsText = buildRobotsTxt(['released-elsewhere']);
+      // An explicitly blocked fixture tests release waiting, independently of live site policy.
+      const robotsText = 'User-agent: *\nDisallow: /\nSitemap: https://supplementstack.de/sitemap.xml\n';
       honoHarness = createProductionKnowledgeHonoHarness();
       createProductionKnowledgeSchema(honoHarness);
       honoHarness.run("INSERT INTO ingredients (id, name, is_active) VALUES (42, 'Quercetin', 1)");
@@ -842,12 +842,12 @@ describe('hydrated knowledge route browser contract', () => {
         published_at: string;
         modified_at: string;
       }, imagePath: string | null = null) => {
-        const canonicalUrl = `${baseUrl}/wissen/${article.slug}`;
+        const canonicalUrl = `https://supplementstack.de/wissen/${article.slug}`;
         const organization = {
           '@type': 'Organization',
-          '@id': `${baseUrl}/#organization`,
+          '@id': 'https://supplementstack.de/#organization',
           name: 'Supplement Stack',
-          url: `${baseUrl}/`,
+          url: 'https://supplementstack.de/',
         };
         return {
           meta_title: article.title,
@@ -867,7 +867,7 @@ describe('hydrated knowledge route browser contract', () => {
             dateModified: article.modified_at,
             author: organization,
             publisher: organization,
-            ...(imagePath ? { image: `${baseUrl}${imagePath}` } : {}),
+            ...(imagePath ? { image: `https://supplementstack.de${imagePath}` } : {}),
           },
         };
       };

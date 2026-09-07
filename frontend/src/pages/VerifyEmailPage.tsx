@@ -4,6 +4,7 @@ import { CheckCircle2, Mail, RefreshCw, XCircle } from 'lucide-react';
 import { resendVerificationEmail, verifyEmail } from '../api/auth';
 import { useAuth } from '../contexts/AuthContext';
 import { authPath, authReturnTo, returnToLabel } from '../lib/returnTo';
+import { authDeliveryStatus } from '../lib/authDeliveryState';
 
 type VerifyState = 'idle' | 'loading' | 'success' | 'error';
 
@@ -13,22 +14,26 @@ export default function VerifyEmailPage() {
   const location = useLocation();
   const token = searchParams.get('token') ?? '';
   const returnTo = authReturnTo(location);
+  const [initialDelivery] = useState(() => ({ token, status: authDeliveryStatus(location.pathname) }));
+  const deliveryError = initialDelivery.token === token ? initialDelivery.status : null;
   const locationState = location.state as {
     emailVerificationEmailSent?: boolean;
     message?: string;
   } | null;
   const attemptedToken = useRef<string | null>(null);
 
-  const [status, setStatus] = useState<VerifyState>(token ? 'loading' : 'idle');
+  const [status, setStatus] = useState<VerifyState>(deliveryError ? 'error' : token ? 'loading' : 'idle');
   const [message, setMessage] = useState<string | null>(() => {
-    return locationState?.message ?? null;
+    return deliveryError === 503 ? 'Der Link konnte gerade nicht geprüft werden. Bitte versuche es später noch einmal.'
+      : deliveryError ? `Dieser Link ist ${deliveryError === 410 ? 'abgelaufen' : 'ungültig'}. Bitte fordere nach der Anmeldung einen neuen Bestätigungslink an.`
+        : locationState?.message ?? null;
   });
   const [resendMessage, setResendMessage] = useState<string | null>(null);
   const [resendError, setResendError] = useState<string | null>(null);
   const [resending, setResending] = useState(false);
 
   useEffect(() => {
-    if (!token || attemptedToken.current === token) return;
+    if (!token || deliveryError || attemptedToken.current === token) return;
     attemptedToken.current = token;
 
     setStatus('loading');
@@ -42,7 +47,7 @@ export default function VerifyEmailPage() {
         setStatus('error');
         setMessage(err instanceof Error ? err.message : 'E-Mail-Adresse konnte nicht bestätigt werden.');
       });
-  }, [refreshUser, token]);
+  }, [deliveryError, refreshUser, token]);
 
   const handleResend = async () => {
     setResendMessage(null);
@@ -148,6 +153,7 @@ export default function VerifyEmailPage() {
         )}
 
         <div className="mt-6 flex flex-wrap gap-3">
+          {deliveryError === 503 && <button type="button" onClick={() => window.location.reload()} className="min-h-11 rounded-xl px-5 py-2 font-bold">Erneut versuchen</button>}
           {user ? (
             <Link
               to={returnTo}
