@@ -15,6 +15,7 @@ const RegisterPage = lazy(() => import('./pages/RegisterPage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const StacksPage = lazy(() => import('./pages/StacksPage'));
 const DemoPage = lazy(() => import('./pages/DemoPage'));
+const IntakePlanIntroPage = lazy(() => import('./pages/IntakePlanIntroPage'));
 const MyProductsPage = lazy(() => import('./pages/MyProductsPage'));
 const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
@@ -144,7 +145,7 @@ export default function App() {
             path="/einnahmeplan"
             element={
               <Layout>
-                <RoutinePageRoute />
+                <ProtectedRoute><RoutinePageRoute /></ProtectedRoute>
               </Layout>
             }
           />
@@ -155,6 +156,7 @@ export default function App() {
               <Layout>
                 <Routes>
                   <Route path="/" element={<LandingPage />} />
+                  <Route path="/einnahmeplan-erstellen" element={<IntakePlanIntroPage />} />
                   <Route path="/login" element={<LoginPage />} />
                   <Route path="/register" element={<RegisterPage />} />
                   <Route

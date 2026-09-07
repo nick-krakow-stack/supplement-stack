@@ -2,6 +2,7 @@ import { JSDOM } from 'jsdom';
 import { describe, expect, it, vi } from 'vitest';
 import { onRequest } from '../../../functions/_middleware';
 import { isKnownAppPath } from '../../../functions/lib/site-routes.mjs';
+vi.mock('cloudflare:sockets', () => ({ connect: vi.fn() }));
 
 const shell = '<!doctype html><html><head><title>Generic</title><meta name="robots" content="index,follow"><link rel="canonical" href="https://supplementstack.de/"></head><body><div id="root"></div><script src="/assets/app.js"></script></body></html>';
 const makeShell = () => new Response(shell, { headers: { 'Content-Type': 'text/html', ETag: 'old', 'Content-Length': '100' } });
@@ -17,7 +18,7 @@ describe('site page HTTP delivery', () => {
     const { result } = await request(path);
     expect(result.status).toBe(404);
     expect(result.headers.get('X-Robots-Tag')).toBe('noindex, nofollow');
-    expect(result.headers.get('Cache-Control')).toBe('no-store');
+    expect(result.headers.get('Cache-Control')).toBe('private, no-store');
     expect(result.headers.has('ETag')).toBe(false);
     expect(result.headers.has('Content-Length')).toBe(false);
     const html = await result.text();
@@ -38,10 +39,25 @@ describe('site page HTTP delivery', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  it.each(['/', '/login?returnTo=%2Fstacks', '/register', '/reset-password?token=secret', '/verify-email?token=secret', '/forgot-password', '/profile', '/stacks', '/demo', '/creator', '/einnahmeplan', '/my-products', '/wissen', '/wissen/vitamin-d', '/share/AbC_123-opaque', '/administrator', '/administrator/knowledge', '/administrator/ingredients/42', '/administrator/products/new', '/administrator/products/18'])('preserves the actual app route %s', async (path) => {
+  it.each(['/wissen/vitamin-d'])('preserves the existing article handler for %s', async (path) => {
     const original = makeShell();
     const { result } = await request(path, original);
     expect(result).toBe(original);
+  });
+
+  it.each(['/profile', '/stacks', '/creator', '/einnahmeplan', '/my-products', '/administrator', '/administrator/knowledge', '/administrator/ingredients/42', '/administrator/products/new', '/administrator/products/18'])('requires authentication before the private app route %s', async (path) => {
+    const { result, next } = await request(path);
+    expect(result.status).toBe(302);
+    expect(result.headers.get('Location')).toBe(`/login?returnTo=${encodeURIComponent(path)}`);
+    expect(result.headers.get('Cache-Control')).toBe('private, no-store');
+    expect(result.headers.get('X-Robots-Tag')).toBe('noindex,nofollow');
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it.each(['/', '/demo', '/login?returnTo=%2Fstacks', '/register', '/forgot-password'])('provides an actual initial page for %s', async (path) => {
+    const { result } = await request(path);
+    expect(result.status).toBe(200);
+    expect(new JSDOM(await result.text()).window.document.querySelectorAll('h1')).toHaveLength(1);
   });
 
   it.each(['/api', '/api/knowledge', '/api/not-real', '/api/auth/callback', '/robots.txt', '/sitemap.xml'])('leaves backend-owned status and content untouched for %s', async (path) => {

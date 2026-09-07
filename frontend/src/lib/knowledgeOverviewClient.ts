@@ -40,6 +40,11 @@ export function isKnowledgeOverviewResponse(value: unknown): value is KnowledgeO
 
 export function readCachedKnowledgeOverview(): KnowledgeOverviewResponse | null {
   try {
+    const bootstrap = document.getElementById('knowledge-overview-bootstrap');
+    if (bootstrap?.textContent) {
+      const payload: unknown = JSON.parse(bootstrap.textContent);
+      if (isKnowledgeOverviewResponse(payload)) return payload;
+    }
     const raw = window.sessionStorage.getItem(OVERVIEW_SESSION_CACHE_KEY);
     if (!raw) return null;
     const cached = JSON.parse(raw) as CachedKnowledgeOverview;

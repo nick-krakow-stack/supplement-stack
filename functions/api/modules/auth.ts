@@ -26,6 +26,7 @@ import {
 } from '../lib/helpers'
 import { sendEmailVerificationEmail, sendPasswordResetEmail } from '../lib/mail'
 import { validateReturnTo } from '../lib/return-to'
+import { readVerificationToken, readResetToken, verificationTokenExpired, resetTokenExpired } from '../lib/auth-link-state'
 
 const auth = new Hono<AppContext>()
 
@@ -103,14 +104,6 @@ async function authTableExists(db: D1Database, tableName: string): Promise<boole
     WHERE type = 'table' AND name = ?
   `).bind(tableName).first<{ present: number }>()
   return row?.present === 1
-}
-
-function parseVerificationExpiry(value: number | string): number {
-  if (typeof value === 'number') return value
-  const numeric = Number(value)
-  if (Number.isFinite(numeric)) return numeric
-  const parsed = Date.parse(value)
-  return Number.isFinite(parsed) ? parsed : Number.NaN
 }
 
 type SignupAttributionInput = {
@@ -342,13 +335,8 @@ auth.post('/verify-email', async (c) => {
   const rawToken = body && typeof body.token === 'string' ? body.token.trim() : ''
   if (!rawToken) return c.json({ error: 'Ungültiger oder abgelaufener Bestätigungslink.' }, 400)
 
-  const tokenHash = await hashResetToken(rawToken)
-  const row = await c.env.DB.prepare(
-    'SELECT user_id, expires_at FROM email_verification_tokens WHERE token = ? AND used_at IS NULL'
-  ).bind(tokenHash).first<{ user_id: number; expires_at: number | string }>()
-
-  const expiresAt = row ? parseVerificationExpiry(row.expires_at) : Number.NaN
-  if (!row || !Number.isFinite(expiresAt) || expiresAt < Date.now()) {
+  const row = await readVerificationToken(c.env.DB, rawToken)
+  if (!row || verificationTokenExpired(row)) {
     if (row) {
       await c.env.DB.prepare(
         'DELETE FROM email_verification_tokens WHERE user_id = ?'
@@ -453,15 +441,9 @@ auth.post('/reset-password', async (c) => {
   if (!rawToken) return c.json({ error: 'Ungültiger oder abgelaufener Link.' }, 400)
   if (!password || password.length < 8) return c.json({ error: 'Passwort muss mindestens 8 Zeichen lang sein.' }, 400)
 
-  // Hash the incoming raw token to compare against the stored SHA-256 hash
-  const tokenHash = await hashResetToken(rawToken)
-
-  const user = await c.env.DB.prepare(
-    'SELECT id, reset_token_expires_at FROM users WHERE reset_token = ?'
-  ).bind(tokenHash).first<{ id: number; reset_token_expires_at: number | null }>()
-
+  const user = await readResetToken(c.env.DB, rawToken)
   if (!user) return c.json({ error: 'Dieser Link ist ungültig. Bitte fordere einen neuen an.' }, 400)
-  if (!user.reset_token_expires_at || user.reset_token_expires_at < Date.now()) {
+  if (resetTokenExpired(user)) {
     return c.json({ error: 'Dieser Link ist abgelaufen. Bitte fordere einen neuen an.' }, 410)
   }
 

@@ -54,7 +54,36 @@ describe('authentication return flow', () => {
     window.sessionStorage.clear();
   });
 
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    document.getElementById('site-delivery-bootstrap')?.remove();
+  });
+
+  it.each([400, 410, 503])('preserves the initial reset-link HTTP%s result without offering a password write', (status) => {
+    const bootstrap = document.createElement('script');
+    bootstrap.id = 'site-delivery-bootstrap';
+    bootstrap.type = 'application/json';
+    bootstrap.textContent = JSON.stringify({ status, pageKind: 'error', pathname: '/reset-password' });
+    document.body.append(bootstrap);
+    render(<MemoryRouter initialEntries={[`/reset-password?token=test-token&returnTo=${encodeURIComponent(returnTo)}`]}><ResetPasswordPage /></MemoryRouter>);
+    expect(screen.queryByLabelText('Neues Passwort')).toBeNull();
+    expect(screen.getByRole('heading').textContent).toMatch(/Link (ungültig|abgelaufen|gerade nicht prüfbar)/);
+    if (status === 503) expect(screen.getByRole('button', { name: 'Erneut versuchen' })).toBeTruthy();
+    else expect(screen.getByRole('link', { name: 'Neuen Link anfordern' }).getAttribute('href')).toContain(encodeURIComponent(returnTo));
+    expect(apiClient.post).not.toHaveBeenCalled();
+  });
+
+  it.each([400, 410, 503])('preserves the initial verification HTTP%s result without consuming or automatically retrying the token', (status) => {
+    const bootstrap = document.createElement('script');
+    bootstrap.id = 'site-delivery-bootstrap';
+    bootstrap.type = 'application/json';
+    bootstrap.textContent = JSON.stringify({ status, pageKind: 'error', pathname: '/verify-email' });
+    document.body.append(bootstrap);
+    render(<MemoryRouter initialEntries={[`/verify-email?token=test-token&returnTo=${encodeURIComponent(returnTo)}`]}><VerifyEmailPage /></MemoryRouter>);
+    expect(screen.getByRole('alert').textContent).toMatch(/Link.*(ungültig|abgelaufen|nicht geprüft)/);
+    expect(verifyEmail).not.toHaveBeenCalled();
+    expect(screen.getByRole('link', { name: 'Anmelden' }).getAttribute('href')).toContain(encodeURIComponent(returnTo));
+  });
 
   it('preserves query and hash through login and the switch to registration', async () => {
     authState.login.mockResolvedValue({ email: 'user@test.invalid', email_verified_at: '2026-08-07', role: 'user' });

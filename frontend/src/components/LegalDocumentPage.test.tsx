@@ -74,7 +74,7 @@ describe('central legal document UI', () => {
     expect(document.getElementById('legal-prerender')).toBeNull();
     expect(document.getElementById('legal-document-bootstrap')).toBeNull();
     expect(document.title).toBe('Datenschutzerklärung | Supplement Stack');
-    expect(document.head.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe('index,follow');
+    expect(document.head.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe('noindex,follow');
     expect(document.head.querySelector('link[rel="canonical"]')?.getAttribute('href')).toBe('https://supplementstack.de/datenschutz');
   });
 
@@ -126,7 +126,7 @@ describe('central legal document UI', () => {
     expect(document.head.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe('noindex,nofollow');
     fireEvent.click(screen.getByRole('button', { name: 'Erneut versuchen' }));
     expect(await screen.findByRole('heading', { name: 'Kurz erklärt' })).toBeTruthy();
-    expect(document.head.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe('index,follow');
+    expect(document.head.querySelector('meta[name="robots"]')?.getAttribute('content')).toBe('noindex,follow');
   });
 
   it('rejects a bootstrap and an API response for another slug', async () => {

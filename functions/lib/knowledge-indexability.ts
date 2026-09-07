@@ -4,16 +4,10 @@ import { isKnowledgeControlMarkerLine, knowledgeInlineMarkdownToText, normalizeK
 import type { KnowledgeInlineMarkdownToken } from './knowledge-inline-markdown.mjs'
 import { isKnowledgeSourceHeading, parseKnowledgeMarkdown } from './knowledge-markdown-blocks.mjs'
 
-export const SITE_ORIGIN = 'https://supplementstack.de'
-const SEARCH_CRAWLERS = Object.freeze([
-  'Googlebot',
-  'Googlebot-Image',
-  'Bingbot',
-  'DuckDuckBot',
-  'YandexBot',
-  'Baiduspider',
-  'Slurp',
-])
+import { knowledgeArticleHead, knowledgeArticleJsonLd } from './knowledge-seo.mjs'
+import { applyRouteHeadHtml, resolveRouteHead, SITE_ORIGIN } from './route-head-contract.mjs'
+export { SITE_ORIGIN }
+export { buildRobotsTxt, buildSitemapXml } from './site-crawl.mjs'
 
 export function isValidKnowledgeSlug(slug: string): boolean {
   return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)
@@ -104,42 +98,8 @@ export function markdownToPrerenderText(markdown: string): string {
     .trim()
 }
 
-export function articleJsonLd(article: PublicKnowledgeArticle, canonicalUrl: string): Record<string, unknown> {
-  const storedJsonLd = article.seo?.json_ld
-  if (storedJsonLd) {
-    return {
-      ...storedJsonLd,
-      ...(typeof storedJsonLd.headline === 'string'
-        ? { headline: inlineMetadataText(storedJsonLd.headline) }
-        : {}),
-      ...(typeof storedJsonLd.description === 'string'
-        ? { description: inlineMetadataText(storedJsonLd.description) }
-        : {}),
-    }
-  }
-
-  return {
-    '@context': 'https://schema.org',
-    '@type': 'Article',
-    headline: inlineMetadataText(article.title),
-    description: inlineMetadataText(article.summary),
-    mainEntityOfPage: canonicalUrl,
-    inLanguage: 'de',
-    datePublished: article.published_at,
-    dateModified: article.modified_at,
-    author: {
-      '@type': 'Organization',
-      '@id': `${SITE_ORIGIN}/#organization`,
-      name: 'Supplement Stack',
-      url: `${SITE_ORIGIN}/`,
-    },
-    publisher: {
-      '@type': 'Organization',
-      '@id': `${SITE_ORIGIN}/#organization`,
-      name: 'Supplement Stack',
-      url: `${SITE_ORIGIN}/`,
-    },
-  }
+export function articleJsonLd(article: PublicKnowledgeArticle, _canonicalUrl: string): Record<string, unknown> {
+  return knowledgeArticleJsonLd(article)
 }
 
 function renderInlineTokens(tokens: KnowledgeInlineMarkdownToken[]): string {
@@ -215,12 +175,10 @@ export function renderKnowledgeUnavailableHtml(shellHtml: string, status: 404 | 
     ? 'Dieser Artikel ist nicht verfügbar. In der Wissensübersicht findest du weitere Artikel und kannst nach einem Wirkstoff suchen.'
     : 'Der Artikel konnte gerade nicht geladen werden. Bitte versuche es gleich noch einmal.'
   const main = `<main class="knowledge-prerender"><h1>${title}</h1><p>${explanation}</p><a href="/wissen">Zur Wissensübersicht</a><form action="/wissen" method="get"><label for="knowledge-error-search">Wirkstoff suchen</label><input id="knowledge-error-search" name="q" type="search" /><button type="submit">Suchen</button></form></main>`
-  return shellHtml
-    .replace(/<title>[\s\S]*?<\/title>/i, `<title>${title} | Supplement Stack</title>`)
-    .replace(/<meta\b(?=[^>]*\bname=["'](?:robots|description)["'])[^>]*>/gi, '')
-    .replace(/<link\b(?=[^>]*\brel=["']canonical["'])[^>]*>/gi, '')
-    .replace('</head>', `<meta name="robots" content="noindex,nofollow" /><meta name="description" content="${explanation}" /></head>`)
-    .replace(/<div\s+id=["']root["']\s*><\/div>/i, `<div id="root">${main}</div>`)
+  return applyRouteHeadHtml(shellHtml, resolveRouteHead({
+    pathname: '/wissen/nicht-verfuegbar', status,
+    title: `${title} | Supplement Stack`, description: explanation,
+  })).replace(/<div\s+id=["']root["']\s*><\/div>/i, `<div id="root">${main}</div>`)
 }
 
 export function renderKnowledgeArticleHtml(
@@ -228,10 +186,8 @@ export function renderKnowledgeArticleHtml(
   article: PublicKnowledgeArticle,
   canonicalUrl: string,
 ): string {
-  const metaTitle = inlineMetadataText(article.seo?.meta_title ?? article.title)
-  const metaDescription = inlineMetadataText(article.seo?.meta_description ?? article.summary)
-  const robots = article.seo?.robots ?? 'index,follow'
-  const jsonLd = JSON.stringify(articleJsonLd(article, canonicalUrl)).replace(/</g, '\\u003c')
+  if (canonicalUrl !== knowledgeCanonicalUrl(article.slug)) throw new Error('Knowledge canonical does not match its article.')
+  const routeHead = knowledgeArticleHead(article)
   const articleBootstrap = serializeBootstrapJson({ article })
   const seenSources = new Set<string>()
   const sourceItems = article.sources
@@ -262,42 +218,7 @@ ${sourceItems}
         ${relatedItems ? `<nav aria-label="Verwandte Artikel"><h2>Weiterlesen zum Wirkstoff</h2><ul>${relatedItems}</ul></nav>` : ''}
       </article>
     </main>`
-  const head = [
-    `    <meta name="description" content="${escapeHtml(metaDescription)}" />`,
-    `    <meta name="robots" content="${escapeHtml(robots)}" />`,
-    `    <link rel="canonical" href="${escapeHtml(canonicalUrl)}" />`,
-    `    <meta property="og:title" content="${escapeHtml(metaTitle)}" />`,
-    `    <meta property="og:description" content="${escapeHtml(metaDescription)}" />`,
-    `    <meta property="og:url" content="${escapeHtml(canonicalUrl)}" />`,
-    '    <meta property="og:type" content="article" />',
-    `    <script type="application/ld+json">${jsonLd}</script>`,
-    `    <script>window.__knowledgeArticleBootstrap=${articleBootstrap};</script>`,
-  ].join('\n')
-
-  return shellHtml
-    .replace(/<title>[\s\S]*?<\/title>/i, `<title>${escapeHtml(metaTitle)}</title>`)
-    .replace('</head>', `${head}\n  </head>`)
+  return applyRouteHeadHtml(shellHtml, routeHead)
+    .replace('</head>', `<script>window.__knowledgeArticleBootstrap=${articleBootstrap};</script>\n</head>`)
     .replace(/<div\s+id=["']root["']\s*><\/div>/i, `<div id="root">${prerenderedArticle}\n  </div>`)
-}
-
-export function buildRobotsTxt(slugs: readonly string[]): string {
-  const releasedSlugs = [...new Set(slugs)].filter(isValidKnowledgeSlug).sort()
-  const rules = releasedSlugs
-    .map((slug) => `Allow: /wissen/${slug}$`)
-    .join('\n')
-  const agents = [...SEARCH_CRAWLERS, '*'].map((crawler) => `User-agent: ${crawler}`).join('\n')
-  return `# Published knowledge indexability; Cloudflare may prepend a wildcard AI-bot group.\n${agents}\nDisallow: /\n${rules}\n\nSitemap: ${SITE_ORIGIN}/sitemap.xml\n`
-}
-
-export function buildSitemapXml(lastModifiedBySlug: ReadonlyMap<string, string> = new Map()): string {
-  const urls = [...lastModifiedBySlug.keys()].filter(isValidKnowledgeSlug).sort().map((slug) => {
-    const modified = lastModifiedBySlug.get(slug)
-    return [
-      '  <url>',
-      `    <loc>${knowledgeCanonicalUrl(slug)}</loc>`,
-      ...(modified ? [`    <lastmod>${escapeHtml(modified)}</lastmod>`] : []),
-      '  </url>',
-    ].join('\n')
-  }).join('\n')
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`
 }

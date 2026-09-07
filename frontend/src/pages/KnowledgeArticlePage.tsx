@@ -8,12 +8,15 @@ import {
   readPrimedKnowledgeArticle,
 } from '../lib/knowledgeArticleClient';
 import type { KnowledgeArticle } from '../types';
+import { knowledgeArticleHead, knowledgeSeoTimestamps } from '../../../functions/lib/knowledge-seo.mjs';
+import { resolveRouteHead } from '../../../functions/lib/route-head-contract.mjs';
+import { applyPublicRouteHead } from '../lib/publicPageHead';
+export { knowledgeSeoTimestamps };
 import { knowledgeCategoryLabel } from '../lib/knowledgeCategories';
 import { knowledgeContextLabel, knowledgeNavigationState, knowledgeOverviewSearch } from '../lib/knowledgeNavigation';
 import { KnowledgeArticleActions } from './KnowledgeArticleActions';
 import KnowledgeArticleRecovery from './KnowledgeArticleRecovery';
 import {
-  hasUnsafeKnowledgeUrlCharacters,
   deduplicateKnowledgeSources,
   isRenderableKnowledgeSource,
   KnowledgeMagazineArticle,
@@ -103,42 +106,6 @@ function formatReviewedDate(value?: string | null): string | null {
   }).format(date);
 }
 
-function normalizeSeoTimestamp(value?: string | null): { value: string; time: number } | null {
-  if (!value) return null;
-  const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(value);
-  const sqliteUtc = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d{1,3})?$/.test(value)
-    ? `${value.replace(' ', 'T')}Z`
-    : value;
-  const parsed = new Date(dateOnly ? `${value}T00:00:00.000Z` : sqliteUtc);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return { value: dateOnly ? value : parsed.toISOString(), time: parsed.getTime() };
-}
-
-export function knowledgeSeoTimestamps(article: KnowledgeArticle): { publishedAt: string | null; modifiedAt: string | null } {
-  const published = normalizeSeoTimestamp(article.created_at)
-    ?? normalizeSeoTimestamp(article.reviewed_at);
-  if (!published) return { publishedAt: null, modifiedAt: null };
-
-  const fallbackModified = [article.reviewed_at, article.updated_at]
-    .map(normalizeSeoTimestamp)
-    .filter((entry): entry is { value: string; time: number } => entry !== null)
-    .sort((left, right) => right.time - left.time)[0] ?? published;
-  return {
-    publishedAt: published.value,
-    modifiedAt: fallbackModified.time >= published.time ? fallbackModified.value : published.value,
-  };
-}
-
-function normalizeSeoText(value: string): string {
-  return knowledgeInlineMarkdownToText(value)
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function buildKnowledgeArticleUrl(slug: string): string {
-  return new URL(`/wissen/${encodeURIComponent(slug)}`, window.location.origin).href;
-}
-
 function knowledgeApiPathWithCacheCheck(path: string, search: string): string {
   const routeParams = new URLSearchParams(search);
   const endpoint = apiPath(path);
@@ -147,117 +114,6 @@ function knowledgeApiPathWithCacheCheck(path: string, search: string): string {
   const endpointUrl = new URL(endpoint, window.location.origin);
   endpointUrl.searchParams.set('cfcheck', routeParams.get('cfcheck') ?? '');
   return endpoint.startsWith('/') ? `${endpointUrl.pathname}${endpointUrl.search}` : endpointUrl.href;
-}
-
-function normalizeKnowledgeImageUrl(value?: string | null): string | null {
-  if (
-    typeof value !== 'string'
-    || value.length === 0
-    || value !== value.trim()
-    || hasUnsafeKnowledgeUrlCharacters(value)
-  ) {
-    return null;
-  }
-
-  try {
-    if (value.startsWith('/')) {
-      if (value.startsWith('//')) return null;
-      const parsed = new URL(value, window.location.origin);
-      return parsed.origin === window.location.origin ? parsed.href : null;
-    }
-
-    const lowerCaseValue = value.toLowerCase();
-    if (!lowerCaseValue.startsWith('https://') && !lowerCaseValue.startsWith('http://')) return null;
-
-    const parsed = new URL(value);
-    if (
-      !['https:', 'http:'].includes(parsed.protocol)
-      || !parsed.hostname
-      || parsed.username
-      || parsed.password
-    ) {
-      return null;
-    }
-    return parsed.href;
-  } catch {
-    return null;
-  }
-}
-
-function firstBoundKnowledgeBodyAsset(article: KnowledgeArticle): string | null {
-  const expectedPath = new RegExp(`^/api/r2/knowledge/${article.slug}/[a-f0-9]{64}\\.(?:png|jpg)$`);
-  for (const block of parseKnowledgeMarkdown(article.body)) {
-    if (block.type !== 'image') continue;
-    const normalized = normalizeKnowledgeImageUrl(block.src);
-    if (!normalized) continue;
-    const parsed = new URL(normalized);
-    if (parsed.origin === window.location.origin && expectedPath.test(parsed.pathname) && !parsed.search && !parsed.hash) {
-      return parsed.href;
-    }
-  }
-  return null;
-}
-
-function knowledgeOrganization(origin: string): Record<string, string> {
-  return {
-    '@type': 'Organization',
-    '@id': new URL('/#organization', origin).href,
-    name: 'Supplement Stack',
-    url: new URL('/', origin).href,
-  };
-}
-
-function serializeJsonLd(value: unknown): string {
-  const escapedCharacters: Record<string, string> = {
-    '<': '\\u003c',
-    '>': '\\u003e',
-    '&': '\\u0026',
-    '\u2028': '\\u2028',
-    '\u2029': '\\u2029',
-  };
-
-  return JSON.stringify(value).replace(/[<>&\u2028\u2029]/g, (character) => escapedCharacters[character]);
-}
-
-function setHeadAttribute(
-  selector: string,
-  createElement: () => HTMLElement,
-  attributeName: string,
-  value: string,
-): () => void {
-  const existingElement = document.head.querySelector<HTMLElement>(selector);
-  const element = existingElement ?? createElement();
-  const created = existingElement === null;
-  const previousValue = element.getAttribute(attributeName);
-
-  if (created) {
-    element.dataset.knowledgeArticleMeta = 'true';
-    document.head.append(element);
-  }
-  element.setAttribute(attributeName, value);
-
-  return () => {
-    if (!element.isConnected) return;
-
-    if (element.getAttribute(attributeName) !== value) {
-      if (created) delete element.dataset.knowledgeArticleMeta;
-      return;
-    }
-
-    if (created) {
-      element.remove();
-    } else if (previousValue === null) {
-      element.removeAttribute(attributeName);
-    } else {
-      element.setAttribute(attributeName, previousValue);
-    }
-  };
-}
-
-function createMetaTag(attributeName: 'name' | 'property', attributeValue: string): HTMLMetaElement {
-  const element = document.createElement('meta');
-  element.setAttribute(attributeName, attributeValue);
-  return element;
 }
 
 export default function KnowledgeArticlePage() {
@@ -327,112 +183,20 @@ export default function KnowledgeArticlePage() {
   const visibleArticle = article && slug && article.slug === slug ? article : null;
 
   useLayoutEffect(() => {
-    if (!visibleArticle || !slug) return;
-
-    const articleTitle = normalizeSeoText(visibleArticle.seo?.meta_title ?? visibleArticle.title);
-    const description = normalizeSeoText(visibleArticle.seo?.meta_description ?? visibleArticle.summary);
-    const canonicalUrl = visibleArticle.seo?.canonical_url ?? buildKnowledgeArticleUrl(slug);
-    const imageUrl = firstBoundKnowledgeBodyAsset(visibleArticle);
-    const { publishedAt, modifiedAt } = knowledgeSeoTimestamps(visibleArticle);
-    const organization = knowledgeOrganization(window.location.origin);
-    const pageTitle = articleTitle;
-    const previousTitle = document.title;
-    const restoreHeadAttributes = [
-      setHeadAttribute(
-        'meta[name="description"]',
-        () => createMetaTag('name', 'description'),
-        'content',
-        description,
-      ),
-      setHeadAttribute(
-        'meta[name="robots"]',
-        () => createMetaTag('name', 'robots'),
-        'content',
-        visibleArticle.seo?.robots ?? 'index,follow',
-      ),
-      setHeadAttribute(
-        'link[rel="canonical"]',
-        () => {
-          const element = document.createElement('link');
-          element.setAttribute('rel', 'canonical');
-          return element;
-        },
-        'href',
-        canonicalUrl,
-      ),
-      setHeadAttribute(
-        'meta[property="og:title"]',
-        () => createMetaTag('property', 'og:title'),
-        'content',
-        articleTitle,
-      ),
-      setHeadAttribute(
-        'meta[property="og:description"]',
-        () => createMetaTag('property', 'og:description'),
-        'content',
-        description,
-      ),
-      setHeadAttribute(
-        'meta[property="og:url"]',
-        () => createMetaTag('property', 'og:url'),
-        'content',
-        canonicalUrl,
-      ),
-      setHeadAttribute(
-        'meta[property="og:type"]',
-        () => createMetaTag('property', 'og:type'),
-        'content',
-        'article',
-      ),
-    ];
-
-    if (imageUrl) {
-      restoreHeadAttributes.push(
-        setHeadAttribute(
-          'meta[property="og:image"]',
-          () => createMetaTag('property', 'og:image'),
-          'content',
-          imageUrl,
-        ),
-      );
+    if (visibleArticle) {
+      applyPublicRouteHead(knowledgeArticleHead(visibleArticle));
+      return;
     }
-
-    const storedStructuredData = visibleArticle.seo?.json_ld;
-    const structuredData: Record<string, unknown> = storedStructuredData
-      ? {
-        ...storedStructuredData,
-        ...(typeof storedStructuredData.headline === 'string'
-          ? { headline: normalizeSeoText(storedStructuredData.headline) }
-          : {}),
-        ...(typeof storedStructuredData.description === 'string'
-          ? { description: normalizeSeoText(storedStructuredData.description) }
-          : {}),
-      }
-      : {
-        '@context': 'https://schema.org',
-        '@type': 'Article',
-        headline: articleTitle,
-        description,
-        mainEntityOfPage: canonicalUrl,
-        inLanguage: 'de',
-        ...(publishedAt && modifiedAt ? { datePublished: publishedAt, dateModified: modifiedAt } : {}),
-        author: organization,
-        publisher: organization,
-        ...(imageUrl ? { image: imageUrl } : {}),
-      };
-    const structuredDataElement = document.createElement('script');
-    structuredDataElement.type = 'application/ld+json';
-    structuredDataElement.dataset.knowledgeArticleJsonLd = 'true';
-    structuredDataElement.textContent = serializeJsonLd(structuredData);
-    document.head.append(structuredDataElement);
-    document.title = pageTitle;
-
-    return () => {
-      structuredDataElement.remove();
-      for (const restore of restoreHeadAttributes.reverse()) restore();
-      if (document.title === pageTitle) document.title = previousTitle;
-    };
-  }, [slug, visibleArticle]);
+    // Clear a prior article immediately, including during detail-to-detail loads.
+    applyPublicRouteHead(resolveRouteHead({
+      pathname: location.pathname,
+      status: errorStatus === 404 || errorStatus === 410 ? errorStatus : 503,
+      title: errorStatus === 404 || errorStatus === 410
+        ? 'Artikel nicht gefunden | Supplement Stack'
+        : 'Artikel wird geladen | Supplement Stack',
+      description: 'In der Wissensübersicht findest du weitere Artikel.',
+    }));
+  }, [errorStatus, location.pathname, visibleArticle]);
 
   const reviewedDate = formatReviewedDate(visibleArticle?.reviewed_at);
   const normalizedBody = visibleArticle?.body ?? '';
@@ -462,12 +226,13 @@ export default function KnowledgeArticlePage() {
 
   useLayoutEffect(() => {
     if (showLoading || !error) return;
-    const previousTitle = document.title;
-    const title = `${missingArticle ? 'Artikel nicht gefunden' : 'Artikel gerade nicht erreichbar'} | Supplement Stack`;
-    document.title = title;
-    const restore = setHeadAttribute('meta[name="robots"]', () => createMetaTag('name', 'robots'), 'content', 'noindex,follow');
-    return () => { restore(); if (document.title === title) document.title = previousTitle; };
-  }, [error, missingArticle, showLoading]);
+    applyPublicRouteHead(resolveRouteHead({
+      pathname: location.pathname,
+      status: missingArticle ? errorStatus : 503,
+      title: `${missingArticle ? 'Artikel nicht gefunden' : 'Artikel gerade nicht erreichbar'} | Supplement Stack`,
+      description: 'In der Wissensübersicht findest du weitere Artikel und kannst nach einem Wirkstoff suchen.',
+    }));
+  }, [error, errorStatus, location.pathname, missingArticle, showLoading]);
 
   const relatedArticles = visibleArticle?.related_articles ?? [];
   const mainArticles = useMagazineTemplate ? [] : relatedArticles.filter((related) => related.article_layer === 'main_article');

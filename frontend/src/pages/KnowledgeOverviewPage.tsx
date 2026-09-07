@@ -12,6 +12,8 @@ import {
 } from '../lib/knowledgeOverviewClient';
 import type { KnowledgeArticleOverviewItem, KnowledgeNutrientStatus } from '../types';
 import { countLabel, pluralLabel } from '../lib/displayCopy';
+import { buildKnowledgeOverviewJsonLd, resolveRouteHead } from '../../../functions/lib/route-head-contract.mjs';
+import { applyPublicRouteHead } from '../lib/publicPageHead';
 
 type CategoryKey =
   | 'vitamine'
@@ -394,6 +396,10 @@ function KnowledgeOverview() {
     [cacheCheck],
   );
   const [overview, setOverview] = useState<KnowledgeOverviewResponse | null>(cachedOverview);
+  useEffect(() => {
+    if (overview) applyPublicRouteHead(resolveRouteHead({ pathname: '/wissen', jsonLd: buildKnowledgeOverviewJsonLd(overview.articles) }));
+    document.getElementById('knowledge-overview-bootstrap')?.remove();
+  }, [overview]);
   const [loading, setLoading] = useState(cachedOverview === null);
   const [error, setError] = useState('');
   const [loadAttempt, setLoadAttempt] = useState(0);
