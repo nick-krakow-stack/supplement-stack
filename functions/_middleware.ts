@@ -24,10 +24,28 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   }
   // Existing article handlers, authenticated screens, and share routes own their own state checks.
   if (isKnownAppPath(path)) return context.next()
-  const response = await context.next(head ? new Request(context.request, { method: 'GET' }) : undefined)
+  let response = await context.next(head ? new Request(context.request, { method: 'GET' }) : undefined)
+  // A 304 may omit representation headers. Verify its actual asset without validators;
+  // an HTML SPA fallback must not turn an unknown URL into a valid cached page.
+  if (response.status === 304 && !response.headers.get('Content-Type')) {
+    const notModified = response
+    const headers = new Headers(context.request.headers)
+    headers.delete('If-None-Match')
+    headers.delete('If-Modified-Since')
+    response = await context.next(new Request(context.request, { method: 'GET', headers }))
+    const verifiedType = response.headers.get('Content-Type') ?? ''
+    if (response.ok && verifiedType.length > 0 && !/text\/html|application\/xhtml\+xml/i.test(verifiedType)) {
+      // Prefer a fresh representation if the file changed between the two reads.
+      if (response.headers.get('ETag') === notModified.headers.get('ETag')
+        && response.headers.get('Last-Modified') === notModified.headers.get('Last-Modified')) {
+        await response.body?.cancel()
+        return notModified
+      }
+    }
+  }
   // Preserve real static assets, but never mistake the SPA's HTML fallback for an existing file.
   const type = response.headers.get('Content-Type') ?? ''
-  if (response.ok && !/text\/html|application\/xhtml\+xml/i.test(type) && type.length > 0) {
+  if ((response.ok || response.status === 304) && !/text\/html|application\/xhtml\+xml/i.test(type) && type.length > 0) {
     return head ? new Response(null, { status: response.status, headers: response.headers }) : response
   }
   return pageResponse(renderMissingPageHtml(await response.text(), 404), response, 404, head)

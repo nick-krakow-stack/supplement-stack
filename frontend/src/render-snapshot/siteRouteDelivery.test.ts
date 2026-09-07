@@ -56,6 +56,65 @@ describe('site page HTTP delivery', () => {
     expect((await request('/logo.png', image)).result).toBe(image);
   });
 
+  it.each(['GET', 'HEAD'])('preserves typed asset304 validators and an empty body for %s', async (method) => {
+    const headers = { 'Content-Type': 'application/javascript', ETag: '"asset-v1"', 'Cache-Control': 'public, max-age=14400, must-revalidate', Vary: 'Accept-Encoding' };
+    const original = new Response(null, { status: 304, headers });
+    const { result, next } = await request('/assets/app.js', original, method);
+    expect(result.status).toBe(304);
+    expect(await result.text()).toBe('');
+    for (const [name, value] of Object.entries(headers)) expect(result.headers.get(name)).toBe(value);
+    expect(next).toHaveBeenCalledOnce();
+  });
+
+  it('keeps an existing asset200 HEAD response bodyless without losing its metadata', async () => {
+    const { result } = await request('/assets/app.js', new Response('asset bytes', { headers: { 'Content-Type': 'application/javascript', ETag: '"v1"', 'Cache-Control': 'public, max-age=14400' } }), 'HEAD');
+    expect(result.status).toBe(200);
+    expect(await result.text()).toBe('');
+    expect(result.headers.get('Content-Type')).toBe('application/javascript');
+    expect(result.headers.get('ETag')).toBe('"v1"');
+  });
+
+  it.each(['GET', 'HEAD'])('verifies a typeless304 using an unconditional actual asset read for %s', async (method) => {
+    const headers = { ETag: '"asset-v1"', 'Cache-Control': 'public, max-age=14400, must-revalidate', Vary: 'Accept-Encoding' };
+    const original = new Response(null, { status: 304, headers });
+    const next = vi.fn().mockResolvedValueOnce(original).mockResolvedValueOnce(new Response('body { color:red }', { headers: { ...headers, 'Content-Type': 'text/css' } }));
+    const result = await onRequest({ request: new Request('https://supplementstack.de/assets/app.css', { method, headers: { 'If-None-Match': '"asset-v1"', 'If-Modified-Since': 'Mon, 07 Sep 2026 10:00:00 GMT', Accept: 'text/css' } }), next, env: {} } as unknown as Parameters<typeof onRequest>[0]);
+    expect(result).toBe(original);
+    expect(result.status).toBe(304);
+    expect(await result.text()).toBe('');
+    for (const [name, value] of Object.entries(headers)) expect(result.headers.get(name)).toBe(value);
+    expect(next).toHaveBeenCalledTimes(2);
+    const verification = next.mock.calls[1][0] as Request;
+    expect(verification.url).toBe('https://supplementstack.de/assets/app.css');
+    expect(verification.method).toBe('GET');
+    expect(verification.headers.has('If-None-Match')).toBe(false);
+    expect(verification.headers.has('If-Modified-Since')).toBe(false);
+    expect(verification.headers.get('Accept')).toBe('text/css');
+  });
+
+  it.each(['GET', 'HEAD'])('keeps typeless304 HTML fallbacks and missing assets at404 for %s', async (method) => {
+    for (const path of ['/not-a-page', '/assets/missing.js']) {
+      const next = vi.fn().mockResolvedValueOnce(new Response(null, { status: 304, headers: { ETag: 'old' } })).mockResolvedValueOnce(makeShell());
+      const result = await onRequest({ request: new Request(`https://supplementstack.de${path}`, { method, headers: { 'If-None-Match': 'old' } }), next, env: {} } as unknown as Parameters<typeof onRequest>[0]);
+      expect(result.status).toBe(404);
+      expect(result.headers.get('X-Robots-Tag')).toBe('noindex, nofollow');
+      expect(result.headers.has('ETag')).toBe(false);
+      expect(await result.text()).toEqual(method === 'HEAD' ? '' : expect.stringContaining('Diese Seite gibt es nicht'));
+    }
+    const { result } = await request('/assets/missing.png', new Response(null, { status: 404, headers: { 'Content-Type': 'image/png' } }), method);
+    expect(result.status).toBe(404);
+    const html304 = await request('/assets/missing.js', new Response(null, { status: 304, headers: { 'Content-Type': 'text/html' } }), method);
+    expect(html304.result.status).toBe(404);
+  });
+
+  it('returns a fresh asset if its validator changes during typeless304 verification', async () => {
+    const fresh = new Response('new bytes', { headers: { 'Content-Type': 'application/javascript', ETag: '"v2"' } });
+    const next = vi.fn().mockResolvedValueOnce(new Response(null, { status: 304, headers: { ETag: '"v1"' } })).mockResolvedValueOnce(fresh);
+    const result = await onRequest({ request: new Request('https://supplementstack.de/assets/app.js'), next, env: {} } as unknown as Parameters<typeof onRequest>[0]);
+    expect(result).toBe(fresh);
+    expect(await result.text()).toBe('new bytes');
+  });
+
   it('HEAD keeps real 404 status and metadata with no response body', async () => {
     const { result } = await request('/unknown', makeShell(), 'HEAD');
     expect(result.status).toBe(404);
