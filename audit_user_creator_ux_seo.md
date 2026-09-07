@@ -575,6 +575,13 @@ aufgeführt.
 
 ### Phase C – P1 SEO: öffentliche technische Grundlage
 
+Umsetzungsstand 07.09.2026: Phase-A-Restpunkte und Phase-C-Code in PR #30
+(`ee48e31`) umgesetzt; unabhängige Abnahme und 571 Tests bestanden.
+Die End-to-End-Boxen bleiben bis Deployment/Live-Abnahme offen: Cloudflare D1
+blockierte Run `34137602863` am Tagesleselimit vor der Veröffentlichung.
+Details und getrennt inventarisierte historische Meta-Längen:
+`umsetzung_phase_a_c_ux_seo.md`.
+
 - [ ] Zentralen Route-Head-Vertrag für Indexziel, Head, Schema und Cache einführen.
 - [ ] Blanket-`Disallow: /` ersetzen; Start, Wissen und Demo erlauben, Utilityseiten crawlbar-noindex behandeln.
 - [ ] SSR/Edge-Prerender für Start, Wissen, Demo, Legal, Auth-Grundzustände und Fehler.

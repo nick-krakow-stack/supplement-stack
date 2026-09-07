@@ -1,6 +1,12 @@
 # Umsetzung: Phase A abschließen, Phase C vollständig
 
-Stand: 7. September 2026 · Status: IN ARBEIT
+Stand: 7. September 2026 · Status: CODE FERTIG — VERÖFFENTLICHUNG BLOCKIERT
+
+PR #30 ist als `ee48e31` zusammengeführt. Unabhängige User-/Creator-/Technik-
+Abnahme und 571 Tests sind bestanden. Deployment `34137602863` stoppte vor
+Pages am ausgeschöpften Cloudflare-D1-Leselimit (Fehler 7500). Deshalb bleiben
+die End-to-End-Fertigboxen bis Deployment und Live-Abnahme offen; die neue
+Version ist **noch nicht live**. Reset: 8. September, 02:00 Uhr Berlin.
 
 Quelle: `audit_user_creator_ux_seo.md`, Abschnitt 18, Phase A und C;
 konkrete Routen-/Zustandskriterien aus Abschnitt 16 sowie Definition of Done
@@ -18,9 +24,10 @@ nicht neu gestartet. Phase B/D sind kein zusätzlicher Auftrag.
 - [ ] C05: Wissensrenderer liefert die bestehende semantische Artikelstruktur serverseitig; nach Hydrierung genau ein gebundener JSON-LD-Graph, keine Altmetadaten nach Routenwechsel.
 - [ ] C06: Meta-Längen werden im Publication-Gate geprüft; OG-Bild/Twitter und konsistente Artikel-/Quellenbeziehungen ergänzen. Wissenschaftliche H1, Quellenlabel und fachliche Artikelinhalte bleiben unverändert.
 - [ ] C07: Slash- und /agb-Aliasse leiten permanent und sicher auf kanonische Ziele weiter; Tokenparameter gelangen nicht in öffentliche Metadaten.
-- [ ] Bestehende neun Phase-A-Punkte auf unveränderte Gültigkeit anhand der vorhandenen Umsetzung/Gates abgleichen.
-- [ ] Unabhängiges User-/Creator-Feedback und einmaliger technischer Gesamtcheck; nötiges Feedback an Autoren, nur veränderte Teile nachprüfen.
-- [ ] Proportionale Tests, UTF-8, Build, Commit/PR/Merge und Deployment bestanden.
+- [x] Bestehende neun Phase-A-Punkte auf unveränderte Gültigkeit anhand der vorhandenen Umsetzung/Gates abgleichen.
+- [x] Unabhängiges User-/Creator-Feedback und einmaliger technischer Gesamtcheck; nötiges Feedback an Autoren, nur veränderte Teile nachprüfen.
+- [x] Proportionale Tests, UTF-8, Build und Commit/PR/Merge bestanden.
+- [ ] Deployment bestanden — wartet auf D1-Kapazität.
 - [ ] Öffentlicher HTTP-/DOM-/Head-/Robots-/Sitemap-Readback über den vollständigen betroffenen Routenbestand; Desktop/Mobil und Hydrierungs-/Navigationsfälle geprüft.
 - [ ] Audit, Checkliste und knapper Deploy-Log abgeschlossen.
 
