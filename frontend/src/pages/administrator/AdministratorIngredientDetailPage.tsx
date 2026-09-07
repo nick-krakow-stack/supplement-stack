@@ -2315,7 +2315,7 @@ export default function AdministratorIngredientDetailPage() {
           {forms.map((form) => (
             <article key={form.id} className="rounded-[var(--admin-r-md)] border border-[color:var(--admin-line)] p-3">
               <p className="font-medium">{form.name}</p>
-              <p className="admin-muted mt-1 text-[12px]">Timing: {form.timing || '-'}</p>
+              <p className="admin-muted mt-1 text-[12px]">Zeitpunkt: {form.timing || '-'}</p>
               <p className="admin-muted mt-1 text-[12px]">Kommentar: {form.comment || '-'}</p>
             </article>
           ))}
@@ -3104,7 +3104,7 @@ export default function AdministratorIngredientDetailPage() {
                 value={form.partner_label}
                 onChange={(event) => setForm((previous) => ({ ...previous, partner_label: event.target.value }))}
                 className="admin-input mt-1"
-                placeholder="z.B. Kaffee, Levothyroxin"
+                placeholder="z. B. Kaffee, Levothyroxin"
               />
             </label>
           )}
@@ -3567,7 +3567,7 @@ export default function AdministratorIngredientDetailPage() {
               />
             </label>
             <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
-              Timing
+              Zeitpunkt
               <input
                 value={displayProfileForm.timing}
                 onChange={(event) => setDisplayProfileForm((previous) => ({ ...previous, timing: event.target.value }))}
@@ -3575,7 +3575,7 @@ export default function AdministratorIngredientDetailPage() {
               />
             </label>
             <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
-              Timing-Notiz
+              Notiz zum Zeitpunkt
               <input
                 value={displayProfileForm.timing_note}
                 onChange={(event) => setDisplayProfileForm((previous) => ({ ...previous, timing_note: event.target.value }))}
@@ -3634,7 +3634,7 @@ export default function AdministratorIngredientDetailPage() {
                           </AdminBadge>
                         </div>
                         <p className="admin-muted mt-1 text-xs">
-                          Form-Timing: {form.timing || '-'} | Kommentar: {form.comment || '-'}
+                          Zeitpunkt für diese Form: {form.timing || '-'} | Kommentar: {form.comment || '-'}
                         </p>
                       </div>
                       <AdminButton
@@ -3659,7 +3659,7 @@ export default function AdministratorIngredientDetailPage() {
                       </label>
                       <div className="grid gap-3 md:grid-cols-2">
                         <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
-                          Timing
+                          Zeitpunkt
                           <input
                             value={formState.timing}
                             onChange={(event) => updateFormProfileForm(form.id, 'timing', event.target.value)}
@@ -3667,7 +3667,7 @@ export default function AdministratorIngredientDetailPage() {
                           />
                         </label>
                         <label className="text-xs font-medium text-[color:var(--admin-ink-2)]">
-                          Timing-Notiz
+                          Notiz zum Zeitpunkt
                           <input
                             value={formState.timing_note}
                             onChange={(event) => updateFormProfileForm(form.id, 'timing_note', event.target.value)}

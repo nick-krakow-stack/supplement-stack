@@ -1760,7 +1760,7 @@ export default function AdministratorProductDetailPage() {
                 className="admin-select mt-1"
                 disabled={servingUnitsLoading}
               >
-                <option value="">Einheit waehlen</option>
+                <option value="">Einheit wählen</option>
                 {visibleServingUnitOptions.map((option) => (
                   <option key={`${option.id}-${option.value}`} value={option.value}>
                     {option.plural_label && option.plural_label !== option.label

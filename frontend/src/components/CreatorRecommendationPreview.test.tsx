@@ -47,8 +47,9 @@ describe('CreatorRecommendationPreview', () => {
     expect(screen.getByText('Empfohlen von Alex Alltag')).toBeTruthy();
     expect(screen.getByText('Stand: 7. August 2026')).toBeTruthy();
     expect(screen.getByText('So nutzt Alex Alltag das Produkt:')).toBeTruthy();
-    expect(screen.getByText(/Menge laut Empfehlung:/).parentElement?.textContent).toContain('1 (Einheit nicht angegeben)');
-    expect(screen.getByText('Einnahme:').parentElement?.textContent).toBe('Einnahme: täglich');
+    expect(screen.getByText('Menge:').parentElement?.textContent).toContain('1 (Einheit nicht angegeben)');
+    expect(screen.getByText('Wie oft:').parentElement?.textContent).toBe('Wie oft: täglich');
+    expect(screen.getByText('Eigene Angabe:').parentElement?.textContent).toBe('Eigene Angabe: Keine Angabe');
     expect(screen.getByText(/keine Dosierungsanweisung für dich/)).toBeTruthy();
     expect(screen.getByText(/Passt gut in meinen Alltag/)).toBeTruthy();
     expect(screen.getByRole('img', { name: 'Produktbild: Magnesium Pur' }).getAttribute('src')).toBe('/api/r2/products/magnesium.webp');
@@ -63,6 +64,7 @@ describe('CreatorRecommendationPreview', () => {
   it('formats known raw timing keys but never exposes an unknown internal key', () => {
     expect(formatRecommendationTiming(null, 'before_breakfast')).toBe('Vor dem Frühstück');
     expect(formatRecommendationTiming(null, 'internal_future_key')).toBe('Keine Angabe');
+    expect(formatRecommendationTiming('before_breakfast', 'before_breakfast')).toBe('Vor dem Frühstück');
 
     render(<CreatorRecommendationPreview preview={{
       ...preview,
@@ -89,7 +91,7 @@ describe('CreatorRecommendationPreview', () => {
       items: [{ ...preview.items[0], intake_interval_days: null }],
     }} />);
 
-    expect(screen.queryByText('Einnahme:')).toBeNull();
+    expect(screen.getByText('Wie oft:').parentElement?.textContent).toBe('Wie oft: Keine Angabe');
     expect(screen.queryByText(/täglich/)).toBeNull();
   });
 
@@ -99,7 +101,7 @@ describe('CreatorRecommendationPreview', () => {
       items: [{ ...preview.items[0], unit: 'Kapsel' }],
     }} />);
 
-    expect(screen.getByText(/Menge laut Empfehlung:/).parentElement?.textContent).toContain('1 Kapsel');
+    expect(screen.getByText('Menge:').parentElement?.textContent).toContain('1 Kapsel');
     expect(formatRecommendationUnit(' µg ')).toBe('µg');
     expect(formatRecommendationAmount(2.5, 'ml')).toBe('2,5 ml');
     expect(formatRecommendationAmount(1, ' kapseln ')).toBe('1 Kapsel');

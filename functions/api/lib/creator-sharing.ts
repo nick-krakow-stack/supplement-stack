@@ -1,20 +1,12 @@
 import type { Env } from './types'
+import { formatIntakeTimingLabel, INTAKE_TIMING_LABELS } from '../../lib/intake-timing-labels.mjs'
 
 export const CREATOR_SHARING_SNAPSHOT_VERSION = 3
 export const CREATOR_SHARING_SUPPORTED_SNAPSHOT_VERSIONS = [1, 2, 3] as const
 export const CREATOR_SHARING_MAX_ITEMS = 100
 export const CREATOR_STATEMENT_MAX_LENGTH = 500
 
-export const CREATOR_TIMING_LABELS: Readonly<Record<string, string>> = {
-  anytime: 'Zeit flexibel',
-  before_breakfast: 'Vor dem Frühstück',
-  after_breakfast: 'Nach dem Frühstück',
-  with_meal: 'Zum Essen',
-  morning: 'Morgens',
-  evening: 'Abends',
-  noon: 'Mittags',
-  morning_evening: 'Morgens und abends',
-}
+export const CREATOR_TIMING_LABELS = INTAKE_TIMING_LABELS
 
 export type CreatorPartyType = 'platform' | 'creator' | 'brand' | 'user'
 export type CreatorResolutionKind = 'creator_version' | 'platform_version' | 'legacy_resolved' | 'bare'
@@ -74,7 +66,7 @@ export function creatorTimingLabel(value: string | null, managedLabels: Readonly
   // `anytime` must be explicit and stays plain-language stable even when the
   // generic managed-list label is worded differently.
   if (canonical === 'anytime') return CREATOR_TIMING_LABELS.anytime
-  return managedLabels.get(canonical) ?? CREATOR_TIMING_LABELS[canonical] ?? 'Keine Angabe'
+  return formatIntakeTimingLabel(canonical, managedLabels.get(canonical))
 }
 
 export function isSupportedCreatorShareSnapshotVersion(value: unknown): value is 1 | 2 | 3 {

@@ -11,6 +11,7 @@ import {
   writeCachedKnowledgeOverview,
 } from '../lib/knowledgeOverviewClient';
 import type { KnowledgeArticleOverviewItem, KnowledgeNutrientStatus } from '../types';
+import { countLabel, pluralLabel } from '../lib/displayCopy';
 
 type CategoryKey =
   | 'vitamine'
@@ -271,10 +272,6 @@ function solubilityLabel(solubility: NutrientCard['solubility']): string | null 
   return null;
 }
 
-function pluralize(count: number, singular: string, plural: string): string {
-  return `${count} ${count === 1 ? singular : plural}`;
-}
-
 function CoverageBadges({ card }: { card: NutrientCard }) {
   if (!card.status.has_studies && !card.status.has_dge) return null;
 
@@ -510,9 +507,9 @@ function KnowledgeOverview() {
                 event.preventDefault();
                 updateOverviewSearch(activeCategory, '');
               }}
-              placeholder="Wirkstoff suchen – z. B. Vitamin D, Magnesium oder Eisen …"
+              placeholder="Nährstoff suchen – z. B. Vitamin D, Magnesium oder Eisen …"
               autoComplete="off"
-              aria-label="Wirkstoff suchen"
+              aria-label="Nährstoff suchen"
               aria-controls="knowledge-results"
             />
             {hasQuery && (
@@ -538,7 +535,7 @@ function KnowledgeOverview() {
             </div>
             <div className="db-stat">
               <b>{loading || error ? '–' : overview?.articles.length ?? 0}</b>
-              <span>{loading ? 'Artikel werden geladen' : error ? 'Artikel zurzeit nicht verfügbar' : pluralize(overview?.articles.length ?? 0, 'ausführlicher Artikel', 'ausführliche Artikel').replace(/^\d+ /, '')}</span>
+              <span>{loading ? 'Artikel werden geladen' : error ? 'Artikel zurzeit nicht verfügbar' : pluralLabel(overview?.articles.length ?? 0, 'ausführlicher Artikel', 'ausführliche Artikel')}</span>
             </div>
           </div>
         </div>
@@ -621,8 +618,8 @@ function KnowledgeOverview() {
         {!loading && !error && cards.length > 0 && (
           <p className="db-results" role="status" aria-live="polite" aria-atomic="true">
             {hasActiveFilters
-              ? pluralize(visibleCount, 'Treffer', 'Treffer')
-              : pluralize(cards.length, 'Wirkstoff', 'Wirkstoffe')}
+              ? countLabel(visibleCount, 'Treffer', 'Treffer')
+              : countLabel(cards.length, 'Wirkstoff', 'Wirkstoffe')}
           </p>
         )}
 
@@ -679,7 +676,7 @@ function KnowledgeOverview() {
                   <h2>{category.label}</h2>
                   <p className="sub">{category.description}</p>
                 </div>
-                <span className="meta">{pluralize(categoryCards.length, 'Eintrag', 'Einträge')}</span>
+                <span className="meta">{countLabel(categoryCards.length, 'Eintrag', 'Einträge')}</span>
               </header>
 
               <div className="card-grid">

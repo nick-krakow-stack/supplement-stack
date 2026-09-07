@@ -14,6 +14,7 @@ import { Hono } from 'hono'
 import type { AppContext, StackRow, StackItemRow, InteractionRow } from '../lib/types'
 import { checkRateLimit, ensureAuth } from '../lib/helpers'
 import { sendMail } from '../lib/mail'
+import { formatIntakeTimingLabel } from '../../lib/intake-timing-labels.mjs'
 import { calculateProductUsage, ingredientAmountPerProductServing } from '../lib/stack-calculations'
 import { loadIngredientPartsByParentRows, type IngredientPartRead } from '../lib/ingredient-parts'
 import { loadCatalogProductSafetyWarnings, loadUserProductSafetyWarnings } from './knowledge'
@@ -383,41 +384,9 @@ function canonicalIntakeTimingSqlExpression(sourceExpression: string): string {
   END`
 }
 
-const STACK_TIMING_EMAIL_LABELS: Record<string, string> = {
-  anytime: 'Jederzeit',
-  flexible: 'Jederzeit',
-  jederzeit: 'Jederzeit',
-  before_breakfast: 'Vor dem Frühstück',
-  after_breakfast: 'Nach dem Frühstück',
-  with_meal: 'Zum Essen',
-  morning: 'Morgens',
-  evening: 'Abends',
-  noon: 'Mittags',
-  morning_evening: 'Morgens & Abends',
-}
-
-function normalizeTimingDisplayKey(value: string): string {
-  return value.trim().toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_')
-}
-
-function isEnumLikeTimingValue(value: string): boolean {
-  const trimmed = value.trim()
-  return /^[A-Z0-9_-]+$/.test(trimmed) || /^[a-z0-9]+(?:[_-][a-z0-9]+)+$/.test(trimmed)
-}
-
 function formatStackTimingForEmail(item: Pick<StackMailItem, 'timing_label' | 'timing'>): string {
-  const managedLabel = item.timing_label?.trim()
-  if (managedLabel) return managedLabel
-
-  const rawTiming = item.timing?.trim()
-  if (!rawTiming) return 'Keine Angabe'
-
-  const mappedLabel = STACK_TIMING_EMAIL_LABELS[normalizeTimingDisplayKey(rawTiming)]
-  if (mappedLabel) return mappedLabel
-
-  if (isEnumLikeTimingValue(rawTiming)) return 'Keine Angabe'
-
-  return rawTiming
+  // Legacy stacks can contain a user-written timing instead of a managed key.
+  return formatIntakeTimingLabel(item.timing, item.timing_label?.trim() || item.timing)
 }
 
 function prepareMailItems(
@@ -536,7 +505,7 @@ function buildStackEmailHtml(
         <td style="padding:14px 8px;border-bottom:1px solid #e5e7eb;">${warnings}</td>
         <td style="padding:14px 8px;border-bottom:1px solid #e5e7eb;text-align:right;">
           <strong>${formatEuro(item.product_price)}</strong>
-          <br><span style="color:#64748b;">${item.monthlyCost != null ? `${formatEuro(item.monthlyCost)}/Monat` : '-'}</span>
+          <br><span style="color:#64748b;">${item.monthlyCost != null ? `${formatEuro(item.monthlyCost)} pro Monat` : 'Nicht berechenbar – Produktangaben fehlen.'}</span>
           <br><br>${buyButton}
         </td>
       </tr>
@@ -590,7 +559,7 @@ function buildStackEmailHtml(
       ${stackNote}
       <div style="margin:0 0 18px;padding:14px 16px;border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0;">
         <strong>Einmaliger Kaufpreis:</strong> ${formatEuro(totalOnce)}
-        <br><strong>Geschätzte Monatskosten:</strong> ${formatEuro(totalMonthly)}
+        <br><strong>Geschätzte Monatskosten:</strong> ${formatEuro(totalMonthly)} pro Monat
       </div>
       ${ingredientSummary}
       <table style="width:100%;border-collapse:collapse;font-size:14px;">
@@ -1457,7 +1426,7 @@ stacks.post('/:id/email', async (c) => {
   if (authErr) return authErr
   const user = c.get('user')
   const allowed = await checkRateLimit(c.env.RATE_LIMITER, `stack-email:${user.userId}`, 5, 3600)
-  if (!allowed) return c.json({ error: 'Bitte warte kurz, bevor du weitere Stack-Mails versendest.' }, 429)
+  if (!allowed) return c.json({ error: 'Bitte warte kurz, bevor du weitere Einnahmepläne per E-Mail sendest.' }, 429)
 
   const id = c.req.param('id')
   const stack = await c.env.DB.prepare(`

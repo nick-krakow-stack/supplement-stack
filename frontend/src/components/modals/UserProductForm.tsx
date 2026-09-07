@@ -6,6 +6,7 @@ import SearchBar from '../SearchBar';
 import { Camera, ChevronDown, ChevronUp, Info, Plus, X } from 'lucide-react';
 import { getIngredient, getIngredientParts } from '../../api/ingredients';
 import { operationErrorMessage } from '../../lib/operationError';
+import { countLabel } from '../../lib/displayCopy';
 import type {
   Ingredient,
   IngredientPartAmount,
@@ -1104,7 +1105,7 @@ export default function UserProductForm({ onClose, onSaved, initialProduct, copy
       >
         <span>3. Wirkstoffe</span>
         <span className="flex items-center gap-2 text-xs">
-          {ingredientRows.length} Eintrag{ingredientRows.length === 1 ? '' : 'e'}
+          {countLabel(ingredientRows.length, 'Eintrag', 'Einträge')}
           {showIngredientSection ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
         </span>
       </button>
@@ -1148,7 +1149,7 @@ export default function UserProductForm({ onClose, onSaved, initialProduct, copy
                   />
                   {showExpertDetails && row.ingredientId && row.availableForms && row.availableForms.length > 0 && (
                     <label className="mt-2 flex flex-col gap-1 text-sm font-medium text-gray-700">
-                      Darreichungsform dieses Wirkstoffs
+                      Gewählte Form dieses Wirkstoffs
                       <select
                         value={row.formId ?? ''}
                         onChange={(e) =>

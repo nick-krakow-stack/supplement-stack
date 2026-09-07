@@ -165,7 +165,7 @@ describe('CreatorShareImportPage', () => {
     expect(await screen.findByText('Geteilte Empfehlung')).toBeTruthy();
     expect(screen.getByText('Empfohlen von Alex Alltag')).toBeTruthy();
     expect(screen.getByText('So nutzt Alex Alltag das Produkt:')).toBeTruthy();
-    expect(screen.getByText(/Menge laut Empfehlung:/).parentElement?.textContent).toContain('1 Kapsel');
+    expect(screen.getByText('Menge:').parentElement?.textContent).toContain('1 Kapsel');
     expect(screen.queryByText(/Affiliate-Hinweis:/)).toBeNull();
     expect(screen.getByRole('heading', { name: 'Möchtest du die Empfehlung in deinen Stacks speichern?' })).toBeTruthy();
     expect(screen.getByText('Vor der Anmeldung wird nichts gespeichert.')).toBeTruthy();
@@ -509,7 +509,7 @@ describe('CreatorShareImportPage', () => {
 
     fireEvent.click(screen.getByRole('radio', { name: 'Mein Magnesium' }));
     expect(screen.getByText('Deine private Notiz: Nur nach dem Essen')).toBeTruthy();
-    expect(screen.getAllByText('Wie oft:', { exact: false })).toHaveLength(2);
+    expect(screen.getAllByText('Wie oft:', { selector: 'dt' })).toHaveLength(2);
     expect(screen.getByText('Abends')).toBeTruthy();
     expect(screen.getAllByText('Keine Angabe').length).toBeGreaterThan(0);
     expect(document.body.textContent).not.toContain('evening');
@@ -730,7 +730,7 @@ describe('CreatorShareImportPage', () => {
     const recoveryStatus = recoveryHeading.closest('[role="status"]');
     expect(recoveryStatus).toBeTruthy();
     expect(document.activeElement).toBe(recoveryStatus);
-    expect(screen.getByText('Du kannst sie danach selbst senden.')).toBeTruthy();
+    expect(screen.getByText('Füge die kopierte Nachricht anschließend in deinen Messenger oder deine E-Mail ein.')).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Zu meinen Stacks' })).toBeTruthy();
     expect(screen.getAllByRole('link', { name: 'Zur Startseite' })).toHaveLength(1);
     fireEvent.click(screen.getByRole('button', { name: 'Nachricht an Creator kopieren' }));
@@ -755,7 +755,7 @@ describe('CreatorShareImportPage', () => {
       </MemoryRouter>,
     );
 
-    const error = await screen.findByText('Das hat gerade nicht geklappt. Bitte versuche es noch einmal.');
+    const error = await screen.findByText('Die Empfehlung konnte nicht geladen werden. Bitte versuche es noch einmal.');
     expect(error.className).toContain('text-red-700');
     const retry = screen.getByRole('button', { name: 'Erneut versuchen' });
     expect(retry.className).toContain('min-h-11');
@@ -763,6 +763,37 @@ describe('CreatorShareImportPage', () => {
     fireEvent.click(retry);
     expect(await screen.findByText('Empfohlen von Creator A')).toBeTruthy();
     expect(getCreatorShare).toHaveBeenCalledTimes(2);
+  });
+
+  it('distinguishes checking and saving failures and reuses the existing explicit retry flow', async () => {
+    currentUser = { id: 11 };
+    vi.mocked(preflightCreatorShare).mockRejectedValueOnce(new Error('network')).mockResolvedValueOnce(checkedSelection({
+      target: { mode: 'new', stack_id: null, stack_name: 'Mein Alltag', name_already_used: false, suggested_stack_name: null },
+    }));
+    vi.mocked(importCreatorShare).mockRejectedValueOnce(new Error('network'));
+    render(<MemoryRouter initialEntries={['/share/public-token']}><Routes><Route path="/share/:token" element={<CreatorShareImportPage />} /></Routes></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button', { name: 'Änderungen ansehen' }));
+    expect(await screen.findByText('Die Empfehlung konnte nicht geprüft werden. Bitte versuche es noch einmal.')).toBeTruthy();
+    expect(importCreatorShare).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Erneut versuchen' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Stack mit Creator Magnesium anlegen' }));
+    expect(await screen.findByText('Die Empfehlung konnte nicht gespeichert werden. Bitte versuche es noch einmal.')).toBeTruthy();
+    expect(preflightCreatorShare).toHaveBeenCalledTimes(2);
+    expect(importCreatorShare).toHaveBeenCalledTimes(1);
+  });
+
+  it('names one product in both stack confirmation and its consequence', async () => {
+    currentUser = { id: 11 };
+    vi.mocked(getCreatorShare).mockResolvedValue(previewFor('public-token', 'Einzelstack', 'stack', 'Creator A'));
+    vi.mocked(preflightCreatorShare).mockResolvedValue(checkedSelection({ type: 'stack', recommendation: null,
+      target: { mode: 'new', stack_id: null, stack_name: 'Einzelstack', name_already_used: false, suggested_stack_name: null },
+      stack_item_count: 1,
+    }));
+    render(<MemoryRouter initialEntries={['/share/public-token']}><Routes><Route path="/share/:token" element={<CreatorShareImportPage />} /></Routes></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button', { name: 'Änderungen ansehen' }));
+    expect(await screen.findByRole('button', { name: 'Stack mit 1 Produkt anlegen' })).toBeTruthy();
+    expect(screen.getByText('Ein neuer Stack „Einzelstack“ mit 1 Produkt wird angelegt. Deine vorhandenen Stacks bleiben unverändert.')).toBeTruthy();
+    expect(importCreatorShare).not.toHaveBeenCalled();
   });
 
   it('retries the stack list itself and blocks checking until the list is available', async () => {
@@ -787,7 +818,7 @@ describe('CreatorShareImportPage', () => {
     expect(await screen.findByText('Empfohlen von Creator A')).toBeTruthy();
     expect((screen.getByRole('button', { name: 'Änderungen ansehen' }) as HTMLButtonElement).disabled).toBe(true);
     rejectFirstLoad(new Error('network'));
-    expect(await screen.findByText('Das hat gerade nicht geklappt. Bitte versuche es noch einmal.')).toBeTruthy();
+    expect(await screen.findByText('Deine Stacks konnten nicht geladen werden. Bitte versuche es noch einmal.')).toBeTruthy();
     expect(document.activeElement).toBe(screen.getByRole('alert'));
     expect((screen.getByRole('button', { name: 'Änderungen ansehen' }) as HTMLButtonElement).disabled).toBe(true);
 

@@ -33,6 +33,7 @@ import {
 import { creatorSharingEnabled, markStackOpened } from '../api/creatorSharing';
 import type { ProductSafetyWarning, User } from '../types';
 import type { DosageGuideline, Ingredient, ShopDomain } from '../types/local';
+import { countLabel, formatMonthlyCost, pluralLabel, timingLabel } from '../lib/displayCopy';
 import {
   aggregateStackIngredientTotals,
   calculateProductUsage,
@@ -159,19 +160,6 @@ const ROUTINE_META: Record<RoutineKey, { label: string; hint: string }> = {
   flexible: { label: 'Flexibel', hint: 'Zum Essen oder ohne feste Tageszeit' },
 };
 
-const INTAKE_TIMING_LABELS: Record<string, string> = {
-  anytime: 'Jederzeit',
-  flexible: 'Jederzeit',
-  jederzeit: 'Jederzeit',
-  before_breakfast: 'Vor dem Frühstück',
-  after_breakfast: 'Nach dem Frühstück',
-  with_meal: 'Zum Essen',
-  morning: 'Morgens',
-  evening: 'Abends',
-  noon: 'Mittags',
-  morning_evening: 'Morgens & Abends',
-};
-
 function credentialedFetch(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
   return fetch(input, { credentials: 'include', ...init });
 }
@@ -282,6 +270,11 @@ function formatDoseAmount(dose?: ManualDose | null): string {
   return `${dose.value.toLocaleString('de-DE', { maximumFractionDigits: 2 })} ${dose.unit}`;
 }
 
+function guidelineRangeNote(guideline?: DosageGuideline): string | null {
+  if (guideline?.dose_min == null || guideline.dose_max == null || guideline.dose_min === guideline.dose_max || !guideline.unit) return null;
+  return `Hinterlegter Bereich: ${guideline.dose_min.toLocaleString('de-DE')}–${guideline.dose_max.toLocaleString('de-DE')} ${normalizeUnitToGerman(guideline.unit)}. Beim Eintragen wird der oben angezeigte Wert übernommen; du kannst deine geplante Menge selbst ändern.`;
+}
+
 export function populationLabel(population?: string): string {
   switch ((population ?? '').trim().toLowerCase()) {
     case 'adult_male': case 'male': case 'men': case 'maenner': case 'männer': return 'Männer';
@@ -289,8 +282,11 @@ export function populationLabel(population?: string): string {
     case 'pregnancy': case 'pregnant': case 'schwangere': return 'Schwangere';
     case 'lactation': case 'breastfeeding': case 'stillende': return 'Stillzeit';
     case 'children': case 'kinder': return 'Kinder';
-    case 'older': case 'aeltere': case 'ältere': return 'Ältere';
-    default: return 'Standard';
+    case 'older': case 'elderly': case 'aeltere': case 'ältere': return 'Ältere';
+    case 'adult': case 'adults': return 'Erwachsene';
+    case 'athlete': return 'Sportlich aktive Personen';
+    case 'deficient': return 'Personen mit einem Mangel';
+    default: return 'Nicht näher angegeben';
   }
 }
 
@@ -318,6 +314,17 @@ function isStudyContextGuideline(guideline: DosageGuideline): boolean {
     && (guideline.stage4_status == null || guideline.stage4_status === 'active');
 }
 
+function isOfficialGuideline(guideline: DosageGuideline): boolean {
+  return ['DGE', 'EFSA', 'NIH'].includes(guideline.source)
+    && guideline.amount_type !== 'tested_amount'
+    && (guideline.stage4_status == null || guideline.stage4_status === 'active');
+}
+
+function guidelineSourceLink(guideline?: DosageGuideline): string | undefined {
+  const value = guideline?.source_url?.trim();
+  return value && /^https?:\/\//i.test(value) ? value : undefined;
+}
+
 export function selectStudyGuideline(
   guidelines: DosageGuideline[],
   referenceGuideline?: DosageGuideline,
@@ -334,7 +341,7 @@ export function describeStudyGuidelineContext(guideline?: DosageGuideline): stri
 }
 
 export function describeStudyGuidelineEffect(guideline?: DosageGuideline): string {
-  return guideline?.notes?.trim() || 'Wirkung noch nicht hinterlegt.';
+  return guideline?.notes?.trim() || 'Weitere Angaben zum Studienkontext sind hier nicht hinterlegt.';
 }
 
 function productName(product: DemoProduct): string {
@@ -353,7 +360,7 @@ function productInterval(product: DemoProduct): number {
 function productIntakeLabel(product: DemoProduct): string {
   if (product.dosage_text?.trim()) return product.dosage_text.trim();
   const portions = productServingsPerDay(product);
-  const portionLabel = portions === 1 ? 'Portion' : 'Portionen';
+  const portionLabel = pluralLabel(portions, 'Portion', 'Portionen');
   const interval = productInterval(product);
   return `${portions.toLocaleString('de-DE', { maximumFractionDigits: 2 })} ${portionLabel}${interval > 1 ? ` alle ${interval} Tage` : ' täglich'}`;
 }
@@ -380,12 +387,12 @@ export function describeProductPlan(product: DemoProduct): string {
   if (product.dosage_text?.trim() && usage.calculationSource !== 'target_dose') {
     return 'Für deinen Plan: Portionen nicht berechenbar, Reichweite nicht berechenbar, Monatskosten nicht berechenbar';
   }
-  const portionLabel = usage.servingsPerIntake === 1 ? 'Portion' : 'Portionen';
+  const portionLabel = pluralLabel(usage.servingsPerIntake, 'Portion', 'Portionen');
   const reach = usage.daysSupply != null
     ? `reicht ${usage.daysSupply} ${usage.daysSupply === 1 ? 'Tag' : 'Tage'}`
     : 'Reichweite nicht berechenbar';
   const monthly = usage.monthlyCost != null
-    ? `${formatEuro(usage.monthlyCost)} €/Monat`
+    ? formatMonthlyCost(usage.monthlyCost)
     : 'Monatskosten nicht berechenbar';
   return `Für deinen Plan: ${usage.servingsPerIntake.toLocaleString('de-DE', { maximumFractionDigits: 2 })} ${portionLabel}, ${reach}, ${monthly}`;
 }
@@ -427,26 +434,8 @@ function routineKeysForTiming(timing?: string): RoutineKey[] {
   return ['flexible'];
 }
 
-function normalizeTimingKey(value: string): string {
-  return value.trim().toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_');
-}
-
-function isEnumLikeTiming(value: string): boolean {
-  const trimmed = value.trim();
-  return /^[A-Z0-9_-]+$/.test(trimmed) || /^[a-z0-9]+(?:[_-][a-z0-9]+)+$/.test(trimmed);
-}
-
 export function productTimingLabel(product: Pick<DemoProduct, 'timing' | 'timing_label' | 'ingredient_timing_label'>): string {
-  const managed = product.timing_label?.trim();
-  if (managed) return managed;
-  const raw = product.timing?.trim();
-  if (raw) {
-    const known = INTAKE_TIMING_LABELS[normalizeTimingKey(raw)];
-    if (known) return known;
-    if (!isEnumLikeTiming(raw)) return raw;
-    return 'Keine Angabe';
-  }
-  return 'Keine Angabe';
+  return timingLabel(product.timing, product.timing_label);
 }
 
 function stackCreatorNames(stack: DemoStack): string[] {
@@ -487,7 +476,7 @@ function routineProductFacts(product: DemoProduct): { reach: string; monthly: st
       ? `${usage.daysSupply} ${usage.daysSupply === 1 ? 'Tag' : 'Tage'}`
       : 'Nicht berechenbar – Packungsangaben fehlen.',
     monthly: usage.monthlyCost != null
-      ? `${formatEuro(usage.monthlyCost)} €/Monat`
+      ? formatMonthlyCost(usage.monthlyCost)
       : 'Nicht berechenbar – Preis oder Packungsangaben fehlen.',
   };
 }
@@ -577,7 +566,7 @@ export function buildStackPdf(stack: DemoStack, createdAt = new Date()): Blob {
     const price = productPriceValue(product);
     const priceLabel = price !== null ? `${formatEuro(price)} €` : 'Preis nicht verfügbar';
     return wrapPdfLine(
-      `${index + 1}. ${productName(product)} · Gespeicherte Menge: ${productIntakeLabel(product)} · Einnahmezeit: ${productTimingLabel(product)} · ${priceLabel}`,
+      `${index + 1}. ${productName(product)} · Gespeicherte Menge: ${productIntakeLabel(product)} · Zeitpunkt: ${productTimingLabel(product)} · ${priceLabel}`,
     );
   });
   const creatorNames = stackCreatorNames(stack);
@@ -713,7 +702,7 @@ function AddProductModal({
   const restoredRef = useRef(false);
 
   const targetStack = stacks.find((stack) => stack.id === targetStackId) ?? stacks[0];
-  const dgeOptions = guidelines.filter((guideline) => guideline.source === 'DGE' || guideline.is_default);
+  const dgeOptions = guidelines.filter(isOfficialGuideline);
   const visibleDgeOptions = modalVisibleGuidelineOptions(dgeOptions);
   const dgeGuideline = dgeOptions.find((guideline) => guideline.id === selectedDgeId) ?? dgeOptions[0];
   const dgeDose = primaryDose(dgeGuideline);
@@ -748,19 +737,16 @@ function AddProductModal({
       setSelectedFormId(selected.matched_form_id ?? null);
       const loadedGuidelines = Array.isArray(guidelineData.guidelines) ? guidelineData.guidelines : [];
       setGuidelines(loadedGuidelines);
-      const officialGuideline = loadedGuidelines.find((guideline) => guideline.source === 'DGE')
-        ?? loadedGuidelines.find((guideline) => guideline.is_default);
-      const preferredGuideline = guidelineSource === 'studien'
-        ? selectStudyGuideline(loadedGuidelines, officialGuideline) ?? officialGuideline
-        : officialGuideline ?? selectStudyGuideline(loadedGuidelines);
+      const officialGuideline = loadedGuidelines.find((guideline) => guideline.source === 'DGE' && isOfficialGuideline(guideline))
+        ?? loadedGuidelines.find(isOfficialGuideline);
       setSelectedDgeId(officialGuideline?.id ?? null);
-      setDose(primaryDose(preferredGuideline) ?? { value: 0, unit: normalizeUnitToGerman(merged.unit) });
+      setDose({ value: 0, unit: normalizeUnitToGerman(merged.unit) });
     } catch {
       setError('Die Angaben konnten nicht vollständig geladen werden. Du kannst es erneut versuchen.');
     } finally {
       setLoading(false);
     }
-  }, [guidelineSource]);
+  }, []);
 
   useEffect(() => {
     if (!initialDraft || restoredRef.current) return;
@@ -777,6 +763,14 @@ function AddProductModal({
 
   const loadProducts = async () => {
     if (!ingredient) return;
+    if (!dose.unit) {
+      setError('Für die geplante Wirkstoffmenge fehlt eine Einheit. Du kannst nur einen eingeordneten Wert mit hinterlegter Einheit übernehmen.');
+      return;
+    }
+    if (!Number.isFinite(dose.value) || dose.value <= 0) {
+      setError('Trage zuerst deine geplante Wirkstoffmenge ein oder wähle bewusst einen der eingeordneten Werte.');
+      return;
+    }
     setLoading(true);
     setError('');
     const params = new URLSearchParams();
@@ -824,7 +818,7 @@ function AddProductModal({
     }
   };
 
-  const dosePercent = dgeDose && dose.value > 0 && dgeDose.value > 0
+  const dosePercent = dgeDose && dose.value > 0 && dgeDose.value > 0 && dose.unit === dgeDose.unit
     ? Math.round((dose.value / dgeDose.value) * 100)
     : null;
 
@@ -833,7 +827,8 @@ function AddProductModal({
       <ModalWrapper onClose={() => setDuplicate(null)} title={`${duplicate.ingredient.name} ist bereits enthalten`} size="md">
         <p className="ss-modal-copy">Der Wirkstoff ist schon über „{productName(duplicate.product)}“ in „{targetStack?.name}“ enthalten. Was möchtest du tun?</p>
         <div className="ss-modal-actions ss-modal-actions-stack">
-          <button type="button" className="ss-modal-btn-save" onClick={() => onEditExistingProduct(productStackKey(duplicate.product))}>Einnahmemenge bearbeiten</button>
+          <button type="button" className="ss-modal-btn-save" onClick={() => onEditExistingProduct(productStackKey(duplicate.product))}>Einnahme bearbeiten</button>
+          <p>Du änderst Menge oder Zeitpunkt des vorhandenen Produkts. Es wird kein weiteres Produkt hinzugefügt.</p>
           <button type="button" className="ss-modal-btn-cancel" onClick={() => {
             const selected = duplicate.ingredient;
             setReplacement({
@@ -843,9 +838,12 @@ function AddProductModal({
             });
             setDuplicate(null);
             void beginIngredient(selected);
-          }}>Vorhandenes Produkt wechseln</button>
-          <button type="button" className="ss-modal-btn-cancel" onClick={() => { const selected = duplicate.ingredient; setDuplicate(null); void beginIngredient(selected); }}>Trotzdem ein weiteres Produkt hinzufügen</button>
-          <button type="button" className="ss-modal-btn-cancel" onClick={() => setDuplicate(null)}>Abbrechen</button>
+          }}>Produkt wechseln</button>
+          <p>Das bisherige Produkt wird erst ersetzt, wenn du ein neues Produkt auswählst und hinzufügst.</p>
+          <button type="button" className="ss-modal-btn-cancel" onClick={() => { const selected = duplicate.ingredient; setDuplicate(null); void beginIngredient(selected); }}>Als zusätzliches Produkt hinzufügen</button>
+          <p>Beide Produkte bleiben im Stack. Ihre Wirkstoffmengen werden zusammengezählt.</p>
+          <button type="button" className="ss-modal-btn-cancel" onClick={() => setDuplicate(null)}>Nichts ändern</button>
+          <p>Du kehrst zur Suche zurück. Dein Stack bleibt unverändert.</p>
         </div>
       </ModalWrapper>
     );
@@ -860,6 +858,7 @@ function AddProductModal({
               <div className="rounded-2xl border border-blue-200 bg-blue-50/50 p-4 sm:p-5">
                 <div className="mb-3 flex items-center gap-3 text-blue-900"><Search /><h3 className="text-xl font-black">Welchen Wirkstoff möchtest du hinzufügen?</h3></div>
                 <SearchBar onSelect={chooseIngredient} placeholder="Zum Beispiel Magnesium oder Vitamin D" autoFocus />
+                <p className="mt-3 text-sm text-slate-600">Tippe einen Wirkstoff ein, zum Beispiel Magnesium oder Vitamin D.</p>
                 <p className="mt-3 text-sm font-semibold text-slate-600">Die Suche berücksichtigt Namen, bekannte andere Bezeichnungen und Wirkstoffbestandteile gemeinsam.</p>
               </div>
             )}
@@ -871,7 +870,7 @@ function AddProductModal({
                 <p className="ss-dosage-description">{modalIngredientDescription(ingredient)}</p>
                 <details className="ss-expert-details">
                   <summary>Weitere Angaben für Experten</summary>
-                  <label className="ss-input-label" htmlFor="ingredient-form">Darreichungsform</label>
+                  <label className="ss-input-label" htmlFor="ingredient-form">Gewählte Form des Wirkstoffs</label>
                   <select id="ingredient-form" className="ss-stack-select" value={selectedFormId ?? ''} onChange={(event) => setSelectedFormId(event.target.value ? Number(event.target.value) : null)}>
                     <option value="">Alle passenden Formen</option>
                     {forms.map((form) => <option key={form.id} value={form.id}>{form.name}</option>)}
@@ -894,18 +893,24 @@ function AddProductModal({
                       )}
                     </div>
                     {dgeDose ? <p className="ss-reference-value">{formatDoseAmount(dgeDose)}</p> : <p className="ss-reference-note">Kein offizieller Referenzwert verfügbar.</p>}
+                    {guidelineRangeNote(dgeGuideline) && <p className="ss-reference-note">{guidelineRangeNote(dgeGuideline)}</p>}
                     <p className="ss-reference-note">Gilt für die gesamte Zufuhr aus Lebensmitteln und Ergänzungen – nicht als automatische Supplementmenge. Quelle: {dgeGuideline?.source_title || dgeGuideline?.source || 'nicht hinterlegt'}{dgeGuideline?.population ? `, Zielgruppe ${populationLabel(dgeGuideline.population)}` : ''}.</p>
-                    {dgeDose && <button type="button" className="ss-reference-cta ss-reference-cta--dge" onClick={() => setDose(dgeDose)}><Check size={18} />Einnahmemenge übernehmen</button>}
+                    {guidelineSourceLink(dgeGuideline) && <a className="ss-reference-source" href={guidelineSourceLink(dgeGuideline)} target="_blank" rel="noopener noreferrer">Originalquelle zum Referenzwert öffnen</a>}
+                    {dgeDose && <button type="button" className="ss-reference-cta ss-reference-cta--dge" onClick={() => { setDose(dgeDose); setError(''); }}><Check size={18} />Als geplante Menge eintragen</button>}
                   </div>
 
                   <div className="ss-reference-card ss-reference-card--study">
-                    <p className="ss-reference-title">Studien-Referenz</p>
+                    <p className="ss-reference-title">In dieser Studie untersuchte Menge</p>
                     {studyDose ? (
                       <>
                         <p className="ss-reference-value">{formatDoseAmount(studyDose)}</p>
+                        {guidelineRangeNote(studyGuideline) && <p className="ss-reference-note">{guidelineRangeNote(studyGuideline)}</p>}
                         <p className="ss-reference-note">{describeStudyGuidelineEffect(studyGuideline)}</p>
+                        <p className="ss-reference-note">Untersuchte Personengruppe: {populationLabel(studyGuideline?.population)}. Dauer und untersuchte Form sind hier nicht gesondert hinterlegt; vorhandene Einzelheiten stehen im Studienkontext und in der Quelle.</p>
+                        <p className="ss-reference-note">Diese Menge ist keine persönliche Einnahmeempfehlung. Ergebnisse gelten nur für die untersuchten Bedingungen und lassen sich nicht automatisch auf dich übertragen.</p>
                         {studyGuideline?.source_title && <p className="ss-reference-source"><FileText size={15} />{studyGuideline.source_title}</p>}
-                        <button type="button" className="ss-reference-cta ss-reference-cta--study" onClick={() => setDose(studyDose)}>Einnahmemenge übernehmen</button>
+                        {guidelineSourceLink(studyGuideline) && <a className="ss-reference-source" href={guidelineSourceLink(studyGuideline)} target="_blank" rel="noopener noreferrer">Originalquelle zur Studie öffnen</a>}
+                        <button type="button" className="ss-reference-cta ss-reference-cta--study" onClick={() => { setDose(studyDose); setError(''); }}>Als geplante Menge eintragen</button>
                       </>
                     ) : <p className="ss-reference-note">Keine Studiendaten hinterlegt.</p>}
                   </div>
@@ -918,7 +923,7 @@ function AddProductModal({
                 </div>
                 <p className="ss-helper-text">Gemeint ist die Wirkstoffmenge, nicht die Anzahl der Kapseln oder Portionen. Die passende Produktmenge wird im nächsten Schritt berechnet.</p>
                 {dosePercent != null && (
-                  <div className="ss-dge-notice"><Info /><div><p className="ss-dge-notice-title">Neutraler Vergleich: {dosePercent} % des angezeigten Referenzwerts</p><p className="ss-dge-notice-text">Ernährung, persönliche Situation und mögliche obere Zufuhrgrenzen sind darin nicht automatisch berücksichtigt.</p></div></div>
+                  <div className="ss-dge-notice"><Info /><div><p className="ss-dge-notice-title">Vergleich mit dem {dgeGuideline?.source === 'DGE' ? 'DGE-Referenzwert' : 'angezeigten Referenzwert'}: Deine eingetragene Menge entspricht {dosePercent} %.</p><p className="ss-dge-notice-text">Ernährung, persönliche Situation und mögliche obere Zufuhrgrenzen sind darin nicht automatisch berücksichtigt.</p></div></div>
                 )}
 
                 <div className="ss-modal-actions ss-modal-actions-main">
@@ -996,8 +1001,12 @@ function EditProductModal({
   const save = async () => {
     const amount = Number(quantity);
     const days = rhythm === 'daily' ? 1 : Number(interval);
-    if (!Number.isFinite(amount) || amount <= 0 || !Number.isInteger(days) || days < 1) {
-      setError('Bitte trage eine gültige Menge und einen gültigen Rhythmus ein.');
+    if (!Number.isFinite(amount) || amount < 0.1) {
+      setError('Trage mindestens 0,1 Portionen pro Einnahme ein.');
+      return;
+    }
+    if (!Number.isInteger(days) || days < (rhythm === 'daily' ? 1 : 2)) {
+      setError('Trage für deinen eigenen Abstand eine ganze Zahl ab 2 Tagen ein.');
       return;
     }
     setSaving(true);
@@ -1020,10 +1029,10 @@ function EditProductModal({
   return (
     <ModalWrapper onClose={onClose} title="Produkt bearbeiten" size="md">
       <div className="ss-modal ss-modal-embedded">
-        <label className="ss-modal-label">Menge pro Einnahme<input className="ss-modal-input" type="number" min="0.01" step="any" value={quantity} onChange={(event) => setQuantity(event.target.value)} /></label>
-        <label className="ss-modal-label">Einnahmezeit<select className="ss-modal-input" value={timing} onChange={(event) => setTiming(event.target.value)}>{availableTimingOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+        <label className="ss-modal-label">Menge pro Einnahme (Portionen)<input className="ss-modal-input" type="number" min="0.1" step="any" value={quantity} onChange={(event) => setQuantity(event.target.value)} /></label>
+        <label className="ss-modal-label">Zeitpunkt<select className="ss-modal-input" value={timing} onChange={(event) => setTiming(event.target.value)}>{availableTimingOptions.map((option) => <option key={option.value} value={option.value}>{timingLabel(option.value, option.label)}</option>)}</select></label>
         <p className="ss-helper-text">Die gespeicherte Auswahl erscheint genauso im Einnahmeplan. „Morgens &amp; Abends“ steht in beiden Abschnitten; „Zum Essen“ bleibt ohne erfundene Uhrzeit im Bereich „Flexibel“.</p>
-        <fieldset className="ss-rhythm-fieldset"><legend>Wie oft?</legend><label><input type="radio" checked={rhythm === 'daily'} onChange={() => setRhythm('daily')} /> täglich</label><label><input type="radio" checked={rhythm === 'interval'} onChange={() => setRhythm('interval')} /> alle X Tage</label></fieldset>
+        <fieldset className="ss-rhythm-fieldset"><legend>Wie oft nimmst du es?</legend><label><input type="radio" checked={rhythm === 'daily'} onChange={() => setRhythm('daily')} /> Täglich</label><label><input type="radio" checked={rhythm === 'interval' && interval === '2'} onChange={() => { setRhythm('interval'); setInterval('2'); }} /> Alle 2 Tage</label><label><input type="radio" checked={rhythm === 'interval' && interval === '7'} onChange={() => { setRhythm('interval'); setInterval('7'); }} /> Wöchentlich</label><label><input type="radio" checked={rhythm === 'interval' && interval !== '2' && interval !== '7'} onChange={() => { setRhythm('interval'); setInterval(''); }} /> Eigener Abstand</label></fieldset>
         {rhythm === 'interval' && <label className="ss-modal-label">Abstand in Tagen<input className="ss-modal-input" type="number" min="2" step="1" value={interval} onChange={(event) => setInterval(event.target.value)} /></label>}
         <p className="ss-helper-text">Reichweite und Monatskosten werden aus diesen Angaben automatisch neu berechnet.</p>
         {error && <p role="alert" className="ss-live-status ss-live-status-error">{error}</p>}
@@ -1069,7 +1078,7 @@ function RoutineGroup({ group, onEdit }: { group: RoutineGroupData; onEdit: (pro
                 return (
                   <article key={`${group.key}-${productStackKey(product)}`} className="routine-item">
                     <h3>{productName(product)}</h3>
-                    <p className="routine-timing"><strong>Einnahmezeit:</strong> {productTimingLabel(product)}</p>
+                    <p className="routine-timing"><strong>Zeitpunkt:</strong> {productTimingLabel(product)}</p>
                     {hasMultipleTimeWindows && <p className="routine-multi-time-note">Die Menge ist die Gesamtmenge pro Einnahmetag. Wie sie auf die Zeitfenster verteilt wird, ist nicht gespeichert.</p>}
                     <dl className="routine-facts">
                       <div><dt>Menge und Rhythmus</dt><dd>{productIntakeLabel(product)}</dd></div>
@@ -1126,6 +1135,20 @@ function NoticeDialog({ title, message, primaryLabel, onPrimary, onClose }: {
       <div className="ss-modal ss-modal-embedded"><p className="ss-modal-copy">{message}</p><div className="ss-modal-actions"><button type="button" className="ss-modal-btn-cancel" onClick={onClose}>Schließen</button>{primaryLabel && onPrimary && <button type="button" className="ss-modal-btn-save" onClick={onPrimary}>{primaryLabel}</button>}</div></div>
     </ModalWrapper>
   );
+}
+
+function StackExportButton({ onPdf }: { onPdf: () => void }) {
+  const [open, setOpen] = useState(false);
+  return <>
+    <button type="button" className="ss-btn ss-btn-outline" onClick={() => setOpen(true)}><Printer size={17} />Drucken oder als PDF speichern</button>
+    {open && <ModalWrapper title="Drucken oder als PDF speichern" onClose={() => setOpen(false)} size="md">
+      <p className="ss-modal-copy">Öffne die Druckansicht deines Browsers oder lade den Einnahmeplan direkt als PDF-Datei herunter.</p>
+      <div className="ss-modal-actions">
+        <button type="button" className="ss-modal-btn-cancel" onClick={() => { setOpen(false); window.setTimeout(() => window.print(), 0); }}><Printer size={17} />Druckansicht öffnen</button>
+        <button type="button" className="ss-modal-btn-save" onClick={() => { setOpen(false); onPdf(); }}><Download size={17} />PDF herunterladen</button>
+      </div>
+    </ModalWrapper>}
+  </>;
 }
 
 export function StackWorkspace({ mode = 'demo', standaloneHeader, view = 'workspace' }: StackWorkspaceProps) {
@@ -1564,7 +1587,7 @@ export function StackWorkspace({ mode = 'demo', standaloneHeader, view = 'worksp
               <h2>Welchen Stack möchtest du ansehen?</h2>
               <div className="ss-stack-list" aria-label="Aktiven Stack auswählen">{state.stacks.map((stack) => (
                 <button type="button" key={stack.id} aria-pressed={stack.id === activeStack?.id} className={`ss-stack-list-item${stack.id === activeStack?.id ? ' is-active' : ''}`} onClick={() => selectStack(stack.id)}>
-                  <strong>{stack.name}</strong><span>{stack.products.length} {stack.products.length === 1 ? 'Produkt' : 'Produkte'}</span>
+                  <strong>{stack.name}</strong><span>{countLabel(stack.products.length, 'Produkt', 'Produkte')}</span>
                 </button>
               ))}</div>
             </div>
@@ -1585,9 +1608,8 @@ export function StackWorkspace({ mode = 'demo', standaloneHeader, view = 'worksp
               <div className="ss-routine-export">
                 <div><strong>Einnahmeplan mitnehmen</strong><span>Du kannst ihn direkt drucken, als PDF speichern oder an deine Account-Adresse senden.</span></div>
                 <div className="ss-routine-actions">
-                  <button type="button" className="ss-btn ss-btn-outline" onClick={() => isDemo ? requestSignedIn('Einnahmeplan kostenlos per E-Mail senden') : setEmailConfirmOpen(true)}><Mail size={17} />E-Mail</button>
-                  <button type="button" className="ss-btn ss-btn-outline" onClick={() => window.print()}><Printer size={17} />Drucken</button>
-                  <button type="button" className="ss-btn ss-btn-outline" onClick={() => isDemo ? requestSignedIn('PDF kostenlos erstellen') : downloadStackPdf(activeStack)}><Download size={17} />PDF</button>
+                  <button type="button" className="ss-btn ss-btn-outline" onClick={() => isDemo ? requestSignedIn('Einnahmeplan kostenlos per E-Mail senden') : setEmailConfirmOpen(true)}><Mail size={17} />Einnahmeplan per E-Mail senden</button>
+                  <StackExportButton onPdf={() => isDemo ? requestSignedIn('PDF kostenlos erstellen') : downloadStackPdf(activeStack)} />
                 </div>
               </div>
               <div className="routine-grid">{routineGroups.map((group) => <RoutineGroup key={group.key} group={group} onEdit={(product) => setEditingProductKey(productStackKey(product))} />)}</div>
@@ -1596,7 +1618,7 @@ export function StackWorkspace({ mode = 'demo', standaloneHeader, view = 'worksp
           )}
         </div>
         {editingProduct && <EditProductModal product={editingProduct} timingOptions={timingOptions} onSave={(patch) => updateProduct(productStackKey(editingProduct), patch)} onClose={() => setEditingProductKey(null)} />}
-        {emailConfirmOpen && activeStack && <ConfirmDialog title="Einnahmeplan per E-Mail senden?" confirmLabel="An meine Account-Adresse senden" busy={busy} onConfirm={() => void sendEmail()} onClose={() => setEmailConfirmOpen(false)}><p>Gesendet wird „{activeStack.name}“ mit {activeStack.products.length} {activeStack.products.length === 1 ? 'Produkt' : 'Produkten'} an deine Account-Adresse <strong>{user?.email}</strong>.</p>{(creatorNames.length > 0 || creatorStatements.length > 0) && <p>Creator-Herkunft, Stand der Empfehlung und der allgemeine Creator-Hinweis werden mitgesendet.</p>}<p>Für den Versand werden diese gespeicherten Planangaben an unseren E-Mail-Dienst übertragen. Einzelheiten findest du in der <a href="/datenschutz">Datenschutzerklärung</a>.</p></ConfirmDialog>}
+        {emailConfirmOpen && activeStack && <ConfirmDialog title="Einnahmeplan per E-Mail senden?" confirmLabel="An meine Account-Adresse senden" busy={busy} onConfirm={() => void sendEmail()} onClose={() => setEmailConfirmOpen(false)}><p>Gesendet wird „{activeStack.name}“ mit {countLabel(activeStack.products.length, 'Produkt', 'Produkten')} an deine Account-Adresse <strong>{user?.email}</strong>.</p>{(creatorNames.length > 0 || creatorStatements.length > 0) && <p>Creator-Herkunft, Stand der Empfehlung und der allgemeine Creator-Hinweis werden mitgesendet.</p>}<p>Für den Versand werden diese gespeicherten Planangaben an unseren E-Mail-Dienst übertragen. Einzelheiten findest du in der <a href="/datenschutz">Datenschutzerklärung</a>.</p></ConfirmDialog>}
         {notice && <NoticeDialog {...notice} onClose={() => setNotice(null)} />}
       </>
     );
@@ -1619,7 +1641,7 @@ export function StackWorkspace({ mode = 'demo', standaloneHeader, view = 'worksp
             </button>
           </div>
         )}
-        {isDemo && <div className="info-banner info-banner-demo"><Info size={18} /><div><strong>Alle Stack-Funktionen nutzbar.</strong> <span>{user ? 'Du kannst alles ausprobieren. Für deine gespeicherten Daten öffnest du anschließend „Meine Stacks“.' : 'Speichern, E-Mail, PDF und eigene Produkte sind nach einer kostenlosen Anmeldung verfügbar. Der Hinweis erscheint immer vorab.'}</span></div></div>}
+        {isDemo && <div className="info-banner info-banner-demo"><Info size={18} /><div><strong>Teste Suche, Stack-Aufbau und Kostenübersicht.</strong> <span>{user ? 'Speichern, E-Mail, PDF und eigene Produkte nutzt du unter „Meine Stacks“.' : 'Speichern, E-Mail, PDF und eigene Produkte gibt es nach kostenloser Anmeldung.'}</span></div></div>}
         {error && <p className="ss-live-status ss-live-status-error" role="alert">{error}</p>}
         {status && <p className="ss-live-status" role="status">{status}</p>}
 
@@ -1627,7 +1649,7 @@ export function StackWorkspace({ mode = 'demo', standaloneHeader, view = 'worksp
           <div className="ss-stack-browser-heading"><div><h2>Deine Stacks untereinander</h2><p>Öffne einen Stack, ohne den Überblick über die anderen zu verlieren.</p></div><button type="button" className="ss-btn ss-btn-green" onClick={() => void createStack()} disabled={busy}><Plus size={17} />Neuen Stack anlegen</button></div>
           <div className="ss-stack-list">{state.stacks.map((stack) => (
             <article key={stack.id} className={`ss-stack-list-section${stack.id === activeStack?.id ? ' is-active' : ''}`}>
-              <button type="button" className="ss-stack-list-item" aria-expanded={stack.id === activeStack?.id} onClick={() => selectStack(stack.id)}><div><strong>{stack.name}</strong>{stack.description && <small>{stack.description}</small>}</div><span>{stack.products.length} {stack.products.length === 1 ? 'Produkt' : 'Produkte'}</span><ChevronDown size={18} /></button>
+              <button type="button" className="ss-stack-list-item" aria-expanded={stack.id === activeStack?.id} onClick={() => selectStack(stack.id)}><div><strong>{stack.name}</strong>{stack.description && <small>{stack.description}</small>}</div><span>{countLabel(stack.products.length, 'Produkt', 'Produkte')}</span><ChevronDown size={18} /></button>
             </article>
           ))}</div>
           {!isDemo && <button type="button" className="ss-trash-link" onClick={() => void openTrash()}><Trash2 size={16} />Papierkorb öffnen</button>}
@@ -1636,17 +1658,16 @@ export function StackWorkspace({ mode = 'demo', standaloneHeader, view = 'worksp
         {loading && <div className="ss-loading" role="status">Stacks werden geladen …</div>}
         {!loading && activeStack && (
           <section className="ss-active-stack" aria-labelledby="active-stack-title">
-            <div className="ss-active-stack-heading"><div><h2 id="active-stack-title">{activeStack.name}</h2><p>{activeStack.description || 'Noch keine Beschreibung. Du kannst Ziele oder den Zeitraum ergänzen.'}</p></div>{activeStack.origin_party_name && <span className="ss-creator-origin">Aus der Empfehlung von {activeStack.origin_party_name}</span>}</div>
+            <div className="ss-active-stack-heading"><div><h2 id="active-stack-title">{activeStack.name}</h2><p>{activeStack.description || 'Noch keine Beschreibung. Du kannst Ziele oder den Zeitraum ergänzen.'}</p></div>{activeStack.origin_party_name && <span className="ss-creator-origin" style={{ flex: '0 1 auto', maxWidth: '100%' }}>Ursprünglich empfohlen von {activeStack.origin_party_name}. Du kannst diesen Stack selbst anpassen.</span>}</div>
             <div className="ss-toolbar" aria-label="Stack-Aktionen">
               <button ref={addProductButtonRef} type="button" className="ss-btn ss-btn-green ss-toolbar-primary-action" onClick={() => { setAddDraft(null); setAddModalOpen(true); }}><Plus size={17} />Produkt hinzufügen</button>
               <button type="button" className="ss-btn ss-btn-outline" onClick={() => setEditStackOpen(true)}><Pencil size={17} />Stack bearbeiten</button>
               <button type="button" className="ss-btn ss-btn-outline" onClick={() => isDemo ? requestSignedIn('Einnahmeplan kostenlos per E-Mail senden') : setEmailConfirmOpen(true)}><Mail size={17} />Einnahmeplan per E-Mail senden</button>
-              <button type="button" className="ss-btn ss-btn-outline" onClick={() => window.print()}><Printer size={17} />Drucken</button>
-              <button type="button" className="ss-btn ss-btn-outline" onClick={() => isDemo ? requestSignedIn('PDF kostenlos erstellen') : downloadStackPdf(activeStack)}><Download size={17} />PDF</button>
+              <StackExportButton onPdf={() => isDemo ? requestSignedIn('PDF kostenlos erstellen') : downloadStackPdf(activeStack)} />
               <button type="button" className="ss-btn ss-btn-red-soft" onClick={() => setDeleteStackOpen(true)}><Trash2 size={17} />In Papierkorb</button>
             </div>
 
-            <div className="ss-product-area-heading"><div><h2>Produkte</h2><p>Die Auswahl bestimmt, was in der Kostenübersicht enthalten ist.</p></div><div className="ss-product-view-controls"><label>Sortierung<select value={sortMode} onChange={(event) => setSortMode(event.target.value as ProductSortMode)}><option value="manual">Manuell</option><option value="az">A–Z</option><option value="timing">Nach Einnahmezeit</option></select></label><div role="group" aria-label="Produktansicht"><button type="button" className={viewMode === 'grid' ? 'active' : ''} aria-pressed={viewMode === 'grid'} onClick={() => setViewMode('grid')}><LayoutGrid size={16} />Kacheln</button><button type="button" className={viewMode === 'list' ? 'active' : ''} aria-pressed={viewMode === 'list'} onClick={() => setViewMode('list')}><List size={16} />Liste</button></div></div></div>
+            <div className="ss-product-area-heading"><div><h2>Produkte</h2><p>Nur ausgewählte Produkte zählen in die Kostenübersicht.</p></div><div className="ss-product-view-controls"><label>Sortierung<select value={sortMode} onChange={(event) => setSortMode(event.target.value as ProductSortMode)}><option value="manual">Manuell</option><option value="az">A–Z</option><option value="timing">Nach Einnahmezeit</option></select></label><div role="group" aria-label="Produktansicht"><button type="button" className={viewMode === 'grid' ? 'active' : ''} aria-pressed={viewMode === 'grid'} onClick={() => setViewMode('grid')}><LayoutGrid size={16} />Kacheln</button><button type="button" className={viewMode === 'list' ? 'active' : ''} aria-pressed={viewMode === 'list'} onClick={() => setViewMode('list')}><List size={16} />Liste</button></div></div></div>
             {sortMode === 'manual' && activeProducts.length > 1 && <p className="ss-manual-help">Manuelle Reihenfolge: Verschiebe Produkte mit „Nach oben“ und „Nach unten“. Die feste Rastervorschau bleibt dabei stabil und ist vollständig per Tastatur nutzbar.</p>}
 
             {activeProducts.length === 0 ? (
@@ -1677,16 +1698,16 @@ export function StackWorkspace({ mode = 'demo', standaloneHeader, view = 'worksp
         )}
       </div>
 
-      {activeStack && activeProducts.length > 0 && <div className="bottom-bar" aria-live="polite"><div><div className="bb-title">Kostenübersicht</div><div className="bb-sub">{selectedKeys.size} von {activeProducts.length} Produkten enthalten</div></div><div className="bb-prices"><div className="bb-price-block"><div className="bb-price-label">Packungen einmalig</div><div className="bb-price-value">{totalOnce === null ? 'Nicht vollständig berechenbar' : `${formatEuro(totalOnce)} €`}</div></div><div className="bb-divider" /><div className="bb-price-block"><div className="bb-price-label">Aus Nutzung pro Monat</div><div className="bb-price-value">{totalMonthly === null ? 'Nicht vollständig berechenbar' : `${formatEuro(totalMonthly)} €`}</div></div><button type="button" className="btn-select-all" onClick={() => setSelectedKeys(selectedKeys.size === activeProducts.length ? new Set() : new Set(activeProducts.map(productStackKey)))}>{selectedKeys.size === activeProducts.length ? 'Alle abwählen' : 'Alle auswählen'}</button></div></div>}
+      {activeStack && activeProducts.length > 0 && <div className="bottom-bar" aria-live="polite"><div><div className="bb-title">Kostenübersicht</div><div className="bb-sub">{selectedKeys.size} von {countLabel(activeProducts.length, 'Produkt', 'Produkten')} enthalten</div></div><div className="bb-prices"><div className="bb-price-block"><div className="bb-price-label">Packungen einmalig</div><div className="bb-price-value">{totalOnce === null ? 'Nicht vollständig berechenbar' : `${formatEuro(totalOnce)} €`}</div></div><div className="bb-divider" /><div className="bb-price-block"><div className="bb-price-label">Aus Nutzung pro Monat</div><div className="bb-price-value">{totalMonthly === null ? 'Nicht vollständig berechenbar' : formatMonthlyCost(totalMonthly)}</div></div><button type="button" className="btn-select-all" onClick={() => setSelectedKeys(selectedKeys.size === activeProducts.length ? new Set() : new Set(activeProducts.map(productStackKey)))}>{selectedKeys.size === activeProducts.length ? 'Alle abwählen' : 'Alle auswählen'}</button></div></div>}
 
       {addModalOpen && <AddProductModal stacks={state.stacks} activeStackId={state.activeStackId} isDemo={isDemo} guidelineSource={user?.guideline_source ?? 'DGE'} initialDraft={addDraft} onAdd={addProduct} onClose={() => { setAddModalOpen(false); setAddDraft(null); }} onRequestOwnProduct={(draft) => { if (isDemo) { requestSignedIn('Eigenes Produkt kostenlos anlegen'); return; } if (draft) window.sessionStorage.setItem(ADD_PRODUCT_DRAFT_KEY, JSON.stringify(draft)); navigate('/my-products?returnTo=%2Fstacks%3FopenSearch%3D1'); }} onEditExistingProduct={(key) => { setAddModalOpen(false); setEditingProductKey(key); }} />}
       {editStackOpen && activeStack && <EditStackModal initialName={activeStack.name} initialDescription={activeStack.description} onSave={saveStackMeta} onClose={() => setEditStackOpen(false)} />}
       {editingProduct && <EditProductModal product={editingProduct} timingOptions={timingOptions} onSave={(patch) => updateProduct(productStackKey(editingProduct), patch)} onClose={() => setEditingProductKey(null)} />}
       {deleteProductKey && <ConfirmDialog title="Produkt aus dem Stack entfernen?" confirmLabel="Produkt entfernen" danger busy={busy} onConfirm={() => void removeProduct()} onClose={() => setDeleteProductKey(null)}><strong>{deletingProduct ? productName(deletingProduct) : 'Dieses Produkt'}</strong> wird aus „{activeStack?.name}“ entfernt. Andere Produkte bleiben unverändert.</ConfirmDialog>}
-      {deleteStackOpen && activeStack && <ConfirmDialog title="Stack in den Papierkorb verschieben?" confirmLabel="In Papierkorb verschieben" danger busy={busy} onConfirm={() => void trashStack()} onClose={() => setDeleteStackOpen(false)}>„{activeStack.name}“ mit {activeStack.products.length} {activeStack.products.length === 1 ? 'Produkt' : 'Produkten'} wird für 7 Tage in den Papierkorb verschoben. In dieser Zeit kannst du ihn wiederherstellen; danach wird er vollständig gelöscht.</ConfirmDialog>}
-      {emailConfirmOpen && activeStack && <ConfirmDialog title="Einnahmeplan per E-Mail senden?" confirmLabel="An meine Account-Adresse senden" busy={busy} onConfirm={() => void sendEmail()} onClose={() => setEmailConfirmOpen(false)}><p>Gesendet wird „{activeStack.name}“ mit {activeStack.products.length} {activeStack.products.length === 1 ? 'Produkt' : 'Produkten'} an deine Account-Adresse <strong>{user?.email}</strong>.</p>{(creatorNames.length > 0 || creatorStatements.length > 0) && <p>Creator-Herkunft, Stand der Empfehlung und der allgemeine Creator-Hinweis werden mitgesendet.</p>}<p>Für den Versand werden diese gespeicherten Planangaben an unseren E-Mail-Dienst übertragen. Einzelheiten findest du in der <a href="/datenschutz">Datenschutzerklärung</a>.</p></ConfirmDialog>}
+      {deleteStackOpen && activeStack && <ConfirmDialog title="Stack in den Papierkorb verschieben?" confirmLabel="In Papierkorb verschieben" danger busy={busy} onConfirm={() => void trashStack()} onClose={() => setDeleteStackOpen(false)}>„{activeStack.name}“ mit {countLabel(activeStack.products.length, 'Produkt', 'Produkten')} wird für 7 Tage in den Papierkorb verschoben. In dieser Zeit kannst du ihn wiederherstellen; danach wird seine Zusammenstellung vollständig gelöscht. Eigene Produkte bleiben unter „Eigene Produkte“ erhalten.</ConfirmDialog>}
+      {emailConfirmOpen && activeStack && <ConfirmDialog title="Einnahmeplan per E-Mail senden?" confirmLabel="An meine Account-Adresse senden" busy={busy} onConfirm={() => void sendEmail()} onClose={() => setEmailConfirmOpen(false)}><p>Gesendet wird „{activeStack.name}“ mit {countLabel(activeStack.products.length, 'Produkt', 'Produkten')} an deine Account-Adresse <strong>{user?.email}</strong>.</p>{(creatorNames.length > 0 || creatorStatements.length > 0) && <p>Creator-Herkunft, Stand der Empfehlung und der allgemeine Creator-Hinweis werden mitgesendet.</p>}<p>Für den Versand werden diese gespeicherten Planangaben an unseren E-Mail-Dienst übertragen. Einzelheiten findest du in der <a href="/datenschutz">Datenschutzerklärung</a>.</p></ConfirmDialog>}
       {notice && <NoticeDialog {...notice} onClose={() => setNotice(null)} />}
-      {trashOpen && <ModalWrapper onClose={() => setTrashOpen(false)} title="Papierkorb" size="lg"><div className="ss-trash-modal"><p className="ss-modal-copy">Stacks bleiben ab dem Löschzeitpunkt 7 Tage wiederherstellbar. Danach entfernt der Server sie samt Produkten aus dem Stack.</p>{trash.length === 0 ? <div className="ss-empty-inline">Der Papierkorb ist leer.</div> : <div className="ss-trash-list">{trash.map((stack) => <article key={stack.id}><div><strong>{stack.name}</strong><span>{stack.items_count} Produkte · Löschung am {new Date(`${stack.delete_purge_after.replace(' ', 'T')}Z`).toLocaleString('de-DE')}</span></div><button type="button" className="ss-btn ss-btn-outline" disabled={busy} onClick={() => void restore(stack)}><Undo2 size={16} />Wiederherstellen</button></article>)}</div>}</div></ModalWrapper>}
+      {trashOpen && <ModalWrapper onClose={() => setTrashOpen(false)} title="Papierkorb" size="lg"><div className="ss-trash-modal"><p className="ss-modal-copy">Stacks bleiben ab dem Löschzeitpunkt 7 Tage wiederherstellbar. Danach wird ihre Zusammenstellung gelöscht. Eigene Produkte bleiben unter „Eigene Produkte“ erhalten.</p>{trash.length === 0 ? <div className="ss-empty-inline">Der Papierkorb ist leer.</div> : <div className="ss-trash-list">{trash.map((stack) => <article key={stack.id}><div><strong>{stack.name}</strong><span>{countLabel(stack.items_count, 'Produkt', 'Produkte')} · Löschung am {new Date(`${stack.delete_purge_after.replace(' ', 'T')}Z`).toLocaleString('de-DE')}</span></div><button type="button" className="ss-btn ss-btn-outline" disabled={busy} onClick={() => void restore(stack)}><Undo2 size={16} />Wiederherstellen</button></article>)}</div>}</div></ModalWrapper>}
     </>
   );
 }

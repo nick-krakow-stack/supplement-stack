@@ -3,6 +3,7 @@ import { AlertTriangle, ExternalLink, Flag, Info, Pencil, RefreshCcw, Trash2 } f
 import type { ShopDomain } from '../types/local';
 import type { ProductSafetyWarning } from '../types';
 import ModalWrapper from './modals/ModalWrapper';
+import { countLabel, formatMonthlyCost, timingLabel as displayTimingLabel } from '../lib/displayCopy';
 import {
   calculateProductUsage,
   intakeIntervalDays as getIntakeIntervalDays,
@@ -371,42 +372,6 @@ const TIMING_STYLES: Record<TimingKey, { cls: string; label: string }> = {
   anytime: { cls: 'bg-[#e0f2fe] text-[#0284c7]', label: 'Jederzeit' },
 };
 
-const TIMING_LABELS: Record<string, string> = {
-  anytime: 'Jederzeit',
-  flexible: 'Jederzeit',
-  before_breakfast: 'Vor dem Frühstück',
-  after_breakfast: 'Nach dem Frühstück',
-  with_meal: 'Zum Essen',
-  morning: 'Morgens',
-  MORNING: 'Morgens',
-  evening: 'Abends',
-  EVENING: 'Abends',
-  noon: 'Mittags',
-  morning_evening: 'Morgens & Abends',
-  zum_essen: 'Zum Essen',
-  zum_fruehstueck: 'Vor dem Frühstück',
-  zum_frühstück: 'Vor dem Frühstück',
-  zum_abendessen: 'Abends',
-};
-
-function humanizeTimingFallback(timing?: string | null): string {
-  const raw = timing?.trim();
-  if (!raw) return TIMING_STYLES.anytime.label;
-  const enumLike = /^[A-Z0-9_-]+$/.test(raw) || /^[a-z0-9_-]+$/.test(raw);
-  if (enumLike) return TIMING_STYLES.anytime.label;
-  return raw.replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim() || TIMING_STYLES.anytime.label;
-}
-
-function getTimingDisplayLabel(timing?: string | null, managedLabel?: string | null): string {
-  const label = managedLabel?.trim();
-  if (label) return label;
-  const raw = timing?.trim();
-  if (!raw) return TIMING_STYLES.anytime.label;
-  const normalized = raw.toLowerCase().replace(/\s+/g, '_').replace(/-/g, '_');
-  const timingKey = getTimingKey(raw);
-  return TIMING_LABELS[raw] ?? TIMING_LABELS[normalized] ?? (timingKey === 'anytime' ? humanizeTimingFallback(raw) : TIMING_STYLES[timingKey].label);
-}
-
 type CategoryKey = 'vitamin' | 'mineral' | 'omega' | 'protein' | 'default';
 
 function getCategory(product: ProductCardProduct): CategoryKey {
@@ -439,8 +404,12 @@ function normalizeWarningSeverity(value?: string | null): WarningSeverity {
 
 function warningLeadLabel(severity: WarningSeverity): string {
   if (severity === 'danger') return 'Wichtig';
-  if (severity === 'info') return 'Hinweis';
-  return 'Achtung';
+  if (severity === 'info') return 'Gut zu wissen';
+  return 'Bitte beachten';
+}
+
+function warningDisplayText(value: string): string {
+  return value.replace(/20-30min Abstand zu Kaffee\/Tee/g, '20–30 Minuten Abstand zu Kaffee oder Tee');
 }
 
 function compactTextLabel(value: string): string | null {
@@ -452,23 +421,21 @@ function compactTextLabel(value: string): string | null {
 
 function compactWarningLabel(warning: ProductWarning | null): string | null {
   if (!warning) return null;
-  if (warning.shortLabel) return warning.shortLabel;
-  const combined = `${warning.title ?? ''} ${warning.message}`.toLowerCase();
-  if (combined.includes('kaffee') || combined.includes('tee')) return '20-30min Abstand zu Kaffee/Tee';
+  if (warning.shortLabel) return warningDisplayText(warning.shortLabel);
   const source = warning.title?.trim() || warning.message.trim();
-  return compactTextLabel(source);
+  return compactTextLabel(warningDisplayText(source));
 }
 
 function getCompactWarnings(product: ProductCardProduct, warning: ProductWarning | null): CompactWarning[] {
   const safetyWarnings = product.warnings
     ?.map((item): CompactWarning | null => {
-      const label = item.short_label.trim() || compactTextLabel(item.popover_text) || '';
+      const label = warningDisplayText(item.short_label.trim() || compactTextLabel(item.popover_text) || '');
       if (!label) return null;
       return {
         label,
         severity: normalizeWarningSeverity(item.severity),
         title: getProductWarningTitle(item),
-        detail: item.popover_text.trim() || undefined,
+        detail: warningDisplayText(item.popover_text.trim()) || undefined,
         articleTitle: item.article_title,
         articleUrl: item.article_url,
       };
@@ -481,7 +448,7 @@ function getCompactWarnings(product: ProductCardProduct, warning: ProductWarning
   const label = compactWarningLabel(warning);
   if (!label || !warning) return [];
 
-  const detail = warning.message.trim();
+  const detail = warningDisplayText(warning.message.trim());
   return [{
     label,
     severity: normalizeWarningSeverity(warning.type),
@@ -539,11 +506,11 @@ export default function ProductCard({
   const category = getCategory(product);
   const emoji = CATEGORY_EMOJI[category];
 
-  const effectiveTiming = product.ingredient_timing?.trim() || product.timing;
-  const effectiveTimingLabel = product.ingredient_timing_label?.trim() || product.timing_label?.trim();
+  const effectiveTiming = product.timing?.trim() || product.ingredient_timing;
+  const effectiveTimingLabel = product.timing?.trim() ? product.timing_label : product.ingredient_timing_label;
   const timingKey = getTimingKey(effectiveTiming);
   const timing = TIMING_STYLES[timingKey];
-  const timingLabel = getTimingDisplayLabel(effectiveTiming, effectiveTimingLabel);
+  const timingLabel = displayTimingLabel(effectiveTiming, effectiveTimingLabel);
 
   const productHost = normalizeShopHostname(product.shop_link);
   const directShopHref = normalizeShopHref(product.shop_link);
@@ -642,7 +609,7 @@ export default function ProductCard({
             </span>
             <span className="ss-product-list-meta-item">
               <span>Reicht f&uuml;r</span>
-              {daysSupply ? `${daysSupply} Tage` : 'Nicht berechenbar – Produktangaben fehlen'}
+              {daysSupply ? countLabel(daysSupply, 'Tag', 'Tage') : 'Nicht berechenbar – Produktangaben fehlen.'}
             </span>
             {showInterval && (
               <span className="ss-product-list-meta-item">
@@ -690,7 +657,7 @@ export default function ProductCard({
         <div className="ss-product-list-actions-panel ss-product-list-actions-stack">
           <div className="ss-product-list-price">
             <strong>{price === null ? 'Preis nicht verfügbar' : formatEur(price)}</strong>
-            {monthlyPrice !== null && <span>{formatEur(monthlyPrice)} pro Monat</span>}
+            {monthlyPrice !== null && <span>{formatMonthlyCost(monthlyPrice)}</span>}
           </div>
           <div className="ss-product-list-actions">
             {shopHref && (
@@ -754,7 +721,7 @@ export default function ProductCard({
           </div>
           {openWarning && (
             <div onClick={(event) => event.stopPropagation()}>
-              <ModalWrapper onClose={closeWarningModal} title={openWarning.title ?? warningLeadLabel(openWarning.severity)} size="md">
+              <ModalWrapper onClose={closeWarningModal} title={warningLeadLabel(openWarning.severity)} size="md">
                 <div className="space-y-3">
                   <div>
                     <p className="text-xs font-extrabold uppercase tracking-[0.4px] text-slate-500">
@@ -765,12 +732,12 @@ export default function ProductCard({
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs font-extrabold text-slate-500">Was bedeutet das?</p>
+                    <p className="text-xs font-extrabold text-slate-500">Kurz erklärt</p>
                     <p className="mt-1 text-sm text-slate-700">{openWarning.label}</p>
                   </div>
                   {openWarning.detail && (
                     <div>
-                      <p className="text-xs font-extrabold text-slate-500">Was kannst du jetzt tun?</p>
+                      <p className="text-xs font-extrabold text-slate-500">Weitere Informationen</p>
                       <p className="mt-1 text-sm text-slate-600">{openWarning.detail}</p>
                     </div>
                   )}
@@ -862,11 +829,11 @@ export default function ProductCard({
           >
             {timingLabel}
           </span>
-          {recommendationType && (
+          {recommendationType && (recommendationType !== 'recommended' || selected) && (
             <span className={`ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-extrabold ${
               recommendationType === 'recommended' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
             }`}>
-              {recommendationType === 'recommended' ? 'Passend' : 'Alternative'}
+              {recommendationType === 'recommended' ? 'Ausgewählt' : 'Alternative'}
             </span>
           )}
         </div>
@@ -885,7 +852,7 @@ export default function ProductCard({
         <div>
           <div className="text-xs font-bold uppercase tracking-[0.4px] text-slate-500 mb-0.5">Reicht f&uuml;r</div>
           <div className="text-[12.5px] font-bold text-slate-700">
-            {daysSupply ? `${daysSupply} Tage` : 'Nicht berechenbar – Angaben fehlen'}
+            {daysSupply ? countLabel(daysSupply, 'Tag', 'Tage') : 'Nicht berechenbar – Produktangaben fehlen.'}
           </div>
         </div>
       </div>
@@ -942,7 +909,7 @@ export default function ProductCard({
 
       {openWarning && (
         <div onClick={(event) => event.stopPropagation()}>
-          <ModalWrapper onClose={closeWarningModal} title={openWarning.title ?? warningLeadLabel(openWarning.severity)} size="md">
+          <ModalWrapper onClose={closeWarningModal} title={warningLeadLabel(openWarning.severity)} size="md">
             <div className="space-y-3">
               <div>
                 <p className="text-xs font-extrabold uppercase tracking-[0.4px] text-slate-500">
@@ -953,12 +920,12 @@ export default function ProductCard({
                 </p>
               </div>
               <div>
-                <p className="text-xs font-extrabold text-slate-500">Was bedeutet das?</p>
+                <p className="text-xs font-extrabold text-slate-500">Kurz erklärt</p>
                 <p className="mt-1 text-sm text-slate-700">{openWarning.label}</p>
               </div>
               {openWarning.detail && (
                 <div>
-                  <p className="text-xs font-extrabold text-slate-500">Was kannst du jetzt tun?</p>
+                  <p className="text-xs font-extrabold text-slate-500">Weitere Informationen</p>
                   <p className="mt-1 text-sm text-slate-600">{openWarning.detail}</p>
                 </div>
               )}
@@ -986,7 +953,7 @@ export default function ProductCard({
         <span className="text-[18px] font-black text-slate-900">{price === null ? 'Preis nicht verfügbar' : formatEur(price)}</span>
         {monthlyPrice !== null && (
           <span className="bg-emerald-500 text-white px-2.5 py-0.5 rounded-full text-[12px] font-extrabold">
-            {formatEur(monthlyPrice)}/Mo
+            {formatMonthlyCost(monthlyPrice)}
           </span>
         )}
       </div>

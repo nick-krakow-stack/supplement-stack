@@ -1,10 +1,23 @@
 // @vitest-environment jsdom
 
-import { fireEvent, render, screen, within } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import ProductCard from './ProductCard';
 
 describe('ProductCard sub-ingredients', () => {
+  afterEach(cleanup);
+  it('shows the saved timing before ingredient defaults and does not invent coffee spacing', () => {
+    const { container } = render(<ProductCard product={{ id: 91, name: 'Testprodukt', timing: 'evening', ingredient_timing: 'morning', ingredient_timing_label: 'Morgens', warnings: [{ id: 1, ingredient_id: 1, severity: 'info', short_label: '20-30min Abstand zu Kaffee/Tee', popover_text: 'Vorhandener Hinweis ohne weitere Zahlen.' }] }} />);
+    expect(within(container).getByText('Abends')).toBeTruthy();
+    expect(within(container).getByText('20–30 Minuten Abstand zu Kaffee oder Tee')).toBeTruthy();
+    expect(within(container).queryByText('Morgens')).toBeNull();
+  });
+
+  it('does not derive a numeric interval from a mere coffee mention', () => {
+    const { container } = render(<ProductCard product={{ id: 92, name: 'Testprodukt' }} warning={{ type: 'info', title: 'Kaffee oder Tee', message: 'Ein Hinweis ohne festgelegten Abstand.' }} />);
+    expect(within(container).queryByText(/20[–-]30/)).toBeNull();
+  });
+
   it('shows active contained amounts as davon values and hides inactive parts', () => {
     render(<ProductCard product={{
       id: 1,
@@ -54,13 +67,13 @@ describe('ProductCard sub-ingredients', () => {
       ingredients: [],
     }} />);
 
-    expect(screen.getByText('Hinweis')).toBeTruthy();
+    expect(screen.getByText('Gut zu wissen')).toBeTruthy();
     expect(screen.getByText('Kaffee und Tee zeitversetzt trinken')).toBeTruthy();
     expect(screen.queryByText('Achtung')).toBeNull();
     expect(screen.queryByText(/20-30min/)).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Mehr Informationen: Kaffee und Tee zeitversetzt trinken' }));
-    expect(screen.getByRole('heading', { name: 'Einnahmehinweis' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Gut zu wissen' })).toBeTruthy();
     expect(screen.queryByText('Warnung')).toBeNull();
   });
 

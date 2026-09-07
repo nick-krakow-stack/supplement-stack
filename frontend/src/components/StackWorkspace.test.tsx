@@ -73,7 +73,7 @@ function BackButton() {
   return <button type="button" onClick={() => navigate(-1)}>Browser zurück</button>;
 }
 
-function mockWorkspaceFetch(catalogProducts: Array<Record<string, unknown>> = []): ReturnType<typeof vi.fn> {
+function mockWorkspaceFetch(catalogProducts: Array<Record<string, unknown>> = [], guidelinesOverride?: DosageGuideline[]): ReturnType<typeof vi.fn> {
   const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input instanceof Request ? input.url : input);
     let body: Record<string, unknown> = {};
@@ -85,7 +85,7 @@ function mockWorkspaceFetch(catalogProducts: Array<Record<string, unknown>> = []
       };
     } else if (url.includes('/ingredients/77/dosage-guidelines')) {
       body = {
-        guidelines: [
+        guidelines: guidelinesOverride ?? [
           { id: 1, ingredient_id: 77, source: 'DGE', source_title: 'DGE', population: 'adult', dose_max: 10, unit: 'mg', is_default: 1 },
           { id: 2, ingredient_id: 77, source: 'study', source_title: 'Studie', population: 'adult', dose_max: 20, unit: 'mg', is_default: 0, amount_type: 'tested_amount' },
         ],
@@ -393,14 +393,13 @@ describe('StackWorkspace dosage guideline helpers', () => {
     expect(screen.getByRole('button', { name: /Mittags/ }).getAttribute('aria-expanded')).toBe('false');
     expect(screen.getByRole('button', { name: /Flexibel/ }).getAttribute('aria-expanded')).toBe('true');
     expect(screen.getByRole('heading', { name: 'Produkt zum Essen', level: 3 })).toBeTruthy();
-    expect(screen.getAllByText('30,00 €/Monat')).toHaveLength(2);
+    expect(screen.getAllByText('30,00 € pro Monat')).toHaveLength(2);
     expect(screen.getByText('Nicht berechenbar – Packungsangaben fehlen.')).toBeTruthy();
     expect(screen.getByText('Nicht berechenbar – Preis oder Packungsangaben fehlen.')).toBeTruthy();
     expect(screen.getByText('So nutze ich diesen Stack in meinem Alltag.')).toBeTruthy();
     expect(screen.getAllByText(/Allgemeiner Creator-Hinweis:/)).toHaveLength(1);
-    expect(screen.getByRole('button', { name: 'E-Mail' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Drucken' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'PDF' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Einnahmeplan per E-Mail senden' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Drucken oder als PDF speichern' })).toBeTruthy();
   });
 
   it('separates the public example plan clearly from a saved private plan', async () => {
@@ -444,7 +443,7 @@ describe('StackWorkspace dosage guideline helpers', () => {
 
     render(<MemoryRouter initialEntries={['/einnahmeplan']}><StackWorkspace mode="authenticated" view="routine" /></MemoryRouter>);
     fireEvent.click(await screen.findByRole('button', { name: 'Einnahmezeit bearbeiten' }));
-    const timing = screen.getByLabelText('Einnahmezeit') as HTMLSelectElement;
+    const timing = screen.getByLabelText('Zeitpunkt') as HTMLSelectElement;
     expect(timing.value).toBe('with_meal');
     expect(screen.getByText(/„Zum Essen“ bleibt ohne erfundene Uhrzeit/)).toBeTruthy();
     fireEvent.change(timing, { target: { value: 'morning_evening' } });
@@ -467,7 +466,7 @@ describe('StackWorkspace dosage guideline helpers', () => {
     }]);
     render(<MemoryRouter initialEntries={['/einnahmeplan']}><StackWorkspace mode="authenticated" view="routine" /></MemoryRouter>);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'E-Mail' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Einnahmeplan per E-Mail senden' }));
     const dialog = screen.getByRole('dialog', { name: 'Einnahmeplan per E-Mail senden?' });
     expect(within(dialog).getByText(/Mail-Plan/)).toBeTruthy();
     expect(within(dialog).getByText(/user@test.invalid/)).toBeTruthy();
@@ -483,7 +482,7 @@ describe('StackWorkspace dosage guideline helpers', () => {
     expect(productTimingLabel({ timing: null, timing_label: null, ingredient_timing_label: null })).toBe('Keine Angabe');
     expect(productTimingLabel({ timing: null, timing_label: null, ingredient_timing_label: 'Morgens' })).toBe('Keine Angabe');
     expect(productTimingLabel({ timing: 'UNKNOWN_TIMING', timing_label: null, ingredient_timing_label: 'Morgens' })).toBe('Keine Angabe');
-    expect(productTimingLabel({ timing: 'anytime', timing_label: null, ingredient_timing_label: null })).toBe('Jederzeit');
+    expect(productTimingLabel({ timing: 'anytime', timing_label: null, ingredient_timing_label: null })).toBe('Zeit flexibel');
   });
 
   it('does not present one-time or monthly totals as complete when a selected price is missing', async () => {
@@ -594,7 +593,8 @@ describe('StackWorkspace dosage guideline helpers', () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(await screen.findByRole('button', { name: 'PDF' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Drucken oder als PDF speichern' }));
+    fireEvent.click(screen.getByRole('button', { name: 'PDF herunterladen' }));
     expect(await screen.findByRole('dialog', { name: 'PDF kostenlos erstellen' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Kostenlos anmelden' })).toBeTruthy();
     expect(screen.getByText(/sobald du angemeldet bist/)).toBeTruthy();
@@ -607,7 +607,8 @@ describe('StackWorkspace dosage guideline helpers', () => {
       </MemoryRouter>,
     );
 
-    fireEvent.click(await screen.findByRole('button', { name: 'PDF' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Drucken oder als PDF speichern' }));
+    fireEvent.click(screen.getByRole('button', { name: 'PDF herunterladen' }));
     expect(await screen.findByRole('dialog', { name: 'Funktion in deinen Stacks nutzen' })).toBeTruthy();
     expect(screen.getByText(/Du bist bereits angemeldet/)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Meine Stacks öffnen' })).toBeTruthy();
@@ -737,10 +738,10 @@ describe('StackWorkspace dosage guideline helpers', () => {
 
     expect(await screen.findByText('400 mg täglich')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Produkt bearbeiten' }));
-    const amount = screen.getByLabelText('Menge pro Einnahme') as HTMLInputElement;
+    const amount = screen.getByLabelText('Menge pro Einnahme (Portionen)') as HTMLInputElement;
     expect(amount.value).toBe('2');
     fireEvent.change(amount, { target: { value: '1' } });
-    fireEvent.click(screen.getByRole('radio', { name: 'alle X Tage' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Eigener Abstand' }));
     fireEvent.change(screen.getByLabelText('Abstand in Tagen'), { target: { value: '2' } });
     fireEvent.click(screen.getByRole('button', { name: 'Speichern' }));
 
@@ -752,7 +753,7 @@ describe('StackWorkspace dosage guideline helpers', () => {
     expect(screen.queryByText('400 mg täglich')).toBeNull();
     expect(screen.getByText('1 Portion')).toBeTruthy();
     expect(screen.getByText('60 Tage')).toBeTruthy();
-    expect(screen.getByText((content) => content.includes('15,00') && content.endsWith('/Mo'))).toBeTruthy();
+    expect(screen.getAllByText('15,00 € pro Monat')).toHaveLength(2);
   });
 
   it('keeps every product, stack heading, creator and health note printable in grid and list view', async () => {
@@ -770,7 +771,7 @@ describe('StackWorkspace dosage guideline helpers', () => {
     render(<MemoryRouter initialEntries={['/stacks']}><StackWorkspace mode="authenticated" /></MemoryRouter>);
 
     expect(await screen.findByRole('heading', { name: 'Creator-Stack', level: 2 })).toBeTruthy();
-    expect(screen.getByText('Aus der Empfehlung von Creatorin Mia')).toBeTruthy();
+    expect(screen.getByText('Ursprünglich empfohlen von Creatorin Mia. Du kannst diesen Stack selbst anpassen.')).toBeTruthy();
     expect(screen.getByText('Produkt Eins')).toBeTruthy();
     expect(screen.getByText('Produkt Zwei')).toBeTruthy();
     expect(screen.getByText(/Gesundheitshinweis: Diese Übersicht dient der Orientierung/)).toBeTruthy();
@@ -848,8 +849,8 @@ describe('StackWorkspace dosage guideline helpers', () => {
     fireEvent.change(screen.getByLabelText('Mit welcher täglichen Wirkstoffmenge möchtest du planen?'), { target: { value: '400' } });
     fireEvent.click(screen.getByRole('button', { name: 'Passende Produkte anzeigen' }));
 
-    expect(await screen.findByText('Für deinen Plan: 2 Portionen, reicht 15 Tage, 60,00 €/Monat')).toBeTruthy();
-    expect(screen.getByText('Für deinen Plan: 1 Portion, reicht 30 Tage, 30,00 €/Monat')).toBeTruthy();
+    expect(await screen.findByText('Für deinen Plan: 2 Portionen, reicht 15 Tage, 60,00 € pro Monat')).toBeTruthy();
+    expect(screen.getByText('Für deinen Plan: 1 Portion, reicht 30 Tage, 30,00 € pro Monat')).toBeTruthy();
     expect(screen.getByRole('link', { name: /Jetzt kaufen: Produkt mit 300 mg/ })).toBeTruthy();
     const targetSelect = screen.getByRole('combobox', { name: 'Für Stack' }) as HTMLSelectElement;
     const firstStackId = (targetSelect.options[0] as HTMLOptionElement).value;
@@ -897,6 +898,80 @@ describe('StackWorkspace dosage guideline helpers', () => {
     expect(referenceGrid).not.toBeNull();
     expect(referenceGrid!.classList.contains('ss-reference-grid--DGE')).toBe(true);
     expect(referenceGrid!.firstElementChild?.classList.contains('ss-reference-card--dge')).toBe(true);
+    expect((screen.getByLabelText('Mit welcher täglichen Wirkstoffmenge möchtest du planen?') as HTMLInputElement).value).toBe('');
+    expect(screen.getByText(/Untersuchte Personengruppe: Erwachsene/)).toBeTruthy();
+    expect(screen.getByText(/Dauer und untersuchte Form sind hier nicht gesondert hinterlegt/)).toBeTruthy();
+    expect(screen.getByText(/Diese Menge ist keine persönliche Einnahmeempfehlung/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Passende Produkte anzeigen' }));
+    expect(screen.getByRole('alert').textContent).toContain('Trage zuerst deine geplante Wirkstoffmenge ein');
+    fireEvent.click(within(referenceGrid!.firstElementChild as HTMLElement).getByRole('button', { name: 'Als geplante Menge eintragen' }));
     expect((screen.getByLabelText('Mit welcher täglichen Wirkstoffmenge möchtest du planen?') as HTMLInputElement).value).toBe('10');
+    expect(screen.getByText('Vergleich mit dem DGE-Referenzwert: Deine eingetragene Menge entspricht 100 %.')).toBeTruthy();
+  });
+
+  it('preserves a historical amount and validates the visible 0.1 minimum before any write', async () => {
+    const { fetchMock, getStacks } = mockAuthenticatedStacksFetch([{ id: 1, name: 'Mein Plan', version: 1, products: [{ id: 10, name: 'Mein Produkt', quantity: 0.05, intake_interval_days: 1, version: 1 }] }]);
+    render(<MemoryRouter><StackWorkspace mode="authenticated" /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button', { name: 'Produkt bearbeiten' }));
+    const amount = screen.getByLabelText('Menge pro Einnahme (Portionen)') as HTMLInputElement;
+    expect(amount.value).toBe('0.05');
+    expect(amount.min).toBe('0.1');
+    fireEvent.click(screen.getByRole('button', { name: 'Speichern' }));
+    expect(screen.getByRole('alert').textContent).toBe('Trage mindestens 0,1 Portionen pro Einnahme ein.');
+    expect(fetchMock.mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === 'PUT')).toHaveLength(0);
+    fireEvent.change(amount, { target: { value: '0.1' } });
+    fireEvent.click(screen.getByRole('radio', { name: 'Wöchentlich' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Speichern' }));
+    await screen.findByText('Einnahmemenge und Rhythmus wurden gespeichert.');
+    expect((getStacks()[0].products as Array<Record<string, unknown>>)[0]).toMatchObject({ quantity: 0.1, intake_interval_days: 7 });
+  });
+
+  it('offers one export action while retaining browser printing and a separate real PDF download', async () => {
+    const print = vi.spyOn(window, 'print').mockImplementation(() => undefined);
+    render(<MemoryRouter><StackWorkspace mode="demo" /></MemoryRouter>);
+    fireEvent.click(screen.getByRole('button', { name: 'Drucken oder als PDF speichern' }));
+    expect(screen.getByRole('button', { name: 'PDF herunterladen' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Druckansicht öffnen' }));
+    await waitFor(() => expect(print).toHaveBeenCalledOnce());
+    expect(screen.queryByRole('dialog', { name: 'Drucken oder als PDF speichern' })).toBeNull();
+  });
+
+  it.each(['https://source.example/study?original=1', 'javascript:alert(1)'])('does not mislabel a default study as official, preserves its context, and bounds source links (%s)', async (sourceUrl) => {
+    mockWorkspaceFetch([], [{ id: 2, ingredient_id: 77, source: 'study', source_title: 'Originalstudie', source_url: sourceUrl, population: 'elderly', dose_min: 5, dose_max: 20, unit: 'mg', is_default: 1, amount_type: 'tested_amount', notes: '12 Wochen; untersuchte Form laut Originalquelle.' }]);
+    render(<MemoryRouter initialEntries={['/stacks?openSearch=1']}><StackWorkspace mode="demo" /></MemoryRouter>);
+    fireEvent.change(await screen.findByRole('combobox', { name: 'Wirkstoff suchen' }), { target: { value: 'Magnesium' } });
+    fireEvent.mouseDown(await screen.findByRole('option', { name: /Magnesium/ }));
+    await screen.findByText('Kein offizieller Referenzwert verfügbar.');
+    expect(screen.getByText(/Untersuchte Personengruppe: Ältere/)).toBeTruthy();
+    expect(screen.getByText('12 Wochen; untersuchte Form laut Originalquelle.')).toBeTruthy();
+    expect(screen.getByText(/Hinterlegter Bereich: 5–20 mg/)).toBeTruthy();
+    expect((screen.getByLabelText('Mit welcher täglichen Wirkstoffmenge möchtest du planen?') as HTMLInputElement).value).toBe('');
+    const source = screen.queryByRole('link', { name: 'Originalquelle zur Studie öffnen' });
+    if (sourceUrl.startsWith('https:')) expect(source?.getAttribute('href')).toBe(sourceUrl);
+    else expect(source).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Als geplante Menge eintragen' }));
+    expect((screen.getByLabelText('Mit welcher täglichen Wirkstoffmenge möchtest du planen?') as HTMLInputElement).value).toBe('20');
+    expect(screen.queryByText(/Deine eingetragene Menge entspricht/)).toBeNull();
+  });
+
+  it('explains duplicate choices and stack deletion before any write, with no imaginary groups or family control', async () => {
+    const ingredientFetch = mockWorkspaceFetch().getMockImplementation()!;
+    const { fetchMock, getStacks } = mockAuthenticatedStacksFetch([{ id: 1, name: 'Mein Plan', version: 1, products: [{ id: 10, name: 'Vorhandenes Produkt', quantity: 1, version: 1, ingredients: [{ ingredient_id: 77, ingredient_name: 'Magnesium' }] }] }]);
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL, init?: RequestInit) => String(input).includes('/ingredients/') ? ingredientFetch(input) : fetchMock(input, init)));
+    render(<MemoryRouter><StackWorkspace mode="authenticated" /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button', { name: 'Produkt hinzufügen' }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Wirkstoff suchen' }), { target: { value: 'Magnesium' } });
+    fireEvent.mouseDown(await screen.findByRole('option', { name: /Magnesium/ }));
+    const duplicate = await screen.findByRole('dialog', { name: 'Magnesium ist bereits enthalten' });
+    for (const name of ['Einnahme bearbeiten', 'Produkt wechseln', 'Als zusätzliches Produkt hinzufügen', 'Nichts ändern']) expect(within(duplicate).getByRole('button', { name })).toBeTruthy();
+    expect(within(duplicate).getByText('Beide Produkte bleiben im Stack. Ihre Wirkstoffmengen werden zusammengezählt.')).toBeTruthy();
+    fireEvent.click(within(duplicate).getByRole('button', { name: 'Nichts ändern' }));
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Produkt hinzufügen' })).getByRole('button', { name: 'Schließen' }));
+    fireEvent.click(screen.getByRole('button', { name: 'In Papierkorb' }));
+    expect(within(screen.getByRole('dialog', { name: 'Stack in den Papierkorb verschieben?' })).getByText(/Eigene Produkte bleiben unter „Eigene Produkte“ erhalten/)).toBeTruthy();
+    expect(fetchMock.mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method)).toHaveLength(0);
+    expect((getStacks()[0].products as unknown[])).toHaveLength(1);
+    expect(screen.queryByText('Familienprofil')).toBeNull();
+    expect(screen.queryByText('Meine Gruppen')).toBeNull();
   });
 });

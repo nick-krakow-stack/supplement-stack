@@ -118,7 +118,7 @@ describe('KnowledgeOverviewPage', () => {
     vi.unstubAllGlobals();
   });
 
-  it('explains the overview factually with correct typography and consistent Wirkstoff wording', async () => {
+  it('uses the exact knowledge title and search wording while retaining central descriptions', async () => {
     const magnesiumSummary = 'Mineralstoff für die normale Funktion von Muskeln und Nerven.';
     stubOverview([status(1, 'Magnesium', 'mineralstoffe', { description: magnesiumSummary })]);
     renderOverview();
@@ -128,10 +128,18 @@ describe('KnowledgeOverviewPage', () => {
       name: 'Alles über Vitamine, Mineralstoffe & Co. – einfach erklärt',
     })).toBeTruthy();
     expect(screen.getByText(/was über einen Wirkstoff bekannt ist, wo er vorkommt und welche Grenzen/i)).toBeTruthy();
-    expect(screen.getByRole('searchbox', { name: 'Wirkstoff suchen' })).toBeTruthy();
-    expect(screen.getByPlaceholderText('Wirkstoff suchen – z. B. Vitamin D, Magnesium oder Eisen …')).toBeTruthy();
+    expect(screen.getByRole('searchbox', { name: 'Nährstoff suchen' })).toBeTruthy();
+    expect(screen.getByPlaceholderText('Nährstoff suchen – z. B. Vitamin D, Magnesium oder Eisen …')).toBeTruthy();
     expect(screen.getByText(magnesiumSummary)).toBeTruthy();
+    expect(screen.getByText('1 Eintrag')).toBeTruthy();
     expect(document.body.textContent).not.toContain('Nährstoff suchen');
+  });
+
+  it('uses plural entries for a category with multiple nutrients', async () => {
+    stubOverview([status(1, 'Magnesium', 'mineralstoffe'), status(2, 'Calcium', 'mineralstoffe')]);
+    renderOverview();
+    expect(await screen.findByText('2 Einträge')).toBeTruthy();
+    expect(screen.queryByText('1 Einträge')).toBeNull();
   });
 
   it('renders exactly the 92 active API ingredients, including formerly missing entries, without a local fallback list', async () => {
@@ -192,7 +200,7 @@ describe('KnowledgeOverviewPage', () => {
     expect(screen.queryByText('Kurztext wird geprüft.')).toBeNull();
     expect(screen.getByText('Quellen beschreiben Ginseng im Zusammenhang mit Energie und Stress.')).toBeTruthy();
 
-    fireEvent.change(screen.getByRole('searchbox', { name: 'Wirkstoff suchen' }), { target: { value: 'Magnesiumcitrat' } });
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Nährstoff suchen' }), { target: { value: 'Magnesiumcitrat' } });
     expect(screen.getByText('Magnesium')).toBeTruthy();
     expect(screen.queryByText('Boswellia (Weihrauch)')).toBeNull();
     expect(document.querySelector('.db-results')?.textContent).toBe('1 Treffer');
@@ -204,7 +212,7 @@ describe('KnowledgeOverviewPage', () => {
       status(2, 'Natrium', 'mineralstoffe'),
     ]);
     renderOverview();
-    const input = await screen.findByRole('searchbox', { name: 'Wirkstoff suchen' });
+    const input = await screen.findByRole('searchbox', { name: 'Nährstoff suchen' });
 
     fireEvent.change(input, { target: { value: 'mag' } });
     expect(document.querySelector('.db-results')?.textContent).toBe('1 Treffer');

@@ -74,6 +74,20 @@ describe('authentication return flow', () => {
     expect((await screen.findByLabelText('location')).textContent).toBe(returnTo);
   });
 
+  it('explains optional profile details and the complete consent without changing its gate', () => {
+    render(<MemoryRouter><RegisterPage /></MemoryRouter>);
+    expect(screen.getByText(/Optionale Angaben kannst du später im Profil ergänzen/)).toBeTruthy();
+    const consent = screen.getByRole('checkbox', { name: /^Ich willige ein, dass Supplement Stack.*Mehr dazu im Datenschutz\s*\.$/ });
+    expect(consent.closest('label')?.textContent).toBe('Ich willige ein, dass Supplement Stack meine Stack-, Produkt- und Einnahmedaten speichert, damit ich die App nutzen kann. Daraus können Rückschlüsse auf meine Gesundheit möglich sein. Mehr dazu im Datenschutz.');
+    expect((consent as HTMLInputElement).checked).toBe(false);
+    expect((screen.getByRole('button', { name: 'Konto erstellen' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText('Welche Daten sind gemeint?').closest('details')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Datenschutz' }).getAttribute('href')).toBe('/datenschutz');
+    fireEvent.click(consent);
+    expect((screen.getByRole('button', { name: 'Konto erstellen' }) as HTMLButtonElement).disabled).toBe(false);
+    expect(authState.register).not.toHaveBeenCalled();
+  });
+
   it('passes the exact returnTo into registration, verification state and the verification email request', async () => {
     authState.register.mockResolvedValue({
       user: { email: 'new@test.invalid', email_verified_at: null, role: 'user' },

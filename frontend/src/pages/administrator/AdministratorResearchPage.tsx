@@ -674,7 +674,7 @@ export default function AdministratorResearchPage() {
       <div className="admin-research-layout">
         <AdminCard
           title="Pipeline"
-          subtitle="Vitamin auswaehlen und Durchlaufstatus pruefen."
+          subtitle="Vitamin auswählen und Durchlaufstatus prüfen."
           actions={
             <button
               type="button"
@@ -739,7 +739,7 @@ export default function AdministratorResearchPage() {
         <div className="admin-research-detail">
           {!selectedItem ? (
             <AdminCard padded>
-              <AdminEmpty>Vitamin aus der Liste auswaehlen.</AdminEmpty>
+              <AdminEmpty>Vitamin aus der Liste auswählen.</AdminEmpty>
             </AdminCard>
           ) : (
             <>
