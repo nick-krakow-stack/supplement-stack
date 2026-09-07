@@ -405,8 +405,10 @@ Die ursprünglichen Sterne/Befunde dokumentieren weiterhin die Audit-Ausgangslag
 Die ersten acht Zeilen sind am 6. September 2026 abgeschlossen und produktiv
 geprüft (PR #27, Deployment `34061348653`). Details und Nachweise:
 [`umsetzung_copy_register_01_08.md`](umsetzung_copy_register_01_08.md).
-Die übrigen 58 Registerzeilen werden im anschließenden Goal vollständig
-abgearbeitet: [`umsetzung_copy_register_09_66.md`](umsetzung_copy_register_09_66.md).
+Die übrigen 58 Registerzeilen sind am 7. September 2026 vollständig abgeschlossen
+und live geprüft (PR #28 sowie enger Auslieferungsfix PR #29, finales Deployment
+`34119841030`). Zeilenbezogene Nachweise und begründete Aktualisierungen alter
+Auditannahmen: [`umsetzung_copy_register_09_66.md`](umsetzung_copy_register_09_66.md).
 
 Die Tabelle deckt alle wiederkehrenden oder konkret problematischen
 Oberflächentexte ab. Nicht aufgeführte dynamische Produkt-, Creator- und
@@ -424,64 +426,64 @@ vor Veröffentlichung weiterhin den jeweils vorgeschriebenen Fach-/Claim-Review.
 | [x] | „Analytics-Einwilligung“ | „Optionale Nutzungsanalyse“; ergänzen: „Die App funktioniert auch, wenn du ablehnst.“ |
 | [x] | „DGE · EFSA · NIH Quellen“ | „Quellen: DGE, EFSA und NIH“. |
 | [x] | „Preis-pro-Portion Vergleich“ | „Kosten pro Einnahme im Vergleich“. |
-| [ ] | „Kostenlos & ohne Konto nutzbar“ | „Demo ohne Konto ausprobieren“. |
-| [ ] | „vollständig ausprobieren“, „Alles nutzbar“, „ohne Risiko“ | „Teste Suche, Stack-Aufbau und Kostenübersicht. Speichern, E-Mail und eigene Produkte gibt es nach kostenloser Anmeldung.“ |
-| [ ] | „neueste Erkenntnisse“ | „Wissensartikel mit Quellen und Prüfdatum“, solange Aktualität nicht anderweitig garantiert wird. |
-| [ ] | „geprüfte Inhaltsstoffe“ | Nur bei belegtem Prüfvertrag; sonst „erfasste Inhaltsstoffe“. |
-| [ ] | „Optional: Alter und bevorzugte Quellenpraeferenz koennen spaeter geaendert werden.“ | „Optional – diese Angaben kannst du später im Profil ergänzen.“ |
-| [ ] | „Leitlinienquelle“ | Falls wirksam: „Welche Quellen möchtest du zuerst sehen?“ Sonst Feld entfernen. |
-| [ ] | „Influencer“ als Quellenoption | Einheitlich „Creator-Empfehlungen“; nicht als Leitlinie bezeichnen. |
-| [ ] | langer Consent mit „DSGVO Art. 9 erforderlich“ | „Ich willige ein, dass Supplement Stack meine Stack-, Produkt- und Einnahmedaten speichert, damit ich die App nutzen kann. Daraus können Rückschlüsse auf meine Gesundheit möglich sein. Mehr dazu im Datenschutz.“ Details aufklappbar. |
-| [ ] | „Rolle: user/creator“ | Ausblenden oder „Kontotyp: Standardkonto/Creator“. |
-| [ ] | „Meine Supplement Stacks“ | „Meine Stacks“. |
-| [ ] | „1 Produkte“ | Zentrale Pluralisierung: „1 Produkt“, „2 Produkte“. |
-| [ ] | Screenreaderlabels mit `waehlen` | Echtes UTF-8: „wählen“. |
-| [ ] | Sortierung „Eigene“ | „Manuell“. |
-| [ ] | Kategorien „Keine“ / „Eigene“ | „Ohne Gruppen“ / „Meine Gruppen“. |
-| [ ] | amber „Creator-Stack von …“ | Neutrale Infobox: „Ursprünglich empfohlen von {Name}. Du kannst diesen Stack selbst anpassen.“ |
-| [ ] | unerklärte Auswahl | „Nur ausgewählte Produkte zählen in die Kostenübersicht.“ |
-| [ ] | doppeltes „Wirkstoff suchen / Nach Wirkstoff suchen“ | Einmal: „Welchen Wirkstoff möchtest du hinzufügen?“ |
-| [ ] | „Beginnen Sie zu tippen …“ | „Tippe einen Wirkstoff ein, zum Beispiel Magnesium oder Vitamin D.“ |
-| [ ] | „z.B.“ | Einheitlich „z. B.“. |
-| [ ] | „FORM“ / unklare „Form“ | „Produktform“ beziehungsweise „Gewählte Form“. |
-| [ ] | „DGE Empfehlung“ | „DGE-Referenzwert für die gesamte tägliche Zufuhr“. |
-| [ ] | „Studien-Referenz“ | „In dieser Studie untersuchte Menge“ plus Population, Dauer, Form und Grenze. |
-| [ ] | „Empfehlung übernehmen“ / „Referenz übernehmen“ | „Als geplante Menge eintragen“, erst nach sichtbarer Einordnung. |
-| [ ] | „Rund um die DGE Empfehlung“ mit Warnsymbol | Neutral: „Vergleich mit dem DGE-Referenzwert: Deine eingetragene Menge entspricht …“. |
-| [ ] | Duplikataktionen „Wirkstoffmengen bearbeiten / Produkt ändern / So lassen / Trotzdem …“ | „Einnahme bearbeiten“, „Produkt wechseln“, „Nichts ändern“, „Als zusätzliches Produkt hinzufügen“ – jeweils mit einem Folgensatz. |
-| [ ] | „Fallback: manuelle Einnahmemenge“ | „Eigene Einnahmeangabe (optional)“. |
-| [ ] | „Timing“ | „Zeitpunkt“. |
-| [ ] | „Einnahmeintervall in Tagen“ | „Wie oft nimmst du es?“ mit Presets und optionalem eigenem Abstand. |
-| [ ] | „Portionen pro Einnahmetag müssen größer als 0 sein.“ | „Trage mindestens 0,1 Portionen pro Einnahme ein.“ |
-| [ ] | „Familienprofil“ | Nur bei echter Auswahl: „Für wen ist dieser Stack?“ mit erklärter Folge. |
-| [ ] | „Kategorie X wirklich löschen?“ | „Kategorie ‚X‘ löschen? Die Produkte bleiben erhalten und werden nach ‚Ohne Gruppe‘ verschoben.“ |
-| [ ] | „Stack wirklich löschen?“ | „Der Stack und seine Zusammenstellung werden gelöscht. Eigene Produkte bleiben unter ‚Eigene Produkte‘ erhalten.“ |
-| [ ] | „Passend“ ohne Begründung | „Vorgeschlagene Option“ plus sichtbarer Grund oder wertungsfrei „Ausgewählt“. |
-| [ ] | „unbekannt“ / Strich bei Reichweite | „Nicht berechenbar – Produktangaben fehlen.“ |
-| [ ] | `/Mo`, `EUR/Monat`, „pro Monat“ gemischt | Einheitlich „… € pro Monat“. |
-| [ ] | Warnmodal „Warnung / Kurzbeschreibung / Details“ | Nach Schweregrad „Gut zu wissen“, „Wichtig“ oder „Bitte beachten“; „Kurz erklärt“ statt „Kurzbeschreibung“. |
-| [ ] | „20-30min Abstand zu Kaffee/Tee“ | „20–30 Minuten Abstand zu Kaffee oder Tee“. |
-| [ ] | „Stack mailen“, „Stack-Mail“, „Stack per E-Mail senden“ | Einheitlich „Einnahmeplan per E-Mail senden“. |
-| [ ] | Versandbutton ohne Ziel | „An meine Account-Adresse senden“; Zieladresse im Dialog sichtbar. |
-| [ ] | „Plan drucken/PDF“ | „Drucken oder als PDF speichern“. |
-| [ ] | Creator „Schreibzugriff“ | „Du kannst die Empfehlungen ansehen, aber nicht ändern. Zum Erstellen oder Beenden brauchst du Bearbeitungsrechte für …“. |
-| [ ] | „Wird gesendet …“ bei Moderation | „Wird zur Prüfung eingereicht …“. |
-| [ ] | „Freigabe und Shop-Link“ | Je Produkt konkret: „Shop-Link fehlt“ / „Produkt ist noch nicht freigegeben“. |
-| [ ] | „1 aktuell freigegebene Links“, „1-mal angesehen/gespeichert“ | „1 freigegebener Link“, „1 Übernahme“; Mehrzahl zentral bilden. Besuche gemäß tatsächlicher Messung als „erfasste eindeutige Besuche“ mit Zustimmungshinweis bezeichnen, nicht als rohe Ansichten. |
-| [ ] | „über aktive Links gespeichert“ | „in einen Stack übernommen“. |
-| [ ] | roher Timingwert `before_breakfast` | „Vor dem Frühstück“; alle Werte zentral übersetzen, unbekannt = „Keine Angabe“. |
-| [ ] | „Du kannst sie danach selbst senden“ | „Füge die kopierte Nachricht anschließend in deinen Messenger oder deine E-Mail ein.“ |
-| [ ] | „Menge laut Empfehlung“ + „Angabe des Creators“ | Bereich „So nutzt {Name} das Produkt“ mit „Menge“, „Eigene Angabe“, „Wie oft“, „Zeitpunkt“. |
-| [ ] | „Jetzt bestätigen“ | Dynamisch: „Stack mit 3 Produkten anlegen“, „Produkt hinzufügen“ oder „Produkt ersetzen“. |
-| [ ] | „Bei der Empfehlung bleiben“ | „Empfehlung weiter ansehen“. |
-| [ ] | „Das hat gerade nicht geklappt“ | Schritt nennen: „Die Empfehlung konnte nicht geprüft/gespeichert werden.“ |
-| [ ] | H1 „Co. - einfach erklärt“ | „Alles über Vitamine, Mineralstoffe & Co. – einfach erklärt“. |
-| [ ] | Suche „Nährstoff suchen - z. B. … ...“ | „Nährstoff suchen – z. B. Vitamin D, Magnesium oder Eisen …“. |
-| [ ] | „Bald“ | Kein unbelegter Bearbeitungsstatus: Karten ohne Artikel bleiben nichtinteraktiv und ohne „Bald“/„Artikel in Vorbereitung“. |
-| [ ] | „1 Einträge“ | „1 Eintrag“. |
-| [ ] | „Pflanzlicher Stoffstoff“, „Bedeutet als Cofaktor“, „Schlaf- und Rhythmusrhythmus“, „Fokuslage“, „Wirkungsdebatten“ | Geprüfte Kurztexte aus der zentralen Quelle; keine lokalen Einzelflicken und gemäß ausdrücklicher Owner-Korrektur keine Systemstatusmeldung als Ersatztext. |
-| [ ] | Artikel „Zurück“ | „Zur Wissensübersicht“. |
-| [ ] | Rechtsseiten ohne Datum | „Stand: {Datum}“ aus der kanonischen Dokumentversion. |
+| [x] | „Kostenlos & ohne Konto nutzbar“ | „Demo ohne Konto ausprobieren“. |
+| [x] | „vollständig ausprobieren“, „Alles nutzbar“, „ohne Risiko“ | „Teste Suche, Stack-Aufbau und Kostenübersicht. Speichern, E-Mail und eigene Produkte gibt es nach kostenloser Anmeldung.“ |
+| [x] | „neueste Erkenntnisse“ | „Wissensartikel mit Quellen und Prüfdatum“, solange Aktualität nicht anderweitig garantiert wird. |
+| [x] | „geprüfte Inhaltsstoffe“ | Nur bei belegtem Prüfvertrag; sonst „erfasste Inhaltsstoffe“. |
+| [x] | „Optional: Alter und bevorzugte Quellenpraeferenz koennen spaeter geaendert werden.“ | „Optional – diese Angaben kannst du später im Profil ergänzen.“ |
+| [x] | „Leitlinienquelle“ | Falls wirksam: „Welche Quellen möchtest du zuerst sehen?“ Sonst Feld entfernen. |
+| [x] | „Influencer“ als Quellenoption | Einheitlich „Creator-Empfehlungen“; nicht als Leitlinie bezeichnen. |
+| [x] | langer Consent mit „DSGVO Art. 9 erforderlich“ | „Ich willige ein, dass Supplement Stack meine Stack-, Produkt- und Einnahmedaten speichert, damit ich die App nutzen kann. Daraus können Rückschlüsse auf meine Gesundheit möglich sein. Mehr dazu im Datenschutz.“ Details aufklappbar. |
+| [x] | „Rolle: user/creator“ | Ausblenden oder „Kontotyp: Standardkonto/Creator“. |
+| [x] | „Meine Supplement Stacks“ | „Meine Stacks“. |
+| [x] | „1 Produkte“ | Zentrale Pluralisierung: „1 Produkt“, „2 Produkte“. |
+| [x] | Screenreaderlabels mit `waehlen` | Echtes UTF-8: „wählen“. |
+| [x] | Sortierung „Eigene“ | „Manuell“. |
+| [x] | Kategorien „Keine“ / „Eigene“ | „Ohne Gruppen“ / „Meine Gruppen“. |
+| [x] | amber „Creator-Stack von …“ | Neutrale Infobox: „Ursprünglich empfohlen von {Name}. Du kannst diesen Stack selbst anpassen.“ |
+| [x] | unerklärte Auswahl | „Nur ausgewählte Produkte zählen in die Kostenübersicht.“ |
+| [x] | doppeltes „Wirkstoff suchen / Nach Wirkstoff suchen“ | Einmal: „Welchen Wirkstoff möchtest du hinzufügen?“ |
+| [x] | „Beginnen Sie zu tippen …“ | „Tippe einen Wirkstoff ein, zum Beispiel Magnesium oder Vitamin D.“ |
+| [x] | „z.B.“ | Einheitlich „z. B.“. |
+| [x] | „FORM“ / unklare „Form“ | „Produktform“ beziehungsweise „Gewählte Form“. |
+| [x] | „DGE Empfehlung“ | „DGE-Referenzwert für die gesamte tägliche Zufuhr“. |
+| [x] | „Studien-Referenz“ | „In dieser Studie untersuchte Menge“ plus Population, Dauer, Form und Grenze. |
+| [x] | „Empfehlung übernehmen“ / „Referenz übernehmen“ | „Als geplante Menge eintragen“, erst nach sichtbarer Einordnung. |
+| [x] | „Rund um die DGE Empfehlung“ mit Warnsymbol | Neutral: „Vergleich mit dem DGE-Referenzwert: Deine eingetragene Menge entspricht …“. |
+| [x] | Duplikataktionen „Wirkstoffmengen bearbeiten / Produkt ändern / So lassen / Trotzdem …“ | „Einnahme bearbeiten“, „Produkt wechseln“, „Nichts ändern“, „Als zusätzliches Produkt hinzufügen“ – jeweils mit einem Folgensatz. |
+| [x] | „Fallback: manuelle Einnahmemenge“ | „Eigene Einnahmeangabe (optional)“. |
+| [x] | „Timing“ | „Zeitpunkt“. |
+| [x] | „Einnahmeintervall in Tagen“ | „Wie oft nimmst du es?“ mit Presets und optionalem eigenem Abstand. |
+| [x] | „Portionen pro Einnahmetag müssen größer als 0 sein.“ | „Trage mindestens 0,1 Portionen pro Einnahme ein.“ |
+| [x] | „Familienprofil“ | Nur bei echter Auswahl: „Für wen ist dieser Stack?“ mit erklärter Folge. |
+| [x] | „Kategorie X wirklich löschen?“ | „Kategorie ‚X‘ löschen? Die Produkte bleiben erhalten und werden nach ‚Ohne Gruppe‘ verschoben.“ |
+| [x] | „Stack wirklich löschen?“ | „Der Stack und seine Zusammenstellung werden gelöscht. Eigene Produkte bleiben unter ‚Eigene Produkte‘ erhalten.“ |
+| [x] | „Passend“ ohne Begründung | „Vorgeschlagene Option“ plus sichtbarer Grund oder wertungsfrei „Ausgewählt“. |
+| [x] | „unbekannt“ / Strich bei Reichweite | „Nicht berechenbar – Produktangaben fehlen.“ |
+| [x] | `/Mo`, `EUR/Monat`, „pro Monat“ gemischt | Einheitlich „… € pro Monat“. |
+| [x] | Warnmodal „Warnung / Kurzbeschreibung / Details“ | Nach Schweregrad „Gut zu wissen“, „Wichtig“ oder „Bitte beachten“; „Kurz erklärt“ statt „Kurzbeschreibung“. |
+| [x] | „20-30min Abstand zu Kaffee/Tee“ | „20–30 Minuten Abstand zu Kaffee oder Tee“. |
+| [x] | „Stack mailen“, „Stack-Mail“, „Stack per E-Mail senden“ | Einheitlich „Einnahmeplan per E-Mail senden“. |
+| [x] | Versandbutton ohne Ziel | „An meine Account-Adresse senden“; Zieladresse im Dialog sichtbar. |
+| [x] | „Plan drucken/PDF“ | „Drucken oder als PDF speichern“. |
+| [x] | Creator „Schreibzugriff“ | „Du kannst die Empfehlungen ansehen, aber nicht ändern. Zum Erstellen oder Beenden brauchst du Bearbeitungsrechte für …“. |
+| [x] | „Wird gesendet …“ bei Moderation | „Wird zur Prüfung eingereicht …“. |
+| [x] | „Freigabe und Shop-Link“ | Je Produkt konkret: „Shop-Link fehlt“ / „Produkt ist noch nicht freigegeben“. |
+| [x] | „1 aktuell freigegebene Links“, „1-mal angesehen/gespeichert“ | „1 freigegebener Link“, „1 Übernahme“; Mehrzahl zentral bilden. Besuche gemäß tatsächlicher Messung als „erfasste eindeutige Besuche“ mit Zustimmungshinweis bezeichnen, nicht als rohe Ansichten. |
+| [x] | „über aktive Links gespeichert“ | „in einen Stack übernommen“. |
+| [x] | roher Timingwert `before_breakfast` | „Vor dem Frühstück“; alle Werte zentral übersetzen, unbekannt = „Keine Angabe“. |
+| [x] | „Du kannst sie danach selbst senden“ | „Füge die kopierte Nachricht anschließend in deinen Messenger oder deine E-Mail ein.“ |
+| [x] | „Menge laut Empfehlung“ + „Angabe des Creators“ | Bereich „So nutzt {Name} das Produkt“ mit „Menge“, „Eigene Angabe“, „Wie oft“, „Zeitpunkt“. |
+| [x] | „Jetzt bestätigen“ | Dynamisch: „Stack mit 3 Produkten anlegen“, „Produkt hinzufügen“ oder „Produkt ersetzen“. |
+| [x] | „Bei der Empfehlung bleiben“ | „Empfehlung weiter ansehen“. |
+| [x] | „Das hat gerade nicht geklappt“ | Schritt nennen: „Die Empfehlung konnte nicht geprüft/gespeichert werden.“ |
+| [x] | H1 „Co. - einfach erklärt“ | „Alles über Vitamine, Mineralstoffe & Co. – einfach erklärt“. |
+| [x] | Suche „Nährstoff suchen - z. B. … ...“ | „Nährstoff suchen – z. B. Vitamin D, Magnesium oder Eisen …“. |
+| [x] | „Bald“ | Kein unbelegter Bearbeitungsstatus: Karten ohne Artikel bleiben nichtinteraktiv und ohne „Bald“/„Artikel in Vorbereitung“. |
+| [x] | „1 Einträge“ | „1 Eintrag“. |
+| [x] | „Pflanzlicher Stoffstoff“, „Bedeutet als Cofaktor“, „Schlaf- und Rhythmusrhythmus“, „Fokuslage“, „Wirkungsdebatten“ | Geprüfte Kurztexte aus der zentralen Quelle; keine lokalen Einzelflicken und gemäß ausdrücklicher Owner-Korrektur keine Systemstatusmeldung als Ersatztext. |
+| [x] | Artikel „Zurück“ | „Zur Wissensübersicht“. |
+| [x] | Rechtsseiten ohne Datum | „Stand: {Datum}“ aus der kanonischen Dokumentversion. |
 
 ## 16. Vollständige SEO-Seitenmatrix
 
