@@ -487,9 +487,12 @@ vor Veröffentlichung weiterhin den jeweils vorgeschriebenen Fach-/Claim-Review.
 
 ## 16. Vollständige SEO-Seitenmatrix
 
-Alle Scores liegen unter 98 und benötigen deshalb die jeweils angegebene
-Maßnahme. Die 790 Wissensdetails werden im Seiteninventar am Ende einzeln
-aufgeführt.
+Die Scores und Messwerte in diesem Abschnitt dokumentieren den ursprünglichen
+Auditstand. Technische Phase A/C wurde am 08.09.2026 veröffentlicht und über
+alle 790 Wissensdetails sowie die betroffenen Routen geprüft (Abschnitt 18).
+Die umfassenden SEO-Zielboxen der Artikel bleiben wegen separat offener
+historischer Kurzmetadaten unverändert; sie sind kein offener Technikrelease.
+Die 790 Wissensdetails werden im Seiteninventar am Ende einzeln aufgeführt.
 
 | Erledigt | Seite/Zustand | Ziel | SEO | Weg auf 100 |
 |---|---|---|---:|---|
@@ -557,8 +560,8 @@ aufgeführt.
 - [x] Einnahmeplan-Zuordnung für Mehrfachzeitpunkte und „zum Essen“ korrigieren.
 - [x] Rohe Timing-Schlüssel in Creator-Vorschauen zentral übersetzen.
 - [x] Unsichtbare Rückmeldung nach Linkmeldung sichtbar und zugänglich machen.
-- [ ] Ungültige Share-/Wissens-/Catch-all-Pfade als 404/410 und noindex ausliefern.
-- [ ] Sharetokens mit `noindex`, `no-referrer` und sicherer Cache-Policy schützen.
+- [x] Ungültige Share-/Wissens-/Catch-all-Pfade als 404/410 und noindex ausliefern.
+- [x] Sharetokens mit `noindex`, `no-referrer` und sicherer Cache-Policy schützen.
 
 ### Phase B – P1: Kern-UX und einfache Sprache
 
@@ -575,20 +578,24 @@ aufgeführt.
 
 ### Phase C – P1 SEO: öffentliche technische Grundlage
 
-Umsetzungsstand 07.09.2026: Phase-A-Restpunkte und Phase-C-Code in PR #30
+Abgeschlossen am 08.09.2026: Phase-A-Restpunkte und Phase C in PR #30
 (`ee48e31`) umgesetzt; unabhängige Abnahme und 571 Tests bestanden.
-Die End-to-End-Boxen bleiben bis Deployment/Live-Abnahme offen: Cloudflare D1
-blockierte Run `34137602863` am Tagesleselimit vor der Veröffentlichung.
-Details und getrennt inventarisierte historische Meta-Längen:
+Nach D1-Reset veröffentlichte Run `34137602863`, Versuch 2, erfolgreich.
+Live: 790/790 Artikel mit GET/HEAD/Head/Schema, 794 Sitemap-URLs, 44
+Hauptartikellinks und insgesamt 819 technische Fälle bestätigt; 16 reale
+Browserzustände auf Desktop/390 px ohne Überlauf oder doppelte Metadaten.
+Drei pauschale Linkanzahl-Prüfannahmen wurden nur für die betroffenen Routen
+berichtigt und durch einen separaten Delta-Readback geklärt, kein Zweitcrawl.
+Details, Belege und separat offene historische Meta-Kürzungen:
 `umsetzung_phase_a_c_ux_seo.md`.
 
-- [ ] Zentralen Route-Head-Vertrag für Indexziel, Head, Schema und Cache einführen.
-- [ ] Blanket-`Disallow: /` ersetzen; Start, Wissen und Demo erlauben, Utilityseiten crawlbar-noindex behandeln.
-- [ ] SSR/Edge-Prerender für Start, Wissen, Demo, Legal, Auth-Grundzustände und Fehler.
-- [ ] Sitemap um kanonische öffentliche Seiten ergänzen und 541 Zeitstempel normalisieren.
-- [ ] Wissensrenderer semantisch serverseitig ausgeben, doppeltes JSON-LD entfernen.
-- [ ] Meta-Längen über Publication-Gate prüfen; OG-Bild/Twitter ergänzen.
-- [ ] Slash- und `/agb`-Aliasse permanent weiterleiten.
+- [x] Zentralen Route-Head-Vertrag für Indexziel, Head, Schema und Cache einführen.
+- [x] Blanket-`Disallow: /` ersetzen; Start, Wissen und Demo erlauben, Utilityseiten crawlbar-noindex behandeln.
+- [x] SSR/Edge-Prerender für Start, Wissen, Demo, Legal, Auth-Grundzustände und Fehler.
+- [x] Sitemap um kanonische öffentliche Seiten ergänzen und vorhandene Zeitstempel bei der Ausgabe normalisieren (541 im ursprünglichen Audit; keine Datumswerte erfinden).
+- [x] Wissensrenderer semantisch serverseitig ausgeben, doppeltes JSON-LD entfernen.
+- [x] Meta-Längen über Publication-Gate prüfen; OG-Bild/Twitter ergänzen.
+- [x] Slash- und `/agb`-Aliasse permanent weiterleiten.
 
 ### Phase D – P2: Creator-Wachstum und Komfort
 
