@@ -141,6 +141,9 @@ describe('site page HTTP delivery', () => {
   it('does not whitelist arbitrary app prefixes or deeper article routes', () => {
     expect(isKnownAppPath('/administrator/unknown')).toBe(false);
     expect(isKnownAppPath('/wissen/vitamin-d/unknown')).toBe(false);
-    expect(isKnownAppPath('/creator/unknown')).toBe(false);
+    // Public creator slugs now have a real route; publication eligibility still
+    // determines its HTTP404 response (covered by creatorProfileDelivery).
+    expect(isKnownAppPath('/creator/unknown')).toBe(true);
+    expect(isKnownAppPath('/creator/unknown/deeper')).toBe(false);
   });
 });

@@ -4,8 +4,10 @@ import { ensureAdmin, logAdminAction } from '../lib/helpers'
 import { normalizeDomain, snapshotHash, validateAffiliateTemplate } from '../lib/creator-sharing'
 import { getPlatformParty, parseStoredSnapshot, publicProfileImageUrl } from '../lib/creator-sharing-service'
 import { deliverCreatorShareNotification } from '../lib/creator-share-notifications'
+import { creatorPublicProfileAdmin } from './creator-public-profiles'
 
 const creatorSharingAdmin = new Hono<AppContext>()
+creatorSharingAdmin.route('/', creatorPublicProfileAdmin)
 
 function positiveInteger(value: unknown): number | null {
   const parsed = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : Number.NaN

@@ -6,6 +6,7 @@ export interface RouteHeadInput {
   description?: string | null;
   jsonLd?: RouteJsonLd | null;
   image?: string | null;
+  profilePublished?: boolean;
 }
 export interface RouteHead {
   kind: string;

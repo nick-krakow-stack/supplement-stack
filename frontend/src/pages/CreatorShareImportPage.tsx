@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import {
   creatorSharingEnabled,
@@ -22,6 +22,9 @@ import { clearCreatorShareDraft, readCreatorShareDraft, writeCreatorShareDraft }
 import { formatRecommendationAmount, formatRecommendationInterval } from '../lib/creatorRecommendationFormat';
 import { authPath, currentLocationReturnTo } from '../lib/returnTo';
 import { countLabel, timingLabel } from '../lib/displayCopy';
+import { projectShareHead, publicShareFailure } from '../../../functions/lib/share-head-projection.mjs';
+import { applyPublicRouteHead } from '../lib/publicPageHead';
+import { hasInitialShareHead } from '../lib/sharePageHead';
 
 type UnavailableKind = 'pending' | 'paused' | 'expired' | 'unavailable' | 'unknown';
 type Decision = 'keep' | 'replace';
@@ -506,12 +509,32 @@ function CreatorShareImportPageForToken({ token }: { token: string }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [technicalError, setTechnicalError] = useState<string | null>(null);
+  const [previewFailureStatus, setPreviewFailureStatus] = useState<404 | 409 | 410 | 503>(503);
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
   const activeRef = useRef(true);
   const preflightHeadingRef = useRef<HTMLHeadingElement>(null);
   const resultRef = useRef<HTMLDivElement>(null);
   const stackErrorRef = useRef<HTMLDivElement>(null);
   const technicalErrorRef = useRef<HTMLDivElement>(null);
+  const preserveInitialHead = useRef(hasInitialShareHead(location.pathname));
+
+  useLayoutEffect(() => {
+    const loading = creatorSharingEnabled && !unavailable && (previewLoading || !preview && !technicalError);
+    if (loading && preserveInitialHead.current) return;
+    if (!loading) preserveInitialHead.current = false;
+    const failure = unavailable ? publicShareFailure(
+      unavailable === 'unknown' ? 404 : unavailable === 'expired' || unavailable === 'unavailable' ? 410 : 409,
+      `SHARE_${unavailable.toUpperCase()}`,
+    ) : null;
+    const projection = projectShareHead(
+      !creatorSharingEnabled ? publicShareFailure(404)
+        : failure ?? (loading ? { status: 'loading' }
+          : preview ? { status: 200, title: preview.title, creatorName: preview.creator.name }
+            : publicShareFailure(previewFailureStatus)),
+      token,
+    );
+    applyPublicRouteHead(projection.head);
+  }, [preview, previewFailureStatus, previewLoading, technicalError, token, unavailable]);
 
   useEffect(() => {
     activeRef.current = true;
@@ -532,7 +555,10 @@ function CreatorShareImportPageForToken({ token }: { token: string }) {
       })
       .catch((caught: unknown) => {
         if (cancelled) return;
-        const kind = unavailableKind(errorData(caught).code);
+        const status = (caught as { response?: { status?: number } })?.response?.status;
+        setPreviewFailureStatus(publicShareFailure(status ?? 503).status);
+        const kind = unavailableKind(errorData(caught).code)
+          ?? (status === 404 ? 'unknown' : status === 410 ? 'unavailable' : null);
         if (kind) setUnavailable(kind);
         else setTechnicalError('Die Empfehlung konnte nicht geladen werden. Bitte versuche es noch einmal.');
       })

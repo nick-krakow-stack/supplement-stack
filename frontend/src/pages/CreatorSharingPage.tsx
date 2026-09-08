@@ -28,6 +28,7 @@ import {
   type CreatorSourceShareGuard,
 } from '../api/creatorSharing';
 import CreatorRecommendationPreview from '../components/CreatorRecommendationPreview';
+import CreatorPublicProfileSettings from '../components/CreatorPublicProfileSettings';
 import ModalWrapper from '../components/modals/ModalWrapper';
 import { useAuth } from '../contexts/AuthContext';
 import {
@@ -1577,6 +1578,8 @@ export default function CreatorSharingPage() {
         </div>
         {parties.length > 1 && <p className="mt-3 text-xs leading-5 text-slate-500">Beim Wechsel ändern sich Entwürfe, Empfehlungen und Zahlen. Entwürfe werden für jede Partei getrennt gespeichert.</p>}
       </section>
+
+      {selectedParty && <CreatorPublicProfileSettings key={`${userId}:${selectedParty.id}`} party={selectedParty} initiallyExpanded={false} />}
 
       {!canEdit && (
         <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm leading-6 text-blue-900">

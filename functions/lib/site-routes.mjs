@@ -10,12 +10,21 @@ const APP_ROUTES = new Set([
 ])
 
 /** Exact SPA routes, not prefix-based permission for arbitrary invented pages. */
+export function isCreatorProfileSlug(slug) {
+  return typeof slug === 'string' && /^[a-z0-9][a-z0-9-]{1,118}[a-z0-9]$/.test(slug)
+}
+
+export function isCreatorProfilePath(pathname) {
+  return pathname.startsWith('/creator/') && isCreatorProfileSlug(pathname.slice('/creator/'.length))
+}
+
 export function isKnownAppPath(pathname) {
   const path = pathname === '/' ? pathname : pathname.replace(/\/$/, '')
   return APP_ROUTES.has(path)
     || /^\/administrator\/(ingredients|products)\/[^/]+$/.test(path)
     || /^\/wissen\/[^/]+$/.test(path)
     || /^\/share\/[^/]+$/.test(path)
+    || isCreatorProfilePath(path)
 }
 
 export function isBackendPath(pathname) {

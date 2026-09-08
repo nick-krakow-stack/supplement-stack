@@ -2,6 +2,7 @@ import { Hono, type Context } from 'hono'
 import type { AppContext } from '../lib/types'
 import { checkRateLimit, ensureAuth } from '../lib/helpers'
 import creatorSharingImport from './creator-sharing-import'
+import { creatorPublicProfiles } from './creator-public-profiles'
 import {
   CREATOR_SHARING_SNAPSHOT_VERSION,
   buildAffiliateUrl,
@@ -37,6 +38,7 @@ import {
 import { drainLegacyCreatorShareNotifications } from '../lib/creator-share-notifications'
 
 const creatorSharing = new Hono<AppContext>()
+creatorSharing.route('/', creatorPublicProfiles)
 creatorSharing.route('/', creatorSharingImport)
 
 type ShareRow = {
