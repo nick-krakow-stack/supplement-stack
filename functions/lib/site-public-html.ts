@@ -5,6 +5,7 @@ import type { KnowledgeOverviewPayload } from '../api/modules/knowledge-overview
 import { knowledgeCategoryLabel } from '../../frontend/src/lib/knowledgeCategories'
 import type { PublicSharePage } from './site-page-data'
 import { INTAKE_PLAN_INTRO } from './public-page-copy.mjs'
+import { projectShareHead } from './share-head-projection.mjs'
 
 const navigation = '<nav aria-label="Weitere Seiten"><a href="/">Startseite</a> · <a href="/wissen">Wissen entdecken</a> · <a href="/demo">Demo ausprobieren</a></nav>'
 const styles = '<style>#site-page-prerender{font-family:system-ui,sans-serif;max-width:70rem;margin:2rem auto;padding:2rem;color:#172033;line-height:1.65}#site-page-prerender h1{font-size:clamp(1.8rem,4vw,3rem);line-height:1.2}#site-page-prerender a{color:#254bc2;text-decoration:underline}#site-page-prerender section{margin-top:2rem}#site-page-prerender label{display:block;margin-top:1rem}#site-page-prerender input{border:1px solid #94a3b8;border-radius:.5rem;padding:.6rem;max-width:100%}#site-page-prerender fieldset{border:0;padding:0}</style>'
@@ -47,10 +48,9 @@ export function authPageContent(path: string, status: number, hasToken: boolean)
 }
 
 export function sharePageProjection(pathname: string, share: PublicSharePage): { head: RouteHead; content: string } {
-  const title = share.status === 200 ? share.title || 'Geteilte Empfehlung' : share.status === 410 ? 'Empfehlung nicht mehr verfügbar' : share.status === 404 ? 'Empfehlung nicht gefunden' : 'Empfehlung gerade nicht verfügbar'
-  const description = share.status === 200 ? `${share.creatorName ? `Von ${share.creatorName}. ` : ''}Sieh dir die geteilte Zusammenstellung an. Du entscheidest selbst, welche Produkte du übernehmen möchtest.` : share.message
+  const { head, title, description } = projectShareHead(share, pathname.slice('/share/'.length))
   return {
-    head: resolveRouteHead({ pathname, status: share.status, title: `${title} | Supplement Stack`, description }),
+    head,
     content: `<h1>${escapeHtml(title)}</h1><p>${escapeHtml(description ?? '')}</p>${share.status === 200 ? `<h2>Produkte in dieser Zusammenstellung</h2><ul>${(share.productNames ?? []).map((name) => `<li>${escapeHtml(name)}</li>`).join('')}</ul><p>Dein eigener Stack bleibt unverändert, bis du in der App eine Auswahl bestätigst. Dies ist keine persönliche Einnahmeempfehlung.</p><noscript><p>Aktiviere JavaScript, wenn du Produkte auswählen und in deinen Stack übernehmen möchtest.</p></noscript>` : ''}${navigation}`,
   }
 }

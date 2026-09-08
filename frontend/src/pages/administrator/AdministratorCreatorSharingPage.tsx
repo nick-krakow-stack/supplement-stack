@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { apiClient } from '../../api/client';
 import { AdminBadge, AdminButton, AdminCard, AdminEmpty, AdminError, AdminPageHeader } from './AdminUi';
+import AdminCreatorPublicProfileReview from '../../components/AdminCreatorPublicProfileReview';
 
 type Party = {
   id: number; type: string; name: string; slug: string; status: 'active' | 'blocked';
@@ -433,6 +434,8 @@ export default function AdministratorCreatorSharingPage() {
           })}
         </tbody></table></div>}
       </AdminCard>
+
+      <AdminCreatorPublicProfileReview />
 
       <AdminCard title="Empfehlungen prüfen" subtitle="Freigeben oder mit einer klaren Rückmeldung ablehnen. Eine Ablehnung macht den Link vorläufig nicht öffentlich; der Creator kann die Empfehlung korrigieren." padded>
         {shares.length === 0 ? <AdminEmpty>Keine Creator-Empfehlungen vorhanden.</AdminEmpty> : <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Creator</th><th>Empfehlung</th><th>Status</th><th>Rückmeldung</th><th>Prüfung</th></tr></thead><tbody>{shares.map((share) => {

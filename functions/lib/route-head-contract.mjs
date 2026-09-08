@@ -1,4 +1,4 @@
-import { isKnownAppPath } from './site-routes.mjs'
+import { isCreatorProfilePath, isKnownAppPath } from './site-routes.mjs'
 
 export const SITE_ORIGIN = 'https://supplementstack.de'
 export const DEFAULT_SOCIAL_IMAGE = `${SITE_ORIGIN}/logo.png`
@@ -55,11 +55,12 @@ function baseSchema(kind, canonicalUrl) {
   return null
 }
 
-export function resolveRouteHead({ pathname, status, title, description, jsonLd, image } = {}) {
+export function resolveRouteHead({ pathname, status, title, description, jsonLd, image, profilePublished = false } = {}) {
   const path = typeof pathname === 'string' ? pathname.split(/[?#]/, 1)[0].replace(/\/$/, '') || '/' : '/'
   let row = ROUTES[path]
   if (!row && /^\/wissen\/[a-z0-9]+(?:-[a-z0-9]+)*$/.test(path)) row = ['knowledge-article', 'Wissensartikel | Supplement Stack', 'Quellenbasiertes Wissen zu Nahrungsergänzung.', true]
   if (!row && /^\/share\/[^/]+$/.test(path)) row = ['share', 'Geteilte Empfehlung | Supplement Stack', 'Sieh dir eine geteilte Zusammenstellung an und entscheide selbst, was du übernehmen möchtest.', false]
+  if (!row && isCreatorProfilePath(path)) row = ['creator-profile', 'Öffentliche Creator-Seite | Supplement Stack', 'Lerne einen Creator auf Supplement Stack kennen.', profilePublished === true]
   if (!row && path.startsWith('/administrator') && isKnownAppPath(path)) row = ['private', 'Verwaltung | Supplement Stack', 'Geschützter Verwaltungsbereich.', false]
   const effectiveStatus = status ?? (row ? 200 : 404)
   const error = effectiveStatus >= 400
@@ -78,7 +79,7 @@ export function resolveRouteHead({ pathname, status, title, description, jsonLd,
     imageAlt: 'Supplement Stack',
     jsonLd: indexable ? (jsonLd ?? baseSchema(kind, canonicalUrl)) : null,
     status: effectiveStatus,
-    cacheControl: indexable ? 'public, max-age=0, must-revalidate' : 'private, no-store',
+    cacheControl: indexable && kind !== 'creator-profile' ? 'public, max-age=0, must-revalidate' : 'private, no-store',
     referrerPolicy: sensitive || error ? 'no-referrer' : 'strict-origin-when-cross-origin',
     indexable,
     authRequired: kind === 'private',

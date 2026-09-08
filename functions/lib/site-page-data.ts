@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import type { AppContext, Env } from '../api/lib/types'
 import { ensureAdmin, ensureAuth } from '../api/lib/helpers'
 import creatorSharing from '../api/modules/creator-sharing'
+import { publicShareFailure } from './share-head-projection.mjs'
 
 export type PublicSharePage = {
   status: 200 | 404 | 409 | 410 | 503
@@ -23,15 +24,9 @@ function publicText(value: unknown, token: string): string {
 export async function loadPublicSharePage(env: Env, token: string): Promise<PublicSharePage> {
   const response = await creatorSharing.fetch(new Request(`https://internal.invalid/shares/${encodeURIComponent(token)}`), env)
   if (!response.ok) {
-    const status = response.status === 404 || response.status === 409 || response.status === 410 ? response.status : 503
     const body: unknown = await response.json().catch(() => null)
     const code = body && typeof body === 'object' && 'code' in body ? body.code : null
-    const message = code === 'SHARE_PENDING' ? 'Diese Empfehlung wird noch geprüft.'
-      : code === 'SHARE_PAUSED' ? 'Diese Empfehlung ist vorübergehend pausiert.'
-        : status === 410 ? 'Diese Empfehlung ist nicht mehr verfügbar. Bitte frage nach einem aktuellen Link.'
-          : status === 404 ? 'Diese Empfehlung wurde nicht gefunden. Bitte prüfe den Link.'
-            : 'Diese Empfehlung kann gerade nicht geladen werden. Bitte versuche es später noch einmal.'
-    return { status, message, retryAfter: response.headers.get('Retry-After') ?? undefined }
+    return { ...publicShareFailure(response.status, code), retryAfter: response.headers.get('Retry-After') ?? undefined }
   }
   const body: unknown = await response.json()
   if (!body || typeof body !== 'object' || !('title' in body) || !('creator' in body) || !('items' in body)

@@ -28,6 +28,7 @@ const KnowledgeArticlePage = lazy(() => import('./pages/KnowledgeArticlePage'));
 const StackWorkspace = lazy(() => import('./components/StackWorkspace'));
 const CreatorSharingPage = lazy(() => import('./pages/CreatorSharingPage'));
 const CreatorShareImportPage = lazy(() => import('./pages/CreatorShareImportPage'));
+const CreatorPublicProfilePage = lazy(() => import('./pages/CreatorPublicProfilePage'));
 
 const AdministratorShell = lazy(() => import('./pages/administrator/AdministratorShell'));
 const AdministratorDashboardPage = lazy(() => import('./pages/administrator/AdministratorDashboardPage'));
@@ -177,6 +178,7 @@ export default function App() {
                   <Route path="/wissen" element={<KnowledgeOverviewPage />} />
                   <Route path="/wissen/:slug" element={<KnowledgeArticlePage />} />
                   <Route path="/share/:token" element={<CreatorShareImportPage />} />
+                  <Route path="/creator/:slug" element={<CreatorPublicProfilePage />} />
                   <Route
                     path="/my-products"
                     element={

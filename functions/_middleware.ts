@@ -9,6 +9,9 @@ import { loadKnowledgeOverview } from './api/modules/knowledge-overview-projecti
 import { checkPrivatePageAccess, loadPublicSharePage } from './lib/site-page-data'
 import { authPageContent, knowledgeOverviewPage, renderPublicIntro, renderSitePage, sharePageProjection } from './lib/site-public-html'
 import { escapeLegalHtml } from './lib/legal-document-renderer.mjs'
+import { loadPublicCreatorProfile } from './api/lib/creator-public-profile'
+import { creatorSharingEnabled } from './api/lib/creator-sharing'
+import { renderCreatorProfileHtml } from './lib/creator-profile-html'
 
 export const onRequest: PagesFunction<Env> = async (context) => {
   const url = new URL(context.request.url)
@@ -54,6 +57,12 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     }
     try {
       const slug = path.slice(1)
+      if (policy.kind === 'creator-profile') {
+        const creatorSlug = path.slice('/creator/'.length)
+        const profile = creatorSharingEnabled(context.env) ? await loadPublicCreatorProfile(context.env.DB, creatorSlug) : null
+        const projection = renderCreatorProfileHtml(html, creatorSlug, profile ? { status: 200, profile } : { status: 404 })
+        return pageResponse(projection.html, shell, projection.head.status, head, projection.head)
+      }
       if (LEGAL_PAGE_SLUGS.has(slug)) {
         const document = await loadPublishedLegalDocument(context.env.DB, slug)
         if (!document) return pageResponse(renderMissingPageHtml(html, 404, true), shell, 404, head, resolveRouteHead({ pathname: path, status: 404 }))
@@ -82,6 +91,10 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       return pageResponse(renderSitePage(html, policy, content), shell, 200, head, policy)
     } catch {
       const errorHead = resolveRouteHead({ pathname: path, status: 503 })
+      if (policy.kind === 'creator-profile') {
+        const projection = renderCreatorProfileHtml(html, path.slice('/creator/'.length), { status: 503 })
+        return pageResponse(projection.html, shell, 503, head, projection.head)
+      }
       if (policy.kind === 'auth-token') return pageResponse(renderSitePage(html, errorHead, '<h1>Dieser Link kann gerade nicht geprüft werden</h1><p>Bitte versuche es später noch einmal.</p><p><a href="/login">Zur Anmeldung</a></p>', path), shell, 503, head, errorHead)
       return pageResponse(renderMissingPageHtml(html, 503, policy.kind === 'legal'), shell, 503, head, errorHead)
     }

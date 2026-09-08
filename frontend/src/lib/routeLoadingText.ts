@@ -22,6 +22,7 @@ export function routeLoadingText(pathname: string): string {
   const path = pathname.replace(/\/$/, '') || '/';
   if (path.startsWith('/wissen/')) return 'Artikel wird geladen …';
   if (path.startsWith('/share/')) return 'Die Empfehlung wird geladen …';
+  if (path.startsWith('/creator/')) return 'Die öffentliche Creator-Seite wird geladen …';
   if (path === '/administrator' || path.startsWith('/administrator/')) return 'Der Admin-Bereich wird geladen …';
   return routeLabels[path] ?? 'Die Seite wird geladen …';
 }
