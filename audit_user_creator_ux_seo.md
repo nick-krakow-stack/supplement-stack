@@ -490,36 +490,39 @@ vor Veröffentlichung weiterhin den jeweils vorgeschriebenen Fach-/Claim-Review.
 Die Scores und Messwerte in diesem Abschnitt dokumentieren den ursprünglichen
 Auditstand. Technische Phase A/C wurde am 08.09.2026 veröffentlicht und über
 alle 790 Wissensdetails sowie die betroffenen Routen geprüft (Abschnitt 18).
-Die umfassenden SEO-Zielboxen der Artikel bleiben wegen separat offener
-historischer Kurzmetadaten unverändert; sie sind kein offener Technikrelease.
+Am 08.09.2026 wurden zusätzlich Share-Metadaten und die freiwillige öffentliche
+Creatorprofilroute über PR #31/Merge `b0d3dcc` veröffentlicht. Damit sind
+22/24 Matrixzeilen belegt. Die beiden Artikel-Zielboxen bleiben wegen 443
+offener Metadatenkandidaten unverändert; der Gesamtscope ist nicht abgeschlossen.
+Detailbelege: `umsetzung_seo_matrix_zielkonflikte.md`.
 Die 790 Wissensdetails werden im Seiteninventar am Ende einzeln aufgeführt.
 
 | Erledigt | Seite/Zustand | Ziel | SEO | Weg auf 100 |
 |---|---|---|---:|---|
-| [ ] | `/` | indexierbar | 31 | Hero/H1/Nutzen und Hauptlinks serverseitig; eigener Title, Description, Canonical, `index,follow`, OG/Twitter-Bild, `WebSite`/`Organization`/`WebApplication`; Robots erlauben; Sitemap. |
-| [ ] | `/wissen` | indexierbar | 38 | Kategorien und 44 Hauptartikel im Roh-HTML; eigener Head; `CollectionPage`/`ItemList`/Breadcrumb; Filter canonicalisieren; Robots und Sitemap. |
-| [ ] | `/demo` | indexierbare Produkt-Landingpage | 27 | Stabiler SSR-Introbereich mit H1, Erklärung und Links; eigener Head, OG/Twitter, `WebApplication`; Robots/Sitemap. Interaktive Daten erst hydrieren. |
+| [x] | `/` | indexierbar | 31 | Hero/H1/Nutzen und Hauptlinks serverseitig; eigener Title, Description, Canonical, `index,follow`, OG/Twitter-Bild, `WebSite`/`Organization`/`WebApplication`; Robots erlauben; Sitemap. |
+| [x] | `/wissen` | indexierbar | 38 | Kategorien und 44 Hauptartikel im Roh-HTML; eigener Head; `CollectionPage`/`ItemList`/Breadcrumb; Filter canonicalisieren; Robots und Sitemap. |
+| [x] | `/demo` | indexierbare Produkt-Landingpage | 27 | Stabiler SSR-Introbereich mit H1, Erklärung und Links; eigener Head, OG/Twitter, `WebApplication`; Robots/Sitemap. Interaktive Daten erst hydrieren. |
 | [ ] | 44 Hauptartikel | indexierbar | 86 | Separate knappe Meta-Titel/-Descriptions; semantisches SSR; OG-Bild/Twitter; nur ein JSON-LD; Breadcrumb/`about`; ISO-`lastmod`; Edge-Cache; Slash-Redirect. |
 | [ ] | 746 Studien-/Quellenseiten | indexierbar | 83 | Wie Hauptartikel; zusätzlich kurzer Meta-Titel neben unverändertem Quellen-H1, sichtbarer Hauptartikel-Rücklink, Evidenznavigation, `citation`/`isPartOf`. |
-| [ ] | `/wissen/:slug/` | Alias | 78 | Permanente 301/308 auf Pfad ohne Slash statt parallelem 200. |
-| [ ] | `/wissen/:unbekannt` | Fehler | 48 | 404 beziehungsweise 410, `X-Robots-Tag: noindex`, eigener Fehler-Head/H1 und Links zur Übersicht. |
-| [ ] | `/stacks` | privat/noindex | 57 | Auth am Edge mit 302/401, `noindex,nofollow`, eigener Titel/H1, `private,no-store`; keine Sitemap. |
-| [ ] | `/einnahmeplan` | privat/gemischt | 51 | App-Route noindex/privat mit H1/Titel. Separate öffentliche Erklärseite `/einnahmeplan-erstellen`; keine Nutzerdaten indexieren. |
-| [ ] | `/my-products` | privat/noindex | 60 | Serverauth/Noindex, eigener Titel, sichere Shell, `private,no-store`, keine privaten Produktmetadaten. |
-| [ ] | `/profile` | privat/noindex | 60 | Wie eigene Produkte; keine persönlichen Werte im Roh-HTML, Referrer-Policy und 401/302. |
-| [ ] | `/creator` | privat/noindex | 56 | Dashboard ausdrücklich noindex/privat; optional getrennte, freiwillige öffentliche Creatorprofilroute. |
-| [ ] | `/share/:token` gültig | Capability-Link/noindex | 43 | SSR-Share-Shell aus Snapshot; `noindex,nofollow`, kein tokenhaltiges Canonical, `no-referrer`, revokationssicherer Cache; datensparsame dynamische OG/Twitter-Vorschau. |
-| [ ] | `/share/:token` ungültig/abgelaufen | Fehler | 35 | 404/410, noindex-Header, neutraler Fehler-Head/H1 und sichere Rückwege. |
-| [ ] | `/login` | Utility/noindex | 58 | Crawlbar mit `noindex,follow`, eigener Titel/H1, no-store; `returnTo` nie in Canonical/OG. |
-| [ ] | `/register` | Utility/noindex | 57 | Wie Login; eigene Browserdescription, serverseitige Formularsemantik, kein Sitemap-Eintrag. |
-| [ ] | `/forgot-password` | Utility/noindex | 57 | Eigener Titel, noindex/no-store, sichere SSR-H1/Formular-Shell. |
-| [ ] | `/reset-password` | Tokenroute/noindex | 49 | Token nie in Canonical/OG/Referrer; noindex/no-store; gültig 200, ungültig 400/410; SSR-H1. |
-| [ ] | `/verify-email` | Tokenroute/noindex | 54 | Wie Reset; Erfolg/Fehler mit passenden Statuszuständen, keine Tokenweitergabe. |
-| [ ] | `/impressum` | Legal/noindex-follow | 58 | Rechtstext/H1 serverseitig, eigener Head, self-canonical, `noindex,follow`; crawlbar, nicht in Sitemap. |
-| [ ] | `/datenschutz` | Legal/noindex-follow | 58 | Wie Impressum. |
-| [ ] | `/nutzungsbedingungen` | Legal/noindex-follow | 58 | Wie Impressum; kanonisches Ziel der Bedingungen. |
-| [ ] | `/agb` | Alias | 42 | 301/308 auf `/nutzungsbedingungen`. |
-| [ ] | beliebiges `*` | Fehler | 26 | Echter 404, `noindex`, eigener Title/H1 und hilfreiche Links. |
+| [x] | `/wissen/:slug/` | Alias | 78 | Permanente 301/308 auf Pfad ohne Slash statt parallelem 200. |
+| [x] | `/wissen/:unbekannt` | Fehler | 48 | 404 beziehungsweise 410, `X-Robots-Tag: noindex`, eigener Fehler-Head/H1 und Links zur Übersicht. |
+| [x] | `/stacks` | privat/noindex | 57 | Auth am Edge mit 302/401, `noindex,nofollow`, eigener Titel/H1, `private,no-store`; keine Sitemap. |
+| [x] | `/einnahmeplan` | privat/gemischt | 51 | App-Route noindex/privat mit H1/Titel. Separate öffentliche Erklärseite `/einnahmeplan-erstellen`; keine Nutzerdaten indexieren. |
+| [x] | `/my-products` | privat/noindex | 60 | Serverauth/Noindex, eigener Titel, sichere Shell, `private,no-store`, keine privaten Produktmetadaten. |
+| [x] | `/profile` | privat/noindex | 60 | Wie eigene Produkte; keine persönlichen Werte im Roh-HTML, Referrer-Policy und 401/302. |
+| [x] | `/creator` | privat/noindex | 56 | Dashboard ausdrücklich noindex/privat; optional getrennte, freiwillige öffentliche Creatorprofilroute. |
+| [x] | `/share/:token` gültig | Capability-Link/noindex | 43 | SSR-Share-Shell aus Snapshot; `noindex,nofollow`, kein tokenhaltiges Canonical, `no-referrer`, revokationssicherer Cache; datensparsame dynamische OG/Twitter-Vorschau. |
+| [x] | `/share/:token` ungültig/abgelaufen | Fehler | 35 | 404/410, noindex-Header, neutraler Fehler-Head/H1 und sichere Rückwege. |
+| [x] | `/login` | Utility/noindex | 58 | Crawlbar mit `noindex,follow`, eigener Titel/H1, no-store; `returnTo` nie in Canonical/OG. |
+| [x] | `/register` | Utility/noindex | 57 | Wie Login; eigene Browserdescription, serverseitige Formularsemantik, kein Sitemap-Eintrag. |
+| [x] | `/forgot-password` | Utility/noindex | 57 | Eigener Titel, noindex/no-store, sichere SSR-H1/Formular-Shell. |
+| [x] | `/reset-password` | Tokenroute/noindex | 49 | Token nie in Canonical/OG/Referrer; noindex/no-store; gültig 200, ungültig 400/410; SSR-H1. |
+| [x] | `/verify-email` | Tokenroute/noindex | 54 | Wie Reset; Erfolg/Fehler mit passenden Statuszuständen, keine Tokenweitergabe. |
+| [x] | `/impressum` | Legal/noindex-follow | 58 | Rechtstext/H1 serverseitig, eigener Head, self-canonical, `noindex,follow`; crawlbar, nicht in Sitemap. |
+| [x] | `/datenschutz` | Legal/noindex-follow | 58 | Wie Impressum. |
+| [x] | `/nutzungsbedingungen` | Legal/noindex-follow | 58 | Wie Impressum; kanonisches Ziel der Bedingungen. |
+| [x] | `/agb` | Alias | 42 | 301/308 auf `/nutzungsbedingungen`. |
+| [x] | beliebiges `*` | Fehler | 26 | Echter 404, `noindex`, eigener Title/H1 und hilfreiche Links. |
 
 ### Gemessener Zustand der 790 indexierten Wissensseiten
 
@@ -534,6 +537,14 @@ Die 790 Wissensdetails werden im Seiteninventar am Ende einzeln aufgeführt.
 - Die Slash-Variante liefert 200 statt permanenter Weiterleitung.
 
 ## 17. UX-/SEO-Zielkonflikte und gemeinsame Maximierung
+
+Aktueller Stand 08.09.2026: acht der neun Lösungen sind umgesetzt und
+veröffentlicht. Offen bleibt ausschließlich die separate kurze Suchdarstellung
+des historischen Artikelbestands (UXSEO-04); der dafür notwendige engere
+Korrekturvertrag wartet auf eine ausdrückliche Owner-Entscheidung. Creatorprofile
+sind freiwillig, moderiert und standardmäßig nicht öffentlich; Sharetokens und
+private Kontodaten werden dadurch nicht veröffentlicht. Die vorhandene globale
+Affiliate-Kennzeichnung bleibt unverändert, ohne Produkthinweise.
 
 | Konflikt | Schlechte Extrementscheidung | Gemeinsame 10/10-Lösung |
 |---|---|---|
