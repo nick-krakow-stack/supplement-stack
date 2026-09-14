@@ -104,9 +104,22 @@ Der Befund wurde lokal festgestellt, ohne zusätzlichen D1-Zugriff.
 - [x] Owner-Freigabe zur engen Kompatibilitätserweiterung.
 - [x] Vorhandene SEO-Daten korrekt validieren und vollständig an den Altzustand binden.
 - [x] Gezielte Erfolgs-, Fehler-, Konkurrenz-, Noop- und Rollbacktests: 7/7 lokal bestanden.
-- [ ] Unabhängiger technischer Review des fertigen Diffs.
-- [ ] Bestehenden Releaseweg verwenden und Veröffentlichung bestätigen.
-- [ ] Normalen Artikelkorrekturlauf mit echten Vorzuständen fortsetzen.
+- [x] Unabhängiger technischer Review des fertigen Diffs: PASS, gebundene Dateihashes und 7/7 Tests.
+- [x] Bestehenden Releaseweg verwenden und Veröffentlichung bestätigen: Deployment 34880186676 und gezielter Live-Readback PASS.
+- [x] Normalen Artikelkorrekturlauf mit echten Vorzuständen fortsetzen: Alpha-Liponsäure erreicht `WAITING_FOR_RESEARCH`.
+
+Technischer Release: PR #35, Merge `8fa344b`; PR-CI `34879886173`,
+Main-CI `34880186660` und Deployment `34880186676` bestanden. Pages:
+`74bb22ba.supplementstack.pages.dev`. Keine Migrationen erforderlich.
+Öffentliche API bestätigt den unveränderten Artikelinhalt; die neue
+Pages-Auslieferung liefert den Artikel mit H1 und korrekter Canonical-Adresse.
+Ein zuerst falsch angenommener API-Wrapper wurde nur im lokalen Prüfskript
+korrigiert; zwei gezielte Abrufe anschließend bestanden, kein Vollcrawl.
+Der echte L-Vorzustand samt kanonischem Linkinventar wurde mit insgesamt
+10.956 D1-Lesezeilen und 0 Schreibzeilen erfasst. Davon entfallen 10.908 auf
+das gemeinsame Linkinventar, das nicht je Artikel erneut abgefragt werden soll.
+Ein abgelaufener Login wurde nach einem HTTP-401 über die vorhandene Sitzung
+erneuert; keine neuen Zugangsdaten nötig. Noch kein Artikelpublish.
 
 ## Bildaufträge aus den tatsächlichen Fundstellen
 
