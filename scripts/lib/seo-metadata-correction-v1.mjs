@@ -238,6 +238,38 @@ function validatePublicObservations(observation, input, side) {
       }
   }
 }
+function omitBoundReadbackCheckValue(url, allowedPaths, expectedHash = null) {
+  if (typeof url !== 'string') return null
+  let parsed
+  try { parsed = new URL(url) } catch { return null }
+  if (parsed.origin !== ORIGIN || parsed.username || parsed.password || !allowedPaths.has(parsed.pathname)
+    || parsed.searchParams.getAll('cfcheck').length !== 1) return null
+  const match = url.match(/^([^?#]*\?)([^#]*)(#.*)?$/)
+  if (!match) return null
+  const pairs = match[2].split('&'), indices = pairs.flatMap((pair, index) => pair.startsWith('cfcheck=') ? [index] : [])
+  if (indices.length !== 1) return null
+  const index = indices[0]
+  let value
+  try { value = decodeURIComponent(pairs[index].slice('cfcheck='.length)) } catch { return null }
+  if (!HASH.test(value) || (expectedHash !== null && value !== expectedHash)) return null
+  // Only remove this one known technical value. Do not reserialize the URL:
+  // every other query byte, its order/encoding, the path and fragment stay exact.
+  pairs[index] = 'cfcheck='
+  return `${match[1]}${pairs.join('&')}${match[3] ?? ''}`
+}
+export function sameSeoReadbackLinksV1(before, after, { slug, inventory, releaseHash }) {
+  if (same(before, after)) return true
+  if (!Array.isArray(before) || !Array.isArray(after) || before.length !== after.length || !HASH.test(releaseHash)) return false
+  const allowedPaths = new Set(['/wissen', `/wissen/${slug}`, ...inventory.map(row => `/wissen/${row.slug}`)])
+  return before.every((oldLink, index) => {
+    const newLink = after[index]
+    if (same(oldLink, newLink)) return true
+    if (!plainObject(oldLink) || !plainObject(newLink) || !same(without(oldLink, ['url']), without(newLink, ['url']))) return false
+    const oldUrl = omitBoundReadbackCheckValue(oldLink.url, allowedPaths)
+    const newUrl = omitBoundReadbackCheckValue(newLink.url, allowedPaths, releaseHash)
+    return oldUrl !== null && newUrl !== null && oldUrl === newUrl
+  })
+}
 export function validateSeoCorrectionReadbackV1(observation, release) {
   artifact(observation, 'seo_metadata_correction_readback.v1')
   if (observation.release_hash !== release.release_hash) fail('public readback release differs')
@@ -249,7 +281,8 @@ export function validateSeoCorrectionReadbackV1(observation, release) {
     for (const surface of ['raw_html', 'desktop', 'mobile']) {
       const oldState = surface === 'raw_html' ? before.raw_html : before.viewports[surface]
       const newState = surface === 'raw_html' ? after.raw_html : after.viewports[surface]
-      if (oldState.article_text !== newState.article_text || !same(oldState.links, newState.links) || !same(oldState.json_ld, newState.json_ld)) fail(`${target.slug} ${surface} article/source/schema changed`)
+      if (oldState.article_text !== newState.article_text || !sameSeoReadbackLinksV1(oldState.links, newState.links, { slug: target.slug, inventory: release.input.inventory, releaseHash: release.release_hash })
+        || !same(oldState.json_ld, newState.json_ld)) fail(`${target.slug} ${surface} article/source/schema changed`)
       for (const field of ['images', 'times', 'article_html']) {
         if ((Object.hasOwn(oldState, field) || Object.hasOwn(newState, field)) && !same(oldState[field], newState[field])) fail(`${target.slug} ${surface} ${field} changed`)
       }
