@@ -488,6 +488,14 @@ oder Readback-Mismatch blockiert ohne automatischen Retry.
 
 ## Korrekturen
 
+Für den ausdrücklich autorisierten Modus `seo_metadata_correction` gilt der
+[SEO-Korrekturvertrag](seo-metadata-correction-contract.md): ein eingefrorener
+Vorschlag und unabhängiger Review ausschließlich der Suchtexte gegen den
+vollständigen unveränderten Artikel. Das ist die eng begrenzte Ausnahme vom
+Verbot separat vorgeschlagener Metatexte und vom erneuten vollständigen
+L-Slice, keine neue laufende Artikel-/SEO-Pflegequelle. Alle fachlichen
+Änderungen und regulären neuen Artikel folgen weiterhin dem normalen Vertrag.
+
 Bestehende Artikel folgen der S/M/L-Klassifikation aus `AGENTS.md` und dem
 Pipelinevertrag. Das Manifest setzt `operation=article_correction` und friert
 vorherige, Kandidaten- und Patchbytes in

@@ -1077,6 +1077,13 @@ konkreter Befund an den menschlichen Owner.
 
 ## Bestehende Artikel: S/M/L-Fast-Lanes
 
+Die ausdrücklich autorisierte Ausnahme für reine SEO-Texte veröffentlichter
+Artikel ist im [SEO-Korrekturvertrag](seo-metadata-correction-contract.md)
+definiert. `seo_metadata_correction` nutzt denselben `publication_apply`-
+Einstieg, erhält alle Nicht-SEO-Werte und bindet einen unabhängigen Metareview.
+Sie ist keine S-/M-Herabstufung und kein behaupteter vollständiger L-Faktenlauf.
+Die folgenden normalen S/M/L-Verträge bleiben außerhalb dieser Ausnahme gültig.
+
 Jede Korrektur setzt `manifest.operation=article_correction`. Vor der
 Zuweisung friert die Runtime Original-, Kandidaten- und Patchbytes in
 `article_correction_input_receipt.v1` ein und klassifiziert; bei Unsicherheit

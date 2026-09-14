@@ -2843,6 +2843,107 @@ export async function collectLegacyCorrectionDomV1(articles, releaseHash) {
   } finally { await cleanupBrowserResources({ page, browserProcess, userDataDirectory }); }
 }
 
+export function collectSeoMetadataSurfaceV1(document) {
+  // Separate selectors avoid a JSDOM selector-list bug for the raw SSR article.
+  const root = document.querySelector('article[data-template]') ?? document.querySelector('[data-knowledge-prerender] article');
+  return {
+    text: root ? [...root.querySelectorAll('h1,h2,h3,p,li,th,td,figcaption')].map(node => node.textContent ?? '').join(' ') : '',
+    article_html: root?.innerHTML ?? null,
+    article_text: root?.textContent ?? null,
+    title: document.title, h1: root?.querySelector('h1')?.textContent ?? null,
+    description: document.querySelector('meta[name="description"]')?.content ?? null,
+    canonical: document.querySelector('link[rel="canonical"]')?.href ?? null,
+    robots: document.querySelector('meta[name="robots"]')?.content ?? null,
+    json_ld: [...document.querySelectorAll('script[type="application/ld+json"]')].map(node => { try { return JSON.parse(node.textContent); } catch { return null; } }),
+    links: root ? [...root.querySelectorAll('a[href]')].map(node => ({ label: node.textContent ?? '', url: node.href })) : [],
+    images: root ? [...root.querySelectorAll('img')].map(node => ({ src: node.getAttribute('src'), alt: node.getAttribute('alt') })) : [],
+    times: root ? [...root.querySelectorAll('time')].map(node => ({ text: node.textContent, datetime: node.getAttribute('datetime') })) : [],
+    social: [...document.querySelectorAll('meta[property^="og:"],meta[name^="twitter:"]')].map(node => ({ key: node.getAttribute('property') ?? node.getAttribute('name'), value: node.getAttribute('content') })),
+  };
+}
+
+// SEO-only correction: observe the real navigation response and both viewports
+// from one hydrated page. No replay, DOM injection, or duplicate mobile request.
+export async function collectSeoMetadataCorrectionPublicV1(articles, bindingHash, { existing = [], onArticle = async () => {} } = {}) {
+  const browserPath = findBrowserExecutable();
+  const debugPort = await getFreePort();
+  const userDataDirectory = await createTemporaryBrowserProfile();
+  let browserProcess;
+  let page;
+  const results = [...existing];
+  const known = new Set(existing.map(row => row.slug));
+  try {
+    browserProcess = await spawnBrowserProcess(browserPath, ['--headless=new', `--remote-debugging-port=${debugPort}`, `--user-data-dir=${userDataDirectory}`, '--no-first-run', '--no-default-browser-check', '--disable-extensions', '--disable-sync', '--hide-scrollbars', 'about:blank']);
+    const browserVersion = await waitForJson(`http://127.0.0.1:${debugPort}/json/version`);
+    const target = await createBrowserTarget(debugPort);
+    page = await new CdpClient(target.webSocketDebuggerUrl).connect();
+    await page.send('Page.enable');
+    await page.send('Runtime.enable');
+    await page.send('Network.enable', { maxTotalBufferSize: 20_000_000, maxResourceBufferSize: 10_000_000 });
+    const documents = new Map();
+    const apiResponses = new Map();
+    const finished = new Set();
+    page.webSocket.addEventListener('message', event => {
+      const message = JSON.parse(event.data);
+      if (message.method === 'Network.responseReceived' && message.params.type === 'Document') documents.set(message.params.response.url, message.params);
+      if (message.method === 'Network.responseReceived' && ['Fetch', 'XHR'].includes(message.params.type)) apiResponses.set(message.params.response.url, message.params);
+      if (message.method === 'Network.loadingFinished') finished.add(message.params.requestId);
+    });
+    const collect = collectSeoMetadataSurfaceV1;
+    for (const article of articles) {
+      if (known.has(article.slug)) continue;
+      const url = new URL(article.public_url);
+      if (url.origin !== SITE_ORIGIN || url.pathname !== `/wissen/${article.slug}`) throw new Error('SEO readback target is not the bound public article.');
+      url.searchParams.set('cfcheck', bindingHash);
+      documents.clear();
+      apiResponses.clear();
+      finished.clear();
+      await applyViewport(page, VIEWPORTS.desktop);
+      await page.send('Page.navigate', { url: url.href });
+      await waitForPublicRoute(page, { slug: article.slug, expected_projection: { template: article.article_layer === 'main_article' ? 'magazine' : 'study_article_v2' } });
+      // cfcheck makes the application revalidate its SSR bootstrap through its
+      // own API GET. Observe that response instead of issuing another D1 read.
+      let apiObserved;
+      const apiDeadline = Date.now() + 10_000;
+      while (Date.now() < apiDeadline) {
+        apiObserved = [...apiResponses.values()].find(entry => {
+          const endpoint = new URL(entry.response.url);
+          return endpoint.origin === SITE_ORIGIN && endpoint.pathname === `/api/knowledge/${article.slug}`
+            && endpoint.searchParams.get('cfcheck') === bindingHash && finished.has(entry.requestId);
+        });
+        if (apiObserved) break;
+        await delay(100);
+      }
+      if (!apiObserved || apiObserved.response.status !== 200) throw new Error(`SEO hydration API response missing for ${article.slug}`);
+      const apiBody = await page.send('Network.getResponseBody', { requestId: apiObserved.requestId });
+      const apiBytes = Buffer.from(apiBody.body, apiBody.base64Encoded ? 'base64' : 'utf8');
+      const api = { url: apiObserved.response.url, http_status: apiObserved.response.status, content_type: apiObserved.response.mimeType,
+        body_hash: sha256Bytes(apiBytes), payload: JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(apiBytes)), observation: 'ACTUAL_HYDRATION_NETWORK_RESPONSE' };
+      // Let React commit the API revalidation before collecting the article.
+      await runtimeValue(page, 'new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve(true))))', true);
+      const observed = documents.get(url.href);
+      if (!observed || !finished.has(observed.requestId) || observed.response.status !== 200) throw new Error(`SEO navigation response missing for ${article.slug}`);
+      const body = await page.send('Network.getResponseBody', { requestId: observed.requestId });
+      const bytes = Buffer.from(body.body, body.base64Encoded ? 'base64' : 'utf8');
+      const html = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+      const dom = new JSDOM(html, { url: url.href });
+      const raw_html = { ...collect(dom.window.document), url: url.href, http_status: observed.response.status, content_type: observed.response.mimeType, body_hash: sha256Bytes(bytes), observation: 'ACTUAL_BROWSER_NETWORK_RESPONSE' };
+      if (!raw_html.article_html || !raw_html.h1) throw new Error(`SEO raw article missing for ${article.slug}: ${JSON.stringify({ article: dom.window.document.querySelector('article')?.outerHTML.slice(0,500), root: dom.window.document.querySelector('#root')?.outerHTML.slice(0,500), around: html.slice(html.indexOf('data-knowledge-prerender')-80,html.indexOf('data-knowledge-prerender')+300), length: html.length, url: observed.response.url })}`);
+      dom.window.close();
+      if (article.article_layer === 'main_article') await expandDisclosures(page);
+      const desktop = await runtimeValue(page, `(${collect.toString()})(document)`);
+      await applyViewport(page, VIEWPORTS.mobile);
+      await runtimeValue(page, 'new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve(true))))', true);
+      const mobile = await runtimeValue(page, `(${collect.toString()})(document)`);
+      const row = { slug: article.slug, article_id: article.article_id ?? article.slug, public_url: article.public_url, binding_hash: bindingHash, checked_at: new Date().toISOString(), api, raw_html, viewports: { desktop, mobile }, browser: browserVersion.Browser, explicit_article_requests: 1, observed_article_loads: 2 };
+      results.push(row);
+      await onArticle(row);
+    }
+    const base = { schema: 'seo_metadata_public_observation.v1', binding_hash: bindingHash, checked_at: new Date().toISOString(), article_results: results };
+    return { ...base, content_hash: canonicalJsonHash(base) };
+  } finally { await cleanupBrowserResources({ page, browserProcess, userDataDirectory }); }
+}
+
 function errorJson(error) {
   return JSON.stringify({ schema: 'renderer_style_validation_error.v2', code: error?.code ?? 'STYLE_VALIDATION_INTERNAL', message: error?.message ?? 'Unbekannter Style-Validatorfehler.' });
 }
