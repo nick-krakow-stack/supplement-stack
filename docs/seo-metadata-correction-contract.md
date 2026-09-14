@@ -82,6 +82,14 @@ Ein identischer gültiger Nachzustand ist ein Noop; er verursacht keine weitere
 Versionserhöhung. Ein fehlender öffentlicher Nachweis bleibt ausdrücklich
 unvollständig und erlaubt kein behauptetes COMPLETE.
 
+Die atomare Prüfung überträgt unveränderliche Inhalte nur einmal: Der gesamte
+publizierte Metadaten-/Versions-/Statusbestand wird vor dem Update exakt gebunden;
+alle Felder und Relationen der Zielartikel werden danach vollständig innerhalb
+derselben Transaktion geprüft. Da ausschließlich SEO und Version überschrieben
+werden dürfen und alle Trigger exakt gebunden sind, führt jede zwischenzeitliche
+Änderung anderer Inhalte zum vollständigen Rollback. Der frische vollständige
+Vorzustand und der vollständige D1-Nachher-Abgleich bleiben zusätzlich erhalten.
+
 Vorhandene lokale Snapshots dienen der redaktionellen Arbeit. Neue D1-Lese-
 zugriffe werden gebündelt, über indizierte Zielschlüssel eingegrenzt und mit
 `rows_read`/`rows_written` protokolliert. Keine wiederholten Gesamttabellenscans

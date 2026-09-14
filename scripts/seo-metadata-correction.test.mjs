@@ -182,14 +182,18 @@ for (const [name, mutation] of [
   } finally { f.close() }
 })
 
-test('a race after fresh read and a postguard-trigger failure both roll back the entire multiarticle batch', async () => {
-  for (const phase of ['race', 'postguard']) {
+test('body/relation/outside-inventory races after fresh read and a postguard-trigger failure roll back the entire batch', async () => {
+  for (const phase of ['race-source', 'race-body', 'race-inventory', 'postguard']) {
     const f = fixture({ postguard: phase === 'postguard' })
     try {
-      if (phase === 'race') {
+      if (phase.startsWith('race-')) {
         const query = f.adapter.query
         f.adapter.query = async body => {
-          if (body.batch.some(row => row.sql.startsWith('UPDATE'))) f.db.exec("UPDATE knowledge_article_sources SET label='raced' WHERE id=2")
+          if (body.batch.some(row => row.sql.startsWith('UPDATE'))) {
+            if (phase === 'race-source') f.db.exec("UPDATE knowledge_article_sources SET label='raced' WHERE id=2")
+            if (phase === 'race-body') f.db.exec("UPDATE knowledge_articles SET body='raced body' WHERE slug='teststoff-2'")
+            if (phase === 'race-inventory') f.db.exec("UPDATE knowledge_articles SET title='raced other article' WHERE slug='teststoff-3'")
+          }
           return query(body)
         }
       }
@@ -326,6 +330,14 @@ test('guard SELECTs use indexed identities and D1 statements remain within publi
     assert.ok(plan.limits.maximum_sql_bytes < 100_000)
     assert.ok(plan.limits.maximum_bound_parameters <= 100)
     assert.ok(plan.limits.maximum_parameter_bytes < 2_000_000)
+    const firstWrite = plan.batch.findIndex(row => row.sql.startsWith('UPDATE'))
+    assert.ok(firstWrite > 0)
+    for (const statement of plan.batch.filter(row => row.sql.startsWith('UPDATE'))) {
+      assert.equal(statement.params.length, 1)
+      assert.equal((statement.sql.match(/json_each\(\?1\)/g) ?? []).length, 2)
+    }
+    assert.ok(plan.batch.slice(firstWrite).some(row => row.sql.includes('a."body" IS json_extract')))
+    assert.ok(!plan.batch.slice(0, firstWrite).some(row => row.sql.includes('a."body" IS json_extract')))
     for (const statement of plan.batch.filter(row => row.sql.includes('json_each(?) e WHERE NOT EXISTS') && !row.sql.includes('pragma_table_info') && !row.sql.includes('sqlite_schema'))) {
       const details = f.db.prepare(`EXPLAIN QUERY PLAN ${statement.sql}`).all(...statement.params).map(row => row.detail)
       assert.ok(details.some(detail => /SEARCH a USING (?:INTEGER PRIMARY KEY|INDEX|COVERING INDEX)/.test(detail)), details.join('\n'))
