@@ -297,7 +297,16 @@ export function validateAuthoritativeCorrectionBeforeV1(value, target = null) {
   const row = snapshot.article
   const columns = ['slug', 'title', 'summary', 'body', 'status', 'reviewed_at', 'sources_json', 'created_at', 'updated_at', 'version', 'conclusion', 'featured_image_r2_key', 'featured_image_url', 'dose_min', 'dose_max', 'dose_unit', 'product_note', 'article_layer', 'seo_json', 'update_reason']
   if (columns.some(key => !Object.hasOwn(row, key))) fail('L authoritative before article row is incomplete')
-  if (row.status !== 'published' || !Number.isInteger(row.version) || row.version < 1 || row.seo_json !== null || state.seo !== null || state.compiled_payload_hash !== null) fail('L authoritative before is not a published article without historical compiled/SEO lineage')
+  if (row.status !== 'published' || !Number.isInteger(row.version) || row.version < 1 || state.compiled_payload_hash !== null) fail('L authoritative before is not a published article without historical compiled lineage')
+  // Stored SEO (including a completed SEO-only correction) is raw prestate,
+  // not evidence of a historical compiler release. Never discard its bytes.
+  let storedSeo = null
+  if (row.seo_json !== null) {
+    if (typeof row.seo_json !== 'string') fail('L authoritative before seo_json must be a JSON object string or SQL NULL')
+    try { storedSeo = JSON.parse(row.seo_json) } catch { fail('L authoritative before seo_json is malformed JSON') }
+    object(storedSeo, 'L authoritative before parsed SEO')
+  }
+  if (canonicalJsonHash(storedSeo) !== canonicalJsonHash(state.seo)) fail('L authoritative before SEO differs from inspected state')
   if (state.article_id !== value.article_id || state.slug !== value.slug || state.status !== row.status || state.version !== row.version || state.article_layer !== row.article_layer || state.stage !== (row.article_layer === 'single_study' ? 'stage2' : row.article_layer === 'main_article' ? 'stage3' : null)) fail('L authoritative before state identity differs from raw row')
   hash(state.payload_hash, 'L authoritative before payload hash')
   const persisted = object(state.persistence_snapshot, 'L authoritative before persistence snapshot')

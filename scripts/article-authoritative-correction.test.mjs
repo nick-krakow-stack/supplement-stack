@@ -12,7 +12,13 @@ import { loadNutrientContentRunManifest, runNutrientContent } from './lib/nutrie
 
 const stamp = '2026-09-05T00:00:00.000Z'
 const hashed = value => ({ ...value, content_hash: artifactHashV2(value) })
-async function fixture() {
+// Shape of the completed 2026-09-14 SEO-only release: persisted public SEO,
+// without compiled hashes or a reconstructed full-pipeline release.
+const storedSeo = JSON.stringify({ canonical_url: 'https://example.test/wissen/teststoff', canonical_path: '/wissen/teststoff', robots: 'index,follow', indexable: true,
+  json_ld: { '@context': 'https://schema.org', '@type': 'Article', headline: 'Alter Titel', description: 'Alte Einordnung.', mainEntityOfPage: 'https://example.test/wissen/teststoff', inLanguage: 'de', datePublished: stamp, dateModified: stamp,
+    author: { '@type': 'Organization', '@id': 'https://example.test/#organization', name: 'Test', url: 'https://example.test/' }, publisher: { '@type': 'Organization', '@id': 'https://example.test/#organization', name: 'Test', url: 'https://example.test/' } },
+  meta_title: 'Teststoff: Funktionen und Grenzen', meta_description: 'Eine verständliche Einordnung.' }, null, 2)
+async function fixture(seoJson = null) {
   const root = mkdtempSync(join(tmpdir(), 'authoritative-l-correction-'))
   const db = new DatabaseSync(':memory:')
   db.exec(`CREATE TABLE knowledge_articles(slug TEXT PRIMARY KEY,title TEXT,summary TEXT,body TEXT,status TEXT,reviewed_at TEXT,sources_json TEXT,created_at TEXT,updated_at TEXT,version INTEGER,conclusion TEXT,featured_image_r2_key TEXT,featured_image_url TEXT,dose_min REAL,dose_max REAL,dose_unit TEXT,product_note TEXT,article_layer TEXT,seo_json TEXT,update_reason TEXT);
@@ -21,6 +27,7 @@ async function fixture() {
     CREATE TABLE study_interpretation_records(id INTEGER PRIMARY KEY,ingredient_id INTEGER,source_id INTEGER,research_artifact_id INTEGER,knowledge_article_slug TEXT,status TEXT,structured_summary_json TEXT,stage3_reference_summary TEXT,notes TEXT,review_notes TEXT,version INTEGER,created_at TEXT,updated_at TEXT);
     CREATE TABLE knowledge_article_parts(article_slug TEXT,ingredient_id INTEGER,part_id INTEGER);`)
   const row = { slug: 'teststoff', title: 'Alter Titel', summary: 'Alte Einordnung.', body: '## Einordnung\n\nAlter Text.', status: 'published', reviewed_at: stamp, sources_json: null, created_at: stamp, updated_at: stamp, version: 1, conclusion: 'Altes Fazit.', featured_image_r2_key: null, featured_image_url: null, dose_min: null, dose_max: null, dose_unit: null, product_note: null, article_layer: 'main_article', seo_json: null, update_reason: null }
+  if (seoJson !== null) { row.seo_json = seoJson; row.version = 2 }
   db.prepare(`INSERT INTO knowledge_articles(${Object.keys(row).join(',')}) VALUES (${Object.keys(row).map(() => '?').join(',')})`).run(...Object.values(row))
   db.prepare('INSERT INTO knowledge_article_ingredients VALUES (?,?,?,?)').run(row.slug, 7, 0, stamp)
   db.prepare('INSERT INTO knowledge_article_parts VALUES (?,?,?)').run(row.slug, 7, 1)
@@ -36,7 +43,7 @@ async function fixture() {
   const state = (await adapter.inspectArticlesByTargets([identity]))[row.slug]
   const full = (await adapter.readLegacyFieldCorrectionSnapshots([identity]))[row.slug]
   const before = hashed({ schema: 'article_correction_authoritative_before.v1', captured_at: stamp, read_only: true, database_id: 'test-db', database_name: 'test-target', article_id: row.slug, slug: row.slug, state, full_snapshot: full, expected_changed_row_count: 1, historical_compiled_lineage: null })
-  const guard = { mode: 'update', expected_status: 'published', expected_version: 1, expected_payload_hash: state.payload_hash }
+  const guard = { mode: 'update', expected_status: 'published', expected_version: row.version, expected_payload_hash: state.payload_hash }
   const target = { ...identity, change_class: 'L', target: 'test-target', write_guard: guard, authoritative_before: before, update_reason: 'Einordnung verständlicher erklärt.', desired_status: 'published', reviewed_at: stamp, published_at: stamp, modified_at: '2026-09-05T01:00:00.000Z',
     publish_payload: { ...state.publish_payload, title: 'Neuer Titel', body: '## Einordnung\n\nNeuer Text.' }, source_relations: [], source_projection: null, ingredient_ids: [7], assets: [], asset_hashes: [], compiled_payload_hash: canonicalJsonHash({ fixture: 'new-compiled' }), seo: null }
   const release = { release_hash: canonicalJsonHash(target), publish_target: 'test-target', articles: [target] }
@@ -44,8 +51,9 @@ async function fixture() {
 
 }
 
-test('L raw-before input freezes actual legacy state without inventing any prior or candidate v2 lineage', async () => {
-  const f = await fixture()
+for (const seoJson of [null, storedSeo]) {
+test(`L raw-before input freezes actual legacy state without invented lineage (SEO=${seoJson !== null})`, async () => {
+  const f = await fixture(seoJson)
   try {
     const put = (name, value) => writeFileSync(join(f.root, name), JSON.stringify(value))
     put('before.json', f.before)
@@ -71,11 +79,11 @@ test('L raw-before input freezes actual legacy state without inventing any prior
   } finally { f.close() }
 })
 
-test('normal D1 L apply guards full raw state, updates once, preserves parts, and restores the exact prestate on rollback', async () => {
-  const f = await fixture()
+test(`normal D1 L apply, noop and exact rollback (SEO=${seoJson !== null})`, async () => {
+  const f = await fixture(seoJson)
   try {
     const transaction = await f.adapter.applyAtomicRelease(f.release)
-    assert.equal((await f.snapshot()).article.version, 2)
+    assert.equal((await f.snapshot()).article.version, f.before.state.version + 1)
     assert.equal((await f.snapshot()).article.update_reason, f.target.update_reason)
     assert.deepEqual((await f.snapshot()).part_rows, f.before.full_snapshot.part_rows)
     const writes = f.writes()
@@ -86,11 +94,15 @@ test('normal D1 L apply guards full raw state, updates once, preserves parts, an
   } finally { f.close() }
 })
 
-test('L raw-before blocks changed relations and a postguard failure atomically rolls back article and part writes', async () => {
-  const f = await fixture()
+test(`L raw-before blocks changed relations and rolls back postguard failure (SEO=${seoJson !== null})`, async () => {
+  const f = await fixture(seoJson)
   try {
-    const unbound = structuredClone(f.release); delete unbound.articles[0].authoritative_before
-    await assert.rejects(() => f.adapter.applyAtomicRelease(unbound), /requires its authoritative-before/)
+    // The pre-existing adapter fallback detects legacy rows by absent SEO.
+    // SEO-bearing authoritative runs bind the snapshot through parent/child.
+    if (seoJson === null) {
+      const unbound = structuredClone(f.release); delete unbound.articles[0].authoritative_before
+      await assert.rejects(() => f.adapter.applyAtomicRelease(unbound), /requires its authoritative-before/)
+    }
     assert.equal(f.writes(), 0)
     f.db.exec("INSERT INTO knowledge_article_parts VALUES ('teststoff',7,2)")
     await assert.rejects(() => f.adapter.applyAtomicRelease(f.release), /changed since freeze/)
@@ -99,5 +111,34 @@ test('L raw-before blocks changed relations and a postguard failure atomically r
     f.db.exec("CREATE TRIGGER modify_parts AFTER UPDATE OF title ON knowledge_articles BEGIN INSERT INTO knowledge_article_parts VALUES ('teststoff',7,2); END")
     await assert.rejects(() => f.adapter.applyAtomicRelease(f.release), /malformed JSON/)
     assert.deepEqual(await f.snapshot(), f.before.full_snapshot)
+  } finally { f.close() }
+})
+}
+
+test('SEO raw-before rejects malformed, mismatched, stale and compiled prestates without writes', async () => {
+  const f = await fixture(storedSeo)
+  try {
+    validateAuthoritativeCorrectionBeforeV1(f.before, f.target)
+    for (const raw of ['{bad', 'null', '[]', '"text"', '42', 42]) {
+      const bad = structuredClone(f.before)
+      bad.full_snapshot.article.seo_json = raw
+      assert.throws(() => validateAuthoritativeCorrectionBeforeV1(hashed(bad)), /SEO|seo_json/)
+    }
+    const mismatch = structuredClone(f.before)
+    mismatch.state.seo.meta_title = 'Andere Metadaten'
+    assert.throws(() => validateAuthoritativeCorrectionBeforeV1(hashed(mismatch)), /SEO differs/)
+    const stale = structuredClone(f.before)
+    stale.full_snapshot.article.seo_json += ' '
+    assert.throws(() => validateAuthoritativeCorrectionBeforeV1(stale), /content hash is stale/)
+    assert.throws(() => validateAuthoritativeCorrectionBeforeV1(hashed(stale)), /raw article differs/)
+    for (const mutate of [v => { v.state.compiled_payload_hash = canonicalJsonHash('compiled') }, v => { v.historical_compiled_lineage = {} }, v => { v.expected_changed_row_count = 2 }, v => { v.full_snapshot.article.status = 'draft' }, v => { v.state.version++ }]) {
+      const bad = structuredClone(f.before); mutate(bad)
+      assert.throws(() => validateAuthoritativeCorrectionBeforeV1(hashed(bad)))
+    }
+    const changedSeo = storedSeo.replace('Funktionen und Grenzen', 'Funktionen und Risiken')
+    f.db.prepare('UPDATE knowledge_articles SET seo_json=? WHERE slug=?').run(changedSeo, f.target.slug)
+    await assert.rejects(() => f.adapter.applyAtomicRelease(f.release), /changed since freeze|guard/i)
+    assert.equal(f.writes(), 0)
+    assert.equal((await f.snapshot()).article.seo_json, changedSeo)
   } finally { f.close() }
 })
