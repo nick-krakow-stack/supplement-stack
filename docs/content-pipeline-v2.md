@@ -1150,12 +1150,20 @@ idempotent nachgeholt werden. Es werden keine historischen Facts-, Render-
 oder Publication-Belege erfunden. Klasse L ist in diesem Modus unzulässig
 und verwendet weiterhin ausschließlich den normalen betroffenen v2-Slice.
 
-Für einen historischen L-Artikel ohne gespeicherte Compiler-/SEO-Lineage darf
+Für einen historischen publizierten L-Artikel ohne gespeicherte Compiler-Lineage darf
 der Parent ausschließlich seinen Altzustand als echten
 `article_correction_authoritative_before.v1`-Readback binden:
 `before.authoritative_snapshot_path` erzeugt einen L-Input mit
 `mode=authoritative_before`, ausdrücklich ohne erfundenes altes oder vorab
-kompiliertes Kandidaten-Release. Der normale Ein-Artikel-Child bindet unter
+kompiliertes Kandidaten-Release. Gespeicherte SEO-Daten, auch nach einer
+abgeschlossenen SEO-only-Korrektur, sind zulässiger roher Altzustand, keine
+Compiler-Lineage. `seo_json` bleibt bytegleich im vollständigen Snapshot und
+muss entweder SQL-`NULL` oder ein gültiger JSON-Objektstring sein; sein geparster
+Wert muss exakt dem inspizierten `state.seo` entsprechen. Malformed JSON,
+abweichende SEO-Daten oder vorhandene Compiler-Lineage blockieren. Version,
+Identität, Hashbindung und sämtliche Altwert-/Relations-/Count-Guards bleiben
+unverändert; SEO wird weder genullt noch als Facts- oder Release-Beleg benutzt.
+Der normale Ein-Artikel-Child bindet unter
 `article_plan.*[].authoritative_before` denselben `path` und `content_hash`
 sowie einen echten `update_reason`; Identität und Update-Guard müssen zum
 Parent passen. Neue Extraktion, Facts, Writer, Compiler und Publication-Gate
@@ -1165,7 +1173,8 @@ Quellen-, Ingredient-, Interpretations- und Partzeilen samt Counts atomar.
 Artikelteile bleiben unverändert; gültige Wiederholungen sind Noops.
 Der normale vollständige öffentliche DOM-/SEO-Readback bleibt erforderlich;
 ein Rücksetzen nach fehlgeschlagenem Readback restauriert auch den alten
-Aktualisierungsgrund unter demselben exakten Snapshot-Guard.
+Aktualisierungsgrund und die unveränderten rohen SEO-Bytes unter demselben
+exakten Snapshot-Guard.
 
 ## Optionaler Stage-4-Stack-Sync
 
