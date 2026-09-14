@@ -491,9 +491,12 @@ Die Scores und Messwerte in diesem Abschnitt dokumentieren den ursprünglichen
 Auditstand. Technische Phase A/C wurde am 08.09.2026 veröffentlicht und über
 alle 790 Wissensdetails sowie die betroffenen Routen geprüft (Abschnitt 18).
 Am 08.09.2026 wurden zusätzlich Share-Metadaten und die freiwillige öffentliche
-Creatorprofilroute über PR #31/Merge `b0d3dcc` veröffentlicht. Damit sind
-22/24 Matrixzeilen belegt. Die beiden Artikel-Zielboxen bleiben wegen 443
-offener Metadatenkandidaten unverändert; der Gesamtscope ist nicht abgeschlossen.
+Creatorprofilroute über PR #31/Merge `b0d3dcc` veröffentlicht. Am 14.09.2026
+wurden die 443 verbliebenen Artikel-Metapaare unabhängig geprüft, geschützt
+veröffentlicht und vollständig per D1/API/Roh-HTML/Desktop/Mobil abgeglichen.
+Damit sind 24/24 Matrixzeilen belegt. Original-H1, sichtbare Artikelinhalte,
+Quellen, Bilder und Datumswerte bleiben unverändert. Die folgenden Scores und
+Messwerte bleiben ausdrücklich historische Auditwerte, keine neue Bewertung.
 Detailbelege: `umsetzung_seo_matrix_zielkonflikte.md`.
 Die 790 Wissensdetails werden im Seiteninventar am Ende einzeln aufgeführt.
 
@@ -502,8 +505,8 @@ Die 790 Wissensdetails werden im Seiteninventar am Ende einzeln aufgeführt.
 | [x] | `/` | indexierbar | 31 | Hero/H1/Nutzen und Hauptlinks serverseitig; eigener Title, Description, Canonical, `index,follow`, OG/Twitter-Bild, `WebSite`/`Organization`/`WebApplication`; Robots erlauben; Sitemap. |
 | [x] | `/wissen` | indexierbar | 38 | Kategorien und 44 Hauptartikel im Roh-HTML; eigener Head; `CollectionPage`/`ItemList`/Breadcrumb; Filter canonicalisieren; Robots und Sitemap. |
 | [x] | `/demo` | indexierbare Produkt-Landingpage | 27 | Stabiler SSR-Introbereich mit H1, Erklärung und Links; eigener Head, OG/Twitter, `WebApplication`; Robots/Sitemap. Interaktive Daten erst hydrieren. |
-| [ ] | 44 Hauptartikel | indexierbar | 86 | Separate knappe Meta-Titel/-Descriptions; semantisches SSR; OG-Bild/Twitter; nur ein JSON-LD; Breadcrumb/`about`; ISO-`lastmod`; Edge-Cache; Slash-Redirect. |
-| [ ] | 746 Studien-/Quellenseiten | indexierbar | 83 | Wie Hauptartikel; zusätzlich kurzer Meta-Titel neben unverändertem Quellen-H1, sichtbarer Hauptartikel-Rücklink, Evidenznavigation, `citation`/`isPartOf`. |
+| [x] | 44 Hauptartikel | indexierbar | 86 | Separate knappe Meta-Titel/-Descriptions; semantisches SSR; OG-Bild/Twitter; nur ein JSON-LD; Breadcrumb/`about`; ISO-`lastmod`; Edge-Cache; Slash-Redirect. |
+| [x] | 746 Studien-/Quellenseiten | indexierbar | 83 | Wie Hauptartikel; zusätzlich kurzer Meta-Titel neben unverändertem Quellen-H1, sichtbarer Hauptartikel-Rücklink, Evidenznavigation, `citation`/`isPartOf`. |
 | [x] | `/wissen/:slug/` | Alias | 78 | Permanente 301/308 auf Pfad ohne Slash statt parallelem 200. |
 | [x] | `/wissen/:unbekannt` | Fehler | 48 | 404 beziehungsweise 410, `X-Robots-Tag: noindex`, eigener Fehler-Head/H1 und Links zur Übersicht. |
 | [x] | `/stacks` | privat/noindex | 57 | Auth am Edge mit 302/401, `noindex,nofollow`, eigener Titel/H1, `private,no-store`; keine Sitemap. |
@@ -538,10 +541,11 @@ Die 790 Wissensdetails werden im Seiteninventar am Ende einzeln aufgeführt.
 
 ## 17. UX-/SEO-Zielkonflikte und gemeinsame Maximierung
 
-Aktueller Stand 08.09.2026: acht der neun Lösungen sind umgesetzt und
-veröffentlicht. Offen bleibt ausschließlich die separate kurze Suchdarstellung
-des historischen Artikelbestands (UXSEO-04); der dafür notwendige engere
-Korrekturvertrag wartet auf eine ausdrückliche Owner-Entscheidung. Creatorprofile
+Aktueller Stand 14.09.2026: alle neun Lösungen sind umgesetzt, veröffentlicht
+und belegt. Die gesonderten kurzen Suchtexte des historischen Artikelbestands
+(UXSEO-04) wurden nach ausdrücklicher Owner-Freigabe über den eng begrenzten
+SEO-Korrekturvertrag abgeschlossen; die wissenschaftlichen Originaltitel und
+Artikelinhalte sind unverändert. Creatorprofile
 sind freiwillig, moderiert und standardmäßig nicht öffentlich; Sharetokens und
 private Kontodaten werden dadurch nicht veröffentlicht. Die vorhandene globale
 Affiliate-Kennzeichnung bleibt unverändert, ohne Produkthinweise.
