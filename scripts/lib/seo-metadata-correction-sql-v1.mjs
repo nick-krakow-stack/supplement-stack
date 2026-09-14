@@ -126,18 +126,26 @@ export function buildSeoMetadataCorrectionSqlV1(release, state) {
   const schemaObjectGuard = guard(`(SELECT COUNT(*) FROM sqlite_schema WHERE ${SCHEMA_WHERE})=? AND NOT EXISTS (
     SELECT 1 FROM json_each(?) e WHERE NOT EXISTS (SELECT 1 FROM sqlite_schema a WHERE ${equalColumns(['name', 'type', 'tbl_name', 'sql'])})
   )`, [state.schema_rows.length, JSON.stringify(state.schema_rows)], 'schema-objects')
-  const batch = [schemaObjectGuard, ...schemaGuards(state.schema), ...inventoryGuards(expectedInventoryBefore), ...snapshotGuards(state.snapshots, state.schema)]
+  // Protect every overwritten value (SEO/version) with the exact site inventory
+  // before writing. All remaining article fields and relations are never assigned
+  // by this plan or the frozen triggers: their complete postguards below therefore
+  // also reject pre-existing/concurrent drift, rolling back the entire batch.
+  // Sending those large immutable rows twice exceeds D1's observed envelope limit.
+  const batch = [schemaObjectGuard, ...schemaGuards(state.schema), ...inventoryGuards(expectedInventoryBefore)]
   const cache = state.cache.row
   if (cache.id !== 1 || !Number.isInteger(cache.source_version) || !same(rowKeys(cache), state.schema[SEO_CORRECTION_CACHE_TABLE].map(row => row.name).sort())) fail('cache metadata full row/schema differs')
   batch.push(guard(`(SELECT COUNT(*) FROM ${SEO_CORRECTION_CACHE_TABLE})=1`, [], 'cache-row-count'), ...indexedExactRowGuards(SEO_CORRECTION_CACHE_TABLE, [cache], rowKeys(cache), ['id']))
   const writes = decisions.filter(decision => decision.result === 'applied').map(decision => ({ slug: decision.slug, seo_json: expectedAfter[decision.slug].article.seo_json,
     version: targetMap.get(decision.slug).before.article.version, status: 'published' }))
   for (const selected of jsonGroups(writes)) {
-    batch.push({ sql: `UPDATE knowledge_articles SET seo_json=(SELECT json_extract(e.value,'$.seo_json') FROM json_each(?) e WHERE json_extract(e.value,'$.slug')=knowledge_articles.slug),version=version+1
-      WHERE slug IN (SELECT json_extract(value,'$.slug') FROM json_each(?))`, params: [JSON.stringify(selected), JSON.stringify(selected)] })
+    batch.push({ sql: `UPDATE knowledge_articles SET seo_json=(SELECT json_extract(e.value,'$.seo_json') FROM json_each(?1) e WHERE json_extract(e.value,'$.slug')=knowledge_articles.slug),version=version+1
+      WHERE slug IN (SELECT json_extract(value,'$.slug') FROM json_each(?1))`, params: [JSON.stringify(selected)] })
     batch.push(guard('changes()=?', [selected.length], 'exact-update-count'))
   }
-  batch.push(...snapshotGuards(expectedAfter, state.schema), ...inventoryGuards(expectedInventoryAfter))
+  // The other inventory rows cannot change inside this transaction: only the
+  // explicitly scoped UPDATE above and the bound cache invalidation can write.
+  // Target postguards prove the complete projected final inventory by induction.
+  batch.push(...snapshotGuards(expectedAfter, state.schema))
   const expectedCache = { ...cache, source_version: cache.source_version + writes.length }
   if (writes.length) {
     const keys = rowKeys(expectedCache).filter(key => key !== 'updated_at')
