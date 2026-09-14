@@ -8,7 +8,7 @@ import { canonicalJsonHash } from './lib/content-validation.mjs'
 import { knowledgeArticleHead, knowledgeMetadataText } from '../functions/lib/knowledge-seo.mjs'
 import { buildSeoMetadataCorrectionInputV1, buildSeoMetadataCorrectionReviewOrderV1, buildSeoMetadataCorrectionReleaseV1, buildSeoMetadataCorrectionApplyOrderV1,
   sealSeoCorrectionArtifactV1 as seal, seoCorrectionSnapshotV1, currentSeoMetadataV1, projectSeoMetadataCorrectionV1, validateSeoMetadataCorrectionInputV1,
-  validateSeoMetadataCorrectionReleaseV1, validateSeoCorrectionReadbackV1, SEO_CORRECTION_TABLES } from './lib/seo-metadata-correction-v1.mjs'
+  validateSeoMetadataCorrectionReleaseV1, validateSeoCorrectionReadbackV1, sameSeoReadbackLinksV1, SEO_CORRECTION_TABLES } from './lib/seo-metadata-correction-v1.mjs'
 import { buildSeoMetadataCorrectionSqlV1 } from './lib/seo-metadata-correction-sql-v1.mjs'
 import { CloudflareD1ContentPublicationAdapter, dispatchDeterministicWorkOrderV2 } from './lib/nutrient-content-machine-dispatcher.mjs'
 
@@ -320,6 +320,31 @@ test('public API, H1, source links, dates, canonical and mobile content mismatch
       assert.throws(() => validateSeoCorrectionReadbackV1(seal(bad), f.release), /differs|changed/)
     }
   } finally { f.close() }
+})
+
+test('readback link comparison tolerates only one bound cfcheck value on frozen same-origin knowledge routes', () => {
+  const beforeHash = canonicalJsonHash('actual baseline'), releaseHash = canonicalJsonHash('actual release')
+  const options = { slug: 'test-study', inventory: [{ slug: 'test-study' }, { slug: 'related-main' }], releaseHash }
+  const beforeValue = encodeURIComponent(beforeHash), afterValue = encodeURIComponent(releaseHash)
+  const link = url => [{ label: 'Unveränderter Rückweg', url }]
+  for (const path of ['/wissen', '/wissen/test-study', '/wissen/related-main']) {
+    const before = `${origin}${path}?saved=1&cfcheck=${beforeValue}&q=a%20b#fazit`
+    const after = before.replace(beforeValue, afterValue)
+    assert.equal(sameSeoReadbackLinksV1(link(before), link(after), options), true)
+    for (const changed of [
+      after.replace('saved=1', 'saved=2'), after.replace('saved=1&cfcheck=', 'cfcheck=').replace('&q=', '&saved=1&q='),
+      after.replace('a%20b', 'a+b'), after.replace('#fazit', '#andere-stelle'), after.replace(afterValue, encodeURIComponent(canonicalJsonHash('other release'))),
+      after.replace('#fazit', `&cfcheck=${afterValue}#fazit`), after.replace('cfcheck=', '%63fcheck='), after.replace(`${path}?`, `${path}/?`),
+    ]) assert.equal(sameSeoReadbackLinksV1(link(before), link(changed), options), false, changed)
+    assert.equal(sameSeoReadbackLinksV1(link(before), [{ ...link(after)[0], label: 'Anderer sichtbarer Text' }], options), false)
+    assert.equal(sameSeoReadbackLinksV1(link(before.replace(beforeValue, 'not-a-hash')), link(after), options), false)
+    assert.equal(sameSeoReadbackLinksV1(link(before), link(after.replace(`&cfcheck=${afterValue}`, '')), options), false)
+  }
+  for (const target of ['https://external.example/source', `${origin}/wissen/not-in-inventory`, `${origin}/profile`]) {
+    assert.equal(sameSeoReadbackLinksV1(link(`${target}?cfcheck=${beforeValue}`), link(`${target}?cfcheck=${afterValue}`), options), false)
+  }
+  const ordinary = link('https://external.example/unchanged?cfcheck=source-owned-value')
+  assert.equal(sameSeoReadbackLinksV1(ordinary, ordinary, options), true)
 })
 
 test('guard SELECTs use indexed identities and D1 statements remain within published limits', async () => {
