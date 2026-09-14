@@ -1,6 +1,6 @@
 # Umsetzung: SEO-Seitenmatrix und UX-/SEO-Zielkonflikte
 
-Stand: 8. September 2026 · Status: TECHNISCH LIVE — ARTIKELMETAS WARTEN AUF OWNER-ENTSCHEIDUNG
+Stand: 14. September 2026 · Status: TECHNISCH LIVE — ARTIKELMETAS IN UMSETZUNG
 
 Auftrag: `audit_user_creator_ux_seo.md`, Abschnitte 16 und 17 vollständig mit
 dem aktuellen Stand abgleichen und sämtliche noch fehlenden Anforderungen
@@ -8,6 +8,12 @@ umsetzen. Der Abschluss von Phase A/C ist ein Wiederverwendungsbeleg, keine
 pauschale Freigabe dieser weitergehenden Anforderungen.
 
 ## Ablauf und Fortschritt
+
+Die konkrete SEO-only-Freigabe liegt seit 14.09.2026 vor. Der
+`docs/seo-metadata-correction-contract.md` erhält sämtliche Artikelinhalte
+und bindet unabhängige Textprüfung sowie den bestehenden Publisher. Vorhandene
+lokale Prüfdaten werden wiederverwendet; neue D1-Abfragen bleiben gebündelt,
+indiziert und auf den erforderlichen Vor-/Nachzustand begrenzt.
 
 - [x] Auftrag, AGENTS, aktuelle Runtimebasis `53d56d9` und vorherigen Release lesen.
 - [x] Jede Matrixzeile und jeden Zielkonflikt mit konkreten Code-/Test-/Live-Belegen einordnen.
@@ -74,14 +80,12 @@ keine universellen Suchmaschinenlimits. Kürze allein ist kein Qualitätsbeweis.
 - Agent B: Artikelinventar/Reuse, danach Owner-/Admin-Profiloberfläche und fokussierte Tests.
 - Unabhängiger Reviewer: neue P1-Risiken und spätere geänderte Runtime-/Write-Guards; kein erneutes unverändertes Phase-A/C-Gate.
 
-Artikelmetadaten werden vor Zuweisung als Klasse L behandelt. Kein freier
-D1-Massenpatch und keine Umdeklaration zu S/M. Es gibt derzeit keinen
-belegten bestehenden Meta-only-Publishpfad: Der normale Compiler leitet die
-Description aus dem sichtbaren Dek ab. Ein technischer Gap oder notwendige
-Ownerentscheidung wird ausdrücklich dokumentiert, nicht durch eine zweite
-Inhaltsquelle oder ein erfundenes Gate umgangen. Reuse benötigt echte
-hashgebundene Originalartefakte. Unveränderte bestandene Tests/Reviews werden
-nicht ohne nachgewiesenen Bedarf neu gestartet.
+Metadaten sind keine S-/M-Korrekturen. Die am 14.09. genehmigte enge Ausnahme
+ist in `docs/seo-metadata-correction-contract.md` dokumentiert und wird im
+vorhandenen `publication_apply` umgesetzt. Der normale Compiler bleibt
+unverändert; es entsteht weder eine zweite SEO-Pflegequelle noch eine behauptete
+neue Faktenfreigabe historischer Artikel. Unveränderte bestandene Tests/Reviews
+werden nicht ohne nachgewiesenen Bedarf neu gestartet.
 
 Belege: `.agent-memory/seo-matrix-20260908/`.
 
@@ -94,9 +98,9 @@ Belege: `.agent-memory/seo-matrix-20260908/`.
   `published-article-prestate.v1.json`; Hash
   `38e72008432c2911630142332ccfa4a5e41916d370813cbfdbe15aa43767909d`.
   25.708 Datenbankzeilen gelesen, keine geschrieben. 443 Prüfkandidaten bestätigt.
-- Für eine reine SEO-Korrektur wurde eine ausdrückliche Owner-Entscheidung
-  angefordert. Solange diese fehlt, bleiben Artikel und Publikationsvertrag
-  unverändert. Ein breiter Gesamtauftrag ersetzt diese konkrete Grenze nicht.
+- Die konkrete reine SEO-Korrektur wurde am 14.09. vom Owner freigegeben;
+  die eng begrenzte Vertragsausnahme und ihre Schutzmechanismen sind umgesetzt.
+  Artikelwrites erfolgen erst nach unabhängiger Text- und technischer Abnahme.
 - Das freiwillige Creatorprofil verwendet vorhandenen Namen, Slug und Avatar;
   nur der kurze Vorstellungstext ist ein neues Pflegefeld. Einreichung und
   Veröffentlichung sind explizit, die Freigabe bindet aktuelle Identität und
@@ -129,9 +133,32 @@ Migration 0112 ist angewendet, ohne bestehende Profile zu veröffentlichen.
 
 Damit sind 22/24 Matrixzeilen und 8/9 Zielkonflikte vollständig belegt.
 Offen bleiben **SEO-04, SEO-05 und UXSEO-04** für die 443 Metadatenkandidaten.
-Der gesamte Goal ist ausdrücklich noch nicht abgeschlossen. Der engere
-SEO-only-Korrekturvertrag ist noch nicht vom Owner bestätigt und wurde weder
-implementiert noch durch freie Datenbankwrites umgangen.
+Der gesamte Goal ist ausdrücklich noch nicht abgeschlossen. Die Freigabe des
+SEO-only-Vertrags liegt inzwischen vor; Prüfung und Veröffentlichung folgen
+über denselben geschützten Publisher, nicht über einen freien Datenbankpatch.
+
+### Fortsetzung am 14.09.2026
+
+- [x] Engen SEO-only-Vertrag und feste Editor-/Reviewerrollen dokumentieren.
+- [x] Frischen Zielbestand gebündelt lesen: alle 443 Ziele seit dem 08.09.
+  unverändert, 8.628 direkte D1-Lesezeilen und 0 Schreibzeilen. Schmale
+  Zusatzprüfung des bestehenden Cache-Schemas: 414 Lesezeilen, 0 Schreibzeilen.
+- [x] Alle 443 Metapaare lokal erstellen; 251 Titel und 423 Descriptions
+  geändert, jeweils geeignete übrige Felder erhalten. Grenzen/Eindeutigkeit
+  gegen alle 790 Artikel bestanden; 2.067 exakte unterstützende Originalzitate.
+- [x] Echte öffentliche Vorherbelege für alle 443 Ziele: API, Roh-HTML und
+  hydriertes Desktop-/Mobil-DOM. Kein weiterer Gesamtsite-Crawl.
+- [x] Atomaren SQL-Plan lokal mit realem Schema und vorhandenen Triggern
+  prüfen: 443 Ziele, 277 Statements, maximal zwei Parameter je Statement;
+  Guard-/Regressionsprüfungen bestanden. Keine neuen Trigger oder Migrationen.
+- [ ] Unabhängige Text- und technische Abnahme samt erforderlichen Deltas.
+- [ ] Veröffentlichung/CI und atomarer Artikel-Apply mit frischem Write-Guard.
+- [ ] Vollständiger D1-/API-/SSR-/Hydrierungsnachweis nach Apply; globaler
+  Eindeutigkeitsabgleich und Abschluss aller drei offenen Anforderungs-IDs.
+
+Neue Belege: `.agent-memory/seo-metadata-20260914/`. Der Nachher-Kollektor
+verwendet direkt die ohnehin stattfindende API-Revalidierung der App statt
+eines zusätzlichen API-Aufrufs. Desktop/Mobil brauchen keine zweite Navigation.
 
 ### Nicht blockierende Folgepunkte (P2)
 

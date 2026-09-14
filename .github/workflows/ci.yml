@@ -66,3 +66,5 @@ jobs:
         run: node --test scripts/legal-documents-migration.test.mjs
       - name: Verify publication metadata length gate
         run: node --test scripts/article-seo-length-gate.test.mjs
+      - name: Verify guarded SEO-only article corrections
+        run: node --test scripts/seo-metadata-correction.test.mjs

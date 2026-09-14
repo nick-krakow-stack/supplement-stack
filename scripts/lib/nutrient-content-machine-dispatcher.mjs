@@ -15,6 +15,8 @@ import { buildPublicApiReadbackActualV1, PUBLIC_API_READBACK_CHECKS_V1 } from '.
 import { LEGACY_FIELD_CORRECTION_MODE, normalizeLegacyCorrectionRowV1, validateLegacyFieldCorrectionReleaseV1, validateAuthoritativeCorrectionBeforeV1 } from './article-correction-v1.mjs'
 import { parseKnowledgeMarkdown, isKnowledgeSourceHeading } from '../../functions/lib/knowledge-markdown-blocks.mjs'
 import { knowledgeInlineMarkdownToText } from '../../functions/lib/knowledge-inline-markdown.mjs'
+import { SEO_METADATA_CORRECTION_MODE, validateSeoMetadataCorrectionReleaseV1, validateSeoCorrectionReadbackV1, sealSeoCorrectionArtifactV1 } from './seo-metadata-correction-v1.mjs'
+import { readSeoMetadataCorrectionStateV1, buildSeoMetadataCorrectionSqlV1, seoCorrectionQueryReceiptsV1, validateSeoCorrectionCacheReadbackV1 } from './seo-metadata-correction-sql-v1.mjs'
 
 const HASH = /^sha256:[a-f0-9]{64}$/
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
@@ -778,13 +780,15 @@ function authoritativeBeforePartGuards(slug, rows) {
 }
 
 export class CloudflareD1ContentPublicationAdapter {
-  constructor({ accountId, databaseId, apiToken, publicBaseUrl, legacyDomReadback = null }) {
+  constructor({ accountId, databaseId, apiToken, publicBaseUrl, legacyDomReadback = null, seoMetadataReadback = null }) {
     this.kind = 'cloudflare-d1'; this.authority = 'd1-readback'
     this.publicReadbackRetry = { attempts: 10, delayMs: 500 }
     this.accountId = text(accountId, 'Cloudflare account id'); this.databaseId = text(databaseId, 'Cloudflare D1 database id'); this.apiToken = text(apiToken, 'Cloudflare API token')
     this.publicBaseUrl = normalizeUrlOrigin(publicBaseUrl, 'Cloudflare public base URL')
     if (legacyDomReadback !== null && typeof legacyDomReadback !== 'function') fail('legacy DOM readback adapter must be a function')
     this.legacyDomReadback = legacyDomReadback
+    if (seoMetadataReadback !== null && typeof seoMetadataReadback !== 'function') fail('SEO metadata readback adapter must be a function')
+    this.seoMetadataReadback = seoMetadataReadback
     this.endpoint = `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(this.accountId)}/d1/database/${encodeURIComponent(this.databaseId)}/query`
   }
 
@@ -817,6 +821,10 @@ export class CloudflareD1ContentPublicationAdapter {
       result[slug] = snapshot
     }
     return result
+  }
+
+  async readSeoMetadataCorrectionState(targets) {
+    return readSeoMetadataCorrectionStateV1(this, targets)
   }
 
   async readLegacyFieldCorrectionDom(release) {
@@ -1279,6 +1287,7 @@ function articleResultReadbacks(release, target, current, publicState, seoDelive
 }
 
 export async function applyContentReleaseV2({ release, workOrder, adapter, publishEnabled = false, receiptPath, rendererRequestPath = null, rendererReceiptPath = null }) {
+  if (release?.mode === SEO_METADATA_CORRECTION_MODE) return applySeoMetadataCorrectionV1({ release, workOrder, adapter, publishEnabled, receiptPath })
   if (release?.mode === LEGACY_FIELD_CORRECTION_MODE) return applyLegacyFieldCorrectionV1({ release, workOrder, adapter, publishEnabled, receiptPath })
   validateContentReleaseForApplyV2(release)
   validateDeterministicWorkOrderV2(workOrder, { kind: 'publication_apply', runId: release.run_id })
@@ -1445,6 +1454,75 @@ export function validateLegacyCorrectionDomV1(observation, release, after) {
   }
   const result = { ...observation, result: 'MATCH' }
   return { ...result, content_hash: artifactHashV2(result) }
+}
+
+async function applySeoMetadataCorrectionV1({ release, workOrder, adapter, publishEnabled, receiptPath }) {
+  validateSeoMetadataCorrectionReleaseV1(release)
+  validateDeterministicWorkOrderV2(workOrder, { kind: 'publication_apply', runId: release.run_id })
+  if (!publishEnabled) fail('SEO publication apply is disabled; explicit publish flag required')
+  if (workOrder.task?.mode !== SEO_METADATA_CORRECTION_MODE || workOrder.task?.release_hash !== release.release_hash
+    || workOrder.assignee?.role !== 'deterministic-content-publication-executor'
+    || !workOrder.outputs?.some(entry => entry.name === 'publish_receipt' && entry.schema === 'content_publish_receipt.v2')) fail('SEO publication_apply Order binding differs')
+  if (adapter.databaseId !== release.database_id || adapter.publicBaseUrl !== release.public_base_url
+    || typeof adapter.readSeoMetadataCorrectionState !== 'function' || typeof adapter.query !== 'function') fail('SEO adapter database/origin/reader differs')
+  let previousReceipt = null
+  if (existsSync(receiptPath)) {
+    const previous = strictJson(receiptPath, 'existing SEO publication receipt')
+    if (previous.schema !== 'content_publish_receipt.v2' || previous.mode !== SEO_METADATA_CORRECTION_MODE || previous.content_hash !== artifactHashV2(previous)
+      || previous.release_hash !== release.release_hash || previous.work_order_id !== workOrder.work_order_id || previous.input_hash !== release.input.content_hash
+      || previous.review_hash !== release.review.content_hash || !Number.isFinite(Date.parse(previous.applied_at))
+      || !['COMPLETE', 'PUBLISHED_READBACK_PENDING', 'APPLY_OUTCOME_UNKNOWN'].includes(previous.completion_state)) {
+      fail('existing SEO publication receipt is invalid or belongs to a different release; no retry/write')
+    }
+    previousReceipt = previous
+  }
+  const attemptedAt = now()
+  const before = await adapter.readSeoMetadataCorrectionState(release.input.articles)
+  const plan = buildSeoMetadataCorrectionSqlV1(release, before)
+  // A verified no-op resumes the original publication, including a committed
+  // request whose response was lost. Do not expire already collected readbacks.
+  const appliedAt = previousReceipt && plan.decisions.every(decision => decision.result === 'already_current') ? previousReceipt.applied_at : attemptedAt
+  const snapshot = sealSeoCorrectionArtifactV1({ schema: 'seo_metadata_correction_apply_snapshot.v1', release_hash: release.release_hash,
+    captured_at: attemptedAt, database_id: release.database_id, read_only: true, state: before, sql_plan_hash: canonicalJsonHash(plan.batch), limits: plan.limits })
+  const snapshotPath = `${receiptPath}.before-${Date.now()}.json`
+  writeJsonAtomic(snapshotPath, snapshot)
+  // Never split this transaction into independently committed chunks. Read slices
+  // above are only transport boundaries; all row/schema/count guards run again here.
+  const attempt = { schema: 'content_publish_receipt.v2', mode: SEO_METADATA_CORRECTION_MODE, operation: 'article_correction',
+    release_hash: release.release_hash, work_order_id: workOrder.work_order_id, target: release.publish_target, applied_at: appliedAt, attempted_at: attemptedAt,
+    input_hash: release.input.content_hash, review_hash: release.review.content_hash, review_execution_receipt_hash: release.review_execution_receipt.content_hash,
+    snapshot: { path: snapshotPath, content_hash: snapshot.content_hash },
+    atomic_batch: { result: 'UNKNOWN', scope: 'knowledge_articles.seo_json_and_version_only', sql_plan_hash: canonicalJsonHash(plan.batch), limits: plan.limits,
+      existing_cache_invalidation: { table: plan.cache_invalidation.table, source_version_increment: plan.cache_invalidation.expected_source_version_increment } },
+    article_results: plan.decisions.map(decision => ({ ...decision, changed_rows: decision.result === 'applied' ? 1 : 0, resulting_version: plan.expected_after[decision.slug].article.version,
+      before_hash: canonicalJsonHash(before.snapshots[decision.slug]), after_hash: canonicalJsonHash(plan.expected_after[decision.slug]) })),
+    query_receipts: before.query_receipts, completion_state: 'APPLY_OUTCOME_UNKNOWN', published: null, seo_live_claim: false }
+  // A transport failure can happen after commit. Keep the attempt binding and
+  // never claim a rollback; a fresh guarded retry distinguishes before/after.
+  writeJsonAtomic(receiptPath, sealSeoCorrectionArtifactV1(attempt))
+  const transaction = await adapter.query({ batch: plan.batch })
+  const queryReceipts = seoCorrectionQueryReceiptsV1(transaction, 'atomic-apply', plan.batch)
+  const base = { ...attempt, atomic_batch: { ...attempt.atomic_batch, result: 'COMMITTED' }, query_receipts: [...before.query_receipts, ...queryReceipts] }
+  let pending = { ...base, completion_state: 'PUBLISHED_READBACK_PENDING', published: true, seo_live_claim: false }
+  // Persist the honest committed-but-unverified state before any network readback.
+  writeJsonAtomic(receiptPath, sealSeoCorrectionArtifactV1(pending))
+  try {
+    const after = await adapter.readSeoMetadataCorrectionState(release.input.articles)
+    pending = { ...pending, query_receipts: [...base.query_receipts, ...after.query_receipts] }
+    if (canonicalJsonHash(after.snapshots) !== canonicalJsonHash(plan.expected_after) || canonicalJsonHash(after.inventory) !== canonicalJsonHash(plan.expected_inventory_after)
+      || canonicalJsonHash(after.schema) !== canonicalJsonHash(before.schema) || canonicalJsonHash(after.schema_rows) !== canonicalJsonHash(before.schema_rows)) fail('SEO full D1 content readback differs after atomic batch')
+    pending = { ...pending, persistence: { result: 'MATCH', snapshots_hash: canonicalJsonHash(after.snapshots), inventory_hash: canonicalJsonHash(after.inventory), schema_hash: canonicalJsonHash(after.schema) } }
+    pending = { ...pending, cache_invalidation: validateSeoCorrectionCacheReadbackV1(plan, after) }
+    if (typeof adapter.seoMetadataReadback !== 'function') fail('SEO API/raw-HTML/hydrated readback is not supplied')
+    const publicReadback = validateSeoCorrectionReadbackV1(await adapter.seoMetadataReadback(release), release)
+    const receipt = sealSeoCorrectionArtifactV1({ ...pending, completion_state: 'COMPLETE', seo_live_claim: true, public_readback: publicReadback })
+    writeJsonAtomic(receiptPath, receipt)
+    return receipt
+  } catch (error) {
+    const receipt = sealSeoCorrectionArtifactV1({ ...pending, readback_error: String(error.message) })
+    writeJsonAtomic(receiptPath, receipt)
+    return receipt
+  }
 }
 
 async function applyLegacyFieldCorrectionV1({ release, workOrder, adapter, publishEnabled, receiptPath }) {
