@@ -361,6 +361,33 @@ gebundenen Artifact-Root ein und erzeugt genau ein
 `sources[{source_id,path,byte_hash,content_type,locator}]` und `content_hash`.
 Das Receipt ist nur Maschinenlineage, kein zweites Analyseinventar.
 
+Für einen gezielten semantischen Nachzug kann dasselbe Runmanifest optional
+`research_reconciliation` enthalten. Dieser Block bindet `prior_research`,
+`prior_coverage_plan` und `prior_source_artifact_receipt` jeweils als
+`{path, byte_hash}` sowie eine nichtleere Liste konkreter `missing_scope`-Fragen
+und positive endliche ganzzahlige `query_budget` und
+`wall_clock_budget_minutes`. Die bisherigen Artefakte müssen zum selben Run
+und Stoff gehören; ihre Bytes und alle eingefrorenen Sources werden geprüft.
+Die aktiven `inputs.research_path`, `inputs.coverage_plan_path` und
+`inputs.source_artifact_receipt_path` zeigen auf neue, kollisionsfreie Pfade;
+der neue Source-Root bleibt deterministisch `source-artifacts` neben dem neuen
+Receipt. Historische Pfade dürfen weder aktive Inputs noch generierte
+Ausgabebereiche überlappen. Es entsteht kein zweites steuerndes Manifest.
+
+Der Runner stellt dafür eine echte `research`-Order mit diesen drei gebundenen
+Inputs, allen `reused_sources`, genau dem fehlenden Scope und dessen Budgets
+aus. Auch bei teilweise vorhandener Ausgabe wird daraus kein Freeze-Auftrag.
+Research schreibt ein einziges konsolidiertes neues Inventar, kopiert alle
+wiederverwendeten Originalbytes in den neuen Root und erhält Source-ID,
+Locator und Content-Type unverändert. Neue Originale dürfen additiv hinzukommen.
+Das neue Source-Receipt bindet zusätzlich `reconciliation_work_order_id` an
+die exakte ausgestellte Order. Der Runner blockiert fehlenden/veränderten
+Reuse, unveränderte alte Researchbytes und eine nicht mehr passende Order.
+Anschließend gelten unverändert Coverage, Extraktion, unabhängiges Facts-Gate
+und Publication-Gate; technische Reconciliation belegt keine wissenschaftlich
+geschlossene Lücke. Ohne diesen optionalen Block bleiben Research- und
+Legacy-Freeze-Verhalten unverändert.
+
 Eine deterministische Priorisierung darf in der einen semantischen Datei
 nachvollziehbar dokumentiert werden; es entsteht kein zweites Score-Artefakt.
 Artikel, Snippets und Sekundärseiten sind ausschließlich Wegweiser zur

@@ -68,3 +68,5 @@ jobs:
         run: node --test scripts/article-seo-length-gate.test.mjs
       - name: Verify guarded SEO-only article corrections
         run: node --test scripts/seo-metadata-correction.test.mjs
+      - name: Verify bound semantic research reconciliation
+        run: node --test --test-name-pattern="research reconciliation" scripts/run-nutrient-content.test.mjs

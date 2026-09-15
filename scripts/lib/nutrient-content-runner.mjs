@@ -1,5 +1,5 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync, rmSync } from 'node:fs'
+import { dirname, relative, resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { fileURLToPath } from 'node:url'
 import { canonicalJsonHash, decodeUtf8Strict, sha256Bytes } from './content-validation.mjs'
@@ -429,7 +429,51 @@ export function loadNutrientContentRunManifest(manifestPath) {
     articles: { stage2, stage3, all }, publish: { required: publish.required === true, target: text(publish.target, 'manifest.publish.target'), publicBaseUrl, retireArticles },
     stage4: { enabled: stage4.enabled, target: stage4Target, write_guard: stage4WriteGuard, prestate_path: stage4PrestatePath }, validatorVersion: ARTICLE_VALIDATOR_VERSION, evidenceValidatorVersion: EVIDENCE_VALIDATOR_VERSION, rendererVersion: RENDERER_VERSION,
   }
+  result.researchReconciliation = loadResearchReconciliation(result, inputPaths)
   return result
+}
+
+function loadResearchReconciliation(context, inputPaths) {
+  const raw = context.manifest.research_reconciliation
+  if (raw === undefined) return null
+  object(raw, 'manifest.research_reconciliation')
+  const allowed = ['prior_research', 'prior_coverage_plan', 'prior_source_artifact_receipt', 'missing_scope', 'query_budget', 'wall_clock_budget_minutes']
+  if (Object.keys(raw).some(key => !allowed.includes(key))) fail('research_reconciliation contains unsupported fields')
+  const scope = array(raw.missing_scope, 'research_reconciliation.missing_scope').map((entry, index) => text(entry, `missing_scope[${index}]`))
+  if (!scope.length || new Set(scope).size !== scope.length) fail('research_reconciliation.missing_scope must be nonempty and unique')
+  for (const key of ['query_budget', 'wall_clock_budget_minutes']) if (!Number.isSafeInteger(raw[key]) || raw[key] <= 0) fail(`research_reconciliation.${key} must be a positive finite safe integer`)
+  const bindings = ['prior_research', 'prior_coverage_plan', 'prior_source_artifact_receipt'].map(name => {
+    const entry = object(raw[name], `research_reconciliation.${name}`)
+    if (Object.keys(entry).some(key => !['path', 'byte_hash'].includes(key))) fail(`research_reconciliation.${name} contains unsupported fields`)
+    const path = resolveManifestPath(context.root, entry.path, `research_reconciliation.${name}.path`)
+    if (!existsSync(path) || !HASH.test(entry.byte_hash ?? '') || sha256Bytes(readFileSync(path)) !== entry.byte_hash) fail(`research_reconciliation.${name} bytes/hash differ`)
+    return { name, path }
+  })
+  const priorContext = { ...context, researchPath: bindings[0].path, sourceArtifactReceiptPath: bindings[2].path, sourceArtifactRootPath: resolve(dirname(bindings[2].path), 'source-artifacts') }
+  const receipt = loadSourceArtifactReceipt(priorContext)
+  const coverage = validateCoveragePlanV2(strictJson(bindings[1].path, 'prior coverage plan'), { researchHash: receipt.value.research_hash, substance: context.substance.slug, language: context.substance.language, runId: context.runId, allowFrameworkCatalogMismatch: true })
+  const mismatch = coverageReceiptMismatch(coverage, receipt)
+  if (mismatch) fail(`research_reconciliation: ${mismatch}`)
+  const protectedPaths = [...bindings.map(entry => entry.path), ...receipt.sources.map(entry => entry.path)]
+  assertNoPathCollisions([...inputPaths, ...protectedPaths].map((path, index) => ({ path, label: `reconciliation path ${index}` })))
+  // Resolve existing ancestors as well: a not-yet-created child of a junction
+  // already aliases its destination and must not become a writable source root.
+  const realPath = path => {
+    let ancestor = path
+    while (!existsSync(ancestor) && dirname(ancestor) !== ancestor) ancestor = dirname(ancestor)
+    return resolve(realpathSync.native(ancestor), relative(ancestor, path))
+  }
+  const realProtectedPaths = protectedPaths.map(realPath)
+  const realInputPaths = inputPaths.map(realPath)
+  const priorArtifactRoot = realPath(receipt.artifactRoot)
+  const sourceArtifactRoot = realPath(context.sourceArtifactRootPath)
+  const generatedRoots = [context.stateDir, context.evidenceDir, context.sourceArtifactRootPath].map(realPath)
+  if (generatedRoots.some((root, index) => generatedRoots.some((other, otherIndex) => index !== otherIndex && isContained(root, other)))) fail('research_reconciliation output roots must be disjoint')
+  for (const root of generatedRoots) {
+    if (realProtectedPaths.some(path => isContained(root, path) || isContained(path, root)) || isContained(priorArtifactRoot, root)) fail('research_reconciliation outputs overlap frozen prior artifacts')
+  }
+  if (realInputPaths.some(path => isContained(priorArtifactRoot, path)) || realInputPaths.some(path => isContained(sourceArtifactRoot, path))) fail('research_reconciliation inputs overlap source artifact outputs')
+  return { inputs: bindings.map(entry => runInput(context, entry.name, entry.path)), receipt, missingScope: scope, queryBudget: raw.query_budget, wallClockBudgetMinutes: raw.wall_clock_budget_minutes }
 }
 
 function binding(context, path, extra = {}) {
@@ -823,16 +867,20 @@ function validatePlanParity(context, coverage) {
 }
 
 function researchWorkOrder(context, reason, { freezeOnly = false } = {}) {
+  const reconciliation = context.researchReconciliation
+  // Partial reconciliation output must resume semantic research, never a freeze-only job.
+  if (reconciliation) { freezeOnly = false; reason = 'explicit hash-bound semantic research reconciliation' }
   return workOrder(context, freezeOnly ? 'research_source_freeze' : 'research', {
     reason, scope: orderScope('run'), assignee: { role: 'nutrient-research-analyst', independent_from_ids: [] },
-    inputs: freezeOnly ? [runInput(context, 'research', context.researchPath)] : [], reused_sources: [], link_inventory: null,
+    inputs: reconciliation ? reconciliation.inputs : freezeOnly ? [runInput(context, 'research', context.researchPath)] : [],
+    reused_sources: reconciliation ? reconciliation.receipt.sources.map(source => ({ ...reusedSource(context, source.source_id, source.path, source.byte_hash), locator: source.locator, content_type: source.content_type })) : [], link_inventory: null,
     outputs: [
       ...(!freezeOnly ? [runOutput(context, 'research', context.researchPath, { mediaType: 'application/octet-stream' })] : []),
       runOutput(context, 'source_artifact_receipt', context.sourceArtifactReceiptPath, { schema: 'research_source_artifact_receipt.v2' }),
       runOutput(context, 'source_artifact_root', context.sourceArtifactRootPath, { mediaType: 'application/vnd.supplement-stack.source-artifact-directory' }),
     ],
-    task: { objective: freezeOnly ? 'Acquire each already selected original source once and freeze its unchanged bytes without adding a second semantic analysis.' : 'Create one opaque semantic research inventory, identify the most material common public assumptions as evidence questions, and in the same wave acquire each selected original source exactly once as unchanged frozen bytes.', research_scope: freezeOnly ? ['already_selected_sources_only'] : ['common_public_assumptions_and_questions', 'authority_reference_and_legal', 'guideline_consensus', 'systematic_review_meta_analysis', 'material_primary_studies', 'safety_interaction_vulnerable_groups', 'correction_retraction_follow_up'], query_budget: freezeOnly ? 0 : 30, wall_clock_budget_minutes: freezeOnly ? 8 : 25, artifact_root: portablePath(context.root, context.sourceArtifactRootPath), receipt_contract: { schema: 'research_source_artifact_receipt.v2', source_fields: ['source_id', 'path', 'byte_hash', 'content_type', 'locator'] } },
-    constraints: { original_sources_only: true, hard_query_and_time_budget: true, stop_when_material_coverage_is_satisfied: true, unchanged_source_bytes: true, no_second_semantic_inventory: true, no_downstream_refetch: true, common_assumptions_are_discovery_signals_not_facts: true, no_quantified_prevalence_without_original_evidence: true },
+    task: { objective: reconciliation ? 'Reconcile only the explicit missing semantic scope against the bound prior research and coverage. Produce one consolidated research inventory at the new output path. Copy all reused originals byte-for-byte into the new artifact root with unchanged source IDs, locators and content types; acquire only missing originals. Preserve unresolved scientific gaps for coverage planning.' : freezeOnly ? 'Acquire each already selected original source once and freeze its unchanged bytes without adding a second semantic analysis.' : 'Create one opaque semantic research inventory, identify the most material common public assumptions as evidence questions, and in the same wave acquire each selected original source exactly once as unchanged frozen bytes.', research_scope: reconciliation ? reconciliation.missingScope : freezeOnly ? ['already_selected_sources_only'] : ['common_public_assumptions_and_questions', 'authority_reference_and_legal', 'guideline_consensus', 'systematic_review_meta_analysis', 'material_primary_studies', 'safety_interaction_vulnerable_groups', 'correction_retraction_follow_up'], query_budget: reconciliation ? reconciliation.queryBudget : freezeOnly ? 0 : 30, wall_clock_budget_minutes: reconciliation ? reconciliation.wallClockBudgetMinutes : freezeOnly ? 8 : 25, artifact_root: portablePath(context.root, context.sourceArtifactRootPath), receipt_contract: { schema: 'research_source_artifact_receipt.v2', source_fields: ['source_id', 'path', 'byte_hash', 'content_type', 'locator'] } },
+    constraints: { original_sources_only: true, hard_query_and_time_budget: true, stop_when_material_coverage_is_satisfied: true, unchanged_source_bytes: true, no_second_semantic_inventory: true, no_downstream_refetch: true, common_assumptions_are_discovery_signals_not_facts: true, no_quantified_prevalence_without_original_evidence: true, ...(reconciliation ? { preserve_all_reused_sources: true, prior_artifacts_read_only: true, receipt_must_bind_reconciliation_work_order_id: true } : {}) },
   })
 }
 
@@ -1972,7 +2020,19 @@ export function runNutrientContent({ manifestPath }) {
     if (!existsSync(context.linkInventorySourcePath)) orders.push(linkInventorySourceWorkOrder(context, 'authoritative site link inventory source is missing'))
     return finish(context, started, 'WAITING_FOR_RESEARCH', orders, stats)
   }
-  try { loadSourceArtifactReceipt(context) } catch (error) {
+  try {
+    const receipt = loadSourceArtifactReceipt(context)
+    if (context.researchReconciliation) {
+      const prior = context.researchReconciliation.receipt
+      const order = issuedWorkOrders.find(entry => entry.work_order_id === receipt.value.reconciliation_work_order_id && entry.kind === 'research')
+      if (!order || researchWorkOrder({ ...context, llmWaveIndex: order.wave_index }, '').work_order_id !== order.work_order_id) fail('reconciliation receipt must bind the exact issued semantic research WorkOrder')
+      if (receipt.value.research_hash === prior.value.research_hash) fail('reconciliation requires new semantic research bytes, not an unchanged freeze')
+      for (const source of prior.sources) {
+        const current = receipt.byId.get(source.source_id)
+        if (!current || ['byte_hash', 'locator', 'content_type'].some(key => current[key] !== source[key])) fail(`reconciliation reused source ${source.source_id} changed or is missing`)
+      }
+    }
+  } catch (error) {
     removeRelease(context)
     return finish(context, started, 'BLOCKED', [escalationWorkOrder(context, 'research_source_integrity_escalation', { reason: error.message, inputs: [runInput(context, 'source_artifact_receipt', context.sourceArtifactReceiptPath, { schema: 'research_source_artifact_receipt.v2' })] })], stats, { published: false })
   }

@@ -592,6 +592,162 @@ function createFixture({ stages = ['stage2', 'stage3'], graphic = false, publish
   return { root, paths, coverage, evidenceManifest, articles, graphic, cleanup: () => rmSync(root, { recursive: true, force: true }) }
 }
 
+function reconciliationFixture() {
+  const fixture = createFixture()
+  const inventory = json(fixture.paths.linkInventorySource)
+  inventory.routes.forEach(route => { route.meta_title = route.title })
+  put(fixture.paths.linkInventorySource, hashed(inventory))
+  const manifest = json(fixture.paths.run)
+  manifest.research_reconciliation = {
+    prior_research: { path: rel(fixture.root, fixture.paths.research), byte_hash: sha256Bytes(readFileSync(fixture.paths.research)) },
+    prior_coverage_plan: { path: rel(fixture.root, fixture.paths.coverage), byte_hash: sha256Bytes(readFileSync(fixture.paths.coverage)) },
+    prior_source_artifact_receipt: { path: rel(fixture.root, fixture.paths.sourceArtifactReceipt), byte_hash: sha256Bytes(readFileSync(fixture.paths.sourceArtifactReceipt)) },
+    missing_scope: ['Resolve the erratum and missing review constituents.'], query_budget: 7, wall_clock_budget_minutes: 12,
+  }
+  manifest.inputs.research_path = 'reconciled/research.md'
+  manifest.inputs.coverage_plan_path = 'reconciled/coverage.json'
+  manifest.inputs.source_artifact_receipt_path = 'reconciled/source-receipt.json'
+  put(fixture.paths.run, manifest)
+  return { ...fixture, manifest }
+}
+
+function finishReconciliationFixture(fixture, order) {
+  const context = loadNutrientContentRunManifest(fixture.paths.run)
+  put(context.researchPath, '# Consolidated research\nThe missing erratum remains scientifically unresolved.\n')
+  const original = json(fixture.paths.sourceArtifactReceipt)
+  const sources = original.sources.map(source => {
+    const path = join(context.sourceArtifactRootPath, `${source.source_id}.txt`)
+    put(path, readFileSync(join(fixture.root, source.path)))
+    return { ...source, path: rel(fixture.root, path) }
+  })
+  const receipt = hashed({ ...original, research_hash: sha256Bytes(readFileSync(context.researchPath)), artifact_root: rel(fixture.root, context.sourceArtifactRootPath), sources, reconciliation_work_order_id: order.work_order_id })
+  put(context.sourceArtifactReceiptPath, receipt)
+  return { context, receipt }
+}
+
+test('research reconciliation binds prior bytes, explicit scope, budgets and immutable source reuse', () => {
+  const fixture = reconciliationFixture()
+  try {
+    const status = runNutrientContent({ manifestPath: fixture.paths.run })
+    const order = status.work_orders.work_orders.find(entry => entry.kind === 'research')
+    assert.equal(status.state, 'WAITING_FOR_RESEARCH')
+    assert.deepEqual(order.inputs.map(entry => entry.name), ['prior_coverage_plan', 'prior_research', 'prior_source_artifact_receipt'])
+    assert.deepEqual(order.task.research_scope, fixture.manifest.research_reconciliation.missing_scope)
+    assert.equal(order.task.query_budget, 7)
+    assert.equal(order.task.wall_clock_budget_minutes, 12)
+    assert.equal(order.reused_sources[0].byte_hash, sha256Bytes(readFileSync(fixture.paths.source)))
+    assert.equal(order.reused_sources[0].locator, 'https://example.org/study')
+    const { context } = finishReconciliationFixture(fixture, order)
+    const resumed = runNutrientContent({ manifestPath: fixture.paths.run })
+    assert.notEqual(resumed.state, 'BLOCKED')
+    assert.equal(existsSync(context.coveragePlanPath), false)
+    assert.equal(resumed.work_orders.work_orders.some(entry => entry.kind === 'writer'), false)
+    assert.equal(resumed.work_orders.work_orders.some(entry => entry.kind === 'coverage_planning'), true)
+    const repeated = runNutrientContent({ manifestPath: fixture.paths.run })
+    assert.equal(repeated.state, resumed.state)
+    assert.deepEqual(repeated.work_orders.work_orders.map(entry => entry.kind), resumed.work_orders.work_orders.map(entry => entry.kind))
+    for (const key of ['prior_research', 'prior_coverage_plan', 'prior_source_artifact_receipt']) {
+      const binding = fixture.manifest.research_reconciliation[key]
+      assert.equal(sha256Bytes(readFileSync(join(fixture.root, binding.path))), binding.byte_hash)
+    }
+  } finally { fixture.cleanup() }
+})
+
+test('research reconciliation rejects stale bindings, invalid budgets and overlapping paths', () => {
+  const mutations = [
+    manifest => { manifest.research_reconciliation.prior_research.byte_hash = `sha256:${'0'.repeat(64)}` },
+    manifest => { manifest.research_reconciliation.query_budget = 0 },
+    manifest => { manifest.research_reconciliation.wall_clock_budget_minutes = 0.5 },
+    manifest => { manifest.research_reconciliation.missing_scope = [] },
+    manifest => { manifest.inputs.research_path = manifest.research_reconciliation.prior_research.path },
+    manifest => { manifest.inputs.source_artifact_receipt_path = 'inputs/new-receipt.json' },
+    manifest => { manifest.outputs.state_dir = 'inputs' },
+    manifest => { manifest.outputs.state_dir = 'reconciled/source-artifacts/state' },
+    manifest => { manifest.research_reconciliation.prior_research.path = '../outside.md' },
+  ]
+  for (const mutate of mutations) {
+    const fixture = reconciliationFixture()
+    try {
+      mutate(fixture.manifest)
+      put(fixture.paths.run, fixture.manifest)
+      assert.throws(() => loadNutrientContentRunManifest(fixture.paths.run))
+    } finally { fixture.cleanup() }
+  }
+})
+
+test('research reconciliation cannot turn partial output into a freeze or accept tampered reused sources', () => {
+  for (const change of ['locator', 'bytes', 'missing', 'unissued', 'unchanged-research']) {
+    const fixture = reconciliationFixture()
+    try {
+      put(join(fixture.root, fixture.manifest.inputs.research_path), 'Partial semantic output')
+      const status = runNutrientContent({ manifestPath: fixture.paths.run })
+      const order = status.work_orders.work_orders.find(entry => entry.kind === 'research')
+      assert.ok(order)
+      assert.equal(status.work_orders.work_orders.some(entry => entry.kind === 'research_source_freeze'), false)
+      const { context, receipt } = finishReconciliationFixture(fixture, order)
+      if (change === 'locator') receipt.sources[0].locator = 'https://example.org/different'
+      if (change === 'bytes') {
+        put(join(fixture.root, receipt.sources[0].path), 'Changed bytes')
+        receipt.sources[0].byte_hash = sha256Bytes('Changed bytes')
+      }
+      if (change === 'missing') receipt.sources[0].source_id = 'different-source'
+      if (change === 'unissued') receipt.reconciliation_work_order_id = `sha256:${'0'.repeat(64)}`
+      if (change === 'unchanged-research') {
+        put(context.researchPath, readFileSync(fixture.paths.research))
+        receipt.research_hash = sha256Bytes(readFileSync(context.researchPath))
+      }
+      put(context.sourceArtifactReceiptPath, hashed(receipt))
+      assert.equal(runNutrientContent({ manifestPath: fixture.paths.run }).state, 'BLOCKED', change)
+    } finally { fixture.cleanup() }
+  }
+})
+
+test('research reconciliation rejects junction aliases of frozen source roots and their missing children', () => {
+  for (const missingChild of [false, true]) {
+    const fixture = reconciliationFixture()
+    try {
+      const before = readFileSync(fixture.paths.source)
+      const alias = join(fixture.root, 'reconciled', 'source-artifacts')
+      mkdirSync(dirname(alias), { recursive: true })
+      symlinkSync(dirname(fixture.paths.source), alias, 'junction')
+      if (missingChild) {
+        fixture.manifest.inputs.source_artifact_receipt_path = 'reconciled/source-artifacts/new/receipt.json'
+        put(fixture.paths.run, fixture.manifest)
+      }
+      assert.throws(() => loadNutrientContentRunManifest(fixture.paths.run), /overlap frozen prior artifacts/)
+      assert.deepEqual(readFileSync(fixture.paths.source), before)
+    } finally { fixture.cleanup() }
+  }
+})
+
+test('research reconciliation scope or budget changes invalidate a previously issued result', () => {
+  const fixture = reconciliationFixture()
+  try {
+    const order = runNutrientContent({ manifestPath: fixture.paths.run }).work_orders.work_orders.find(entry => entry.kind === 'research')
+    finishReconciliationFixture(fixture, order)
+    fixture.manifest.research_reconciliation.query_budget += 1
+    put(fixture.paths.run, fixture.manifest)
+    assert.equal(runNutrientContent({ manifestPath: fixture.paths.run }).state, 'BLOCKED')
+  } finally { fixture.cleanup() }
+})
+
+test('research reconciliation opt-in preserves ordinary research and legacy freeze defaults', () => {
+  for (const freezeOnly of [false, true]) {
+    const fixture = createFixture()
+    try {
+      rmSync(fixture.paths.sourceArtifactReceipt)
+      if (!freezeOnly) rmSync(fixture.paths.research)
+      const order = runNutrientContent({ manifestPath: fixture.paths.run }).work_orders.work_orders.find(entry => entry.kind === (freezeOnly ? 'research_source_freeze' : 'research'))
+      assert.ok(order)
+      assert.deepEqual(order.reused_sources, [])
+      assert.equal(order.inputs.length, freezeOnly ? 1 : 0)
+      assert.equal(order.task.query_budget, freezeOnly ? 0 : 30)
+      assert.equal(order.task.wall_clock_budget_minutes, freezeOnly ? 8 : 25)
+      assert.equal(order.constraints.receipt_must_bind_reconciliation_work_order_id, undefined)
+    } finally { fixture.cleanup() }
+  }
+})
+
 function createSourceReview(fixture, { result = 'PASS' } = {}) {
   const sample = json(join(fixture.paths.evidence, 'review-sample-manifest.v2.json'))
   const bundle = (() => {

@@ -1,6 +1,6 @@
 # Umsetzung: vollständiges Wissensseiten-Inventar, Textqualität und Bilder
 
-Stand: 14.09.2026 · Status: IN ARBEIT
+Stand: 15.09.2026 · Status: IN ARBEIT — autorisierte Fortsetzung im neuen Worktree
 
 ## Vollständiger Auftrag
 
@@ -42,6 +42,49 @@ bisherige Zehntklässler-Vorgabe des Qualitätsvertrags.
   Bildliste, Checkliste, Deploy-Log und Goal-Abnahme fertigstellen.
 
 ## Bewertungsregeln
+
+### Autorisierte Fortsetzung im Worktree df83
+
+Die Research-Reconciliation-Erweiterung ist implementiert: sechs gezielte
+Tests und unabhängiger technischer Review bestanden. Der festgestellte
+Verzeichnisalias-Sonderfall ist behoben und separat getestet. Release läuft;
+noch keine neue Artikelpublikation. Paket D ist jetzt60/60 vollständig gelesen
+(42 neue Lektüren); Paket E und das disjunkte Paket F laufen weiter.
+Die übernommenen Originaldateien bleiben bytegleich; Transferbeleg und Review
+liegen unter `.agent-memory/wissensinventar-20260914/`.
+
+### Zwischenstand vom 15.09.2026
+
+211 von 746 Quellenartikeln sind vollständig gelesen, ohne Überschneidungen:
+13 priorisierte Artikel, Pakete A/B/C mit jeweils 60 und Paket D mit 18.
+535 Quellenartikel sind noch offen. Die Befunde sind redaktionelle Erstprüfungen,
+keine Fakten- oder Publikationsfreigaben. Paket D bleibt mit 42 ungelesenen
+Zielen wiederaufnehmbar. Noch keine Artikelinhalte dieses Auftrags veröffentlicht.
+
+Der unabhängige DGE-Korrekturlauf hat die Originalquellen-Extraktion abgeschlossen
+und die Faktenprüfung erreicht. Sein echter Vorzustand kostete 18 D1-Lesezeilen;
+das gemeinsame Linkinventar und vorhandene Originaldateien wurden wiederverwendet.
+
+Die zuvor dokumentierten Fortsetzungshindernisse werden im autorisierten neuen
+Worktree bearbeitet:
+
+- Alpha-Liponsäure braucht einen gezielten semantischen Quellennachzug. Der
+  bestehende Runner kann dafür weder den fehlenden Suchscope noch die 22
+  wiederverwendbaren Quellen in einer neuen Research-Order binden. Er setzt
+  `reused_sources=[]` und allgemeine Suchbereiche fest. Ein reiner Source-Freeze
+  darf diese semantische Lücke nicht ersetzen. Der abgeschlossene Freeze hat
+  alle 22 Dateien unverändert erhalten; der Salinas-Volltext bleibt unzugänglich.
+  Die eng begrenzte technische Erweiterung ist inzwischen ausdrücklich
+  autorisiert und wird vor der Artikelüberarbeitung implementiert, unabhängig
+  geprüft und deployed. Keine manipulierten Work-Orders.
+- Die aktuelle Aufgabe meldet beim Start weiterer unabhängiger Agenten
+  `agent thread limit reached`. Die Fakten- und Publikationsprüfung darf nicht
+  durch umbenannte bereits beteiligte Agenten simuliert werden. Für die
+  erforderlichen unabhängigen Rollen ist eine neue Aufgabe mit der gesicherten
+  Übergabe nötig; der Owner hat diese Fortsetzung ausdrücklich beauftragt.
+  Neue echte Agenten sind gestartet; bisherige Rollenidentitäten bleiben erhalten.
+
+Keine weiteren D1-Abfragen oder Produktionsänderungen für diese Diagnose.
 
 SEO behält die sechs Kategorien des Audits: Status/Indexierung 25,
 Head-Metadaten 20, Roh-HTML/Semantik 20, Social/Schema 15, Auffindbarkeit 10,
