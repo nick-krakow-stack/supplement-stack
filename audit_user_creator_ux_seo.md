@@ -703,7 +703,7 @@ Originalquelle. Der DGE-Fettreferenzartikel zu MCT ist ebenfalls mit Text-UX8/10
 abgeschlossen. Die BfR-Artikel zu B5 und Vitamin K sind mit jeweils Text-UX7,5/10 und
 SEO100/100 abgeschlossen. Der Huo-Artikel ist mit Text-UX7/10 und SEO100/100 einschließlich seiner
 gebundenen Originalberichte abgeschlossen. Die DGE-Vitamin-D-FAQ sind ebenfalls mit Text-UX8/10 und SEO100/100
-abgeschlossen. Der Carnitin-DGE-Artikel (Text-UX7,5/10) und der FDA-MCT-Artikel (8/10) sind ebenfalls geschützt veröffentlicht und öffentlich mit SEO100/100 geprüft. Damit sind 304/790 Bestandszeilen sowie ein zusätzlicher Quellenartikel
+abgeschlossen. Der Carnitin-DGE-Artikel (Text-UX7,5/10) und der FDA-MCT-Artikel (8/10) sind ebenfalls geschützt veröffentlicht und öffentlich mit SEO100/100 geprüft. Der BfR-Artikel zu Probiotika in Säuglingsnahrung ist mit Text-UX7/10 und SEO100/100 ebenfalls abgeschlossen. Damit sind 305/790 Bestandszeilen sowie ein zusätzlicher Quellenartikel
 abgeschlossen. Die übrigen bleiben offen.
 
 | Erledigt | Pfad | Typ | Text-UX ★ | SEO |
@@ -1089,7 +1089,7 @@ abgeschlossen. Die übrigen bleiben offen.
 | [ ] | `/wissen/perinataler-verzehr-thiaminangereicherter-fischsauce-im-la-027` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/probiotika` | Hauptartikel | 7 | 86 |
 | [ ] | `/wissen/probiotika-aga-gi-guideline-2020` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/probiotika-bfr-infant-formula-benefit-safety-2026` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/probiotika-bfr-infant-formula-benefit-safety-2026` | Studie/Quelle | 7 | 100 |
 | [ ] | `/wissen/probiotika-chieng-bv-recurrence-meta-2022` | Studie/Quelle | 7 | 83 |
 | [x] | `/wissen/probiotika-cochrane-urti-2022` | Studie/Quelle | ≥7 | 100 |
 | [x] | `/wissen/probiotika-collinson-acute-infectious-diarrhoea-cochrane-2020` | Studie/Quelle | ≥7 | 100 |
