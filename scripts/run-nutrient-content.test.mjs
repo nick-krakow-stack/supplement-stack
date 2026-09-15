@@ -179,6 +179,25 @@ test('quantity guard recognizes exact nested structured context quantities witho
   }
 })
 
+test('quantity guard accepts only documented magnitude keys sharing their own context unit', () => {
+  const article = { article_id: 'iuliano-source' }
+  const factsPackage = { facts: [{ claim: 'Freigegebene Gruppenwerte.', context: {
+    calcium: { mean: 700, sd: 247, unit: 'mg/day' },
+    protein: { mean: 58, sd: 14, unit: 'g/day' },
+    percentages: [{ intervention: 3.7, control: 5.2, unit: '%' }, { intervention: 1.3, control: 2.4, unit: '%' }, { intervention: 57, control: 62, unit: '%' }, { intervention: 27, control: 28, unit: '%' }],
+    metadata: { n: 41, year: 2021, id: 123, unit: 'mg' },
+    unrecognized: { lower: 0.48, upper: 0.93, unit: '%' },
+    invalid: { mean: '701', sd: null, intervention: Infinity, control: NaN, unit: 'mg' },
+    parent: { unit: 'mg', child: { mean: 702 } },
+    siblings: { amount: { sd: 703 }, units: { unit: 'mg' } },
+    participants: { intervention: 3301, control: 3894, unit: 'participants' },
+  } }] }
+  assert.doesNotThrow(() => validateNumberUnitTokens(article, factsPackage, '700 mg, 247 mg, 58 g, 14 g, 3,7 %, 5,2 %, 1,3 %, 2,4 %, 57 %, 62 %, 27 % und 28 %.'))
+  for (const unbound of ['700 g', '58 mg', '701 mg', '0 mg', '41 mg', '2021 mg', '123 mg', '702 mg', '703 mg', '3301 mg', '0,48 %', '4 %', '3,70 mg', '246 mg']) {
+    assert.throws(() => validateNumberUnitTokens(article, factsPackage, unbound), /quantity\/unit tokens not present/)
+  }
+})
+
 test('release SEO duplicate grouping reports every colliding article deterministically', () => {
   const compiled = [
     { article: { article_id: 'article-c' }, compiled: { seo: { meta_title: 'Gleicher Titel', meta_description: 'Gleicher Text' } } },
