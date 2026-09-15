@@ -47,9 +47,13 @@ bisherige Zehntklässler-Vorgabe des Qualitätsvertrags.
 
 Die Research-Reconciliation-Erweiterung ist implementiert: sechs gezielte
 Tests und unabhängiger technischer Review bestanden. Der festgestellte
-Verzeichnisalias-Sonderfall ist behoben und separat getestet. Release läuft;
-noch keine neue Artikelpublikation. Paket D ist jetzt60/60 vollständig gelesen
-(42 neue Lektüren); Paket E und das disjunkte Paket F laufen weiter.
+Verzeichnisalias-Sonderfall ist behoben und separat getestet. Commit `6d513b2`,
+CI `34955364961`, Deployment `34955365039` und gezielter Live-Readback PASS.
+GitHub lieferte beim PR-Anlegen GraphQL-/REST-HTTP500; der dokumentierte
+Git-Push-main-Release wurde genutzt. Keine neue Artikelpublikation.
+Jetzt384Quellenartikel vollständig gelesen: initial13,A60,B60,C60,D60,E60,
+F25,G28,H18;362offen. Neue echte Researchorder `820911dc…` bindet22Originale
+und gezielte Lücken; zwei der drei offenen unabhängigen DGE-Factsreviews laufen.
 Die übernommenen Originaldateien bleiben bytegleich; Transferbeleg und Review
 liegen unter `.agent-memory/wissensinventar-20260914/`.
 
