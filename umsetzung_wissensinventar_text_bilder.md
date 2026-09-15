@@ -56,7 +56,8 @@ UniqueScope/Hashbindungen validiert. Inventar:459 Korrekturpflicht,287 keine Pfl
 keine ungeklärte Zuordnung. Alle 287 unveränderten Kandidaten aktuell in D1 und
 öffentlich abgeglichen: Text-UX-Untergrenze ≥7, technisches SEO 282×100 und 5×90.
 Die fünf fehlenden Hauptartikel-Rücklinks sind nicht blockierende Restpunkte.
-Beleg: unchanged-source-acceptance.json; mit DGE und LPI jetzt289/790 abgeschlossen.
+Beleg: unchanged-source-acceptance.json; mit DGE, LPI, Iuliano, Cappellani und
+NNR-Calcium jetzt292/790 abgeschlossen.
 Ein vollständiger überarbeiteter Einzelabschluss: DGE-Referenzwerte,
 UX8/10 unabhängig, technischerSEO100/100 nach tatsächlichen sechsAuditkategorien,
 Child/ParentCOMPLETE und öffentlichMATCH. IndexabilityReceipt2b0390e8…;
@@ -70,8 +71,18 @@ Roh-HTML, Sitemap/Robots und Wissensbadges MATCH, technisches SEO100/100.
 Release0158e0ad…, Publishreceipt47cc22b3…, Parent/ChildCOMPLETE.
 Compilerfehler für verschachtelte geprüfte Mengen eng behoben, unabhängig geprüft
 und über PR38/79c5327 veröffentlicht; CI/Deploy PASS, Pages53fdc09b.
-Calcium: Research terminal, Coverage prüft echte Originale und konkrete Abruflücken;
-Cookie-/JS-Challenges werden ausdrücklich nicht als Originalabstract akzeptiert.
+Iuliano (UX7,5), Cappellani (UX8) und NNR-Calcium (UX8) sind nach unabhängigen
+Reviews geschützt veröffentlicht; alle drei technischen SEO-Nachweise100/100.
+PR40/2520098 erhält lesbare Originalquellenlinks bei exakter bibliografischer
+Identität. PR-/Main-CI und Deploy34967693614 PASS, Pagesa646518b; einmaliger
+Browserstartfehler im Main-CI nach gezieltem Failed-Job-Rerun behoben.
+Die vorherige Iuliano-Publikation und ihr SEO80-Fehlerbeleg bleiben unverändert;
+ein eigener geprüfter Recovery-Release schließt die Linkkorrektur ab.
+Calcium-Gesamtplan bleibt wissenschaftlich blockiert: Cookie-/JS-Challenges
+werden ausdrücklich nicht als Originalabstract akzeptiert. Das echte
+Huo-Supplement wurde inzwischen beschafft; die Baron-/Chapuy-Verweisabweichung
+bleibt konkret dokumentiert, ohne stille Zuordnung von Ereigniszahlen.
+Nächster notwendiger Scope: getrennte NCCIH-Patienten- und Fachquellenartikel.
 Die präzise Liste aller18offenenBildaufträge liegt in
 [offene_bildauftraege_wissensartikel.md](offene_bildauftraege_wissensartikel.md).
 Erstellung/Integration bleiben im jeweiligenFactsgebundenenWriterauftrag.

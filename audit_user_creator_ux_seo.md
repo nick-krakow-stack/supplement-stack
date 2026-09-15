@@ -680,13 +680,20 @@ Einzelbindungen stehen in `article-completions.json` im selben Verzeichnis.
 LPI ist ebenfalls überarbeitet und unabhängig mit 8/10 bewertet, geschützt
 veröffentlicht und mit technischem SEO100 bestätigt; Belege im Verzeichnis
 `alpha-liponsaeure-lpi-v2/state/publish` und `lpi-seo-score-readback.json`.
-Damit sind 289/790 Zeilen abgeschlossen. Die übrigen bleiben offen.
+Iuliano (Text-UX 7,5/10), Cappellani (8/10) und NNR-Calcium (8/10) sind ebenfalls
+geschützt veröffentlicht und jeweils mit technischem SEO100 bestätigt.
+Die Originalverknüpfungen wurden identitätsgebunden erhalten; die historischen
+Iuliano-Fehlerbelege bleiben neben dem erfolgreichen Recovery-Nachweis bestehen.
+Einzelbelege: `iuliano-reference-seo-score-readback.json`,
+`cappellani-reference-seo-score-readback.json`, `nnr-seo-score-readback.json`
+und die gebundenen Release-/Reviewpfade in `article-completions.json`.
+Damit sind 292/790 Zeilen abgeschlossen. Die übrigen bleiben offen.
 
 | Erledigt | Pfad | Typ | Text-UX ★ | SEO |
 |---|---|---|---:|---:|
 | [ ] | `/wissen/alkoholkonsumstorungen-diagnose-und-behandlung-korperliche-014` | Studie/Quelle | 5 | 83 |
 | [ ] | `/wissen/alpha-liponsaeure` | Hauptartikel | 8 | 86 |
-| [ ] | `/wissen/alpha-liponsaeure-cappellani-ias-case-review-2018` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/alpha-liponsaeure-cappellani-ias-case-review-2018` | Studie/Quelle | 8 | 100 |
 | [x] | `/wissen/alpha-liponsaeure-carlson-sodium-r-lipoate-pk-2007` | Studie/Quelle | ≥7 | 100 |
 | [x] | `/wissen/alpha-liponsaeure-cochrane-dpn-2024` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/alpha-liponsaeure-de-oliveira-safety-review-2020` | Studie/Quelle | 7 | 83 |
@@ -712,10 +719,10 @@ Damit sind 289/790 Zeilen abgeschlossen. Die übrigen bleiben offen.
 | [ ] | `/wissen/bioverfuegbarkeit-kommerzieller-magnesiumpraeparate` | Studie/Quelle | 6 | 83 |
 | [ ] | `/wissen/calcium` | Hauptartikel | 7 | 86 |
 | [x] | `/wissen/calcium-bedarf-who-fao-2004` | Studie/Quelle | ≥7 | 100 |
-| [ ] | `/wissen/calcium-ernaehrungsempfehlungen-nnr-2023` | Studie/Quelle | 6 | 83 |
+| [x] | `/wissen/calcium-ernaehrungsempfehlungen-nnr-2023` | Studie/Quelle | 8 | 100 |
 | [x] | `/wissen/calcium-fachinformationen-nih` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/calcium-kardiovaskulaeres-risiko-huo-2023` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/calcium-lebensmittel-pflegeeinrichtungen-iuliano-2021` | Studie/Quelle | 6 | 83 |
+| [x] | `/wissen/calcium-lebensmittel-pflegeeinrichtungen-iuliano-2021` | Studie/Quelle | 7,5 | 100 |
 | [x] | `/wissen/calcium-levothyroxin-interaktion-zamfirescu-2011` | Studie/Quelle | ≥7 | 100 |
 | [x] | `/wissen/calcium-meta-masse-2026` | Studie/Quelle | ≥7 | 100 |
 | [x] | `/wissen/calcium-nierensteine-ernaehrung-taylor-2013` | Studie/Quelle | ≥7 | 100 |
