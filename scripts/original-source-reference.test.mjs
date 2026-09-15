@@ -51,3 +51,35 @@ test('original reference rejects mismatches and non-exact PMC transport variants
   ]
   for (const patch of invalid) assert.throws(() => projectVisibleSourceV2({ ...good, ...patch }), /invalid or mismatched PMC original-reference pair/)
 })
+
+test('Nordic chapter reference binds the reviewed official NNR2023 calcium chapter without changing PDF evidence', () => {
+  const input = { ...source(), source_id: 'nnr2023-calcium', url: 'https://pub.norden.org/nord2023-003/files/691f2f1d3e29c_calcium.pdf', canonical_url: 'https://pub.norden.org/nord2023-003/calcium.html' }
+  const before = JSON.stringify(input)
+  const projection = projectVisibleSourceV2(input)
+  assert.equal(projection.source_url, input.canonical_url)
+  assert.equal(projection.source_content_hash, input.source_content_hash)
+  assert.equal(projection.label, input.label)
+  assert.equal(JSON.stringify(input), before)
+  assert.equal(projectVisibleSourceV2({ ...input, canonical_url: input.url }).source_url, input.url)
+  const invalid = [
+    { canonical_url: input.canonical_url.replace('calcium', 'potassium') },
+    { url: input.url.replace('_calcium', '_potassium') },
+    { canonical_url: input.canonical_url.replace('2023', '2024') },
+    { url: input.url.replace('2023', '2024') },
+    { canonical_url: input.canonical_url.replace('pub.norden.org', 'example.org') },
+    { url: input.url.replace('pub.norden.org', 'pub.norden.org.evil.example') },
+    { canonical_url: input.canonical_url + '?redirect=other' },
+    { url: input.url + '?download=1' },
+    { canonical_url: input.canonical_url + '#chapter' },
+    { url: input.url + '#page=1' },
+    { url: input.url.replace('https://', 'https://user:secret@') },
+    { canonical_url: input.canonical_url.replace('https://', 'https://user:secret@') },
+    { url: input.url.replace('.org/', '.org:443/') },
+    { canonical_url: input.canonical_url.replace('.org/', '.org:443/') },
+    { url: input.url.replace('https:', 'http:') },
+    { canonical_url: input.canonical_url.replace('https:', 'http:') },
+    { url: input.url.replace('_calcium.pdf', '_calcium.pdf/extra') },
+    { url: input.url.replace('691f2f1d3e29c_', 'unknown_') },
+  ]
+  for (const patch of invalid) assert.throws(() => projectVisibleSourceV2({ ...input, ...patch }), /invalid or mismatched Nordic chapter-reference pair/)
+})

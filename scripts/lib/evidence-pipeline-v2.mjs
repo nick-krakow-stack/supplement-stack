@@ -889,6 +889,16 @@ function originalReferenceUrl(source) {
   // Only this exact, same-PMCID transport pair has a deterministic identity proof.
   let acquisitionHost, canonicalHost
   try { acquisitionHost = new URL(acquisitionUrl).hostname; canonicalHost = new URL(canonicalUrl).hostname } catch { return acquisitionUrl }
+  const nordicChapterPair = /\.pdf/i.test(acquisitionUrl)
+    && (acquisitionHost === 'pub.norden.org' || canonicalHost === 'pub.norden.org')
+  if (nordicChapterPair) {
+    // This reviewed publisher/edition/chapter pair identifies a bibliographic chapter,
+    // not identical HTML text or a replacement for the frozen PDF evidence bytes.
+    const acquiredChapter = acquisitionUrl.match(/^https:\/\/pub\.norden\.org\/(nord2023-003)\/files\/[a-f0-9]{13}_(calcium)\.pdf$/)
+    const referencedChapter = canonicalUrl.match(/^https:\/\/pub\.norden\.org\/(nord2023-003)\/(calcium)\.html$/)
+    if (!acquiredChapter || !referencedChapter || acquiredChapter[1] !== referencedChapter[1] || acquiredChapter[2] !== referencedChapter[2]) fail(`source ${source.source_id} has an invalid or mismatched Nordic chapter-reference pair`)
+    return canonicalUrl
+  }
   const pmcXmlPair = /fullTextXML/i.test(acquisitionUrl)
     && (acquisitionHost === 'www.ebi.ac.uk' || canonicalHost === 'pmc.ncbi.nlm.nih.gov')
   if (!pmcXmlPair) return acquisitionUrl
