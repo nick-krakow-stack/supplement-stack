@@ -119,6 +119,104 @@ test('technical SEO gives a short exact Stage-2 source H1 deterministic context'
   assert.equal(seo.meta_title, 'Kalium: Originalquelle')
 })
 
+function sourceTitleSeoFixture() {
+  return {
+    context: { linkInventory: { routes: [] } },
+    article: { article_id: 'source-candidate', slug: 'source-candidate', stage: 'stage2' },
+    factsPackage: {
+      language: 'de', substance: { slug: 'calcium' },
+      source_assignment: { anchor_source_id: 'who' },
+      visible_sources: [{ source_id: 'who', author_or_institution: 'World Health Organization', publication_year: 2025 }],
+      selected_link_slice: { links: [{ path: '/wissen/calcium', title: 'Calcium: Funktionen, Bedarf, Quellen, Evidenz und Sicherheit' }] },
+      seo_brief: { primary_intent: 'Originalquelle verstehen', internal_link_targets: [] },
+    },
+    publishPayload: { title: 'Präeklampsie', dek: 'Die WHO erklärt Präeklampsie, Vorsorge und Risiken anhand der gebundenen Originalquelle.' },
+  }
+}
+
+test('source title SEO preserves the WHO original identity and immutable H1 and description', () => {
+  const input = sourceTitleSeoFixture()
+  const before = structuredClone(input)
+  const seo = buildTechnicalSeo(input)
+  assert.equal(seo.meta_title, 'Präeklampsie — World Health Organization (2025)')
+  assert.equal(seo.json_ld.headline, seo.meta_title)
+  assert.equal(seo.meta_description, input.publishPayload.dek)
+  assert.deepEqual(input, before)
+  const nextEdition = structuredClone(input)
+  nextEdition.factsPackage.visible_sources[0].publication_year = 2024
+  assert.notEqual(buildTechnicalSeo(nextEdition).meta_title, seo.meta_title)
+  const nextInstitution = structuredClone(input)
+  nextInstitution.factsPackage.visible_sources[0].author_or_institution = 'Andere Institution'
+  assert.notEqual(buildTechnicalSeo(nextInstitution).meta_title, seo.meta_title)
+})
+
+test('source title SEO uses only one exact anchor and omits unbound metadata', () => {
+  const input = sourceTitleSeoFixture()
+  input.factsPackage.visible_sources.unshift({ source_id: 'unrelated', author_or_institution: 'Falsche Institution', publication_year: 2020 })
+  assert.equal(buildTechnicalSeo(input).meta_title, 'Präeklampsie — World Health Organization (2025)')
+  delete input.factsPackage.visible_sources[1].publication_year
+  assert.equal(buildTechnicalSeo(input).meta_title, 'Präeklampsie — World Health Organization')
+  delete input.factsPackage.visible_sources[1].author_or_institution
+  assert.equal(buildTechnicalSeo(input).meta_title, 'Präeklampsie: Originalquelle')
+  input.factsPackage.visible_sources[1].publication_year = 2025
+  assert.equal(buildTechnicalSeo(input).meta_title, 'Präeklampsie — Originalquelle (2025)')
+  for (const anchor of [undefined, 'missing']) {
+    input.factsPackage.source_assignment.anchor_source_id = anchor
+    assert.equal(buildTechnicalSeo(input).meta_title, 'Präeklampsie: Originalquelle')
+  }
+  input.factsPackage.source_assignment.anchor_source_id = 'who'
+  input.factsPackage.visible_sources.push({ source_id: 'who', author_or_institution: 'Ambiguous' })
+  assert.equal(buildTechnicalSeo(input).meta_title, 'Präeklampsie: Originalquelle')
+})
+
+test('source title SEO reserves original title and year when institution context is long', () => {
+  const input = sourceTitleSeoFixture()
+  input.factsPackage.visible_sources[0].author_or_institution = 'Eine sehr lange vollständig quellengebundene Institution mit zahlreichen zusätzlichen Namensbestandteilen'
+  const seo = buildTechnicalSeo(input)
+  assert.ok(seo.meta_title.startsWith('Präeklampsie — Eine sehr lange'))
+  assert.ok(seo.meta_title.endsWith('… (2025)'))
+  assert.ok(seo.meta_title.length >= 15 && seo.meta_title.length <= 70)
+  assert.equal(seo.json_ld.headline, seo.meta_title)
+})
+
+test('source title SEO resolves live collisions with anchor context and rejects remaining collisions', () => {
+  const input = sourceTitleSeoFixture()
+  input.publishPayload.title = 'Präeklampsie und Vorsorge'
+  input.context.linkInventory.routes = [{ slug: 'live', path: '/wissen/live', meta_title: input.publishPayload.title }]
+  const seo = buildTechnicalSeo(input)
+  assert.equal(seo.meta_title, 'Präeklampsie und Vorsorge — World Health Organization (2025)')
+  input.context.linkInventory.routes.push({ slug: 'other', path: '/wissen/other', meta_title: seo.meta_title })
+  assert.throws(() => buildTechnicalSeo(input), /SEO title duplicates live route/)
+  const short = sourceTitleSeoFixture()
+  short.context.linkInventory.routes = [{ slug: 'other', path: '/wissen/other', meta_title: buildTechnicalSeo(short).meta_title }]
+  assert.throws(() => buildTechnicalSeo(short), /SEO title duplicates live route/)
+})
+
+test('source title SEO leaves regular Stage-2 and Stage-3 titles and strict guards unchanged', () => {
+  const input = sourceTitleSeoFixture()
+  input.publishPayload.title = 'Ein unveränderter ausreichend langer Originaltitel'
+  for (const stage of ['stage2', 'stage3']) {
+    input.article.stage = stage
+    assert.equal(buildTechnicalSeo(input).meta_title, technicalMetaTitleV2(input.publishPayload.title))
+  }
+  input.context.linkInventory.routes = [{ slug: 'other', path: '/wissen/other', meta_title: input.publishPayload.title }]
+  assert.throws(() => buildTechnicalSeo(input), /SEO title duplicates live route/)
+  input.context.linkInventory.routes = []
+  input.publishPayload.title = 'Kalium'
+  assert.throws(() => buildTechnicalSeo(input), /SEO title length/)
+  input.article.stage = 'stage2'
+  input.publishPayload.dek = 'Zu kurz'
+  assert.throws(() => buildTechnicalSeo(input), /SEO description length/)
+})
+
+test('source title SEO retains same-release collision detection without invented differentiators', () => {
+  const first = sourceTitleSeoFixture()
+  const second = sourceTitleSeoFixture()
+  second.article.article_id = second.article.slug = 'second-source'
+  const groups = findDuplicateReleaseSeoGroupsV2([first, second].map(input => ({ article: input.article, compiled: { seo: buildTechnicalSeo(input) } })))
+  assert.deepEqual(groups.find(group => group.field === 'meta_title').article_ids, ['second-source', 'source-candidate'])
+})
+
 test('live SEO collision guard compares the persisted technical meta title with legacy H1 fallback', () => {
   const technicalTitle = 'Gemeinsamer gekürzter Studientitel…'
   const technicalCollision = { slug: 'live-a', title: 'Ein anderer und deutlich längerer sichtbarer H1', meta_title: technicalTitle }

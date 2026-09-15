@@ -693,7 +693,11 @@ Sein eigenständiges zweites Original wird zusätzlich im neuen Fachartikel
 SEO90; Hauptartikel-Rücklink noch offen). Dieser Zusatzartikel zählt nicht als
 Abschluss einer ursprünglichen Inventarzeile; sein Nachweis steht separat in
 `additional-carrier-completions.json` und `nccih-provider-seo-score-readback.json`.
-Damit sind 293/790 Bestandszeilen sowie ein zusätzlicher Quellenartikel
+Die DGE-Artikel zu Vitamin B12 (Text-UX7,5/10) und Vitamin D (8/10) sowie
+der NCCIH-Artikel zu Traubenkernextrakt (7/10) sind geschützt veröffentlicht.
+Alle drei erreichen technischen SEO100/100; ihre vollständigen Review-/Release-
+und Readbackbindungen stehen in `article-completions.json`.
+Damit sind 296/790 Bestandszeilen sowie ein zusätzlicher Quellenartikel
 abgeschlossen. Die übrigen bleiben offen.
 
 | Erledigt | Pfad | Typ | Text-UX ★ | SEO |
@@ -1068,7 +1072,7 @@ abgeschlossen. Die übrigen bleiben offen.
 | [ ] | `/wissen/opc-harnly-grape-polyphenol-standardization-2021` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/opc-health-canada-nhp-monograph-2024` | Studie/Quelle | 6 | 83 |
 | [ ] | `/wissen/opc-health-canada-safety-assessment-2024` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/opc-nccih-grape-seed-safety-2025` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/opc-nccih-grape-seed-safety-2025` | Studie/Quelle | 7 | 100 |
 | [ ] | `/wissen/opc-ren-proanthocyanidins-blood-pressure-2020` | Studie/Quelle | 7 | 83 |
 | [x] | `/wissen/opc-robertson-pine-bark-cochrane-2020` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/opc-sica-gse-quality-characterization-2018` | Studie/Quelle | 7 | 83 |
@@ -1281,7 +1285,7 @@ abgeschlossen. Die übrigen bleiben offen.
 | [ ] | `/wissen/vitamin-b12` | Hauptartikel | 7 | 86 |
 | [ ] | `/wissen/vitamin-b12-5-deoxyadenosylcobalamin-and-methylcobalamin-as-sources-fo-441` | Studie/Quelle | 6 | 83 |
 | [ ] | `/wissen/vitamin-b12-a-systematic-review-and-meta-analysis-of-functional-vitami-468` | Studie/Quelle | 5 | 83 |
-| [ ] | `/wissen/vitamin-b12-ausgewahlte-fragen-und-antworten-zu-vitamin-b12-435` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/vitamin-b12-ausgewahlte-fragen-und-antworten-zu-vitamin-b12-435` | Studie/Quelle | 7,5 | 100 |
 | [ ] | `/wissen/vitamin-b12-cancer-incidence-and-mortality-after-treatment-with-folic-489` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/vitamin-b12-clinical-practice-vitamin-b12-deficiency-458` | Studie/Quelle | 6 | 83 |
 | [x] | `/wissen/vitamin-b12-cobalamin-coenzyme-forms-are-not-likely-to-be-superior-to-479` | Studie/Quelle | ≥7 | 100 |
@@ -1360,7 +1364,7 @@ abgeschlossen. Die übrigen bleiben offen.
 | [x] | `/wissen/vitamin-d-bfr-hoechstmengen` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/vitamin-d-calcifediol-cholecalciferol` | Studie/Quelle | 6 | 83 |
 | [ ] | `/wissen/vitamin-d-calcium-frakturen-stuerze` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/vitamin-d-dge-referenzwerte` | Studie/Quelle | 6 | 83 |
+| [x] | `/wissen/vitamin-d-dge-referenzwerte` | Studie/Quelle | 8 | 100 |
 | [ ] | `/wissen/vitamin-d-dge-versorgung` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/vitamin-d-diabetes-praevention-d2d` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/vitamin-d-efsa-obergrenze-sicherheit` | Studie/Quelle | 5 | 83 |

@@ -660,12 +660,31 @@ function technicalMetaTitleV2(value, contextPrefix = null) {
   const normalized = prefix
     ? (seoComparisonKeyV2(prefix) === seoComparisonKeyV2(visibleTitle) ? `${visibleTitle}: Originalquelle` : `${prefix}: ${visibleTitle}`)
     : visibleTitle
-  if (normalized.length <= 70) return normalized
-  const maximumStemLength = 69
+  return shortenTechnicalSeoTitle(normalized, 70)
+}
+
+function shortenTechnicalSeoTitle(normalized, maximumLength) {
+  if (normalized.length <= maximumLength) return normalized
+  const maximumStemLength = maximumLength - 1
   const candidate = normalized.slice(0, maximumStemLength + 1)
   const boundary = candidate.lastIndexOf(' ')
   const stem = (boundary >= 14 ? candidate.slice(0, boundary) : normalized.slice(0, maximumStemLength)).trimEnd()
   return `${stem}…`.normalize('NFC')
+}
+
+function sourceContextMetaTitle(factsPackage, title) {
+  const visibleTitle = normalizeVisibleSeoTextV2(title)
+  const anchorId = factsPackage.source_assignment?.anchor_source_id
+  const anchors = anchorId ? (factsPackage.visible_sources ?? []).filter(source => source.source_id === anchorId) : []
+  const source = anchors.length === 1 ? anchors[0] : null
+  const institution = typeof source?.author_or_institution === 'string' ? normalizeVisibleSeoTextV2(source.author_or_institution) : ''
+  const year = Number.isInteger(source?.publication_year) && source.publication_year >= 1000 && source.publication_year <= new Date().getUTCFullYear() ? ` (${source.publication_year})` : ''
+  if (!institution && !year) return technicalMetaTitleV2(`${visibleTitle}: Originalquelle`)
+  // Reserve room for both identities. Long institution names cannot displace the
+  // original title, and the year remains available to distinguish editions.
+  const contextBudget = 70 - Math.min(visibleTitle.length, 35) - 3
+  const suffix = shortenTechnicalSeoTitle(institution || 'Originalquelle', contextBudget - year.length) + year
+  return `${shortenTechnicalSeoTitle(visibleTitle, 70 - suffix.length - 3)} — ${suffix}`
 }
 
 function seoComparisonKeyV2(value) {
@@ -680,23 +699,17 @@ function findDuplicateLiveSeoTitleV2(routes, slug, metaTitle) {
 function buildTechnicalSeo({ context, article, factsPackage, publishPayload }) {
   let metaTitle = technicalMetaTitleV2(publishPayload.title)
   const metaDescription = normalizeVisibleSeoTextV2(publishPayload.dek)
-  const substancePath = `/wissen/${factsPackage.substance?.slug ?? ''}`
-  const substanceTitle = article.stage === 'stage2'
-    ? (factsPackage.selected_link_slice?.links?.find((link) => link.path === substancePath)?.title ?? null)
-    : null
   if (metaTitle.length < 15 && article.stage === 'stage2') {
-    metaTitle = technicalMetaTitleV2(publishPayload.title, substanceTitle ?? publishPayload.title)
+    metaTitle = sourceContextMetaTitle(factsPackage, publishPayload.title)
   }
-  if (metaTitle.length < 15 || metaTitle.length > 70) fail(`${article.article_id} SEO title length must be 15..70 characters`)
   if (metaDescription.length < 40 || metaDescription.length > 180) fail(`${article.article_id} SEO description length must be 40..180 characters`)
-  if (metaTitle.toLocaleLowerCase('de-DE') === metaDescription.toLocaleLowerCase('de-DE')) fail(`${article.article_id} SEO title and description must be distinct`)
   let duplicateLiveTitle = findDuplicateLiveSeoTitleV2(context.linkInventory?.routes ?? [], article.slug, metaTitle)
   if (duplicateLiveTitle && article.stage === 'stage2') {
-    if (substanceTitle) {
-      metaTitle = technicalMetaTitleV2(publishPayload.title, substanceTitle)
-      duplicateLiveTitle = findDuplicateLiveSeoTitleV2(context.linkInventory?.routes ?? [], article.slug, metaTitle)
-    }
+    metaTitle = sourceContextMetaTitle(factsPackage, publishPayload.title)
+    duplicateLiveTitle = findDuplicateLiveSeoTitleV2(context.linkInventory?.routes ?? [], article.slug, metaTitle)
   }
+  if (metaTitle.length < 15 || metaTitle.length > 70) fail(`${article.article_id} SEO title length must be 15..70 characters`)
+  if (metaTitle.toLocaleLowerCase('de-DE') === metaDescription.toLocaleLowerCase('de-DE')) fail(`${article.article_id} SEO title and description must be distinct`)
   if (duplicateLiveTitle) fail(`${article.article_id} SEO title duplicates live route ${duplicateLiveTitle.path}`)
   const duplicateLiveDescription = (context.linkInventory?.routes ?? []).find((route) => route.slug !== article.slug && route.meta_description && seoComparisonKeyV2(route.meta_description) === seoComparisonKeyV2(metaDescription))
   if (duplicateLiveDescription) fail(`${article.article_id} SEO description duplicates live route ${duplicateLiveDescription.path}`)
