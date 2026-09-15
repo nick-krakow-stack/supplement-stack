@@ -72,3 +72,5 @@ jobs:
         run: node --test --test-name-pattern="research reconciliation" scripts/run-nutrient-content.test.mjs
       - name: Verify approved structured fact quantities
         run: node --test --test-name-pattern="quantity guard" scripts/run-nutrient-content.test.mjs
+      - name: Verify identity-bound original source references
+        run: node --test scripts/original-source-reference.test.mjs

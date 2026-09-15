@@ -881,9 +881,26 @@ function validateReviewsV2({ input, bundle, sample, previousSample = null, candi
   return { status: failures.length ? 'fail' : 'pass', reviews, reviewerIds, failures, carriedForward: [...carried.values()] }
 }
 
+function originalReferenceUrl(source) {
+  const acquisitionUrl = source.url
+  const canonicalUrl = source.canonical_url ?? acquisitionUrl
+  if (canonicalUrl === acquisitionUrl) return acquisitionUrl
+  // A canonical URL is normally catalogue identity, not permission to replace a locator.
+  // Only this exact, same-PMCID transport pair has a deterministic identity proof.
+  let acquisitionHost, canonicalHost
+  try { acquisitionHost = new URL(acquisitionUrl).hostname; canonicalHost = new URL(canonicalUrl).hostname } catch { return acquisitionUrl }
+  const pmcXmlPair = /fullTextXML/i.test(acquisitionUrl)
+    && (acquisitionHost === 'www.ebi.ac.uk' || canonicalHost === 'pmc.ncbi.nlm.nih.gov')
+  if (!pmcXmlPair) return acquisitionUrl
+  const acquired = acquisitionUrl.match(/^https:\/\/www\.ebi\.ac\.uk\/europepmc\/webservices\/rest\/(PMC[1-9][0-9]*)\/fullTextXML$/)
+  const referenced = canonicalUrl.match(/^https:\/\/pmc\.ncbi\.nlm\.nih\.gov\/articles\/(PMC[1-9][0-9]*)\/$/)
+  if (!acquired || !referenced || acquired[1] !== referenced[1]) fail(`source ${source.source_id} has an invalid or mismatched PMC original-reference pair`)
+  return canonicalUrl
+}
+
 function visibleSource(source) {
   return {
-    source_id: source.source_id, source_type: source.source_type, label: source.label, source_url: source.url,
+    source_id: source.source_id, source_type: source.source_type, label: source.label, source_url: originalReferenceUrl(source),
     author_or_institution: source.author_or_institution, publication_year: source.publication_year, title: source.title, journal_or_publisher: source.journal_or_publisher,
     canonical_url: source.canonical_url ?? source.url, doi: source.doi ?? null, pubmed_id: source.pmid ?? source.pubmed_id ?? null,
     source_content_hash: source.source_content_hash,
@@ -1354,4 +1371,4 @@ export function validateFactsPackageForImportV2({ packageValue, stage, articleId
 }
 
 export const EVIDENCE_V2_REPO_ROOT = REPO_ROOT
-export { artifactHash as artifactHashV2 }
+export { artifactHash as artifactHashV2, visibleSource as projectVisibleSourceV2 }
