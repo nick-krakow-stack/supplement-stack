@@ -640,10 +640,11 @@ function structuredFactQuantityKey(fact) {
 
 function structuredContextQuantityKeys(value) {
   if (value === null || typeof value !== 'object') return []
-  // Only a numeric value and its unit on the same object authorize a quantity.
+  // Only documented magnitude fields and their unit on the same object authorize a quantity.
   // Nested prose, bare numbers and units from sibling objects add no authority.
-  const key = Array.isArray(value) ? null : structuredFactQuantityKey(value)
-  return [...(key ? [key] : []), ...Object.values(value).flatMap(structuredContextQuantityKeys)]
+  const keys = Array.isArray(value) ? [] : ['value', 'mean', 'sd', 'intervention', 'control']
+    .map((field) => structuredFactQuantityKey({ value: value[field], unit: value.unit })).filter(Boolean)
+  return [...keys, ...Object.values(value).flatMap(structuredContextQuantityKeys)]
 }
 
 function normalizeVisibleSeoTextV2(value) {
