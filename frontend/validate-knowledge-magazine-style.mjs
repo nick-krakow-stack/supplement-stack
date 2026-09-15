@@ -2099,7 +2099,11 @@ export function assessRawHtmlReadback(readback, expected) {
   if (htmlTransportMatches) {
     try { document = new JSDOM(readback.body, { url: readback.url }).window.document; } catch {}
   }
-  const rawText = normalizedDocumentText(document?.body?.textContent);
+  const rawBody = document?.body?.cloneNode(true);
+  // Match semanticSectionText's structural separators without splitting inline words.
+  rawBody?.querySelectorAll('p, li, h3, h4, th, td, tr, figcaption, [role="columnheader"], [role="cell"], .src-list__in > div, .faq-q')
+    .forEach((element) => element.append(document.createTextNode(' ')));
+  const rawText = normalizedDocumentText(rawBody?.textContent);
   const expectedTextSegments = [
     expected.expected_projection.h1,
     expected.expected_projection.dek,
