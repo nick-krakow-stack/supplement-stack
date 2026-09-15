@@ -663,6 +663,15 @@ Abschnitt 15. `86` gilt als SEO-Ausgangswert für Hauptartikel, `83` für
 Studien-/Quellenseiten. Jeder Pfad wird bei der Umsetzung und nach seinem
 öffentlichen Einzelreadback separat abgehakt.
 
+Einzelabschluss15.09.2026: DGE-Referenzwerte unabhängig redaktionell8/10,
+kanonisch veröffentlicht und einschließlich Desktop/Mobil sowie Roh-HTML
+vollständig geprüft. TechnischerSEO100/100 nach den sechs Kategorien;
+kein Rankingversprechen. Belege:
+`.agent-memory/wissensinventar-20260914/dge-seo-score-readback.json` und
+`alpha-liponsaeure-dge-v2/state/publish/indexability-release-receipt.v1.json`
+im selbenBelegverzeichnis. Die übrigen Zeilen bleiben bis zu ihrem tatsächlichen
+Einzelabschluss offen.
+
 | Erledigt | Pfad | Typ | Text-UX ★ | SEO |
 |---|---|---|---:|---:|
 | [ ] | `/wissen/alkoholkonsumstorungen-diagnose-und-behandlung-korperliche-014` | Studie/Quelle | 5 | 83 |
@@ -671,7 +680,7 @@ Studien-/Quellenseiten. Jeder Pfad wird bei der Umsetzung und nach seinem
 | [ ] | `/wissen/alpha-liponsaeure-carlson-sodium-r-lipoate-pk-2007` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/alpha-liponsaeure-cochrane-dpn-2024` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/alpha-liponsaeure-de-oliveira-safety-review-2020` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/alpha-liponsaeure-dge-reference-values-nonessentiality` | Studie/Quelle | 6 | 83 |
+| [x] | `/wissen/alpha-liponsaeure-dge-reference-values-nonessentiality` | Studie/Quelle | 8 | 100 |
 | [ ] | `/wissen/alpha-liponsaeure-dtu-food-supplement-safety` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/alpha-liponsaeure-efsa-ias-safety-2021` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/alpha-liponsaeure-ghalichi-overweight-obesity-meta-2025` | Studie/Quelle | 8 | 83 |

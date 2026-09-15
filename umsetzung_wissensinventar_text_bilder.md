@@ -51,9 +51,18 @@ Verzeichnisalias-Sonderfall ist behoben und separat getestet. Commit `6d513b2`,
 CI `34955364961`, Deployment `34955365039` und gezielter Live-Readback PASS.
 GitHub lieferte beim PR-Anlegen GraphQL-/REST-HTTP500; der dokumentierte
 Git-Push-main-Release wurde genutzt. Keine neue Artikelpublikation.
-Jetzt384Quellenartikel vollständig gelesen: initial13,A60,B60,C60,D60,E60,
-F25,G28,H18;362offen. Neue echte Researchorder `820911dc…` bindet22Originale
-und gezielte Lücken; zwei der drei offenen unabhängigen DGE-Factsreviews laufen.
+553Quellenartikel in abgeschlossenenPaketen vollständig gelesen (initial13,A–I je60);
+J/K laufen,193Rest. Ein vollständigerEinzelabschluss: DGE-Referenzwerte,
+UX8/10 unabhängig, technischerSEO100/100 nach tatsächlichen sechsAuditkategorien,
+Child/ParentCOMPLETE und öffentlichMATCH. IndexabilityReceipt2b0390e8…;
+Auditzeile abgeschlossen. PR36/805cd59Adoption deployedPASS; PR37/f1f3164 behebt den
+belegten RawHTML-Tabellenabstandsfehler,25Tests/ReviewPASS, CI/DeployPASS
+(Main34959111334,Deploy34959111358,Pages08da771b), LiveReadbackPASS.
+Research144Originalartefakte erhalten; ALAGesamtplanwissenschaftlichBLOCKED.
+LPI-EinzelSlice einebytegleicheSource, CoverageREADY,10Extraktionspflichten inArbeit.
+Die präzise Liste aller18offenenBildaufträge liegt in
+[offene_bildauftraege_wissensartikel.md](offene_bildauftraege_wissensartikel.md).
+Erstellung/Integration bleiben im jeweiligenFactsgebundenenWriterauftrag.
 Die übernommenen Originaldateien bleiben bytegleich; Transferbeleg und Review
 liegen unter `.agent-memory/wissensinventar-20260914/`.
 
