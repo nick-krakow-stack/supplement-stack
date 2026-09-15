@@ -3,6 +3,7 @@ import { dirname, relative, resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { fileURLToPath } from 'node:url'
 import { canonicalJsonHash, decodeUtf8Strict, sha256Bytes } from './content-validation.mjs'
+import { hasSourceArtifactBindingsV2, resolveSourceArtifactBindingsV2, sourceArtifactBindingsForV2 } from './source-artifact-bindings-v2.mjs'
 import {
   EVIDENCE_V2_REPO_ROOT,
   artifactHashV2,
@@ -517,6 +518,10 @@ function loadSourceArtifactReceipt(context) {
 }
 
 function coverageReceiptMismatch(coverage, receipt) {
+  if (hasSourceArtifactBindingsV2(coverage)) {
+    try { resolveSourceArtifactBindingsV2(coverage, receipt.value); return null }
+    catch (error) { return error.message }
+  }
   if (!sameSet(coverage.sources.map((entry) => entry.source_id), receipt.sources.map((entry) => entry.source_id))) return 'coverage sources differ from the frozen research source receipt'
   for (const source of coverage.sources) {
     const frozen = receipt.byId.get(source.source_id)
@@ -645,6 +650,14 @@ function repoOutput(name, path, { schema = null, mediaType = null } = {}) {
 
 function reusedSource(context, sourceId, path, contentHash) {
   return { source_id: sourceId, root: 'run', path: portablePath(context.root, path), byte_hash: sha256Bytes(readFileSync(path)), content_hash: contentHash }
+}
+
+function reusedEvidenceSources(context, input, sourceIds) {
+  if (!input.sourceArtifactBindings) return sourceIds.map(sourceId => reusedSource(context, sourceId, input.sourceArtifactPaths[sourceId], input.coveragePlan.sources.find(source => source.source_id === sourceId).source_content_hash))
+  return sourceArtifactBindingsForV2(input.sourceArtifactBindings, sourceIds).map(binding => ({
+    ...reusedSource(context, binding.artifact_id, resolveManifestPath(context.root, binding.path), binding.byte_hash),
+    artifact_id: binding.artifact_id, parent_source_id: binding.source_id, relationship: binding.relationship, locator: binding.locator, content_type: binding.content_type,
+  }))
 }
 
 function orderScope(mode, { sourceIds = [], clusterIds = [], obligationIds = [], articleIds = [] } = {}) {
@@ -1005,6 +1018,7 @@ function loadAssetDeployment(context, request, issuedWorkOrders) {
 
 function buildEvidenceManifest(context, coverage) {
   const receipt = context.sourceArtifactReceipt
+  const artifactBindings = hasSourceArtifactBindingsV2(coverage) ? resolveSourceArtifactBindingsV2(coverage, receipt.value, context.root) : null
   const plannedIds = new Set(plannedCoverageArticles(coverage).map((article) => article.article_id))
   const activeObligations = coverage.extraction_obligations.filter((obligation) => obligation.required_for.some((articleId) => plannedIds.has(articleId)))
   const sourceIds = [...new Set(activeObligations.map((obligation) => obligation.source_id))].sort()
@@ -1035,7 +1049,8 @@ function buildEvidenceManifest(context, coverage) {
     source_evidence_shard_paths: extractionSlices.map((slice) => slice.shard_path),
     source_facts_review_paths: reviewSlices.map((slice) => slice.path),
     source_facts_review_slices: reviewSlices,
-    source_artifacts: Object.fromEntries(sourceIds.map((sourceId) => [sourceId, portablePath(context.root, receipt.byId.get(sourceId).path)])),
+    source_artifacts: Object.fromEntries(sourceIds.map((sourceId) => [sourceId, portablePath(context.root, receipt.byId.get(coverage.sources.find(source => source.source_id === sourceId).artifact_id ?? sourceId).path)])),
+    ...(artifactBindings ? { source_artifact_bindings: sourceArtifactBindingsForV2(artifactBindings, sourceIds) } : {}),
     extraction_slices: extractionSlices,
     bundle_id: `bundle-${context.runId}`, sampling_seed: canonicalJsonHash({ run_id: context.runId, coverage_plan_hash: coverage.content_hash }),
     merger: { role: 'evidence-bundle-merger', id: `merger-${context.runId}` },
@@ -1536,7 +1551,7 @@ function extractionWorkOrders(context, evidenceInput, issuedWorkOrders, reason) 
     reason, scope: orderScope('obligations', { sourceIds: slice.source_ids, clusterIds: slice.cluster_ids, obligationIds: slice.obligation_ids }),
     assignee: { role: 'source-evidence-extractor', independent_from_ids: [] },
     inputs: [runInput(context, 'coverage_plan', context.coveragePlanPath, { contentHash: evidenceInput.coveragePlan.content_hash, schema: 'coverage_plan.v2' }), sourceArtifactReceiptInput(context), runInput(context, 'evidence_manifest', context.evidenceManifestPath, { contentHash: evidenceInput.manifest.content_hash, schema: 'evidence_pipeline_build.v2' })],
-    reused_sources: slice.source_ids.map((sourceId) => reusedSource(context, sourceId, evidenceInput.sourceArtifactPaths[sourceId], evidenceInput.coveragePlan.sources.find((source) => source.source_id === sourceId).source_content_hash)),
+    reused_sources: reusedEvidenceSources(context, evidenceInput, slice.source_ids),
     link_inventory: null,
     outputs: [runOutput(context, 'evidence_shard', slice.shard_path, { schema: 'source_evidence_shard.v2' })],
     task: { slice_id: slice.slice_id, sources: evidenceInput.coveragePlan.sources.filter((source) => slice.source_ids.includes(source.source_id)), obligations: evidenceInput.coveragePlan.extraction_obligations.filter((obligation) => slice.obligation_ids.includes(obligation.obligation_id)), missing_outputs: [portablePath(context.root, slice.shard_path)] },
@@ -1592,7 +1607,7 @@ function sourceExtractionRepairWorkOrders(context, evidenceInput, result, issued
         runInput(context, 'source_review_input', result.reviewInputPath, { contentHash: result.reviewInput.content_hash, schema: 'source_facts_review_input.v2' }),
         ...failedReviewInputs.map(({ path, value }, index) => runInput(context, `failed_source_review_${index}`, path, { contentHash: value.content_hash, schema: 'source_facts_review.v2' })),
       ],
-      reused_sources: slice.source_ids.map((sourceId) => reusedSource(context, sourceId, evidenceInput.sourceArtifactPaths[sourceId], evidenceInput.coveragePlan.sources.find((source) => source.source_id === sourceId).source_content_hash)),
+      reused_sources: reusedEvidenceSources(context, evidenceInput, slice.source_ids),
       link_inventory: null, outputs: [runOutput(context, 'evidence_shard', slice.shard_path, { schema: 'source_evidence_shard.v2' })],
       task: { slice_id: slice.slice_id, repair_generation: 1, predecessor_shard_hash: predecessor.content_hash, failure_fingerprint: failureFingerprint, failed_obligation_ids: slice.obligation_ids.filter((id) => failedObligationIds.includes(id)).sort(), bundled_findings: sliceFailures, required_repair_lineage: { work_order_id: 'issued_work_order_id', predecessor_shard_hash: predecessor.content_hash, failure_fingerprint: failureFingerprint, repair_generation: 1 } },
       constraints: { frozen_source_bytes_only: true, no_network_refetch: true, preserve_unaffected_obligations_exactly: true, replace_same_declared_shard_path: true, one_repair_generation_only: true },
@@ -1633,7 +1648,7 @@ function sourceReviewWorkOrders(context, evidenceInput, result, issuedWorkOrders
     scope: orderScope('obligations', { sourceIds: [...new Set(assignment.selections.map((selection) => selection.obligation_result.source_id))], clusterIds: [...new Set(assignment.selections.map((selection) => selection.obligation_result.cluster_id))], obligationIds: assignment.selections.map((selection) => selection.obligation_id) }),
     assignee: { role: 'source-facts-reviewer', independent_from_ids: result.bundle.extractors },
     inputs: [runInput(context, 'coverage_plan', context.coveragePlanPath, { contentHash: evidenceInput.coveragePlan.content_hash, schema: 'coverage_plan.v2' }), runInput(context, 'source_review_input', result.reviewInputPath, { contentHash: result.reviewInput.content_hash, schema: 'source_facts_review_input.v2' })],
-    reused_sources: [...new Set(assignment.selections.map((selection) => selection.obligation_result.source_id))].sort().map((sourceId) => reusedSource(context, sourceId, evidenceInput.sourceArtifactPaths[sourceId], evidenceInput.coveragePlan.sources.find((source) => source.source_id === sourceId).source_content_hash)),
+    reused_sources: reusedEvidenceSources(context, evidenceInput, [...new Set(assignment.selections.map((selection) => selection.obligation_result.source_id))].sort()),
     link_inventory: null, outputs: [runOutput(context, 'source_facts_review', assignment.path, { schema: 'source_facts_review.v2' })],
     task: { sampling_round: round, shard_id: assignment.shard_id, reviewer_slot: assignment.shard_id, selected: assignment.selections }, constraints: { independent_review: true, distinct_reviewer_id_per_concurrent_shard: true, original_sources_required: true },
     })

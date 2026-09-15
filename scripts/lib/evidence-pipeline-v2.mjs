@@ -3,6 +3,7 @@ import { dirname, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { canonicalJsonHash, decodeUtf8Strict, sha256Bytes } from './content-validation.mjs'
 import { assertContained, assertNoPathCollisions, assertSafeId, isContained, portablePath, resolveManifestPath } from './safe-paths.mjs'
+import { hasSourceArtifactBindingsV2, resolveSourceArtifactBindingsV2, sourceArtifactBindingsForV2, validateSourceArtifactBindingsHashV2 } from './source-artifact-bindings-v2.mjs'
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 const CATALOG_PATH = resolve(REPO_ROOT, 'codex-files/frameworks/framework-catalog.v1.json')
@@ -575,12 +576,23 @@ export function loadEvidenceManifestV2(manifestPath, expected = {}) {
   const sourceArtifactPaths = Object.fromEntries(Object.entries(raw.source_artifacts ?? {}).map(([id, path]) => [assertSafeId(id, `source_artifacts.${id}`), resolveManifestPath(root, path, `source_artifacts.${id}`)]))
   const slicedSourceIds = sorted(new Set(extractionSlices.flatMap((slice) => slice.source_ids)))
   if (!sameSet(Object.keys(sourceArtifactPaths), slicedSourceIds)) fail('source_artifacts must exactly map the source IDs assigned by extraction_slices')
+  let sourceArtifactBindings
+  if (hasSourceArtifactBindingsV2(coveragePlan)) {
+    const receipt = json(sourceArtifactReceiptPath, 'source artifact receipt')
+    if (receipt.content_hash !== raw.source_artifact_receipt_hash || receipt.content_hash !== artifactHash(receipt)) fail('source artifact receipt hash is stale')
+    sourceArtifactBindings = sourceArtifactBindingsForV2(resolveSourceArtifactBindingsV2(coveragePlan, receipt, root), slicedSourceIds)
+    if (canonicalJsonHash(raw.source_artifact_bindings ?? null) !== canonicalJsonHash(sourceArtifactBindings)) fail('manifest source artifact bindings differ from frozen coverage')
+    for (const binding of sourceArtifactBindings.filter(entry => entry.relationship === 'primary')) {
+      if (sourceArtifactPaths[binding.source_id] !== resolveManifestPath(root, binding.path)) fail('primary source artifact path differs from frozen receipt')
+    }
+  } else if (raw.source_artifact_bindings != null) fail('legacy coverage cannot declare attachment bindings')
   assertNoPathCollisions([
     { path: coveragePlanPath, label: 'coverage plan', kind: 'input' }, { path: researchPath, label: 'research', kind: 'input' }, { path: sourceArtifactReceiptPath, label: 'source artifact receipt', kind: 'input' },
     ...shardPaths.map((path, index) => ({ path, label: `shard ${index}`, kind: 'input' })), ...reviewPaths.map((path, index) => ({ path, label: `review ${index}`, kind: 'input' })),
     ...Object.entries(sourceArtifactPaths).map(([id, path]) => ({ path, label: `source ${id}`, kind: 'input' })),
+    ...(sourceArtifactBindings ?? []).filter(entry => entry.relationship !== 'primary').map(entry => ({ path: resolveManifestPath(root, entry.path), label: `attachment ${entry.artifact_id}`, kind: 'input' })),
   ])
-  return { absolute, root, mode, policyVersion, validatorVersion, manifest: raw, coveragePlanPath, researchPath, researchHash, sourceArtifactReceiptPath, sourceArtifactReceiptHash: raw.source_artifact_receipt_hash, coveragePlan, shardPaths, extractionSlices, reviewPaths, reviewSlices, sourceArtifactPaths }
+  return { absolute, root, mode, policyVersion, validatorVersion, manifest: raw, coveragePlanPath, researchPath, researchHash, sourceArtifactReceiptPath, sourceArtifactReceiptHash: raw.source_artifact_receipt_hash, coveragePlan, shardPaths, extractionSlices, reviewPaths, reviewSlices, sourceArtifactPaths, ...(sourceArtifactBindings ? { sourceArtifactBindings } : {}) }
 }
 
 function validateRecord(record, obligation, stage4Requested) {
@@ -687,6 +699,12 @@ export function mergeEvidenceV2(input) {
     extractorIds.add(extractorId); extractedAt.push(iso(shard.extracted_at, `shard ${shard.shard_id}.extracted_at`))
     const shardSourceIds = unique(shard.source_ids, `shard ${shard.shard_id}.source_ids`)
     if (!sameSet(shardSourceIds, declaredSlice.source_ids)) fail(`shard ${shard.shard_id} source IDs differ from extraction slice ${declaredSlice.slice_id}`)
+    if (input.sourceArtifactBindings) {
+      validateSourceArtifactBindingsHashV2(shard, input.sourceArtifactBindings)
+      for (const binding of sourceArtifactBindingsForV2(input.sourceArtifactBindings, shardSourceIds)) {
+        if (sha256Bytes(readFileSync(resolveManifestPath(input.root, binding.path))) !== binding.byte_hash) fail(`source artifact ${binding.artifact_id} bytes/hash mismatch`)
+      }
+    }
     for (const sourceId of shardSourceIds) {
       if (!sourceById.has(sourceId) || seenSources.has(sourceId)) fail(`source ${sourceId} is unknown or assigned to multiple extractors`)
       const artifactPath = input.sourceArtifactPaths[sourceId]
@@ -714,6 +732,7 @@ export function mergeEvidenceV2(input) {
     for (const rawRecord of shardRecords) {
       const obligation = obligationById.get(rawRecord.obligation_id)
       if (!obligation) fail(`shard ${shard.shard_id} contains a record for an inactive/unknown obligation`)
+      if (input.sourceArtifactBindings && !input.sourceArtifactBindings.some(binding => binding.source_id === obligation.source_id && binding.artifact_id === rawRecord.artifact_id && binding.byte_hash === rawRecord.artifact_content_hash)) fail(`record ${rawRecord.record_id} has an invalid parent/artifact binding`)
       const record = validateRecord(rawRecord, obligation, plan.stage4_requested)
       if (seenRecords.has(record.record_id)) fail(`duplicate record_id ${record.record_id}`)
       seenRecords.add(record.record_id); records.push(record)
@@ -745,6 +764,7 @@ export function mergeEvidenceV2(input) {
   if (missing.length) fail(`active extraction obligations are missing terminal outcomes: ${missing.join(', ')}`)
   const bundleBase = {
     schema: 'source_evidence_bundle.v2', bundle_id: assertSafeId(input.manifest.bundle_id, 'bundle_id'), run_id: plan.run_id,
+    ...(input.sourceArtifactBindings ? { source_artifact_bindings: input.sourceArtifactBindings } : {}),
     coverage_plan_id: plan.coverage_plan_id, coverage_plan_hash: plan.content_hash, research_hash: input.researchHash,
     stage4_requested: plan.stage4_requested, records: records.sort((a, b) => a.record_id.localeCompare(b.record_id)),
     material_conflict_signals: materialConflictSignals.sort((a, b) => a.signal_id.localeCompare(b.signal_id)),
@@ -889,6 +909,14 @@ function originalReferenceUrl(source) {
   // Only this exact, same-PMCID transport pair has a deterministic identity proof.
   let acquisitionHost, canonicalHost
   try { acquisitionHost = new URL(acquisitionUrl).hostname; canonicalHost = new URL(canonicalUrl).hostname } catch { return acquisitionUrl }
+  const medPubmedPair = /\/rest\/search/i.test(acquisitionUrl)
+    && (acquisitionHost === 'www.ebi.ac.uk' || canonicalHost === 'pubmed.ncbi.nlm.nih.gov')
+  if (medPubmedPair) {
+    const acquired = acquisitionUrl.match(/^https:\/\/www\.ebi\.ac\.uk\/europepmc\/webservices\/rest\/search\?query=EXT_ID%3A([1-9][0-9]*)%20AND%20SRC%3AMED&resultType=core&format=json$/)
+    const referenced = canonicalUrl.match(/^https:\/\/pubmed\.ncbi\.nlm\.nih\.gov\/([1-9][0-9]*)\/$/)
+    if (!acquired || !referenced || acquired[1] !== referenced[1] || String(source.pmid ?? source.pubmed_id ?? '') !== acquired[1]) fail(`source ${source.source_id} has an invalid or mismatched MED/PubMed original-reference pair`)
+    return canonicalUrl
+  }
   const nordicChapterPair = /\.pdf/i.test(acquisitionUrl)
     && (acquisitionHost === 'pub.norden.org' || canonicalHost === 'pub.norden.org')
   if (nordicChapterPair) {
@@ -914,6 +942,8 @@ function visibleSource(source) {
     author_or_institution: source.author_or_institution, publication_year: source.publication_year, title: source.title, journal_or_publisher: source.journal_or_publisher,
     canonical_url: source.canonical_url ?? source.url, doi: source.doi ?? null, pubmed_id: source.pmid ?? source.pubmed_id ?? null,
     source_content_hash: source.source_content_hash,
+    ...(source.artifact_id != null ? { artifact_id: source.artifact_id } : {}),
+    ...(source.attachments?.length ? { attachments: source.attachments } : {}),
   }
 }
 function writerFact(record) {
@@ -921,6 +951,7 @@ function writerFact(record) {
     record_id: record.record_id,
     obligation_id: record.obligation_id,
     source_id: record.source_id,
+    ...(record.artifact_id != null ? { artifact_id: record.artifact_id, artifact_content_hash: record.artifact_content_hash } : {}),
     cluster_id: record.cluster_id,
     claim_type: record.claim_type,
     subject_key: record.subject_key,
@@ -1053,6 +1084,11 @@ function buildPackagesV2({ coveragePlan, bundle, gate, reviews, policyVersion, v
 }
 
 function runBinding(root, path, extra = {}) { return { scope: 'run', path: portablePath(root, path), byte_hash: sha256Bytes(readFileSync(path)), ...extra } }
+function evidenceOriginalBindings(input, sourceIds = Object.keys(input.sourceArtifactPaths)) {
+  return input.sourceArtifactBindings
+    ? sourceArtifactBindingsForV2(input.sourceArtifactBindings, sourceIds).map(binding => runBinding(input.root, resolveManifestPath(input.root, binding.path), { source_id: binding.source_id, artifact_id: binding.artifact_id, relationship: binding.relationship, locator: binding.locator, content_type: binding.content_type }))
+    : sourceIds.map(sourceId => runBinding(input.root, input.sourceArtifactPaths[sourceId], { source_id: sourceId }))
+}
 function repoBinding(path, extra = {}) { return { scope: 'repo', path: portablePath(REPO_ROOT, path), byte_hash: sha256Bytes(readFileSync(path)), ...extra } }
 
 function writeSourceReviewInputV2({ input, dir, bundle, sample }) {
@@ -1065,7 +1101,7 @@ function writeSourceReviewInputV2({ input, dir, bundle, sample }) {
   const base = {
     schema: 'source_facts_review_input.v2', run_id: input.coveragePlan.run_id,
     coverage_plan_hash: input.coveragePlan.content_hash, evidence_bundle_hash: bundle.content_hash, sample_manifest_hash: sample.content_hash,
-    selected, carried_forward: sample.carried_forward ?? [], original_sources: selectedSourceIds.map((sourceId) => runBinding(input.root, input.sourceArtifactPaths[sourceId], { source_id: sourceId })),
+    selected, carried_forward: sample.carried_forward ?? [], original_sources: evidenceOriginalBindings(input, selectedSourceIds),
     allowed_output_paths: input.reviewPaths.map((path) => portablePath(input.root, path)),
     reviewer_contract: { role: 'source-facts-reviewer', independence_source: 'nutrient_content_work_order.v2.assignee', output_schema: 'source_facts_review.v2' },
   }
@@ -1085,7 +1121,7 @@ export function buildEvidencePipelineV2({ input, outputDir }) {
   if (bundle.obligation_results.some((entry) => entry.status === 'blocked')) return { status: 'blocked', reason: 'active extraction obligation is blocked', bundle, activeArticles }
   const dir = assertContained(input.root, outputDir, 'evidence output directory')
   if (dir === resolve(input.root)) fail('evidence output directory must be below the run root')
-  const declaredPaths = [input.absolute, input.coveragePlanPath, input.researchPath, ...input.shardPaths, ...input.reviewPaths, ...Object.values(input.sourceArtifactPaths)]
+  const declaredPaths = [input.absolute, input.coveragePlanPath, input.researchPath, ...input.shardPaths, ...input.reviewPaths, ...Object.values(input.sourceArtifactPaths), ...(input.sourceArtifactBindings ?? []).filter(entry => entry.relationship !== 'primary').map(entry => resolveManifestPath(input.root, entry.path))]
   if (declaredPaths.some((path) => isContained(dir, path))) fail('evidence output directory cannot contain a declared input or review path')
   const persistedSamplePath = resolve(dir, 'review-sample-manifest.v2.json')
   const candidateReviews = input.reviewPaths.filter(existsSync).map((path) => json(path))
@@ -1153,7 +1189,8 @@ export function buildEvidencePipelineV2({ input, outputDir }) {
     original_coverage_plan: runBinding(input.root, input.coveragePlanPath, { content_hash: input.coveragePlan.content_hash }),
     canonical_framework_catalog: repoBinding(CATALOG_PATH), style_snapshot: repoBinding(STYLE_SNAPSHOT_PATH),
     framework_files: [...new Map(input.coveragePlan.articles.filter((article) => article.status === 'planned').map((article) => [`${article.framework.path}:${article.framework_hash}`, repoBinding(resolve(REPO_ROOT, article.framework.path), { framework_hash: article.framework_hash })])).values()],
-    extraction_shards: input.extractionSlices.map((slice) => runBinding(input.root, slice.shard_path, { slice_id: slice.slice_id, source_ids: slice.source_ids, obligation_ids: slice.obligation_ids, cluster_ids: slice.cluster_ids })), source_artifacts: Object.entries(input.sourceArtifactPaths).sort().map(([sourceId, path]) => runBinding(input.root, path, { source_id: sourceId })),
+    extraction_shards: input.extractionSlices.map((slice) => runBinding(input.root, slice.shard_path, { slice_id: slice.slice_id, source_ids: slice.source_ids, obligation_ids: slice.obligation_ids, cluster_ids: slice.cluster_ids })), source_artifacts: evidenceOriginalBindings(input, Object.keys(input.sourceArtifactPaths).sort()),
+    ...(input.sourceArtifactBindings ? { source_artifact_bindings: input.sourceArtifactBindings } : {}),
     source_review_input: runBinding(input.root, reviewInput.path, { content_hash: reviewInput.value.content_hash }),
     source_reviews: input.reviewPaths.filter(existsSync).map((path) => runBinding(input.root, path)), evidence_bundle: runBinding(input.root, bundleOut, { content_hash: bundle.content_hash }), sample_manifest: runBinding(input.root, sampleOut, { content_hash: sample.content_hash }), facts_gate: runBinding(input.root, gateOut, { content_hash: gate.content_hash }),
     packages: packageBindings, writers_ready: gate.writers_ready, extractor_ids: sorted(extractorIds), facts_reviewer_ids: sorted(reviews.reviewerIds),
@@ -1196,6 +1233,13 @@ export function validateEvidencePipelineLockV2({ lockPath, root, expected }) {
   if (sourceArtifactReceipt?.content_hash !== lock.source_artifact_receipt.content_hash || sourceArtifactReceipt?.content_hash !== artifactHash(sourceArtifactReceipt)) fail('source artifact receipt lock binding is stale')
   const coverage = resolveLockBinding(root, lock.coverage_plan, 'coverage plan').value
   const originalCoverage = resolveLockBinding(root, lock.original_coverage_plan, 'original coverage plan')
+  if (hasSourceArtifactBindingsV2(coverage)) {
+    const sourceIds = [...new Set(buildManifest.value.extraction_slices.flatMap(slice => slice.source_ids))]
+    const bindings = sourceArtifactBindingsForV2(resolveSourceArtifactBindingsV2(coverage, sourceArtifactReceipt, root), sourceIds)
+    if (canonicalJsonHash(lock.source_artifact_bindings ?? null) !== canonicalJsonHash(bindings) || canonicalJsonHash(buildManifest.value.source_artifact_bindings ?? null) !== canonicalJsonHash(bindings)) fail('locked artifact partition/parent binding is stale')
+    const expectedOriginals = evidenceOriginalBindings({ root, sourceArtifactPaths: {}, sourceArtifactBindings: bindings }, sourceIds)
+    if (canonicalJsonHash(lock.source_artifacts) !== canonicalJsonHash(expectedOriginals)) fail('locked source artifacts omit or differ from frozen bindings')
+  }
   if (coverage.content_hash !== originalCoverage.value.content_hash || sha256Bytes(readFileSync(originalCoverage.path)) !== lock.original_coverage_plan.byte_hash) fail('coverage lock bindings differ')
   if (expected.coveragePlanPath && resolve(expected.coveragePlanPath) !== originalCoverage.path) fail('run coverage path differs from locked coverage')
   if (expected.researchPath && resolve(expected.researchPath) !== research.path) fail('run research path differs from locked research')

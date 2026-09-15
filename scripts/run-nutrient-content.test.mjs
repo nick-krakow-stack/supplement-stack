@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join, relative, resolve } from 'node:path'
 import test from 'node:test'
 import { artifactHashV2, buildEvidencePipelineV2, buildReviewSampleV2, loadEvidenceManifestV2, mergeEvidenceV2, validateCoveragePlanV2, validateEvidencePipelineLockV2, validateFactsPackageForImportV2, validateStackProjectionV2 } from './lib/evidence-pipeline-v2.mjs'
+import { resolveSourceArtifactBindingsV2 } from './lib/source-artifact-bindings-v2.mjs'
 import { canonicalJsonHash, sha256Bytes } from './lib/content-validation.mjs'
 import { buildContentReleaseV2, buildTechnicalSeo, findDuplicateLiveSeoTitleV2, normalizeVisibleSeoTextV2, projectInlineLinksV2, projectVisibleAssetV2, stage3PresentationSourcesV2, technicalMetaTitleV2, validateNumberUnitTokens, writerWorkOrderIdV2 } from './lib/article-runtime-v2.mjs'
 import { STATE_WORK_ORDER_MATRIX, WORK_ORDER_KIND_CONTRACTS, findDuplicateReleaseSeoGroupsV2, groupDuplicateReleaseSeoRepairsV2, isStaleWriterBindingError, loadNutrientContentRunManifest, repairFailureBundle, runNutrientContent, selectFrameworkGapTransition, selectReusableInitialWriterOrderV2, selectReusablePublicationQaOrderV2, summarizeWorkOrderTimingsV1 } from './lib/nutrient-content-runner.mjs'
@@ -2321,6 +2322,126 @@ test('low-risk review sampling is deterministic and capped at 8 of 40 and 10 of 
       assert.equal(new Set(first.selected.map((entry) => entry.obligation_id)).size, expected)
     } finally { fixture.cleanup() }
   }
+})
+
+function addBoundAttachment(fixture, { primaryOverride = false } = {}) {
+  const path = join(dirname(fixture.paths.source), 'supplement.txt')
+  put(path, 'Supplementary original reports the study condition.\n')
+  const receipt = json(fixture.paths.sourceArtifactReceipt)
+  const row = { source_id: 'supplement-a', path: rel(fixture.root, path), byte_hash: sha256Bytes(readFileSync(path)), content_type: 'text/plain', locator: 'https://example.org/supplement' }
+  receipt.sources.push(row)
+  put(fixture.paths.sourceArtifactReceipt, hashed(receipt))
+  const coverage = json(fixture.paths.coverage), source = coverage.sources[0]
+  const attachmentRow = primaryOverride ? receipt.sources[0] : row
+  if (primaryOverride) Object.assign(source, { artifact_id: row.source_id, url: row.locator, source_content_hash: row.byte_hash })
+  source.attachments = [{ artifact_id: attachmentRow.source_id, parent_source_id: source.source_id, relationship: 'supplementary_material', is_independent_source: false, path: attachmentRow.path, byte_hash: attachmentRow.byte_hash, content_type: attachmentRow.content_type, locator: attachmentRow.locator }]
+  put(fixture.paths.coverage, hashed(coverage))
+  const bindings = resolveSourceArtifactBindingsV2(coverage, receipt, fixture.root)
+  const manifest = json(fixture.paths.evidenceManifest)
+  manifest.coverage_plan_hash = hashed(coverage).content_hash
+  manifest.source_artifact_receipt_hash = hashed(receipt).content_hash
+  manifest.source_artifact_bindings = bindings
+  if (primaryOverride) manifest.source_artifacts['source-a'] = row.path
+  put(fixture.paths.evidenceManifest, hashed(manifest))
+  const shard = json(fixture.paths.shard)
+  shard.coverage_plan_hash = manifest.coverage_plan_hash
+  shard.source_artifact_bindings = bindings
+  Object.assign(shard.records[0], { artifact_id: attachmentRow.source_id, artifact_content_hash: attachmentRow.byte_hash })
+  put(fixture.paths.shard, hashed(shard))
+  return { path, bindings, receipt, coverage }
+}
+
+test('parent-bound artifacts reach facts inputs, packages and cached locks with primary override', () => {
+  for (const primaryOverride of [false, true]) {
+    const fixture = createFixture({ stages: ['stage3'] })
+    try {
+      const { path, bindings } = addBoundAttachment(fixture, { primaryOverride })
+      const input = loadEvidenceManifestV2(fixture.paths.evidenceManifest)
+      let result = buildEvidencePipelineV2({ input, outputDir: fixture.paths.evidence })
+      assert.equal(result.status, 'missing_reviews')
+      const reviewInput = json(join(fixture.paths.evidence, 'source-facts-review-input.v2.json'))
+      assert.equal(reviewInput.original_sources.length, 2)
+      assert.ok(reviewInput.original_sources.every(entry => entry.source_id === 'source-a'))
+      assert.deepEqual(result.bundle.source_artifact_bindings, bindings)
+      createSourceReview(fixture)
+      result = buildEvidencePipelineV2({ input: loadEvidenceManifestV2(fixture.paths.evidenceManifest), outputDir: fixture.paths.evidence })
+      assert.equal(result.status, 'pass')
+      const pkg = json(join(fixture.paths.evidence, 'stage3-packages', 'main-a.json'))
+      assert.equal(pkg.facts[0].artifact_id, primaryOverride ? 'source-a' : 'supplement-a')
+      assert.equal(pkg.visible_sources[0].attachments.length, 1)
+      const validation = { lockPath: result.lockPath, root: fixture.root, expected: { substance: 'teststoff', language: 'de' } }
+      assert.doesNotThrow(() => validateEvidencePipelineLockV2(validation))
+      const originalLock = json(result.lockPath)
+      const omitted = structuredClone(originalLock); omitted.source_artifacts.pop(); omitted.lock_hash = artifactHashV2(omitted)
+      put(result.lockPath, omitted)
+      assert.throws(() => validateEvidencePipelineLockV2(validation), /locked source artifacts/)
+      put(result.lockPath, originalLock)
+      put(path, 'Changed supplementary original bytes.\n')
+      assert.throws(() => validateEvidencePipelineLockV2(validation), /changed bytes/)
+      assert.throws(() => mergeEvidenceV2(input), /bytes\/hash mismatch/)
+    } finally { fixture.cleanup() }
+  }
+})
+
+test('parent-bound artifacts reject missing shard and foreign record bindings', () => {
+  const fixture = createFixture({ stages: ['stage3'] })
+  try {
+    addBoundAttachment(fixture)
+    const original = json(fixture.paths.shard)
+    for (const mutate of [shard => { delete shard.source_artifact_bindings }, shard => shard.source_artifact_bindings.pop(), shard => { shard.records[0].artifact_id = 'foreign' }, shard => { shard.records[0].artifact_content_hash = `sha256:${'f'.repeat(64)}` }]) {
+      const shard = structuredClone(original); mutate(shard); put(fixture.paths.shard, hashed(shard))
+      assert.throws(() => mergeEvidenceV2(loadEvidenceManifestV2(fixture.paths.evidenceManifest)), /assigned primary and attachment|invalid parent\/artifact binding/)
+    }
+  } finally { fixture.cleanup() }
+})
+
+test('parent-bound artifacts appear in genuine extraction and facts work orders', () => {
+  const fixture = createFixture({ stages: ['stage2'] })
+  try {
+    addBoundAttachment(fixture)
+    const inventory = json(fixture.paths.linkInventorySource)
+    inventory.routes[0].source_presentation_label_de = 'Magnesium'
+    for (const route of inventory.routes) route.meta_title = route.title
+    put(fixture.paths.linkInventorySource, hashed(inventory))
+    const shard = json(fixture.paths.shard)
+    rmSync(fixture.paths.shard)
+    const extractionStatus = runNutrientContent({ manifestPath: fixture.paths.run })
+    assert.equal(extractionStatus.state, 'WAITING_FOR_SOURCE_EXTRACTION', JSON.stringify(extractionStatus.work_orders))
+    const extraction = extractionStatus.work_orders.work_orders[0]
+    assert.deepEqual(extraction.scope.source_ids, ['source-a'])
+    assert.equal(extraction.reused_sources.length, 2)
+    assert.ok(extraction.reused_sources.every(entry => entry.parent_source_id === 'source-a'))
+    put(fixture.paths.shard, shard)
+    const reviewStatus = runNutrientContent({ manifestPath: fixture.paths.run })
+    assert.equal(reviewStatus.state, 'WAITING_FOR_SOURCE_REVIEW', JSON.stringify(reviewStatus.work_orders))
+    assert.equal(reviewStatus.work_orders.work_orders[0].reused_sources.length, 2)
+  } finally { fixture.cleanup() }
+})
+
+test('parent-bound artifacts enforce exact frozen partition, paths, locators and ownership', () => {
+  const fixture = createFixture({ stages: ['stage3'] })
+  try {
+    const { receipt, coverage } = addBoundAttachment(fixture)
+    for (const mutate of [
+      plan => { plan.sources[0].attachments[0].parent_source_id = 'foreign' },
+      plan => { plan.sources[0].attachments[0].is_independent_source = true },
+      plan => { plan.sources[0].attachments[0].relationship = 'similar_topic' },
+      plan => { plan.sources[0].attachments[0].path = '../outside' },
+      plan => { plan.sources[0].attachments[0].byte_hash = `sha256:${'f'.repeat(64)}` },
+      plan => { plan.sources[0].attachments[0].locator += '?changed' },
+      plan => { plan.sources[0].attachments[0].content_type = 'application/pdf' },
+      plan => { plan.sources[0].artifact_id = 'supplement-a' },
+      plan => { plan.sources[0].attachments = [] },
+      plan => { plan.sources[0].attachments.push(structuredClone(plan.sources[0].attachments[0])) },
+    ]) {
+      const changed = structuredClone(coverage); mutate(changed)
+      assert.throws(() => resolveSourceArtifactBindingsV2(changed, receipt, fixture.root), /source artifact binding/)
+    }
+    const changedReceipt = structuredClone(receipt); changedReceipt.sources[1].path = '../outside'
+    assert.throws(() => resolveSourceArtifactBindingsV2(coverage, changedReceipt, fixture.root), /\.\./)
+    const manifest = json(fixture.paths.evidenceManifest); manifest.source_artifact_bindings.pop(); put(fixture.paths.evidenceManifest, hashed(manifest))
+    assert.throws(() => loadEvidenceManifestV2(fixture.paths.evidenceManifest), /manifest source artifact bindings/)
+  } finally { fixture.cleanup() }
 })
 
 test('facts packages are derived from hash-bound original-source bytes and never from article prose', () => {
