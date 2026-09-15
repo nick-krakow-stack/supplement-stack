@@ -57,7 +57,7 @@ keine ungeklärte Zuordnung. Alle 287 unveränderten Kandidaten aktuell in D1 un
 öffentlich abgeglichen: Text-UX-Untergrenze ≥7, technisches SEO 282×100 und 5×90.
 Die fünf fehlenden Hauptartikel-Rücklinks sind nicht blockierende Restpunkte.
 Beleg: unchanged-source-acceptance.json; mit DGE, LPI, Iuliano, Cappellani und
-NNR-Calcium jetzt292/790 abgeschlossen.
+NNR-Calcium und NCCIH-Patientenseite jetzt293/790 abgeschlossen.
 Ein vollständiger überarbeiteter Einzelabschluss: DGE-Referenzwerte,
 UX8/10 unabhängig, technischerSEO100/100 nach tatsächlichen sechsAuditkategorien,
 Child/ParentCOMPLETE und öffentlichMATCH. IndexabilityReceipt2b0390e8…;
@@ -82,7 +82,17 @@ Calcium-Gesamtplan bleibt wissenschaftlich blockiert: Cookie-/JS-Challenges
 werden ausdrücklich nicht als Originalabstract akzeptiert. Das echte
 Huo-Supplement wurde inzwischen beschafft; die Baron-/Chapuy-Verweisabweichung
 bleibt konkret dokumentiert, ohne stille Zuordnung von Ereigniszahlen.
-Nächster notwendiger Scope: getrennte NCCIH-Patienten- und Fachquellenartikel.
+NCCIH-Patientenseite überarbeitet und veröffentlicht: UX8/SEO100. Die eigenständige
+Fachseite erhält zusätzlich einen eigenen veröffentlichten Carrier (UX8/SEO90,
+Hauptartikel-Rücklink noch offen), separat außerhalb des ursprünglichen
+790er-Inventars erfasst. Beide Originale und ihre unterschiedlichen Aussagen
+bleiben erhalten; die echte Live-Linkrevision ist unabhängig gebunden.
+Huo-Reconciliation bindet 15 Originalartefakte für 13 bibliografische Berichte,
+elf Studien und 13 Vergleichszeilen. Echte technische P1-Lücken verhindern den
+nächsten Faktenlauf: Elternbindung von Anhängen/Alternatmanifestationen und
+identitätsgebundene MED-JSON/PubMed-Originallinks. Die eng begrenzte Korrektur
+wird mit unabhängiger Technikprüfung umgesetzt; keine zusätzlichen Studien
+aus Anhängen und keine pauschale Pflicht zu elf weiteren Volltexten.
 Die präzise Liste aller18offenenBildaufträge liegt in
 [offene_bildauftraege_wissensartikel.md](offene_bildauftraege_wissensartikel.md).
 Erstellung/Integration bleiben im jeweiligenFactsgebundenenWriterauftrag.

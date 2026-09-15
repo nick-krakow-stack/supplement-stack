@@ -687,7 +687,14 @@ Iuliano-Fehlerbelege bleiben neben dem erfolgreichen Recovery-Nachweis bestehen.
 Einzelbelege: `iuliano-reference-seo-score-readback.json`,
 `cappellani-reference-seo-score-readback.json`, `nnr-seo-score-readback.json`
 und die gebundenen Release-/Reviewpfade in `article-completions.json`.
-Damit sind 292/790 Zeilen abgeschlossen. Die übrigen bleiben offen.
+Der NCCIH-Patientenartikel ist mit Text-UX8/10 und SEO100/100 abgeschlossen.
+Sein eigenständiges zweites Original wird zusätzlich im neuen Fachartikel
+`/wissen/alpha-liponsaeure-nccih-diabetes-wissenschaft-2022` erklärt (Text-UX8,
+SEO90; Hauptartikel-Rücklink noch offen). Dieser Zusatzartikel zählt nicht als
+Abschluss einer ursprünglichen Inventarzeile; sein Nachweis steht separat in
+`additional-carrier-completions.json` und `nccih-provider-seo-score-readback.json`.
+Damit sind 293/790 Bestandszeilen sowie ein zusätzlicher Quellenartikel
+abgeschlossen. Die übrigen bleiben offen.
 
 | Erledigt | Pfad | Typ | Text-UX ★ | SEO |
 |---|---|---|---:|---:|
@@ -710,7 +717,7 @@ Damit sind 292/790 Zeilen abgeschlossen. Die übrigen bleiben offen.
 | [ ] | `/wissen/alpha-liponsaeure-mohammadi-cardiometabolic-meta-2026` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/alpha-liponsaeure-morvaridzadeh-inflammatory-biomarkers-meta-2023` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/alpha-liponsaeure-namazi-type-2-diabetes-meta-2022` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/alpha-liponsaeure-nccih-dpn-supplement-context` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/alpha-liponsaeure-nccih-dpn-supplement-context` | Studie/Quelle | 8 | 100 |
 | [ ] | `/wissen/aspen-konsensempfehlungen-zum-refeeding-syndrom-019` | Studie/Quelle | 6 | 83 |
 | [x] | `/wissen/ausgewahlte-fragen-und-antworten-zu-thiamin-002` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/b2-meta-migraine-adult-2026` | Studie/Quelle | 7 | 83 |
