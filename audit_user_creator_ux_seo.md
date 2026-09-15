@@ -697,7 +697,11 @@ Die DGE-Artikel zu Vitamin B12 (Text-UX7,5/10) und Vitamin D (8/10) sowie
 der NCCIH-Artikel zu Traubenkernextrakt (7/10) sind geschützt veröffentlicht.
 Alle drei erreichen technischen SEO100/100; ihre vollständigen Review-/Release-
 und Readbackbindungen stehen in `article-completions.json`.
-Damit sind 296/790 Bestandszeilen sowie ein zusätzlicher Quellenartikel
+Auch der WHO-Artikel zur Präeklampsie ist mit Text-UX8/10 und SEO100/100
+veröffentlicht und öffentlich geprüft; Titel und Beschreibung benennen die
+Originalquelle. Der DGE-Fettreferenzartikel zu MCT ist ebenfalls mit Text-UX8/10 und SEO100/100
+abgeschlossen. Die BfR-Artikel zu B5 und Vitamin K sind mit jeweils Text-UX7,5/10 und
+SEO100/100 abgeschlossen. Damit sind 300/790 Bestandszeilen sowie ein zusätzlicher Quellenartikel
 abgeschlossen. Die übrigen bleiben offen.
 
 | Erledigt | Pfad | Typ | Text-UX ★ | SEO |
@@ -726,7 +730,7 @@ abgeschlossen. Die übrigen bleiben offen.
 | [x] | `/wissen/ausgewahlte-fragen-und-antworten-zu-thiamin-002` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/b2-meta-migraine-adult-2026` | Studie/Quelle | 7 | 83 |
 | [x] | `/wissen/b3-safety-efsa-ul-niacin` | Studie/Quelle | ≥7 | 100 |
-| [ ] | `/wissen/b5-safety-bfr-hoechstmengen-pantothensaeure` | Studie/Quelle | 6 | 83 |
+| [x] | `/wissen/b5-safety-bfr-hoechstmengen-pantothensaeure` | Studie/Quelle | 7,5 | 100 |
 | [ ] | `/wissen/bioverfuegbarkeit-kommerzieller-magnesiumpraeparate` | Studie/Quelle | 6 | 83 |
 | [ ] | `/wissen/calcium` | Hauptartikel | 7 | 86 |
 | [x] | `/wissen/calcium-bedarf-who-fao-2004` | Studie/Quelle | ≥7 | 100 |
@@ -737,7 +741,7 @@ abgeschlossen. Die übrigen bleiben offen.
 | [x] | `/wissen/calcium-levothyroxin-interaktion-zamfirescu-2011` | Studie/Quelle | ≥7 | 100 |
 | [x] | `/wissen/calcium-meta-masse-2026` | Studie/Quelle | ≥7 | 100 |
 | [x] | `/wissen/calcium-nierensteine-ernaehrung-taylor-2013` | Studie/Quelle | ≥7 | 100 |
-| [ ] | `/wissen/calcium-praeeklampsie-who-2025` | Studie/Quelle | 6 | 83 |
+| [x] | `/wissen/calcium-praeeklampsie-who-2025` | Studie/Quelle | 8 | 100 |
 | [x] | `/wissen/calcium-reference-efsa-drv-2015` | Studie/Quelle | ≥7 | 100 |
 | [x] | `/wissen/calcium-referenzwerte-dge` | Studie/Quelle | ≥7 | 100 |
 | [x] | `/wissen/calcium-referenzwerte-iom-2011` | Studie/Quelle | ≥7 | 100 |
@@ -997,7 +1001,7 @@ abgeschlossen. Die übrigen bleiben offen.
 | [ ] | `/wissen/mct-oel` | Hauptartikel | 7 | 86 |
 | [ ] | `/wissen/mct-oel-chapman-lopez-koh-sport-review-2022` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/mct-oel-dge-fettzufuhr-leitlinie-2015` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/mct-oel-dge-referenzwerte-fett-essenzielle-fettsaeuren` | Studie/Quelle | 8 | 83 |
+| [x] | `/wissen/mct-oel-dge-referenzwerte-fett-essenzielle-fettsaeuren` | Studie/Quelle | 8 | 100 |
 | [x] | `/wissen/mct-oel-efsa-health-claim-body-weight-2011` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/mct-oel-fda-grn-449` | Studie/Quelle | 7 | 83 |
 | [x] | `/wissen/mct-oel-fsanz-a563-infant-formula` | Studie/Quelle | ≥7 | 100 |
@@ -1414,7 +1418,7 @@ abgeschlossen. Die übrigen bleiben offen.
 | [ ] | `/wissen/vitamin-k-efficacy-of-vitamin-k2-in-the-prevention-and-treatment-of-676` | Studie/Quelle | 6 | 83 |
 | [x] | `/wissen/vitamin-k-further-assessment-on-vitamin-k2-and-contribution-to-the-n-661` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/vitamin-k-high-dietary-menaquinone-intake-is-associated-with-reduced-685` | Studie/Quelle | 9 | 83 |
-| [ ] | `/wissen/vitamin-k-hoechstmengenvorschlaege-fuer-vitamin-k-in-lebensmitteln-i-613` | Studie/Quelle | 8 | 83 |
+| [x] | `/wissen/vitamin-k-hoechstmengenvorschlaege-fuer-vitamin-k-in-lebensmitteln-i-613` | Studie/Quelle | 7,5 | 100 |
 | [ ] | `/wissen/vitamin-k-intake-of-dietary-phylloquinone-and-menaquinones-and-risk-646` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/vitamin-k-les-references-nutritionnelles-en-vitamines-et-mineraux-vi-611` | Studie/Quelle | 6 | 83 |
 | [ ] | `/wissen/vitamin-k-low-dose-daily-intake-of-vitamin-k2-menaquinone-7-improves-682` | Studie/Quelle | 7 | 83 |
