@@ -608,6 +608,17 @@ Originalstelle und erzeugt genau einen `source_facts_review.v2`-Shard; keiner
 Records exakt bestanden, alle aktiven Pflichten terminal, alle erforderlichen
 Cluster gedeckt und alle Rollenbindungen gültig sind.
 
+Neue Runs dürfen optional `facts_review_partition: "selected_records_v1"` im
+Runmanifest setzen. Dann bestimmt die tatsächlich ausgewählte Recordzahl
+(je Pflicht mindestens Gewicht 1) die Shardzahl: aufgerundet ein Shard je
+60 Records, begrenzt auf 1–4, verfügbare Slots und ausgewählte Pflichten.
+60 ist ein Arbeitsrichtwert; einzelne große Pflichten bleiben ungeteilt.
+Gemischte Risikoklassen erhalten bei verfügbaren Slots mindestens zwei Shards.
+Auswahl, Sampling, Full-Review, Carried-forward und Gates bleiben unverändert.
+Ohne Feld gilt bytegleich die bisherige Aufteilung. Ein Strategiewechsel für
+eine bestehende Run-ID wird vor Artefaktwrites abgelehnt, auch bei geändertem
+Manifesthash; bestehende vorbereitete Runs werden nicht umgestellt.
+
 Reine initiale Low-Risk-Shards laufen `reasoning_tier=standard`; Full-/High-
 Risk-Auswahl und `sampling_round=1` laufen `high`. Sind beide Klassen in einer
 Runde vertreten und mindestens zwei Shards möglich, trennt die Runtime sie

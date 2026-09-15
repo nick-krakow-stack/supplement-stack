@@ -351,6 +351,7 @@ export function loadNutrientContentRunManifest(manifestPath) {
   if (!existsSync(absolute)) fail(`run manifest does not exist: ${absolute}`)
   const rawProbe = strictJson(absolute, 'nutrient content run manifest')
   if (rawProbe.schema !== RUN_SCHEMA) fail(`manifest.schema must equal ${RUN_SCHEMA}`)
+  if (Object.hasOwn(rawProbe, 'facts_review_partition') && rawProbe.facts_review_partition !== 'selected_records_v1') fail('manifest.facts_review_partition must equal selected_records_v1 when present')
   const mode = text(rawProbe.mode, 'manifest.mode')
   const root = environmentRoot(absolute, mode)
   const runId = assertSafeId(rawProbe.run_id, 'manifest.run_id')
@@ -724,6 +725,14 @@ function workOrder(context, kind, payload) {
   return { ...contract, work_order_id: canonicalJsonHash(contract) }
 }
 
+function factsReviewPartitionBinding(context) {
+  return context.manifest.facts_review_partition === 'selected_records_v1' ? { facts_review_partition: 'selected_records_v1' } : {}
+}
+
+function assertFactsReviewPartitionUnchanged(context, stored) {
+  if (stored.run_id === context.runId && stored.facts_review_partition !== context.manifest.facts_review_partition) fail('facts_review_partition cannot change for an existing run_id; create a new run')
+}
+
 function loadIssuedWorkOrders(context) {
   const orders = []
   if (existsSync(context.workOrderHistoryPath)) {
@@ -733,12 +742,14 @@ function loadIssuedWorkOrders(context) {
       let event
       try { event = JSON.parse(line) } catch (error) { fail(`WorkOrder history line ${index + 1} is invalid JSON: ${error.message}`) }
       if (event.schema !== 'nutrient_content_work_order_event.v2' || event.event_hash !== canonicalJsonHash(Object.fromEntries(Object.entries(event).filter(([key]) => key !== 'event_hash')))) fail(`WorkOrder history line ${index + 1} schema/hash is invalid`)
+      assertFactsReviewPartitionUnchanged(context, event)
       if (event.run_id === context.runId && event.manifest_hash === context.manifestHash) orders.push(event.work_order)
     }
   }
   if (existsSync(context.workOrdersPath)) {
     const value = strictJson(context.workOrdersPath, 'issued work orders')
     if (value.schema !== 'nutrient_content_work_orders.v2' || value.content_hash !== canonicalJsonHash(Object.fromEntries(Object.entries(value).filter(([key]) => key !== 'content_hash')))) fail('issued work-orders file schema/hash is invalid')
+    assertFactsReviewPartitionUnchanged(context, value)
     if (value.run_id === context.runId && value.manifest_hash === context.manifestHash) orders.push(...array(value.work_orders, 'issued work_orders'))
   }
   for (const order of orders) if (order.schema !== 'nutrient_content_work_order.v2' || order.run_id !== context.runId || order.work_order_id !== canonicalJsonHash(Object.fromEntries(Object.entries(order).filter(([key]) => key !== 'work_order_id')))) fail('issued WorkOrder has a stale full-contract hash')
@@ -749,7 +760,7 @@ function appendWorkOrderHistory(context, workOrders) {
   const existingIds = new Set(loadIssuedWorkOrders(context).map((order) => order.work_order_id))
   mkdirSync(dirname(context.workOrderHistoryPath), { recursive: true })
   for (const order of workOrders) if (!existingIds.has(order.work_order_id)) {
-    const base = { schema: 'nutrient_content_work_order_event.v2', run_id: context.runId, manifest_hash: context.manifestHash, issued_at: new Date().toISOString(), work_order: order }
+    const base = { schema: 'nutrient_content_work_order_event.v2', ...factsReviewPartitionBinding(context), run_id: context.runId, manifest_hash: context.manifestHash, issued_at: new Date().toISOString(), work_order: order }
     appendFileSync(context.workOrderHistoryPath, `${JSON.stringify({ ...base, event_hash: canonicalJsonHash(base) })}\n`, 'utf8')
     existingIds.add(order.work_order_id)
   }
@@ -831,7 +842,7 @@ function finish(context, started, state, workOrders, stats, extra = {}) {
   assertWorkOrderDispatch(state, workOrders)
   const outputPaths = workOrders.flatMap((order) => order.outputs.map((output) => `${output.root}:${output.path}`))
   if (new Set(outputPaths).size !== outputPaths.length) fail('parallel WorkOrders must have disjoint output paths')
-  const ordersBase = { schema: 'nutrient_content_work_orders.v2', run_id: context.runId, manifest_hash: context.manifestHash, state, work_orders: [...workOrders].sort((a, b) => a.work_order_id.localeCompare(b.work_order_id)) }
+  const ordersBase = { schema: 'nutrient_content_work_orders.v2', ...factsReviewPartitionBinding(context), run_id: context.runId, manifest_hash: context.manifestHash, state, work_orders: [...workOrders].sort((a, b) => a.work_order_id.localeCompare(b.work_order_id)) }
   const orders = { ...ordersBase, content_hash: canonicalJsonHash(ordersBase) }
   appendWorkOrderHistory(context, orders.work_orders)
   writeJsonAtomic(context.workOrdersPath, orders)
@@ -1621,9 +1632,14 @@ function sourceReviewWorkOrders(context, evidenceInput, result, issuedWorkOrders
   const selected = [...result.reviewInput.selected].sort((a, b) => a.obligation_id.localeCompare(b.obligation_id))
   const declared = evidenceInput.reviewSlices.filter((slice) => slice.sampling_round === round).sort((a, b) => a.shard_id.localeCompare(b.shard_id))
   if (!declared.length) fail(`evidence manifest has no source facts review slices for round ${round}`)
-  const shardCount = Math.min(4, declared.length, Math.max(1, selected.length))
+  let shardCount = Math.min(4, declared.length, Math.max(1, selected.length))
   const highSelections = selected.filter((selection) => round === 1 || selection.mode === 'full' || selection.obligation_result?.full_review_required === true || selection.obligation_result?.effective_risk === 'high')
   const lowSelections = selected.filter((selection) => !highSelections.includes(selection))
+  if (context.manifest.facts_review_partition === 'selected_records_v1') {
+    const recordWeight = selected.reduce((sum, selection) => sum + Math.max(1, selection.records.length), 0)
+    const minimum = highSelections.length && lowSelections.length ? 2 : 1
+    shardCount = Math.min(shardCount, Math.max(minimum, Math.ceil(recordWeight / 60)))
+  }
   const partition = (values, slices, tier) => slices.map((slice, index) => ({ ...slice, reasoning_tier: tier, selections: values.filter((_, selectedIndex) => selectedIndex % slices.length === index) })).filter((assignment) => assignment.selections.length)
   let assignments
   if (highSelections.length && lowSelections.length && shardCount >= 2) {
