@@ -158,6 +158,27 @@ test('quantity guard accepts approved study conditions from fact context only', 
   assert.throws(() => validateNumberUnitTokens(article, factsPackage, 'Nicht gebundene Bedingung: 9 g.'), /9 g/)
 })
 
+test('quantity guard recognizes exact nested structured context quantities without combining unrelated values', () => {
+  const article = { article_id: 'lpi-source' }
+  const factsPackage = { facts: [{ value: null, unit: null, claim: 'Freigegebene Studienbedingungen.', context: {
+    dose: { value: 800, unit: 'mg/day' },
+    other_study: [{ dose: { value: 300, unit: 'mg/day' } }],
+    body_weight: { value: 10.5, unit: 'kg' },
+    exposure: { per_tablet: { value: 600, unit: 'mg' } },
+    sample: { value: 72, unit: 'participants' },
+    separate_number: { value: 900 }, separate_unit: { unit: 'mg' },
+    invalid: { value: '700', unit: 'mg' },
+    nested_prose: { note: 'Nicht als strukturierte Menge gebunden: 9 g.' },
+  } }] }
+  assert.doesNotThrow(() => validateNumberUnitTokens(article, factsPackage, '800 mg, 300 mg, 10,5 kg und 600 mg.'))
+  for (const unbound of ['801 mg', '800 g', '10 kg', '72 mg', '900 mg', '700 mg', '9 g', '2400 mg']) {
+    assert.throws(() => validateNumberUnitTokens(article, factsPackage, unbound), /quantity\/unit tokens not present/)
+  }
+  for (const value of [null, Number.NaN, Number.POSITIVE_INFINITY]) {
+    assert.throws(() => validateNumberUnitTokens(article, { facts: [{ context: { dose: { value, unit: 'mg' } } }] }, '0 mg'), /quantity\/unit tokens not present/)
+  }
+})
+
 test('release SEO duplicate grouping reports every colliding article deterministically', () => {
   const compiled = [
     { article: { article_id: 'article-c' }, compiled: { seo: { meta_title: 'Gleicher Titel', meta_description: 'Gleicher Text' } } },

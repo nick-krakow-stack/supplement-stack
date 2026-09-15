@@ -638,6 +638,14 @@ function structuredFactQuantityKey(fact) {
   return baseUnit ? `${Number(fact.value)}|${normalizeUnit(baseUnit)}` : null
 }
 
+function structuredContextQuantityKeys(value) {
+  if (value === null || typeof value !== 'object') return []
+  // Only a numeric value and its unit on the same object authorize a quantity.
+  // Nested prose, bare numbers and units from sibling objects add no authority.
+  const key = Array.isArray(value) ? null : structuredFactQuantityKey(value)
+  return [...(key ? [key] : []), ...Object.values(value).flatMap(structuredContextQuantityKeys)]
+}
+
 function normalizeVisibleSeoTextV2(value) {
   return knowledgeInlineMarkdownToText(String(value ?? ''))
     .normalize('NFC')
@@ -715,6 +723,7 @@ function validateNumberUnitTokens(article, factsPackage, markdown) {
   const tokens = quantityTokens(visible)
   const allowed = new Set(factsPackage.facts.flatMap((fact) => [
     structuredFactQuantityKey(fact),
+    ...structuredContextQuantityKeys(fact.context),
     ...quantityTokens(fact.claim).map((entry) => entry.key),
     ...Object.values(fact.context ?? {}).filter((value) => typeof value === 'string').flatMap((value) => quantityTokens(value).map((entry) => entry.key)),
   ].filter(Boolean)))

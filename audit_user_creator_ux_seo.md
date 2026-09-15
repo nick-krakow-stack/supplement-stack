@@ -669,20 +669,27 @@ vollständig geprüft. TechnischerSEO100/100 nach den sechs Kategorien;
 kein Rankingversprechen. Belege:
 `.agent-memory/wissensinventar-20260914/dge-seo-score-readback.json` und
 `alpha-liponsaeure-dge-v2/state/publish/indexability-release-receipt.v1.json`
-im selbenBelegverzeichnis. Die übrigen Zeilen bleiben bis zu ihrem tatsächlichen
-Einzelabschluss offen.
+im selbenBelegverzeichnis.
+
+Weitere 287 unveränderte Quellenartikel sind nach vollständiger Einzelprüfung
+und aktuellem D1-/öffentlichem Auslieferungsabgleich abgeschlossen. `≥7` ist die
+belegte Text-UX-Untergrenze, kein erfundener exakter Punktwert. Technisches SEO:
+282 Artikel mit 100, fünf mit 90 wegen fehlender Hauptartikel-Rückverlinkung.
+Beleg: `.agent-memory/wissensinventar-20260914/unchanged-source-acceptance.json`;
+Einzelbindungen stehen in `article-completions.json` im selben Verzeichnis.
+Damit sind 288/790 Zeilen abgeschlossen. Die übrigen bleiben offen.
 
 | Erledigt | Pfad | Typ | Text-UX ★ | SEO |
 |---|---|---|---:|---:|
 | [ ] | `/wissen/alkoholkonsumstorungen-diagnose-und-behandlung-korperliche-014` | Studie/Quelle | 5 | 83 |
 | [ ] | `/wissen/alpha-liponsaeure` | Hauptartikel | 8 | 86 |
 | [ ] | `/wissen/alpha-liponsaeure-cappellani-ias-case-review-2018` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/alpha-liponsaeure-carlson-sodium-r-lipoate-pk-2007` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/alpha-liponsaeure-cochrane-dpn-2024` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/alpha-liponsaeure-carlson-sodium-r-lipoate-pk-2007` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/alpha-liponsaeure-cochrane-dpn-2024` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/alpha-liponsaeure-de-oliveira-safety-review-2020` | Studie/Quelle | 7 | 83 |
 | [x] | `/wissen/alpha-liponsaeure-dge-reference-values-nonessentiality` | Studie/Quelle | 8 | 100 |
-| [ ] | `/wissen/alpha-liponsaeure-dtu-food-supplement-safety` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/alpha-liponsaeure-efsa-ias-safety-2021` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/alpha-liponsaeure-dtu-food-supplement-safety` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/alpha-liponsaeure-efsa-ias-safety-2021` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/alpha-liponsaeure-ghalichi-overweight-obesity-meta-2025` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/alpha-liponsaeure-guo-oral-dpn-meta-2023` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/alpha-liponsaeure-karimi-nafld-meta-2026` | Studie/Quelle | 7 | 83 |
@@ -695,284 +702,284 @@ Einzelabschluss offen.
 | [ ] | `/wissen/alpha-liponsaeure-namazi-type-2-diabetes-meta-2022` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/alpha-liponsaeure-nccih-dpn-supplement-context` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/aspen-konsensempfehlungen-zum-refeeding-syndrom-019` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/ausgewahlte-fragen-und-antworten-zu-thiamin-002` | Studie/Quelle | 6 | 83 |
+| [x] | `/wissen/ausgewahlte-fragen-und-antworten-zu-thiamin-002` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/b2-meta-migraine-adult-2026` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/b3-safety-efsa-ul-niacin` | Studie/Quelle | 6 | 83 |
+| [x] | `/wissen/b3-safety-efsa-ul-niacin` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/b5-safety-bfr-hoechstmengen-pantothensaeure` | Studie/Quelle | 6 | 83 |
 | [ ] | `/wissen/bioverfuegbarkeit-kommerzieller-magnesiumpraeparate` | Studie/Quelle | 6 | 83 |
 | [ ] | `/wissen/calcium` | Hauptartikel | 7 | 86 |
-| [ ] | `/wissen/calcium-bedarf-who-fao-2004` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/calcium-bedarf-who-fao-2004` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/calcium-ernaehrungsempfehlungen-nnr-2023` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/calcium-fachinformationen-nih` | Studie/Quelle | 6 | 83 |
+| [x] | `/wissen/calcium-fachinformationen-nih` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/calcium-kardiovaskulaeres-risiko-huo-2023` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/calcium-lebensmittel-pflegeeinrichtungen-iuliano-2021` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/calcium-levothyroxin-interaktion-zamfirescu-2011` | Studie/Quelle | 5 | 83 |
-| [ ] | `/wissen/calcium-meta-masse-2026` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/calcium-nierensteine-ernaehrung-taylor-2013` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/calcium-levothyroxin-interaktion-zamfirescu-2011` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/calcium-meta-masse-2026` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/calcium-nierensteine-ernaehrung-taylor-2013` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/calcium-praeeklampsie-who-2025` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/calcium-reference-efsa-drv-2015` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/calcium-referenzwerte-dge` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/calcium-referenzwerte-iom-2011` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/calcium-safety-bolland-2010` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/calcium-safety-efsa-ul-2012` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/calcium-und-magnesium-im-trinkwasser` | Studie/Quelle | 6 | 83 |
+| [x] | `/wissen/calcium-reference-efsa-drv-2015` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/calcium-referenzwerte-dge` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/calcium-referenzwerte-iom-2011` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/calcium-safety-bolland-2010` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/calcium-safety-efsa-ul-2012` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/calcium-und-magnesium-im-trinkwasser` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/chlorella` | Hauptartikel | 7 | 86 |
 | [ ] | `/wissen/chlorella-algen-allergenitaet-purcell-meyerink-2022` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/chlorella-algen-jod-bfr-2007` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/chlorella-algen-jod-bfr-2007` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/chlorella-algen-kontaminanten-efsa-2022` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/chlorella-b12-bioverfuegbarkeit-watanabe-2003` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/chlorella-b12-mma-merchant-2015` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/chlorella-b12-mma-merchant-2015` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/chlorella-dioxin-muttermilch-nakano-2007` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/chlorella-dioxin-schwangerschaft-nakano-2005` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/chlorella-immune-claim-efsa-on-hold` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/chlorella-kardiometabolik-fallah-2018` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/chlorella-kardiometabolik-silva-barros-2025` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/chlorella-lebermarker-ebrahimi-mameghani-2021` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/chlorella-kardiometabolik-silva-barros-2025` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/chlorella-lebermarker-ebrahimi-mameghani-2021` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/chlorella-lipide-sherafati-2022` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/chlorella-nafld-glucose-entzuendung-ebrahimi-mameghani-2017` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/chlorella-nafld-glucose-entzuendung-ebrahimi-mameghani-2017` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/chlorella-produktqualitaet-rzymski-2025` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/chlorella-siga-crossover-otsuki-2011` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/chlorella-species-eu-jrc-sante-2024` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/chlorella-species-eu-jrc-sante-2024` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/chlorella-toxic-metals-rare-earth-wu-2024` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/chlorella-typ2-diabetes-hosseini-2021` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/chlorella-vulgaris-review-safi-2014` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/chlorella-typ2-diabetes-hosseini-2021` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/chlorella-vulgaris-review-safi-2014` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/chlorella-warfarin-yamaguchi-1996` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/cholin` | Hauptartikel | 7 | 86 |
 | [ ] | `/wissen/cholin-funktionen-und-public-health` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/cholin-offizielle-referenzwerte-und-sicherheit` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/cholin-schwangerschaft-und-fruehe-entwicklung` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/cholin-offizielle-referenzwerte-und-sicherheit` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/cholin-schwangerschaft-und-fruehe-entwicklung` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/chrom` | Hauptartikel | 4 | 86 |
 | [ ] | `/wissen/chrom-adipositas-kardiometabolisch-monfared` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/chrom-bfr-hoechstmengen-nem` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/chrom-bioverfuegbarkeit-laschinsky` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/chrom-efsa-kein-drv-essentialitaet` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/chrom-essentialitaet-statusmarker-henriksen-buegel` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/chrom-expositionsmarker-atsdr` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/chrom-formen-absorption-disilvestro` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/chrom-bfr-hoechstmengen-nem` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/chrom-bioverfuegbarkeit-laschinsky` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/chrom-efsa-kein-drv-essentialitaet` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/chrom-essentialitaet-statusmarker-henriksen-buegel` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/chrom-expositionsmarker-atsdr` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/chrom-formen-absorption-disilvestro` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/chrom-iii-efsa-sicherheit` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/chrom-koerperzusammensetzung-t2d-vajdi` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/chrom-lipidprofil-umbrella-vajdi` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/chrom-nasem-ai-kein-ul` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/chrom-koerperzusammensetzung-t2d-vajdi` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/chrom-lipidprofil-umbrella-vajdi` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/chrom-nasem-ai-kein-ul` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/chrom-nih-ods-factsheet` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/chrom-nnr-keine-empfehlung` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/chrom-nnr-keine-empfehlung` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/chrom-parenterale-ernaehrung-mangel-moukarzel` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/chrom-pcos-randkontext-hamsho` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/chrom-referenzwerte-dach` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/chrom-scf-ul-trivalent` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/chrom-referenzwerte-dach` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/chrom-scf-ul-trivalent` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/chrom-statusmarker-hambidge` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/chrom-tpn-mangel-jeejeebhoy` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/chrom-typ-2-diabetes-glukose-asbaghi` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/chrom-vi-kontamination-efsa` | Studie/Quelle | 8 | 83 |
+| [x] | `/wissen/chrom-tpn-mangel-jeejeebhoy` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/chrom-typ-2-diabetes-glukose-asbaghi` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/chrom-vi-kontamination-efsa` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/chrom-vkm-sicherheit-hohe-zufuhr` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/chrom-who-fao-trace-elements` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/chrompicolinat-efsa-sicherheit` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/chrompicolinat-gewicht-adipositas-cochrane` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/chrompicolinat-niere-wani` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/chrompicolinat-toxizitaet-cerulli` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/chrompicolinat-efsa-sicherheit` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/chrompicolinat-gewicht-adipositas-cochrane` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/chrompicolinat-niere-wani` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/chrompicolinat-toxizitaet-cerulli` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/der-verzehr-thiaminangereicherter-fischsauce-im-haushalt-e-028` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/efns-leitlinie-zur-diagnose-therapie-und-pravention-der-we-015` | Studie/Quelle | 6 | 83 |
 | [ ] | `/wissen/ein-vorhersagemodell-fur-thiaminresponsive-storungen-bei-s-032` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/einfluss-einer-vitamin-b1-und-vitamin-b2-supplementierung-045` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/einfluss-einer-vitamin-b1-und-vitamin-b2-supplementierung-045` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/eisen` | Hauptartikel | 8 | 86 |
-| [ ] | `/wissen/eisen-akute-eisenaufnahme-warnhinweise` | Studie/Quelle | 6 | 83 |
+| [x] | `/wissen/eisen-akute-eisenaufnahme-warnhinweise` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/eisen-blutspender` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/eisen-daily-vs-alternate-day` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/eisen-fatigue-ohne-anaemie` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/eisen-ferritin-cutoffs-statusmarker` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/eisen-haem-nicht-haem-bioverfuegbarkeit` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/eisen-haemochromatose-ueberladung` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/eisen-ibd-iv-oral-spezialkontext` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/eisen-daily-vs-alternate-day` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/eisen-fatigue-ohne-anaemie` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/eisen-ferritin-cutoffs-statusmarker` | Studie/Quelle | ≥7 | 90 |
+| [x] | `/wissen/eisen-haem-nicht-haem-bioverfuegbarkeit` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/eisen-haemochromatose-ueberladung` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/eisen-ibd-iv-oral-spezialkontext` | Studie/Quelle | ≥7 | 90 |
 | [ ] | `/wissen/eisen-ida-erwachsene-gi-cutoff` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/eisen-interaktionen-vitamin-c-zink-arznei` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/eisen-interaktionen-vitamin-c-zink-arznei` | Studie/Quelle | ≥7 | 90 |
 | [ ] | `/wissen/eisen-kinder-dosis-dauer-review` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/eisen-kinder-malaria-sicherheit` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/eisen-lmic-kinder-jugendliche-cosupplementierung` | Studie/Quelle | 8 | 83 |
+| [x] | `/wissen/eisen-kinder-malaria-sicherheit` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/eisen-lmic-kinder-jugendliche-cosupplementierung` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/eisen-menstruierende-frauen-reviews` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/eisen-orale-formen-vertraeglichkeit` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/eisen-orale-formen-vertraeglichkeit` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/eisen-postpartum-anaemie-iv-transfusion` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/eisen-public-health-lifecycle-anaemia` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/eisen-referenzwerte-dach-efsa-iom-international` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/eisen-saeuglinge-low-birth-weight` | Studie/Quelle | 8 | 83 |
+| [x] | `/wissen/eisen-public-health-lifecycle-anaemia` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/eisen-referenzwerte-dach-efsa-iom-international` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/eisen-saeuglinge-low-birth-weight` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/eisen-schwangerschaft-daily-intermit-normalstatus` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/eisen-schwangerschaft-iv-vs-oral` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/eisen-schwangerschaft-lmic-micronutrients` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/eisen-schwangerschaft-screening-leitlinien` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/eisen-sicherheit-ul-nem-hoechstmengen` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/eisen-sport-aktive-frauen` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/electrolyte-reference-nasem-2019` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/eisen-schwangerschaft-screening-leitlinien` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/eisen-sicherheit-ul-nem-hoechstmengen` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/eisen-sport-aktive-frauen` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/electrolyte-reference-nasem-2019` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/electrolyte-systematic-review-ors-hahn-2001` | Studie/Quelle | 6 | 83 |
 | [ ] | `/wissen/elektrolyte` | Hauptartikel | 7 | 86 |
 | [ ] | `/wissen/ernahrungsunterstutzung-fur-erwachsene-orale-enterale-und-018` | Studie/Quelle | 5 | 83 |
 | [ ] | `/wissen/ginseng` | Hauptartikel | 7 | 86 |
-| [ ] | `/wissen/ginseng-fatigue-kim-2013` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/ginseng-vertraeglichkeit-song-2018` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/globale-schatzung-unzureichender-mikronahrstoffzufuhr-eine-023` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/grapefruitkerne-harnwegsinfektionen-studie` | Studie/Quelle | 6 | 83 |
+| [x] | `/wissen/ginseng-fatigue-kim-2013` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/ginseng-vertraeglichkeit-song-2018` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/globale-schatzung-unzureichender-mikronahrstoffzufuhr-eine-023` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/grapefruitkerne-harnwegsinfektionen-studie` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/grapefruitkernextrakt` | Hauptartikel | 6 | 86 |
 | [ ] | `/wissen/grapefruitkernextrakt-benzethonium-bfr` | Studie/Quelle | 6 | 83 |
 | [ ] | `/wissen/hoch-dosiertes-orales-thiamin-gegen-placebo-bei-chronische-050` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/hochstmengenvorschlage-fur-vitamin-b1-vitamin-b2-und-panto-013` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/hohe-pravalenz-von-thiaminmangel-im-fruhen-kindesalter-in-024` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/hochstmengenvorschlage-fur-vitamin-b1-vitamin-b2-und-panto-013` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/hohe-pravalenz-von-thiaminmangel-im-fruhen-kindesalter-in-024` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/inositol` | Hauptartikel | 7 | 86 |
 | [ ] | `/wissen/inositol-kein-allgemeiner-referenzwert-und-formen` | Studie/Quelle | 6 | 83 |
 | [ ] | `/wissen/inositol-pcos-leitlinie-und-subfertilitaet` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/inositol-schwangerschaft-und-gestationsdiabetes` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/jod` | Hauptartikel | 7 | 86 |
-| [ ] | `/wissen/jod-algen-kelp-schilddruese-smyth` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/jod-algen-kelp-schilddruese-smyth` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/jod-algen-sicherheit-anses` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/jod-bfr-hoechstmengen-nem-2025` | Studie/Quelle | 8 | 83 |
+| [x] | `/wissen/jod-bfr-hoechstmengen-nem-2025` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/jod-braunalgen-bioverfuegbarkeit-review` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/jod-efsa-scf-upper-intake-level` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/jod-fruehe-schwangerschaft-intelligenz-2026` | Studie/Quelle | 5 | 83 |
-| [ ] | `/wissen/jod-iodat-iodid-jodsalz-bfr-mri` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/jod-kinder-jugendliche-dgkj-moki` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/jod-efsa-scf-upper-intake-level` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/jod-fruehe-schwangerschaft-intelligenz-2026` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/jod-iodat-iodid-jodsalz-bfr-mri` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/jod-kinder-jugendliche-dgkj-moki` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/jod-kinder-statusmarker-montenegro-bethancourt` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/jod-korea-hohe-zufuhr-schilddruese-kim` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/jod-muetterlicher-status-kind-iq-levie` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/jod-nasem-iom-dri-ul` | Studie/Quelle | 8 | 83 |
+| [x] | `/wissen/jod-nasem-iom-dri-ul` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/jod-nih-ods-factsheet` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/jod-nnr-scoping-review` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/jod-referenzwerte-dach-dge` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/jod-referenzwerte-efsa-drv` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/jod-referenzwerte-dach-dge` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/jod-referenzwerte-efsa-drv` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/jod-schwangerschaft-cochrane-harding` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/jod-schwangerschaft-stillzeit-review-ma-brough` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/jod-schwangerschaft-supplementierung-dineva-meta` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/jod-schwangerschaft-stillzeit-review-ma-brough` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/jod-schwangerschaft-supplementierung-dineva-meta` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/jod-statusmarker-uic-tg-tsh-review` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/jod-thyreoglobulin-biomarker-review` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/jod-ueberschuss-schilddruese-katagiri` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/jod-ueberschussquellen-farebrother` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/jod-ueberschussquellen-farebrother` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/jod-vegan-vegetarisch-eveleigh-meta` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/jod-vegane-kinder-jugendliche-koller` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/jod-vegane-kinder-jugendliche-koller` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/jod-vegane-vegetarische-kinder-remerova` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/jod-wachstum-salz-supplemente-farebrother` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/jod-who-europa-salzjodierung-2024` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/jod-who-europa-salzjodierung-2024` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/jod-who-monitoring-uic-salzjodierung` | Studie/Quelle | 4 | 83 |
-| [ ] | `/wissen/jod-who-nlis-uic-schwellen` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/jod-who-nlis-uic-schwellen` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/jodinduzierte-schilddruesendysfunktion-leung-braverman` | Studie/Quelle | 6 | 83 |
 | [ ] | `/wissen/jodprophylaxe-autoimmunitaet-review` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/jodsalz-faktenblatt-bmleh` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/jodsalz-faktenblatt-bmleh` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/jodsalz-praevention-review` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/jodversorgung-deutschland-bmleh-rki` | Studie/Quelle | 8 | 83 |
+| [x] | `/wissen/jodversorgung-deutschland-bmleh-rki` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/kalium` | Hauptartikel | 7 | 86 |
-| [ ] | `/wissen/kalium-blutdruck-metaanalyse-granal-2025` | Studie/Quelle | 6 | 83 |
+| [x] | `/wissen/kalium-blutdruck-metaanalyse-granal-2025` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/kalium-ernaehrungsempfehlungen-nnr-2023` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/kalium-leitlinie-who-2012` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/kalium-meta-aburto-2013` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/kalium-reference-dge-2026` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/kalium-leitlinie-who-2012` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/kalium-meta-aburto-2013` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/kalium-reference-dge-2026` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/kalium-referenzwerte-efsa-2016` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/kalium-referenzwerte-nasem-2019` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/kalium-risk-kdigo-2020` | Studie/Quelle | 5 | 83 |
-| [ ] | `/wissen/kalium-safety-bfr-2021` | Studie/Quelle | 6 | 83 |
+| [x] | `/wissen/kalium-safety-bfr-2021` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/kalium-salzersatz-ssass-2021` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/kollagen` | Hauptartikel | 7 | 86 |
-| [ ] | `/wissen/kollagen-bischof-training-meta-2024` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/kollagen-cammilleri-marine-metals-quality-2025` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/kollagen-cao-skin-anti-aging-meta-2023` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/kollagen-dge-reference-values-nonessentiality` | Studie/Quelle | 5 | 83 |
+| [x] | `/wissen/kollagen-bischof-training-meta-2024` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/kollagen-cammilleri-marine-metals-quality-2025` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/kollagen-cao-skin-anti-aging-meta-2023` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/kollagen-dge-reference-values-nonessentiality` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/kollagen-efsa-egg-membrane-hydrolysate-safety-2025` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/kollagen-efsa-joint-health-claim-2011` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/kollagen-efsa-verisol-skin-elasticity-claim-2013` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/kollagen-koenig-bmd-rct-2018` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/kollagen-efsa-joint-health-claim-2011` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/kollagen-efsa-verisol-skin-elasticity-claim-2013` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/kollagen-koenig-bmd-rct-2018` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/kollagen-kumar-uc-ii-knee-oa-review-2023` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/kollagen-lin-knee-oa-pain-meta-2023` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/kollagen-ncbi-collagen-synthesis` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/kollagen-ravindran-umbrella-skin-musculoskeletal-2026` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/kollagen-yazaki-collagen-peptide-bioavailability-2017` | Studie/Quelle | 8 | 83 |
+| [x] | `/wissen/kollagen-yazaki-collagen-peptide-bioavailability-2017` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/krilloel` | Hauptartikel | 7 | 86 |
-| [ ] | `/wissen/krilloel-dge-fett-essenzielle-fettsaeuren` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/krilloel-efsa-drv-fats-2010` | Studie/Quelle | 8 | 83 |
+| [x] | `/wissen/krilloel-dge-fett-essenzielle-fettsaeuren` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/krilloel-efsa-drv-fats-2010` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/krilloel-efsa-novel-food-antarctic-krill-2014` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/krilloel-efsa-ul-epa-dha-dpa-2012` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/krilloel-efsa-ul-epa-dha-dpa-2012` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/krilloel-fda-grn-371` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/krilloel-health-canada-monograph-2025` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/krilloel-huang-cardiovascular-meta-2023` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/krilloel-laslett-knee-osteoarthritis-rct-2024` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/krilloel-nicholls-severe-hypertriglyceridemia-rct-2022` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/krilloel-ramprasath-omega-3-index-rct-2013` | Studie/Quelle | 8 | 83 |
+| [x] | `/wissen/krilloel-ramprasath-omega-3-index-rct-2013` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/krilloel-sahebkar-krill-vs-fish-oil-network-meta-2020` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/krilloel-schuchardt-bioavailability-plasma-phospholipids-2011` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/krilloel-xia-knee-osteoarthritis-meta-2025` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/kupfer` | Hauptartikel | 7 | 86 |
 | [ ] | `/wissen/kupfer-aasld-wilson-summary` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/kupfer-alzheimer-nicht-cp-kupfer` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/kupfer-bariatrische-chirurgie-gletsu-miller` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/kupfer-bfr-nem-hoechstmengen` | Studie/Quelle | 8 | 83 |
+| [x] | `/wissen/kupfer-alzheimer-nicht-cp-kupfer` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/kupfer-bariatrische-chirurgie-gletsu-miller` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/kupfer-bfr-nem-hoechstmengen` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/kupfer-cupric-oxide-baker` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/kupfer-depletion-repletion-kehoe` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/kupfer-dge-referenzwerte` | Studie/Quelle | 8 | 83 |
+| [x] | `/wissen/kupfer-dge-referenzwerte` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/kupfer-easl-ern-wilson-guideline` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/kupfer-efsa-hbgv-sicherheit` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/kupfer-efsa-referenzwerte` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/kupfer-iom-dri-rda-ul` | Studie/Quelle | 8 | 83 |
+| [x] | `/wissen/kupfer-efsa-hbgv-sicherheit` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/kupfer-efsa-referenzwerte` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/kupfer-iom-dri-rda-ul` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/kupfer-knochen-gutierrez-guerra-review` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/kupfer-moderne-statusmarker-chillon` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/kupfer-myelopathie-jaiser-winston` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/kupfer-nhanes-mortalitaet-wang-zhao` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/kupfer-myelopathie-jaiser-winston` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/kupfer-nhanes-mortalitaet-wang-zhao` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/kupfer-nih-fact-sheet-formen-risiken` | Studie/Quelle | 6 | 83 |
 | [ ] | `/wissen/kupfer-nordic-scoping-review` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/kupfer-pratt-supplementierung-sicherheit` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/kupfer-pure-china-cvd-mortalitaet` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/kupfer-scf-ul-2003` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/kupfer-serumkupfer-mace-review` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/kupfer-pratt-supplementierung-sicherheit` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/kupfer-pure-china-cvd-mortalitaet` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/kupfer-scf-ul-2003` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/kupfer-serumkupfer-mace-review` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/kupfer-statusmarker-harvey-2009` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/kupfer-supplementierung-enzyme-jones` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/kupfer-supplementierung-enzyme-jones` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/kupfer-who-fao-bedarf` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/kupfer-zink-interaktion-fischer` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/kupfer-zink-prothesenhaftcreme-jamal` | Studie/Quelle | 4 | 83 |
 | [ ] | `/wissen/l-carnitin` | Hauptartikel | 7 | 86 |
 | [ ] | `/wissen/l-carnitin-dge-referenzwerte-nichttreffer` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/l-carnitin-efsa-tartrate-safety-2003` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/l-carnitin-efsa-tartrate-safety-2003` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/l-carnitin-gheysari-diabetes-cvd-risk-2024` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/l-carnitin-hamedi-obesity-umbrella-2025` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/l-carnitin-health-canada-monograph-2025` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/l-carnitin-heinrich-sanchez-tmao-review-2025` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/l-carnitin-mielgo-ayuso-exercise-performance-2021` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/l-carnitin-mielgo-ayuso-exercise-performance-2021` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/l-carnitin-nih-ods-health-professional` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/l-carnitin-vajdi-hemodialysis-cardiometabolic-2026` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/l-carnitin-vkm-risk-assessment-2015` | Studie/Quelle | 8 | 83 |
+| [x] | `/wissen/l-carnitin-vkm-risk-assessment-2015` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/l-carnitin-wu-gbu-tmao-response-2025` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/l-carnitin-zhou-primary-deficiency-screening-2024` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/linxian-25-year-2018` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/l-carnitin-zhou-primary-deficiency-screening-2024` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/linxian-25-year-2018` | Studie/Quelle | ≥7 | 90 |
 | [ ] | `/wissen/linxian-lung-chemoprevention-2006` | Studie/Quelle | 6 | 83 |
 | [ ] | `/wissen/magnesium` | Hauptartikel | 7 | 86 |
-| [ ] | `/wissen/magnesium-aufnahme-bioverfuegbarkeit` | Studie/Quelle | 6 | 83 |
+| [x] | `/wissen/magnesium-aufnahme-bioverfuegbarkeit` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/magnesium-bei-skelettmuskelkraempfen` | Studie/Quelle | 6 | 83 |
 | [ ] | `/wissen/magnesium-fachinformationen-fuer-gesundheitsberufe` | Studie/Quelle | 5 | 83 |
 | [ ] | `/wissen/magnesium-meta-zhang-2016` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/magnesium-reference-dge-2021` | Studie/Quelle | 8 | 83 |
+| [x] | `/wissen/magnesium-reference-dge-2021` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/magnesium-referenzwerte-calcium-phosphor-vitamin-d-fluorid` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/magnesium-safety-bfr-2017` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/magnesium-safety-bfr-2017` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/mangan` | Hauptartikel | 7 | 86 |
 | [ ] | `/wissen/mangan-atsdr-toxikologie-biomarker` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/mangan-bfr-hoechstmengen-nem` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/mangan-bfr-hoechstmengen-nem` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/mangan-bioaccessibility-oneal-zheng` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/mangan-deutschland-exposition-sachse` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/mangan-efsa-safe-level-sicherheit` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/mangan-deutschland-exposition-sachse` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/mangan-efsa-safe-level-sicherheit` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/mangan-efsa-supplementformen` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/mangan-homeostase-aschner` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/mangan-homeostase-aschner` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/mangan-internationale-aufnahme-freeland-graves` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/mangan-kinder-neuroentwicklung-liu-meta` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/mangan-mangel-toxizitaet-freeland-graves` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/mangan-mangel-toxizitaet-freeland-graves` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/mangan-metabolisches-syndrom-wong-meta` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/mangan-nih-ods-factsheet` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/mangan-nnr-scoping-review` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/mangan-parenterale-ernaehrung-hardy` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/mangan-parenterale-ernaehrung-hardy` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/mangan-pn-blutspiegel-abdalian` | Studie/Quelle | 4 | 83 |
 | [ ] | `/wissen/mangan-referenzwerte-dach-efsa-nasem` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/mangan-saeuglinge-formula-williams` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/mangan-saeuglingsnahrung-gehalte-frisbie` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/mangan-saeuglingsnahrung-gehalte-frisbie` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/mangan-sicherheit-scf-vkm-health-council` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/mangan-tpn-toxizitaet-dewitt` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/mangan-trinkwasser-kinder-iyare-review` | Studie/Quelle | 6 | 83 |
+| [x] | `/wissen/mangan-tpn-toxizitaet-dewitt` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/mangan-trinkwasser-kinder-iyare-review` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/mangan-trinkwasser-kinder-rahman-kohorte` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/mangan-trinkwasser-who-sicherheit` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/mct-oel` | Hauptartikel | 7 | 86 |
 | [ ] | `/wissen/mct-oel-chapman-lopez-koh-sport-review-2022` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/mct-oel-dge-fettzufuhr-leitlinie-2015` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/mct-oel-dge-referenzwerte-fett-essenzielle-fettsaeuren` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/mct-oel-efsa-health-claim-body-weight-2011` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/mct-oel-efsa-health-claim-body-weight-2011` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/mct-oel-fda-grn-449` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/mct-oel-fsanz-a563-infant-formula` | Studie/Quelle | 6 | 83 |
+| [x] | `/wissen/mct-oel-fsanz-a563-infant-formula` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/mct-oel-he-gewicht-metabolik-meta-2024` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/mct-oel-heidt-regulatory-perspectives-2026` | Studie/Quelle | 6 | 83 |
 | [ ] | `/wissen/mct-oel-maher-clegg-satiety-food-intake-meta-2021` | Studie/Quelle | 7 | 83 |
@@ -982,7 +989,7 @@ Einzelabschluss offen.
 | [ ] | `/wissen/mct-oel-wu-alzheimer-cognition-meta-2023` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/msm` | Hauptartikel | 7 | 86 |
 | [ ] | `/wissen/msm-dermatology-review-abdul-rahman-2026` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/msm-efsa-joints-claims-2009` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/msm-efsa-joints-claims-2009` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/msm-efsa-related-claims-2010` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/msm-fda-gras-grn-229` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/msm-half-marathon-rct-withee-2017` | Studie/Quelle | 7 | 83 |
@@ -991,64 +998,64 @@ Einzelabschluss offen.
 | [ ] | `/wissen/msm-human-csf-plasma-engelke-2005` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/msm-intestinal-absorption-sulfate-2018` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/msm-mild-knee-pain-rct-nakasone-2023` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/msm-military-knee-pain-negative-tennent-2017` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/msm-oa-meta-analysis-brien-2011` | Studie/Quelle | 8 | 83 |
+| [x] | `/wissen/msm-military-knee-pain-negative-tennent-2017` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/msm-oa-meta-analysis-brien-2011` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/msm-oa-rct-debbi-2011` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/msm-verbraucherzentrale-arthrose-schwefeltherapie-2025` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/msm-vkm-risk-assessment-2021` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/msm-verbraucherzentrale-arthrose-schwefeltherapie-2025` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/msm-vkm-risk-assessment-2021` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/nahrstoffreferenzwerte-fur-australien-und-neuseeland-thiam-011` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/niedrig-dosierte-thiaminsupplementierung-stillender-kambod-029` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/nordische-ernaehrungsempfehlungen-2023-magnesium` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/nordische-ernaehrungsempfehlungen-2023-magnesium` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/nordische-ernahrungsempfehlungen-2023-thiamin-008` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/omega-3` | Hauptartikel | 7 | 86 |
 | [ ] | `/wissen/omega-3-aha-hypertriglyceridemia-advisory` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/omega-3-albert-nz-oxidation-label` | Studie/Quelle | 8 | 83 |
+| [x] | `/wissen/omega-3-albert-nz-oxidation-label` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/omega-3-arnesen-nnr-scoping-review` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/omega-3-ascend-bowman-diabetes-cvd` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/omega-3-begtrup-bleeding-risk-review` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/omega-3-ascend-bowman-diabetes-cvd` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/omega-3-begtrup-bleeding-risk-review` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/omega-3-bernasconi-cvd-dose-meta` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/omega-3-bfr-important-but-in-moderation` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/omega-3-dge-fett-essenzielle-fettsaeuren` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/omega-3-dge-handlungsempfehlungen-schwangerschaft` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/omega-3-bfr-important-but-in-moderation` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/omega-3-dge-fett-essenzielle-fettsaeuren` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/omega-3-dge-handlungsempfehlungen-schwangerschaft` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/omega-3-downie-dry-eye-cochrane` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/omega-3-dream-dry-eye-rct` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/omega-3-efsa-ul-epa-dha-dpa` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/omega-3-fish-oil-oxidative-status-compliance` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/omega-3-dream-dry-eye-rct` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/omega-3-efsa-ul-epa-dha-dpa` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/omega-3-fish-oil-oxidative-status-compliance` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/omega-3-gencer-atrial-fibrillation-meta` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/omega-3-hanson-pufa-cancer-rct-meta` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/omega-3-issfal-pregnancy-preterm-statement` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/omega-3-khan-cvd-meta` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/omega-3-kim-nafld-meta` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/omega-3-kleiner-label-amounts` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/omega-3-lee-cancer-umbrella` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/omega-3-kim-nafld-meta` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/omega-3-kleiner-label-amounts` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/omega-3-lee-cancer-umbrella` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/omega-3-makrides-orip-preterm-delivery` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/omega-3-middleton-pregnancy-cochrane` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/omega-3-moore-plant-based-nafld-meta` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/omega-3-nasem-iom-dri-fatty-acids` | Studie/Quelle | 8 | 83 |
+| [x] | `/wissen/omega-3-nasem-iom-dri-fatty-acids` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/omega-3-nih-ods-fact-sheet` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/omega-3-nnr-2023-fat-fatty-acids` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/omega-3-reduce-it-bhatt-icosapent-ethyl` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/omega-3-strength-nicholls-epa-dha-corn-oil` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/omega-3-sydenham-cognition-cochrane` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/omega-3-vital-manson-cvd-cancer` | Studie/Quelle | 8 | 83 |
+| [x] | `/wissen/omega-3-sydenham-cognition-cochrane` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/omega-3-vital-manson-cvd-cancer` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/omega-3-wang-dry-eye-meta` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/omega-3-wang-dyslipidemia-meta` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/omega-3-wang-ra-meta` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/omega-3-zhang-blood-pressure-meta` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/opc` | Hauptartikel | 7 | 86 |
-| [ ] | `/wissen/opc-anjom-shoae-gse-dyslipidaemia-2020` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/opc-anjom-shoae-gse-dyslipidaemia-2020` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/opc-asbaghi-gse-metabolic-markers-2020` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/opc-bayer-hoegger-pycnogenol-pk-2024` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/opc-efsa-meganatural-bp-claim-2021` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/opc-foshati-gse-fmd-blood-pressure-2022` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/opc-foshati-gse-fmd-blood-pressure-2022` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/opc-harnly-grape-polyphenol-standardization-2021` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/opc-health-canada-nhp-monograph-2024` | Studie/Quelle | 6 | 83 |
 | [ ] | `/wissen/opc-health-canada-safety-assessment-2024` | Studie/Quelle | 6 | 83 |
 | [ ] | `/wissen/opc-nccih-grape-seed-safety-2025` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/opc-ren-proanthocyanidins-blood-pressure-2020` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/opc-robertson-pine-bark-cochrane-2020` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/opc-robertson-pine-bark-cochrane-2020` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/opc-sica-gse-quality-characterization-2018` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/opc-unusan-grape-seed-proanthocyanidins-2020` | Studie/Quelle | 5 | 83 |
+| [x] | `/wissen/opc-unusan-grape-seed-proanthocyanidins-2020` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/opc-usp-nf-grape-seeds-opc-standard` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/opc-wren-gspe-bioavailability-pk` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/orale-magnesiumsupplementierung-schlaflosigkeit-aeltere-erwachsene` | Studie/Quelle | 7 | 83 |
@@ -1057,81 +1064,81 @@ Einzelabschluss offen.
 | [ ] | `/wissen/probiotika-aga-gi-guideline-2020` | Studie/Quelle | 6 | 83 |
 | [ ] | `/wissen/probiotika-bfr-infant-formula-benefit-safety-2026` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/probiotika-chieng-bv-recurrence-meta-2022` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/probiotika-cochrane-urti-2022` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/probiotika-collinson-acute-infectious-diarrhoea-cochrane-2020` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/probiotika-cochrane-urti-2022` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/probiotika-collinson-acute-infectious-diarrhoea-cochrane-2020` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/probiotika-ding-functional-constipation-meta-2024` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/probiotika-efsa-qps-update-2026` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/probiotika-fda-preterm-invasive-disease-warning-2023` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/probiotika-fda-preterm-invasive-disease-warning-2023` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/probiotika-fsai-food-supplement-safety-2024` | Studie/Quelle | 6 | 83 |
 | [ ] | `/wissen/probiotika-goldenberg-cdi-cochrane-2017` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/probiotika-goodman-adult-aad-meta-2021` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/probiotika-guo-pediatric-aad-cochrane-2019` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/probiotika-hill-isapp-definition-2014` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/probiotika-kelly-acg-cdi-guideline-2021` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/probiotika-hill-isapp-definition-2014` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/probiotika-kelly-acg-cdi-guideline-2021` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/probiotika-kim-atopic-dermatitis-meta-2025` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/probiotika-lacy-acg-ibs-guideline-2021` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/probiotika-lacy-acg-ibs-guideline-2021` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/probiotika-liu-metabolic-syndrome-meta-2025` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/probiotika-merenstein-commercial-product-quality-2019` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/probiotika-merenstein-commercial-product-quality-2019` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/probiotika-nih-ods-fact-sheet-2025` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/probiotika-sanders-safety-review-2023` | Studie/Quelle | 6 | 83 |
 | [ ] | `/wissen/probiotika-tang-ibs-meta-tsa-2026` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/q10` | Hauptartikel | 7 | 86 |
 | [ ] | `/wissen/q10-bakri-male-infertility-2025` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/q10-bfr-sicherheit-risiken-2023` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/q10-bfr-sicherheit-risiken-2023` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/q10-dai-oxidative-stress-2022` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/q10-deng-exercise-performance-2025` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/q10-efsa-health-claims-2010` | Studie/Quelle | 6 | 83 |
+| [x] | `/wissen/q10-deng-exercise-performance-2025` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/q10-efsa-health-claims-2010` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/q10-genereviews-primary-deficiency` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/q10-health-canada-ubiquinone-monograph` | Studie/Quelle | 6 | 83 |
+| [x] | `/wissen/q10-health-canada-ubiquinone-monograph` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/q10-karimi-blood-pressure-heart-rate-2025` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/q10-kennedy-statin-myalgia-2020` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/q10-kennedy-statin-myalgia-2020` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/q10-kovacic-statin-myopathy-2025` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/q10-lin-dor-ivf-2024` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/q10-liu-lipid-profiles-2022` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/q10-mei-ubiquinol-cocrystal-bioavailability-2026` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/q10-mortensen-q-symbio-heart-failure-2014` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/q10-mortensen-q-symbio-heart-failure-2014` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/q10-musazadeh-glycemic-umbrella-2026` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/q10-parkinson-qe3-negative-2014` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/q10-parkinson-qe3-negative-2014` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/q10-pravst-formulation-bioavailability-2020` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/q10-sazali-migraine-meta-2021` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/q10-sazali-migraine-meta-2021` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/q10-talebi-exercise-muscle-damage-2024` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/q10-vkm-risk-assessment-2015` | Studie/Quelle | 8 | 83 |
+| [x] | `/wissen/q10-vkm-risk-assessment-2015` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/q10-xu-heart-failure-meta-2024` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/q10-zhang-metabolic-markers-2026` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/quercetin` | Hauptartikel | 7 | 86 |
-| [ ] | `/wissen/quercetin-atemwegsinfekte-rct-2010` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/quercetin-efsa-health-claims-2011` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/quercetin-im-blut-form-und-lebensmittelmatrix` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/quercetin-kardiometabolische-marker-meta-analyse` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/quercetin-masld-leberfett-meta-analyse` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/quercetin-safety-review-2018` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/quercetin-sport-leistung-erholung` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/referenzwerte-fur-die-nahrstoffzufuhr-thiamin-001` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/quercetin-atemwegsinfekte-rct-2010` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/quercetin-efsa-health-claims-2011` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/quercetin-im-blut-form-und-lebensmittelmatrix` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/quercetin-kardiometabolische-marker-meta-analyse` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/quercetin-masld-leberfett-meta-analyse` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/quercetin-safety-review-2018` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/quercetin-sport-leistung-erholung` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/referenzwerte-fur-die-nahrstoffzufuhr-thiamin-001` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/referenzwerte-fur-die-zufuhr-von-thiamin-003` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/referenzwerte-fur-thiamin-riboflavin-niacin-vitamin-b6-fol-005` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/rolle-der-thiaminsupplementierung-bei-der-behandlung-chron-044` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/saccharomyces-boulardii` | Hauptartikel | 8 | 86 |
-| [ ] | `/wissen/saccharomyces-boulardii-acg-cdi-guideline-2021` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/saccharomyces-boulardii-acg-cdi-guideline-2021` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/saccharomyces-boulardii-aga-probiotics-guideline-2020` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/saccharomyces-boulardii-chen-hpylori-bismuth-quadruple-meta-2024` | Studie/Quelle | 4 | 83 |
-| [ ] | `/wissen/saccharomyces-boulardii-efsa-cncm-i-1079-health-claim-2012` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/saccharomyces-boulardii-ehrhardt-aad-rct-2016` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/saccharomyces-boulardii-esmaeilinezhad-cdad-cochrane-2025` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/saccharomyces-boulardii-famhp-fungaemia-warning-2018` | Studie/Quelle | 6 | 83 |
+| [x] | `/wissen/saccharomyces-boulardii-chen-hpylori-bismuth-quadruple-meta-2024` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/saccharomyces-boulardii-efsa-cncm-i-1079-health-claim-2012` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/saccharomyces-boulardii-ehrhardt-aad-rct-2016` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/saccharomyces-boulardii-esmaeilinezhad-cdad-cochrane-2025` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/saccharomyces-boulardii-famhp-fungaemia-warning-2018` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/saccharomyces-boulardii-health-canada-probiotics-monograph-2026` | Studie/Quelle | 6 | 83 |
 | [ ] | `/wissen/saccharomyces-boulardii-li-xie-hpylori-adjuvant-meta-2025` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/saccharomyces-boulardii-mcfarland-goh-travellers-diarrhea-meta-2019` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/saccharomyces-boulardii-mcfarland-li-pediatric-acute-diarrhea-china-2025` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/saccharomyces-boulardii-rannikko-fungemia-case-control-2021` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/saccharomyces-boulardii-szajewska-kolodziej-aad-meta-2015` | Studie/Quelle | 8 | 83 |
+| [x] | `/wissen/saccharomyces-boulardii-rannikko-fungemia-case-control-2021` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/saccharomyces-boulardii-szajewska-kolodziej-aad-meta-2015` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/saccharomyces-boulardii-szajewska-pediatric-age-update-2020` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/schwarzkuemmeloel` | Hauptartikel | 7 | 86 |
 | [ ] | `/wissen/schwarzkuemmeloel-abdel-razek-oil-quality-2024` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/schwarzkuemmeloel-efsa-botanical-claims-on-hold-2021` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/schwarzkuemmeloel-hannan-phytochemistry-safety-2021` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/schwarzkuemmeloel-he-rhinitis-2024` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/schwarzkuemmeloel-he-xu-asthma-2020` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/schwarzkuemmeloel-health-canada-npn-80124888` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/schwarzkuemmeloel-he-xu-asthma-2020` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/schwarzkuemmeloel-health-canada-npn-80124888` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/schwarzkuemmeloel-jafari-cvd-risk-dose-response-2025` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/schwarzkuemmeloel-kavyani-blood-pressure-2023` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/schwarzkuemmeloel-lan-xia-inflammation-oxidative-stress-2025` | Studie/Quelle | 7 | 83 |
@@ -1142,15 +1149,15 @@ Einzelabschluss offen.
 | [ ] | `/wissen/schwarzkuemmeloel-rasff-pah-contamination-2025` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/schwarzkuemmeloel-razmpoosh-liver-kidney-2020` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/schwarzkuemmeloel-tekbas-thymoquinone-oil-serum-2023` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/schwarzkuemmeloel-thomas-tq-rich-oil-safety-2022` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/schwarzkuemmeloel-thomas-tq-rich-oil-safety-2022` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/selen` | Hauptartikel | 7 | 86 |
 | [ ] | `/wissen/selen-bfr-hoechstmengen-bvl-abgrenzung` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/selen-catalyst-larsen-qol` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/selen-catalyst-larsen-qol` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/selen-cvd-mortalitaet-jenkins` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/selen-dach-referenzwerte-kipp-dge` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/selen-diabetes-review-vinceti` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/selen-efsa-drv-2014` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/selen-efsa-ul-2023` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/selen-dach-referenzwerte-kipp-dge` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/selen-diabetes-review-vinceti` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/selen-efsa-drv-2014` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/selen-efsa-ul-2023` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/selen-entzuendung-crp-review` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/selen-formen-bioverfuegbarkeit-review` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/selen-gestationsdiabetes-kong` | Studie/Quelle | 8 | 83 |
@@ -1165,44 +1172,44 @@ Einzelabschluss offen.
 | [ ] | `/wissen/selen-kashin-beck-kinder-defizienzregion` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/selen-krebspraevention-cochrane-vinceti` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/selen-kritisch-kranke-alhazzani` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/selen-l-selenomethionin-efsa` | Studie/Quelle | 6 | 83 |
+| [x] | `/wissen/selen-l-selenomethionin-efsa` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/selen-lipide-urbano-dosiswirkung` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/selen-mangel-keshan-kashin-beck` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/selen-npc-clark-krebshypothese` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/selen-npc-clark-krebshypothese` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/selen-npc-diabetes-stranges-algotar` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/selen-schwangerschaft-review-mcdougall` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/selen-selcel-lance-adenome-diabetes` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/selen-select-kristal-hochstatus` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/selen-select-lippman-krebs-sicherheit` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/selen-select-kristal-hochstatus` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/selen-select-lippman-krebs-sicherheit` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/selen-selenhefe-efsa-rayman` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/selen-sprint-praeeklampsie-marker` | Studie/Quelle | 8 | 83 |
+| [x] | `/wissen/selen-sprint-praeeklampsie-marker` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/selen-statusabhaengigkeit-u-kurve-rayman` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/selen-statusmarker-combs-selenoprotein-p` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/selen-supplement-toxizitaet-macfarquhar` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/selen-statusmarker-combs-selenoprotein-p` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/selen-supplement-toxizitaet-macfarquhar` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/selen-versorgung-europa-schweiz-finnland` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/spirulina` | Hauptartikel | 6 | 86 |
 | [ ] | `/wissen/spirulina-allergie-gromek-2024-review` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/spirulina-anses-sicherheit-2017` | Studie/Quelle | 5 | 83 |
-| [ ] | `/wissen/spirulina-b12-bioavailability-watanabe-2003` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/spirulina-blue-green-algae-microcystins-fda-2024` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/spirulina-blutdruck-machowiec-2021-meta` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/spirulina-anses-sicherheit-2017` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/spirulina-b12-bioavailability-watanabe-2003` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/spirulina-blue-green-algae-microcystins-fda-2024` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/spirulina-blutdruck-machowiec-2021-meta` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/spirulina-body-composition-meta-2025` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/spirulina-crp-meta-2025` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/spirulina-crp-meta-2025` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/spirulina-french-production-microcystins-2023` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/spirulina-fu-2025-kardiometabolik-exercise-meta` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/spirulina-glucose-ghanbari-2022-meta` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/spirulina-limnospira-microcystin-taxonomie-pinchart-2024` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/spirulina-lipide-rahnama-2023-dose-response` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/spirulina-livertox-leber-sicherheit` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/spirulina-microcystin-supplements-gilroy-2000` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/spirulina-livertox-leber-sicherheit` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/spirulina-microcystin-supplements-gilroy-2000` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/spirulina-microcystins-who-2020-background` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/spirulina-naehrstoffprofil-usda-fooddata` | Studie/Quelle | 9 | 83 |
-| [ ] | `/wissen/spirulina-pseudovitamin-b12-watanabe-1999` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/spirulina-naehrstoffprofil-usda-fooddata` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/spirulina-pseudovitamin-b12-watanabe-1999` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/spirulina-retail-microbiota-cyanotoxins-2023` | Studie/Quelle | 6 | 83 |
 | [ ] | `/wissen/strategien-zur-thiaminanreicherung-in-landern-mit-niedrige-022` | Studie/Quelle | 5 | 83 |
 | [ ] | `/wissen/systematischer-review-zur-thiaminsupplementierung-bei-diab-046` | Studie/Quelle | 6 | 83 |
 | [ ] | `/wissen/thiamin-fachinformationen-fur-gesundheitsberufe-004` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/thiaminmangel-bei-gambischen-frauen-im-gebarfahigen-alter-031` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/thiaminmangel-bei-gambischen-frauen-im-gebarfahigen-alter-031` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/thiaminmangel-bei-kambodschanischen-sauglingen-mit-und-ohn-025` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/thiaminmangel-und-herzfunktionsstorungen-bei-kambodschanis-026` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/thiaminmangel-und-seine-pravention-und-kontrolle-in-grosse-006` | Studie/Quelle | 5 | 83 |
@@ -1216,18 +1223,18 @@ Einzelabschluss offen.
 | [ ] | `/wissen/vitamin-a-30-vitamin-a-and-bone-fractures-systematic-review-and-meta-2021` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/vitamin-a-43-vitamin-a-and-beta-carotene-a-scoping-review-for-2023` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/vitamin-a-5-vitamin-a-supplementation-for-preventing-morbidity-and-mortality-in-2022` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/vitamin-a-56-nepal-child-mortality-1991` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/vitamin-a-56-nepal-child-mortality-1991` | Studie/Quelle | ≥7 | 90 |
 | [ ] | `/wissen/vitamin-a-57-vitamin-a-supplementation-in-northern-ghana-1993` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/vitamin-a-58-trends-and-mortality-effects-of-vitamin-a-deficiency-in-2015` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/vitamin-a-59-vitamin-a-supplements-and-mortality-related-to-measles-1987` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/vitamin-a-59-vitamin-a-supplements-and-mortality-related-to-measles-1987` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/vitamin-a-6-vitamin-a-supplementation-during-pregnancy-for-maternal-and-newborn-2015` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/vitamin-a-61-nepal-maternal-mortality-1999` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/vitamin-a-61-nepal-maternal-mortality-1999` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/vitamin-a-62-effect-of-vitamin-a-supplementation-in-women-of-reproductive-age-on-maternal-survival-in-ghana-obaapavita-2010` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/vitamin-a-64-vitamin-a-supplementation-for-infants-one-to-six-months-2016` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/vitamin-a-65-neonatal-vitamin-a-supplementation-for-prevention-of-mortality-and-2017` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/vitamin-a-65-neonatal-vitamin-a-supplementation-for-prevention-of-mortality-and-2017` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/vitamin-a-67-epidemiology-of-vitamin-a-deficiency-and-xerophthalmia-2012` | Studie/Quelle | 5 | 83 |
-| [ ] | `/wissen/vitamin-a-7-vitamin-a-supplementation-for-postpartum-women-2016` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/vitamin-a-70-mortality-in-randomized-trials-of-antioxidant-supplements-for-primary-2007` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/vitamin-a-7-vitamin-a-supplementation-for-postpartum-women-2016` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/vitamin-a-70-mortality-in-randomized-trials-of-antioxidant-supplements-for-primary-2007` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/vitamin-a-71-beta-carotene-supplementation-and-mortality-risk-2022` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/vitamin-a-72-beta-carotene-supplementation-and-risk-of-cardiovascular-disease-2022` | Studie/Quelle | 6 | 83 |
 | [ ] | `/wissen/vitamin-a-73-use-of-antioxidant-vitamins-for-the-prevention-of-cardiovascular-disease-2003` | Studie/Quelle | 7 | 83 |
@@ -1236,9 +1243,9 @@ Einzelabschluss offen.
 | [ ] | `/wissen/vitamin-a-76-blood-concentrations-of-carotenoids-and-retinol-and-lung-cancer-2016` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/vitamin-a-77-areds-report-35-amd-2013` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/vitamin-a-79-retinol-intake-and-bone-fracture-risk-a-meta-analysis-2014` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/vitamin-a-8-vitamin-a-for-treating-measles-in-children-2005` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/vitamin-a-8-vitamin-a-for-treating-measles-in-children-2005` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/vitamin-a-80-vitamin-a-and-risk-of-fracture-a-meta-analysis-2017` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/vitamin-a-81-vitamin-a-supplementation-and-fracture-risk-intervention-follow-up-2013` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/vitamin-a-81-vitamin-a-supplementation-and-fracture-risk-intervention-follow-up-2013` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/vitamin-a-9-vitamin-a-supplementation-to-prevent-mortality-and-short-and-2016` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/vitamin-a-areds-original-2001` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/vitamin-a-areds2-2013` | Studie/Quelle | 7 | 83 |
@@ -1250,9 +1257,9 @@ Einzelabschluss offen.
 | [ ] | `/wissen/vitamin-a-jivita-1-2011` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/vitamin-a-linxian-follow-up-2009` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/vitamin-a-linxian-nutrition-intervention-1993` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/vitamin-a-physicians-health-1996` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/vitamin-a-physicians-health-1996` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/vitamin-a-rothman-1995` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/vitamin-a-severe-measles-hussey-klein-1990` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/vitamin-a-severe-measles-hussey-klein-1990` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/vitamin-b1` | Hauptartikel | 6 | 86 |
 | [ ] | `/wissen/vitamin-b12` | Hauptartikel | 7 | 86 |
 | [ ] | `/wissen/vitamin-b12-5-deoxyadenosylcobalamin-and-methylcobalamin-as-sources-fo-441` | Studie/Quelle | 6 | 83 |
@@ -1260,40 +1267,40 @@ Einzelabschluss offen.
 | [ ] | `/wissen/vitamin-b12-ausgewahlte-fragen-und-antworten-zu-vitamin-b12-435` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/vitamin-b12-cancer-incidence-and-mortality-after-treatment-with-folic-489` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/vitamin-b12-clinical-practice-vitamin-b12-deficiency-458` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/vitamin-b12-cobalamin-coenzyme-forms-are-not-likely-to-be-superior-to-479` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/vitamin-b12-dietary-reference-intakes-tables-reference-values-for-vita-452` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/vitamin-b12-effects-of-vitamin-b12-and-folate-deficiency-on-brain-deve-473` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/vitamin-b12-cobalamin-coenzyme-forms-are-not-likely-to-be-superior-to-479` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/vitamin-b12-dietary-reference-intakes-tables-reference-values-for-vita-452` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/vitamin-b12-effects-of-vitamin-b12-and-folate-deficiency-on-brain-deve-473` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/vitamin-b12-elevated-plasma-vitamin-b12-levels-as-a-marker-for-cancer-490` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/vitamin-b12-eu-register-of-nutrition-and-health-claims-made-on-foods-455` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/vitamin-b12-global-estimation-of-dietary-micronutrient-inadequacies-a-462` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/vitamin-b12-hochstmengen-fur-vitamin-b12-in-lebensmitteln-inklusive-na-450` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/vitamin-b12-how-common-is-vitamin-b-12-deficiency-460` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/vitamin-b12-eu-register-of-nutrition-and-health-claims-made-on-foods-455` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/vitamin-b12-global-estimation-of-dietary-micronutrient-inadequacies-a-462` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/vitamin-b12-hochstmengen-fur-vitamin-b12-in-lebensmitteln-inklusive-na-450` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/vitamin-b12-how-common-is-vitamin-b-12-deficiency-460` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/vitamin-b12-how-prevalent-is-vitamin-b12-deficiency-among-vegetarians-465` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/vitamin-b12-kinetics-of-cellular-cobalamin-uptake-and-conversion-compa-480` | Studie/Quelle | 6 | 83 |
+| [x] | `/wissen/vitamin-b12-kinetics-of-cellular-cobalamin-uptake-and-conversion-compa-480` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/vitamin-b12-long-term-metformin-use-and-vitamin-b12-deficiency-in-the-482` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/vitamin-b12-long-term-supplemental-one-carbon-metabolism-related-vitam-488` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/vitamin-b12-long-term-treatment-with-metformin-in-patients-with-type-2-481` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/vitamin-b12-monitoring-of-vitamin-b-12-nutritional-status-in-the-unite-461` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/vitamin-b12-neubewertung-der-dge-position-zu-veganer-ernahrung-2024-436` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/vitamin-b12-nutrient-reference-values-for-australia-and-new-zealand-in-453` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/vitamin-b12-long-term-treatment-with-metformin-in-patients-with-type-2-481` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/vitamin-b12-monitoring-of-vitamin-b-12-nutritional-status-in-the-unite-461` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/vitamin-b12-neubewertung-der-dge-position-zu-veganer-ernahrung-2024-436` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/vitamin-b12-nutrient-reference-values-for-australia-and-new-zealand-in-453` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/vitamin-b12-prevalence-of-vitamin-b-12-insufficiency-during-pregnancy-472` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/vitamin-b12-proton-pump-inhibitor-and-histamine-2-receptor-antagonist-483` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/vitamin-b12-sacn-statement-on-nutrition-and-older-adults-living-in-the-454` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/vitamin-b12-sacn-statement-on-nutrition-and-older-adults-living-in-the-454` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/vitamin-b12-scientific-opinion-on-dietary-reference-values-for-cobalam-439` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/vitamin-b12-scientific-opinion-on-the-substantiation-of-health-claims-440` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/vitamin-b12-the-revised-d-a-ch-reference-values-for-the-intake-of-vita-438` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/vitamin-b12-vitamin-and-mineral-requirements-in-human-nutrition-2nd-ed-444` | Studie/Quelle | 8 | 83 |
+| [x] | `/wissen/vitamin-b12-scientific-opinion-on-the-substantiation-of-health-claims-440` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/vitamin-b12-the-revised-d-a-ch-reference-values-for-the-intake-of-vita-438` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/vitamin-b12-vitamin-and-mineral-requirements-in-human-nutrition-2nd-ed-444` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/vitamin-b12-vitamin-b-12-and-perinatal-health-471` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/vitamin-b12-vitamin-b12-a-scoping-review-for-nordic-nutrition-recommen-446` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/vitamin-b12-vitamin-b12-a-scoping-review-for-nordic-nutrition-recommen-446` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/vitamin-b12-vitamin-b12-among-vegetarians-status-assessment-and-supple-466` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/vitamin-b12-vitamin-b12-bei-pflanzenbasierter-ernahrung-besonders-auf-451` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/vitamin-b12-vitamin-b12-cobalamine-referenzwerte-434` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/vitamin-b12-vitamin-b12-containing-plant-food-sources-for-vegetarians-464` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/vitamin-b12-vitamin-b12-bei-pflanzenbasierter-ernahrung-besonders-auf-451` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/vitamin-b12-vitamin-b12-cobalamine-referenzwerte-434` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/vitamin-b12-vitamin-b12-containing-plant-food-sources-for-vegetarians-464` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/vitamin-b12-vitamin-b12-deficiency-457` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/vitamin-b12-vitamin-b12-deficiency-a-21st-century-perspective-459` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/vitamin-b12-vitamin-b12-dietary-reference-intakes-for-thiamin-riboflav-443` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/vitamin-b12-vitamin-b12-dietary-reference-intakes-for-thiamin-riboflav-443` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/vitamin-b12-vitamin-b12-health-professional-fact-sheet-442` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/vitamin-b12-vitamin-b12-in-health-and-disease-456` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/vitamin-b12-vitamin-b12-in-health-and-disease-456` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/vitamin-b12-vitamin-b12-nordic-nutrition-recommendations-2023-445` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/vitamin-b12-vitamin-b12-sources-and-bioavailability-463` | Studie/Quelle | 6 | 83 |
 | [ ] | `/wissen/vitamin-b12-vitamin-b12-status-and-supplementation-in-plant-based-diet-469` | Studie/Quelle | 7 | 83 |
@@ -1310,30 +1317,30 @@ Einzelabschluss offen.
 | [ ] | `/wissen/vitamin-b9` | Hauptartikel | 7 | 86 |
 | [ ] | `/wissen/vitamin-b9-evidenz-folat-versorgung-sicherheit` | Studie/Quelle | 5 | 83 |
 | [ ] | `/wissen/vitamin-c` | Hauptartikel | 7 | 86 |
-| [ ] | `/wissen/vitamin-c-aufnahme-weltweit-modellierung` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/vitamin-c-aufnahme-weltweit-modellierung` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/vitamin-c-bekanntes-unbekanntes-richtiges-mass` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/vitamin-c-biomarker-herz-kreislauf-umbrella-review` | Studie/Quelle | 5 | 83 |
-| [ ] | `/wissen/vitamin-c-dge-referenzwerte` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/vitamin-c-efsa-referenzwerte` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/vitamin-c-erkaeltungen-vorbeugung-behandlung` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/vitamin-c-fachinformation-gesundheitsberufe` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/vitamin-c-fragen-und-antworten-dge` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/vitamin-c-lungenentzuendung-praevention-behandlung` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/vitamin-c-biomarker-herz-kreislauf-umbrella-review` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/vitamin-c-dge-referenzwerte` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/vitamin-c-efsa-referenzwerte` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/vitamin-c-erkaeltungen-vorbeugung-behandlung` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/vitamin-c-fachinformation-gesundheitsberufe` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/vitamin-c-fragen-und-antworten-dge` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/vitamin-c-lungenentzuendung-praevention-behandlung` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/vitamin-c-mangel-australien-scoping-review` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/vitamin-c-nordische-ernaehrungsempfehlungen-2023` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/vitamin-c-obere-aufnahmemenge-efsa` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/vitamin-c-nordische-ernaehrungsempfehlungen-2023` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/vitamin-c-obere-aufnahmemenge-efsa` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/vitamin-c-pharmakokinetik-gesunde-freiwillige` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/vitamin-c-physicians-health-study-herz-kreislauf` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/vitamin-c-physicians-health-study-herz-kreislauf` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/vitamin-c-praeparate-nierensteine-maenner` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/vitamin-c-scoping-review-nnr-2023` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/vitamin-c-sekundaerpraevention-frauen-herz-kreislauf` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/vitamin-c-status-einflussfaktoren-global` | Studie/Quelle | 5 | 83 |
 | [ ] | `/wissen/vitamin-c-status-mangel-global-review` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/vitamin-c-zufuhr-nierensteine-kohorten` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/vitamin-c-zufuhr-nierensteine-kohorten` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/vitamin-d` | Hauptartikel | 7 | 86 |
 | [ ] | `/wissen/vitamin-d-atemwegsinfektionen-aktualisierte-meta` | Studie/Quelle | 5 | 83 |
 | [ ] | `/wissen/vitamin-d-atemwegsinfektionen-ipd-meta` | Studie/Quelle | 5 | 83 |
-| [ ] | `/wissen/vitamin-d-bfr-hoechstmengen` | Studie/Quelle | 4 | 83 |
+| [x] | `/wissen/vitamin-d-bfr-hoechstmengen` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/vitamin-d-calcifediol-cholecalciferol` | Studie/Quelle | 6 | 83 |
 | [ ] | `/wissen/vitamin-d-calcium-frakturen-stuerze` | Studie/Quelle | 6 | 83 |
 | [ ] | `/wissen/vitamin-d-dge-referenzwerte` | Studie/Quelle | 6 | 83 |
@@ -1378,13 +1385,13 @@ Einzelabschluss offen.
 | [ ] | `/wissen/vitamin-k-concepts-and-controversies-in-evaluating-vitamin-k-status-630` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/vitamin-k-dietary-intake-of-menaquinone-is-associated-with-a-reduced-648` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/vitamin-k-dietary-reference-intakes-for-japanese-2020-612` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/vitamin-k-dietary-reference-intakes-tables-reference-values-for-vita-609` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/vitamin-k-dietary-reference-intakes-tables-reference-values-for-vita-609` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/vitamin-k-dietary-reference-values-for-vitamin-k-603` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/vitamin-k-dietary-vitamin-k1-intake-is-associated-with-lower-long-te-647` | Studie/Quelle | 8 | 83 |
+| [x] | `/wissen/vitamin-k-dietary-vitamin-k1-intake-is-associated-with-lower-long-te-647` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/vitamin-k-effect-of-low-dose-supplements-of-menaquinone-7-vitamin-k2-698` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/vitamin-k-effect-of-vitamin-k-on-bone-mineral-density-and-fracture-r-633` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/vitamin-k-efficacy-of-vitamin-k2-in-the-prevention-and-treatment-of-676` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/vitamin-k-further-assessment-on-vitamin-k2-and-contribution-to-the-n-661` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/vitamin-k-further-assessment-on-vitamin-k2-and-contribution-to-the-n-661` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/vitamin-k-high-dietary-menaquinone-intake-is-associated-with-reduced-685` | Studie/Quelle | 9 | 83 |
 | [ ] | `/wissen/vitamin-k-hoechstmengenvorschlaege-fuer-vitamin-k-in-lebensmitteln-i-613` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/vitamin-k-intake-of-dietary-phylloquinone-and-menaquinones-and-risk-646` | Studie/Quelle | 8 | 83 |
@@ -1393,49 +1400,49 @@ Einzelabschluss offen.
 | [ ] | `/wissen/vitamin-k-maximal-dose-response-of-vitamin-k2-menaquinone-4-on-under-683` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/vitamin-k-menaquinone-content-of-cheese-670` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/vitamin-k-menaquinones-bacteria-and-the-food-supply-the-relevance-of-668` | Studie/Quelle | 5 | 83 |
-| [ ] | `/wissen/vitamin-k-multiple-vitamin-k-forms-exist-in-dairy-foods-669` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/vitamin-k-multiple-vitamin-k-forms-exist-in-dairy-foods-669` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/vitamin-k-nordic-nutrition-recommendations-2023-vitamin-k-chapter-608` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/vitamin-k-perspective-evidence-before-enthusiasm-a-critical-review-o-688` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/vitamin-k-phylloquinone-c31h46o2-cid-5284607-620` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/vitamin-k-phylloquinone-intakes-and-food-sources-and-vitamin-k-statu-628` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/vitamin-k-phylloquinone-intakes-and-food-sources-and-vitamin-k-statu-628` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/vitamin-k-safe-upper-levels-for-vitamins-and-minerals-616` | Studie/Quelle | 6 | 83 |
 | [ ] | `/wissen/vitamin-k-safety-of-vitamin-k2-added-for-nutritional-purposes-as-a-s-662` | Studie/Quelle | 5 | 83 |
 | [ ] | `/wissen/vitamin-k-scientific-opinion-on-the-substantiation-of-health-claims-617` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/vitamin-k-the-study-of-bioavailability-and-endogenous-circadian-rhyt-673` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/vitamin-k-the-use-of-vitamin-k-supplementation-to-achieve-inr-stabil-650` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/vitamin-k-us-pharmacopeial-convention-safety-evaluation-of-menaquino-663` | Studie/Quelle | 6 | 83 |
+| [x] | `/wissen/vitamin-k-us-pharmacopeial-convention-safety-evaluation-of-menaquino-663` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/vitamin-k-use-of-vitamins-in-foods-risk-assessment-of-vitamin-k-614` | Studie/Quelle | 5 | 83 |
-| [ ] | `/wissen/vitamin-k-vegetables-and-mixed-dishes-are-top-contributors-to-phyllo-627` | Studie/Quelle | 8 | 83 |
+| [x] | `/wissen/vitamin-k-vegetables-and-mixed-dishes-are-top-contributors-to-phyllo-627` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/vitamin-k-vitamin-k-622` | Studie/Quelle | 5 | 83 |
 | [ ] | `/wissen/vitamin-k-vitamin-k-a-scoping-review-for-nordic-nutrition-recommenda-621` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/vitamin-k-vitamin-k-antagonists-and-cardiovascular-calcification-a-s-700` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/vitamin-k-vitamin-k-assessment-of-proposed-maximum-limits-in-food-su-615` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/vitamin-k-vitamin-k-assessment-of-proposed-maximum-limits-in-food-su-615` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/vitamin-k-vitamin-k-containing-dietary-supplements-comparison-of-syn-671` | Studie/Quelle | 6 | 83 |
 | [ ] | `/wissen/vitamin-k-vitamin-k-deficiency-bleeding-619` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/vitamin-k-vitamin-k-dge-referenzwerte-602` | Studie/Quelle | 6 | 83 |
+| [x] | `/wissen/vitamin-k-vitamin-k-dge-referenzwerte-602` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/vitamin-k-vitamin-k-dietary-reference-intakes-for-vitamin-a-vitamin-605` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/vitamin-k-vitamin-k-double-bonds-beyond-coagulation-insights-into-di-665` | Studie/Quelle | 6 | 83 |
 | [ ] | `/wissen/vitamin-k-vitamin-k-food-composition-and-dietary-intakes-624` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/vitamin-k-vitamin-k-health-professional-fact-sheet-604` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/vitamin-k-vitamin-k-intake-and-atherosclerotic-cardiovascular-diseas-687` | Studie/Quelle | 9 | 83 |
 | [ ] | `/wissen/vitamin-k-vitamin-k-intake-and-the-risk-of-fractures-a-meta-analysis-634` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/vitamin-k-vitamin-k-nutrient-reference-values-610` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/vitamin-k-vitamin-k-nutrient-reference-values-610` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/vitamin-k-vitamin-k-sources-physiological-role-kinetics-deficiency-d-623` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/vitamin-k-vitamin-k-status-cardiovascular-disease-and-all-cause-mort-645` | Studie/Quelle | 9 | 83 |
+| [x] | `/wissen/vitamin-k-vitamin-k-status-cardiovascular-disease-and-all-cause-mort-645` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/vitamin-k-vitamin-k-status-supplementation-and-vascular-disease-a-sy-643` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/vitamin-k-vitamin-k-supplementation-and-vascular-calcification-a-sys-690` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/vitamin-k-vitamin-k-supplementation-for-the-prevention-of-cardiovasc-642` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/vitamin-k-vitamin-k2-and-d-in-patients-with-aortic-valve-calcificati-692` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/vitamin-k-vitamin-k2-and-d-in-patients-with-aortic-valve-calcificati-692` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/vitamin-k-vitamin-k2-in-health-and-disease-a-clinical-perspective-667` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/vitamin-k-vitamins-and-minerals-vitamin-k-618` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/vitamin-und-mineralstoffbedarf-des-menschen-kapitel-thiami-007` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/vitamin-und-mineralstoffbedarf-vitamin-c-who-fao` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/vitamin-k-vitamins-and-minerals-vitamin-k-618` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/vitamin-und-mineralstoffbedarf-des-menschen-kapitel-thiami-007` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/vitamin-und-mineralstoffbedarf-vitamin-c-who-fao` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/welche-thiamindosis-ist-zur-behandlung-oder-pravention-der-017` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/wirksamkeit-der-vitamine-b1-und-b6-als-zusatztherapie-zu-l-051` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/wirkung-einer-thiaminsupplementierung-auf-glykamische-endp-033` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/wirksamkeit-der-vitamine-b1-und-b6-als-zusatztherapie-zu-l-051` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/wirkung-einer-thiaminsupplementierung-auf-glykamische-endp-033` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/wirkungen-einer-thiaminsupplementierung-auf-die-allgemeine-047` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/wirkungen-einer-zwolfmonatigen-benfotiaminbehandlung-auf-m-048` | Studie/Quelle | 5 | 83 |
-| [ ] | `/wissen/wissenschaftliches-gutachten-referenzwerte-magnesium-efsa-2015` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/wissenschaftliches-gutachten-referenzwerte-magnesium-efsa-2015` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/zeolith` | Hauptartikel | 7 | 86 |
 | [ ] | `/wissen/zeolith-bulog-pma-zeolite-review-2024` | Studie/Quelle | 6 | 83 |
 | [ ] | `/wissen/zeolith-commercial-products-metalloids-pavlovich-2023` | Studie/Quelle | 7 | 83 |
@@ -1443,11 +1450,11 @@ Einzelabschluss offen.
 | [ ] | `/wissen/zeolith-efsa-feedap-regulatory-context-2025` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/zeolith-kraljevic-pavelic-blood-parameters-2022` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/zeolith-kraljevic-pavelic-critical-review-2018` | Studie/Quelle | 5 | 83 |
-| [ ] | `/wissen/zeolith-lamprecht-intestinal-barrier-sport-rct-2015` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/zeolith-lead-uptake-tracer-samekova-2021` | Studie/Quelle | 8 | 83 |
+| [x] | `/wissen/zeolith-lamprecht-intestinal-barrier-sport-rct-2015` | Studie/Quelle | ≥7 | 100 |
+| [x] | `/wissen/zeolith-lead-uptake-tracer-samekova-2021` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/zeolith-novel-food-rasff-consumer-context-2026` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/zink` | Hauptartikel | 7 | 86 |
-| [ ] | `/wissen/zink-areds-amd-hochdosis` | Studie/Quelle | 8 | 83 |
+| [x] | `/wissen/zink-areds-amd-hochdosis` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/zink-bfr-nahrungsergaenzungsmittel-hoechstmenge` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/zink-bioverfuegbarkeit-phytat-formen` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/zink-diabetes-stoffwechsel-reviews` | Studie/Quelle | 7 | 83 |
@@ -1457,7 +1464,7 @@ Einzelabschluss offen.
 | [ ] | `/wissen/zink-kinder-ul-sicherheit` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/zink-kinderdurchfall-review-dosisvergleich` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/zink-mangel-statusmarker-risikogruppen` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/zink-pneumoniepraevention-kinder` | Studie/Quelle | 8 | 83 |
+| [x] | `/wissen/zink-pneumoniepraevention-kinder` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/zink-prostata-kontroverse` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/zink-prothesenhaftcreme-kupfermangel` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/zink-referenzwerte-dach-efsa-international` | Studie/Quelle | 8 | 83 |
