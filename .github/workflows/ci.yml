@@ -76,3 +76,5 @@ jobs:
         run: node --test scripts/original-source-reference.test.mjs
       - name: Verify parent-bound original artifacts and evidence lineage
         run: node --test --test-name-pattern="^parent-bound artifacts " scripts/run-nutrient-content.test.mjs
+      - name: Verify source identity in short and colliding SEO titles
+        run: node --test --test-name-pattern="^source title SEO " scripts/run-nutrient-content.test.mjs
