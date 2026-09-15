@@ -644,7 +644,16 @@ function structuredContextQuantityKeys(value) {
   // Nested prose, bare numbers and units from sibling objects add no authority.
   const keys = Array.isArray(value) ? [] : ['value', 'mean', 'sd', 'intervention', 'control']
     .map((field) => structuredFactQuantityKey({ value: value[field], unit: value.unit })).filter(Boolean)
-  return [...keys, ...Object.values(value).flatMap(structuredContextQuantityKeys)]
+  // Explicit <subject>_range_<unit>[_per_day] fields bind only their two
+  // numeric endpoints, never intermediate values or units from nearby fields.
+  const rangeKeys = Array.isArray(value) ? [] : Object.entries(value).flatMap(([field, endpoints]) => {
+    const unit = field.match(/^[a-z][a-z0-9]*(?:_[a-z0-9]+)*_range_(µg|μg|ug|mcg|mg|kg|g|ml|l|IE|IU|%|mmol|mol|KBE|CFU)(?:_per_day)?$/u)?.[1]
+    if (!unit || !Array.isArray(endpoints) || endpoints.length !== 2
+      || !endpoints.every(endpoint => Number.isFinite(endpoint) && endpoint >= 0)
+      || endpoints[0] > endpoints[1]) return []
+    return endpoints.map(endpoint => structuredFactQuantityKey({ value: endpoint, unit }))
+  })
+  return [...keys, ...rangeKeys, ...Object.values(value).flatMap(structuredContextQuantityKeys)]
 }
 
 function normalizeVisibleSeoTextV2(value) {

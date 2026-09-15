@@ -297,6 +297,36 @@ test('quantity guard accepts only documented magnitude keys sharing their own co
   }
 })
 
+test('quantity guard accepts only the endpoints of explicit context range-unit fields', () => {
+  const article = { article_id: 'huo-source' }
+  const factsPackage = { facts: [{ value: null, unit: null,
+    claim: 'Die Calcium-allein-Vergleiche betrafen vor allem ältere Frauen und placebokontrollierte Supplementgaben.',
+    context: { calcium_range_g_per_day: [1, 1.5], duration_range_years: [2, 5],
+      nested: [{ dose_range_mg: [800, 1200] }] },
+  }] }
+  assert.doesNotThrow(() => validateNumberUnitTokens(article, factsPackage, '1 g bis 1,5 g pro Tag; 800 mg bis 1200 mg.'))
+  for (const unbound of ['1,25 g', '1,6 g', '1,5 mg', '1500 mg', '900 mg', '2 g', '5 mg']) {
+    assert.throws(() => validateNumberUnitTokens(article, factsPackage, unbound), /quantity\/unit tokens not present/)
+  }
+})
+
+test('quantity guard rejects loose malformed and ambiguously unit-bound ranges', () => {
+  const article = { article_id: 'huo-source' }
+  const rejectedContexts = [
+    { calcium: [1, 1.5], unit: 'g' }, { calcium_range: [1, 1.5], unit: 'g' },
+    { calcium_range_g_per_week: [1, 1.5] }, { calcium_range_g_per_day_extra: [1, 1.5] },
+    { calcium_range_garbage: [1, 1.5] }, { calcium_range_years: [1, 1.5] },
+    { calcium_range_g_per_day: ['1', '1.5'] }, { calcium_range_g_per_day: [1, 1.25, 1.5] },
+    { calcium_range_g_per_day: [1.5, 1] }, { calcium_range_g_per_day: [null, 1.5] },
+    { calcium_range_g_per_day: [NaN, 1.5] }, { calcium_range_g_per_day: [1.5, Infinity] },
+    { calcium_range_g_per_day: [-1, 1.5] }, { calcium_range_g_per_day: { min: 1, max: 1.5 } },
+    { range: [1, 1.5], note: 'Die Einheit ist g.' }, [[1, 1.5]],
+  ]
+  for (const context of rejectedContexts) {
+    assert.throws(() => validateNumberUnitTokens(article, { facts: [{ context }] }, '1,5 g'), /quantity\/unit tokens not present/)
+  }
+})
+
 test('release SEO duplicate grouping reports every colliding article deterministically', () => {
   const compiled = [
     { article: { article_id: 'article-c' }, compiled: { seo: { meta_title: 'Gleicher Titel', meta_description: 'Gleicher Text' } } },
