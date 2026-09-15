@@ -701,7 +701,9 @@ Auch der WHO-Artikel zur Präeklampsie ist mit Text-UX8/10 und SEO100/100
 veröffentlicht und öffentlich geprüft; Titel und Beschreibung benennen die
 Originalquelle. Der DGE-Fettreferenzartikel zu MCT ist ebenfalls mit Text-UX8/10 und SEO100/100
 abgeschlossen. Die BfR-Artikel zu B5 und Vitamin K sind mit jeweils Text-UX7,5/10 und
-SEO100/100 abgeschlossen. Damit sind 300/790 Bestandszeilen sowie ein zusätzlicher Quellenartikel
+SEO100/100 abgeschlossen. Der Huo-Artikel ist mit Text-UX7/10 und SEO100/100 einschließlich seiner
+gebundenen Originalberichte abgeschlossen. Die DGE-Vitamin-D-FAQ sind ebenfalls mit Text-UX8/10 und SEO100/100
+abgeschlossen. Der Carnitin-DGE-Artikel (Text-UX7,5/10) und der FDA-MCT-Artikel (8/10) sind ebenfalls geschützt veröffentlicht und öffentlich mit SEO100/100 geprüft. Damit sind 304/790 Bestandszeilen sowie ein zusätzlicher Quellenartikel
 abgeschlossen. Die übrigen bleiben offen.
 
 | Erledigt | Pfad | Typ | Text-UX ★ | SEO |
@@ -736,7 +738,7 @@ abgeschlossen. Die übrigen bleiben offen.
 | [x] | `/wissen/calcium-bedarf-who-fao-2004` | Studie/Quelle | ≥7 | 100 |
 | [x] | `/wissen/calcium-ernaehrungsempfehlungen-nnr-2023` | Studie/Quelle | 8 | 100 |
 | [x] | `/wissen/calcium-fachinformationen-nih` | Studie/Quelle | ≥7 | 100 |
-| [ ] | `/wissen/calcium-kardiovaskulaeres-risiko-huo-2023` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/calcium-kardiovaskulaeres-risiko-huo-2023` | Studie/Quelle | 7 | 100 |
 | [x] | `/wissen/calcium-lebensmittel-pflegeeinrichtungen-iuliano-2021` | Studie/Quelle | 7,5 | 100 |
 | [x] | `/wissen/calcium-levothyroxin-interaktion-zamfirescu-2011` | Studie/Quelle | ≥7 | 100 |
 | [x] | `/wissen/calcium-meta-masse-2026` | Studie/Quelle | ≥7 | 100 |
@@ -952,7 +954,7 @@ abgeschlossen. Die übrigen bleiben offen.
 | [ ] | `/wissen/kupfer-zink-interaktion-fischer` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/kupfer-zink-prothesenhaftcreme-jamal` | Studie/Quelle | 4 | 83 |
 | [ ] | `/wissen/l-carnitin` | Hauptartikel | 7 | 86 |
-| [ ] | `/wissen/l-carnitin-dge-referenzwerte-nichttreffer` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/l-carnitin-dge-referenzwerte-nichttreffer` | Studie/Quelle | 7,5 | 100 |
 | [x] | `/wissen/l-carnitin-efsa-tartrate-safety-2003` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/l-carnitin-gheysari-diabetes-cvd-risk-2024` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/l-carnitin-hamedi-obesity-umbrella-2025` | Studie/Quelle | 7 | 83 |
@@ -1003,7 +1005,7 @@ abgeschlossen. Die übrigen bleiben offen.
 | [ ] | `/wissen/mct-oel-dge-fettzufuhr-leitlinie-2015` | Studie/Quelle | 7 | 83 |
 | [x] | `/wissen/mct-oel-dge-referenzwerte-fett-essenzielle-fettsaeuren` | Studie/Quelle | 8 | 100 |
 | [x] | `/wissen/mct-oel-efsa-health-claim-body-weight-2011` | Studie/Quelle | ≥7 | 100 |
-| [ ] | `/wissen/mct-oel-fda-grn-449` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/mct-oel-fda-grn-449` | Studie/Quelle | 8 | 100 |
 | [x] | `/wissen/mct-oel-fsanz-a563-infant-formula` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/mct-oel-he-gewicht-metabolik-meta-2024` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/mct-oel-heidt-regulatory-perspectives-2026` | Studie/Quelle | 6 | 83 |
@@ -1369,7 +1371,7 @@ abgeschlossen. Die übrigen bleiben offen.
 | [ ] | `/wissen/vitamin-d-calcifediol-cholecalciferol` | Studie/Quelle | 6 | 83 |
 | [ ] | `/wissen/vitamin-d-calcium-frakturen-stuerze` | Studie/Quelle | 6 | 83 |
 | [x] | `/wissen/vitamin-d-dge-referenzwerte` | Studie/Quelle | 8 | 100 |
-| [ ] | `/wissen/vitamin-d-dge-versorgung` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/vitamin-d-dge-versorgung` | Studie/Quelle | 8 | 100 |
 | [ ] | `/wissen/vitamin-d-diabetes-praevention-d2d` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/vitamin-d-efsa-obergrenze-sicherheit` | Studie/Quelle | 5 | 83 |
 | [ ] | `/wissen/vitamin-d-efsa-referenzwerte` | Studie/Quelle | 5 | 83 |
