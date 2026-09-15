@@ -70,3 +70,5 @@ jobs:
         run: node --test scripts/seo-metadata-correction.test.mjs
       - name: Verify bound semantic research reconciliation
         run: node --test --test-name-pattern="research reconciliation" scripts/run-nutrient-content.test.mjs
+      - name: Verify approved structured fact quantities
+        run: node --test --test-name-pattern="quantity guard" scripts/run-nutrient-content.test.mjs

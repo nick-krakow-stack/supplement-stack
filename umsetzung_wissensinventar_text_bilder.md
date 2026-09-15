@@ -27,7 +27,7 @@ bisherige Zehntklässler-Vorgabe des Qualitätsvertrags.
 - [x] Vorhandene 790er-Daten und aktuelle Releasebelege sparsam zusammenführen;
   vollständiges Einzelinventar mit Herkunft und Prüffundstellen erzeugen.
 - [x] Alle 44 Hauptartikel auf Inhalt, Sprache und Bilder vollständig lesen.
-- [ ] Alle 746 Quellenartikel auf Mindestverständlichkeit und Bildbriefings prüfen.
+- [x] Alle 746 Quellenartikel auf Mindestverständlichkeit und Bildbriefings prüfen.
 - [ ] Pro notwendiger Korrektur Klasse S/M/L vor Writerzuweisung festlegen;
   bestehende Originalquellen-/Facts-Lineage deterministisch auf Wiederverwendung prüfen.
 - [ ] Betroffene Artikel korrigieren; geeignete Bilder innerhalb des jeweiligen
@@ -51,15 +51,24 @@ Verzeichnisalias-Sonderfall ist behoben und separat getestet. Commit `6d513b2`,
 CI `34955364961`, Deployment `34955365039` und gezielter Live-Readback PASS.
 GitHub lieferte beim PR-Anlegen GraphQL-/REST-HTTP500; der dokumentierte
 Git-Push-main-Release wurde genutzt. Keine neue Artikelpublikation.
-553Quellenartikel in abgeschlossenenPaketen vollständig gelesen (initial13,A–I je60);
-J/K laufen,193Rest. Ein vollständigerEinzelabschluss: DGE-Referenzwerte,
+Alle 746 Quellenartikel vollständig gelesen (initial13, A–K je60, L73),
+UniqueScope/Hashbindungen validiert. Inventar:459 Korrekturpflicht,287 keine Pflicht,
+keine ungeklärte Zuordnung. Alle 287 unveränderten Kandidaten aktuell in D1 und
+öffentlich abgeglichen: Text-UX-Untergrenze ≥7, technisches SEO 282×100 und 5×90.
+Die fünf fehlenden Hauptartikel-Rücklinks sind nicht blockierende Restpunkte.
+Beleg: unchanged-source-acceptance.json; Gesamtabschluss jetzt288/790.
+Ein vollständiger überarbeiteter Einzelabschluss: DGE-Referenzwerte,
 UX8/10 unabhängig, technischerSEO100/100 nach tatsächlichen sechsAuditkategorien,
 Child/ParentCOMPLETE und öffentlichMATCH. IndexabilityReceipt2b0390e8…;
 Auditzeile abgeschlossen. PR36/805cd59Adoption deployedPASS; PR37/f1f3164 behebt den
 belegten RawHTML-Tabellenabstandsfehler,25Tests/ReviewPASS, CI/DeployPASS
 (Main34959111334,Deploy34959111358,Pages08da771b), LiveReadbackPASS.
 Research144Originalartefakte erhalten; ALAGesamtplanwissenschaftlichBLOCKED.
-LPI-EinzelSlice einebytegleicheSource, CoverageREADY,10Extraktionspflichten inArbeit.
+LPI-Einzelslice:56 Records/11 Pflichten, vier unabhängige Facts-Reviews PASS.
+Writer fertig; konkreter Compilerfehler für verschachtelte geprüfte Mengen wird
+eng behoben, bevor unabhängige Publikationsprüfung und Veröffentlichung folgen.
+Calcium: Research terminal, Coverage prüft echte Originale und konkrete Abruflücken;
+Cookie-/JS-Challenges werden ausdrücklich nicht als Originalabstract akzeptiert.
 Die präzise Liste aller18offenenBildaufträge liegt in
 [offene_bildauftraege_wissensartikel.md](offene_bildauftraege_wissensartikel.md).
 Erstellung/Integration bleiben im jeweiligenFactsgebundenenWriterauftrag.
