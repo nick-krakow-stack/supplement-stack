@@ -242,6 +242,27 @@ Alle Pfade liegen innerhalb des gebundenen Roots, jeder Bytehash passt zur
 tatsächlichen Datei, und Locator/Source-ID sind eindeutig. Das Receipt ist
 reine Lineage und weder zweites Researchinventar noch Score-/Analyseartefakt.
 
+Bei mehreren Manifestationen ist `sources[].source_id` im unveränderten
+Research-Receipt die Erwerbsartefakt-ID. Der Coverage-Plan bindet pro
+bibliografischer Source optional `artifact_id` für die Hauptmanifestation
+(Standard: `source_id`) und `attachments[]`. Jeder Anhang trägt `artifact_id`,
+`parent_source_id`, `is_independent_source=false`, `relationship` sowie exakt
+`path`, `byte_hash`, `locator`, `content_type` des Receipt-Eintrags. Erlaubte
+Relationen sind `supplementary_material`, `alternate_manifestation`,
+`alternate_indexed_abstract_representation_same_bibliographic_source` und
+`alternate_full_text_representation_same_bibliographic_source`. Die fachliche
+Identität begründet der Planner; technische Pfad-/Hashgleichheit ersetzt sie
+nicht. Jede eingefrorene Datei gehört genau einmal zu einer Source. Anhänge
+erfinden keine weiteren Studien oder Carrier und ändern keine Receipt-ID.
+
+Der Build und jeder aktive Shard binden die deterministisch sortierten
+`source_artifact_bindings` aus dem Evidence-Manifest, im Shard beschränkt auf
+seine bibliografischen `source_ids`. In solchen Läufen trägt jeder Record
+zusätzlich `artifact_id` und `artifact_content_hash` seines konkreten Originals.
+Extractor- und Facts-Orders erhalten alle zugeordneten Dateien; Factsinputs,
+Bundle, Lock und Artikel-Lineage bewahren diese Bindungen. Ohne neue Felder
+bleiben bestehende Artefaktformen und Hashes unverändert.
+
 Für die redaktionelle Nutzbarkeit sollen die frei strukturierten Bytes Quellen
 stabil erkennbar machen und Recherchezeitpunkt, Query-/Auswahlweg,
 DOI/PMID/kanonische URL, Version/Korrekturstatus, Zugriff/Locator,
@@ -284,12 +305,20 @@ Extraktionspflichten,
   `publication_year` als Integer `1000..aktuelles Jahr` oder `null`, `title`,
   `journal_or_publisher`, normalisierte `doi`/`pmid` oder `null`, unveränderte
   `url`, normalisierte `canonical_url`, `label` und `source_content_hash`;
-  letzterer entspricht exakt dem `byte_hash` derselben Source im Research-
+  letzterer entspricht exakt dem `byte_hash` ihrer Hauptmanifestation im Research-
   Artifact-Receipt. Das deterministisch erzeugte Label lautet bytegleich
   `<author_or_institution> (<YYYY|o. J.>). <title>. <journal_or_publisher>.[
   DOI: <doi>.][ PMID: <pmid>.]`; fehlende Identifierteile entfallen. Weder
   Writer noch Publication-Executor formatieren es neu oder ersetzen die
   Original-URL durch einen Artikel-/Internlink.
+
+  Eine sichtbare bibliografische Referenz darf nur durch einen expliziten
+  deterministischen Identitätspfad vom Erwerbslokator abweichen. Für MED-JSON
+  gilt ausschließlich der exakte HTTPS-EuropePMC-Suchpfad mit
+  `query=EXT_ID%3A<PMID>%20AND%20SRC%3AMED&resultType=core&format=json`
+  zur HTTPS-PubMed-Referenz derselben explizit gebundenen PMID. Originalbytes,
+  Erwerbs-URL und Receipt bleiben unverändert; beliebige Canonical-URLs und
+  insbesondere PDF-zu-PubMed werden dadurch nicht freigegeben.
 - Jeder Cluster bindet `cluster_id`, `required`, Source-IDs und planseitige
   `plan_risk_tags`.
 - Jeder Artikel bindet `article_id`, `stage=stage2|stage3`,

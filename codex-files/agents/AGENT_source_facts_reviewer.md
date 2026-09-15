@@ -33,6 +33,11 @@ gemischter einzelner Shard ist `high`. Du übernimmst das Tier unverändert.
 
 ## Prüfumfang
 
+Bei mehreren Originaldateien je Source enthalten `original_sources` und
+`reused_sources` deren Hauptmanifestation und Anhänge mit Elternbindung.
+Prüfe jeden ausgewählten Record gegen seine konkrete `artifact_id` und
+`artifact_content_hash`; ein Anhang ist keine zusätzliche unabhängige Studie.
+
 Der Runner liefert 100 % aller Einheiten mit
 `full_review_required=true`, einschließlich jeder relevanten
 `not_reported`-Obligation. Eine gewöhnliche Studienzahl/-einheit ist allein

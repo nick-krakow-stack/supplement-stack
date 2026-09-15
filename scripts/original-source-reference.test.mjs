@@ -10,6 +10,33 @@ const source = (id = '8527562') => ({
   source_content_hash: `sha256:${'a'.repeat(64)}`,
 })
 
+test('MED reference requires the exact indexed PMID, host, path and query without changing acquired JSON', () => {
+  const input = { ...source(), pmid: '16481635', url: 'https://www.ebi.ac.uk/europepmc/webservices/rest/search?query=EXT_ID%3A16481635%20AND%20SRC%3AMED&resultType=core&format=json', canonical_url: 'https://pubmed.ncbi.nlm.nih.gov/16481635/' }
+  const before = JSON.stringify(input)
+  assert.equal(projectVisibleSourceV2(input).source_url, input.canonical_url)
+  assert.equal(JSON.stringify(input), before)
+  const invalid = [
+    { pmid: null }, { pmid: '16481636' },
+    { canonical_url: input.canonical_url.replace('16481635', '16481636') },
+    { canonical_url: 'https://example.org/arbitrary' },
+    ...['?redirect=x', '#x', 'extra'].map(suffix => ({ canonical_url: input.canonical_url + suffix })),
+    ...['&format=xml', '&format=json', '#x'].map(suffix => ({ url: input.url + suffix })),
+    ...['url', 'canonical_url'].flatMap(key => [
+      { [key]: input[key].replace('https:', 'http:') },
+      { [key]: input[key].replace('https://', 'https://user:secret@') },
+      { [key]: input[key].replace(/(\.uk|\.gov)\//, '$1:443/') },
+    ]),
+    { url: input.url.replace('www.ebi.ac.uk', 'www.ebi.ac.uk.evil.example') },
+    { url: input.url.replace('SRC%3AMED', 'SRC%3APMC') },
+    { url: input.url.replace('resultType=core', 'resultType=lite') },
+    { url: input.url.replace('EXT_ID%3A16481635', 'EXT_ID%3A016481635') },
+    { url: input.url.replace('%20AND%20', '%20OR%20') },
+  ]
+  for (const patch of invalid) assert.throws(() => projectVisibleSourceV2({ ...input, ...patch }), /invalid or mismatched MED\/PubMed/)
+  const pdf = { ...input, url: 'https://eclass.uoa.gr/modules/document/file.php/MATH301/StudentsPapers/Jackson-2005.pdf' }
+  assert.equal(projectVisibleSourceV2(pdf).source_url, pdf.url)
+})
+
 test('original reference projects only the exact same-PMCID XML/HTML pair without mutating acquisition bindings', () => {
   for (const id of ['8527562', '6300855']) {
     const input = source(id), before = JSON.stringify(input)

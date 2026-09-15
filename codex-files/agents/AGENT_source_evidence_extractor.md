@@ -35,6 +35,13 @@ Extractor-Shards.
 
 ## Ablauf pro Slice
 
+Bei `source_artifact_bindings` im Evidence-Manifest gehören Hauptdatei und
+Anhänge zur angegebenen bibliografischen Elternsource. Lies alle zugewiesenen
+Originaldateien, erhalte deren Erwerbs-IDs und kopiere die Manifestbindungen
+deines Source-Slices exakt in den Shard. Jeder Record bindet zusätzlich
+`artifact_id` und `artifact_content_hash` der konkret belegenden Datei.
+Ein Anhang wird weder eigenständige Studie noch neue bibliografische Source.
+
 1. Prüfe Source-ID, Originalbytes, Locator und Source-Hash.
 2. Entscheide jede zugewiesene Obligation exakt als `extracted`,
    `not_reported` oder `blocked`. `not_reported` ist ein prüfbares Ergebnis und

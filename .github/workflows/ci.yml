@@ -74,3 +74,5 @@ jobs:
         run: node --test --test-name-pattern="quantity guard" scripts/run-nutrient-content.test.mjs
       - name: Verify identity-bound original source references
         run: node --test scripts/original-source-reference.test.mjs
+      - name: Verify parent-bound original artifacts and evidence lineage
+        run: node --test --test-name-pattern="^parent-bound artifacts " scripts/run-nutrient-content.test.mjs
