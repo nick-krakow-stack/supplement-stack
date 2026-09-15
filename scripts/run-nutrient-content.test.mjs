@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, relative, resolve } from 'node:path'
 import test from 'node:test'
@@ -2918,4 +2918,165 @@ test('source persistence binds explicit official/study kind and rejects URL iden
   const official = buildSourceCatalogSyncRequestV1({ runId: 'source-kind-run', ingredientTarget, sources: [{ source_id: 'dge-a', source_type: 'DGE-Referenzwert', source_kind: 'official', author_or_institution: 'Deutsche Gesellschaft für Ernährung', publication_year: null, title: 'Referenzwerte', journal_or_publisher: 'DGE', label: 'Deutsche Gesellschaft für Ernährung (o. J.). Referenzwerte. DGE.', url: 'https://www.dge.de/wissenschaft/referenzwerte/', source_content_hash: canonicalJsonHash({ source: 'dge' }) }] })
   assert.equal(official.sources[0].source_kind, 'official')
   assert.throws(() => buildSourceCatalogSyncRequestV1({ runId: 'source-kind-run', ingredientTarget, sources: [{ source_id: 'efsa-a', source_type: 'EFSA-BehÃ¶rdenbewertung', source_kind: 'official', label: 'EFSA', url: 'https://doi.org/10.1000/url-id', doi: '10.1000/other-id', source_content_hash: canonicalJsonHash({ source: 'efsa' }) }] }), /DOI conflicts/i)
+})
+
+function configureFactsPartitionFixture(fixture, counts, { adaptive = true, low = [], slots = 4 } = {}) {
+  const inventory = json(fixture.paths.linkInventorySource)
+  for (const route of inventory.routes) Object.assign(route, { meta_title: route.title, meta_description: 'Existing article description.', article_layer: route.article_layer ?? 'main_article', source_urls: route.source_urls ?? [] })
+  put(fixture.paths.linkInventorySource, hashed(inventory))
+  const run = json(fixture.paths.run)
+  if (adaptive) run.facts_review_partition = 'selected_records_v1'
+  put(fixture.paths.run, run)
+  const plan = json(fixture.paths.coverage)
+  plan.extraction_obligations = counts.map((count, index) => ({ obligation_id: `obligation-${String(index).padStart(3, '0')}`, source_id: 'source-a', cluster_id: 'core', expected_claim_type: low.includes(index) ? `numeric-result-low-${index}` : `upper-limit-${index}`, required: true, required_for: ['main-a'], plan_risk_tags: [] }))
+  plan.articles[0].common_assumption_review.checks[0].obligation_ids = plan.extraction_obligations.map(entry => entry.obligation_id)
+  put(fixture.paths.coverage, hashed(plan))
+  const manifest = json(fixture.paths.evidenceManifest)
+  manifest.coverage_plan_hash = artifactHashV2(plan)
+  manifest.extraction_slices[0].obligation_ids = plan.extraction_obligations.map(entry => entry.obligation_id)
+  manifest.source_facts_review_slices = [0, 1].flatMap(round => Array.from({ length: slots }, (_, index) => {
+    const shard_id = `round-${round}-shard-${String(index + 1).padStart(2, '0')}`
+    return { sampling_round: round, shard_id, path: rel(fixture.root, join(dirname(fixture.paths.review), `${shard_id}.source-facts-review.v2.json`)) }
+  }))
+  manifest.source_facts_review_paths = manifest.source_facts_review_slices.map(entry => entry.path)
+  put(fixture.paths.evidenceManifest, hashed(manifest))
+  const shard = json(fixture.paths.shard), record = shard.records[0]
+  shard.coverage_plan_hash = artifactHashV2(plan)
+  shard.records = counts.flatMap((count, index) => Array.from({ length: count }, (_, ordinal) => ({ ...record, record_id: `record-${index}-${ordinal}`, obligation_id: plan.extraction_obligations[index].obligation_id, claim_type: plan.extraction_obligations[index].expected_claim_type, predicate_key: `result-${index}-${ordinal}` })))
+  shard.obligation_results = plan.extraction_obligations.map(entry => ({ obligation_id: entry.obligation_id, status: counts[plan.extraction_obligations.indexOf(entry)] ? 'extracted' : 'not_reported', record_ids: shard.records.filter(record => record.obligation_id === entry.obligation_id).map(record => record.record_id), reason: 'Source inspected.', locator: 'p. 1' }))
+  put(fixture.paths.shard, hashed(shard))
+}
+
+function writePartitionReview(fixture, order, { identity = order.task.shard_id, failId = null } = {}) {
+  const input = json(join(fixture.paths.evidence, 'source-facts-review-input.v2.json'))
+  put(join(fixture.root, order.outputs[0].path), hashed({
+    schema: 'source_facts_review.v2', review_id: `review-${order.task.shard_id}`, bundle_hash: input.evidence_bundle_hash, sample_manifest_hash: input.sample_manifest_hash,
+    reviewer: { role: 'source-facts-reviewer', id: identity }, reviewed_at: '2026-07-14T11:00:00.000Z',
+    obligation_results: order.task.selected.map(entry => ({ obligation_id: entry.obligation_id, mode: entry.mode, status: entry.obligation_id === failId ? 'FAIL' : 'PASS', findings: entry.obligation_id === failId ? [{ code: 'claim-mismatch', message: 'Claim needs correction.' }] : [] })),
+    record_results: order.task.selected.flatMap(entry => entry.records.map(record => ({ record_id: record.record_id, status: entry.obligation_id === failId ? 'FAIL' : 'PASS', findings: entry.obligation_id === failId ? [{ code: 'claim-mismatch', message: 'Claim needs correction.' }] : [] }))),
+  }))
+}
+
+function artifactTreeBytes(path) {
+  if (!existsSync(path)) return []
+  return readdirSync(path, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name)).flatMap(entry => entry.isDirectory() ? artifactTreeBytes(join(path, entry.name)) : [[join(path, entry.name), sha256Bytes(readFileSync(join(path, entry.name)))]])
+}
+
+test('adaptive facts partition uses selected record thresholds with exact unchanged selections', () => {
+  for (const [counts, expected] of [
+    ...[11, 12, 13, 14, 15, 16, 60, 61, 120, 121, 180, 181].map(total => [Array.from({ length: 4 }, (_, index) => Math.floor(total / 4) + (index < total % 4 ? 1 : 0)), Math.min(4, Math.ceil(total / 60))]),
+    [[300], 1], [[0, 0, 0, 0], 1],
+  ]) {
+    const fixture = createFixture({ stages: ['stage3'] })
+    try {
+      configureFactsPartitionFixture(fixture, counts)
+      const status = runNutrientContent({ manifestPath: fixture.paths.run })
+      assert.equal(status.state, 'WAITING_FOR_SOURCE_REVIEW', JSON.stringify(status.work_orders))
+      const orders = status.work_orders.work_orders
+      assert.equal(orders.length, expected, JSON.stringify(counts))
+      const selected = orders.flatMap(order => order.task.selected).sort((a, b) => a.obligation_id.localeCompare(b.obligation_id))
+      assert.deepEqual(selected, json(join(fixture.paths.evidence, 'source-facts-review-input.v2.json')).selected)
+      assert.equal(new Set(selected.map(entry => entry.obligation_id)).size, selected.length)
+      assert.deepEqual(runNutrientContent({ manifestPath: fixture.paths.run }).work_orders.work_orders, orders)
+    } finally { fixture.cleanup() }
+  }
+})
+
+test('adaptive facts partition preserves mixed reasoning tiers', () => {
+  for (const slots of [4]) {
+    const fixture = createFixture({ stages: ['stage3'] })
+    try {
+      configureFactsPartitionFixture(fixture, [1, 1], { low: [1], slots })
+      const orders = runNutrientContent({ manifestPath: fixture.paths.run }).work_orders.work_orders
+      assert.deepEqual(orders.map(order => order.reasoning_tier).sort(), slots === 1 ? ['high'] : ['high', 'standard'])
+    } finally { fixture.cleanup() }
+  }
+})
+
+test('legacy and adaptive facts partitions resume identical orders after partial PASS and keep gate closed for invalid review', () => {
+  for (const adaptive of [false, true]) {
+    const fixture = createFixture({ stages: ['stage3'] })
+    try {
+      configureFactsPartitionFixture(fixture, [31, 31, 31, 31], { adaptive })
+      const initial = runNutrientContent({ manifestPath: fixture.paths.run }).work_orders.work_orders
+      assert.equal(initial.length, adaptive ? 3 : 4)
+      if (!adaptive) {
+        assert.ok(initial.every(order => order.scope.obligation_ids.length === 1))
+        assert.deepEqual(initial.map(order => order.work_order_id), [
+          'sha256:2822481a33493d3985644ef37858bcd064587781ee4c96809be32c69bf1c8673',
+          'sha256:9f34a71d265c497848ef6c47b6c348f30013de4a5516b9fd7bc4f0cc8839fc5f',
+          'sha256:c64cb555d8973e3afdcdc08861f7f70880ffcc6eb0c879650b9247ce7a995e34',
+          'sha256:db4754ff466c119bf4d5593ba442d991a44f928e33067ab8198c032116e9c9ce',
+        ])
+      }
+      const accepted = initial[0]
+      writePartitionReview(fixture, accepted)
+      const bytes = readFileSync(join(fixture.root, accepted.outputs[0].path))
+      const partial = runNutrientContent({ manifestPath: fixture.paths.run })
+      assert.equal(partial.state, 'WAITING_FOR_SOURCE_REVIEW')
+      assert.deepEqual(partial.work_orders.work_orders, initial.filter(order => order !== accepted))
+      assert.deepEqual(readFileSync(join(fixture.root, accepted.outputs[0].path)), bytes)
+      for (const order of initial.slice(1)) writePartitionReview(fixture, order, { identity: 'extractor-a' })
+      assert.throws(() => runNutrientContent({ manifestPath: fixture.paths.run }), /overlaps an extractor or merger/)
+      for (const order of initial.slice(1)) writePartitionReview(fixture, order)
+      assert.equal(runNutrientContent({ manifestPath: fixture.paths.run }).state, 'WAITING_FOR_WRITERS')
+    } finally { fixture.cleanup() }
+  }
+})
+
+test('facts partition rejects unknown strategy and changes before artifact writes including history with another manifest hash', () => {
+  for (const initialAdaptive of [false, true]) for (const retained of ['both', 'history', 'current']) {
+    const fixture = createFixture({ stages: ['stage3'] })
+    try {
+      configureFactsPartitionFixture(fixture, [1, 1], { adaptive: initialAdaptive })
+      runNutrientContent({ manifestPath: fixture.paths.run })
+      if (retained === 'history') rmSync(join(fixture.paths.state, 'work-orders.v2.json'))
+      if (retained === 'current') rmSync(join(fixture.paths.state, 'work-orders-history.v2.jsonl'))
+      const before = [...artifactTreeBytes(fixture.paths.state), ...artifactTreeBytes(fixture.paths.evidence)]
+      const run = json(fixture.paths.run)
+      if (initialAdaptive) delete run.facts_review_partition
+      else run.facts_review_partition = 'selected_records_v1'
+      put(fixture.paths.run, run)
+      assert.throws(() => runNutrientContent({ manifestPath: fixture.paths.run }), /facts_review_partition cannot change/)
+      assert.deepEqual([...artifactTreeBytes(fixture.paths.state), ...artifactTreeBytes(fixture.paths.evidence)], before)
+      for (const invalid of [null, false, '', 'unknown']) {
+        run.facts_review_partition = invalid; put(fixture.paths.run, run)
+        assert.throws(() => runNutrientContent({ manifestPath: fixture.paths.run }), /facts_review_partition must equal/)
+        assert.deepEqual([...artifactTreeBytes(fixture.paths.state), ...artifactTreeBytes(fixture.paths.evidence)], before)
+      }
+    } finally { fixture.cleanup() }
+  }
+})
+
+
+test('adaptive facts partition round one reviews only delta and preserves carried-forward PASS', () => {
+  const fixture = createFixture({ stages: ['stage3'] })
+  try {
+    configureFactsPartitionFixture(fixture, Array(9).fill(1), { low: [1, 2, 3, 4, 5, 6, 7, 8] })
+    const initial = runNutrientContent({ manifestPath: fixture.paths.run }).work_orders.work_orders
+    const high = initial.find(order => order.reasoning_tier === 'high')
+    const low = initial.find(order => order.reasoning_tier === 'standard')
+    writePartitionReview(fixture, high)
+    writePartitionReview(fixture, low, { failId: low.task.selected[0].obligation_id })
+    const priorBytes = initial.map(order => [order.outputs[0].path, readFileSync(join(fixture.root, order.outputs[0].path))])
+    const expanded = runNutrientContent({ manifestPath: fixture.paths.run })
+    assert.equal(expanded.state, 'WAITING_FOR_SOURCE_REVIEW')
+    const input = json(join(fixture.paths.evidence, 'source-facts-review-input.v2.json'))
+    assert.ok(input.carried_forward.length > 0)
+    assert.equal(expanded.work_orders.work_orders.length, 1)
+    const order = expanded.work_orders.work_orders[0]
+    assert.equal(order.task.sampling_round, 1)
+    assert.equal(order.reasoning_tier, 'high')
+    assert.deepEqual(order.task.selected, input.selected)
+    assert.ok(order.task.selected.every(entry => !input.carried_forward.some(carried => carried.obligation_id === entry.obligation_id)))
+    for (const [path, bytes] of priorBytes) assert.deepEqual(readFileSync(join(fixture.root, path)), bytes)
+    writePartitionReview(fixture, order)
+    const reviewPath = join(fixture.root, order.outputs[0].path)
+    const review = json(reviewPath)
+    const invalid = structuredClone(review); invalid.record_results[0].record_id = 'foreign-record'
+    put(reviewPath, hashed(invalid))
+    assert.throws(() => runNutrientContent({ manifestPath: fixture.paths.run }), /record|coverage/)
+    put(reviewPath, review)
+    assert.equal(runNutrientContent({ manifestPath: fixture.paths.run }).state, 'WAITING_FOR_WRITERS')
+  } finally { fixture.cleanup() }
 })

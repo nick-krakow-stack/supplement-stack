@@ -701,12 +701,14 @@ Auch der WHO-Artikel zur Präeklampsie ist mit Text-UX8/10 und SEO100/100
 veröffentlicht und öffentlich geprüft; Titel und Beschreibung benennen die
 Originalquelle. Der DGE-Fettreferenzartikel zu MCT ist ebenfalls mit Text-UX8/10 und SEO100/100
 abgeschlossen. Die BfR-Artikel zu B5 und Vitamin K sind mit jeweils Text-UX7,5/10 und
-SEO100/100 abgeschlossen. Damit sind 300/790 Bestandszeilen sowie ein zusätzlicher Quellenartikel
+SEO100/100 abgeschlossen. Der Huo-Artikel ist mit Text-UX7/10 und SEO100/100 einschließlich seiner
+gebundenen Originalberichte abgeschlossen. Die DGE-Vitamin-D-FAQ sind ebenfalls mit Text-UX8/10 und SEO100/100
+abgeschlossen. Der Carnitin-DGE-Artikel (Text-UX7,5/10) und der FDA-MCT-Artikel (8/10) sind ebenfalls geschützt veröffentlicht und öffentlich mit SEO100/100 geprüft. Der BfR-Artikel zu Probiotika in Säuglingsnahrung ist mit Text-UX7/10 und SEO100/100 ebenfalls abgeschlossen. MSM-FDA ist mit Text-UX7/10 und SEO100/100 veröffentlicht und geprüft. Auch Krillöl-FDA ist mit Text-UX7/10 und SEO100/100 abgeschlossen. Chlorella-EFSA, Schwarzkümmel-EFSA und NICE/Vitamin B1 sind jeweils mit Text-UX8/10 und SEO100/100 veröffentlicht und geprüft. Damit sind 310/790 Bestandszeilen sowie ein zusätzlicher Quellenartikel
 abgeschlossen. Die übrigen bleiben offen.
 
 | Erledigt | Pfad | Typ | Text-UX ★ | SEO |
 |---|---|---|---:|---:|
-| [ ] | `/wissen/alkoholkonsumstorungen-diagnose-und-behandlung-korperliche-014` | Studie/Quelle | 5 | 83 |
+| [x] | `/wissen/alkoholkonsumstorungen-diagnose-und-behandlung-korperliche-014` | Studie/Quelle | 8 | 100 |
 | [ ] | `/wissen/alpha-liponsaeure` | Hauptartikel | 8 | 86 |
 | [x] | `/wissen/alpha-liponsaeure-cappellani-ias-case-review-2018` | Studie/Quelle | 8 | 100 |
 | [x] | `/wissen/alpha-liponsaeure-carlson-sodium-r-lipoate-pk-2007` | Studie/Quelle | ≥7 | 100 |
@@ -736,7 +738,7 @@ abgeschlossen. Die übrigen bleiben offen.
 | [x] | `/wissen/calcium-bedarf-who-fao-2004` | Studie/Quelle | ≥7 | 100 |
 | [x] | `/wissen/calcium-ernaehrungsempfehlungen-nnr-2023` | Studie/Quelle | 8 | 100 |
 | [x] | `/wissen/calcium-fachinformationen-nih` | Studie/Quelle | ≥7 | 100 |
-| [ ] | `/wissen/calcium-kardiovaskulaeres-risiko-huo-2023` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/calcium-kardiovaskulaeres-risiko-huo-2023` | Studie/Quelle | 7 | 100 |
 | [x] | `/wissen/calcium-lebensmittel-pflegeeinrichtungen-iuliano-2021` | Studie/Quelle | 7,5 | 100 |
 | [x] | `/wissen/calcium-levothyroxin-interaktion-zamfirescu-2011` | Studie/Quelle | ≥7 | 100 |
 | [x] | `/wissen/calcium-meta-masse-2026` | Studie/Quelle | ≥7 | 100 |
@@ -756,7 +758,7 @@ abgeschlossen. Die übrigen bleiben offen.
 | [x] | `/wissen/chlorella-b12-mma-merchant-2015` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/chlorella-dioxin-muttermilch-nakano-2007` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/chlorella-dioxin-schwangerschaft-nakano-2005` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/chlorella-immune-claim-efsa-on-hold` | Studie/Quelle | 8 | 83 |
+| [x] | `/wissen/chlorella-immune-claim-efsa-on-hold` | Studie/Quelle | 8 | 100 |
 | [ ] | `/wissen/chlorella-kardiometabolik-fallah-2018` | Studie/Quelle | 7 | 83 |
 | [x] | `/wissen/chlorella-kardiometabolik-silva-barros-2025` | Studie/Quelle | ≥7 | 100 |
 | [x] | `/wissen/chlorella-lebermarker-ebrahimi-mameghani-2021` | Studie/Quelle | ≥7 | 100 |
@@ -915,7 +917,7 @@ abgeschlossen. Die übrigen bleiben offen.
 | [x] | `/wissen/krilloel-efsa-drv-fats-2010` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/krilloel-efsa-novel-food-antarctic-krill-2014` | Studie/Quelle | 7 | 83 |
 | [x] | `/wissen/krilloel-efsa-ul-epa-dha-dpa-2012` | Studie/Quelle | ≥7 | 100 |
-| [ ] | `/wissen/krilloel-fda-grn-371` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/krilloel-fda-grn-371` | Studie/Quelle | 7 | 100 |
 | [ ] | `/wissen/krilloel-health-canada-monograph-2025` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/krilloel-huang-cardiovascular-meta-2023` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/krilloel-laslett-knee-osteoarthritis-rct-2024` | Studie/Quelle | 8 | 83 |
@@ -952,7 +954,7 @@ abgeschlossen. Die übrigen bleiben offen.
 | [ ] | `/wissen/kupfer-zink-interaktion-fischer` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/kupfer-zink-prothesenhaftcreme-jamal` | Studie/Quelle | 4 | 83 |
 | [ ] | `/wissen/l-carnitin` | Hauptartikel | 7 | 86 |
-| [ ] | `/wissen/l-carnitin-dge-referenzwerte-nichttreffer` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/l-carnitin-dge-referenzwerte-nichttreffer` | Studie/Quelle | 7,5 | 100 |
 | [x] | `/wissen/l-carnitin-efsa-tartrate-safety-2003` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/l-carnitin-gheysari-diabetes-cvd-risk-2024` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/l-carnitin-hamedi-obesity-umbrella-2025` | Studie/Quelle | 7 | 83 |
@@ -1003,7 +1005,7 @@ abgeschlossen. Die übrigen bleiben offen.
 | [ ] | `/wissen/mct-oel-dge-fettzufuhr-leitlinie-2015` | Studie/Quelle | 7 | 83 |
 | [x] | `/wissen/mct-oel-dge-referenzwerte-fett-essenzielle-fettsaeuren` | Studie/Quelle | 8 | 100 |
 | [x] | `/wissen/mct-oel-efsa-health-claim-body-weight-2011` | Studie/Quelle | ≥7 | 100 |
-| [ ] | `/wissen/mct-oel-fda-grn-449` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/mct-oel-fda-grn-449` | Studie/Quelle | 8 | 100 |
 | [x] | `/wissen/mct-oel-fsanz-a563-infant-formula` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/mct-oel-he-gewicht-metabolik-meta-2024` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/mct-oel-heidt-regulatory-perspectives-2026` | Studie/Quelle | 6 | 83 |
@@ -1016,7 +1018,7 @@ abgeschlossen. Die übrigen bleiben offen.
 | [ ] | `/wissen/msm-dermatology-review-abdul-rahman-2026` | Studie/Quelle | 7 | 83 |
 | [x] | `/wissen/msm-efsa-joints-claims-2009` | Studie/Quelle | ≥7 | 100 |
 | [ ] | `/wissen/msm-efsa-related-claims-2010` | Studie/Quelle | 8 | 83 |
-| [ ] | `/wissen/msm-fda-gras-grn-229` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/msm-fda-gras-grn-229` | Studie/Quelle | 7 | 100 |
 | [ ] | `/wissen/msm-half-marathon-rct-withee-2017` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/msm-hdl-crp-tang-2021` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/msm-health-canada-joint-health-products` | Studie/Quelle | 7 | 83 |
@@ -1087,7 +1089,7 @@ abgeschlossen. Die übrigen bleiben offen.
 | [ ] | `/wissen/perinataler-verzehr-thiaminangereicherter-fischsauce-im-la-027` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/probiotika` | Hauptartikel | 7 | 86 |
 | [ ] | `/wissen/probiotika-aga-gi-guideline-2020` | Studie/Quelle | 6 | 83 |
-| [ ] | `/wissen/probiotika-bfr-infant-formula-benefit-safety-2026` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/probiotika-bfr-infant-formula-benefit-safety-2026` | Studie/Quelle | 7 | 100 |
 | [ ] | `/wissen/probiotika-chieng-bv-recurrence-meta-2022` | Studie/Quelle | 7 | 83 |
 | [x] | `/wissen/probiotika-cochrane-urti-2022` | Studie/Quelle | ≥7 | 100 |
 | [x] | `/wissen/probiotika-collinson-acute-infectious-diarrhoea-cochrane-2020` | Studie/Quelle | ≥7 | 100 |
@@ -1159,7 +1161,7 @@ abgeschlossen. Die übrigen bleiben offen.
 | [ ] | `/wissen/saccharomyces-boulardii-szajewska-pediatric-age-update-2020` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/schwarzkuemmeloel` | Hauptartikel | 7 | 86 |
 | [ ] | `/wissen/schwarzkuemmeloel-abdel-razek-oil-quality-2024` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/schwarzkuemmeloel-efsa-botanical-claims-on-hold-2021` | Studie/Quelle | 8 | 83 |
+| [x] | `/wissen/schwarzkuemmeloel-efsa-botanical-claims-on-hold-2021` | Studie/Quelle | 8 | 100 |
 | [ ] | `/wissen/schwarzkuemmeloel-hannan-phytochemistry-safety-2021` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/schwarzkuemmeloel-he-rhinitis-2024` | Studie/Quelle | 7 | 83 |
 | [x] | `/wissen/schwarzkuemmeloel-he-xu-asthma-2020` | Studie/Quelle | ≥7 | 100 |
@@ -1369,7 +1371,7 @@ abgeschlossen. Die übrigen bleiben offen.
 | [ ] | `/wissen/vitamin-d-calcifediol-cholecalciferol` | Studie/Quelle | 6 | 83 |
 | [ ] | `/wissen/vitamin-d-calcium-frakturen-stuerze` | Studie/Quelle | 6 | 83 |
 | [x] | `/wissen/vitamin-d-dge-referenzwerte` | Studie/Quelle | 8 | 100 |
-| [ ] | `/wissen/vitamin-d-dge-versorgung` | Studie/Quelle | 7 | 83 |
+| [x] | `/wissen/vitamin-d-dge-versorgung` | Studie/Quelle | 8 | 100 |
 | [ ] | `/wissen/vitamin-d-diabetes-praevention-d2d` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/vitamin-d-efsa-obergrenze-sicherheit` | Studie/Quelle | 5 | 83 |
 | [ ] | `/wissen/vitamin-d-efsa-referenzwerte` | Studie/Quelle | 5 | 83 |

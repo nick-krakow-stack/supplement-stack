@@ -78,3 +78,5 @@ jobs:
         run: node --test --test-name-pattern="^parent-bound artifacts " scripts/run-nutrient-content.test.mjs
       - name: Verify source identity in short and colliding SEO titles
         run: node --test --test-name-pattern="^source title SEO " scripts/run-nutrient-content.test.mjs
+      - name: Verify adaptive facts partition scheduling
+        run: node --test --test-name-pattern="facts partition" scripts/run-nutrient-content.test.mjs
