@@ -1198,6 +1198,17 @@ bleiben unverändert verpflichtend. Erst der normale `publication_apply`
 speichert einen frischen Vorher-Snapshot und prüft vollständige Artikel-,
 Quellen-, Ingredient-, Interpretations- und Partzeilen samt Counts atomar.
 Artikelteile bleiben unverändert; gültige Wiederholungen sind Noops.
+Eine eindeutige historische Interpretationszeile derselben Artikel-, Ingredient-
+und Source-Identität darf nur aus diesem vollständig geprüften Snapshot
+übernommen werden, wenn `research_artifact_id=null` ist. Das Update erfolgt
+in-place: ID und `created_at` bleiben erhalten, die Version steigt genau einmal;
+Notes und Review-Notes erhalten ausschließlich die neue echte gebundene
+Facts-/Source-Projektion. Ohne diese L-Autorität, bei fremder Research-Lineage,
+Mehrdeutigkeit oder geändertem Altwert/Count blockiert der bestehende Guard.
+Der kompensierende Rollback schützt den vollständigen Nachzustand und stellt die
+übernommene Zeile in-place mit sämtlichen Originalwerten einschließlich Version,
+Notes, Review-Notes und Zeitstempeln wieder her. Wiederholungen prüfen zusätzlich
+ID, Version und erhaltenes Erstelldatum der übernommenen Zeile.
 Der normale vollständige öffentliche DOM-/SEO-Readback bleibt erforderlich;
 ein Rücksetzen nach fehlgeschlagenem Readback restauriert auch den alten
 Aktualisierungsgrund und die unveränderten rohen SEO-Bytes unter demselben

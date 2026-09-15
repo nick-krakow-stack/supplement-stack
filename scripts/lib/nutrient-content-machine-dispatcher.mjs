@@ -159,6 +159,20 @@ function exactTargetState(current, target) {
     && (current.product_note ?? null) === null
 }
 
+// Adoption is authority from the bound raw prestate, never from a notes prefix.
+function legacyInterpretationAdoptions(target) {
+  if (!target.authoritative_before) return []
+  const frozen = validateAuthoritativeCorrectionBeforeV1(target.authoritative_before, target)
+  const keys = new Set((target.stage2_interpretation_projection ?? []).map(interpretationKey))
+  return frozen.interpretation_rows.filter(row => {
+    if (!keys.has(interpretationKey(row)) || String(row.notes ?? '').startsWith(PIPELINE_INTERPRETATION_PREFIX)) return false
+    if (row.research_artifact_id !== null || !Number.isInteger(row.id) || row.id <= 0 || !Number.isInteger(row.version) || row.version <= 0
+      || row.knowledge_article_slug !== target.slug || !target.ingredient_ids.includes(Number(row.ingredient_id))
+      || frozen.interpretation_rows.filter(other => interpretationKey(other) === interpretationKey(row)).length !== 1) fail('L legacy interpretation adoption identity/ownership is invalid')
+    return true
+  })
+}
+
 function assertInterpretationRowsAreUnambiguous(rows, target) {
   const expectedKeys = new Set((target.stage2_interpretation_projection ?? []).map(interpretationKey))
   const grouped = new Map()
@@ -170,7 +184,7 @@ function assertInterpretationRowsAreUnambiguous(rows, target) {
   for (const key of expectedKeys) {
     const matches = grouped.get(key) ?? []
     if (matches.length > 1) fail(`${target.article_id} interpretation target ${key} is ambiguous (${matches.length} rows)`)
-    if (matches.some((row) => !String(row.notes ?? '').startsWith(PIPELINE_INTERPRETATION_PREFIX))) fail(`${target.article_id} interpretation target ${key} conflicts with a non-pipeline-owned row`)
+    if (matches.some((row) => !String(row.notes ?? '').startsWith(PIPELINE_INTERPRETATION_PREFIX) && !legacyInterpretationAdoptions(target).some(frozen => canonicalJsonHash(frozen) === canonicalJsonHash(row)))) fail(`${target.article_id} interpretation target ${key} conflicts with a non-pipeline-owned row`)
   }
   for (const [key, matches] of grouped) {
     const owned = matches.filter((row) => String(row.notes ?? '').startsWith(PIPELINE_INTERPRETATION_PREFIX))
@@ -1015,15 +1029,25 @@ export class CloudflareD1ContentPublicationAdapter {
   }
 
   #appendTargetRelations(batch, target) {
+    const adoptions = legacyInterpretationAdoptions(target)
     batch.push({ sql: 'DELETE FROM knowledge_article_sources WHERE article_slug=?', params: [target.slug] })
     batch.push({ sql: 'DELETE FROM knowledge_article_ingredients WHERE article_slug=?', params: [target.slug] })
     batch.push({ sql: `DELETE FROM study_interpretation_records WHERE knowledge_article_slug=? AND notes LIKE '${PIPELINE_INTERPRETATION_PREFIX}%'`, params: [target.slug] })
     for (const source of target.source_relations) batch.push({ sql: 'INSERT INTO knowledge_article_sources (article_slug,label,url,sort_order,created_at,updated_at) VALUES (?,?,?,?,datetime(\'now\'),datetime(\'now\'))', params: [target.slug, source.label, source.url, source.position] })
     target.ingredient_ids.forEach((ingredientId, index) => batch.push({ sql: 'INSERT INTO knowledge_article_ingredients (article_slug,ingredient_id,sort_order,created_at) VALUES (?,?,?,datetime(\'now\'))', params: [target.slug, ingredientId, index] }))
-    for (const projection of target.stage2_interpretation_projection) batch.push({
+    for (const projection of target.stage2_interpretation_projection) {
+      const adopted = adoptions.find(row => interpretationKey(row) === interpretationKey(projection))
+      if (adopted) {
+        batch.push({ sql: 'UPDATE study_interpretation_records SET status=?,structured_summary_json=?,stage3_reference_summary=?,notes=?,review_notes=?,updated_at=datetime(\'now\'),version=version+1 WHERE id=? AND version=? AND ingredient_id=? AND source_id=? AND knowledge_article_slug=? AND research_artifact_id IS NULL',
+          params: [projection.status, JSON.stringify(projection.structured_summary), projection.stage3_reference_summary, `${PIPELINE_INTERPRETATION_PREFIX}${projection.projection_hash}`, JSON.stringify(pipelineInterpretationLineage(projection)), adopted.id, adopted.version, adopted.ingredient_id, adopted.source_id, target.slug] })
+        batch.push({ sql: "SELECT CASE WHEN changes()=1 THEN 1 ELSE json_extract('d1-interpretation-adoption-guard-failed','$') END AS adoption_guard" })
+        continue
+      }
+      batch.push({
       sql: 'INSERT INTO study_interpretation_records (ingredient_id,source_id,research_artifact_id,knowledge_article_slug,status,structured_summary_json,stage3_reference_summary,notes,review_notes,created_at,updated_at,version) VALUES (?,?,NULL,?,?,?,?,?,?,datetime(\'now\'),datetime(\'now\'),1)',
       params: [projection.ingredient_id, projection.resolved_source_id, projection.knowledge_article_slug, projection.status, JSON.stringify(projection.structured_summary), projection.stage3_reference_summary, `${PIPELINE_INTERPRETATION_PREFIX}${projection.projection_hash}`, JSON.stringify(pipelineInterpretationLineage(projection))],
-    })
+      })
+    }
   }
 
   async applyAtomicRelease(release) {
@@ -1039,6 +1063,10 @@ export class CloudflareD1ContentPublicationAdapter {
       if (this.databaseId !== target.authoritative_before.database_id || release.publish_target !== target.authoritative_before.database_name) fail('L authoritative-before database differs')
       if (exactTargetState(before[target.article_id], target)) {
         const current = fullBefore[target.slug]
+        for (const adopted of legacyInterpretationAdoptions(target)) {
+          const matches = current.interpretation_rows.filter(row => interpretationKey(row) === interpretationKey(adopted))
+          if (matches.length !== 1 || matches[0].id !== adopted.id || matches[0].version !== adopted.version + 1 || matches[0].created_at !== adopted.created_at || matches[0].research_artifact_id !== null) fail('L adopted interpretation idempotent identity/version differs')
+        }
         if (current.article.version !== frozen.article.version + 1 || current.article.update_reason !== target.update_reason || canonicalJsonHash(current.part_rows) !== canonicalJsonHash(frozen.part_rows)) fail('L authoritative-before idempotent state/version/reason/parts differs')
       } else if (canonicalJsonHash(fullBefore[target.slug]) !== canonicalJsonHash(frozen)) fail('L authoritative-before full row/relations/parts changed since freeze')
     }
@@ -1095,7 +1123,14 @@ export class CloudflareD1ContentPublicationAdapter {
 
   #appendSnapshotRestore(batch, target, snapshot, resulting) {
     batch.push(...this.#snapshotGuards(target, resulting))
-    batch.push({ sql: `DELETE FROM study_interpretation_records WHERE knowledge_article_slug=? AND notes LIKE '${PIPELINE_INTERPRETATION_PREFIX}%'`, params: [target.slug] })
+    const adoptions = legacyInterpretationAdoptions(target)
+    const excluded = adoptions.length ? ` AND id NOT IN (${adoptions.map(() => '?').join(',')})` : ''
+    batch.push({ sql: `DELETE FROM study_interpretation_records WHERE knowledge_article_slug=? AND notes LIKE '${PIPELINE_INTERPRETATION_PREFIX}%'${excluded}`, params: [target.slug, ...adoptions.map(row => row.id)] })
+    for (const row of adoptions) {
+      batch.push({ sql: 'UPDATE study_interpretation_records SET ingredient_id=?,source_id=?,research_artifact_id=?,knowledge_article_slug=?,status=?,structured_summary_json=?,stage3_reference_summary=?,notes=?,review_notes=?,version=?,created_at=?,updated_at=? WHERE id=? AND version=?',
+        params: [row.ingredient_id, row.source_id, row.research_artifact_id, row.knowledge_article_slug, row.status, row.structured_summary_json, row.stage3_reference_summary, row.notes, row.review_notes, row.version, row.created_at, row.updated_at, row.id, row.version + 1] })
+      batch.push({ sql: "SELECT CASE WHEN changes()=1 THEN 1 ELSE json_extract('d1-interpretation-restore-guard-failed','$') END AS interpretation_restore_guard" })
+    }
     batch.push({ sql: 'DELETE FROM knowledge_article_ingredients WHERE article_slug=?', params: [target.slug] })
     batch.push({ sql: 'DELETE FROM knowledge_article_sources WHERE article_slug=?', params: [target.slug] })
     if (!snapshot) {
