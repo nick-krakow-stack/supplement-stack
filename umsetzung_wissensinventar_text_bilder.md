@@ -56,7 +56,7 @@ UniqueScope/Hashbindungen validiert. Inventar:459 Korrekturpflicht,287 keine Pfl
 keine ungeklärte Zuordnung. Alle 287 unveränderten Kandidaten aktuell in D1 und
 öffentlich abgeglichen: Text-UX-Untergrenze ≥7, technisches SEO 282×100 und 5×90.
 Die fünf fehlenden Hauptartikel-Rücklinks sind nicht blockierende Restpunkte.
-Beleg: unchanged-source-acceptance.json; Gesamtabschluss jetzt288/790.
+Beleg: unchanged-source-acceptance.json; mit DGE und LPI jetzt289/790 abgeschlossen.
 Ein vollständiger überarbeiteter Einzelabschluss: DGE-Referenzwerte,
 UX8/10 unabhängig, technischerSEO100/100 nach tatsächlichen sechsAuditkategorien,
 Child/ParentCOMPLETE und öffentlichMATCH. IndexabilityReceipt2b0390e8…;
@@ -65,8 +65,11 @@ belegten RawHTML-Tabellenabstandsfehler,25Tests/ReviewPASS, CI/DeployPASS
 (Main34959111334,Deploy34959111358,Pages08da771b), LiveReadbackPASS.
 Research144Originalartefakte erhalten; ALAGesamtplanwissenschaftlichBLOCKED.
 LPI-Einzelslice:56 Records/11 Pflichten, vier unabhängige Facts-Reviews PASS.
-Writer fertig; konkreter Compilerfehler für verschachtelte geprüfte Mengen wird
-eng behoben, bevor unabhängige Publikationsprüfung und Veröffentlichung folgen.
+Unabhängiges Publication-Gate UX8/10, atomar veröffentlicht; Desktop/Mobil,
+Roh-HTML, Sitemap/Robots und Wissensbadges MATCH, technisches SEO100/100.
+Release0158e0ad…, Publishreceipt47cc22b3…, Parent/ChildCOMPLETE.
+Compilerfehler für verschachtelte geprüfte Mengen eng behoben, unabhängig geprüft
+und über PR38/79c5327 veröffentlicht; CI/Deploy PASS, Pages53fdc09b.
 Calcium: Research terminal, Coverage prüft echte Originale und konkrete Abruflücken;
 Cookie-/JS-Challenges werden ausdrücklich nicht als Originalabstract akzeptiert.
 Die präzise Liste aller18offenenBildaufträge liegt in

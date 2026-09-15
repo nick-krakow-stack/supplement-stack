@@ -677,7 +677,10 @@ belegte Text-UX-Untergrenze, kein erfundener exakter Punktwert. Technisches SEO:
 282 Artikel mit 100, fünf mit 90 wegen fehlender Hauptartikel-Rückverlinkung.
 Beleg: `.agent-memory/wissensinventar-20260914/unchanged-source-acceptance.json`;
 Einzelbindungen stehen in `article-completions.json` im selben Verzeichnis.
-Damit sind 288/790 Zeilen abgeschlossen. Die übrigen bleiben offen.
+LPI ist ebenfalls überarbeitet und unabhängig mit 8/10 bewertet, geschützt
+veröffentlicht und mit technischem SEO100 bestätigt; Belege im Verzeichnis
+`alpha-liponsaeure-lpi-v2/state/publish` und `lpi-seo-score-readback.json`.
+Damit sind 289/790 Zeilen abgeschlossen. Die übrigen bleiben offen.
 
 | Erledigt | Pfad | Typ | Text-UX ★ | SEO |
 |---|---|---|---:|---:|
@@ -693,7 +696,7 @@ Damit sind 288/790 Zeilen abgeschlossen. Die übrigen bleiben offen.
 | [ ] | `/wissen/alpha-liponsaeure-ghalichi-overweight-obesity-meta-2025` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/alpha-liponsaeure-guo-oral-dpn-meta-2023` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/alpha-liponsaeure-karimi-nafld-meta-2026` | Studie/Quelle | 7 | 83 |
-| [ ] | `/wissen/alpha-liponsaeure-lpi-lipoic-acid-forms-functions` | Studie/Quelle | 6 | 83 |
+| [x] | `/wissen/alpha-liponsaeure-lpi-lipoic-acid-forms-functions` | Studie/Quelle | 8 | 100 |
 | [ ] | `/wissen/alpha-liponsaeure-madadi-dpn-meta-2026` | Studie/Quelle | 7 | 83 |
 | [ ] | `/wissen/alpha-liponsaeure-mashayekh-amiri-pcos-meta-2024` | Studie/Quelle | 8 | 83 |
 | [ ] | `/wissen/alpha-liponsaeure-mirtaheri-ckd-meta-2025` | Studie/Quelle | 7 | 83 |
