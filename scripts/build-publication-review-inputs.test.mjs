@@ -130,6 +130,23 @@ test('Stage-2 v2 fails closed at byte, adaptive-section and source boundaries', 
   assert.doesNotThrow(() => assemble(valid.replace('Tragender Text.', '### Vertiefung\n\nTragender Unterabschnitt.')))
 })
 
+test('source URL guards reject exact Markdown/HTML/bare destinations and allow longer PDF and carrier URLs', () => {
+  const stage2 = '# Titel\n\nLead.\n\n## Inhalt\n\nTEXT\n\n## Fazit\n\nSchluss.\n\n## Quellen\n\n<!-- sources:auto -->'
+  const stage3 = '# Titel\n\nLead.\n\n<!-- knowledge-template:magazine -->\n\n## Auf einen Blick\n\n- Eins.\n- Zwei.\n- Drei.\n\n## Inhalt\n\nTEXT\n\n## Fazit\n\nSchluss.\n\n## Quellen\n\n<!-- sources:auto -->'
+  for (const [assemble, template, url, longerUrl] of [
+    [assembleStage2VisiblePayload, stage2, 'https://pmc.ncbi.nlm.nih.gov/articles/PMC5372953/', 'https://pmc.ncbi.nlm.nih.gov/articles/PMC5372953/pdf/main.pdf'],
+    [assembleStage3VisiblePayload, stage3, '/wissen/studie', '/wissen/studie-ergaenzung'],
+  ]) {
+    const source = { source_id: 'original', label: 'Originalquelle', url }
+    for (const format of [value => `[Quelle](${value})`, value => `[Quelle](<${value}>)`, value => `<a href="${value}">Quelle</a>`, value => `<a href='${value}'>Quelle</a>`, value => `<${value}> Quelle`, value => value]) {
+      assert.throws(() => assemble({ slug: 'test', markdown: template.replace('TEXT', format(url)), visibleSources: [source] }), /duplicates generated source URL/)
+      const payload = assemble({ slug: 'test', markdown: template.replace('TEXT', format(longerUrl)), visibleSources: [source] })
+      assert.ok(payload.body.includes(longerUrl))
+      assert.deepEqual(payload.sources, [source])
+    }
+  }
+})
+
 test('Stage-3 payload exposes title, first lead, conclusion and sources exactly once', () => {
   const markdown = `
 # Beispielstoff: Was die Forschung zeigt

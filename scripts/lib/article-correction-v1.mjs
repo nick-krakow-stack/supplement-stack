@@ -120,7 +120,7 @@ function validateReleaseArticle(article, label) {
   return article
 }
 
-function validateReleaseContext(value, beforeArticle, candidateArticle, label = 'article correction release_context') {
+function validateReleaseContext(value, beforeArticle, candidateArticle, changeClass, label = 'article correction release_context') {
   const context = object(value, label)
   const ingredientTarget = object(context.ingredient_target, `${label}.ingredient_target`)
   if (!Number.isInteger(ingredientTarget.ingredient_id) || ingredientTarget.ingredient_id <= 0 || ingredientTarget.status !== 'active' || !Number.isInteger(ingredientTarget.version) || ingredientTarget.version <= 0) fail(`${label}.ingredient_target identity is invalid`)
@@ -128,9 +128,15 @@ function validateReleaseContext(value, beforeArticle, candidateArticle, label = 
   if (ingredientTarget.identity_hash !== canonicalJsonHash(identity)) fail(`${label}.ingredient_target.identity_hash is stale`)
   hash(ingredientTarget.receipt_hash, `${label}.ingredient_target.receipt_hash`)
   hash(context.source_resolution_receipt_hash, `${label}.source_resolution_receipt_hash`)
+  const hasBeforeSourceReceipt = Object.hasOwn(context, 'before_source_resolution_receipt_hash')
+  if (hasBeforeSourceReceipt && changeClass !== 'L') fail(`${label}.before_source_resolution_receipt_hash is L-only`)
+  const beforeSourceReceipt = hasBeforeSourceReceipt
+    ? hash(context.before_source_resolution_receipt_hash, `${label}.before_source_resolution_receipt_hash`)
+    : context.source_resolution_receipt_hash
   for (const [name, article] of [['before', beforeArticle], ['candidate', candidateArticle]]) {
     if (!sameSet(article.ingredient_ids, [identity.ingredient_id])) fail(`${label} ${name} article ingredient relation differs from the authoritative target`)
-    if (article.stage === 'stage2' && article.stage2_interpretation_projection.some((entry) => entry.source_resolution_receipt_hash !== context.source_resolution_receipt_hash)) fail(`${label} ${name} Stage-2 interpretation source lineage differs`)
+    const sourceReceipt = name === 'before' ? beforeSourceReceipt : context.source_resolution_receipt_hash
+    if (article.stage === 'stage2' && article.stage2_interpretation_projection.some((entry) => entry.source_resolution_receipt_hash !== sourceReceipt)) fail(`${label} ${name} Stage-2 interpretation source lineage differs`)
   }
   if (candidateArticle.write_guard.mode === 'update' ? !HASH.test(context.article_target_receipt_hash ?? '') : context.article_target_receipt_hash != null) fail(`${label}.article_target_receipt_hash differs from the candidate write guard`)
   const hasAssets = [beforeArticle, candidateArticle].some((article) => article.assets.length)
@@ -139,6 +145,7 @@ function validateReleaseContext(value, beforeArticle, candidateArticle, label = 
   return {
     ingredient_target: { ...identity, identity_hash: ingredientTarget.identity_hash, receipt_hash: ingredientTarget.receipt_hash },
     source_resolution_receipt_hash: context.source_resolution_receipt_hash,
+    ...(hasBeforeSourceReceipt ? { before_source_resolution_receipt_hash: beforeSourceReceipt } : {}),
     article_target_receipt_hash: context.article_target_receipt_hash ?? null,
     asset_deployment_receipt_hash: context.asset_deployment_receipt_hash ?? null,
   }
@@ -165,7 +172,7 @@ export function buildArticleCorrectionInputReceiptV1({ root, request, frozenAt =
   const beforeArticle = validateReleaseArticle(request.before?.release_article, 'article correction before.release_article')
   const candidateArticle = validateReleaseArticle(request.candidate?.release_article, 'article correction candidate.release_article')
   if (beforeArticle.article_id !== candidateArticle.article_id || beforeArticle.stage !== candidateArticle.stage || beforeArticle.slug !== candidateArticle.slug) fail('article correction before/candidate identity differs')
-  const releaseContext = validateReleaseContext(request.release_context, beforeArticle, candidateArticle)
+  const releaseContext = validateReleaseContext(request.release_context, beforeArticle, candidateArticle, changeClass)
   const beforePath = resolveManifestPath(root, request.before.markdown_path, 'article correction before.markdown_path')
   const candidatePath = resolveManifestPath(root, request.candidate.markdown_path, 'article correction candidate.markdown_path')
   if (!existsSync(beforePath) || !existsSync(candidatePath)) fail('article correction before/candidate Markdown is missing')
@@ -209,7 +216,7 @@ export function loadArticleCorrectionInputReceiptV1({ root, path, runId, changeC
   if (before.byte_hash !== receipt.before.markdown_byte_hash || candidate.byte_hash !== receipt.candidate.markdown_byte_hash) fail('article correction frozen Markdown bytes changed')
   const beforeArticle = validateReleaseArticle(receipt.before.release_article, 'article correction before.release_article')
   const candidateArticle = validateReleaseArticle(receipt.candidate.release_article, 'article correction candidate.release_article')
-  validateReleaseContext(receipt.release_context, beforeArticle, candidateArticle, 'article correction input receipt release_context')
+  validateReleaseContext(receipt.release_context, beforeArticle, candidateArticle, changeClass, 'article correction input receipt release_context')
   if (canonicalJsonHash(beforeArticle) !== receipt.before.release_article_hash || canonicalJsonHash(candidateArticle) !== receipt.candidate.release_article_hash) fail('article correction release article hash is stale')
   if (canonicalJsonHash(semanticFingerprint(before.text, beforeArticle)) !== canonicalJsonHash(receipt.before.semantic_fingerprint) || canonicalJsonHash(semanticFingerprint(candidate.text, candidateArticle)) !== canonicalJsonHash(receipt.candidate.semantic_fingerprint)) fail('article correction semantic fingerprint is stale')
   const changes = lineDiff(before.text, candidate.text)
