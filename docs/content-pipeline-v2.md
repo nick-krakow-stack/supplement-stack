@@ -1170,6 +1170,14 @@ ausgegebene `work_order_id`. S/M öffnen weder Research noch Facts- oder volles
 Publication-Gate; L auditiert keine unbetroffenen Artikel. Alle Klassen nutzen
 bei Publish denselben zentralen `publication_apply`-Executor und Write-Guard.
 
+Bei L-Korrekturen mit zwei echten eingefrorenen Releaseartikeln darf
+`release_context.before_source_resolution_receipt_hash` die ursprüngliche
+Source-Lineage separat binden. `source_resolution_receipt_hash` bindet weiterhin
+den Kandidaten; beide Stage-2-Interpretationsprojektionen müssen ihren jeweiligen
+Receipt exakt tragen. Alte Artikelbelege werden nicht umgeschrieben. Das optionale
+Feld ist für S/M unzulässig; ohne das Feld bleibt der bisherige gemeinsame
+Receiptvertrag einschließlich der erzeugten Hashbytes unverändert.
+
 Historische Artikel ohne rekonstruierbare Compiler-Lineage dürfen für rein
 lokale Klasse-M-Umlautreparaturen den begrenzten `legacy_field_patch`-Modus
 desselben Executors verwenden: höchstens sechs explizite, publizierte

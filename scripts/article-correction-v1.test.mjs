@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { dirname, join, relative } from 'node:path'
 import test from 'node:test'
-import { buildArticleCorrectionInputReceiptV1 } from './lib/article-correction-v1.mjs'
+import { buildArticleCorrectionInputReceiptV1, loadArticleCorrectionInputReceiptV1 } from './lib/article-correction-v1.mjs'
 import { canonicalJsonHash } from './lib/content-validation.mjs'
 import { artifactHashV2 } from './lib/evidence-pipeline-v2.mjs'
 import { SqliteContentPublicationAdapter, dispatchDeterministicWorkOrderV2, publicationGuardPayloadHash } from './lib/nutrient-content-machine-dispatcher.mjs'
@@ -114,6 +114,69 @@ test('correction input fails closed on forged publication lineage', () => {
     changeClass: 'S', beforeMarkdown: '# Teststoff\n\nDer Stoff ist gut verständlich.\n\n<!-- obsolete -->\n', candidateMarkdown: '# Teststoff\n\nDer Stoff ist gut verständlich.\n',
     requestMutator: (request) => { request.release_context.ingredient_target.identity_hash = hash('forged-identity') },
   }), /ingredient_target\.identity_hash is stale/i)
+})
+
+function stage2CorrectionOptions(changeClass = 'L', requestMutator = null) {
+  const beforeArticle = releaseArticle()
+  beforeArticle.stage = 'stage2'
+  beforeArticle.article_layer = 'single_study'
+  beforeArticle.stage2_interpretation_projection = [{ source_resolution_receipt_hash: SOURCE_RESOLUTION_HASH }]
+  const candidateArticle = structuredClone(beforeArticle)
+  candidateArticle.stage2_interpretation_projection[0].source_resolution_receipt_hash = hash('new-source-resolution')
+  candidateArticle.write_guard = { mode: 'update', expected_status: 'published', expected_version: 1, expected_payload_hash: publicationGuardPayloadHash(beforeArticle) }
+  return {
+    changeClass, beforeArticle, candidateArticle,
+    beforeMarkdown: '# Teststoff\n\nAlter Text.\n', candidateMarkdown: '# Teststoff\n\nNeuer Text.\n',
+    requestMutator: (request) => {
+      request.release_context.before_source_resolution_receipt_hash = SOURCE_RESOLUTION_HASH
+      request.release_context.source_resolution_receipt_hash = hash('new-source-resolution')
+      requestMutator?.(request)
+    },
+  }
+}
+
+test('L correction binds distinct original and candidate source receipts without rewriting either article', () => {
+  const options = stage2CorrectionOptions()
+  const fixture = correctionFixture(options)
+  try {
+    const loaded = loadArticleCorrectionInputReceiptV1({ root: fixture.root, path: join(fixture.root, 'inputs/article-correction-input-receipt.v1.json'), runId: fixture.input.run_id, changeClass: 'L' })
+    assert.deepEqual(loaded.beforeArticle, options.beforeArticle)
+    assert.deepEqual(loaded.candidateArticle, options.candidateArticle)
+    assert.equal(fixture.input.before.release_article_hash, canonicalJsonHash(options.beforeArticle))
+    assert.equal(fixture.input.candidate.release_article_hash, canonicalJsonHash(options.candidateArticle))
+  } finally { fixture.cleanup() }
+})
+
+test('L correction rejects wrong before or candidate source receipt bindings', () => {
+  for (const key of ['source_resolution_receipt_hash', 'before_source_resolution_receipt_hash']) {
+    assert.throws(() => correctionFixture(stage2CorrectionOptions('L', request => { request.release_context[key] = hash('wrong-receipt') })), /Stage-2 interpretation source lineage differs/)
+  }
+})
+
+test('L correction rejects frozen before manipulation even when the outer receipt is rehashed', () => {
+  const fixture = correctionFixture(stage2CorrectionOptions())
+  try {
+    fixture.input.before.release_article.stage2_interpretation_projection[0].source_resolution_receipt_hash = hash('tampered-before')
+    fixture.input.release_context.before_source_resolution_receipt_hash = hash('tampered-before')
+    fixture.input.content_hash = artifactHashV2(fixture.input)
+    const path = put(join(fixture.root, 'inputs/article-correction-input-receipt.v1.json'), fixture.input)
+    assert.throws(() => loadArticleCorrectionInputReceiptV1({ root: fixture.root, path, runId: fixture.input.run_id, changeClass: 'L' }), /release article hash is stale/)
+  } finally { fixture.cleanup() }
+})
+
+test('S/M corrections retain strict shared source receipt lineage', () => {
+  for (const changeClass of ['S', 'M']) {
+    assert.throws(() => correctionFixture(stage2CorrectionOptions(changeClass)), /L-only/)
+    assert.throws(() => correctionFixture(stage2CorrectionOptions(changeClass, request => { delete request.release_context.before_source_resolution_receipt_hash })), /before Stage-2 interpretation source lineage differs/)
+  }
+})
+
+test('legacy correction receipts omit the new lineage field', () => {
+  const fixture = correctionFixture({ changeClass: 'S', beforeMarkdown: '# Teststoff\n\nText.\n\n<!-- alt -->', candidateMarkdown: '# Teststoff\n\nText.' })
+  try {
+    assert.deepEqual(fixture.input.release_context, releaseContext(fixture.beforeArticle, fixture.candidateArticle))
+    assert.equal(Object.hasOwn(fixture.input.release_context, 'before_source_resolution_receipt_hash'), false)
+  } finally { fixture.cleanup() }
 })
 
 test('M correction cannot hide a number or unit change only inside the publish payload', () => {

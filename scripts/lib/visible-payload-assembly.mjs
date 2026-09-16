@@ -1,7 +1,19 @@
+import { tokenizeKnowledgeInlineMarkdown } from '../../functions/lib/knowledge-inline-markdown.mjs'
+
 function fail(message) { throw new Error(message) }
 
 export const MAGAZINE_TEMPLATE_MARKER = '<!-- knowledge-template:magazine -->'
 export const AUTO_SOURCES_MARKER = '<!-- sources:auto -->'
+
+function authoringSourceUrls(markdown) {
+  // Compare complete destinations (including bare URLs), never URL prefixes.
+  const urls = new Set(markdown.match(/(?:https?:\/\/|\/wissen\/)[^\s<>"')\]]+/gi) ?? [])
+  for (const token of tokenizeKnowledgeInlineMarkdown(markdown)) {
+    if (token.type === 'link') urls.add(token.href)
+  }
+  for (const match of markdown.matchAll(/<a\b[^>]*\bhref\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)) urls.add(match[1] ?? match[2])
+  return urls
+}
 
 function assertRawLeadingH1(markdown, stage) {
   if (typeof markdown !== 'string') fail('article authoring markdown must be a string')
@@ -181,8 +193,9 @@ export function assembleStage2VisiblePayload({ slug, markdown, visibleSources })
     const section = authoring.slice((heading.index ?? 0) + heading[0].length, next?.index ?? authoring.length).trim()
     if (!visibleSectionContent(section)) fail(`Stage-2 article has an empty H2 section: ${heading[1].trim()}`)
   }
+  const authoredUrls = authoringSourceUrls(authoring)
   for (const source of sources) {
-    if (authoring.includes(source.url)) fail(`Stage-2 authoring duplicates generated source URL ${source.source_id}`)
+    if (authoredUrls.has(source.url)) fail(`Stage-2 authoring duplicates generated source URL ${source.source_id}`)
   }
 
   const body = authoring.slice(firstH2.index ?? -1, sourceIndex).trim()
@@ -289,7 +302,8 @@ export function assembleStage3VisiblePayload({ slug, markdown, visibleSources })
   assertRawLeadingH1(markdown, 'Stage-3')
   const authoring = normalizeAuthoringMarkdown(markdown)
   const sources = normalizeVisibleSources(visibleSources, 'Stage-3')
-  for (const source of sources) if (authoring.includes(source.url)) fail(`Stage-3 authoring duplicates generated source URL ${source.source_id}`)
+  const authoredUrls = authoringSourceUrls(authoring)
+  for (const source of sources) if (authoredUrls.has(source.url)) fail(`Stage-3 authoring duplicates generated source URL ${source.source_id}`)
   return {
     slug: String(slug ?? '').trim(),
     ...splitStage3VisibleBody(authoring),
