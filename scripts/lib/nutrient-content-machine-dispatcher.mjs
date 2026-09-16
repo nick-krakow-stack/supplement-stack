@@ -938,7 +938,7 @@ export class CloudflareD1ContentPublicationAdapter {
     const slugs = targets.map((target) => target.slug)
     const placeholders = slugs.map(() => '?').join(',')
     const response = await this.query({ batch: [
-      { sql: `SELECT slug,title,summary,body,status,version,article_layer,conclusion,featured_image_url,featured_image_r2_key,dose_min,dose_max,dose_unit,product_note,reviewed_at,created_at,updated_at,sources_json,seo_json FROM knowledge_articles WHERE slug IN (${placeholders})`, params: slugs },
+      { sql: `SELECT slug,title,summary,body,status,version,article_layer,conclusion,featured_image_url,featured_image_r2_key,dose_min,dose_max,dose_unit,product_note,reviewed_at,created_at,updated_at,sources_json,seo_json,update_reason FROM knowledge_articles WHERE slug IN (${placeholders})`, params: slugs },
       { sql: `SELECT id,article_slug,label,url,sort_order,created_at,updated_at FROM knowledge_article_sources WHERE article_slug IN (${placeholders}) ORDER BY article_slug,sort_order,id`, params: slugs },
       { sql: `SELECT article_slug,ingredient_id,sort_order,created_at FROM knowledge_article_ingredients WHERE article_slug IN (${placeholders}) ORDER BY article_slug,sort_order,ingredient_id`, params: slugs },
       { sql: `SELECT id,ingredient_id,source_id,research_artifact_id,knowledge_article_slug,status,structured_summary_json,stage3_reference_summary,notes,review_notes,version,created_at,updated_at FROM study_interpretation_records WHERE knowledge_article_slug IN (${placeholders}) ORDER BY knowledge_article_slug,source_id,id`, params: slugs },
