@@ -18,7 +18,7 @@ const storedSeo = JSON.stringify({ canonical_url: 'https://example.test/wissen/t
   json_ld: { '@context': 'https://schema.org', '@type': 'Article', headline: 'Alter Titel', description: 'Alte Einordnung.', mainEntityOfPage: 'https://example.test/wissen/teststoff', inLanguage: 'de', datePublished: stamp, dateModified: stamp,
     author: { '@type': 'Organization', '@id': 'https://example.test/#organization', name: 'Test', url: 'https://example.test/' }, publisher: { '@type': 'Organization', '@id': 'https://example.test/#organization', name: 'Test', url: 'https://example.test/' } },
   meta_title: 'Teststoff: Funktionen und Grenzen', meta_description: 'Eine verständliche Einordnung.' }, null, 2)
-async function fixture(seoJson = null, legacyInterpretation = false) {
+async function fixture(seoJson = null, legacyInterpretation = false, historicalReason = null) {
   const root = mkdtempSync(join(tmpdir(), 'authoritative-l-correction-'))
   const db = new DatabaseSync(':memory:')
   db.exec(`CREATE TABLE knowledge_articles(slug TEXT PRIMARY KEY,title TEXT,summary TEXT,body TEXT,status TEXT,reviewed_at TEXT,sources_json TEXT,created_at TEXT,updated_at TEXT,version INTEGER,conclusion TEXT,featured_image_r2_key TEXT,featured_image_url TEXT,dose_min REAL,dose_max REAL,dose_unit TEXT,product_note TEXT,article_layer TEXT,seo_json TEXT,update_reason TEXT);
@@ -28,6 +28,7 @@ async function fixture(seoJson = null, legacyInterpretation = false) {
     CREATE TABLE knowledge_article_parts(article_slug TEXT,ingredient_id INTEGER,part_id INTEGER);`)
   const row = { slug: 'teststoff', title: 'Alter Titel', summary: 'Alte Einordnung.', body: '## Einordnung\n\nAlter Text.', status: 'published', reviewed_at: stamp, sources_json: null, created_at: stamp, updated_at: stamp, version: 1, conclusion: 'Altes Fazit.', featured_image_r2_key: null, featured_image_url: null, dose_min: null, dose_max: null, dose_unit: null, product_note: null, article_layer: 'main_article', seo_json: null, update_reason: null }
   if (seoJson !== null) { row.seo_json = seoJson; row.version = 2 }
+  if (historicalReason !== null) { row.update_reason = historicalReason; row.version = 3 }
   db.prepare(`INSERT INTO knowledge_articles(${Object.keys(row).join(',')}) VALUES (${Object.keys(row).map(() => '?').join(',')})`).run(...Object.values(row))
   db.prepare('INSERT INTO knowledge_article_ingredients VALUES (?,?,?,?)').run(row.slug, 7, 0, stamp)
   db.prepare('INSERT INTO knowledge_article_parts VALUES (?,?,?)').run(row.slug, 7, 1)
@@ -60,6 +61,32 @@ async function fixture(seoJson = null, legacyInterpretation = false) {
 }
 
 for (const seoJson of [null, storedSeo]) {
+test(`historical update reason survives inspection, guarded apply and rollback (SEO=${seoJson !== null})`, async () => {
+  const reason = 'Schreibfehler und beschädigte Umlaute korrigiert.'
+  const f = await fixture(seoJson, false, reason)
+  try {
+    assert.equal(f.before.state.persistence_snapshot.article.update_reason, reason)
+    assert.equal(f.before.state.version, 3)
+    assert.equal(f.before.state.compiled_payload_hash, null)
+    validateAuthoritativeCorrectionBeforeV1(f.before, f.target)
+    const mismatched = structuredClone(f.before)
+    mismatched.state.persistence_snapshot.article.update_reason = null
+    assert.throws(() => validateAuthoritativeCorrectionBeforeV1(hashed(mismatched)), /raw article differs/)
+    const tx = await f.adapter.applyAtomicRelease(f.release)
+    assert.equal((await f.snapshot()).article.update_reason, f.target.update_reason)
+    const writes = f.writes()
+    assert.equal((await f.adapter.applyAtomicRelease(f.release)).decisions[0].result, 'already_current')
+    assert.equal(f.writes(), writes)
+    await f.adapter.rollbackAtomic(tx)
+    assert.deepEqual(await f.snapshot(), f.before.full_snapshot)
+    f.db.prepare('UPDATE knowledge_articles SET update_reason=? WHERE slug=?').run('Concurrent reason', f.target.slug)
+    const writesBeforeGuard = f.writes()
+    await assert.rejects(() => f.adapter.applyAtomicRelease(f.release), /changed since freeze|guard/i)
+    assert.equal(f.writes(), writesBeforeGuard)
+    assert.equal((await f.snapshot()).article.update_reason, 'Concurrent reason')
+  } finally { f.close() }
+})
+
 test(`L raw-before input freezes actual legacy state without invented lineage (SEO=${seoJson !== null})`, async () => {
   const f = await fixture(seoJson)
   try {
