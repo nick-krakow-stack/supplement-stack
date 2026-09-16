@@ -62,6 +62,10 @@ jobs:
       - run: node --check scripts/user-browser-smoke.mjs
       - name: Verify guarded legacy article corrections
         run: node --test scripts/article-legacy-field-correction.test.mjs scripts/article-authoritative-correction.test.mjs
+      - name: Verify frozen article correction source lineage
+        run: node --test scripts/article-correction-v1.test.mjs
+      - name: Verify exact source URL guards
+        run: node --test --test-name-pattern="^source URL guards " scripts/build-publication-review-inputs.test.mjs
       - name: Verify guarded central legal document migration
         run: node --test scripts/legal-documents-migration.test.mjs
       - name: Verify publication metadata length gate
